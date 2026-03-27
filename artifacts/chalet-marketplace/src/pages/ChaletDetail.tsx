@@ -12,11 +12,8 @@ import { Badge } from "@/components/ui/badge";
 export default function ChaletDetail() {
   const { id } = useParams<{ id: string }>();
   
-  const { data: chalet, isLoading, isError } = useGetChaletById(Number(id), {
-    query: {
-      enabled: !!id,
-    }
-  });
+  const numericId = Number(id);
+  const { data: chalet, isLoading, isError } = useGetChaletById(numericId);
 
   const [emblaRef] = useEmblaCarousel({ direction: 'rtl', loop: true });
 
@@ -133,7 +130,7 @@ export default function ChaletDetail() {
           {/* Mobile Carousel */}
           <div className="md:hidden overflow-hidden rounded-2xl" ref={emblaRef} dir="rtl">
             <div className="flex">
-              {images.map((img, i) => (
+              {images.map((img: string, i: number) => (
                 <div key={i} className="flex-[0_0_100%] min-w-0 relative aspect-[4/3]">
                   <img src={img} alt={`صورة ${i+1}`} className="w-full h-full object-cover" />
                   <div className="absolute bottom-4 left-4 bg-black/60 text-white px-3 py-1 rounded-full text-xs backdrop-blur-md">
@@ -181,7 +178,7 @@ export default function ChaletDetail() {
               <section>
                 <h2 className="text-2xl font-bold mb-6">المرافق والمميزات</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {chalet.amenities.map((amenity, idx) => (
+                  {chalet.amenities.map((amenity: string, idx: number) => (
                     <div key={idx} className="flex items-center gap-3">
                       <CheckCircle2 className="w-5 h-5 text-primary" />
                       <span className="text-foreground">{amenity}</span>

@@ -157,7 +157,7 @@ export default function Chalets() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {chalets?.map((chalet) => (
+                {chalets?.map((chalet: import("@workspace/api-client-react").Chalet) => (
                   <ChaletCard key={chalet.id} chalet={chalet} />
                 ))}
               </div>

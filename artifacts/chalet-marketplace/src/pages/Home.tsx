@@ -1,29 +1,31 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { MapPin, Users, Search } from "lucide-react";
-import { useGetChalets } from "@workspace/api-client-react";
+import { MapPin, Users, Search, Calendar } from "lucide-react";
+import { useGetChalets, Chalet } from "@workspace/api-client-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ChaletCard } from "@/components/ui/ChaletCard";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Home() {
   const [, setLocation] = useLocation();
   const [searchLocation, setSearchLocation] = useState<string>("");
   const [guests, setGuests] = useState<string>("");
+  const [checkIn, setCheckIn] = useState<string>("");
+  const [checkOut, setCheckOut] = useState<string>("");
 
-  const { data: chalets, isLoading } = useGetChalets({
-    maxGuests: 100 // Get some default chalets for the featured section
-  });
+  const { data: chalets, isLoading } = useGetChalets();
 
   const handleSearch = () => {
     const params = new URLSearchParams();
     if (searchLocation && searchLocation !== "all") params.append("location", searchLocation);
     if (guests) params.append("maxGuests", guests);
-    
+    if (checkIn) params.append("checkIn", checkIn);
+    if (checkOut) params.append("checkOut", checkOut);
     setLocation(`/chalets${params.toString() ? `?${params.toString()}` : ''}`);
   };
 
@@ -84,6 +86,33 @@ export default function Home() {
                 </div>
 
                 <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                  <Calendar className="w-5 h-5 text-muted-foreground shrink-0" />
+                  <div className="w-full">
+                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">تاريخ الوصول</p>
+                    <Input
+                      type="date"
+                      value={checkIn}
+                      onChange={(e) => setCheckIn(e.target.value)}
+                      className="border-0 p-0 h-auto focus-visible:ring-0 shadow-none text-foreground font-medium bg-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                  <Calendar className="w-5 h-5 text-muted-foreground shrink-0" />
+                  <div className="w-full">
+                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">تاريخ المغادرة</p>
+                    <Input
+                      type="date"
+                      value={checkOut}
+                      onChange={(e) => setCheckOut(e.target.value)}
+                      min={checkIn}
+                      className="border-0 p-0 h-auto focus-visible:ring-0 shadow-none text-foreground font-medium bg-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
                   <Users className="w-5 h-5 text-muted-foreground shrink-0" />
                   <div className="w-full">
                     <p className="text-xs font-semibold text-muted-foreground text-right mb-1">عدد الضيوف</p>
@@ -137,7 +166,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {chalets?.slice(0, 6).map((chalet, index) => (
+              {chalets?.slice(0, 6).map((chalet: Chalet, index: number) => (
                 <motion.div
                   key={chalet.id}
                   initial={{ opacity: 0, y: 20 }}
