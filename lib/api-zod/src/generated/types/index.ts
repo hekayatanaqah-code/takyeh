@@ -6,4 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./chalet";
+export * from "./errorResponse";
+export * from "./getChaletsParams";
 export * from "./healthStatus";

@@ -8,3 +8,45 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface ErrorResponse {
+  error: string;
+}
+
+export interface Chalet {
+  id: number;
+  /** Chalet name in Arabic */
+  nameAr: string;
+  /** Chalet description in Arabic */
+  descriptionAr: string;
+  /** City name in Arabic */
+  location: string;
+  /** Price per night in SAR */
+  pricePerNight: number;
+  /** Maximum number of guests */
+  maxGuests: number;
+  /** Number of bedrooms */
+  bedrooms: number;
+  /** List of amenities in Arabic */
+  amenities: string[];
+  /** List of photo URLs */
+  photos: string[];
+  /** WhatsApp phone number for booking */
+  whatsappNumber: string;
+  createdAt: string;
+}
+
+export type GetChaletsParams = {
+  /**
+   * Filter by city name
+   */
+  location?: string;
+  /**
+   * Minimum number of guests the chalet must accommodate
+   */
+  maxGuests?: number;
+  /**
+   * Maximum price per night
+   */
+  maxPrice?: number;
+};

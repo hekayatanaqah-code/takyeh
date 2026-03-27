@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "سوق الشاليهات - القصيم"
+version = "1.0.0"
+id = "artifacts/chalet-marketplace"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22125
+
+[services.development]
+run = "pnpm --filter @workspace/chalet-marketplace run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/chalet-marketplace", "run", "build" ]
+publicDir = "artifacts/chalet-marketplace/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22125"
+BASE_PATH = "/"

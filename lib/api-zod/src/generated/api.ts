@@ -14,3 +14,53 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Returns a list of available chalets with optional filtering
+ * @summary List chalets
+ */
+export const GetChaletsQueryParams = zod.object({
+  location: zod.coerce.string().optional().describe("Filter by city name"),
+  maxGuests: zod.coerce
+    .number()
+    .optional()
+    .describe("Minimum number of guests the chalet must accommodate"),
+  maxPrice: zod.coerce.number().optional().describe("Maximum price per night"),
+});
+
+export const GetChaletsResponseItem = zod.object({
+  id: zod.number(),
+  nameAr: zod.string().describe("Chalet name in Arabic"),
+  descriptionAr: zod.string().describe("Chalet description in Arabic"),
+  location: zod.string().describe("City name in Arabic"),
+  pricePerNight: zod.number().describe("Price per night in SAR"),
+  maxGuests: zod.number().describe("Maximum number of guests"),
+  bedrooms: zod.number().describe("Number of bedrooms"),
+  amenities: zod.array(zod.string()).describe("List of amenities in Arabic"),
+  photos: zod.array(zod.string()).describe("List of photo URLs"),
+  whatsappNumber: zod.string().describe("WhatsApp phone number for booking"),
+  createdAt: zod.date(),
+});
+export const GetChaletsResponse = zod.array(GetChaletsResponseItem);
+
+/**
+ * Returns a single chalet's full details
+ * @summary Get chalet by ID
+ */
+export const GetChaletByIdParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetChaletByIdResponse = zod.object({
+  id: zod.number(),
+  nameAr: zod.string().describe("Chalet name in Arabic"),
+  descriptionAr: zod.string().describe("Chalet description in Arabic"),
+  location: zod.string().describe("City name in Arabic"),
+  pricePerNight: zod.number().describe("Price per night in SAR"),
+  maxGuests: zod.number().describe("Maximum number of guests"),
+  bedrooms: zod.number().describe("Number of bedrooms"),
+  amenities: zod.array(zod.string()).describe("List of amenities in Arabic"),
+  photos: zod.array(zod.string()).describe("List of photo URLs"),
+  whatsappNumber: zod.string().describe("WhatsApp phone number for booking"),
+  createdAt: zod.date(),
+});

@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: chalets
+    description: Chalet rental listings
 paths:
   /healthz:
     get:
@@ -24,6 +26,65 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /chalets:
+    get:
+      operationId: getChalets
+      tags: [chalets]
+      summary: List chalets
+      description: Returns a list of available chalets with optional filtering
+      parameters:
+        - name: location
+          in: query
+          schema:
+            type: string
+          description: Filter by city name
+        - name: maxGuests
+          in: query
+          schema:
+            type: integer
+          description: Minimum number of guests the chalet must accommodate
+        - name: maxPrice
+          in: query
+          schema:
+            type: number
+          description: Maximum price per night
+      responses:
+        "200":
+          description: List of chalets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Chalet"
+
+  /chalets/{id}:
+    get:
+      operationId: getChaletById
+      tags: [chalets]
+      summary: Get chalet by ID
+      description: Returns a single chalet's full details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Chalet detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Chalet"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +95,62 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Chalet:
+      type: object
+      properties:
+        id:
+          type: integer
+        nameAr:
+          type: string
+          description: Chalet name in Arabic
+        descriptionAr:
+          type: string
+          description: Chalet description in Arabic
+        location:
+          type: string
+          description: City name in Arabic
+        pricePerNight:
+          type: number
+          description: Price per night in SAR
+        maxGuests:
+          type: integer
+          description: Maximum number of guests
+        bedrooms:
+          type: integer
+          description: Number of bedrooms
+        amenities:
+          type: array
+          items:
+            type: string
+          description: List of amenities in Arabic
+        photos:
+          type: array
+          items:
+            type: string
+          description: List of photo URLs
+        whatsappNumber:
+          type: string
+          description: WhatsApp phone number for booking
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - nameAr
+        - descriptionAr
+        - location
+        - pricePerNight
+        - maxGuests
+        - bedrooms
+        - amenities
+        - photos
+        - whatsappNumber
+        - createdAt

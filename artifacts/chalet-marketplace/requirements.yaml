@@ -1,0 +1,22 @@
+packages:
+  "framer-motion": "For page transitions, smooth entrance animations, and interactive elements."
+  "date-fns": "For formatting dates in the search interface."
+  "embla-carousel-react": "For the image gallery carousel on the chalet detail page."
+
+images:
+  - path: "artifacts/chalet-marketplace/public/images/hero-bg.png"
+    description: "A breathtaking, high-quality, wide-angle shot of a luxurious modern desert chalet at sunset, featuring warm glowing lights, a pristine swimming pool, palm trees, and elegant Arabian architectural elements. The mood is welcoming, serene, and premium."
+    aspect_ratio: "16:9"
+  - path: "artifacts/chalet-marketplace/public/images/chalet-placeholder-1.png"
+    description: "Interior shot of a luxurious modern chalet living room with warm earthy tones, elegant Arabic design elements, large windows overlooking a pool, and plush seating."
+    aspect_ratio: "4:3"
+  - path: "artifacts/chalet-marketplace/public/images/chalet-placeholder-2.png"
+    description: "Outdoor patio of a beautiful resort chalet with a modern fire pit, comfortable lounge chairs, and subtle ambient evening lighting."
+    aspect_ratio: "4:3"
+  - path: "artifacts/chalet-marketplace/public/images/chalet-placeholder-3.png"
+    description: "A luxurious master bedroom in an upscale desert chalet, featuring a large comfortable bed, warm lighting, and contemporary rustic decor."
+    aspect_ratio: "4:3"
+
+notes:
+  - The application uses RTL (right-to-left) layout to support the Arabic language.
+  - The API endpoints for chalets are consumed from `@workspace/api-client-react`.

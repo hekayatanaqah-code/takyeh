@@ -21,7 +21,8 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 ```text
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
+│   ├── api-server/         # Express API server
+│   └── chalet-marketplace/ # Al-Qassim chalet rental marketplace (React + Vite)
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
@@ -34,6 +35,35 @@ artifacts-monorepo/
 ├── tsconfig.json           # Root TS project references
 └── package.json            # Root package with hoisted devDeps
 ```
+
+## Applications
+
+### `artifacts/chalet-marketplace` — سوق الشاليهات - القصيم
+
+Arabic-language vacation rental marketplace for chalets in Al-Qassim region, Saudi Arabia.
+
+**Features:**
+- Full RTL (right-to-left) Arabic interface
+- Landing page with hero section and search filters (city, guests)
+- Listings page with property cards and filter sidebar (city, guests, max price)
+- Property detail page with photo gallery, amenities, and WhatsApp booking button
+- Mobile-responsive design
+
+**Pages:**
+- `/` — Landing page
+- `/chalets` — Listings page with filters
+- `/chalets/:id` — Property detail page
+
+**Tech:** React 19 + Vite, Wouter, TanStack React Query, Tailwind CSS, Embla Carousel, Framer Motion
+
+### `artifacts/api-server` — Express API Server
+
+REST API serving chalet data.
+
+**Endpoints:**
+- `GET /api/healthz` — Health check
+- `GET /api/chalets` — List chalets (filters: `location`, `maxGuests`, `maxPrice`)
+- `GET /api/chalets/:id` — Single chalet detail
 
 ## TypeScript & Composite Projects
 
@@ -56,11 +86,10 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
+- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /healthz`; `src/routes/chalets.ts` exposes `GET /chalets` and `GET /chalets/:id`
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.mjs`)
 
 ### `lib/db` (`@workspace/db`)
 
@@ -68,11 +97,12 @@ Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client insta
 
 - `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
 - `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
+- `src/schema/chalets.ts` — chalets table definition
 
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
+**To seed the database:**
+```bash
+pnpm --filter @workspace/scripts run seed-chalets
+```
 
 ### `lib/api-spec` (`@workspace/api-spec`)
 
@@ -85,12 +115,14 @@ Run codegen: `pnpm --filter @workspace/api-spec run codegen`
 
 ### `lib/api-zod` (`@workspace/api-zod`)
 
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
+Generated Zod schemas from the OpenAPI spec.
 
 ### `lib/api-client-react` (`@workspace/api-client-react`)
 
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
+Generated React Query hooks and fetch client from the OpenAPI spec.
 
 ### `scripts` (`@workspace/scripts`)
 
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+Utility scripts package.
+
+- `seed-chalets` — Seeds 8 chalet listings into the database
