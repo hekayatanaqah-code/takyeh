@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { MapPin, Users, Search, Calendar } from "lucide-react";
+import { toHijri } from "@/lib/hijri";
 import { useGetChalets, Chalet } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -106,6 +107,11 @@ export default function Home() {
                       onChange={(e) => setCheckIn(e.target.value)}
                       className="border-0 p-0 h-auto focus-visible:ring-0 shadow-none text-foreground font-medium bg-transparent"
                     />
+                    {checkIn && (
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium text-right leading-tight mt-0.5">
+                        {toHijri(checkIn)}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -120,6 +126,11 @@ export default function Home() {
                       min={checkIn}
                       className="border-0 p-0 h-auto focus-visible:ring-0 shadow-none text-foreground font-medium bg-transparent"
                     />
+                    {checkOut && (
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium text-right leading-tight mt-0.5">
+                        {toHijri(checkOut)}
+                      </p>
+                    )}
                   </div>
                 </div>
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatDualDate } from "@/lib/hijri";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Badge } from "@/components/ui/badge";
@@ -165,9 +166,17 @@ function SubmissionReviewModal({
               <span className="mr-2"><StatusBadge status={s.status} /></span>
             </div>
             {s.trialEndsAt && (
-              <div className="col-span-2">
+              <div className="col-span-2 space-y-0.5">
                 <span className="text-slate-400">انتهاء الفترة التجريبية:</span>
-                <span className="mr-2 text-amber-400">{new Date(s.trialEndsAt).toLocaleDateString("ar-SA")}</span>
+                {(() => {
+                  const d = formatDualDate(s.trialEndsAt!.split("T")[0]);
+                  return (
+                    <div className="mr-2 inline-block">
+                      <span className="text-amber-400 font-medium">{d.gregorian}</span>
+                      <span className="text-amber-600 text-xs mr-2">({d.hijri})</span>
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {s.mapsUrl && (
@@ -956,26 +965,11 @@ function ServicesTab() {
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-slate-300 text-sm font-medium">السعر (ر.س)</label>
-              <Input
-                type="number"
-                value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                placeholder="اتركه فارغاً إذا كان بالاتفاق"
-                className="bg-slate-900 border-slate-600 text-white placeholder-slate-400"
-                dir="ltr"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-slate-300 text-sm font-medium">ملاحظة السعر</label>
-              <Input
-                value={form.priceNote}
-                onChange={(e) => setForm((f) => ({ ...f, priceNote: e.target.value }))}
-                placeholder="مثال: لكل يوم / للجلسة / بالاتفاق"
-                className="bg-slate-900 border-slate-600 text-white placeholder-slate-400"
-              />
+            <div className="space-y-1.5 sm:col-span-2">
+              <div className="rounded-lg bg-[#25D366]/10 border border-[#25D366]/30 px-3 py-2">
+                <p className="text-[#25D366] text-sm font-semibold">الأسعار عند التواصل مع المالك</p>
+                <p className="text-slate-400 text-xs mt-0.5">سيتواصل العملاء مع مزود الخدمة مباشرةً للاستفسار</p>
+              </div>
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">

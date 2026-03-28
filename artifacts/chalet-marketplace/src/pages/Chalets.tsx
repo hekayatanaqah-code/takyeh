@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
-import { Slider } from "@/components/ui/slider";
 
 export default function Chalets() {
   const [location] = useLocation();
@@ -18,24 +17,22 @@ export default function Chalets() {
   // State for filters
   const [filterLocation, setFilterLocation] = useState<string>(searchParams.get("location") || "all");
   const [filterGuests, setFilterGuests] = useState<string>(searchParams.get("maxGuests") || "");
-  const [filterPrice, setFilterPrice] = useState<number[]>([searchParams.get("maxPrice") ? Number(searchParams.get("maxPrice")) : 3000]);
 
   // Fetch data
   const { data: chalets, isLoading, refetch } = useGetChalets({
     location: filterLocation !== "all" ? filterLocation : undefined,
     maxGuests: filterGuests ? Number(filterGuests) : undefined,
-    maxPrice: filterPrice[0] < 3000 ? filterPrice[0] : undefined,
+    maxPrice: undefined,
   });
 
   // Effect to sync URL params on load
   useEffect(() => {
     refetch();
-  }, [filterLocation, filterGuests, filterPrice, refetch]);
+  }, [filterLocation, filterGuests, refetch]);
 
   const resetFilters = () => {
     setFilterLocation("all");
     setFilterGuests("");
-    setFilterPrice([3000]);
   };
 
   const FilterControls = () => (
@@ -70,24 +67,6 @@ export default function Chalets() {
         </Select>
       </div>
 
-      <div className="space-y-5">
-        <div className="flex justify-between items-center">
-          <label className="text-sm font-semibold text-foreground">السعر الأقصى (لليلة)</label>
-          <span className="text-sm font-bold text-primary">{filterPrice[0]} ر.س</span>
-        </div>
-        <Slider 
-          value={filterPrice} 
-          min={500} 
-          max={3000} 
-          step={100}
-          onValueChange={setFilterPrice}
-          className="py-4"
-        />
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>500 ر.س</span>
-          <span>3000+ ر.س</span>
-        </div>
-      </div>
 
       <Button variant="outline" className="w-full text-destructive border-destructive/20 hover:bg-destructive/10" onClick={resetFilters}>
         <FilterX className="w-4 h-4 me-2" />

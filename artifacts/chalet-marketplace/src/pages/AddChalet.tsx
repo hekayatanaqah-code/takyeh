@@ -22,7 +22,7 @@ import {
   MapPin,
   Link as LinkIcon,
   FileText,
-  DollarSign,
+
   Plus,
   X,
   Building2,
@@ -129,7 +129,6 @@ export default function AddChalet() {
     location: "",
     mapsUrl: "",
     descriptionAr: "",
-    pricePerNight: "",
   });
 
   const mutation = useCreateSubmission();
@@ -232,7 +231,7 @@ export default function AddChalet() {
           district: finalDistrict,
           mapsUrl: form.mapsUrl,
           descriptionAr: form.descriptionAr,
-          pricePerNight: Number(form.pricePerNight),
+          pricePerNight: 0,
           amenities: Array.from(selectedAmenities),
           photos: successfulPhotos,
         },
@@ -245,7 +244,7 @@ export default function AddChalet() {
 
   const resetForm = () => {
     setSubmitted(false);
-    setForm({ nameAr: "", whatsappNumber: "", location: "", mapsUrl: "", descriptionAr: "", pricePerNight: "" });
+    setForm({ nameAr: "", whatsappNumber: "", location: "", mapsUrl: "", descriptionAr: "" });
     setPhotos([]);
     setSelectedAmenities(new Set());
     setSelectedCityId(null);
@@ -468,27 +467,9 @@ export default function AddChalet() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="pricePerNight" className="text-base font-medium">
-                        متوسط السعر (ر.س / ليلة) <span className="text-destructive">*</span>
-                      </Label>
-                      <div className="relative">
-                        <DollarSign className="absolute top-3.5 right-3 w-4 h-4 text-muted-foreground pointer-events-none" />
-                        <Input
-                          id="pricePerNight"
-                          type="number"
-                          min="1"
-                          placeholder="500"
-                          value={form.pricePerNight}
-                          onChange={(e) => handleChange("pricePerNight", e.target.value)}
-                          required
-                          className="h-12 text-base pr-10"
-                        />
-                      </div>
-                      <p className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1">
-                        <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                        السعر النهائي يعتمد على الموسم ويتم تأكيده عبر واتساب
-                      </p>
+                    <div className="rounded-xl bg-[#25D366]/10 border border-[#25D366]/30 px-4 py-3">
+                      <p className="text-sm font-bold text-[#25D366]">الأسعار عند التواصل مع المالك</p>
+                      <p className="text-xs text-muted-foreground mt-1">لا داعي لتحديد سعر — سيتواصل معك العملاء مباشرةً عبر واتساب للاستفسار عن السعر وتفاصيل الحجز</p>
                     </div>
 
                     <div className="space-y-2">

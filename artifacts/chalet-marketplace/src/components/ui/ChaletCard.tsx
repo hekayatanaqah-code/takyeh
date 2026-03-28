@@ -47,8 +47,9 @@ export function ChaletCard({ chalet }: ChaletCardProps) {
               {chalet.nameAr}
             </h3>
             <div className="text-left whitespace-nowrap">
-              <span className="font-bold text-lg text-primary">{chalet.pricePerNight}</span>
-              <span className="text-sm text-muted-foreground me-1">ر.س / ليلة</span>
+              <span className="text-xs font-semibold text-[#25D366] bg-[#25D366]/10 px-2 py-0.5 rounded-full">
+                الأسعار عند التواصل
+              </span>
             </div>
           </div>
 

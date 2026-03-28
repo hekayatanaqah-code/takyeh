@@ -170,18 +170,10 @@ export default function ServiceDetail() {
 
                 {/* Price */}
                 <div className="bg-card border border-border rounded-2xl p-5">
-                  {service.price ? (
-                    <div className="mb-1">
-                      <span className="text-3xl font-extrabold text-primary">{Number(service.price).toLocaleString("ar-SA")}</span>
-                      <span className="text-muted-foreground text-lg me-1"> ر.س</span>
-                      {service.priceNote && <p className="text-muted-foreground text-sm mt-0.5">{service.priceNote}</p>}
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-xl font-bold text-foreground">{service.priceNote ?? "السعر عند الطلب"}</p>
-                      <p className="text-muted-foreground text-sm mt-0.5">تواصل معنا للاستفسار عن الأسعار</p>
-                    </div>
-                  )}
+                  <div className="mb-1">
+                    <p className="text-lg font-bold text-[#25D366]">الأسعار عند التواصل مع المالك</p>
+                    <p className="text-muted-foreground text-sm mt-1">تواصل مع مزود الخدمة مباشرةً للاستفسار عن السعر</p>
+                  </div>
 
                   <a
                     href={waLink}

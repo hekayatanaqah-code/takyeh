@@ -83,15 +83,9 @@ function ServiceCard({ service }: { service: ExternalService }) {
 
         <div className="flex items-center justify-between gap-3">
           <div>
-            {service.price ? (
-              <div>
-                <span className="text-primary font-bold text-lg">{Number(service.price).toLocaleString("ar-SA")}</span>
-                <span className="text-muted-foreground text-sm me-1"> ر.س</span>
-                {service.priceNote && <span className="text-muted-foreground text-xs">({service.priceNote})</span>}
-              </div>
-            ) : (
-              <span className="text-muted-foreground text-sm">{service.priceNote ?? "السعر عند الطلب"}</span>
-            )}
+            <span className="text-xs font-semibold text-[#25D366] bg-[#25D366]/10 px-2.5 py-1 rounded-full">
+              الأسعار عند التواصل
+            </span>
           </div>
           <a
             href={waLink}

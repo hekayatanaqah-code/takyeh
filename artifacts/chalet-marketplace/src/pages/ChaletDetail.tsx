@@ -205,14 +205,10 @@ export default function ChaletDetail() {
             <div className="lg:col-span-1">
               <div className="bg-card border border-border/60 shadow-xl shadow-primary/5 rounded-3xl p-6 sticky top-24">
                 <div className="mb-6 pb-6 border-b border-border/60">
-                  <p className="text-xs text-muted-foreground mb-1">متوسط السعر</p>
-                  <div className="flex items-end gap-2">
-                    <span className="text-3xl font-extrabold text-foreground">{chalet.pricePerNight}</span>
-                    <span className="text-muted-foreground font-medium mb-1">ر.س / ليلة</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                  <p className="text-sm font-bold text-[#25D366] mb-1">الأسعار عند التواصل مع المالك</p>
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                     <Info className="w-3.5 h-3.5 shrink-0" />
-                    السعر النهائي يعتمد على الموسم ويتم تأكيده عبر واتساب
+                    تواصل مع المالك مباشرةً للاستفسار عن السعر وتأكيد الحجز
                   </p>
                 </div>
 
@@ -248,12 +244,13 @@ export default function ChaletDetail() {
       {/* Mobile Sticky Booking Bar */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-background/90 backdrop-blur-xl border-t border-border z-50 flex items-center justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
         <div>
-          <span className="font-bold text-lg block">{chalet.pricePerNight} ر.س</span>
-          <span className="text-xs text-muted-foreground">لليلة الواحدة</span>
+          <span className="font-bold text-sm text-[#25D366] block">الأسعار عند التواصل</span>
+          <span className="text-xs text-muted-foreground">تواصل للاستفسار والحجز</span>
         </div>
         <WhatsAppButton 
           phoneNumber={chalet.whatsappNumber} 
           message={`أهلاً، أود الاستفسار عن حجز شاليه ${chalet.nameAr}.`}
+          className="px-6 py-2.5 text-base font-bold"
         />
       </div>
     </div>
