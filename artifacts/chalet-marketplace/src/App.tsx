@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Home from "./pages/Home";
 import Chalets from "./pages/Chalets";
 import ChaletDetail from "./pages/ChaletDetail";
+import AddChalet from "./pages/AddChalet";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/chalets" component={Chalets} />
       <Route path="/chalets/:id" component={ChaletDetail} />
+      <Route path="/add-chalet" component={AddChalet} />
       <Route component={NotFound} />
     </Switch>
   );

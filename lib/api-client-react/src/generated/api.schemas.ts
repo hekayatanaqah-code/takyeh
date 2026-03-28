@@ -13,6 +13,28 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface CreateSubmissionRequest {
+  /** Chalet name in Arabic */
+  nameAr: string;
+  /** Owner WhatsApp number */
+  whatsappNumber: string;
+  /** City name */
+  location: string;
+  /** Optional website or map URL */
+  websiteUrl?: string;
+  /** Chalet description in Arabic */
+  descriptionAr: string;
+  /** Price per night in SAR */
+  pricePerNight: number;
+  /** List of photo URLs (up to 5) */
+  photos?: string[];
+}
+
+export interface SubmissionResponse {
+  id: number;
+  message: string;
+}
+
 export interface Chalet {
   id: number;
   /** Chalet name in Arabic */

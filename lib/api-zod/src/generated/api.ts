@@ -64,3 +64,20 @@ export const GetChaletByIdResponse = zod.object({
   whatsappNumber: zod.string().describe("WhatsApp phone number for booking"),
   createdAt: zod.date(),
 });
+
+/**
+ * Allows property owners to submit their chalet for listing review
+ * @summary Submit a chalet for review
+ */
+export const CreateSubmissionBody = zod.object({
+  nameAr: zod.string().describe("Chalet name in Arabic"),
+  whatsappNumber: zod.string().describe("Owner WhatsApp number"),
+  location: zod.string().describe("City name"),
+  websiteUrl: zod.string().optional().describe("Optional website or map URL"),
+  descriptionAr: zod.string().describe("Chalet description in Arabic"),
+  pricePerNight: zod.number().describe("Price per night in SAR"),
+  photos: zod
+    .array(zod.string())
+    .optional()
+    .describe("List of photo URLs (up to 5)"),
+});

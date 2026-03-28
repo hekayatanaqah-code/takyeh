@@ -5,23 +5,28 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
 import type {
   Chalet,
+  CreateSubmissionRequest,
   ErrorResponse,
   GetChaletsParams,
   HealthStatus,
+  SubmissionResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -287,3 +292,90 @@ export function useGetChaletById<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Allows property owners to submit their chalet for listing review
+ * @summary Submit a chalet for review
+ */
+export const getCreateSubmissionUrl = () => {
+  return `/api/submissions`;
+};
+
+export const createSubmission = async (
+  createSubmissionRequest: CreateSubmissionRequest,
+  options?: RequestInit,
+): Promise<SubmissionResponse> => {
+  return customFetch<SubmissionResponse>(getCreateSubmissionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createSubmissionRequest),
+  });
+};
+
+export const getCreateSubmissionMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSubmission>>,
+    TError,
+    { data: BodyType<CreateSubmissionRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createSubmission>>,
+  TError,
+  { data: BodyType<CreateSubmissionRequest> },
+  TContext
+> => {
+  const mutationKey = ["createSubmission"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createSubmission>>,
+    { data: BodyType<CreateSubmissionRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createSubmission(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateSubmissionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createSubmission>>
+>;
+export type CreateSubmissionMutationBody = BodyType<CreateSubmissionRequest>;
+export type CreateSubmissionMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Submit a chalet for review
+ */
+export const useCreateSubmission = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSubmission>>,
+    TError,
+    { data: BodyType<CreateSubmissionRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createSubmission>>,
+  TError,
+  { data: BodyType<CreateSubmissionRequest> },
+  TContext
+> => {
+  return useMutation(getCreateSubmissionMutationOptions(options));
+};

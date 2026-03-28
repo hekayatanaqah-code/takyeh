@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, Home, Compass } from "lucide-react";
+import { MapPin, Menu, Home, Compass, PlusCircle } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -44,6 +44,12 @@ export function Navbar() {
               </Link>
             );
           })}
+          <Link href="/add-chalet">
+            <Button size="sm" className="ms-2 rounded-full font-semibold shadow-sm shadow-primary/20">
+              <PlusCircle className="w-4 h-4 me-1.5" />
+              أضف شاليهك
+            </Button>
+          </Link>
         </nav>
 
         {/* Mobile Nav */}
@@ -71,6 +77,18 @@ export function Navbar() {
                     {link.label}
                   </Link>
                 ))}
+                <Link
+                  href="/add-chalet"
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center px-4 py-3 rounded-xl text-base font-semibold transition-colors ${
+                    location === "/add-chalet"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-primary/10 text-primary hover:bg-primary/20"
+                  }`}
+                >
+                  <PlusCircle className="w-4 h-4 me-2" />
+                  أضف شاليهك
+                </Link>
               </nav>
             </SheetContent>
           </Sheet>

@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: chalets
     description: Chalet rental listings
+  - name: submissions
+    description: Owner chalet submission requests
 paths:
   /healthz:
     get:
@@ -85,6 +87,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /submissions:
+    post:
+      operationId: createSubmission
+      tags: [submissions]
+      summary: Submit a chalet for review
+      description: Allows property owners to submit their chalet for listing review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubmissionRequest"
+      responses:
+        "201":
+          description: Submission received successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmissionResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -102,6 +130,50 @@ components:
           type: string
       required:
         - error
+
+    CreateSubmissionRequest:
+      type: object
+      properties:
+        nameAr:
+          type: string
+          description: Chalet name in Arabic
+        whatsappNumber:
+          type: string
+          description: Owner WhatsApp number
+        location:
+          type: string
+          description: City name
+        websiteUrl:
+          type: string
+          description: Optional website or map URL
+        descriptionAr:
+          type: string
+          description: Chalet description in Arabic
+        pricePerNight:
+          type: number
+          description: Price per night in SAR
+        photos:
+          type: array
+          items:
+            type: string
+          description: List of photo URLs (up to 5)
+      required:
+        - nameAr
+        - whatsappNumber
+        - location
+        - descriptionAr
+        - pricePerNight
+
+    SubmissionResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        message:
+          type: string
+      required:
+        - id
+        - message
 
     Chalet:
       type: object
