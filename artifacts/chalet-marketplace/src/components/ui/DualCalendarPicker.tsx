@@ -125,28 +125,35 @@ function DualDayButton({
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       className={cn(
-        "relative flex items-center justify-center w-full h-auto min-h-[--cell-size] min-w-[--cell-size] rounded-lg p-2 gap-0",
+        "relative w-full h-[--cell-size] rounded-lg p-0 overflow-hidden",
         "data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground",
         "data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground",
         "data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground",
         "data-[range-middle=true]:bg-accent data-[range-middle=true]:text-accent-foreground data-[range-middle=true]:rounded-none",
-        modifiers.today && !isSelected && "ring-1 ring-primary/50 bg-primary/8",
-        modifiers.outside && "opacity-30",
+        modifiers.today && !isSelected && "ring-2 ring-primary/40 bg-primary/5",
+        modifiers.outside && "opacity-25",
         defaultClassNames.day,
         className
       )}
       {...props}
     >
-      {/* Gregorian day — top-left corner, small faint gray */}
+      {/* ── Gregorian — top-right corner, tiny reference number ── */}
       <span
-        className="absolute top-1.5 left-1.5 text-[8px] font-normal leading-none"
-        style={{ color: isSelected ? "rgba(255,255,255,0.45)" : "#9ca3af" }}
+        className="absolute top-[5px] right-[5px] text-[0.6rem] font-normal leading-none select-none"
+        style={{ color: isSelected ? "rgba(255,255,255,0.5)" : "#a1a1aa" }}
       >
         {gregDay}
       </span>
 
-      {/* Hijri day — perfectly centred, primary focus */}
-      <span className="text-[1.05rem] font-bold leading-none">{hijriDay}</span>
+      {/* ── Hijri — dead centre, primary focus ── */}
+      <span
+        className={cn(
+          "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
+          "text-[1.2rem] font-bold leading-none select-none"
+        )}
+      >
+        {hijriDay}
+      </span>
     </Button>
   );
 }
@@ -214,7 +221,7 @@ export function DualCalendarPicker({
       </PopoverTrigger>
 
       <PopoverContent
-        className="w-auto p-0 shadow-xl rounded-2xl border border-border overflow-hidden"
+        className="w-auto min-w-[22rem] p-0 shadow-xl rounded-2xl border border-border overflow-hidden"
         align="start"
         side="bottom"
         dir="rtl"
@@ -226,7 +233,7 @@ export function DualCalendarPicker({
           disabled={minDateObj ? { before: minDateObj } : undefined}
           defaultMonth={selected ?? (minDateObj ?? new Date())}
           dir="rtl"
-          className="p-4 [--cell-size:3rem]"
+          className="p-4 [--cell-size:3.25rem]"
           classNames={{
             months:         "flex flex-col gap-4",
             month:          "flex flex-col gap-3",
@@ -237,8 +244,8 @@ export function DualCalendarPicker({
             table:    "w-full border-collapse",
             weekdays: "flex mb-1",
             weekday:  "flex-1 text-center text-[0.68rem] font-semibold text-muted-foreground select-none",
-            week:     "flex w-full mt-1",
-            day:      "flex-1 relative p-0.5 text-center",
+            week:     "flex w-full mt-[3px]",
+            day:      "flex-1 relative p-[3px] text-center",
             today:    "",
             outside:  "",
             disabled: "opacity-30 pointer-events-none",
