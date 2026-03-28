@@ -35,9 +35,11 @@ router.post("/", async (req, res) => {
       nameAr: data.nameAr,
       whatsappNumber: data.whatsappNumber,
       location: data.location,
-      websiteUrl: data.websiteUrl ?? null,
+      websiteUrl: null,
+      mapsUrl: data.mapsUrl,
       descriptionAr: data.descriptionAr,
       pricePerNight: String(data.pricePerNight),
+      amenities: data.amenities ?? [],
       photos: data.photos ?? [],
     })
     .returning({ id: chaletSubmissionsTable.id });

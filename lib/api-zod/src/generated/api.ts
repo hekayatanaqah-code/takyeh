@@ -106,6 +106,20 @@ export const LogoutBrowserSessionHeader = zod.object({
 });
 
 /**
+ * @summary Request a presigned upload URL
+ */
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string(),
+  size: zod.number(),
+  contentType: zod.string(),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string(),
+  objectPath: zod.string(),
+});
+
+/**
  * @summary Get the authenticated owner's chalet submissions
  */
 export const GetMySubmissionsResponseItem = zod.object({
@@ -131,11 +145,15 @@ export const CreateSubmissionBody = zod.object({
   nameAr: zod.string().describe("Chalet name in Arabic"),
   whatsappNumber: zod.string().describe("Owner WhatsApp number"),
   location: zod.string().describe("City name"),
-  websiteUrl: zod.string().optional().describe("Optional website or map URL"),
+  mapsUrl: zod.string().describe("Required Google Maps link"),
   descriptionAr: zod.string().describe("Chalet description in Arabic"),
-  pricePerNight: zod.number().describe("Price per night in SAR"),
+  pricePerNight: zod.number().describe("Average price per night in SAR"),
+  amenities: zod
+    .array(zod.string())
+    .optional()
+    .describe("List of selected amenity keys"),
   photos: zod
     .array(zod.string())
     .optional()
-    .describe("List of photo URLs (up to 5)"),
+    .describe("List of object paths (up to 10)"),
 });

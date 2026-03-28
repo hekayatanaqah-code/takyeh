@@ -17,4 +17,6 @@ export * from "./createSubmissionRequest";
 export * from "./errorResponse";
 export * from "./getChaletsParams";
 export * from "./healthStatus";
+export * from "./requestUploadUrlBody";
+export * from "./requestUploadUrlResponse";
 export * from "./submissionResponse";

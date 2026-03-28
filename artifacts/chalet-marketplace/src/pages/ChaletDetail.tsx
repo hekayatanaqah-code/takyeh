@@ -204,9 +204,16 @@ export default function ChaletDetail() {
             {/* Sticky Sidebar Booking Card */}
             <div className="lg:col-span-1">
               <div className="bg-card border border-border/60 shadow-xl shadow-primary/5 rounded-3xl p-6 sticky top-24">
-                <div className="flex items-end gap-2 mb-6 pb-6 border-b border-border/60">
-                  <span className="text-3xl font-extrabold text-foreground">{chalet.pricePerNight}</span>
-                  <span className="text-muted-foreground font-medium mb-1">ر.س / ليلة</span>
+                <div className="mb-6 pb-6 border-b border-border/60">
+                  <p className="text-xs text-muted-foreground mb-1">متوسط السعر</p>
+                  <div className="flex items-end gap-2">
+                    <span className="text-3xl font-extrabold text-foreground">{chalet.pricePerNight}</span>
+                    <span className="text-muted-foreground font-medium mb-1">ر.س / ليلة</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5 shrink-0" />
+                    السعر النهائي يعتمد على الموسم ويتم تأكيده عبر واتساب
+                  </p>
                 </div>
 
                 <div className="space-y-4 mb-8">
@@ -228,7 +235,7 @@ export default function ChaletDetail() {
                 />
 
                 <p className="text-xs text-center text-muted-foreground mt-4">
-                  لن يتم تحصيل أي مبالغ الآن. الدفع يتم مباشرة مع المالك.
+                  تواصل مباشرة مع المالك عبر واتساب للحجز والاستفسار
                 </p>
               </div>
             </div>

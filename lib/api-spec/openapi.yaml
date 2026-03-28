@@ -16,6 +16,8 @@ tags:
     description: Owner chalet submission requests
   - name: Auth
     description: Browser and mobile authentication endpoints.
+  - name: storage
+    description: Object storage operations
 paths:
   /healthz:
     get:
@@ -137,6 +139,25 @@ paths:
       responses:
         '302':
           description: Redirect to the OIDC provider logout URL.
+
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a presigned upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlBody"
+      responses:
+        "200":
+          description: Presigned upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestUploadUrlResponse"
 
   /submissions:
     get:
@@ -280,6 +301,26 @@ components:
         - status
         - createdAt
 
+    RequestUploadUrlBody:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+
+    RequestUploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string
+
     CreateSubmissionRequest:
       type: object
       properties:
@@ -292,24 +333,30 @@ components:
         location:
           type: string
           description: City name
-        websiteUrl:
+        mapsUrl:
           type: string
-          description: Optional website or map URL
+          description: Required Google Maps link
         descriptionAr:
           type: string
           description: Chalet description in Arabic
         pricePerNight:
           type: number
-          description: Price per night in SAR
+          description: Average price per night in SAR
+        amenities:
+          type: array
+          items:
+            type: string
+          description: List of selected amenity keys
         photos:
           type: array
           items:
             type: string
-          description: List of photo URLs (up to 5)
+          description: List of object paths (up to 10)
       required:
         - nameAr
         - whatsappNumber
         - location
+        - mapsUrl
         - descriptionAr
         - pricePerNight
 

@@ -13,12 +13,14 @@ export interface CreateSubmissionRequest {
   whatsappNumber: string;
   /** City name */
   location: string;
-  /** Optional website or map URL */
-  websiteUrl?: string;
+  /** Required Google Maps link */
+  mapsUrl: string;
   /** Chalet description in Arabic */
   descriptionAr: string;
-  /** Price per night in SAR */
+  /** Average price per night in SAR */
   pricePerNight: number;
-  /** List of photo URLs (up to 5) */
+  /** List of selected amenity keys */
+  amenities?: string[];
+  /** List of object paths (up to 10) */
   photos?: string[];
 }

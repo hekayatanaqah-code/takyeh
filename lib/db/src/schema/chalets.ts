@@ -31,6 +31,8 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   websiteUrl: text("website_url"),
   descriptionAr: text("description_ar").notNull(),
   pricePerNight: numeric("price_per_night", { precision: 10, scale: 2 }).notNull(),
+  amenities: text("amenities").array().notNull().default([]),
+  mapsUrl: text("maps_url"),
   photos: text("photos").array().notNull().default([]),
   status: submissionStatusEnum("status").notNull().default("pending"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
