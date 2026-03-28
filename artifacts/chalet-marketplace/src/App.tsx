@@ -43,9 +43,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/chalets" component={Chalets} />
       <Route path="/chalets/:id" component={ChaletDetail} />
-      <Route path="/add-chalet">
-        {() => <ProtectedRoute component={AddChalet} />}
-      </Route>
+      <Route path="/add-chalet" component={AddChalet} />
       <Route path="/dashboard">
         {() => <ProtectedRoute component={Dashboard} />}
       </Route>
