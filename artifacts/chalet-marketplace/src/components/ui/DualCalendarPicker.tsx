@@ -125,30 +125,28 @@ function DualDayButton({
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       className={cn(
-        "relative flex flex-col items-center justify-center w-full h-auto min-h-[--cell-size] min-w-[--cell-size] rounded-md py-1 px-0 gap-0",
+        "relative flex items-center justify-center w-full h-auto min-h-[--cell-size] min-w-[--cell-size] rounded-lg p-2 gap-0",
         "data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground",
         "data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground",
         "data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground",
         "data-[range-middle=true]:bg-accent data-[range-middle=true]:text-accent-foreground data-[range-middle=true]:rounded-none",
-        modifiers.today && !isSelected && "ring-1 ring-primary/40 bg-accent/50",
-        modifiers.outside && "opacity-35",
+        modifiers.today && !isSelected && "ring-1 ring-primary/50 bg-primary/8",
+        modifiers.outside && "opacity-30",
         defaultClassNames.day,
         className
       )}
       {...props}
     >
-      {/* Gregorian day — small, top-left corner (visually top-right in RTL) */}
+      {/* Gregorian day — top-left corner, small faint gray */}
       <span
-        className={cn(
-          "absolute top-1 right-1 text-[9px] font-normal leading-none",
-          isSelected ? "opacity-60" : "text-muted-foreground"
-        )}
+        className="absolute top-1.5 left-1.5 text-[8px] font-normal leading-none"
+        style={{ color: isSelected ? "rgba(255,255,255,0.45)" : "#9ca3af" }}
       >
         {gregDay}
       </span>
 
-      {/* Hijri day — large, centred */}
-      <span className="text-base font-bold leading-none">{hijriDay}</span>
+      {/* Hijri day — perfectly centred, primary focus */}
+      <span className="text-[1.05rem] font-bold leading-none">{hijriDay}</span>
     </Button>
   );
 }
@@ -228,19 +226,19 @@ export function DualCalendarPicker({
           disabled={minDateObj ? { before: minDateObj } : undefined}
           defaultMonth={selected ?? (minDateObj ?? new Date())}
           dir="rtl"
-          className="p-3 [--cell-size:2.75rem]"
+          className="p-4 [--cell-size:3rem]"
           classNames={{
             months:         "flex flex-col gap-4",
             month:          "flex flex-col gap-3",
-            month_caption:  "flex h-12 items-center justify-center px-10 relative",
-            nav:            "absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1 px-2 pt-1.5",
+            month_caption:  "flex h-14 items-center justify-center px-11 relative",
+            nav:            "absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1 px-2 pt-2.5",
             button_previous: "h-9 w-9 flex items-center justify-center rounded-md hover:bg-accent transition-colors",
             button_next:     "h-9 w-9 flex items-center justify-center rounded-md hover:bg-accent transition-colors",
             table:    "w-full border-collapse",
             weekdays: "flex mb-1",
             weekday:  "flex-1 text-center text-[0.68rem] font-semibold text-muted-foreground select-none",
             week:     "flex w-full mt-1",
-            day:      "flex-1 relative aspect-square p-0 text-center",
+            day:      "flex-1 relative p-0.5 text-center",
             today:    "",
             outside:  "",
             disabled: "opacity-30 pointer-events-none",
