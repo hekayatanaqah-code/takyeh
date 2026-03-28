@@ -3,7 +3,18 @@ import { db } from "@workspace/db";
 import { chaletSubmissionsTable } from "@workspace/db/schema";
 import { CreateSubmissionBody } from "@workspace/api-zod";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import { sendAdminNewSubmissionEmail } from "../lib/email";
+
+const SubmissionBodyStrict = CreateSubmissionBody.extend({
+  nameAr: z.string().trim().min(2, "اسم الشاليه مطلوب"),
+  location: z.string().trim().min(2, "المدينة مطلوبة"),
+  descriptionAr: z.string().trim().min(10, "الوصف قصير جداً"),
+  whatsappNumber: z.string().trim().min(9, "رقم واتساب غير صحيح"),
+  pricePerNight: z.number().positive("يجب أن يكون السعر أكبر من صفر"),
+  mapsUrl: z.string().url().optional().or(z.literal("")),
+  photos: z.array(z.string()).max(5, "الحد الأقصى للصور هو 5").optional(),
+});
 
 const router = Router();
 
@@ -21,9 +32,9 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const result = CreateSubmissionBody.safeParse(req.body);
+  const result = SubmissionBodyStrict.safeParse(req.body);
   if (!result.success) {
-    return res.status(400).json({ error: "بيانات غير صحيحة" });
+    return res.status(400).json({ error: "بيانات غير صحيحة", details: result.error.flatten().fieldErrors });
   }
 
   const data = result.data;
@@ -36,8 +47,8 @@ router.post("/", async (req, res) => {
       nameAr: data.nameAr,
       whatsappNumber: data.whatsappNumber,
       location: data.location,
-      websiteUrl: data.mapsUrl ?? null,
-      mapsUrl: data.mapsUrl ?? null,
+      websiteUrl: data.mapsUrl || null,
+      mapsUrl: data.mapsUrl || null,
       descriptionAr: data.descriptionAr,
       pricePerNight: String(data.pricePerNight),
       amenities: data.amenities ?? [],
