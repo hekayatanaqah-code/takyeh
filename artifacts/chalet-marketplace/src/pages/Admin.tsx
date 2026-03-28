@@ -35,6 +35,60 @@ import { Textarea } from "@/components/ui/textarea";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const API = `${BASE}/api`;
 
+/* ── Domain types ─────────────────────────────── */
+type ServiceCategory = "bounce_houses" | "ice_cream" | "productive_families";
+
+interface Submission {
+  id: number;
+  nameAr: string;
+  location: string;
+  whatsappNumber: string;
+  pricePerNight: string;
+  status: string;
+  createdAt: string;
+  mapsUrl?: string | null;
+  websiteUrl?: string | null;
+}
+
+interface City {
+  id: number;
+  name: string;
+  isActive: boolean;
+}
+
+interface District {
+  id: number;
+  name: string;
+  cityId: number;
+  isActive: boolean;
+}
+
+interface Amenity {
+  id: number;
+  key: string;
+  labelAr: string;
+  isActive: boolean;
+}
+
+interface Owner {
+  ownerId: string;
+  nameAr: string;
+  whatsappNumber: string;
+  createdAt: string;
+}
+
+interface Service {
+  id: number;
+  nameAr: string;
+  category: ServiceCategory;
+  descriptionAr: string;
+  whatsappNumber: string;
+  price: string | null;
+  priceNote: string | null;
+  city: string | null;
+  isActive: boolean;
+}
+
 function apiFetch(path: string, opts?: RequestInit) {
   return fetch(`${API}${path}`, {
     credentials: "include",
@@ -115,7 +169,7 @@ function SubmissionsTab() {
                 <TableCell colSpan={7} className="text-center text-slate-400 py-12">لا توجد طلبات بعد</TableCell>
               </TableRow>
             )}
-            {submissions.map((s: any) => (
+            {submissions.map((s: Submission) => (
               <TableRow key={s.id} className="border-slate-700 hover:bg-slate-800/50 transition-colors">
                 <TableCell className="font-semibold text-white">{s.nameAr}</TableCell>
                 <TableCell className="text-slate-300">{s.location}</TableCell>
@@ -255,7 +309,7 @@ function LocationsTab() {
     },
   });
 
-  const cityDistricts = districts.filter((d: any) => d.cityId === Number(selectedCityId));
+  const cityDistricts = districts.filter((d: District) => d.cityId === Number(selectedCityId));
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -279,7 +333,7 @@ function LocationsTab() {
           </Button>
         </div>
         <div className="space-y-2 max-h-80 overflow-y-auto">
-          {cities.map((city: any) => (
+          {cities.map((city: City) => (
             <div key={city.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-700">
               <span className="text-white font-medium">{city.name}</span>
               <div className="flex items-center gap-2">
@@ -310,7 +364,7 @@ function LocationsTab() {
               <SelectValue placeholder="اختر المدينة" />
             </SelectTrigger>
             <SelectContent className="bg-slate-900 border-slate-700">
-              {cities.map((city: any) => (
+              {cities.map((city: City) => (
                 <SelectItem key={city.id} value={String(city.id)} className="text-white focus:bg-slate-700">{city.name}</SelectItem>
               ))}
             </SelectContent>
@@ -333,7 +387,7 @@ function LocationsTab() {
           </div>
         </div>
         <div className="space-y-2 max-h-64 overflow-y-auto">
-          {selectedCityId && cityDistricts.map((d: any) => (
+          {selectedCityId && cityDistricts.map((d: District) => (
             <div key={d.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-700">
               <span className="text-white">{d.name}</span>
               <Button
@@ -471,7 +525,7 @@ function AmenitiesTab() {
                 <TableCell colSpan={4} className="text-center text-slate-400 py-12">لا توجد مرافق بعد</TableCell>
               </TableRow>
             )}
-            {amenities.map((a: any) => (
+            {amenities.map((a: Amenity) => (
               <TableRow key={a.id} className="border-slate-700 hover:bg-slate-800/50">
                 <TableCell className="font-mono text-sm text-slate-400" dir="ltr">{a.key}</TableCell>
                 <TableCell className="text-white font-medium">{a.labelAr}</TableCell>
@@ -558,7 +612,7 @@ function OwnersTab() {
               <TableCell colSpan={4} className="text-center text-slate-400 py-12">لا يوجد ملاك بعد</TableCell>
             </TableRow>
           )}
-          {owners.map((owner: any) => (
+          {owners.map((owner: Owner) => (
             <TableRow key={owner.ownerId} className="border-slate-700 hover:bg-slate-800/50">
               <TableCell className="font-mono text-xs text-slate-400 max-w-[150px] truncate" dir="ltr">{owner.ownerId}</TableCell>
               <TableCell className="text-white font-medium">{owner.nameAr}</TableCell>
@@ -578,8 +632,6 @@ const SERVICE_CATEGORIES = [
   { value: "ice_cream",           label: "آيس كريم",    emoji: "🍦" },
   { value: "productive_families", label: "أسر منتجة",  emoji: "🎀" },
 ] as const;
-
-type ServiceCategory = typeof SERVICE_CATEGORIES[number]["value"];
 
 interface ServiceFormData {
   nameAr: string;
@@ -658,7 +710,7 @@ function ServicesTab() {
     },
   });
 
-  const handleEdit = (svc: any) => {
+  const handleEdit = (svc: Service) => {
     setEditId(svc.id);
     setForm({
       nameAr: svc.nameAr,
@@ -814,7 +866,7 @@ function ServicesTab() {
                   </TableCell>
                 </TableRow>
               )}
-              {services.map((svc: any) => {
+              {services.map((svc: Service) => {
                 const cat = SERVICE_CATEGORIES.find((c) => c.value === svc.category);
                 return (
                   <TableRow key={svc.id} className="border-slate-700 hover:bg-slate-800/50">

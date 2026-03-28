@@ -354,7 +354,6 @@ export default function AddChalet() {
                       <label
                         key={key}
                         className="flex items-center gap-3 cursor-pointer group p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 transition-all"
-                        onClick={() => toggleAmenity(key)}
                       >
                         <Checkbox
                           checked={selectedAmenities.has(key)}
