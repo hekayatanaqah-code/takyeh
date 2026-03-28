@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { MapPin, Users, Search, Calendar } from "lucide-react";
 import { useGetChalets, Chalet } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ChaletCard } from "@/components/ui/ChaletCard";
@@ -10,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -19,6 +22,15 @@ export default function Home() {
   const [checkOut, setCheckOut] = useState<string>("");
 
   const { data: chalets, isLoading } = useGetChalets();
+  const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["catalog", "cities"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/cities`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 
   const handleSearch = () => {
     const params = new URLSearchParams();
@@ -76,10 +88,9 @@ export default function Home() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">جميع المدن</SelectItem>
-                        <SelectItem value="بريدة">بريدة</SelectItem>
-                        <SelectItem value="عنيزة">عنيزة</SelectItem>
-                        <SelectItem value="الرس">الرس</SelectItem>
-                        <SelectItem value="البكيرية">البكيرية</SelectItem>
+                        {cities.map((city) => (
+                          <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

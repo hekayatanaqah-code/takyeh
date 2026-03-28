@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { chaletSubmissionsTable } from "@workspace/db/schema";
 import { CreateSubmissionBody } from "@workspace/api-zod";
 import { eq } from "drizzle-orm";
+import { sendAdminNewSubmissionEmail } from "../lib/email";
 
 const router = Router();
 
@@ -44,9 +45,18 @@ router.post("/", async (req, res) => {
     })
     .returning({ id: chaletSubmissionsTable.id });
 
+  sendAdminNewSubmissionEmail({
+    nameAr: data.nameAr,
+    whatsappNumber: data.whatsappNumber,
+    location: data.location,
+    pricePerNight: String(data.pricePerNight),
+    mapsUrl: data.mapsUrl,
+    submissionId: submission.id,
+  }).catch(() => {});
+
   return res.status(201).json({
     id: submission.id,
-    message: "تم استلام بياناتك بنجاح، سيتم مراجعة الشاليه ونشره قريباً",
+    message: "تم استلام طلبك، سيتم مراجعته وتفعيله قريباً",
   });
 });
 

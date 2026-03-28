@@ -10,6 +10,7 @@ import Chalets from "./pages/Chalets";
 import ChaletDetail from "./pages/ChaletDetail";
 import AddChalet from "./pages/AddChalet";
 import Dashboard from "./pages/Dashboard";
+import Admin from "./pages/Admin";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +47,7 @@ function Router() {
       <Route path="/dashboard">
         {() => <ProtectedRoute component={Dashboard} />}
       </Route>
+      <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>
   );

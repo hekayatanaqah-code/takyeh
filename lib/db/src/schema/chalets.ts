@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -41,3 +41,29 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
 export const insertSubmissionSchema = createInsertSchema(chaletSubmissionsTable).omit({ id: true, createdAt: true, status: true });
 export type InsertSubmission = z.infer<typeof insertSubmissionSchema>;
 export type ChaletSubmission = typeof chaletSubmissionsTable.$inferSelect;
+
+export const citiesCatalogTable = pgTable("cities_catalog", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type City = typeof citiesCatalogTable.$inferSelect;
+
+export const districtsCatalogTable = pgTable("districts_catalog", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  cityId: integer("city_id").references(() => citiesCatalogTable.id, { onDelete: "cascade" }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type District = typeof districtsCatalogTable.$inferSelect;
+
+export const amenitiesCatalogTable = pgTable("amenities_catalog", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  labelAr: text("label_ar").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type AmenityCatalog = typeof amenitiesCatalogTable.$inferSelect;

@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, Home, Compass, LogIn, LayoutDashboard } from "lucide-react";
+import { MapPin, Menu, Home, Compass, LogIn, LayoutDashboard, Settings } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -49,12 +49,19 @@ export function Navbar() {
 
           {!isLoading && (
             isAuthenticated ? (
-              <Link href="/dashboard">
-                <Button size="sm" className="ms-2 rounded-full font-semibold shadow-sm shadow-primary/20">
-                  <LayoutDashboard className="w-4 h-4 me-1.5" />
-                  لوحتي
-                </Button>
-              </Link>
+              <div className="flex items-center gap-1 ms-2">
+                <Link href="/dashboard">
+                  <Button size="sm" className="rounded-full font-semibold shadow-sm shadow-primary/20">
+                    <LayoutDashboard className="w-4 h-4 me-1.5" />
+                    لوحتي
+                  </Button>
+                </Link>
+                <Link href="/admin">
+                  <Button size="sm" variant="ghost" className="rounded-full w-9 h-9 p-0 text-muted-foreground hover:text-foreground" title="لوحة الإدارة">
+                    <Settings className="w-4 h-4" />
+                  </Button>
+                </Link>
+              </div>
             ) : (
               <Button
                 size="sm"

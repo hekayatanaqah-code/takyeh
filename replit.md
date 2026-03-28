@@ -50,9 +50,12 @@ Arabic-language vacation rental marketplace for chalets in Al-Qassim region, Sau
 - Mobile-responsive design
 
 **Pages:**
-- `/` — Landing page
+- `/` — Landing page with dynamic city search (from DB)
 - `/chalets` — Listings page with filters
 - `/chalets/:id` — Property detail page
+- `/add-chalet` — Owner submission form (authenticated; dynamic cities + amenities from DB)
+- `/dashboard` — Owner dashboard (authenticated)
+- `/admin` — Admin CMS panel (authenticated + ADMIN_USER_ID check)
 
 **Tech:** React 19 + Vite, Wouter, TanStack React Query, Tailwind CSS, Embla Carousel, Framer Motion
 
@@ -64,6 +67,23 @@ REST API serving chalet data.
 - `GET /api/healthz` — Health check
 - `GET /api/chalets` — List chalets (filters: `location`, `maxGuests`, `maxPrice`)
 - `GET /api/chalets/:id` — Single chalet detail
+- `GET /api/cities` — Public city catalog (dynamic)
+- `GET /api/amenities` — Public amenities catalog (dynamic)
+- `GET /api/submissions` — Owner's own submissions (authenticated)
+- `POST /api/submissions` — Submit new chalet (+ email notification)
+- `GET /api/admin/submissions` — All submissions (admin)
+- `PATCH /api/admin/submissions/:id/status` — Update status (admin)
+- `DELETE /api/admin/submissions/:id` — Delete submission (admin)
+- `GET /api/admin/owners` — List all owners (admin)
+- CRUD `/api/admin/cities`, `/api/admin/districts`, `/api/admin/amenities` (admin)
+
+**Admin Setup:**
+- Set `ADMIN_USER_ID` env var to the Replit user ID of the admin
+- Admin's Replit user ID can be found at `GET /api/auth/me` after login
+
+**Email Notifications:**
+- Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `ADMIN_EMAIL` env vars
+- Email sent automatically when new submission received
 
 ## TypeScript & Composite Projects
 

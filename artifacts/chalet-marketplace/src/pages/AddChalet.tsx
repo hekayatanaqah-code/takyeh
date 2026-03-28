@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 import { useCreateSubmission } from "@workspace/api-client-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
@@ -31,27 +32,31 @@ import {
   Info,
 } from "lucide-react";
 
-const CITIES = [
-  "بريدة",
-  "عنيزة",
-  "الرس",
-  "الخبراء",
-  "البكيرية",
-  "عيون الجواء",
-  "المذنب",
-  "الأسياح",
-];
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-const AMENITIES = [
-  { key: "indoor_pool", label: "مسبح داخلي" },
-  { key: "outdoor_pool", label: "مسبح خارجي" },
-  { key: "kids_games", label: "ألعاب أطفال" },
-  { key: "water_games", label: "ألعاب مائية" },
-  { key: "large_garden", label: "حديقة كبيرة" },
-  { key: "bedrooms", label: "غرف نوم" },
-  { key: "bbq", label: "ركن شواء" },
-  { key: "private_majlis", label: "مجالس مستقلة" },
-];
+function useCatalog() {
+  const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["catalog", "cities"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/cities`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: amenities = [] } = useQuery<{ id: number; key: string; labelAr: string }[]>({
+    queryKey: ["catalog", "amenities"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/amenities`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  return { cities, amenities };
+}
 
 const MAX_PHOTOS = 10;
 
@@ -89,6 +94,7 @@ async function uploadPhoto(file: File): Promise<string | null> {
 }
 
 export default function AddChalet() {
+  const { cities, amenities } = useCatalog();
   const [submitted, setSubmitted] = useState(false);
   const [photos, setPhotos] = useState<UploadedPhoto[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -309,9 +315,9 @@ export default function AddChalet() {
                           </div>
                         </SelectTrigger>
                         <SelectContent>
-                          {CITIES.map((city) => (
-                            <SelectItem key={city} value={city}>
-                              {city}
+                          {cities.map((city) => (
+                            <SelectItem key={city.id} value={city.name}>
+                              {city.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -344,7 +350,7 @@ export default function AddChalet() {
                     المرافق والمميزات
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-3">
-                    {AMENITIES.map(({ key, label }) => (
+                    {amenities.map(({ key, labelAr }) => (
                       <label
                         key={key}
                         className="flex items-center gap-3 cursor-pointer group p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 transition-all"
@@ -356,7 +362,7 @@ export default function AddChalet() {
                           className="shrink-0"
                         />
                         <span className="text-sm font-medium text-foreground leading-tight">
-                          {label}
+                          {labelAr}
                         </span>
                       </label>
                     ))}
