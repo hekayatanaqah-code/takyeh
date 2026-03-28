@@ -145,7 +145,10 @@ export const CreateSubmissionBody = zod.object({
   nameAr: zod.string().describe("Chalet name in Arabic"),
   whatsappNumber: zod.string().describe("Owner WhatsApp number"),
   location: zod.string().describe("City name"),
-  mapsUrl: zod.string().describe("Required Google Maps link"),
+  mapsUrl: zod
+    .string()
+    .optional()
+    .describe("Optional Google Maps or website link"),
   descriptionAr: zod.string().describe("Chalet description in Arabic"),
   pricePerNight: zod.number().describe("Average price per night in SAR"),
   amenities: zod
@@ -155,5 +158,5 @@ export const CreateSubmissionBody = zod.object({
   photos: zod
     .array(zod.string())
     .optional()
-    .describe("List of object paths (up to 10)"),
+    .describe("List of object paths (up to 5)"),
 });

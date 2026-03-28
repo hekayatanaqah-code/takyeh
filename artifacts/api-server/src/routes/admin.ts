@@ -15,11 +15,13 @@ const router = Router();
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.isAuthenticated()) {
-    return res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
+    res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
+    return;
   }
   const adminId = process.env.ADMIN_USER_ID;
   if (!adminId || req.user.id !== adminId) {
-    return res.status(403).json({ error: "غير مصرح لك بالدخول" });
+    res.status(403).json({ error: "غير مصرح لك بالدخول" });
+    return;
   }
   next();
 }

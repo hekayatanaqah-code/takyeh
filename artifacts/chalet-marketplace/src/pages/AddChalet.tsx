@@ -58,7 +58,7 @@ function useCatalog() {
   return { cities, amenities };
 }
 
-const MAX_PHOTOS = 10;
+const MAX_PHOTOS = 5;
 
 interface UploadedPhoto {
   url: string;
@@ -420,23 +420,23 @@ export default function AddChalet() {
 
                     <div className="space-y-2">
                       <Label htmlFor="mapsUrl" className="text-base font-medium">
-                        رابط الموقع على خرائط جوجل <span className="text-destructive">*</span>
+                        رابط الموقع على خرائط جوجل أو الموقع الإلكتروني{" "}
+                        <span className="text-muted-foreground font-normal text-sm">(اختياري)</span>
                       </Label>
                       <div className="relative">
                         <LinkIcon className="absolute top-3.5 right-3 w-4 h-4 text-muted-foreground pointer-events-none" />
                         <Input
                           id="mapsUrl"
                           type="url"
-                          placeholder="https://maps.google.com/..."
+                          placeholder="https://maps.google.com/... أو رابط الموقع"
                           value={form.mapsUrl}
                           onChange={(e) => handleChange("mapsUrl", e.target.value)}
-                          required
                           className="h-12 text-base pr-10"
                           dir="ltr"
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        مطلوب — يساعد الضيوف على معرفة الموقع بدقة
+                        يساعد الضيوف على معرفة الموقع بدقة
                       </p>
                     </div>
                   </div>

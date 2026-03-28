@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, Home, Compass, LogIn, LayoutDashboard, Settings } from "lucide-react";
+import { MapPin, Menu, Home, Compass, LogIn, LayoutDashboard, Settings, PlusCircle } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -48,11 +48,18 @@ export function Navbar() {
             );
           })}
 
+          <Link href="/add-chalet">
+            <Button size="sm" className="ms-2 rounded-full font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm shadow-primary/20">
+              <PlusCircle className="w-4 h-4 me-1.5" />
+              أضف شاليهك
+            </Button>
+          </Link>
+
           {!isLoading && (
             isAuthenticated ? (
-              <div className="flex items-center gap-1 ms-2">
+              <div className="flex items-center gap-1">
                 <Link href="/dashboard">
-                  <Button size="sm" className="rounded-full font-semibold shadow-sm shadow-primary/20">
+                  <Button size="sm" variant="ghost" className="rounded-full font-semibold">
                     <LayoutDashboard className="w-4 h-4 me-1.5" />
                     لوحتي
                   </Button>
@@ -68,7 +75,7 @@ export function Navbar() {
                 size="sm"
                 variant="outline"
                 onClick={() => login("/dashboard")}
-                className="ms-2 rounded-full font-semibold"
+                className="rounded-full font-semibold"
               >
                 <LogIn className="w-4 h-4 me-1.5" />
                 تسجيل الدخول / إنشاء حساب
@@ -103,6 +110,15 @@ export function Navbar() {
                   </Link>
                 ))}
 
+                <Link
+                  href="/add-chalet"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center px-4 py-3 rounded-xl text-base font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  <PlusCircle className="w-4 h-4 me-2" />
+                  أضف شاليهك
+                </Link>
+
                 {!isLoading && (
                   isAuthenticated ? (
                     <Link
@@ -110,7 +126,7 @@ export function Navbar() {
                       onClick={() => setIsOpen(false)}
                       className={`flex items-center px-4 py-3 rounded-xl text-base font-semibold transition-colors ${
                         location === "/dashboard"
-                          ? "bg-primary text-primary-foreground"
+                          ? "bg-primary/20 text-primary"
                           : "bg-primary/10 text-primary hover:bg-primary/20"
                       }`}
                     >
@@ -120,7 +136,7 @@ export function Navbar() {
                   ) : (
                     <button
                       onClick={() => { setIsOpen(false); login("/dashboard"); }}
-                      className="flex items-center px-4 py-3 rounded-xl text-base font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                      className="flex items-center px-4 py-3 rounded-xl text-base font-semibold bg-muted text-foreground hover:bg-muted/80 transition-colors"
                     >
                       <LogIn className="w-4 h-4 me-2" />
                       تسجيل الدخول / إنشاء حساب

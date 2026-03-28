@@ -72,15 +72,15 @@ export interface CreateSubmissionRequest {
   whatsappNumber: string;
   /** City name */
   location: string;
-  /** Required Google Maps link */
-  mapsUrl: string;
+  /** Optional Google Maps or website link */
+  mapsUrl?: string;
   /** Chalet description in Arabic */
   descriptionAr: string;
   /** Average price per night in SAR */
   pricePerNight: number;
   /** List of selected amenity keys */
   amenities?: string[];
-  /** List of object paths (up to 10) */
+  /** List of object paths (up to 5) */
   photos?: string[];
 }
 

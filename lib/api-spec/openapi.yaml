@@ -335,7 +335,7 @@ components:
           description: City name
         mapsUrl:
           type: string
-          description: Required Google Maps link
+          description: Optional Google Maps or website link
         descriptionAr:
           type: string
           description: Chalet description in Arabic
@@ -351,12 +351,11 @@ components:
           type: array
           items:
             type: string
-          description: List of object paths (up to 10)
+          description: List of object paths (up to 5)
       required:
         - nameAr
         - whatsappNumber
         - location
-        - mapsUrl
         - descriptionAr
         - pricePerNight
 

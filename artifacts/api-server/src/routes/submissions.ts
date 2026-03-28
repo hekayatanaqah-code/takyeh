@@ -37,7 +37,7 @@ router.post("/", async (req, res) => {
       whatsappNumber: data.whatsappNumber,
       location: data.location,
       websiteUrl: null,
-      mapsUrl: data.mapsUrl,
+      mapsUrl: data.mapsUrl ?? null,
       descriptionAr: data.descriptionAr,
       pricePerNight: String(data.pricePerNight),
       amenities: data.amenities ?? [],
