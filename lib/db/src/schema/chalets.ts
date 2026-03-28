@@ -28,6 +28,7 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   nameAr: text("name_ar").notNull(),
   whatsappNumber: text("whatsapp_number").notNull(),
   location: text("location").notNull(),
+  district: text("district"),
   websiteUrl: text("website_url"),
   descriptionAr: text("description_ar").notNull(),
   pricePerNight: numeric("price_per_night", { precision: 10, scale: 2 }).notNull(),
@@ -35,6 +36,7 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   mapsUrl: text("maps_url"),
   photos: text("photos").array().notNull().default([]),
   status: submissionStatusEnum("status").notNull().default("pending"),
+  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -85,6 +87,7 @@ export const externalServicesTable = pgTable("external_services", {
   city: text("city"),
   photos: text("photos").array().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
+  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ExternalService = typeof externalServicesTable.$inferSelect;

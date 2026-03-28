@@ -29,7 +29,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -42,12 +48,17 @@ interface Submission {
   id: number;
   nameAr: string;
   location: string;
+  district?: string | null;
   whatsappNumber: string;
   pricePerNight: string;
   status: string;
   createdAt: string;
+  trialEndsAt?: string | null;
   mapsUrl?: string | null;
   websiteUrl?: string | null;
+  descriptionAr?: string | null;
+  amenities?: string[];
+  photos?: string[];
 }
 
 interface City {
@@ -108,10 +119,140 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${s.className}`}>{s.label}</span>;
 }
 
+/* ── Submission Review Modal ──────────────────── */
+function SubmissionReviewModal({
+  submission,
+  open,
+  onClose,
+  onApprove,
+  onReject,
+  isPending,
+}: {
+  submission: Submission | null;
+  open: boolean;
+  onClose: () => void;
+  onApprove: (id: number) => void;
+  onReject: (id: number) => void;
+  isPending: boolean;
+}) {
+  if (!submission) return null;
+  const s = submission;
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="text-right text-xl font-bold">{s.nameAr}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5 mt-2">
+          {/* Basic Info */}
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <span className="text-slate-400">المدينة:</span>
+              <span className="mr-2 text-white">{s.location}</span>
+              {s.district && <span className="text-slate-300"> ← {s.district}</span>}
+            </div>
+            <div>
+              <span className="text-slate-400">السعر:</span>
+              <span className="mr-2 text-white">{Number(s.pricePerNight).toLocaleString("ar-SA")} ر.س / ليلة</span>
+            </div>
+            <div>
+              <span className="text-slate-400">واتساب:</span>
+              <span className="mr-2 text-white font-mono" dir="ltr">{s.whatsappNumber}</span>
+            </div>
+            <div>
+              <span className="text-slate-400">الحالة:</span>
+              <span className="mr-2"><StatusBadge status={s.status} /></span>
+            </div>
+            {s.trialEndsAt && (
+              <div className="col-span-2">
+                <span className="text-slate-400">انتهاء الفترة التجريبية:</span>
+                <span className="mr-2 text-amber-400">{new Date(s.trialEndsAt).toLocaleDateString("ar-SA")}</span>
+              </div>
+            )}
+            {s.mapsUrl && (
+              <div className="col-span-2">
+                <a href={s.mapsUrl} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-sm">
+                  <MapPin className="w-4 h-4" />
+                  عرض الموقع على الخريطة
+                </a>
+              </div>
+            )}
+          </div>
+
+          {/* Description */}
+          {s.descriptionAr && (
+            <div>
+              <p className="text-slate-400 text-sm font-semibold mb-1">الوصف</p>
+              <p className="text-slate-200 text-sm leading-relaxed bg-slate-800 rounded-lg p-3">{s.descriptionAr}</p>
+            </div>
+          )}
+
+          {/* Amenities */}
+          {s.amenities && s.amenities.length > 0 && (
+            <div>
+              <p className="text-slate-400 text-sm font-semibold mb-2">المميزات</p>
+              <div className="flex flex-wrap gap-2">
+                {s.amenities.map((a) => (
+                  <span key={a} className="text-xs bg-slate-700 text-slate-200 px-2 py-1 rounded-full">{a}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Photos */}
+          {s.photos && s.photos.length > 0 && (
+            <div>
+              <p className="text-slate-400 text-sm font-semibold mb-2">الصور ({s.photos.length})</p>
+              <div className="grid grid-cols-2 gap-2">
+                {s.photos.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noreferrer">
+                    <img
+                      src={url}
+                      alt={`صورة ${i + 1}`}
+                      className="w-full h-36 object-cover rounded-lg border border-slate-700 hover:border-blue-500 transition-colors"
+                    />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-2 border-t border-slate-700">
+            {s.status !== "approved" && (
+              <Button
+                className="flex-1 bg-green-700 hover:bg-green-600 text-white"
+                onClick={() => { onApprove(s.id); onClose(); }}
+                disabled={isPending}
+              >
+                <CheckCircle className="w-4 h-4 ml-2" />
+                قبول الطلب
+              </Button>
+            )}
+            {s.status !== "rejected" && (
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={() => { onReject(s.id); onClose(); }}
+                disabled={isPending}
+              >
+                <XCircle className="w-4 h-4 ml-2" />
+                رفض الطلب
+              </Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ── Submissions Tab ──────────────────────────── */
 function SubmissionsTab() {
   const qc = useQueryClient();
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [reviewSubmission, setReviewSubmission] = useState<Submission | null>(null);
 
   const { data: submissions = [], isLoading } = useQuery({
     queryKey: ["admin", "submissions"],
@@ -150,6 +291,15 @@ function SubmissionsTab() {
 
   return (
     <>
+      <SubmissionReviewModal
+        submission={reviewSubmission}
+        open={reviewSubmission !== null}
+        onClose={() => setReviewSubmission(null)}
+        onApprove={(id) => updateStatus.mutate({ id, status: "approved" })}
+        onReject={(id) => updateStatus.mutate({ id, status: "rejected" })}
+        isPending={updateStatus.isPending}
+      />
+
       <div className="rounded-lg border border-slate-700 overflow-hidden">
         <Table>
           <TableHeader>
@@ -159,6 +309,7 @@ function SubmissionsTab() {
               <TableHead className="text-slate-300 text-right font-semibold">واتساب</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">السعر</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">الحالة</TableHead>
+              <TableHead className="text-slate-300 text-right font-semibold">التجربة تنتهي</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">التاريخ</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">الإجراءات</TableHead>
             </TableRow>
@@ -166,19 +317,41 @@ function SubmissionsTab() {
           <TableBody>
             {submissions.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-slate-400 py-12">لا توجد طلبات بعد</TableCell>
+                <TableCell colSpan={8} className="text-center text-slate-400 py-12">لا توجد طلبات بعد</TableCell>
               </TableRow>
             )}
             {submissions.map((s: Submission) => (
               <TableRow key={s.id} className="border-slate-700 hover:bg-slate-800/50 transition-colors">
                 <TableCell className="font-semibold text-white">{s.nameAr}</TableCell>
-                <TableCell className="text-slate-300">{s.location}</TableCell>
+                <TableCell className="text-slate-300">
+                  {s.location}
+                  {s.district && <span className="block text-xs text-slate-500">{s.district}</span>}
+                </TableCell>
                 <TableCell className="text-slate-300 font-mono text-sm" dir="ltr">{s.whatsappNumber}</TableCell>
                 <TableCell className="text-slate-300">{Number(s.pricePerNight).toLocaleString("ar-SA")} ر.س</TableCell>
                 <TableCell><StatusBadge status={s.status} /></TableCell>
+                <TableCell className="text-slate-400 text-sm">
+                  {s.trialEndsAt ? (
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      {new Date(s.trialEndsAt).toLocaleDateString("ar-SA")}
+                    </span>
+                  ) : (
+                    <span className="text-slate-600">—</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-slate-400 text-sm">{new Date(s.createdAt).toLocaleDateString("ar-SA")}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2 text-blue-400 hover:text-blue-300 hover:bg-blue-900/30"
+                      onClick={() => setReviewSubmission(s)}
+                      title="مراجعة"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
                     {s.status !== "approved" && (
                       <Button
                         size="sm"
@@ -186,6 +359,7 @@ function SubmissionsTab() {
                         className="h-8 px-2 text-green-400 hover:text-green-300 hover:bg-green-900/30"
                         onClick={() => updateStatus.mutate({ id: s.id, status: "approved" })}
                         disabled={updateStatus.isPending}
+                        title="قبول"
                       >
                         <CheckCircle className="w-4 h-4" />
                       </Button>
@@ -197,6 +371,7 @@ function SubmissionsTab() {
                         className="h-8 px-2 text-red-400 hover:text-red-300 hover:bg-red-900/30"
                         onClick={() => updateStatus.mutate({ id: s.id, status: "rejected" })}
                         disabled={updateStatus.isPending}
+                        title="رفض"
                       >
                         <XCircle className="w-4 h-4" />
                       </Button>
@@ -211,6 +386,7 @@ function SubmissionsTab() {
                       variant="ghost"
                       className="h-8 px-2 text-slate-400 hover:text-red-400 hover:bg-red-900/20"
                       onClick={() => setDeleteId(s.id)}
+                      title="حذف"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>

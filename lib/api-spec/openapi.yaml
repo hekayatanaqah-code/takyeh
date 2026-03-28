@@ -333,6 +333,9 @@ components:
         location:
           type: string
           description: City name
+        district:
+          type: string
+          description: Optional district or neighborhood name
         mapsUrl:
           type: string
           description: Optional Google Maps or website link

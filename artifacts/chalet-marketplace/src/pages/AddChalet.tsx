@@ -34,14 +34,31 @@ import {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-function useCatalog() {
-  const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
+interface CityOption { id: number; name: string; }
+interface DistrictOption { id: number; name: string; cityId: number; }
+
+function useCatalog(selectedCityId: number | null) {
+  const { data: cities = [] } = useQuery<CityOption[]>({
     queryKey: ["catalog", "cities"],
     queryFn: async () => {
       const r = await fetch(`${BASE}/api/cities`, { credentials: "include" });
       if (!r.ok) return [];
       return r.json();
     },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: districts = [] } = useQuery<DistrictOption[]>({
+    queryKey: ["catalog", "districts", selectedCityId],
+    queryFn: async () => {
+      const url = selectedCityId
+        ? `${BASE}/api/districts?cityId=${selectedCityId}`
+        : `${BASE}/api/districts`;
+      const r = await fetch(url, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: true,
     staleTime: 1000 * 60 * 5,
   });
 
@@ -55,7 +72,7 @@ function useCatalog() {
     staleTime: 1000 * 60 * 5,
   });
 
-  return { cities, amenities };
+  return { cities, districts, amenities };
 }
 
 const MAX_PHOTOS = 5;
@@ -94,13 +111,16 @@ async function uploadPhoto(file: File): Promise<string | null> {
 }
 
 export default function AddChalet() {
-  const { cities, amenities } = useCatalog();
+  const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
+  const { cities, districts, amenities } = useCatalog(selectedCityId);
   const [submitted, setSubmitted] = useState(false);
   const [photos, setPhotos] = useState<UploadedPhoto[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedAmenities, setSelectedAmenities] = useState<Set<string>>(new Set());
   const [isDragging, setIsDragging] = useState(false);
+  const [selectedDistrict, setSelectedDistrict] = useState("");
+  const [customDistrict, setCustomDistrict] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
@@ -199,12 +219,17 @@ export default function AddChalet() {
 
     const successfulPhotos = photos.filter((p) => p.url && p.url !== "error").map((p) => p.url);
 
+    const finalDistrict = selectedDistrict === "__other__"
+      ? customDistrict.trim() || undefined
+      : selectedDistrict || undefined;
+
     mutation.mutate(
       {
         data: {
           nameAr: form.nameAr,
           whatsappNumber: form.whatsappNumber,
           location: form.location,
+          district: finalDistrict,
           mapsUrl: form.mapsUrl,
           descriptionAr: form.descriptionAr,
           pricePerNight: Number(form.pricePerNight),
@@ -223,6 +248,9 @@ export default function AddChalet() {
     setForm({ nameAr: "", whatsappNumber: "", location: "", mapsUrl: "", descriptionAr: "", pricePerNight: "" });
     setPhotos([]);
     setSelectedAmenities(new Set());
+    setSelectedCityId(null);
+    setSelectedDistrict("");
+    setCustomDistrict("");
   };
 
   const canAddMore = photos.length < MAX_PHOTOS && !isUploading;
@@ -305,7 +333,13 @@ export default function AddChalet() {
                       </Label>
                       <Select
                         value={form.location}
-                        onValueChange={(val) => handleChange("location", val)}
+                        onValueChange={(val) => {
+                          handleChange("location", val);
+                          const city = cities.find((c) => c.name === val);
+                          setSelectedCityId(city?.id ?? null);
+                          setSelectedDistrict("");
+                          setCustomDistrict("");
+                        }}
                         required
                       >
                         <SelectTrigger className="h-12 text-base">
@@ -323,6 +357,46 @@ export default function AddChalet() {
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {/* Smart District Dropdown */}
+                    {form.location && (
+                      <div className="space-y-2">
+                        <Label htmlFor="district" className="text-base font-medium">
+                          الحي أو المنطقة{" "}
+                          <span className="text-muted-foreground font-normal text-sm">(اختياري)</span>
+                        </Label>
+                        <Select
+                          value={selectedDistrict}
+                          onValueChange={(val) => {
+                            setSelectedDistrict(val);
+                            if (val !== "__other__") setCustomDistrict("");
+                          }}
+                        >
+                          <SelectTrigger className="h-12 text-base">
+                            <div className="flex items-center gap-2">
+                              <Building2 className="w-4 h-4 text-muted-foreground" />
+                              <SelectValue placeholder={districts.length > 0 ? "اختر الحي" : "حي / منطقة"} />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {districts.map((d) => (
+                              <SelectItem key={d.id} value={d.name}>
+                                {d.name}
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="__other__">أخرى...</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {selectedDistrict === "__other__" && (
+                          <Input
+                            placeholder="اكتب اسم الحي أو المنطقة"
+                            value={customDistrict}
+                            onChange={(e) => setCustomDistrict(e.target.value)}
+                            className="h-12 text-base"
+                          />
+                        )}
+                      </div>
+                    )}
 
                     <div className="space-y-2">
                       <Label htmlFor="descriptionAr" className="text-base font-medium">

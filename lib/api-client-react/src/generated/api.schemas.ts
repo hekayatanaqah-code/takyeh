@@ -72,6 +72,8 @@ export interface CreateSubmissionRequest {
   whatsappNumber: string;
   /** City name */
   location: string;
+  /** Optional district or neighborhood name */
+  district?: string;
   /** Optional Google Maps or website link */
   mapsUrl?: string;
   /** Chalet description in Arabic */

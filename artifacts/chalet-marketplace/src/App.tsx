@@ -13,6 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import Services from "./pages/Services";
 import ServiceDetail from "./pages/ServiceDetail";
+import { FloatingWhatsApp } from "@/components/layout/FloatingWhatsApp";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -68,6 +69,7 @@ function App() {
           <Router />
         </WouterRouter>
         <Toaster />
+        <FloatingWhatsApp />
       </TooltipProvider>
     </QueryClientProvider>
   );

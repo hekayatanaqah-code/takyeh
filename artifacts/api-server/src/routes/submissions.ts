@@ -9,6 +9,7 @@ import { sendAdminNewSubmissionEmail } from "../lib/email";
 const SubmissionBodyStrict = CreateSubmissionBody.extend({
   nameAr: z.string().trim().min(2, "اسم الشاليه مطلوب"),
   location: z.string().trim().min(2, "المدينة مطلوبة"),
+  district: z.string().trim().optional(),
   descriptionAr: z.string().trim().min(10, "الوصف قصير جداً"),
   whatsappNumber: z.string().trim().min(9, "رقم واتساب غير صحيح"),
   pricePerNight: z.number().positive("يجب أن يكون السعر أكبر من صفر"),
@@ -47,12 +48,14 @@ router.post("/", async (req, res) => {
       nameAr: data.nameAr,
       whatsappNumber: data.whatsappNumber,
       location: data.location,
+      district: data.district || null,
       websiteUrl: data.mapsUrl || null,
       mapsUrl: data.mapsUrl || null,
       descriptionAr: data.descriptionAr,
       pricePerNight: String(data.pricePerNight),
       amenities: data.amenities ?? [],
       photos: data.photos ?? [],
+      trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     })
     .returning({ id: chaletSubmissionsTable.id });
 

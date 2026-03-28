@@ -145,6 +145,10 @@ export const CreateSubmissionBody = zod.object({
   nameAr: zod.string().describe("Chalet name in Arabic"),
   whatsappNumber: zod.string().describe("Owner WhatsApp number"),
   location: zod.string().describe("City name"),
+  district: zod
+    .string()
+    .optional()
+    .describe("Optional district or neighborhood name"),
   mapsUrl: zod
     .string()
     .optional()

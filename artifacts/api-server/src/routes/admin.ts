@@ -220,6 +220,7 @@ router.post("/services", async (req, res) => {
       ...body.data,
       price: body.data.price != null ? String(body.data.price) : null,
       photos: body.data.photos ?? [],
+      trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     })
     .returning();
 
