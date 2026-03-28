@@ -24,6 +24,7 @@ export const submissionStatusEnum = pgEnum("submission_status", ["pending", "app
 
 export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   id: serial("id").primaryKey(),
+  ownerId: text("owner_id"),
   nameAr: text("name_ar").notNull(),
   whatsappNumber: text("whatsapp_number").notNull(),
   location: text("location").notNull(),

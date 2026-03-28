@@ -66,6 +66,64 @@ export const GetChaletByIdResponse = zod.object({
 });
 
 /**
+ * @summary Get the currently authenticated user
+ */
+export const GetCurrentAuthUserHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — `Bearer <sid>`."),
+});
+
+export const GetCurrentAuthUserResponse = zod.object({
+  user: zod.union([
+    zod.object({
+      id: zod.string(),
+      email: zod.string().email().nullable(),
+      firstName: zod.string().nullable(),
+      lastName: zod.string().nullable(),
+      profileImageUrl: zod.string().nullable(),
+    }),
+    zod.null(),
+  ]),
+});
+
+/**
+ * @summary Start the browser OIDC login flow
+ */
+export const BeginBrowserLoginQueryParams = zod.object({
+  returnTo: zod.coerce.string().optional(),
+});
+
+/**
+ * @summary Clear the session and begin OIDC logout
+ */
+export const LogoutBrowserSessionHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — `Bearer <sid>`."),
+});
+
+/**
+ * @summary Get the authenticated owner's chalet submissions
+ */
+export const GetMySubmissionsResponseItem = zod.object({
+  id: zod.number(),
+  ownerId: zod.string().nullish(),
+  nameAr: zod.string(),
+  whatsappNumber: zod.string(),
+  location: zod.string(),
+  websiteUrl: zod.string().nullish(),
+  descriptionAr: zod.string(),
+  pricePerNight: zod.number(),
+  photos: zod.array(zod.string()),
+  status: zod.enum(["pending", "approved", "rejected"]),
+  createdAt: zod.date(),
+});
+export const GetMySubmissionsResponse = zod.array(GetMySubmissionsResponseItem);
+
+/**
  * Allows property owners to submit their chalet for listing review
  * @summary Submit a chalet for review
  */

@@ -1,13 +1,15 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, Home, Compass, PlusCircle } from "lucide-react";
+import { MapPin, Menu, Home, Compass, LogIn, LayoutDashboard } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { useAuth } from "@workspace/replit-auth-web";
 
 export function Navbar() {
   const [location] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const { isAuthenticated, login, isLoading } = useAuth();
 
   const navLinks = [
     { href: "/", label: "الرئيسية", icon: <Home className="w-4 h-4 me-2" /> },
@@ -44,12 +46,27 @@ export function Navbar() {
               </Link>
             );
           })}
-          <Link href="/add-chalet">
-            <Button size="sm" className="ms-2 rounded-full font-semibold shadow-sm shadow-primary/20">
-              <PlusCircle className="w-4 h-4 me-1.5" />
-              أضف شاليهك
-            </Button>
-          </Link>
+
+          {!isLoading && (
+            isAuthenticated ? (
+              <Link href="/dashboard">
+                <Button size="sm" className="ms-2 rounded-full font-semibold shadow-sm shadow-primary/20">
+                  <LayoutDashboard className="w-4 h-4 me-1.5" />
+                  لوحتي
+                </Button>
+              </Link>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => login("/dashboard")}
+                className="ms-2 rounded-full font-semibold"
+              >
+                <LogIn className="w-4 h-4 me-1.5" />
+                تسجيل الدخول / إنشاء حساب
+              </Button>
+            )
+          )}
         </nav>
 
         {/* Mobile Nav */}
@@ -65,8 +82,8 @@ export function Navbar() {
               <SheetTitle className="text-right mt-4 mb-6 text-xl font-bold">القائمة الرئيسية</SheetTitle>
               <nav className="flex flex-col gap-4">
                 {navLinks.map((link) => (
-                  <Link 
-                    key={link.href} 
+                  <Link
+                    key={link.href}
                     href={link.href}
                     onClick={() => setIsOpen(false)}
                     className={`flex items-center px-4 py-3 rounded-xl text-base font-medium transition-colors ${
@@ -77,18 +94,31 @@ export function Navbar() {
                     {link.label}
                   </Link>
                 ))}
-                <Link
-                  href="/add-chalet"
-                  onClick={() => setIsOpen(false)}
-                  className={`flex items-center px-4 py-3 rounded-xl text-base font-semibold transition-colors ${
-                    location === "/add-chalet"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-primary/10 text-primary hover:bg-primary/20"
-                  }`}
-                >
-                  <PlusCircle className="w-4 h-4 me-2" />
-                  أضف شاليهك
-                </Link>
+
+                {!isLoading && (
+                  isAuthenticated ? (
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setIsOpen(false)}
+                      className={`flex items-center px-4 py-3 rounded-xl text-base font-semibold transition-colors ${
+                        location === "/dashboard"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-primary/10 text-primary hover:bg-primary/20"
+                      }`}
+                    >
+                      <LayoutDashboard className="w-4 h-4 me-2" />
+                      لوحتي
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => { setIsOpen(false); login("/dashboard"); }}
+                      className="flex items-center px-4 py-3 rounded-xl text-base font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                    >
+                      <LogIn className="w-4 h-4 me-2" />
+                      تسجيل الدخول / إنشاء حساب
+                    </button>
+                  )
+                )}
               </nav>
             </SheetContent>
           </Sheet>

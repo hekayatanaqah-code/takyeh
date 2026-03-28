@@ -13,6 +13,47 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface AuthUser {
+  id: string;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  firstName: string | null;
+  /** @nullable */
+  lastName: string | null;
+  /** @nullable */
+  profileImageUrl: string | null;
+}
+
+export interface AuthUserEnvelope {
+  user: AuthUser | null;
+}
+
+export type ChaletSubmissionStatus =
+  (typeof ChaletSubmissionStatus)[keyof typeof ChaletSubmissionStatus];
+
+export const ChaletSubmissionStatus = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+} as const;
+
+export interface ChaletSubmission {
+  id: number;
+  /** @nullable */
+  ownerId?: string | null;
+  nameAr: string;
+  whatsappNumber: string;
+  location: string;
+  /** @nullable */
+  websiteUrl?: string | null;
+  descriptionAr: string;
+  pricePerNight: number;
+  photos: string[];
+  status: ChaletSubmissionStatus;
+  createdAt: string;
+}
+
 export interface CreateSubmissionRequest {
   /** Chalet name in Arabic */
   nameAr: string;
@@ -58,6 +99,11 @@ export interface Chalet {
   createdAt: string;
 }
 
+/**
+ * Opaque session token — `Bearer <sid>`.
+ */
+export type AuthorizationSessionHeaderParameter = string;
+
 export type GetChaletsParams = {
   /**
    * Filter by city name
@@ -71,4 +117,8 @@ export type GetChaletsParams = {
    * Maximum price per night
    */
   maxPrice?: number;
+};
+
+export type BeginBrowserLoginParams = {
+  returnTo?: string;
 };
