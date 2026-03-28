@@ -11,6 +11,8 @@ import ChaletDetail from "./pages/ChaletDetail";
 import AddChalet from "./pages/AddChalet";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
+import Services from "./pages/Services";
+import ServiceDetail from "./pages/ServiceDetail";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +50,8 @@ function Router() {
         {() => <ProtectedRoute component={Dashboard} />}
       </Route>
       <Route path="/admin" component={Admin} />
+      <Route path="/services" component={Services} />
+      <Route path="/services/:id" component={ServiceDetail} />
       <Route component={NotFound} />
     </Switch>
   );

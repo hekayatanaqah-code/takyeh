@@ -29,7 +29,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2 } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const API = `${BASE}/api`;
@@ -571,9 +572,337 @@ function OwnersTab() {
   );
 }
 
+/* ── Services Tab ─────────────────────────────── */
+const SERVICE_CATEGORIES = [
+  { value: "bounce_houses",       label: "نطيطات",      emoji: "🎪" },
+  { value: "ice_cream",           label: "آيس كريم",    emoji: "🍦" },
+  { value: "productive_families", label: "أسر منتجة",  emoji: "🎀" },
+] as const;
+
+type ServiceCategory = typeof SERVICE_CATEGORIES[number]["value"];
+
+interface ServiceFormData {
+  nameAr: string;
+  category: ServiceCategory;
+  descriptionAr: string;
+  whatsappNumber: string;
+  price: string;
+  priceNote: string;
+  city: string;
+}
+
+const BLANK_SERVICE: ServiceFormData = {
+  nameAr: "", category: "bounce_houses", descriptionAr: "",
+  whatsappNumber: "", price: "", priceNote: "", city: "",
+};
+
+function ServicesTab() {
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [form, setForm] = useState<ServiceFormData>(BLANK_SERVICE);
+
+  const { data: services = [], isLoading } = useQuery({
+    queryKey: ["admin", "services"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/services");
+      if (!r.ok) throw new Error("فشل التحميل");
+      return r.json();
+    },
+  });
+
+  const saveService = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        nameAr: form.nameAr,
+        category: form.category,
+        descriptionAr: form.descriptionAr,
+        whatsappNumber: form.whatsappNumber,
+        price: form.price ? Number(form.price) : undefined,
+        priceNote: form.priceNote || undefined,
+        city: form.city || undefined,
+      };
+      const url = editId ? `/admin/services/${editId}` : "/admin/services";
+      const method = editId ? "PATCH" : "POST";
+      const r = await apiFetch(url, { method, body: JSON.stringify(payload) });
+      if (!r.ok) throw new Error("فشل الحفظ");
+    },
+    onSuccess: () => {
+      setShowForm(false);
+      setEditId(null);
+      setForm(BLANK_SERVICE);
+      qc.invalidateQueries({ queryKey: ["admin", "services"] });
+    },
+  });
+
+  const toggleActive = useMutation({
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
+      const r = await apiFetch(`/admin/services/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive }),
+      });
+      if (!r.ok) throw new Error("فشل التحديث");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "services"] }),
+  });
+
+  const deleteService = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await apiFetch(`/admin/services/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error("فشل الحذف");
+    },
+    onSuccess: () => {
+      setDeleteId(null);
+      qc.invalidateQueries({ queryKey: ["admin", "services"] });
+    },
+  });
+
+  const handleEdit = (svc: any) => {
+    setEditId(svc.id);
+    setForm({
+      nameAr: svc.nameAr,
+      category: svc.category,
+      descriptionAr: svc.descriptionAr,
+      whatsappNumber: svc.whatsappNumber,
+      price: svc.price ?? "",
+      priceNote: svc.priceNote ?? "",
+      city: svc.city ?? "",
+    });
+    setShowForm(true);
+  };
+
+  return (
+    <>
+      {/* Add/Edit Form */}
+      {showForm ? (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 mb-6">
+          <h3 className="text-white font-bold text-lg mb-5">
+            {editId ? "تعديل الخدمة" : "إضافة خدمة جديدة"}
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-slate-300 text-sm font-medium">اسم الخدمة *</label>
+              <Input
+                value={form.nameAr}
+                onChange={(e) => setForm((f) => ({ ...f, nameAr: e.target.value }))}
+                placeholder="مثال: نطاطة كبيرة للأطفال"
+                className="bg-slate-900 border-slate-600 text-white placeholder-slate-400"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-slate-300 text-sm font-medium">الفئة *</label>
+              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v as ServiceCategory }))}>
+                <SelectTrigger className="bg-slate-900 border-slate-600 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border-slate-700">
+                  {SERVICE_CATEGORIES.map((c) => (
+                    <SelectItem key={c.value} value={c.value} className="text-white focus:bg-slate-700">
+                      {c.emoji} {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-slate-300 text-sm font-medium">رقم الواتساب *</label>
+              <Input
+                value={form.whatsappNumber}
+                onChange={(e) => setForm((f) => ({ ...f, whatsappNumber: e.target.value }))}
+                placeholder="966501234567"
+                className="bg-slate-900 border-slate-600 text-white placeholder-slate-400"
+                dir="ltr"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-slate-300 text-sm font-medium">المدينة</label>
+              <Input
+                value={form.city}
+                onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                placeholder="بريدة"
+                className="bg-slate-900 border-slate-600 text-white placeholder-slate-400"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-slate-300 text-sm font-medium">السعر (ر.س)</label>
+              <Input
+                type="number"
+                value={form.price}
+                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                placeholder="اتركه فارغاً إذا كان بالاتفاق"
+                className="bg-slate-900 border-slate-600 text-white placeholder-slate-400"
+                dir="ltr"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-slate-300 text-sm font-medium">ملاحظة السعر</label>
+              <Input
+                value={form.priceNote}
+                onChange={(e) => setForm((f) => ({ ...f, priceNote: e.target.value }))}
+                placeholder="مثال: لكل يوم / للجلسة / بالاتفاق"
+                className="bg-slate-900 border-slate-600 text-white placeholder-slate-400"
+              />
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-slate-300 text-sm font-medium">وصف الخدمة *</label>
+              <Textarea
+                value={form.descriptionAr}
+                onChange={(e) => setForm((f) => ({ ...f, descriptionAr: e.target.value }))}
+                placeholder="اكتب تفاصيل الخدمة: المميزات، الأبعاد، ما يشمله العرض..."
+                className="bg-slate-900 border-slate-600 text-white placeholder-slate-400 min-h-[100px] resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-5 justify-end">
+            <Button
+              variant="ghost"
+              className="text-slate-400 hover:text-white hover:bg-slate-700"
+              onClick={() => { setShowForm(false); setEditId(null); setForm(BLANK_SERVICE); }}
+            >
+              إلغاء
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={() => saveService.mutate()}
+              disabled={!form.nameAr || !form.descriptionAr || !form.whatsappNumber || saveService.isPending}
+            >
+              {saveService.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : (editId ? "حفظ التعديلات" : "إضافة الخدمة")}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex justify-end mb-4">
+          <Button
+            onClick={() => setShowForm(true)}
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+          >
+            <Plus className="w-4 h-4 me-1.5" />
+            إضافة خدمة
+          </Button>
+        </div>
+      )}
+
+      {/* Services Table */}
+      {isLoading ? (
+        <div className="flex justify-center py-20"><Loader2 className="animate-spin text-slate-400 w-8 h-8" /></div>
+      ) : (
+        <div className="rounded-lg border border-slate-700 overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-slate-700 bg-slate-800">
+                <TableHead className="text-slate-300 text-right">الخدمة</TableHead>
+                <TableHead className="text-slate-300 text-right">الفئة</TableHead>
+                <TableHead className="text-slate-300 text-right">المدينة</TableHead>
+                <TableHead className="text-slate-300 text-right">السعر</TableHead>
+                <TableHead className="text-slate-300 text-right">الحالة</TableHead>
+                <TableHead className="text-slate-300 text-right">إجراء</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {services.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-slate-400 py-12">
+                    لا توجد خدمات — اضغط "إضافة خدمة" للبدء
+                  </TableCell>
+                </TableRow>
+              )}
+              {services.map((svc: any) => {
+                const cat = SERVICE_CATEGORIES.find((c) => c.value === svc.category);
+                return (
+                  <TableRow key={svc.id} className="border-slate-700 hover:bg-slate-800/50">
+                    <TableCell>
+                      <div className="font-semibold text-white">{svc.nameAr}</div>
+                      <div className="text-slate-400 text-xs mt-0.5 line-clamp-1">{svc.descriptionAr}</div>
+                    </TableCell>
+                    <TableCell className="text-slate-300">
+                      {cat ? `${cat.emoji} ${cat.label}` : svc.category}
+                    </TableCell>
+                    <TableCell className="text-slate-300">{svc.city ?? "—"}</TableCell>
+                    <TableCell className="text-slate-300">
+                      {svc.price
+                        ? `${Number(svc.price).toLocaleString("ar-SA")} ر.س`
+                        : svc.priceNote ?? "بالاتفاق"}
+                    </TableCell>
+                    <TableCell>
+                      <button
+                        onClick={() => toggleActive.mutate({ id: svc.id, isActive: !svc.isActive })}
+                        className={`text-xs px-2.5 py-1 rounded-full font-semibold transition-colors ${
+                          svc.isActive
+                            ? "bg-green-900/50 text-green-400 hover:bg-green-900"
+                            : "bg-slate-700 text-slate-400 hover:bg-slate-600"
+                        }`}
+                      >
+                        {svc.isActive ? "مفعّل" : "مخفي"}
+                      </button>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-8 px-2 text-slate-400 hover:text-amber-400"
+                          onClick={() => handleEdit(svc)}
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </Button>
+                        <a
+                          href={`https://wa.me/${svc.whatsappNumber.replace(/\D/g, "")}`}
+                          target="_blank" rel="noreferrer"
+                          className="text-slate-400 hover:text-green-400 transition-colors p-2"
+                        >
+                          <Phone className="w-3.5 h-3.5" />
+                        </a>
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-8 px-2 text-slate-400 hover:text-red-400"
+                          onClick={() => setDeleteId(svc.id)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent className="bg-slate-900 border-slate-700 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-right">تأكيد الحذف</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400 text-right">
+              سيتم حذف هذه الخدمة نهائياً.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700">إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => deleteId !== null && deleteService.mutate(deleteId)}
+            >
+              {deleteService.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : "حذف"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 /* ── Main Admin Page ──────────────────────────── */
 const TABS = [
   { id: "submissions", label: "الطلبات",          icon: Settings },
+  { id: "services",    label: "خدمات المناسبات",  icon: Wrench },
   { id: "locations",   label: "المدن والأحياء",   icon: Building2 },
   { id: "amenities",   label: "المرافق",           icon: Tag },
   { id: "owners",      label: "الملاك",            icon: Users },
@@ -617,11 +946,45 @@ export default function Admin() {
 
   if (checkError?.message === "403" || checkError?.message === "401") {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white">
-        <div className="text-6xl mb-4">🔒</div>
-        <h1 className="text-2xl font-bold mb-2">غير مصرح</h1>
-        <p className="text-slate-400">ليس لديك صلاحية الوصول إلى لوحة التحكم</p>
-        <a href={BASE || "/"} className="mt-6 text-amber-400 hover:underline">العودة إلى الرئيسية</a>
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white px-4" dir="rtl">
+        <div className="text-6xl mb-6">🔐</div>
+        <h1 className="text-2xl font-bold mb-2">إعداد حساب الإدارة</h1>
+        <p className="text-slate-400 mb-8 text-center max-w-md">
+          لتفعيل صلاحيات الإدارة، انسخ معرّفك أدناه وأضفه كمتغير بيئة باسم{" "}
+          <code className="bg-slate-700 text-amber-400 px-1.5 py-0.5 rounded font-mono text-sm">ADMIN_USER_ID</code>
+        </p>
+
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 w-full max-w-sm mb-6">
+          <p className="text-slate-400 text-xs mb-2 font-semibold uppercase tracking-wider">معرّف حسابك</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 bg-slate-900 text-amber-300 text-sm font-mono px-3 py-2.5 rounded-lg border border-slate-600 break-all select-all">
+              {user?.id ?? "—"}
+            </code>
+            <button
+              onClick={() => {
+                if (user?.id) navigator.clipboard.writeText(user.id);
+              }}
+              className="shrink-0 px-3 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-colors"
+            >
+              نسخ
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 w-full max-w-sm text-sm mb-8">
+          <p className="text-slate-300 font-semibold mb-3">خطوات الإعداد:</p>
+          <ol className="text-slate-400 space-y-2 list-decimal list-inside">
+            <li>انسخ المعرّف أعلاه</li>
+            <li>افتح إعدادات المشروع في Replit</li>
+            <li>أضف متغير بيئة: <code className="text-amber-400 bg-slate-700 px-1 rounded">ADMIN_USER_ID</code></li>
+            <li>الصق المعرّف كقيمة للمتغير</li>
+            <li>أعد تشغيل السيرفر وحدّث الصفحة</li>
+          </ol>
+        </div>
+
+        <a href={BASE || "/"} className="text-slate-400 hover:text-white transition-colors text-sm">
+          ← العودة إلى الرئيسية
+        </a>
       </div>
     );
   }
@@ -674,6 +1037,7 @@ export default function Admin() {
       <main className="p-6 max-w-7xl mx-auto">
         {/* Stats row */}
         {activeTab === "submissions" && <SubmissionsTab />}
+        {activeTab === "services"    && <ServicesTab />}
         {activeTab === "locations"   && <LocationsTab />}
         {activeTab === "amenities"   && <AmenitiesTab />}
         {activeTab === "owners"      && <OwnersTab />}

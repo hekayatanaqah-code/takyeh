@@ -67,3 +67,24 @@ export const amenitiesCatalogTable = pgTable("amenities_catalog", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type AmenityCatalog = typeof amenitiesCatalogTable.$inferSelect;
+
+export const servicesCategoryEnum = pgEnum("services_category", [
+  "bounce_houses",
+  "ice_cream",
+  "productive_families",
+]);
+
+export const externalServicesTable = pgTable("external_services", {
+  id: serial("id").primaryKey(),
+  nameAr: text("name_ar").notNull(),
+  category: servicesCategoryEnum("category").notNull(),
+  descriptionAr: text("description_ar").notNull(),
+  whatsappNumber: text("whatsapp_number").notNull(),
+  price: numeric("price", { precision: 10, scale: 2 }),
+  priceNote: text("price_note"),
+  city: text("city"),
+  photos: text("photos").array().notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ExternalService = typeof externalServicesTable.$inferSelect;

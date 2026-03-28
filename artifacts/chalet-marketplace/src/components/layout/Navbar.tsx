@@ -13,7 +13,8 @@ export function Navbar() {
 
   const navLinks = [
     { href: "/", label: "الرئيسية", icon: <Home className="w-4 h-4 me-2" /> },
-    { href: "/chalets", label: "الشاليهات المتاحة", icon: <Compass className="w-4 h-4 me-2" /> },
+    { href: "/chalets", label: "الشاليهات", icon: <Compass className="w-4 h-4 me-2" /> },
+    { href: "/services", label: "خدمات المناسبات", icon: <span className="me-2 text-base">🎪</span> },
   ];
 
   return (

@@ -5,6 +5,7 @@ import {
   citiesCatalogTable,
   districtsCatalogTable,
   amenitiesCatalogTable,
+  externalServicesTable,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -184,6 +185,72 @@ router.patch("/amenities/:id", async (req, res) => {
 router.delete("/amenities/:id", async (req, res) => {
   const id = Number(req.params.id);
   await db.delete(amenitiesCatalogTable).where(eq(amenitiesCatalogTable.id, id));
+  return res.json({ ok: true });
+});
+
+/* ── External Services ───────────────────────── */
+
+router.get("/services", async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(externalServicesTable)
+    .orderBy(externalServicesTable.createdAt);
+  return res.json(rows.reverse());
+});
+
+router.post("/services", async (req, res) => {
+  const body = z.object({
+    nameAr: z.string().min(1),
+    category: z.enum(["bounce_houses", "ice_cream", "productive_families"]),
+    descriptionAr: z.string().min(1),
+    whatsappNumber: z.string().min(1),
+    price: z.number().positive().optional(),
+    priceNote: z.string().optional(),
+    city: z.string().optional(),
+    photos: z.array(z.string()).optional(),
+  }).safeParse(req.body);
+
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const [svc] = await db
+    .insert(externalServicesTable)
+    .values({
+      ...body.data,
+      price: body.data.price != null ? String(body.data.price) : null,
+      photos: body.data.photos ?? [],
+    })
+    .returning();
+
+  return res.status(201).json(svc);
+});
+
+router.patch("/services/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({
+    nameAr: z.string().min(1).optional(),
+    category: z.enum(["bounce_houses", "ice_cream", "productive_families"]).optional(),
+    descriptionAr: z.string().min(1).optional(),
+    whatsappNumber: z.string().min(1).optional(),
+    price: z.number().positive().nullable().optional(),
+    priceNote: z.string().nullable().optional(),
+    city: z.string().nullable().optional(),
+    isActive: z.boolean().optional(),
+  }).safeParse(req.body);
+
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const updateData: Record<string, unknown> = { ...body.data };
+  if ("price" in body.data && body.data.price != null) {
+    updateData.price = String(body.data.price);
+  }
+
+  await db.update(externalServicesTable).set(updateData).where(eq(externalServicesTable.id, id));
+  return res.json({ ok: true });
+});
+
+router.delete("/services/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  await db.delete(externalServicesTable).where(eq(externalServicesTable.id, id));
   return res.json({ ok: true });
 });
 
