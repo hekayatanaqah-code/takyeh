@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { MapPin, Users, Search, Calendar } from "lucide-react";
-import { toHijri } from "@/lib/hijri";
+import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { useGetChalets, Chalet } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -10,7 +10,7 @@ import { Footer } from "@/components/layout/Footer";
 import { ChaletCard } from "@/components/ui/ChaletCard";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+
 import { Skeleton } from "@/components/ui/skeleton";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -97,40 +97,28 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3 min-w-0">
                   <Calendar className="w-5 h-5 text-muted-foreground shrink-0" />
-                  <div className="w-full">
-                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">تاريخ الوصول</p>
-                    <Input
-                      type="date"
+                  <div className="flex-1 min-w-0">
+                    <DualCalendarPicker
                       value={checkIn}
-                      onChange={(e) => setCheckIn(e.target.value)}
-                      className="border-0 p-0 h-auto focus-visible:ring-0 shadow-none text-foreground font-medium bg-transparent"
+                      onChange={setCheckIn}
+                      placeholder="تاريخ الوصول"
+                      label="تاريخ الوصول"
                     />
-                    {checkIn && (
-                      <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium text-right leading-tight mt-0.5">
-                        {toHijri(checkIn)}
-                      </p>
-                    )}
                   </div>
                 </div>
 
-                <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3 min-w-0">
                   <Calendar className="w-5 h-5 text-muted-foreground shrink-0" />
-                  <div className="w-full">
-                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">تاريخ المغادرة</p>
-                    <Input
-                      type="date"
+                  <div className="flex-1 min-w-0">
+                    <DualCalendarPicker
                       value={checkOut}
-                      onChange={(e) => setCheckOut(e.target.value)}
-                      min={checkIn}
-                      className="border-0 p-0 h-auto focus-visible:ring-0 shadow-none text-foreground font-medium bg-transparent"
+                      onChange={setCheckOut}
+                      placeholder="تاريخ المغادرة"
+                      label="تاريخ المغادرة"
+                      minDate={checkIn || undefined}
                     />
-                    {checkOut && (
-                      <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium text-right leading-tight mt-0.5">
-                        {toHijri(checkOut)}
-                      </p>
-                    )}
                   </div>
                 </div>
 
