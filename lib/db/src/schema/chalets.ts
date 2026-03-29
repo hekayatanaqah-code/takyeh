@@ -26,7 +26,7 @@ export const insertChaletSchema = createInsertSchema(chaletsTable).omit({ id: tr
 export type InsertChalet = z.infer<typeof insertChaletSchema>;
 export type Chalet = typeof chaletsTable.$inferSelect;
 
-export const submissionStatusEnum = pgEnum("submission_status", ["pending", "approved", "rejected"]);
+export const submissionStatusEnum = pgEnum("submission_status", ["pending", "approved", "rejected", "needs_revision"]);
 
 export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   id: serial("id").primaryKey(),
@@ -46,6 +46,7 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   socialLink: text("social_link"),
   photos: text("photos").array().notNull().default([]),
   status: submissionStatusEnum("status").notNull().default("pending"),
+  adminNote: text("admin_note"),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -43,10 +43,16 @@ router.get("/submissions", async (_req, res) => {
 
 router.patch("/submissions/:id/status", async (req, res) => {
   const id = Number(req.params.id);
-  const body = z.object({ status: z.enum(["pending", "approved", "rejected"]) }).safeParse(req.body);
+  const body = z.object({
+    status: z.enum(["pending", "approved", "rejected", "needs_revision"]),
+    adminNote: z.string().optional(),
+  }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
-  const updateData: Record<string, unknown> = { status: body.data.status };
+  const updateData: Record<string, unknown> = {
+    status: body.data.status,
+    adminNote: body.data.adminNote ?? null,
+  };
   if (body.data.status === "approved") {
     updateData.trialEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 

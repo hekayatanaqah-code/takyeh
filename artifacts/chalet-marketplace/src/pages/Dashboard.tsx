@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   User, LogOut, Plus, MapPin, Calendar, Clock, CheckCircle,
-  XCircle, Home, BookOpen, BarChart2, Trash2, Building2, Globe, Phone,
+  XCircle, Home, BookOpen, BarChart2, Trash2, Building2, Globe, Phone, AlertTriangle, RotateCcw,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -29,9 +29,10 @@ function apiFetch(path: string, opts?: RequestInit) {
 }
 
 const statusConfig = {
-  pending:  { label: "قيد المراجعة",   icon: <Clock className="w-3.5 h-3.5" />,        className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-  approved: { label: "تمت الموافقة",   icon: <CheckCircle className="w-3.5 h-3.5" />, className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-  rejected: { label: "مرفوض",          icon: <XCircle className="w-3.5 h-3.5" />,     className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+  pending:        { label: "قيد المراجعة",    icon: <Clock className="w-3.5 h-3.5" />,        className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+  approved:       { label: "تمت الموافقة",    icon: <CheckCircle className="w-3.5 h-3.5" />,   className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+  rejected:       { label: "مرفوض",           icon: <XCircle className="w-3.5 h-3.5" />,       className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+  needs_revision: { label: "يحتاج تعديل",    icon: <RotateCcw className="w-3.5 h-3.5" />,     className: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
 };
 
 /* ── Types ───────────────────────────────────── */
@@ -115,6 +116,25 @@ function ChaletsTab({ submissions, isLoading }: { submissions: any[] | undefined
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{sub.descriptionAr}</p>
+
+                {/* Admin note notification */}
+                {sub.adminNote && (sub.status === "rejected" || sub.status === "needs_revision") && (
+                  <div className={`mt-3 flex items-start gap-2.5 rounded-xl px-3.5 py-3 border ${
+                    sub.status === "needs_revision"
+                      ? "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800/40"
+                      : "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/40"
+                  }`}>
+                    <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${sub.status === "needs_revision" ? "text-orange-500" : "text-red-500"}`} />
+                    <div>
+                      <p className={`text-xs font-bold mb-0.5 ${sub.status === "needs_revision" ? "text-orange-700 dark:text-orange-400" : "text-red-700 dark:text-red-400"}`}>
+                        {sub.status === "needs_revision" ? "ملاحظات الإدارة — يرجى التعديل والإعادة" : "سبب الرفض"}
+                      </p>
+                      <p className={`text-xs leading-relaxed ${sub.status === "needs_revision" ? "text-orange-800 dark:text-orange-300" : "text-red-800 dark:text-red-300"}`}>
+                        {sub.adminNote}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>

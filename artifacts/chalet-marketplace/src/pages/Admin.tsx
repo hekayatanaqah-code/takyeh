@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, ExternalLink, Instagram } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, ExternalLink, Instagram, AlertTriangle, RotateCcw, Home, DoorOpen } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -61,6 +61,9 @@ interface Submission {
   descriptionAr?: string | null;
   amenities?: string[];
   photos?: string[];
+  propertyType?: string | null;
+  sections?: string | null;
+  adminNote?: string | null;
 }
 
 interface AdminChalet {
@@ -124,9 +127,10 @@ function apiFetch(path: string, opts?: RequestInit) {
 /* ── Status Badge ─────────────────────────────── */
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
-    pending:  { label: "قيد الانتظار", className: "bg-amber-100 text-amber-800 border-amber-200" },
-    approved: { label: "مقبول",        className: "bg-green-100 text-green-800 border-green-200" },
-    rejected: { label: "مرفوض",        className: "bg-red-100 text-red-800 border-red-200" },
+    pending:        { label: "قيد الانتظار",    className: "bg-amber-100 text-amber-800 border-amber-200" },
+    approved:       { label: "مقبول",           className: "bg-green-100 text-green-800 border-green-200" },
+    rejected:       { label: "مرفوض",           className: "bg-red-100 text-red-800 border-red-200" },
+    needs_revision: { label: "يحتاج تعديل",    className: "bg-orange-100 text-orange-800 border-orange-200" },
   };
   const s = map[status] ?? { label: status, className: "" };
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${s.className}`}>{s.label}</span>;
@@ -137,145 +141,300 @@ function SubmissionReviewModal({
   submission,
   open,
   onClose,
-  onApprove,
-  onReject,
+  onDecision,
   isPending,
 }: {
   submission: Submission | null;
   open: boolean;
   onClose: () => void;
-  onApprove: (id: number) => void;
-  onReject: (id: number) => void;
+  onDecision: (id: number, status: string, adminNote?: string) => void;
   isPending: boolean;
 }) {
+  const [pendingAction, setPendingAction] = useState<"approved" | "rejected" | "needs_revision" | null>(null);
+  const [reason, setReason] = useState("");
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  const resetAction = () => { setPendingAction(null); setReason(""); };
+
+  const handleClose = () => { resetAction(); onClose(); };
+
+  const handleDecision = () => {
+    if (!submission || !pendingAction) return;
+    const note = pendingAction !== "approved" ? reason.trim() : undefined;
+    onDecision(submission.id, pendingAction, note);
+    handleClose();
+  };
+
   if (!submission) return null;
   const s = submission;
+
+  const actionConfig = {
+    approved:       { label: "تأكيد القبول",         className: "bg-green-700 hover:bg-green-600 text-white" },
+    rejected:       { label: "تأكيد الرفض",          className: "bg-red-700 hover:bg-red-600 text-white" },
+    needs_revision: { label: "تأكيد الإرجاع للتعديل", className: "bg-orange-700 hover:bg-orange-600 text-white" },
+  };
+
+  const needsReason = pendingAction === "rejected" || pendingAction === "needs_revision";
+  const canConfirm = !isPending && (pendingAction === "approved" || (needsReason && reason.trim().length > 0));
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
-        <DialogHeader>
-          <DialogTitle className="text-right text-xl font-bold">{s.nameAr}</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-5 mt-2">
-          {/* Basic Info */}
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <span className="text-slate-400">المدينة:</span>
-              <span className="mr-2 text-white">{s.location}</span>
-              {s.district && <span className="text-slate-300"> ← {s.district}</span>}
-            </div>
-            <div>
-              <span className="text-slate-400">السعر:</span>
-              <span className="mr-2 text-white">{Number(s.pricePerNight).toLocaleString("ar-SA")} ر.س / ليلة</span>
-            </div>
-            <div>
-              <span className="text-slate-400">واتساب:</span>
-              <span className="mr-2 text-white font-mono" dir="ltr">{s.whatsappNumber}</span>
-            </div>
-            <div>
-              <span className="text-slate-400">الحالة:</span>
-              <span className="mr-2"><StatusBadge status={s.status} /></span>
-            </div>
-            {s.trialEndsAt && (
-              <div className="col-span-2 space-y-0.5">
-                <span className="text-slate-400">انتهاء الفترة التجريبية:</span>
-                {(() => {
-                  const d = formatDualDate(s.trialEndsAt!.split("T")[0]);
-                  return (
-                    <div className="mr-2 inline-block">
-                      <span className="text-amber-400 font-medium">{d.gregorian}</span>
-                      <span className="text-amber-600 text-xs mr-2">({d.hijri})</span>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-            {s.mapsUrl && (
-              <div className="col-span-2">
-                <a href={s.mapsUrl} target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-sm">
-                  <MapPin className="w-4 h-4" />
-                  عرض الموقع على الخريطة
-                </a>
-              </div>
-            )}
-            {s.socialLink && (
-              <div className="col-span-2">
-                <a href={s.socialLink} target="_blank" rel="noreferrer" className="text-pink-400 hover:text-pink-300 flex items-center gap-1.5 text-sm font-semibold">
-                  <Instagram className="w-4 h-4" />
-                  التحقق من الحساب الاجتماعي
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-                <p className="text-slate-500 text-xs mt-1">افتح الرابط وتحقق من هوية المالك قبل الموافقة</p>
-              </div>
-            )}
-          </div>
-
-          {/* Description */}
-          {s.descriptionAr && (
-            <div>
-              <p className="text-slate-400 text-sm font-semibold mb-1">الوصف</p>
-              <p className="text-slate-200 text-sm leading-relaxed bg-slate-800 rounded-lg p-3">{s.descriptionAr}</p>
-            </div>
-          )}
-
-          {/* Amenities */}
-          {s.amenities && s.amenities.length > 0 && (
-            <div>
-              <p className="text-slate-400 text-sm font-semibold mb-2">المميزات</p>
-              <div className="flex flex-wrap gap-2">
-                {s.amenities.map((a) => (
-                  <span key={a} className="text-xs bg-slate-700 text-slate-200 px-2 py-1 rounded-full">{a}</span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Photos */}
-          {s.photos && s.photos.length > 0 && (
-            <div>
-              <p className="text-slate-400 text-sm font-semibold mb-2">الصور ({s.photos.length})</p>
-              <div className="grid grid-cols-2 gap-2">
-                {s.photos.map((url, i) => (
-                  <a key={i} href={url} target="_blank" rel="noreferrer">
-                    <img
-                      src={url}
-                      alt={`صورة ${i + 1}`}
-                      className="w-full h-36 object-cover rounded-lg border border-slate-700 hover:border-blue-500 transition-colors"
-                    />
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-2 border-t border-slate-700">
-            {s.status !== "approved" && (
-              <Button
-                className="flex-1 bg-green-700 hover:bg-green-600 text-white"
-                onClick={() => { onApprove(s.id); onClose(); }}
-                disabled={isPending}
-              >
-                <CheckCircle className="w-4 h-4 ml-2" />
-                قبول الطلب
-              </Button>
-            )}
-            {s.status !== "rejected" && (
-              <Button
-                variant="destructive"
-                className="flex-1"
-                onClick={() => { onReject(s.id); onClose(); }}
-                disabled={isPending}
-              >
-                <XCircle className="w-4 h-4 ml-2" />
-                رفض الطلب
-              </Button>
-            )}
-          </div>
+    <>
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <img src={lightboxUrl} alt="صورة مكبّرة" className="max-w-full max-h-full rounded-lg object-contain shadow-2xl" />
         </div>
-      </DialogContent>
-    </Dialog>
+      )}
+
+      <Dialog open={open} onOpenChange={handleClose}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-3xl max-h-[92vh] overflow-y-auto p-0" dir="rtl">
+
+          {/* ── Header ─────────────────────────── */}
+          <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-6 py-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold text-white leading-tight">{s.nameAr}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <StatusBadge status={s.status} />
+                {s.createdAt && (
+                  <span className="text-slate-400 text-xs">
+                    {new Date(s.createdAt).toLocaleDateString("ar-SA")}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-6">
+
+            {/* ── Photo Gallery ──────────────── */}
+            {s.photos && s.photos.length > 0 && (
+              <div>
+                <p className="text-slate-300 text-sm font-semibold mb-3 flex items-center gap-2">
+                  <span className="w-1.5 h-4 bg-amber-500 rounded-full" />
+                  الصور المرفوعة ({s.photos.length})
+                </p>
+                <div className={`grid gap-2 ${s.photos.length === 1 ? "grid-cols-1" : s.photos.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+                  {s.photos.map((url, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setLightboxUrl(url)}
+                      className="relative group overflow-hidden rounded-xl border border-slate-700 hover:border-amber-500/60 transition-colors cursor-zoom-in"
+                    >
+                      <img
+                        src={url}
+                        alt={`صورة ${i + 1}`}
+                        className="w-full h-40 object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                        <Eye className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Basic Info Grid ─────────────── */}
+            <div>
+              <p className="text-slate-300 text-sm font-semibold mb-3 flex items-center gap-2">
+                <span className="w-1.5 h-4 bg-amber-500 rounded-full" />
+                المعلومات الأساسية
+              </p>
+              <div className="grid grid-cols-2 gap-3 bg-slate-800/60 rounded-xl p-4 text-sm">
+                <div className="space-y-0.5">
+                  <p className="text-slate-400 text-xs">المدينة</p>
+                  <p className="text-white font-medium">{s.location}{s.district ? ` — ${s.district}` : ""}</p>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-slate-400 text-xs">واتساب</p>
+                  <p className="text-white font-mono" dir="ltr">{s.whatsappNumber}</p>
+                </div>
+                {s.propertyType && (
+                  <div className="space-y-0.5">
+                    <p className="text-slate-400 text-xs">نوع العقار</p>
+                    <p className="text-amber-400 font-semibold">{s.propertyType}</p>
+                  </div>
+                )}
+                {s.sections && (
+                  <div className="space-y-0.5">
+                    <p className="text-slate-400 text-xs">عدد الأقسام</p>
+                    <p className="text-amber-400 font-semibold">{s.sections}</p>
+                  </div>
+                )}
+                {s.trialEndsAt && (
+                  <div className="col-span-2 space-y-0.5">
+                    <p className="text-slate-400 text-xs">انتهاء الفترة التجريبية</p>
+                    {(() => {
+                      const d = formatDualDate(s.trialEndsAt!.split("T")[0]);
+                      return (
+                        <p className="text-amber-400 font-medium">
+                          {d.gregorian}
+                          <span className="text-amber-600 text-xs mr-2">({d.hijri})</span>
+                        </p>
+                      );
+                    })()}
+                  </div>
+                )}
+                {s.mapsUrl && (
+                  <div className="col-span-2">
+                    <a href={s.mapsUrl} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-blue-400 hover:text-blue-300 text-xs font-medium">
+                      <MapPin className="w-3.5 h-3.5" />
+                      عرض الموقع على خرائط قوقل
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Social Link Verification ─────── */}
+            {s.socialLink && (
+              <div className="bg-pink-950/40 border border-pink-800/50 rounded-xl p-4 flex items-start gap-3">
+                <div className="w-9 h-9 bg-pink-900/60 rounded-lg flex items-center justify-center shrink-0">
+                  <Instagram className="w-5 h-5 text-pink-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-pink-300 font-bold text-sm mb-0.5">التحقق من هوية المالك</p>
+                  <p className="text-slate-400 text-xs mb-2">افتح الرابط وتأكد من أن الحساب يتطابق مع بيانات الشاليه</p>
+                  <a
+                    href={s.socialLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 bg-pink-900/40 hover:bg-pink-900/70 border border-pink-700/40 text-pink-300 hover:text-pink-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    فتح حساب التواصل الاجتماعي
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* ── Description ──────────────────── */}
+            {s.descriptionAr && (
+              <div>
+                <p className="text-slate-300 text-sm font-semibold mb-2 flex items-center gap-2">
+                  <span className="w-1.5 h-4 bg-amber-500 rounded-full" />
+                  وصف العقار
+                </p>
+                <p className="text-slate-200 text-sm leading-relaxed bg-slate-800/60 rounded-xl p-4 border border-slate-700">
+                  {s.descriptionAr}
+                </p>
+              </div>
+            )}
+
+            {/* ── Amenities ────────────────────── */}
+            {s.amenities && s.amenities.length > 0 && (
+              <div>
+                <p className="text-slate-300 text-sm font-semibold mb-2 flex items-center gap-2">
+                  <span className="w-1.5 h-4 bg-amber-500 rounded-full" />
+                  المرافق والمميزات ({s.amenities.length})
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {s.amenities.map((a) => (
+                    <span key={a} className="inline-flex items-center gap-1 text-xs bg-slate-700/80 text-slate-200 border border-slate-600 px-2.5 py-1 rounded-full">
+                      <CheckCircle className="w-3 h-3 text-green-400" />
+                      {a}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Previous admin note ────────── */}
+            {s.adminNote && (
+              <div className="bg-orange-950/40 border border-orange-700/50 rounded-xl p-4 flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-orange-300 text-sm font-bold mb-1">ملاحظة الإدارة السابقة</p>
+                  <p className="text-slate-300 text-sm">{s.adminNote}</p>
+                </div>
+              </div>
+            )}
+
+            {/* ── Decision Area ─────────────────── */}
+            <div className="border-t border-slate-700 pt-5">
+              {!pendingAction ? (
+                <div className="flex flex-wrap gap-3">
+                  {s.status !== "approved" && (
+                    <Button
+                      className="flex-1 bg-green-700 hover:bg-green-600 text-white min-w-[120px]"
+                      onClick={() => setPendingAction("approved")}
+                      disabled={isPending}
+                    >
+                      <CheckCircle className="w-4 h-4 ml-2" />
+                      قبول الطلب
+                    </Button>
+                  )}
+                  <Button
+                    className="flex-1 bg-orange-700 hover:bg-orange-600 text-white min-w-[120px]"
+                    onClick={() => setPendingAction("needs_revision")}
+                    disabled={isPending}
+                  >
+                    <RotateCcw className="w-4 h-4 ml-2" />
+                    إرجاع للتعديل
+                  </Button>
+                  {s.status !== "rejected" && (
+                    <Button
+                      variant="destructive"
+                      className="flex-1 min-w-[120px]"
+                      onClick={() => setPendingAction("rejected")}
+                      disabled={isPending}
+                    >
+                      <XCircle className="w-4 h-4 ml-2" />
+                      رفض الطلب
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {needsReason && (
+                    <div>
+                      <label className="text-slate-300 text-sm font-semibold mb-2 block flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-400" />
+                        {pendingAction === "needs_revision"
+                          ? "سبب الإرجاع للتعديل (مطلوب — سيُرسل للمالك)"
+                          : "سبب الرفض (مطلوب — سيُرسل للمالك)"}
+                      </label>
+                      <textarea
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder={pendingAction === "needs_revision"
+                          ? "مثال: الصور غير واضحة، يرجى رفع صور بجودة أعلى..."
+                          : "مثال: المعلومات المقدمة غير مكتملة..."}
+                        rows={3}
+                        className="w-full bg-slate-800 border border-slate-600 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50"
+                      />
+                    </div>
+                  )}
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={resetAction}
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm font-medium transition-colors"
+                    >
+                      إلغاء
+                    </button>
+                    <Button
+                      className={`flex-1 text-sm font-bold ${actionConfig[pendingAction].className}`}
+                      onClick={handleDecision}
+                      disabled={!canConfirm}
+                    >
+                      {isPending && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                      {actionConfig[pendingAction].label}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -295,10 +454,10 @@ function SubmissionsTab() {
   });
 
   const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+    mutationFn: async ({ id, status, adminNote }: { id: number; status: string; adminNote?: string }) => {
       const r = await apiFetch(`/admin/submissions/${id}/status`, {
         method: "PATCH",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, adminNote }),
       });
       if (!r.ok) throw new Error("فشل التحديث");
     },
@@ -326,8 +485,7 @@ function SubmissionsTab() {
         submission={reviewSubmission}
         open={reviewSubmission !== null}
         onClose={() => setReviewSubmission(null)}
-        onApprove={(id) => updateStatus.mutate({ id, status: "approved" })}
-        onReject={(id) => updateStatus.mutate({ id, status: "rejected" })}
+        onDecision={(id, status, adminNote) => updateStatus.mutate({ id, status, adminNote })}
         isPending={updateStatus.isPending}
       />
 
@@ -400,9 +558,8 @@ function SubmissionsTab() {
                         size="sm"
                         variant="ghost"
                         className="h-8 px-2 text-red-400 hover:text-red-300 hover:bg-red-900/30"
-                        onClick={() => updateStatus.mutate({ id: s.id, status: "rejected" })}
-                        disabled={updateStatus.isPending}
-                        title="رفض"
+                        onClick={() => setReviewSubmission(s)}
+                        title="رفض (افتح المراجعة)"
                       >
                         <XCircle className="w-4 h-4" />
                       </Button>
