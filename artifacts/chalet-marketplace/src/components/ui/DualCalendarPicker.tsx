@@ -125,34 +125,30 @@ function DualDayButton({
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       className={cn(
-        "relative w-full h-[--cell-size] rounded-lg p-0 overflow-hidden",
+        "flex flex-col items-center justify-center gap-[3px]",
+        "w-full h-[--cell-size] rounded-lg",
         "data-[selected-single=true]:bg-primary data-[selected-single=true]:text-primary-foreground",
         "data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground",
         "data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground",
         "data-[range-middle=true]:bg-accent data-[range-middle=true]:text-accent-foreground data-[range-middle=true]:rounded-none",
         modifiers.today && !isSelected && "ring-2 ring-primary/40 bg-primary/5",
-        modifiers.outside && "opacity-25",
+        modifiers.outside && "opacity-30",
         defaultClassNames.day,
         className
       )}
       {...props}
     >
-      {/* ── Gregorian — top-right corner, tiny reference number ── */}
-      <span
-        className="absolute top-[5px] right-[5px] text-[0.6rem] font-normal leading-none select-none"
-        style={{ color: isSelected ? "rgba(255,255,255,0.5)" : "#a1a1aa" }}
-      >
-        {gregDay}
+      {/* ── Primary: Hijri day — large, bold, centred ── */}
+      <span className="text-[1.1rem] font-bold leading-none">
+        {hijriDay}
       </span>
 
-      {/* ── Hijri — dead centre, primary focus ── */}
+      {/* ── Secondary: Gregorian day — small, muted ── */}
       <span
-        className={cn(
-          "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
-          "text-[1.2rem] font-bold leading-none select-none"
-        )}
+        className="text-[0.7rem] font-normal leading-none"
+        style={{ color: isSelected ? "rgba(255,255,255,0.7)" : "#a1a1aa" }}
       >
-        {hijriDay}
+        {gregDay}
       </span>
     </Button>
   );
