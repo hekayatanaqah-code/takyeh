@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   chaletSubmissionsTable,
+  chaletsTable,
   citiesCatalogTable,
   districtsCatalogTable,
   amenitiesCatalogTable,
@@ -48,6 +49,29 @@ router.patch("/submissions/:id/status", async (req, res) => {
   const updateData: Record<string, unknown> = { status: body.data.status };
   if (body.data.status === "approved") {
     updateData.trialEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    const [submission] = await db
+      .select()
+      .from(chaletSubmissionsTable)
+      .where(eq(chaletSubmissionsTable.id, id))
+      .limit(1);
+
+    if (submission) {
+      await db.insert(chaletsTable).values({
+        nameAr: submission.nameAr,
+        descriptionAr: submission.descriptionAr,
+        location: submission.location,
+        district: submission.district ?? undefined,
+        category: submission.category ?? undefined,
+        pricePerNight: String(submission.pricePerNight ?? 0),
+        maxGuests: 10,
+        bedrooms: 3,
+        amenities: submission.amenities ?? [],
+        photos: submission.photos ?? [],
+        whatsappNumber: submission.whatsappNumber,
+        mapsUrl: submission.mapsUrl ?? undefined,
+      }).onConflictDoNothing();
+    }
   }
 
   await db

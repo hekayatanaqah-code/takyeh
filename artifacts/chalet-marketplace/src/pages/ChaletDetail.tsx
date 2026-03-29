@@ -68,10 +68,36 @@ export default function ChaletDetail() {
 
   const district = (chalet as any).district as string | undefined;
   const locationLabel = district ? `حي ${district}، ${chalet.location}` : chalet.location;
-  const mapsQuery = encodeURIComponent(
-    [district, chalet.location, "القصيم، المملكة العربية السعودية"].filter(Boolean).join("، ")
-  );
   const whatsappMsg = `أهلاً، أود الاستفسار عن حجز شاليه ${chalet.nameAr} في ${chalet.location}.`;
+
+  /* ── Coordinate extraction from mapsUrl ──────────────── */
+  const mapsUrl: string | null | undefined = (chalet as any).mapsUrl;
+
+  function parseLatLng(url: string): { lat: number; lng: number } | null {
+    // Format 1: ?q=lat,lng  (e.g. https://maps.google.com/maps?q=26.329,43.975)
+    const qMatch = url.match(/[?&]q=([-\d.]+),([-\d.]+)/);
+    if (qMatch) return { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+    // Format 2: @lat,lng,zoom  (e.g. https://www.google.com/maps/@26.329,43.975,15z)
+    const atMatch = url.match(/@([-\d.]+),([-\d.]+)/);
+    if (atMatch) return { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+    return null;
+  }
+
+  const coords = mapsUrl ? parseLatLng(mapsUrl) : null;
+
+  // Embed URL: exact pin when coords available, text search as fallback
+  const mapEmbedUrl = coords
+    ? `https://maps.google.com/maps?q=${coords.lat},${coords.lng}&output=embed&hl=ar&z=16`
+    : `https://maps.google.com/maps?q=${encodeURIComponent(
+        [district, chalet.location, "القصيم، المملكة العربية السعودية"].filter(Boolean).join("، ")
+      )}&output=embed&hl=ar`;
+
+  // Direct open link: exact coordinates or search query
+  const mapsOpenUrl = coords
+    ? `https://www.google.com/maps?q=${coords.lat},${coords.lng}`
+    : (mapsUrl ?? `https://www.google.com/maps/search/${encodeURIComponent(
+        [chalet.location, "القصيم", "المملكة العربية السعودية"].filter(Boolean).join("، ")
+      )}`);
 
   const handleShare = () => {
     if (navigator.share) {
@@ -207,29 +233,51 @@ export default function ChaletDetail() {
 
               {/* ── Location ───────────────────────────────────── */}
               <section>
-                <h2 className="text-lg font-bold mb-2 flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-primary" />
-                  الموقع
-                </h2>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-lg font-bold flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-primary" />
+                    الموقع
+                  </h2>
+                  <a
+                    href={mapsOpenUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors bg-primary/8 hover:bg-primary/15 px-3 py-1.5 rounded-lg"
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                    فتح في خرائط قوقل
+                  </a>
+                </div>
                 <p className="text-sm font-medium text-foreground mb-3">{locationLabel}</p>
-                <div className="w-full rounded-xl overflow-hidden border border-border/50 mb-3" style={{ height: "200px" }}>
+                <div className="w-full rounded-xl overflow-hidden border border-border/50 mb-3" style={{ height: "220px" }}>
                   <iframe
+                    key={mapEmbedUrl}
                     title="موقع الشاليه"
                     width="100%"
                     height="100%"
                     frameBorder="0"
                     loading="lazy"
                     referrerPolicy="no-referrer-when-downgrade"
-                    src={`https://maps.google.com/maps?q=${mapsQuery}&output=embed&hl=ar`}
+                    src={mapEmbedUrl}
                     className="w-full h-full"
+                    allowFullScreen
                   />
                 </div>
-                <div className="flex items-start gap-2 bg-secondary/60 px-3 py-2.5 rounded-xl">
-                  <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    الخريطة تُظهر المنطقة التقريبية. سيتم مشاركة العنوان الدقيق عبر واتساب بعد التواصل مع المالك.
-                  </p>
-                </div>
+                {coords ? (
+                  <div className="flex items-start gap-2 bg-primary/5 border border-primary/20 px-3 py-2.5 rounded-xl">
+                    <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                    <p className="text-xs text-foreground/80 leading-relaxed">
+                      الموقع الدقيق للشاليه — اضغط "فتح في خرائط قوقل" للتوجيه المباشر.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2 bg-secondary/60 px-3 py-2.5 rounded-xl">
+                    <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      الخريطة تُظهر المنطقة التقريبية. سيتم مشاركة العنوان الدقيق عبر واتساب بعد التواصل مع المالك.
+                    </p>
+                  </div>
+                )}
               </section>
             </div>
 

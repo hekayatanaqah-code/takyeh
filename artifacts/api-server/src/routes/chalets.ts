@@ -51,6 +51,7 @@ router.get("/", async (req, res) => {
       amenities: row.amenities,
       photos: row.photos,
       whatsappNumber: row.whatsappNumber,
+      mapsUrl: row.mapsUrl ?? null,
       createdAt: row.createdAt,
     })
   );
@@ -92,6 +93,7 @@ router.get("/:id", async (req, res) => {
     amenities: row.amenities,
     photos: row.photos,
     whatsappNumber: row.whatsappNumber,
+    mapsUrl: row.mapsUrl ?? null,
     createdAt: row.createdAt,
   });
 

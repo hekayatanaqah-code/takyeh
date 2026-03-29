@@ -417,6 +417,10 @@ components:
         whatsappNumber:
           type: string
           description: WhatsApp phone number for booking
+        mapsUrl:
+          type: string
+          nullable: true
+          description: Google Maps URL with exact pin coordinates (e.g. https://maps.google.com/maps?q=26.329,43.975)
         createdAt:
           type: string
           format: date-time

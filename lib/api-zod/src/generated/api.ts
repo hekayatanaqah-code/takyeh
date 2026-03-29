@@ -44,6 +44,12 @@ export const GetChaletsResponseItem = zod.object({
   amenities: zod.array(zod.string()).describe("List of amenities in Arabic"),
   photos: zod.array(zod.string()).describe("List of photo URLs"),
   whatsappNumber: zod.string().describe("WhatsApp phone number for booking"),
+  mapsUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Google Maps URL with exact pin coordinates (e.g. https:\/\/maps.google.com\/maps?q=26.329,43.975)",
+    ),
   createdAt: zod.date(),
 });
 export const GetChaletsResponse = zod.array(GetChaletsResponseItem);
@@ -72,6 +78,12 @@ export const GetChaletByIdResponse = zod.object({
   amenities: zod.array(zod.string()).describe("List of amenities in Arabic"),
   photos: zod.array(zod.string()).describe("List of photo URLs"),
   whatsappNumber: zod.string().describe("WhatsApp phone number for booking"),
+  mapsUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Google Maps URL with exact pin coordinates (e.g. https:\/\/maps.google.com\/maps?q=26.329,43.975)",
+    ),
   createdAt: zod.date(),
 });
 

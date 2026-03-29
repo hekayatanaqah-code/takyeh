@@ -15,6 +15,7 @@ export const chaletsTable = pgTable("chalets", {
   amenities: text("amenities").array().notNull().default([]),
   photos: text("photos").array().notNull().default([]),
   whatsappNumber: text("whatsapp_number").notNull(),
+  mapsUrl: text("maps_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

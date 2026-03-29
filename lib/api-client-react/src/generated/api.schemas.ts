@@ -115,6 +115,8 @@ export interface Chalet {
   photos: string[];
   /** WhatsApp phone number for booking */
   whatsappNumber: string;
+  /** Google Maps URL with exact pin coordinates (e.g. https://maps.google.com/maps?q=26.329,43.975) */
+  mapsUrl?: string | null;
   createdAt: string;
 }
 
