@@ -17,6 +17,8 @@ export interface CreateSubmissionRequest {
   district?: string;
   /** Optional Google Maps or website link */
   mapsUrl?: string;
+  /** Instagram or Snapchat profile link for verification */
+  socialLink?: string;
   /** Chalet description in Arabic */
   descriptionAr: string;
   /** Average price per night in SAR */

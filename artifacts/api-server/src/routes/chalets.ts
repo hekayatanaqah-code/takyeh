@@ -52,6 +52,7 @@ router.get("/", async (req, res) => {
       photos: row.photos,
       whatsappNumber: row.whatsappNumber,
       mapsUrl: row.mapsUrl ?? null,
+      isVerified: row.isVerified ?? false,
       createdAt: row.createdAt,
     })
   );
@@ -94,6 +95,7 @@ router.get("/:id", async (req, res) => {
     photos: row.photos,
     whatsappNumber: row.whatsappNumber,
     mapsUrl: row.mapsUrl ?? null,
+    isVerified: row.isVerified ?? false,
     createdAt: row.createdAt,
   });
 

@@ -22,7 +22,6 @@ import {
   MapPin,
   Link as LinkIcon,
   FileText,
-
   Plus,
   X,
   Building2,
@@ -30,6 +29,8 @@ import {
   Image as ImageIcon,
   Loader2,
   Info,
+  Instagram,
+  ShieldCheck,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -128,8 +129,10 @@ export default function AddChalet() {
     whatsappNumber: "",
     location: "",
     mapsUrl: "",
+    socialLink: "",
     descriptionAr: "",
   });
+  const [legalAccepted, setLegalAccepted] = useState(false);
 
   const mutation = useCreateSubmission();
 
@@ -229,7 +232,8 @@ export default function AddChalet() {
           whatsappNumber: form.whatsappNumber,
           location: form.location,
           district: finalDistrict,
-          mapsUrl: form.mapsUrl,
+          mapsUrl: form.mapsUrl || undefined,
+          socialLink: form.socialLink,
           descriptionAr: form.descriptionAr,
           pricePerNight: 0,
           amenities: Array.from(selectedAmenities),
@@ -244,12 +248,13 @@ export default function AddChalet() {
 
   const resetForm = () => {
     setSubmitted(false);
-    setForm({ nameAr: "", whatsappNumber: "", location: "", mapsUrl: "", descriptionAr: "" });
+    setForm({ nameAr: "", whatsappNumber: "", location: "", mapsUrl: "", socialLink: "", descriptionAr: "" });
     setPhotos([]);
     setSelectedAmenities(new Set());
     setSelectedCityId(null);
     setSelectedDistrict("");
     setCustomDistrict("");
+    setLegalAccepted(false);
   };
 
   const canAddMore = photos.length < MAX_PHOTOS && !isUploading;
@@ -472,9 +477,34 @@ export default function AddChalet() {
                       <p className="text-xs text-muted-foreground mt-1">لا داعي لتحديد سعر — سيتواصل معك العملاء مباشرةً عبر واتساب للاستفسار عن السعر وتفاصيل الحجز</p>
                     </div>
 
+                    {/* Social Link — mandatory for trust system */}
+                    <div className="space-y-2">
+                      <Label htmlFor="socialLink" className="text-base font-medium flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-primary" />
+                        رابط حساب الشاليه (Instagram / Snapchat){" "}
+                        <span className="text-destructive">*</span>
+                      </Label>
+                      <div className="relative">
+                        <Instagram className="absolute top-3.5 right-3 w-4 h-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                          id="socialLink"
+                          type="url"
+                          placeholder="https://www.instagram.com/your_chalet"
+                          value={form.socialLink}
+                          onChange={(e) => handleChange("socialLink", e.target.value)}
+                          required
+                          className="h-12 text-base pr-10"
+                          dir="ltr"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        يُستخدم للتحقق من هويتك وإظهار شارة "موثق ✅" على بطاقة الشاليه
+                      </p>
+                    </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="mapsUrl" className="text-base font-medium">
-                        رابط الموقع على خرائط جوجل أو الموقع الإلكتروني{" "}
+                        رابط الموقع على خرائط جوجل{" "}
                         <span className="text-muted-foreground font-normal text-sm">(اختياري)</span>
                       </Label>
                       <div className="relative">
@@ -482,7 +512,7 @@ export default function AddChalet() {
                         <Input
                           id="mapsUrl"
                           type="url"
-                          placeholder="https://maps.google.com/... أو رابط الموقع"
+                          placeholder="https://maps.google.com/..."
                           value={form.mapsUrl}
                           onChange={(e) => handleChange("mapsUrl", e.target.value)}
                           className="h-12 text-base pr-10"
@@ -606,6 +636,27 @@ export default function AddChalet() {
                   )}
                 </div>
 
+                {/* ── Legal Declaration ──────────────────────── */}
+                <div className={`rounded-2xl border-2 p-5 transition-colors ${legalAccepted ? "border-primary/40 bg-primary/5" : "border-border bg-secondary/40"}`}>
+                  <label className="flex items-start gap-4 cursor-pointer">
+                    <Checkbox
+                      checked={legalAccepted}
+                      onCheckedChange={(v) => setLegalAccepted(Boolean(v))}
+                      className="mt-0.5 shrink-0 h-5 w-5"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-foreground leading-relaxed mb-1 flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
+                        الإقرار القانوني
+                        <span className="text-destructive text-xs">*</span>
+                      </p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        أقر بأنني المالك أو المفوض الرسمي لهذا العقار، وأتحمل المسؤولية القانونية الكاملة عن صحة البيانات المذكورة.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
                 {/* Error message */}
                 {mutation.isError && (
                   <div className="bg-destructive/10 text-destructive rounded-xl p-4 text-center">
@@ -618,7 +669,7 @@ export default function AddChalet() {
                   type="submit"
                   size="lg"
                   className="w-full h-14 text-lg font-bold rounded-2xl shadow-lg shadow-primary/20"
-                  disabled={mutation.isPending || isUploading || !allUploaded}
+                  disabled={mutation.isPending || isUploading || !allUploaded || !legalAccepted}
                 >
                   {mutation.isPending ? (
                     <span className="flex items-center gap-2">

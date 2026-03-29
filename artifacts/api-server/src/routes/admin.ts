@@ -70,6 +70,7 @@ router.patch("/submissions/:id/status", async (req, res) => {
         photos: submission.photos ?? [],
         whatsappNumber: submission.whatsappNumber,
         mapsUrl: submission.mapsUrl ?? undefined,
+        isVerified: false,
       }).onConflictDoNothing();
     }
   }
@@ -85,6 +86,29 @@ router.patch("/submissions/:id/status", async (req, res) => {
 router.delete("/submissions/:id", async (req, res) => {
   const id = Number(req.params.id);
   await db.delete(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, id));
+  return res.json({ ok: true });
+});
+
+/* ── Chalets Verification ────────────────────────────────── */
+
+router.get("/chalets", async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(chaletsTable)
+    .orderBy(chaletsTable.id);
+  return res.json(rows);
+});
+
+router.patch("/chalets/:id/verify", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({ isVerified: z.boolean() }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  await db
+    .update(chaletsTable)
+    .set({ isVerified: body.data.isVerified })
+    .where(eq(chaletsTable.id, id));
+
   return res.json({ ok: true });
 });
 

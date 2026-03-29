@@ -1,6 +1,6 @@
 import { useParams, Link } from "wouter";
 import { useGetChaletById } from "@workspace/api-client-react";
-import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, Info, Phone } from "lucide-react";
+import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, Info, Phone, ShieldCheck } from "lucide-react";
 import useEmblaCarousel from 'embla-carousel-react';
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -67,6 +67,7 @@ export default function ChaletDetail() {
         ];
 
   const district = (chalet as any).district as string | undefined;
+  const isVerified = Boolean((chalet as any).isVerified);
   const locationLabel = district ? `حي ${district}، ${chalet.location}` : chalet.location;
   const whatsappMsg = `أهلاً، أود الاستفسار عن حجز شاليه ${chalet.nameAr} في ${chalet.location}.`;
 
@@ -141,9 +142,17 @@ export default function ChaletDetail() {
 
               {/* Title + meta */}
               <div>
-                <h1 className="text-2xl lg:text-3xl font-extrabold text-foreground leading-tight mb-2">
-                  {chalet.nameAr}
-                </h1>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h1 className="text-2xl lg:text-3xl font-extrabold text-foreground leading-tight">
+                    {chalet.nameAr}
+                  </h1>
+                  {isVerified && (
+                    <span className="shrink-0 inline-flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      موثق
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-3">
                   <span className="flex items-center gap-1">
                     <MapPin className="w-4 h-4 shrink-0" />
@@ -208,6 +217,14 @@ export default function ChaletDetail() {
                 <p className="text-xs text-center text-muted-foreground mt-3">
                   تواصل مباشرةً مع المالك عبر واتساب للحجز والاستفسار
                 </p>
+
+                {/* ── Safety Warning ─────────────────────── */}
+                <div className="flex items-start gap-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-xl px-3.5 py-3 mt-1">
+                  <span className="text-base leading-none shrink-0 mt-0.5">💡</span>
+                  <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                    <span className="font-semibold">لضمان حقك:</span> تأكد من مطابقة اسم الحساب البنكي مع اسم المالك الموثق في المنصة.
+                  </p>
+                </div>
               </div>
 
               {/* ── Description ────────────────────────────────── */}

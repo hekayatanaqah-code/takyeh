@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { MapPin, Bed, Star } from "lucide-react";
+import { MapPin, Bed, Star, ShieldCheck } from "lucide-react";
 import { Chalet } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ export function ChaletCard({ chalet }: ChaletCardProps) {
 
   const district = (chalet as any).district as string | null | undefined;
   const category = (chalet as any).category as string | null | undefined;
+  const isVerified = Boolean((chalet as any).isVerified);
 
   return (
     <Card className="group overflow-hidden rounded-2xl border-border/50 bg-card hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
@@ -28,16 +29,24 @@ export function ChaletCard({ chalet }: ChaletCardProps) {
               (e.target as HTMLImageElement).src = `https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=800&q=80&fit=crop`;
             }}
           />
-          <div className="absolute top-4 right-4 flex gap-2">
+          <div className="absolute top-4 right-4 flex gap-2 flex-wrap">
+            {isVerified && (
+              <Badge variant="secondary" className="bg-emerald-500/95 text-white border-none shadow-md backdrop-blur-sm">
+                <ShieldCheck className="w-3 h-3 me-1" />
+                موثق
+              </Badge>
+            )}
             {category && (
               <Badge variant="secondary" className="bg-primary/90 text-primary-foreground border-none shadow-sm">
                 {category}
               </Badge>
             )}
-            <Badge variant="secondary" className="bg-background/90 backdrop-blur-sm text-foreground hover:bg-background border-none shadow-sm">
-              <Star className="w-3 h-3 text-amber-500 fill-amber-500 me-1" />
-              <span>جديد</span>
-            </Badge>
+            {!isVerified && (
+              <Badge variant="secondary" className="bg-background/90 backdrop-blur-sm text-foreground hover:bg-background border-none shadow-sm">
+                <Star className="w-3 h-3 text-amber-500 fill-amber-500 me-1" />
+                <span>جديد</span>
+              </Badge>
+            )}
           </div>
           <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent">
             <div className="flex items-center gap-2 text-white text-sm flex-wrap">

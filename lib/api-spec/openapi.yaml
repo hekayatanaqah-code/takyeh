@@ -339,6 +339,9 @@ components:
         mapsUrl:
           type: string
           description: Optional Google Maps or website link
+        socialLink:
+          type: string
+          description: Instagram or Snapchat profile link for verification
         descriptionAr:
           type: string
           description: Chalet description in Arabic
@@ -421,6 +424,9 @@ components:
           type: string
           nullable: true
           description: Google Maps URL with exact pin coordinates (e.g. https://maps.google.com/maps?q=26.329,43.975)
+        isVerified:
+          type: boolean
+          description: Admin-verified chalet with confirmed social media identity
         createdAt:
           type: string
           format: date-time

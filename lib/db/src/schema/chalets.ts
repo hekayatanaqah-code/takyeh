@@ -16,6 +16,7 @@ export const chaletsTable = pgTable("chalets", {
   photos: text("photos").array().notNull().default([]),
   whatsappNumber: text("whatsapp_number").notNull(),
   mapsUrl: text("maps_url"),
+  isVerified: boolean("is_verified").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -38,6 +39,7 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   pricePerNight: numeric("price_per_night", { precision: 10, scale: 2 }).notNull(),
   amenities: text("amenities").array().notNull().default([]),
   mapsUrl: text("maps_url"),
+  socialLink: text("social_link"),
   photos: text("photos").array().notNull().default([]),
   status: submissionStatusEnum("status").notNull().default("pending"),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),

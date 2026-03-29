@@ -32,5 +32,7 @@ export interface Chalet {
   whatsappNumber: string;
   /** Google Maps URL with exact pin coordinates (e.g. https://maps.google.com/maps?q=26.329,43.975) */
   mapsUrl?: string | null;
+  /** Admin-verified chalet with confirmed social media identity */
+  isVerified?: boolean;
   createdAt: Date;
 }

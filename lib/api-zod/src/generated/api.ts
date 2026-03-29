@@ -50,6 +50,10 @@ export const GetChaletsResponseItem = zod.object({
     .describe(
       "Google Maps URL with exact pin coordinates (e.g. https:\/\/maps.google.com\/maps?q=26.329,43.975)",
     ),
+  isVerified: zod
+    .boolean()
+    .optional()
+    .describe("Admin-verified chalet with confirmed social media identity"),
   createdAt: zod.date(),
 });
 export const GetChaletsResponse = zod.array(GetChaletsResponseItem);
@@ -84,6 +88,10 @@ export const GetChaletByIdResponse = zod.object({
     .describe(
       "Google Maps URL with exact pin coordinates (e.g. https:\/\/maps.google.com\/maps?q=26.329,43.975)",
     ),
+  isVerified: zod
+    .boolean()
+    .optional()
+    .describe("Admin-verified chalet with confirmed social media identity"),
   createdAt: zod.date(),
 });
 
@@ -175,6 +183,10 @@ export const CreateSubmissionBody = zod.object({
     .string()
     .optional()
     .describe("Optional Google Maps or website link"),
+  socialLink: zod
+    .string()
+    .optional()
+    .describe("Instagram or Snapchat profile link for verification"),
   descriptionAr: zod.string().describe("Chalet description in Arabic"),
   pricePerNight: zod.number().describe("Average price per night in SAR"),
   amenities: zod

@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, ExternalLink, Instagram } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -57,9 +57,21 @@ interface Submission {
   trialEndsAt?: string | null;
   mapsUrl?: string | null;
   websiteUrl?: string | null;
+  socialLink?: string | null;
   descriptionAr?: string | null;
   amenities?: string[];
   photos?: string[];
+}
+
+interface AdminChalet {
+  id: number;
+  nameAr: string;
+  location: string;
+  district?: string | null;
+  category?: string | null;
+  isVerified: boolean;
+  whatsappNumber: string;
+  createdAt: string;
 }
 
 interface City {
@@ -185,6 +197,16 @@ function SubmissionReviewModal({
                   <MapPin className="w-4 h-4" />
                   عرض الموقع على الخريطة
                 </a>
+              </div>
+            )}
+            {s.socialLink && (
+              <div className="col-span-2">
+                <a href={s.socialLink} target="_blank" rel="noreferrer" className="text-pink-400 hover:text-pink-300 flex items-center gap-1.5 text-sm font-semibold">
+                  <Instagram className="w-4 h-4" />
+                  التحقق من الحساب الاجتماعي
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <p className="text-slate-500 text-xs mt-1">افتح الرابط وتحقق من هوية المالك قبل الموافقة</p>
               </div>
             )}
           </div>
@@ -1321,15 +1343,130 @@ function SettingsTab() {
   );
 }
 
+/* ── Chalets Verification Tab ─────────────────── */
+function ChaletsVerifyTab() {
+  const qc = useQueryClient();
+
+  const { data: chalets = [], isLoading } = useQuery<AdminChalet[]>({
+    queryKey: ["admin", "chalets"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/chalets");
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    },
+  });
+
+  const toggleVerify = useMutation({
+    mutationFn: async ({ id, isVerified }: { id: number; isVerified: boolean }) => {
+      const r = await apiFetch(`/admin/chalets/${id}/verify`, {
+        method: "PATCH",
+        body: JSON.stringify({ isVerified }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "chalets"] }),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="animate-spin text-amber-400 w-8 h-8" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-white">التحقق من الشاليهات</h2>
+        <p className="text-slate-400 text-sm">{chalets.filter((c) => c.isVerified).length} موثق من أصل {chalets.length}</p>
+      </div>
+
+      {/* How-to guide */}
+      <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 text-sm text-slate-300 flex items-start gap-3">
+        <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-semibold text-amber-400 mb-1">كيفية التوثيق</p>
+          <ol className="text-slate-400 list-decimal list-inside space-y-1 text-xs">
+            <li>افتح طلب التسجيل وانقر رابط الحساب الاجتماعي للتحقق</li>
+            <li>تأكد من تطابق اسم الشاليه في الحساب مع البيانات المقدمة</li>
+            <li>فعّل مفتاح "موثق" لإظهار شارة التوثيق على البطاقة وصفحة التفاصيل</li>
+          </ol>
+        </div>
+      </div>
+
+      <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-slate-700 bg-slate-800/80">
+              <TableHead className="text-slate-300 text-right font-semibold">الشاليه</TableHead>
+              <TableHead className="text-slate-300 text-right font-semibold">الموقع</TableHead>
+              <TableHead className="text-slate-300 text-right font-semibold">الفئة</TableHead>
+              <TableHead className="text-slate-300 text-right font-semibold">الحالة</TableHead>
+              <TableHead className="text-slate-300 text-center font-semibold">توثيق</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {chalets.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-slate-400 py-12">لا توجد شاليهات بعد</TableCell>
+              </TableRow>
+            ) : chalets.map((c) => (
+              <TableRow key={c.id} className="border-slate-700 hover:bg-slate-800/50 transition-colors">
+                <TableCell className="font-semibold text-white">{c.nameAr}</TableCell>
+                <TableCell className="text-slate-300 text-sm">
+                  {c.location}
+                  {c.district && <span className="text-slate-500"> · {c.district}</span>}
+                </TableCell>
+                <TableCell className="text-slate-400 text-sm">{c.category ?? "—"}</TableCell>
+                <TableCell>
+                  {c.isVerified ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 bg-emerald-900/30 px-2.5 py-1 rounded-full border border-emerald-800">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      موثق
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-500 bg-slate-700/50 px-2.5 py-1 rounded-full border border-slate-600">
+                      غير موثق
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
+                  <button
+                    onClick={() => toggleVerify.mutate({ id: c.id, isVerified: !c.isVerified })}
+                    disabled={toggleVerify.isPending}
+                    title={c.isVerified ? "إلغاء التوثيق" : "منح التوثيق"}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                      c.isVerified ? "bg-emerald-600" : "bg-slate-600"
+                    } ${toggleVerify.isPending ? "opacity-60 cursor-not-allowed" : "hover:opacity-90 cursor-pointer"}`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        c.isVerified ? "translate-x-1" : "translate-x-6"
+                      }`}
+                    />
+                  </button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main Admin Page ──────────────────────────── */
 const TABS = [
-  { id: "submissions", label: "الطلبات",          icon: Settings },
-  { id: "services",    label: "خدمات المناسبات",  icon: Wrench },
-  { id: "locations",   label: "المدن والأحياء",   icon: Building2 },
-  { id: "amenities",   label: "المرافق",           icon: Tag },
-  { id: "categories",  label: "الفئات",            icon: Tag },
-  { id: "owners",      label: "الملاك",            icon: Users },
-  { id: "siteSettings", label: "إعدادات الموقع", icon: Settings },
+  { id: "submissions",   label: "الطلبات",           icon: Settings },
+  { id: "chaletVerify",  label: "التوثيق",            icon: ShieldCheck },
+  { id: "services",      label: "خدمات المناسبات",   icon: Wrench },
+  { id: "locations",     label: "المدن والأحياء",    icon: Building2 },
+  { id: "amenities",     label: "المرافق",            icon: Tag },
+  { id: "categories",    label: "الفئات",             icon: Tag },
+  { id: "owners",        label: "الملاك",             icon: Users },
+  { id: "siteSettings",  label: "إعدادات الموقع",    icon: Settings },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
@@ -1461,6 +1598,7 @@ export default function Admin() {
       <main className="p-6 max-w-7xl mx-auto">
         {/* Stats row */}
         {activeTab === "submissions"  && <SubmissionsTab />}
+        {activeTab === "chaletVerify" && <ChaletsVerifyTab />}
         {activeTab === "services"     && <ServicesTab />}
         {activeTab === "locations"    && <LocationsTab />}
         {activeTab === "amenities"    && <AmenitiesTab />}

@@ -76,6 +76,8 @@ export interface CreateSubmissionRequest {
   district?: string;
   /** Optional Google Maps or website link */
   mapsUrl?: string;
+  /** Instagram or Snapchat profile link for verification */
+  socialLink?: string;
   /** Chalet description in Arabic */
   descriptionAr: string;
   /** Average price per night in SAR */
@@ -117,6 +119,8 @@ export interface Chalet {
   whatsappNumber: string;
   /** Google Maps URL with exact pin coordinates (e.g. https://maps.google.com/maps?q=26.329,43.975) */
   mapsUrl?: string | null;
+  /** Admin-verified chalet with confirmed social media identity */
+  isVerified?: boolean;
   createdAt: string;
 }
 
