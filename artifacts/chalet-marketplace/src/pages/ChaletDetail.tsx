@@ -187,22 +187,50 @@ export default function ChaletDetail() {
                 </div>
               </section>
               
-              {/* Location Note */}
-              <section className="bg-secondary/50 p-6 rounded-2xl border border-border/50">
-                <div className="flex gap-4">
-                  <Info className="w-6 h-6 text-primary shrink-0" />
-                  <div>
-                    <h3 className="font-bold mb-1">معلومات الموقع</h3>
-                    <p className="text-sm text-muted-foreground">
-                      الموقع الدقيق سيتم مشاركته معك من قبل المالك بعد تأكيد الحجز. الشاليه يقع في منطقة هادئة ومناسبة للعائلات في مدينة {chalet.location}.
-                    </p>
-                  </div>
+              {/* Location Section */}
+              <section>
+                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                  <MapPin className="w-6 h-6 text-primary" />
+                  الموقع
+                </h2>
+
+                {/* Location title */}
+                <p className="text-base font-semibold text-foreground mb-4">
+                  {(chalet as any).district
+                    ? `حي ${(chalet as any).district}، ${chalet.location}`
+                    : chalet.location}
+                </p>
+
+                {/* Google Maps embed */}
+                <div className="w-full rounded-2xl overflow-hidden border border-border/50 mb-4" style={{ height: "260px" }}>
+                  <iframe
+                    title="موقع الشاليه"
+                    width="100%"
+                    height="100%"
+                    frameBorder="0"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                      [(chalet as any).district, chalet.location, "القصيم، المملكة العربية السعودية"]
+                        .filter(Boolean)
+                        .join("، ")
+                    )}&output=embed&hl=ar`}
+                    className="w-full h-full"
+                  />
+                </div>
+
+                {/* Exact address note */}
+                <div className="flex items-start gap-3 bg-secondary/50 p-4 rounded-xl border border-border/50">
+                  <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    الخريطة تُظهر المنطقة التقريبية. سيتم مشاركة العنوان الدقيق عبر واتساب بعد التواصل مع المالك.
+                  </p>
                 </div>
               </section>
             </div>
 
-            {/* Sticky Sidebar Booking Card */}
-            <div className="lg:col-span-1">
+            {/* Sticky Sidebar Booking Card — desktop only; mobile uses the fixed bottom bar */}
+            <div className="hidden lg:block lg:col-span-1">
               <div className="bg-card border border-border/60 shadow-xl shadow-primary/5 rounded-3xl p-6 sticky top-24">
                 <div className="mb-6 pb-6 border-b border-border/60">
                   <p className="text-sm font-bold text-[#25D366] mb-1">الأسعار عند التواصل مع المالك</p>

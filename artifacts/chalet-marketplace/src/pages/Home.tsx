@@ -3,14 +3,11 @@ import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { MapPin, Search, Calendar, Plus, Minus, Tag } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
-import { useGetChalets, Chalet } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { ChaletCard } from "@/components/ui/ChaletCard";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -46,8 +43,6 @@ export default function Home() {
   const [searchCategory, setSearchCategory] = useState<string>("");
   const [bookingDate, setBookingDate]     = useState<string>("");
   const [numDays, setNumDays]             = useState<number>(1);
-
-  const { data: chalets, isLoading } = useGetChalets();
 
   const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["catalog", "cities"],
@@ -266,55 +261,9 @@ export default function Home() {
                   </span>
                   {" "}· تبدأ من{" "}
                   <span className="font-bold">{hijriBookingDate}</span>
-                  {" "}هـ
                 </motion.p>
               )}
             </motion.div>
-          </div>
-        </section>
-
-        {/* Featured Chalets */}
-        <section className="py-20 px-4 container mx-auto">
-          <div className="flex justify-between items-end mb-10">
-            <div>
-              <h2 className="text-3xl font-bold text-foreground mb-2">شاليهات مميزة</h2>
-              <p className="text-muted-foreground">أفضل الشاليهات المختارة بعناية لإقامتك</p>
-            </div>
-            <Button variant="outline" onClick={() => setLocation("/chalets")} className="hidden md:flex">
-              عرض الكل
-            </Button>
-          </div>
-
-          {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="space-y-4">
-                  <Skeleton className="w-full aspect-[4/3] rounded-2xl" />
-                  <Skeleton className="h-6 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {chalets?.slice(0, 6).map((chalet: Chalet, index: number) => (
-                <motion.div
-                  key={chalet.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <ChaletCard chalet={chalet} />
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-10 text-center md:hidden">
-            <Button variant="outline" size="lg" className="w-full" onClick={() => setLocation("/chalets")}>
-              عرض جميع الشاليهات
-            </Button>
           </div>
         </section>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { SlidersHorizontal, FilterX } from "lucide-react";
+import { SlidersHorizontal, FilterX, CheckSquare, Square } from "lucide-react";
 import { useGetChalets } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -20,6 +20,7 @@ export default function Chalets() {
   const [filterCity, setFilterCity]         = useState<string>(searchParams.get("location") || "all");
   const [filterDistrict, setFilterDistrict] = useState<string>(searchParams.get("district") || "all");
   const [filterCategory, setFilterCategory] = useState<string>(searchParams.get("category") || "all");
+  const [filterAmenities, setFilterAmenities] = useState<Set<string>>(new Set());
 
   const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["catalog", "cities"],
@@ -53,6 +54,16 @@ export default function Chalets() {
     staleTime: 1000 * 60 * 5,
   });
 
+  const { data: amenitiesCatalog = [] } = useQuery<{ id: number; key: string; labelAr: string }[]>({
+    queryKey: ["catalog", "amenities"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/amenities`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
   const { data: chalets, isLoading, refetch } = useGetChalets({
     location: filterCity !== "all" ? filterCity : undefined,
   });
@@ -64,13 +75,29 @@ export default function Chalets() {
   const filteredChalets = (chalets ?? []).filter((c) => {
     if (filterDistrict && filterDistrict !== "all" && (c as any).district !== filterDistrict) return false;
     if (filterCategory && filterCategory !== "all" && (c as any).category !== filterCategory) return false;
+    if (filterAmenities.size > 0) {
+      const chaletAmenities: string[] = (c as any).amenities ?? [];
+      for (const key of filterAmenities) {
+        if (!chaletAmenities.includes(key)) return false;
+      }
+    }
     return true;
   });
+
+  const toggleAmenity = (key: string) => {
+    setFilterAmenities((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const resetFilters = () => {
     setFilterCity("all");
     setFilterDistrict("all");
     setFilterCategory("all");
+    setFilterAmenities(new Set());
   };
 
   const FilterControls = () => (
@@ -126,6 +153,30 @@ export default function Chalets() {
           </SelectContent>
         </Select>
       </div>
+
+      {amenitiesCatalog.length > 0 && (
+        <div className="space-y-3">
+          <label className="text-sm font-semibold text-foreground">المرافق والمميزات</label>
+          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+            {amenitiesCatalog.map((amenity) => {
+              const checked = filterAmenities.has(amenity.key);
+              return (
+                <button
+                  key={amenity.id}
+                  type="button"
+                  onClick={() => toggleAmenity(amenity.key)}
+                  className="flex items-center gap-2 w-full text-sm text-right hover:text-primary transition-colors py-0.5"
+                >
+                  {checked
+                    ? <CheckSquare className="w-4 h-4 text-primary shrink-0" />
+                    : <Square className="w-4 h-4 text-muted-foreground shrink-0" />}
+                  <span>{amenity.labelAr}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <Button variant="outline" className="w-full text-destructive border-destructive/20 hover:bg-destructive/10" onClick={resetFilters}>
         <FilterX className="w-4 h-4 me-2" />
