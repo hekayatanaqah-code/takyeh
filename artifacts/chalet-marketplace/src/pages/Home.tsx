@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { MapPin, Users, Search, Calendar, Plus, Minus } from "lucide-react";
+import { MapPin, Search, Calendar, Plus, Minus, Tag } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { useGetChalets, Chalet } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
@@ -14,7 +14,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-/* ── Arabic numeral helpers ─────────────────────────────────── */
 function toArabicNum(n: number): string {
   return new Intl.NumberFormat("ar-SA").format(n);
 }
@@ -42,12 +41,14 @@ function addDays(dateStr: string, days: number): string {
 
 export default function Home() {
   const [, setLocation] = useLocation();
-  const [searchLocation, setSearchLocation] = useState<string>("");
-  const [guests, setGuests]                 = useState<string>("");
-  const [bookingDate, setBookingDate]       = useState<string>("");
-  const [numDays, setNumDays]               = useState<number>(1);
+  const [searchCity, setSearchCity]       = useState<string>("");
+  const [searchDistrict, setSearchDistrict] = useState<string>("");
+  const [searchCategory, setSearchCategory] = useState<string>("");
+  const [bookingDate, setBookingDate]     = useState<string>("");
+  const [numDays, setNumDays]             = useState<number>(1);
 
   const { data: chalets, isLoading } = useGetChalets();
+
   const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["catalog", "cities"],
     queryFn: async () => {
@@ -58,10 +59,33 @@ export default function Home() {
     staleTime: 1000 * 60 * 5,
   });
 
+  const selectedCityId = cities.find((c) => c.name === searchCity)?.id;
+  const { data: districts = [] } = useQuery<{ id: number; name: string; cityId: number }[]>({
+    queryKey: ["catalog", "districts", selectedCityId],
+    enabled: !!selectedCityId,
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/districts?cityId=${selectedCityId}`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: categories = [] } = useQuery<{ id: number; nameAr: string }[]>({
+    queryKey: ["catalog", "categories"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/categories`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
   const handleSearch = () => {
     const params = new URLSearchParams();
-    if (searchLocation && searchLocation !== "all") params.append("location", searchLocation);
-    if (guests)       params.append("maxGuests", guests);
+    if (searchCity && searchCity !== "all") params.append("location", searchCity);
+    if (searchDistrict && searchDistrict !== "all") params.append("district", searchDistrict);
+    if (searchCategory && searchCategory !== "all") params.append("category", searchCategory);
     if (bookingDate) {
       params.append("checkIn", bookingDate);
       params.append("checkOut", addDays(bookingDate, numDays));
@@ -78,7 +102,6 @@ export default function Home() {
       <main className="flex-1">
         {/* Hero Section */}
         <section className="relative pt-24 pb-32 md:pt-32 md:pb-48 px-4 overflow-hidden">
-          {/* Background */}
           <div className="absolute inset-0 z-0">
             <img
               src={`${import.meta.env.BASE_URL}images/hero-bg.png`}
@@ -97,25 +120,25 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
-              className="max-w-3xl mx-auto text-center text-white"
+              className="max-w-4xl mx-auto text-center text-white"
             >
               <h1 className="text-4xl md:text-6xl font-extrabold mb-6 leading-tight">
                 اكتشف أجمل الشاليهات في <span className="text-primary">القصيم</span>
               </h1>
               <p className="text-lg md:text-xl text-white/80 mb-10 max-w-2xl mx-auto">
                 احجز استراحتك أو شاليهك القادم بكل سهولة. خيارات متنوعة تناسب جميع العائلات
-                والمناسبات بأسعار تنافسية.
+                والمناسبات.
               </p>
 
               {/* ── Search Card ─────────────────────────────────────── */}
-              <div className="bg-white/10 backdrop-blur-md border border-white/20 p-2 md:p-3 rounded-2xl shadow-2xl flex flex-col md:flex-row gap-3">
+              <div className="bg-white/10 backdrop-blur-md border border-white/20 p-2 md:p-3 rounded-2xl shadow-2xl flex flex-col md:flex-row flex-wrap gap-3">
 
                 {/* City */}
-                <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                <div className="flex-1 min-w-[140px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
                   <MapPin className="w-5 h-5 text-muted-foreground shrink-0" />
                   <div className="w-full">
                     <p className="text-xs font-semibold text-muted-foreground text-right mb-1">المدينة</p>
-                    <Select value={searchLocation} onValueChange={setSearchLocation}>
+                    <Select value={searchCity} onValueChange={(v) => { setSearchCity(v); setSearchDistrict(""); }}>
                       <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
                         <SelectValue placeholder="اختر المدينة" />
                       </SelectTrigger>
@@ -129,8 +152,57 @@ export default function Home() {
                   </div>
                 </div>
 
+                {/* District */}
+                <div className="flex-1 min-w-[140px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                  <MapPin className="w-5 h-5 text-primary/70 shrink-0" />
+                  <div className="w-full">
+                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الحي</p>
+                    <Select
+                      value={searchDistrict}
+                      onValueChange={setSearchDistrict}
+                      disabled={!selectedCityId}
+                    >
+                      <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
+                        <SelectValue placeholder="الكل" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">الكل</SelectItem>
+                        {districts.map((d) => (
+                          <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Category */}
+                <div className="flex-1 min-w-[140px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                  <Tag className="w-5 h-5 text-muted-foreground shrink-0" />
+                  <div className="w-full">
+                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الفئة</p>
+                    <Select value={searchCategory} onValueChange={setSearchCategory}>
+                      <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
+                        <SelectValue placeholder="جميع الفئات" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">جميع الفئات</SelectItem>
+                        {categories.length === 0 && (
+                          <>
+                            <SelectItem value="شالية">شالية</SelectItem>
+                            <SelectItem value="مزرعة">مزرعة</SelectItem>
+                            <SelectItem value="استراحة">استراحة</SelectItem>
+                          </>
+                        )}
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.nameAr}>{cat.nameAr}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 {/* Booking date */}
-                <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3 min-w-0">
+                <div className="flex-1 min-w-[160px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
                   <Calendar className="w-5 h-5 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
                     <DualCalendarPicker
@@ -143,9 +215,9 @@ export default function Home() {
                 </div>
 
                 {/* Number of days counter */}
-                <div className="bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                <div className="bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3 shrink-0">
                   <div className="flex flex-col items-center w-full gap-1">
-                    <p className="text-xs font-semibold text-muted-foreground">عدد الأيام</p>
+                    <p className="text-xs font-semibold text-muted-foreground whitespace-nowrap">عدد الأيام</p>
                     <div className="flex items-center gap-3" dir="ltr">
                       <button
                         type="button"
@@ -168,25 +240,6 @@ export default function Home() {
                         <Plus className="w-3 h-3" />
                       </button>
                     </div>
-                  </div>
-                </div>
-
-                {/* Guests */}
-                <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
-                  <Users className="w-5 h-5 text-muted-foreground shrink-0" />
-                  <div className="w-full">
-                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">عدد الضيوف</p>
-                    <Select value={guests} onValueChange={setGuests}>
-                      <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
-                        <SelectValue placeholder="اختر العدد" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="5">حتى ٥ أشخاص</SelectItem>
-                        <SelectItem value="10">حتى ١٠ أشخاص</SelectItem>
-                        <SelectItem value="20">حتى ٢٠ شخص</SelectItem>
-                        <SelectItem value="50">أكثر من ٢٠ شخص</SelectItem>
-                      </SelectContent>
-                    </Select>
                   </div>
                 </div>
 
@@ -295,7 +348,7 @@ export default function Home() {
                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h4l2-9 5 18 2-9h5"></path></svg>
                 </div>
                 <h3 className="text-xl font-bold mb-3">معلومات دقيقة</h3>
-                <p className="text-muted-foreground">تفاصيل كاملة عن المرافق والصور والأسعار لتتخذ قرارك بثقة.</p>
+                <p className="text-muted-foreground">تفاصيل كاملة عن المرافق والصور لتتخذ قرارك بثقة.</p>
               </div>
             </div>
           </div>

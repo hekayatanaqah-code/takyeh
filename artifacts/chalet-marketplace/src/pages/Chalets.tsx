@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { SlidersHorizontal, FilterX } from "lucide-react";
 import { useGetChalets } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ChaletCard } from "@/components/ui/ChaletCard";
@@ -10,63 +11,121 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 export default function Chalets() {
   const [location] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
-  
-  // State for filters
-  const [filterLocation, setFilterLocation] = useState<string>(searchParams.get("location") || "all");
-  const [filterGuests, setFilterGuests] = useState<string>(searchParams.get("maxGuests") || "");
 
-  // Fetch data
-  const { data: chalets, isLoading, refetch } = useGetChalets({
-    location: filterLocation !== "all" ? filterLocation : undefined,
-    maxGuests: filterGuests ? Number(filterGuests) : undefined,
-    maxPrice: undefined,
+  const [filterCity, setFilterCity]         = useState<string>(searchParams.get("location") || "all");
+  const [filterDistrict, setFilterDistrict] = useState<string>(searchParams.get("district") || "all");
+  const [filterCategory, setFilterCategory] = useState<string>(searchParams.get("category") || "all");
+
+  const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["catalog", "cities"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/cities`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
   });
 
-  // Effect to sync URL params on load
+  const selectedCityId = cities.find((c) => c.name === filterCity)?.id;
+  const { data: districts = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["catalog", "districts", selectedCityId],
+    enabled: !!selectedCityId,
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/districts?cityId=${selectedCityId}`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: categories = [] } = useQuery<{ id: number; nameAr: string }[]>({
+    queryKey: ["catalog", "categories"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/categories`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: chalets, isLoading, refetch } = useGetChalets({
+    location: filterCity !== "all" ? filterCity : undefined,
+  });
+
   useEffect(() => {
     refetch();
-  }, [filterLocation, filterGuests, refetch]);
+  }, [filterCity, refetch]);
+
+  const filteredChalets = (chalets ?? []).filter((c) => {
+    if (filterDistrict && filterDistrict !== "all" && (c as any).district !== filterDistrict) return false;
+    if (filterCategory && filterCategory !== "all" && (c as any).category !== filterCategory) return false;
+    return true;
+  });
 
   const resetFilters = () => {
-    setFilterLocation("all");
-    setFilterGuests("");
+    setFilterCity("all");
+    setFilterDistrict("all");
+    setFilterCategory("all");
   };
 
   const FilterControls = () => (
     <div className="space-y-8">
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">المدينة</label>
-        <Select value={filterLocation} onValueChange={setFilterLocation}>
+        <Select value={filterCity} onValueChange={(v) => { setFilterCity(v); setFilterDistrict("all"); }}>
           <SelectTrigger className="bg-background">
             <SelectValue placeholder="اختر المدينة" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">جميع المدن</SelectItem>
-            <SelectItem value="بريدة">بريدة</SelectItem>
-            <SelectItem value="عنيزة">عنيزة</SelectItem>
-            <SelectItem value="الرس">الرس</SelectItem>
-            <SelectItem value="البكيرية">البكيرية</SelectItem>
+            {cities.map((city) => (
+              <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
       <div className="space-y-3">
-        <label className="text-sm font-semibold text-foreground">عدد الضيوف كحد أدنى</label>
-        <Select value={filterGuests} onValueChange={setFilterGuests}>
+        <label className="text-sm font-semibold text-foreground">الحي</label>
+        <Select value={filterDistrict} onValueChange={setFilterDistrict} disabled={!selectedCityId}>
           <SelectTrigger className="bg-background">
             <SelectValue placeholder="الكل" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="5">5 أشخاص فأكثر</SelectItem>
-            <SelectItem value="10">10 أشخاص فأكثر</SelectItem>
-            <SelectItem value="20">20 شخص فأكثر</SelectItem>
+            <SelectItem value="all">الكل</SelectItem>
+            {districts.map((d) => (
+              <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
+      <div className="space-y-3">
+        <label className="text-sm font-semibold text-foreground">الفئة</label>
+        <Select value={filterCategory} onValueChange={setFilterCategory}>
+          <SelectTrigger className="bg-background">
+            <SelectValue placeholder="جميع الفئات" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">جميع الفئات</SelectItem>
+            {categories.length === 0 && (
+              <>
+                <SelectItem value="شالية">شالية</SelectItem>
+                <SelectItem value="مزرعة">مزرعة</SelectItem>
+                <SelectItem value="استراحة">استراحة</SelectItem>
+              </>
+            )}
+            {categories.map((cat) => (
+              <SelectItem key={cat.id} value={cat.nameAr}>{cat.nameAr}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <Button variant="outline" className="w-full text-destructive border-destructive/20 hover:bg-destructive/10" onClick={resetFilters}>
         <FilterX className="w-4 h-4 me-2" />
@@ -125,7 +184,7 @@ export default function Chalets() {
                   </div>
                 ))}
               </div>
-            ) : chalets?.length === 0 ? (
+            ) : filteredChalets.length === 0 ? (
               <div className="bg-card rounded-2xl border border-border/50 p-12 text-center flex flex-col items-center">
                 <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-4">
                   <FilterX className="w-10 h-10 text-muted-foreground" />
@@ -136,7 +195,7 @@ export default function Chalets() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                {chalets?.map((chalet: import("@workspace/api-client-react").Chalet) => (
+                {filteredChalets.map((chalet) => (
                   <ChaletCard key={chalet.id} chalet={chalet} />
                 ))}
               </div>

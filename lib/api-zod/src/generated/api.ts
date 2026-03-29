@@ -33,6 +33,11 @@ export const GetChaletsResponseItem = zod.object({
   nameAr: zod.string().describe("Chalet name in Arabic"),
   descriptionAr: zod.string().describe("Chalet description in Arabic"),
   location: zod.string().describe("City name in Arabic"),
+  district: zod.string().nullish().describe("District or neighbourhood"),
+  category: zod
+    .string()
+    .nullish()
+    .describe("Chalet category (e.g. شالية، مزرعة)"),
   pricePerNight: zod.number().describe("Price per night in SAR"),
   maxGuests: zod.number().describe("Maximum number of guests"),
   bedrooms: zod.number().describe("Number of bedrooms"),
@@ -56,6 +61,11 @@ export const GetChaletByIdResponse = zod.object({
   nameAr: zod.string().describe("Chalet name in Arabic"),
   descriptionAr: zod.string().describe("Chalet description in Arabic"),
   location: zod.string().describe("City name in Arabic"),
+  district: zod.string().nullish().describe("District or neighbourhood"),
+  category: zod
+    .string()
+    .nullish()
+    .describe("Chalet category (e.g. شالية، مزرعة)"),
   pricePerNight: zod.number().describe("Price per night in SAR"),
   maxGuests: zod.number().describe("Maximum number of guests"),
   bedrooms: zod.number().describe("Number of bedrooms"),

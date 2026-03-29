@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { formatDualDate } from "@/lib/hijri";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -1121,13 +1121,215 @@ function ServicesTab() {
   );
 }
 
+/* ── Categories Tab ───────────────────────────── */
+function CategoriesTab() {
+  const qc = useQueryClient();
+  const [newName, setNewName] = useState("");
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  interface Category { id: number; nameAr: string; isActive: boolean }
+
+  const { data: categories = [], isLoading } = useQuery<Category[]>({
+    queryKey: ["admin", "categories"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/categories");
+      if (!r.ok) throw new Error("فشل التحميل");
+      return r.json();
+    },
+  });
+
+  const addCategory = useMutation({
+    mutationFn: async (nameAr: string) => {
+      const r = await apiFetch("/admin/categories", { method: "POST", body: JSON.stringify({ nameAr }) });
+      if (!r.ok) throw new Error("فشل الإضافة");
+    },
+    onSuccess: () => { setNewName(""); qc.invalidateQueries({ queryKey: ["admin", "categories"] }); },
+  });
+
+  const toggleActive = useMutation({
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
+      const r = await apiFetch(`/admin/categories/${id}`, { method: "PATCH", body: JSON.stringify({ isActive }) });
+      if (!r.ok) throw new Error("فشل التحديث");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "categories"] }),
+  });
+
+  const deleteCategory = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await apiFetch(`/admin/categories/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error("فشل الحذف");
+    },
+    onSuccess: () => { setDeleteId(null); qc.invalidateQueries({ queryKey: ["admin", "categories"] }); },
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+        <h3 className="text-slate-200 font-semibold mb-4">إضافة فئة جديدة</h3>
+        <div className="flex gap-3">
+          <Input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="مثال: شالية، مزرعة، استراحة"
+            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 flex-1"
+            onKeyDown={(e) => { if (e.key === "Enter" && newName.trim()) addCategory.mutate(newName.trim()); }}
+          />
+          <Button
+            onClick={() => newName.trim() && addCategory.mutate(newName.trim())}
+            disabled={addCategory.isPending || !newName.trim()}
+            className="bg-amber-600 hover:bg-amber-700"
+          >
+            <Plus className="w-4 h-4 me-1" />
+            إضافة
+          </Button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-400 w-6 h-6" /></div>
+      ) : categories.length === 0 ? (
+        <p className="text-slate-400 text-center py-10">لا توجد فئات بعد</p>
+      ) : (
+        <div className="rounded-xl border border-slate-700 overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-slate-700 bg-slate-800">
+                <TableHead className="text-slate-300 text-right">اسم الفئة</TableHead>
+                <TableHead className="text-slate-300 text-right">الحالة</TableHead>
+                <TableHead className="text-slate-300 text-right">إجراءات</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {categories.map((cat) => (
+                <TableRow key={cat.id} className="border-slate-700 hover:bg-slate-800/50">
+                  <TableCell className="text-white font-medium">{cat.nameAr}</TableCell>
+                  <TableCell>
+                    <button
+                      onClick={() => toggleActive.mutate({ id: cat.id, isActive: !cat.isActive })}
+                      className={`text-xs px-2.5 py-1 rounded-full font-semibold ${cat.isActive ? "bg-green-900/50 text-green-400" : "bg-slate-700 text-slate-400"}`}
+                    >
+                      {cat.isActive ? "مفعّل" : "مخفي"}
+                    </button>
+                  </TableCell>
+                  <TableCell>
+                    <Button size="sm" variant="ghost" className="h-8 px-2 text-slate-400 hover:text-red-400" onClick={() => setDeleteId(cat.id)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent className="bg-slate-900 border-slate-700 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-right">تأكيد الحذف</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400 text-right">سيتم حذف هذه الفئة نهائياً.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700">إلغاء</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => deleteId && deleteCategory.mutate(deleteId)}>
+              {deleteCategory.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : "حذف"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+/* ── Site Settings Tab ────────────────────────── */
+function SettingsTab() {
+  const qc = useQueryClient();
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState(false);
+
+  const settingFields = [
+    { key: "platform_whatsapp", label: "رقم واتساب المنصة", placeholder: "966500000000" },
+    { key: "platform_email",    label: "البريد الإلكتروني",  placeholder: "info@example.com" },
+    { key: "facebook_url",      label: "رابط فيسبوك",        placeholder: "https://facebook.com/..." },
+    { key: "twitter_url",       label: "رابط تويتر/X",       placeholder: "https://x.com/..." },
+    { key: "instagram_url",     label: "رابط إنستقرام",      placeholder: "https://instagram.com/..." },
+    { key: "about_text",        label: "نص عن المنصة",       placeholder: "وصف قصير عن المنصة..." },
+  ];
+
+  const { data: settings, isLoading } = useQuery<Record<string, string>>({
+    queryKey: ["admin", "settings"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/settings");
+      if (!r.ok) throw new Error("فشل التحميل");
+      return r.json();
+    },
+  });
+
+  useEffect(() => {
+    if (settings) setForm(settings);
+  }, [settings]);
+
+  const saveSettings = useMutation({
+    mutationFn: async (data: Record<string, string>) => {
+      const r = await apiFetch("/admin/settings", { method: "PATCH", body: JSON.stringify(data) });
+      if (!r.ok) throw new Error("فشل الحفظ");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "settings"] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    },
+  });
+
+  if (isLoading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-400 w-6 h-6" /></div>;
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-5">
+        <h3 className="text-slate-200 font-semibold text-lg">إعدادات الموقع</h3>
+        {settingFields.map((field) => (
+          <div key={field.key} className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-300">{field.label}</label>
+            {field.key === "about_text" ? (
+              <Textarea
+                value={form[field.key] ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                placeholder={field.placeholder}
+                rows={3}
+                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+              />
+            ) : (
+              <Input
+                value={form[field.key] ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                placeholder={field.placeholder}
+                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+                dir={field.key.includes("url") || field.key.includes("whatsapp") || field.key.includes("email") ? "ltr" : "rtl"}
+              />
+            )}
+          </div>
+        ))}
+        <Button
+          onClick={() => saveSettings.mutate(form)}
+          disabled={saveSettings.isPending}
+          className="bg-amber-600 hover:bg-amber-700 w-full"
+        >
+          {saved ? "✓ تم الحفظ" : saveSettings.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main Admin Page ──────────────────────────── */
 const TABS = [
   { id: "submissions", label: "الطلبات",          icon: Settings },
   { id: "services",    label: "خدمات المناسبات",  icon: Wrench },
   { id: "locations",   label: "المدن والأحياء",   icon: Building2 },
   { id: "amenities",   label: "المرافق",           icon: Tag },
+  { id: "categories",  label: "الفئات",            icon: Tag },
   { id: "owners",      label: "الملاك",            icon: Users },
+  { id: "siteSettings", label: "إعدادات الموقع", icon: Settings },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
@@ -1258,11 +1460,13 @@ export default function Admin() {
       {/* Content */}
       <main className="p-6 max-w-7xl mx-auto">
         {/* Stats row */}
-        {activeTab === "submissions" && <SubmissionsTab />}
-        {activeTab === "services"    && <ServicesTab />}
-        {activeTab === "locations"   && <LocationsTab />}
-        {activeTab === "amenities"   && <AmenitiesTab />}
-        {activeTab === "owners"      && <OwnersTab />}
+        {activeTab === "submissions"  && <SubmissionsTab />}
+        {activeTab === "services"     && <ServicesTab />}
+        {activeTab === "locations"    && <LocationsTab />}
+        {activeTab === "amenities"    && <AmenitiesTab />}
+        {activeTab === "categories"   && <CategoriesTab />}
+        {activeTab === "owners"       && <OwnersTab />}
+        {activeTab === "siteSettings" && <SettingsTab />}
       </main>
     </div>
   );

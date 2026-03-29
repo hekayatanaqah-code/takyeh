@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { MapPin, Users, Bed, Star } from "lucide-react";
+import { MapPin, Bed, Star } from "lucide-react";
 import { Chalet } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,34 +9,47 @@ interface ChaletCardProps {
 }
 
 export function ChaletCard({ chalet }: ChaletCardProps) {
-  // Use first photo, or fallback to generated placeholder, or unsplash if generation failed
-  const mainPhoto = chalet.photos && chalet.photos.length > 0 
-    ? chalet.photos[0] 
+  const mainPhoto = chalet.photos && chalet.photos.length > 0
+    ? chalet.photos[0]
     : `${import.meta.env.BASE_URL}images/chalet-placeholder-${(chalet.id % 3) + 1}.png`;
+
+  const district = (chalet as any).district as string | null | undefined;
+  const category = (chalet as any).category as string | null | undefined;
 
   return (
     <Card className="group overflow-hidden rounded-2xl border-border/50 bg-card hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
       <Link href={`/chalets/${chalet.id}`} className="block">
         <div className="relative aspect-[4/3] overflow-hidden bg-secondary">
-          <img 
-            src={mainPhoto} 
-            alt={chalet.nameAr} 
+          <img
+            src={mainPhoto}
+            alt={chalet.nameAr}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             onError={(e) => {
-              // Fallback to stock if the generated image isn't available
               (e.target as HTMLImageElement).src = `https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=800&q=80&fit=crop`;
             }}
           />
           <div className="absolute top-4 right-4 flex gap-2">
+            {category && (
+              <Badge variant="secondary" className="bg-primary/90 text-primary-foreground border-none shadow-sm">
+                {category}
+              </Badge>
+            )}
             <Badge variant="secondary" className="bg-background/90 backdrop-blur-sm text-foreground hover:bg-background border-none shadow-sm">
               <Star className="w-3 h-3 text-amber-500 fill-amber-500 me-1" />
               <span>جديد</span>
             </Badge>
           </div>
           <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70 to-transparent">
-            <div className="flex items-center text-white text-sm">
-              <MapPin className="w-4 h-4 me-1 opacity-80" />
-              <span>{chalet.location}</span>
+            <div className="flex items-center gap-2 text-white text-sm flex-wrap">
+              <div className="flex items-center">
+                <MapPin className="w-4 h-4 me-1 opacity-80" />
+                <span>{chalet.location}</span>
+              </div>
+              {district && (
+                <span className="text-white/80 bg-white/20 px-2 py-0.5 rounded-full text-xs">
+                  {district}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -54,10 +67,6 @@ export function ChaletCard({ chalet }: ChaletCardProps) {
           </div>
 
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-md">
-              <Users className="w-4 h-4 text-primary" />
-              <span>حتى {chalet.maxGuests} ضيوف</span>
-            </div>
             <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-md">
               <Bed className="w-4 h-4 text-primary" />
               <span>{chalet.bedrooms} غرف</span>

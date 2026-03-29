@@ -7,6 +7,8 @@ export const chaletsTable = pgTable("chalets", {
   nameAr: text("name_ar").notNull(),
   descriptionAr: text("description_ar").notNull(),
   location: text("location").notNull(),
+  district: text("district"),
+  category: text("category"),
   pricePerNight: numeric("price_per_night", { precision: 10, scale: 2 }).notNull(),
   maxGuests: integer("max_guests").notNull(),
   bedrooms: integer("bedrooms").notNull(),
@@ -29,6 +31,7 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   whatsappNumber: text("whatsapp_number").notNull(),
   location: text("location").notNull(),
   district: text("district"),
+  category: text("category"),
   websiteUrl: text("website_url"),
   descriptionAr: text("description_ar").notNull(),
   pricePerNight: numeric("price_per_night", { precision: 10, scale: 2 }).notNull(),
@@ -91,3 +94,36 @@ export const externalServicesTable = pgTable("external_services", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ExternalService = typeof externalServicesTable.$inferSelect;
+
+/* ── Chalet Categories ─────────────────────────────────────── */
+export const chaletCategoriesTable = pgTable("chalet_categories", {
+  id: serial("id").primaryKey(),
+  nameAr: text("name_ar").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ChaletCategory = typeof chaletCategoriesTable.$inferSelect;
+
+/* ── Owner Bookings ────────────────────────────────────────── */
+export const bookingSourceEnum = pgEnum("booking_source", ["platform", "external"]);
+
+export const ownerBookingsTable = pgTable("owner_bookings", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  submissionId: integer("submission_id").references(() => chaletSubmissionsTable.id, { onDelete: "set null" }),
+  clientName: text("client_name").notNull(),
+  bookingDate: text("booking_date").notNull(),
+  durationDays: integer("duration_days").notNull().default(1),
+  source: bookingSourceEnum("source").notNull().default("platform"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;
+
+/* ── Site Settings ─────────────────────────────────────────── */
+export const siteSettingsTable = pgTable("site_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull().default(""),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type SiteSetting = typeof siteSettingsTable.$inferSelect;

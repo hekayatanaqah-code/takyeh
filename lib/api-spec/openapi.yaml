@@ -387,6 +387,14 @@ components:
         location:
           type: string
           description: City name in Arabic
+        district:
+          type: string
+          nullable: true
+          description: District or neighbourhood
+        category:
+          type: string
+          nullable: true
+          description: Chalet category (e.g. شالية، مزرعة)
         pricePerNight:
           type: number
           description: Price per night in SAR

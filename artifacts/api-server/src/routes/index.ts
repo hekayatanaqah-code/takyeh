@@ -7,6 +7,7 @@ import storageRouter from "./storage";
 import adminRouter from "./admin";
 import catalogRouter from "./catalog";
 import servicesRouter from "./services";
+import ownerRouter from "./owner";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use("/submissions", submissionsRouter);
 router.use("/admin", adminRouter);
 router.use(catalogRouter);
 router.use("/services", servicesRouter);
+router.use("/owner", ownerRouter);
 
 export default router;

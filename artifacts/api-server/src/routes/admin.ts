@@ -6,6 +6,8 @@ import {
   districtsCatalogTable,
   amenitiesCatalogTable,
   externalServicesTable,
+  chaletCategoriesTable,
+  siteSettingsTable,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -43,9 +45,14 @@ router.patch("/submissions/:id/status", async (req, res) => {
   const body = z.object({ status: z.enum(["pending", "approved", "rejected"]) }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
+  const updateData: Record<string, unknown> = { status: body.data.status };
+  if (body.data.status === "approved") {
+    updateData.trialEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  }
+
   await db
     .update(chaletSubmissionsTable)
-    .set({ status: body.data.status })
+    .set(updateData)
     .where(eq(chaletSubmissionsTable.id, id));
 
   return res.json({ ok: true });
@@ -254,6 +261,55 @@ router.patch("/services/:id", async (req, res) => {
 router.delete("/services/:id", async (req, res) => {
   const id = Number(req.params.id);
   await db.delete(externalServicesTable).where(eq(externalServicesTable.id, id));
+  return res.json({ ok: true });
+});
+
+/* ── Chalet Categories ───────────────────────── */
+
+router.get("/categories", async (_req, res) => {
+  const rows = await db.select().from(chaletCategoriesTable).orderBy(chaletCategoriesTable.createdAt);
+  return res.json(rows);
+});
+
+router.post("/categories", async (req, res) => {
+  const body = z.object({ nameAr: z.string().min(1) }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "الاسم مطلوب" });
+  const [row] = await db.insert(chaletCategoriesTable).values({ nameAr: body.data.nameAr }).returning();
+  return res.status(201).json(row);
+});
+
+router.patch("/categories/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({ nameAr: z.string().min(1).optional(), isActive: z.boolean().optional() }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  await db.update(chaletCategoriesTable).set(body.data).where(eq(chaletCategoriesTable.id, id));
+  return res.json({ ok: true });
+});
+
+router.delete("/categories/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  await db.delete(chaletCategoriesTable).where(eq(chaletCategoriesTable.id, id));
+  return res.json({ ok: true });
+});
+
+/* ── Site Settings ───────────────────────────── */
+
+router.get("/settings", async (_req, res) => {
+  const rows = await db.select().from(siteSettingsTable);
+  const map: Record<string, string> = {};
+  for (const row of rows) map[row.key] = row.value;
+  return res.json(map);
+});
+
+router.patch("/settings", async (req, res) => {
+  const body = z.record(z.string(), z.string()).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  for (const [key, value] of Object.entries(body.data)) {
+    await db
+      .insert(siteSettingsTable)
+      .values({ key, value, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: siteSettingsTable.key, set: { value, updatedAt: new Date() } });
+  }
   return res.json({ ok: true });
 });
 

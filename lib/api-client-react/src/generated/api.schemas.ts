@@ -99,6 +99,10 @@ export interface Chalet {
   descriptionAr: string;
   /** City name in Arabic */
   location: string;
+  /** District or neighbourhood */
+  district?: string | null;
+  /** Chalet category (e.g. شالية، مزرعة) */
+  category?: string | null;
   /** Price per night in SAR */
   pricePerNight: number;
   /** Maximum number of guests */
