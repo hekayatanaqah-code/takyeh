@@ -9,6 +9,8 @@ import {
   externalServicesTable,
   chaletCategoriesTable,
   siteSettingsTable,
+  serviceProviderSubmissionsTable,
+  serviceProvidersTable,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -355,6 +357,64 @@ router.get("/settings", async (_req, res) => {
   const map: Record<string, string> = {};
   for (const row of rows) map[row.key] = row.value;
   return res.json(map);
+});
+
+/* ── Service Provider Submissions (Admin) ──────────────────── */
+
+router.get("/service-submissions", async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(serviceProviderSubmissionsTable)
+    .orderBy(serviceProviderSubmissionsTable.createdAt);
+  return res.json(rows.reverse());
+});
+
+router.patch("/service-submissions/:id/status", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({
+    status: z.enum(["pending", "approved", "rejected", "needs_revision"]),
+    adminNote: z.string().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const updateData: Record<string, unknown> = {
+    status: body.data.status,
+    adminNote: body.data.adminNote ?? null,
+  };
+
+  if (body.data.status === "approved") {
+    const [submission] = await db
+      .select()
+      .from(serviceProviderSubmissionsTable)
+      .where(eq(serviceProviderSubmissionsTable.id, id))
+      .limit(1);
+
+    if (submission) {
+      await db.insert(serviceProvidersTable).values({
+        businessName: submission.businessName,
+        category: submission.category,
+        city: submission.city,
+        descriptionAr: submission.descriptionAr ?? undefined,
+        whatsappNumber: submission.whatsappNumber,
+        logoUrl: submission.logoUrl ?? undefined,
+        galleryPhotos: submission.galleryPhotos ?? [],
+        isActive: true,
+      }).onConflictDoNothing();
+    }
+  }
+
+  await db
+    .update(serviceProviderSubmissionsTable)
+    .set(updateData)
+    .where(eq(serviceProviderSubmissionsTable.id, id));
+
+  return res.json({ ok: true });
+});
+
+router.delete("/service-submissions/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  await db.delete(serviceProviderSubmissionsTable).where(eq(serviceProviderSubmissionsTable.id, id));
+  return res.json({ ok: true });
 });
 
 router.patch("/settings", async (req, res) => {

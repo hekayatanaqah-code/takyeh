@@ -13,6 +13,8 @@ import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import Services from "./pages/Services";
 import ServiceDetail from "./pages/ServiceDetail";
+import AddServiceProvider from "./pages/AddServiceProvider";
+import ProviderDetail from "./pages/ProviderDetail";
 import { FloatingWhatsApp } from "@/components/layout/FloatingWhatsApp";
 
 const queryClient = new QueryClient({
@@ -51,6 +53,10 @@ function Router() {
       <Route path="/admin" component={Admin} />
       <Route path="/services" component={Services} />
       <Route path="/services/:id" component={ServiceDetail} />
+      <Route path="/add-service-provider">
+        {() => <ProtectedRoute component={AddServiceProvider} returnTo="/add-service-provider" />}
+      </Route>
+      <Route path="/providers/:id" component={ProviderDetail} />
       <Route component={NotFound} />
     </Switch>
   );

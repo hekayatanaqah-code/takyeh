@@ -135,3 +135,35 @@ export const siteSettingsTable = pgTable("site_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type SiteSetting = typeof siteSettingsTable.$inferSelect;
+
+/* ── Service Provider Submissions ──────────────────────────── */
+export const serviceProviderSubmissionsTable = pgTable("service_provider_submissions", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id"),
+  businessName: text("business_name").notNull(),
+  category: text("category").notNull(),
+  city: text("city").notNull(),
+  descriptionAr: text("description_ar"),
+  whatsappNumber: text("whatsapp_number").notNull(),
+  logoUrl: text("logo_url"),
+  galleryPhotos: text("gallery_photos").array().notNull().default([]),
+  status: submissionStatusEnum("status").notNull().default("pending"),
+  adminNote: text("admin_note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ServiceProviderSubmission = typeof serviceProviderSubmissionsTable.$inferSelect;
+
+/* ── Approved Service Providers ────────────────────────────── */
+export const serviceProvidersTable = pgTable("service_providers", {
+  id: serial("id").primaryKey(),
+  businessName: text("business_name").notNull(),
+  category: text("category").notNull(),
+  city: text("city").notNull(),
+  descriptionAr: text("description_ar"),
+  whatsappNumber: text("whatsapp_number").notNull(),
+  logoUrl: text("logo_url"),
+  galleryPhotos: text("gallery_photos").array().notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ServiceProvider = typeof serviceProvidersTable.$inferSelect;

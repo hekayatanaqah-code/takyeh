@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, ExternalLink, Instagram, AlertTriangle, RotateCcw, Home, DoorOpen } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, ExternalLink, Instagram, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -1656,16 +1656,349 @@ function ChaletsVerifyTab() {
   );
 }
 
+/* ── Provider Submissions Tab ─────────────────── */
+const PROVIDER_CATEGORY_LABELS: Record<string, string> = {
+  bounce_houses: "🎪 نطيطات",
+  ice_cream: "🍦 آيس كريم",
+  productive_families: "🎀 أسر منتجة",
+  catering: "🍽️ تموين وضيافة",
+  photography: "📸 تصوير",
+  decoration: "🎊 ديكور وتزيين",
+  entertainment: "🎶 ترفيه وأناشيد",
+  other: "✨ أخرى",
+};
+
+interface ProviderSubmission {
+  id: number;
+  businessName: string;
+  category: string;
+  city: string;
+  descriptionAr: string | null;
+  whatsappNumber: string;
+  logoUrl: string | null;
+  galleryPhotos: string[];
+  status: string;
+  adminNote: string | null;
+  createdAt: string;
+  ownerName?: string | null;
+}
+
+function ProviderReviewModal({
+  sub,
+  open,
+  onClose,
+}: {
+  sub: ProviderSubmission | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [adminNote, setAdminNote] = useState("");
+  const [photoIdx, setPhotoIdx] = useState(0);
+  const [step, setStep] = useState<"view" | "confirm-reject" | "confirm-revision">("view");
+
+  useEffect(() => {
+    if (open) { setAdminNote(sub?.adminNote ?? ""); setPhotoIdx(0); setStep("view"); }
+  }, [open, sub]);
+
+  const decide = useMutation({
+    mutationFn: async ({ status, note }: { status: string; note?: string }) => {
+      const r = await fetch(`${API}/admin/service-submissions/${sub!.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, adminNote: note }),
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("فشل التحديث");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "provider-submissions"] });
+      onClose();
+    },
+  });
+
+  if (!sub) return null;
+  const photos = sub.galleryPhotos ?? [];
+  const allPhotos = sub.logoUrl ? [sub.logoUrl, ...photos] : photos;
+  const currentPhoto = allPhotos[photoIdx];
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-right text-lg font-bold flex items-center gap-2">
+            <Star className="w-5 h-5 text-amber-500" />
+            مراجعة طلب مزود خدمة
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Photos */}
+        {allPhotos.length > 0 && (
+          <div className="space-y-2">
+            <div className="relative rounded-xl overflow-hidden aspect-video bg-muted">
+              <img src={currentPhoto} alt="" className="w-full h-full object-cover" />
+              {allPhotos.length > 1 && (
+                <>
+                  <button onClick={() => setPhotoIdx((i) => (i - 1 + allPhotos.length) % allPhotos.length)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center">
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setPhotoIdx((i) => (i + 1) % allPhotos.length)}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center">
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-white text-xs bg-black/40 px-2 py-0.5 rounded-full">
+                    {photoIdx + 1} / {allPhotos.length}
+                  </div>
+                </>
+              )}
+            </div>
+            {allPhotos.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto">
+                {allPhotos.map((url, i) => (
+                  <button key={i} onClick={() => setPhotoIdx(i)}
+                    className={`flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-all ${i === photoIdx ? "border-amber-500" : "border-transparent opacity-60 hover:opacity-100"}`}>
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Details */}
+        <div className="space-y-3 text-sm">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="text-muted-foreground text-xs mb-1">اسم النشاط</p>
+              <p className="font-semibold text-foreground">{sub.businessName}</p>
+            </div>
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="text-muted-foreground text-xs mb-1">الفئة</p>
+              <p className="font-semibold text-foreground">{PROVIDER_CATEGORY_LABELS[sub.category] ?? sub.category}</p>
+            </div>
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="text-muted-foreground text-xs mb-1">المدينة</p>
+              <p className="font-semibold text-foreground">{sub.city || "—"}</p>
+            </div>
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="text-muted-foreground text-xs mb-1">واتساب</p>
+              <a href={`https://wa.me/${sub.whatsappNumber}`} target="_blank" rel="noreferrer"
+                className="font-semibold text-green-600 hover:underline flex items-center gap-1 dir-ltr">
+                <Phone className="w-3.5 h-3.5" />{sub.whatsappNumber}
+              </a>
+            </div>
+          </div>
+          {sub.descriptionAr && (
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="text-muted-foreground text-xs mb-1">وصف الخدمة</p>
+              <p className="text-foreground leading-relaxed">{sub.descriptionAr}</p>
+            </div>
+          )}
+          {sub.ownerName && (
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="text-muted-foreground text-xs mb-1">المقدِّم</p>
+              <p className="font-semibold text-foreground">{sub.ownerName}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Admin Note */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">ملاحظة للمزود (تُرسل عند الرفض/التعديل)</label>
+          <Textarea
+            value={adminNote}
+            onChange={(e) => setAdminNote(e.target.value)}
+            placeholder="اكتب ملاحظتك هنا..."
+            rows={3}
+            className="resize-none"
+          />
+        </div>
+
+        {/* Actions */}
+        {step === "view" && (
+          <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t border-border pt-4 flex gap-3">
+            <Button onClick={() => decide.mutate({ status: "approved" })} disabled={decide.isPending}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold">
+              <CheckCircle className="w-4 h-4 me-1.5" />قبول
+            </Button>
+            <Button onClick={() => setStep("confirm-revision")} variant="outline" disabled={decide.isPending}
+              className="flex-1 border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 font-bold">
+              <RotateCcw className="w-4 h-4 me-1.5" />طلب تعديل
+            </Button>
+            <Button onClick={() => setStep("confirm-reject")} variant="outline" disabled={decide.isPending}
+              className="flex-1 border-red-400 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 font-bold">
+              <XCircle className="w-4 h-4 me-1.5" />رفض
+            </Button>
+          </div>
+        )}
+        {step === "confirm-reject" && (
+          <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t border-border pt-4 space-y-2">
+            <p className="text-sm font-semibold text-destructive text-center">تأكيد الرفض؟</p>
+            <div className="flex gap-3">
+              <Button onClick={() => decide.mutate({ status: "rejected", note: adminNote || undefined })}
+                disabled={decide.isPending} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold">
+                {decide.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "تأكيد الرفض"}
+              </Button>
+              <Button variant="outline" onClick={() => setStep("view")} className="flex-1">رجوع</Button>
+            </div>
+          </div>
+        )}
+        {step === "confirm-revision" && (
+          <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t border-border pt-4 space-y-2">
+            <p className="text-sm font-semibold text-orange-600 text-center">تأكيد طلب التعديل؟</p>
+            <div className="flex gap-3">
+              <Button onClick={() => decide.mutate({ status: "needs_revision", note: adminNote || undefined })}
+                disabled={decide.isPending} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold">
+                {decide.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "تأكيد"}
+              </Button>
+              <Button variant="outline" onClick={() => setStep("view")} className="flex-1">رجوع</Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProviderSubmissionsTab() {
+  const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected" | "needs_revision">("pending");
+  const [selected, setSelected] = useState<ProviderSubmission | null>(null);
+  const qc = useQueryClient();
+
+  const { data: submissions = [], isLoading } = useQuery<ProviderSubmission[]>({
+    queryKey: ["admin", "provider-submissions"],
+    queryFn: async () => {
+      const r = await fetch(`${API}/admin/service-submissions`, { credentials: "include" });
+      if (!r.ok) throw new Error("فشل التحميل");
+      return r.json();
+    },
+  });
+
+  const filtered = filter === "all" ? submissions : submissions.filter((s) => s.status === filter);
+
+  const STATUS_COLORS: Record<string, string> = {
+    pending:        "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+    approved:       "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+    rejected:       "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    needs_revision: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  };
+  const STATUS_LABELS: Record<string, string> = {
+    pending: "قيد المراجعة", approved: "مقبول", rejected: "مرفوض", needs_revision: "يحتاج تعديل",
+  };
+
+  const pendingCount = submissions.filter((s) => s.status === "pending").length;
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-bold text-white">طلبات مزودي الخدمات</h2>
+          {pendingCount > 0 && (
+            <span className="bg-amber-500 text-black text-xs font-bold px-2 py-0.5 rounded-full">
+              {pendingCount} معلق
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex gap-2 overflow-x-auto">
+        {[
+          { id: "all",            label: `الكل (${submissions.length})` },
+          { id: "pending",        label: `معلق (${submissions.filter(s => s.status === "pending").length})` },
+          { id: "approved",       label: "مقبول" },
+          { id: "rejected",       label: "مرفوض" },
+          { id: "needs_revision", label: "يحتاج تعديل" },
+        ].map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setFilter(id as typeof filter)}
+            className={`px-4 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all border ${
+              filter === id
+                ? "bg-amber-500 text-black border-amber-500"
+                : "border-slate-600 text-slate-400 hover:border-amber-500/50"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-amber-400" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">
+          <Star className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p>لا توجد طلبات في هذه الفئة</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((sub) => {
+            const mainPhoto = sub.galleryPhotos?.[0] ?? sub.logoUrl;
+            return (
+              <div
+                key={sub.id}
+                className="bg-slate-800 border border-slate-700 rounded-2xl p-4 flex items-start gap-4 hover:border-amber-500/40 transition-colors"
+              >
+                {mainPhoto ? (
+                  <img src={mainPhoto} alt={sub.businessName} className="w-20 h-16 rounded-xl object-cover shrink-0" />
+                ) : (
+                  <div className="w-20 h-16 rounded-xl bg-slate-700 flex items-center justify-center text-2xl shrink-0">
+                    {PROVIDER_CATEGORY_LABELS[sub.category]?.split(" ")[0] ?? "✨"}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div>
+                      <p className="font-bold text-white">{sub.businessName}</p>
+                      <p className="text-sm text-slate-400 mt-0.5">
+                        {PROVIDER_CATEGORY_LABELS[sub.category] ?? sub.category}
+                        {sub.city ? ` — ${sub.city}` : ""}
+                      </p>
+                    </div>
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${STATUS_COLORS[sub.status] ?? ""}`}>
+                      {STATUS_LABELS[sub.status] ?? sub.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
+                    <span className="text-xs text-slate-500">
+                      {new Date(sub.createdAt).toLocaleDateString("ar-SA")}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelected(sub)}
+                      className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs h-7"
+                    >
+                      <Eye className="w-3.5 h-3.5 me-1" />
+                      مراجعة
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <ProviderReviewModal sub={selected} open={!!selected} onClose={() => setSelected(null)} />
+    </div>
+  );
+}
+
 /* ── Main Admin Page ──────────────────────────── */
 const TABS = [
-  { id: "submissions",   label: "الطلبات",           icon: Settings },
-  { id: "chaletVerify",  label: "التوثيق",            icon: ShieldCheck },
-  { id: "services",      label: "خدمات المناسبات",   icon: Wrench },
-  { id: "locations",     label: "المدن والأحياء",    icon: Building2 },
-  { id: "amenities",     label: "المرافق",            icon: Tag },
-  { id: "categories",    label: "الفئات",             icon: Tag },
-  { id: "owners",        label: "الملاك",             icon: Users },
-  { id: "siteSettings",  label: "إعدادات الموقع",    icon: Settings },
+  { id: "submissions",        label: "الطلبات",              icon: Settings },
+  { id: "chaletVerify",       label: "التوثيق",               icon: ShieldCheck },
+  { id: "services",           label: "خدمات المناسبات",      icon: Wrench },
+  { id: "providerSubmissions", label: "طلبات مزودي الخدمات", icon: Star },
+  { id: "locations",          label: "المدن والأحياء",       icon: Building2 },
+  { id: "amenities",          label: "المرافق",               icon: Tag },
+  { id: "categories",         label: "الفئات",                icon: Tag },
+  { id: "owners",             label: "الملاك",                icon: Users },
+  { id: "siteSettings",       label: "إعدادات الموقع",       icon: Settings },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
@@ -1796,14 +2129,15 @@ export default function Admin() {
       {/* Content */}
       <main className="p-6 max-w-7xl mx-auto">
         {/* Stats row */}
-        {activeTab === "submissions"  && <SubmissionsTab />}
-        {activeTab === "chaletVerify" && <ChaletsVerifyTab />}
-        {activeTab === "services"     && <ServicesTab />}
-        {activeTab === "locations"    && <LocationsTab />}
-        {activeTab === "amenities"    && <AmenitiesTab />}
-        {activeTab === "categories"   && <CategoriesTab />}
-        {activeTab === "owners"       && <OwnersTab />}
-        {activeTab === "siteSettings" && <SettingsTab />}
+        {activeTab === "submissions"         && <SubmissionsTab />}
+        {activeTab === "chaletVerify"        && <ChaletsVerifyTab />}
+        {activeTab === "services"            && <ServicesTab />}
+        {activeTab === "providerSubmissions" && <ProviderSubmissionsTab />}
+        {activeTab === "locations"           && <LocationsTab />}
+        {activeTab === "amenities"           && <AmenitiesTab />}
+        {activeTab === "categories"          && <CategoriesTab />}
+        {activeTab === "owners"              && <OwnersTab />}
+        {activeTab === "siteSettings"        && <SettingsTab />}
       </main>
     </div>
   );

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   User, LogOut, Plus, MapPin, Calendar, Clock, CheckCircle,
-  XCircle, Home, BookOpen, BarChart2, Trash2, Building2, Globe, Phone, AlertTriangle, RotateCcw,
+  XCircle, Home, BookOpen, BarChart2, Trash2, Building2, Globe, Phone, AlertTriangle, RotateCcw, Star,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -342,6 +342,140 @@ function BookingsTab({ submissions }: { submissions: any[] }) {
   );
 }
 
+/* ── Service Submissions Tab ─────────────────── */
+interface ServiceSubmission {
+  id: number;
+  businessName: string;
+  category: string;
+  city: string;
+  descriptionAr: string | null;
+  logoUrl: string | null;
+  galleryPhotos: string[];
+  status: string;
+  adminNote: string | null;
+  createdAt: string;
+}
+
+const SERVICE_CATEGORY_LABELS: Record<string, string> = {
+  bounce_houses: "🎪 نطيطات",
+  ice_cream: "🍦 آيس كريم",
+  productive_families: "🎀 أسر منتجة",
+  catering: "🍽️ تموين وضيافة",
+  photography: "📸 تصوير",
+  decoration: "🎊 ديكور وتزيين",
+  entertainment: "🎶 ترفيه وأناشيد",
+  other: "✨ أخرى",
+};
+
+function ServiceSubmissionsTab() {
+  const { data: submissions = [], isLoading } = useQuery<ServiceSubmission[]>({
+    queryKey: ["my-service-submissions"],
+    queryFn: async () => {
+      const r = await apiFetch("/providers/my/submissions");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2].map((i) => <Skeleton key={i} className="h-36 w-full rounded-2xl" />)}
+      </div>
+    );
+  }
+
+  if (submissions.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="bg-card border border-dashed border-border rounded-2xl p-12 text-center"
+      >
+        <Star className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-foreground mb-2">لا توجد خدمات مسجلة بعد</h3>
+        <p className="text-muted-foreground mb-6">سجّل خدمتك لتظهر لعملاء في منطقة القصيم</p>
+        <Link href="/add-service-provider">
+          <Button>
+            <Plus className="w-4 h-4 me-2" />
+            تسجيل خدمة جديدة
+          </Button>
+        </Link>
+      </motion.div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {submissions.map((sub, idx) => {
+        const status = statusConfig[sub.status as keyof typeof statusConfig] ?? statusConfig.pending;
+        const mainPhoto = sub.galleryPhotos?.[0] ?? sub.logoUrl;
+        return (
+          <motion.div
+            key={sub.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.08 }}
+            className="bg-card border border-border rounded-2xl p-5 md:p-6 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+              {mainPhoto ? (
+                <img src={mainPhoto} alt={sub.businessName} className="w-full sm:w-28 h-20 object-cover rounded-xl shrink-0" />
+              ) : (
+                <div className="w-full sm:w-28 h-20 bg-muted rounded-xl shrink-0 flex items-center justify-center text-3xl">
+                  {SERVICE_CATEGORY_LABELS[sub.category]?.split(" ")[0] ?? "✨"}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <h3 className="text-lg font-bold text-foreground">{sub.businessName}</h3>
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full ${status.className}`}>
+                    {status.icon}{status.label}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2 text-sm text-muted-foreground">
+                  <span>{SERVICE_CATEGORY_LABELS[sub.category] ?? sub.category}</span>
+                  {sub.city && (
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5" />{sub.city}
+                    </span>
+                  )}
+                  {sub.createdAt && (
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {new Date(sub.createdAt).toLocaleDateString("ar-SA")}
+                    </span>
+                  )}
+                </div>
+                {sub.descriptionAr && (
+                  <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{sub.descriptionAr}</p>
+                )}
+                {sub.adminNote && (sub.status === "rejected" || sub.status === "needs_revision") && (
+                  <div className={`mt-3 flex items-start gap-2.5 rounded-xl px-3.5 py-3 border ${
+                    sub.status === "needs_revision"
+                      ? "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800/40"
+                      : "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/40"
+                  }`}>
+                    <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${sub.status === "needs_revision" ? "text-orange-500" : "text-red-500"}`} />
+                    <div>
+                      <p className={`text-xs font-bold mb-0.5 ${sub.status === "needs_revision" ? "text-orange-700 dark:text-orange-400" : "text-red-700 dark:text-red-400"}`}>
+                        {sub.status === "needs_revision" ? "ملاحظات الإدارة — يرجى التعديل والإعادة" : "سبب الرفض"}
+                      </p>
+                      <p className={`text-xs leading-relaxed ${sub.status === "needs_revision" ? "text-orange-800 dark:text-orange-300" : "text-red-800 dark:text-red-300"}`}>
+                        {sub.adminNote}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ── Reports Tab ─────────────────────────────── */
 function ReportsTab() {
   const { data: bookings = [], isLoading } = useQuery<OwnerBooking[]>({
@@ -418,7 +552,7 @@ function ReportsTab() {
 /* ── Main Dashboard ──────────────────────────── */
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"chalets" | "bookings" | "reports">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "services" | "bookings" | "reports">("chalets");
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const { data: submissions, isLoading: submissionsLoading } = useGetMySubmissions();
 
@@ -442,6 +576,7 @@ export default function Dashboard() {
 
   const tabs = [
     { id: "chalets",  label: "شاليهاتي",    icon: <Building2 className="w-4 h-4" /> },
+    { id: "services", label: "خدماتي",      icon: <Star className="w-4 h-4" /> },
     { id: "bookings", label: "حجوزاتنا",    icon: <BookOpen className="w-4 h-4" /> },
     { id: "reports",  label: "التقارير",    icon: <BarChart2 className="w-4 h-4" /> },
   ] as const;
@@ -505,6 +640,9 @@ export default function Dashboard() {
         {/* Tab Content */}
         {activeTab === "chalets" && (
           <ChaletsTab submissions={submissions as any[]} isLoading={submissionsLoading} />
+        )}
+        {activeTab === "services" && (
+          <ServiceSubmissionsTab />
         )}
         {activeTab === "bookings" && (
           <BookingsTab submissions={submissions as any[] ?? []} />

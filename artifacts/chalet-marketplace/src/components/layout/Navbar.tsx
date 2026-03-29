@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, Home, Compass, LogIn, LayoutDashboard, Settings, X } from "lucide-react";
+import { MapPin, Menu, Home, Compass, LogIn, LayoutDashboard, Settings, Building2, Star } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState } from "react";
@@ -23,10 +23,16 @@ export function Navbar() {
     setAuthNoticeOpen(true);
   };
 
-  const proceedToLogin = () => {
+  const proceedAsOwner = () => {
     setAuthNoticeOpen(false);
     setIsOpen(false);
     login("/dashboard");
+  };
+
+  const proceedAsProvider = () => {
+    setAuthNoticeOpen(false);
+    setIsOpen(false);
+    login("/add-service-provider");
   };
 
   return (
@@ -146,30 +152,52 @@ export function Navbar() {
         </div>
       </header>
 
-      {/* Auth Notice Dialog */}
+      {/* Auth Notice Dialog — Role Selection */}
       <Dialog open={authNoticeOpen} onOpenChange={setAuthNoticeOpen}>
         <DialogContent dir="rtl" className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-right text-lg font-bold">تسجيل الدخول للملاك</DialogTitle>
+            <DialogTitle className="text-right text-lg font-bold">إنشاء حساب / تسجيل الدخول</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 mt-2">
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 dark:bg-amber-900/20 dark:border-amber-700">
-              <p className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed font-medium">
-                التسجيل مخصص لملاك الشاليهات فقط.
-              </p>
-              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
-                يمكن للمستأجرين البحث والحجز مباشرة دون الحاجة لإنشاء حساب.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 pt-1">
-              <Button onClick={proceedToLogin} className="w-full">
-                <LogIn className="w-4 h-4 me-2" />
-                متابعة كمالك شاليه
-              </Button>
-              <Button variant="outline" onClick={() => setAuthNoticeOpen(false)} className="w-full">
-                إلغاء
-              </Button>
-            </div>
+          <div className="space-y-3 mt-2">
+            <p className="text-sm text-muted-foreground text-right leading-relaxed">
+              اختر نوع حسابك للمتابعة. يمكن للزوار التصفح والتواصل دون حساب.
+            </p>
+
+            {/* Option 1: Property Owner */}
+            <button
+              onClick={proceedAsOwner}
+              className="w-full flex items-start gap-4 p-4 rounded-2xl border-2 border-primary/30 hover:border-primary hover:bg-primary/5 transition-all text-right group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+                <Building2 className="w-6 h-6 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-foreground text-sm">مالك عقار</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  أضف شاليهك أو مزرعتك وابدأ استقبال الحجوزات
+                </p>
+              </div>
+            </button>
+
+            {/* Option 2: Service Provider */}
+            <button
+              onClick={proceedAsProvider}
+              className="w-full flex items-start gap-4 p-4 rounded-2xl border-2 border-amber-300/40 hover:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-all text-right group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0 group-hover:bg-amber-200 dark:group-hover:bg-amber-900/50 transition-colors">
+                <Star className="w-6 h-6 text-amber-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-foreground text-sm">مزود خدمات مناسبات</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  اعرض خدماتك (نطيطات، آيس كريم، أسر منتجة...)
+                </p>
+              </div>
+            </button>
+
+            <Button variant="ghost" onClick={() => setAuthNoticeOpen(false)} className="w-full text-muted-foreground">
+              إلغاء
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
