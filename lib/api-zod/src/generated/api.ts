@@ -38,6 +38,14 @@ export const GetChaletsResponseItem = zod.object({
     .string()
     .nullish()
     .describe("Chalet category (e.g. شالية، مزرعة)"),
+  propertyType: zod
+    .string()
+    .nullish()
+    .describe("Property type (شالية، مزرعة، استراحة، مخيم)"),
+  sections: zod
+    .string()
+    .nullish()
+    .describe("Number of sections (قسم واحد، قسمين منفصلة)"),
   pricePerNight: zod.number().describe("Price per night in SAR"),
   maxGuests: zod.number().describe("Maximum number of guests"),
   bedrooms: zod.number().describe("Number of bedrooms"),
@@ -76,6 +84,14 @@ export const GetChaletByIdResponse = zod.object({
     .string()
     .nullish()
     .describe("Chalet category (e.g. شالية، مزرعة)"),
+  propertyType: zod
+    .string()
+    .nullish()
+    .describe("Property type (شالية، مزرعة، استراحة، مخيم)"),
+  sections: zod
+    .string()
+    .nullish()
+    .describe("Number of sections (قسم واحد، قسمين منفصلة)"),
   pricePerNight: zod.number().describe("Price per night in SAR"),
   maxGuests: zod.number().describe("Maximum number of guests"),
   bedrooms: zod.number().describe("Number of bedrooms"),
@@ -179,6 +195,14 @@ export const CreateSubmissionBody = zod.object({
     .string()
     .optional()
     .describe("Optional district or neighborhood name"),
+  propertyType: zod
+    .string()
+    .optional()
+    .describe("Property type (شالية، مزرعة، استراحة، مخيم)"),
+  sections: zod
+    .string()
+    .optional()
+    .describe("Number of sections (قسم واحد، قسمين منفصلة)"),
   mapsUrl: zod
     .string()
     .optional()

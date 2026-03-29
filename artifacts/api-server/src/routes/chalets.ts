@@ -18,6 +18,7 @@ router.get("/", async (req, res) => {
   }
 
   const { location, maxGuests, maxPrice } = parseResult.data;
+  const sections = req.query.sections as string | undefined;
 
   const conditions: SQL[] = [];
 
@@ -30,6 +31,9 @@ router.get("/", async (req, res) => {
   if (maxPrice !== undefined) {
     conditions.push(lte(chaletsTable.pricePerNight, String(maxPrice)));
   }
+  if (sections) {
+    conditions.push(eq(chaletsTable.sections, sections));
+  }
 
   const rows = await db
     .select()
@@ -37,8 +41,8 @@ router.get("/", async (req, res) => {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(chaletsTable.id);
 
-  const data = rows.map((row) =>
-    GetChaletsResponseItem.parse({
+  const data = rows.map((row) => ({
+    ...GetChaletsResponseItem.parse({
       id: row.id,
       nameAr: row.nameAr,
       descriptionAr: row.descriptionAr,
@@ -54,8 +58,10 @@ router.get("/", async (req, res) => {
       mapsUrl: row.mapsUrl ?? null,
       isVerified: row.isVerified ?? false,
       createdAt: row.createdAt,
-    })
-  );
+    }),
+    propertyType: row.propertyType ?? null,
+    sections: row.sections ?? null,
+  }));
 
   res.json(data);
 });
@@ -81,23 +87,27 @@ router.get("/:id", async (req, res) => {
   }
 
   const row = rows[0];
-  const data = GetChaletByIdResponse.parse({
-    id: row.id,
-    nameAr: row.nameAr,
-    descriptionAr: row.descriptionAr,
-    location: row.location,
-    district: row.district ?? null,
-    category: row.category ?? null,
-    pricePerNight: Number(row.pricePerNight),
-    maxGuests: row.maxGuests,
-    bedrooms: row.bedrooms,
-    amenities: row.amenities,
-    photos: row.photos,
-    whatsappNumber: row.whatsappNumber,
-    mapsUrl: row.mapsUrl ?? null,
-    isVerified: row.isVerified ?? false,
-    createdAt: row.createdAt,
-  });
+  const data = {
+    ...GetChaletByIdResponse.parse({
+      id: row.id,
+      nameAr: row.nameAr,
+      descriptionAr: row.descriptionAr,
+      location: row.location,
+      district: row.district ?? null,
+      category: row.category ?? null,
+      pricePerNight: Number(row.pricePerNight),
+      maxGuests: row.maxGuests,
+      bedrooms: row.bedrooms,
+      amenities: row.amenities,
+      photos: row.photos,
+      whatsappNumber: row.whatsappNumber,
+      mapsUrl: row.mapsUrl ?? null,
+      isVerified: row.isVerified ?? false,
+      createdAt: row.createdAt,
+    }),
+    propertyType: row.propertyType ?? null,
+    sections: row.sections ?? null,
+  };
 
   res.json(data);
 });

@@ -16,6 +16,8 @@ export function ChaletCard({ chalet }: ChaletCardProps) {
   const district = (chalet as any).district as string | null | undefined;
   const category = (chalet as any).category as string | null | undefined;
   const isVerified = Boolean((chalet as any).isVerified);
+  const propertyType = (chalet as any).propertyType as string | null | undefined;
+  const sections = (chalet as any).sections as string | null | undefined;
 
   return (
     <Card className="group overflow-hidden rounded-2xl border-border/50 bg-card hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
@@ -75,11 +77,21 @@ export function ChaletCard({ chalet }: ChaletCardProps) {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-md">
               <Bed className="w-4 h-4 text-primary" />
               <span>{chalet.bedrooms} غرف</span>
             </div>
+            {propertyType && (
+              <span className="bg-primary/8 text-primary border border-primary/20 px-2 py-1 rounded-md text-xs font-medium">
+                {propertyType}
+              </span>
+            )}
+            {sections && (
+              <span className="bg-secondary/80 text-muted-foreground border border-border/60 px-2 py-1 rounded-md text-xs">
+                {sections}
+              </span>
+            )}
           </div>
 
           <div className="mt-4 pt-4 border-t border-border/50 flex flex-wrap gap-2">

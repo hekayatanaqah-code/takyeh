@@ -132,6 +132,8 @@ export default function AddChalet() {
     socialLink: "",
     descriptionAr: "",
   });
+  const [propertyType, setPropertyType] = useState("");
+  const [sections, setSections] = useState("");
   const [legalAccepted, setLegalAccepted] = useState(false);
 
   const mutation = useCreateSubmission();
@@ -232,6 +234,8 @@ export default function AddChalet() {
           whatsappNumber: form.whatsappNumber,
           location: form.location,
           district: finalDistrict,
+          propertyType: propertyType || undefined,
+          sections: sections || undefined,
           mapsUrl: form.mapsUrl || undefined,
           socialLink: form.socialLink,
           descriptionAr: form.descriptionAr,
@@ -249,6 +253,8 @@ export default function AddChalet() {
   const resetForm = () => {
     setSubmitted(false);
     setForm({ nameAr: "", whatsappNumber: "", location: "", mapsUrl: "", socialLink: "", descriptionAr: "" });
+    setPropertyType("");
+    setSections("");
     setPhotos([]);
     setSelectedAmenities(new Set());
     setSelectedCityId(null);
@@ -401,6 +407,41 @@ export default function AddChalet() {
                         )}
                       </div>
                     )}
+
+                    {/* Property Type */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <div className="space-y-2">
+                        <Label className="text-base font-medium">
+                          نوع العقار <span className="text-destructive">*</span>
+                        </Label>
+                        <Select value={propertyType} onValueChange={setPropertyType} required>
+                          <SelectTrigger className="h-12 text-base">
+                            <SelectValue placeholder="اختر نوع العقار" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="شالية">🏕️ شالية</SelectItem>
+                            <SelectItem value="مزرعة">🌿 مزرعة</SelectItem>
+                            <SelectItem value="استراحة">🏡 استراحة</SelectItem>
+                            <SelectItem value="مخيم">⛺ مخيم</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-base font-medium">
+                          عدد الأقسام <span className="text-destructive">*</span>
+                        </Label>
+                        <Select value={sections} onValueChange={setSections} required>
+                          <SelectTrigger className="h-12 text-base">
+                            <SelectValue placeholder="اختر عدد الأقسام" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="قسم واحد">🔑 قسم واحد</SelectItem>
+                            <SelectItem value="قسمين منفصلة">🔑🔑 قسمين منفصلة</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="descriptionAr" className="text-base font-medium">
@@ -669,7 +710,7 @@ export default function AddChalet() {
                   type="submit"
                   size="lg"
                   className="w-full h-14 text-lg font-bold rounded-2xl shadow-lg shadow-primary/20"
-                  disabled={mutation.isPending || isUploading || !allUploaded || !legalAccepted}
+                  disabled={mutation.isPending || isUploading || !allUploaded || !legalAccepted || !propertyType || !sections}
                 >
                   {mutation.isPending ? (
                     <span className="flex items-center gap-2">

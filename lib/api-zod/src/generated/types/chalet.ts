@@ -18,6 +18,10 @@ export interface Chalet {
   district?: string | null;
   /** Chalet category (e.g. شالية، مزرعة) */
   category?: string | null;
+  /** Property type (شالية، مزرعة، استراحة، مخيم) */
+  propertyType?: string | null;
+  /** Number of sections (قسم واحد، قسمين منفصلة) */
+  sections?: string | null;
   /** Price per night in SAR */
   pricePerNight: number;
   /** Maximum number of guests */

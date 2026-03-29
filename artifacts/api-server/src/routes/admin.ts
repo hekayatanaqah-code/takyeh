@@ -63,6 +63,8 @@ router.patch("/submissions/:id/status", async (req, res) => {
         location: submission.location,
         district: submission.district ?? undefined,
         category: submission.category ?? undefined,
+        propertyType: submission.propertyType ?? undefined,
+        sections: submission.sections ?? undefined,
         pricePerNight: String(submission.pricePerNight ?? 0),
         maxGuests: 10,
         bedrooms: 3,

@@ -68,6 +68,8 @@ export default function ChaletDetail() {
 
   const district = (chalet as any).district as string | undefined;
   const isVerified = Boolean((chalet as any).isVerified);
+  const propertyType = (chalet as any).propertyType as string | null | undefined;
+  const sections = (chalet as any).sections as string | null | undefined;
   const locationLabel = district ? `حي ${district}، ${chalet.location}` : chalet.location;
   const whatsappMsg = `أهلاً، أود الاستفسار عن حجز شاليه ${chalet.nameAr} في ${chalet.location}.`;
 
@@ -173,6 +175,16 @@ export default function ChaletDetail() {
                     <Bed className="w-3.5 h-3.5 text-primary" />
                     {chalet.bedrooms} غرف نوم
                   </span>
+                  {propertyType && (
+                    <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-lg px-3 py-1.5 text-xs font-semibold">
+                      {propertyType}
+                    </span>
+                  )}
+                  {sections && (
+                    <span className="inline-flex items-center gap-1.5 bg-secondary rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                      {sections}
+                    </span>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"

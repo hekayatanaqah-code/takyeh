@@ -74,6 +74,10 @@ export interface CreateSubmissionRequest {
   location: string;
   /** Optional district or neighborhood name */
   district?: string;
+  /** Property type (شالية، مزرعة، استراحة، مخيم) */
+  propertyType?: string;
+  /** Number of sections (قسم واحد، قسمين منفصلة) */
+  sections?: string;
   /** Optional Google Maps or website link */
   mapsUrl?: string;
   /** Instagram or Snapchat profile link for verification */
@@ -105,6 +109,10 @@ export interface Chalet {
   district?: string | null;
   /** Chalet category (e.g. شالية، مزرعة) */
   category?: string | null;
+  /** Property type (شالية، مزرعة، استراحة، مخيم) */
+  propertyType?: string | null;
+  /** Number of sections (قسم واحد، قسمين منفصلة) */
+  sections?: string | null;
   /** Price per night in SAR */
   pricePerNight: number;
   /** Maximum number of guests */

@@ -20,6 +20,7 @@ export default function Chalets() {
   const [filterCity, setFilterCity]         = useState<string>(searchParams.get("location") || "all");
   const [filterDistrict, setFilterDistrict] = useState<string>(searchParams.get("district") || "all");
   const [filterCategory, setFilterCategory] = useState<string>(searchParams.get("category") || "all");
+  const [filterSections, setFilterSections] = useState<string>("all");
   const [filterAmenities, setFilterAmenities] = useState<Set<string>>(new Set());
 
   const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
@@ -75,6 +76,7 @@ export default function Chalets() {
   const filteredChalets = (chalets ?? []).filter((c) => {
     if (filterDistrict && filterDistrict !== "all" && (c as any).district !== filterDistrict) return false;
     if (filterCategory && filterCategory !== "all" && (c as any).category !== filterCategory) return false;
+    if (filterSections && filterSections !== "all" && (c as any).sections !== filterSections) return false;
     if (filterAmenities.size > 0) {
       const chaletAmenities: string[] = (c as any).amenities ?? [];
       for (const key of filterAmenities) {
@@ -97,6 +99,7 @@ export default function Chalets() {
     setFilterCity("all");
     setFilterDistrict("all");
     setFilterCategory("all");
+    setFilterSections("all");
     setFilterAmenities(new Set());
   };
 
@@ -150,6 +153,20 @@ export default function Chalets() {
             {categories.map((cat) => (
               <SelectItem key={cat.id} value={cat.nameAr}>{cat.nameAr}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-3">
+        <label className="text-sm font-semibold text-foreground">عدد الأقسام</label>
+        <Select value={filterSections} onValueChange={setFilterSections}>
+          <SelectTrigger className="bg-background">
+            <SelectValue placeholder="الكل" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">الكل</SelectItem>
+            <SelectItem value="قسم واحد">🔑 قسم واحد</SelectItem>
+            <SelectItem value="قسمين منفصلة">🔑🔑 قسمين منفصلة</SelectItem>
           </SelectContent>
         </Select>
       </div>

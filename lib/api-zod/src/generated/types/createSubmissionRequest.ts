@@ -15,6 +15,10 @@ export interface CreateSubmissionRequest {
   location: string;
   /** Optional district or neighborhood name */
   district?: string;
+  /** Property type (شالية، مزرعة، استراحة، مخيم) */
+  propertyType?: string;
+  /** Number of sections (قسم واحد، قسمين منفصلة) */
+  sections?: string;
   /** Optional Google Maps or website link */
   mapsUrl?: string;
   /** Instagram or Snapchat profile link for verification */

@@ -336,6 +336,12 @@ components:
         district:
           type: string
           description: Optional district or neighborhood name
+        propertyType:
+          type: string
+          description: Property type (شالية، مزرعة، استراحة، مخيم)
+        sections:
+          type: string
+          description: Number of sections (قسم واحد، قسمين منفصلة)
         mapsUrl:
           type: string
           description: Optional Google Maps or website link
@@ -398,6 +404,14 @@ components:
           type: string
           nullable: true
           description: Chalet category (e.g. شالية، مزرعة)
+        propertyType:
+          type: string
+          nullable: true
+          description: Property type (شالية، مزرعة، استراحة، مخيم)
+        sections:
+          type: string
+          nullable: true
+          description: Number of sections (قسم واحد، قسمين منفصلة)
         pricePerNight:
           type: number
           description: Price per night in SAR
