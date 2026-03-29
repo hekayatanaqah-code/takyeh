@@ -190,32 +190,39 @@ function SubmissionReviewModal({
       )}
 
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-3xl max-h-[92vh] overflow-y-auto p-0" dir="rtl">
-
-          {/* ── Header ─────────────────────────── */}
-          <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-6 py-4 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-bold text-white leading-tight">{s.nameAr}</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <StatusBadge status={s.status} />
-                {s.createdAt && (
-                  <span className="text-slate-400 text-xs">
-                    {new Date(s.createdAt).toLocaleDateString("ar-SA")}
-                  </span>
-                )}
-              </div>
+        <DialogContent
+          className="bg-slate-900 border-slate-700 text-white max-w-3xl p-0 flex flex-col"
+          style={{ maxHeight: "92vh" }}
+          dir="rtl"
+        >
+          {/* ── Sticky Header ───────────────────────────── */}
+          <div className="shrink-0 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-6 py-4">
+            <h2 className="text-xl font-bold text-white leading-tight">{s.nameAr}</h2>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <StatusBadge status={s.status} />
+              {s.createdAt && (
+                <span className="text-slate-400 text-xs">
+                  {new Date(s.createdAt).toLocaleDateString("ar-SA")}
+                </span>
+              )}
+              {s.pricePerNight && (
+                <span className="text-amber-400 text-xs font-semibold">
+                  {Number(s.pricePerNight).toLocaleString("ar-SA")} ر.س / ليلة
+                </span>
+              )}
             </div>
           </div>
 
-          <div className="p-6 space-y-6">
+          {/* ── Scrollable Body ──────────────────────────── */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
 
-            {/* ── Photo Gallery ──────────────── */}
-            {s.photos && s.photos.length > 0 && (
-              <div>
-                <p className="text-slate-300 text-sm font-semibold mb-3 flex items-center gap-2">
-                  <span className="w-1.5 h-4 bg-amber-500 rounded-full" />
-                  الصور المرفوعة ({s.photos.length})
-                </p>
+            {/* ── Photo Gallery ── */}
+            <div>
+              <p className="text-slate-300 text-sm font-semibold mb-3 flex items-center gap-2">
+                <span className="w-1.5 h-4 bg-amber-500 rounded-full shrink-0" />
+                الصور المرفوعة {s.photos && s.photos.length > 0 ? `(${s.photos.length})` : ""}
+              </p>
+              {s.photos && s.photos.length > 0 ? (
                 <div className={`grid gap-2 ${s.photos.length === 1 ? "grid-cols-1" : s.photos.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
                   {s.photos.map((url, i) => (
                     <button
@@ -235,36 +242,64 @@ function SubmissionReviewModal({
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="flex items-center justify-center h-24 rounded-xl border border-dashed border-slate-700 text-slate-500 text-sm">
+                  لم يتم رفع أي صور
+                </div>
+              )}
+            </div>
 
-            {/* ── Basic Info Grid ─────────────── */}
+            {/* ── Full Info Grid ── */}
             <div>
               <p className="text-slate-300 text-sm font-semibold mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-4 bg-amber-500 rounded-full" />
+                <span className="w-1.5 h-4 bg-amber-500 rounded-full shrink-0" />
                 المعلومات الأساسية
               </p>
               <div className="grid grid-cols-2 gap-3 bg-slate-800/60 rounded-xl p-4 text-sm">
+                {/* City / District */}
                 <div className="space-y-0.5">
-                  <p className="text-slate-400 text-xs">المدينة</p>
-                  <p className="text-white font-medium">{s.location}{s.district ? ` — ${s.district}` : ""}</p>
+                  <p className="text-slate-400 text-xs">المدينة / الحي</p>
+                  <p className="text-white font-medium">
+                    {s.location}
+                    {s.district ? <span className="text-slate-400"> — {s.district}</span> : ""}
+                  </p>
                 </div>
+                {/* WhatsApp */}
                 <div className="space-y-0.5">
-                  <p className="text-slate-400 text-xs">واتساب</p>
+                  <p className="text-slate-400 text-xs">رقم واتساب</p>
                   <p className="text-white font-mono" dir="ltr">{s.whatsappNumber}</p>
                 </div>
-                {s.propertyType && (
-                  <div className="space-y-0.5">
-                    <p className="text-slate-400 text-xs">نوع العقار</p>
-                    <p className="text-amber-400 font-semibold">{s.propertyType}</p>
-                  </div>
-                )}
-                {s.sections && (
-                  <div className="space-y-0.5">
-                    <p className="text-slate-400 text-xs">عدد الأقسام</p>
-                    <p className="text-amber-400 font-semibold">{s.sections}</p>
-                  </div>
-                )}
+                {/* Property Type */}
+                <div className="space-y-0.5">
+                  <p className="text-slate-400 text-xs">نوع العقار</p>
+                  {s.propertyType
+                    ? <p className="text-amber-400 font-semibold">{s.propertyType}</p>
+                    : <p className="text-slate-600">—</p>
+                  }
+                </div>
+                {/* Sections */}
+                <div className="space-y-0.5">
+                  <p className="text-slate-400 text-xs">عدد الأقسام</p>
+                  {s.sections
+                    ? <p className="text-amber-400 font-semibold">{s.sections}</p>
+                    : <p className="text-slate-600">—</p>
+                  }
+                </div>
+                {/* Maps URL */}
+                <div className="col-span-2 space-y-0.5">
+                  <p className="text-slate-400 text-xs">رابط الخريطة</p>
+                  {s.mapsUrl ? (
+                    <a href={s.mapsUrl} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-blue-400 hover:text-blue-300 text-xs font-medium">
+                      <MapPin className="w-3.5 h-3.5" />
+                      عرض الموقع على خرائط قوقل
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ) : (
+                    <p className="text-slate-600 text-xs">لم يتم إدخال رابط</p>
+                  )}
+                </div>
+                {/* Trial ends */}
                 {s.trialEndsAt && (
                   <div className="col-span-2 space-y-0.5">
                     <p className="text-slate-400 text-xs">انتهاء الفترة التجريبية</p>
@@ -279,61 +314,64 @@ function SubmissionReviewModal({
                     })()}
                   </div>
                 )}
-                {s.mapsUrl && (
-                  <div className="col-span-2">
-                    <a href={s.mapsUrl} target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-blue-400 hover:text-blue-300 text-xs font-medium">
-                      <MapPin className="w-3.5 h-3.5" />
-                      عرض الموقع على خرائط قوقل
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* ── Social Link Verification ─────── */}
-            {s.socialLink && (
-              <div className="bg-pink-950/40 border border-pink-800/50 rounded-xl p-4 flex items-start gap-3">
-                <div className="w-9 h-9 bg-pink-900/60 rounded-lg flex items-center justify-center shrink-0">
-                  <Instagram className="w-5 h-5 text-pink-400" />
+            {/* ── Social Link Verification ── */}
+            <div>
+              <p className="text-slate-300 text-sm font-semibold mb-3 flex items-center gap-2">
+                <span className="w-1.5 h-4 bg-amber-500 rounded-full shrink-0" />
+                التحقق من هوية المالك
+              </p>
+              {s.socialLink ? (
+                <div className="bg-pink-950/40 border border-pink-800/50 rounded-xl p-4 flex items-start gap-3">
+                  <div className="w-9 h-9 bg-pink-900/60 rounded-lg flex items-center justify-center shrink-0">
+                    <Instagram className="w-5 h-5 text-pink-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-pink-300 font-bold text-sm mb-0.5">يجب التحقق قبل الموافقة</p>
+                    <p className="text-slate-400 text-xs mb-2 break-all">{s.socialLink}</p>
+                    <a
+                      href={s.socialLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 bg-pink-900/40 hover:bg-pink-900/70 border border-pink-700/40 text-pink-300 hover:text-pink-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      فتح الحساب الاجتماعي
+                    </a>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-pink-300 font-bold text-sm mb-0.5">التحقق من هوية المالك</p>
-                  <p className="text-slate-400 text-xs mb-2">افتح الرابط وتأكد من أن الحساب يتطابق مع بيانات الشاليه</p>
-                  <a
-                    href={s.socialLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 bg-pink-900/40 hover:bg-pink-900/70 border border-pink-700/40 text-pink-300 hover:text-pink-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    فتح حساب التواصل الاجتماعي
-                  </a>
+              ) : (
+                <div className="flex items-center gap-2 bg-slate-800/40 border border-slate-700 rounded-xl px-4 py-3 text-slate-500 text-sm">
+                  <Instagram className="w-4 h-4 shrink-0" />
+                  لم يتم تقديم رابط تواصل اجتماعي
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
-            {/* ── Description ──────────────────── */}
-            {s.descriptionAr && (
-              <div>
-                <p className="text-slate-300 text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span className="w-1.5 h-4 bg-amber-500 rounded-full" />
-                  وصف العقار
-                </p>
+            {/* ── Description ── */}
+            <div>
+              <p className="text-slate-300 text-sm font-semibold mb-2 flex items-center gap-2">
+                <span className="w-1.5 h-4 bg-amber-500 rounded-full shrink-0" />
+                وصف العقار
+              </p>
+              {s.descriptionAr ? (
                 <p className="text-slate-200 text-sm leading-relaxed bg-slate-800/60 rounded-xl p-4 border border-slate-700">
                   {s.descriptionAr}
                 </p>
-              </div>
-            )}
+              ) : (
+                <p className="text-slate-600 text-sm bg-slate-800/40 rounded-xl p-4 border border-slate-700">لا يوجد وصف</p>
+              )}
+            </div>
 
-            {/* ── Amenities ────────────────────── */}
-            {s.amenities && s.amenities.length > 0 && (
-              <div>
-                <p className="text-slate-300 text-sm font-semibold mb-2 flex items-center gap-2">
-                  <span className="w-1.5 h-4 bg-amber-500 rounded-full" />
-                  المرافق والمميزات ({s.amenities.length})
-                </p>
+            {/* ── Amenities ── */}
+            <div>
+              <p className="text-slate-300 text-sm font-semibold mb-2 flex items-center gap-2">
+                <span className="w-1.5 h-4 bg-amber-500 rounded-full shrink-0" />
+                المرافق والمميزات {s.amenities && s.amenities.length > 0 ? `(${s.amenities.length})` : ""}
+              </p>
+              {s.amenities && s.amenities.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {s.amenities.map((a) => (
                     <span key={a} className="inline-flex items-center gap-1 text-xs bg-slate-700/80 text-slate-200 border border-slate-600 px-2.5 py-1 rounded-full">
@@ -342,10 +380,12 @@ function SubmissionReviewModal({
                     </span>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-slate-600 text-sm">لم يتم اختيار أي مرافق</p>
+              )}
+            </div>
 
-            {/* ── Previous admin note ────────── */}
+            {/* ── Previous admin note ── */}
             {s.adminNote && (
               <div className="bg-orange-950/40 border border-orange-700/50 rounded-xl p-4 flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
@@ -356,81 +396,83 @@ function SubmissionReviewModal({
               </div>
             )}
 
-            {/* ── Decision Area ─────────────────── */}
-            <div className="border-t border-slate-700 pt-5">
-              {!pendingAction ? (
-                <div className="flex flex-wrap gap-3">
-                  {s.status !== "approved" && (
-                    <Button
-                      className="flex-1 bg-green-700 hover:bg-green-600 text-white min-w-[120px]"
-                      onClick={() => setPendingAction("approved")}
-                      disabled={isPending}
-                    >
-                      <CheckCircle className="w-4 h-4 ml-2" />
-                      قبول الطلب
-                    </Button>
-                  )}
-                  <Button
-                    className="flex-1 bg-orange-700 hover:bg-orange-600 text-white min-w-[120px]"
-                    onClick={() => setPendingAction("needs_revision")}
-                    disabled={isPending}
-                  >
-                    <RotateCcw className="w-4 h-4 ml-2" />
-                    إرجاع للتعديل
-                  </Button>
-                  {s.status !== "rejected" && (
-                    <Button
-                      variant="destructive"
-                      className="flex-1 min-w-[120px]"
-                      onClick={() => setPendingAction("rejected")}
-                      disabled={isPending}
-                    >
-                      <XCircle className="w-4 h-4 ml-2" />
-                      رفض الطلب
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {needsReason && (
-                    <div>
-                      <label className="text-slate-300 text-sm font-semibold mb-2 block flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-400" />
-                        {pendingAction === "needs_revision"
-                          ? "سبب الإرجاع للتعديل (مطلوب — سيُرسل للمالك)"
-                          : "سبب الرفض (مطلوب — سيُرسل للمالك)"}
-                      </label>
-                      <textarea
-                        value={reason}
-                        onChange={(e) => setReason(e.target.value)}
-                        placeholder={pendingAction === "needs_revision"
-                          ? "مثال: الصور غير واضحة، يرجى رفع صور بجودة أعلى..."
-                          : "مثال: المعلومات المقدمة غير مكتملة..."}
-                        rows={3}
-                        className="w-full bg-slate-800 border border-slate-600 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50"
-                      />
-                    </div>
-                  )}
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={resetAction}
-                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm font-medium transition-colors"
-                    >
-                      إلغاء
-                    </button>
-                    <Button
-                      className={`flex-1 text-sm font-bold ${actionConfig[pendingAction].className}`}
-                      onClick={handleDecision}
-                      disabled={!canConfirm}
-                    >
-                      {isPending && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
-                      {actionConfig[pendingAction].label}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* ── Reason input (shown when a reject/revision action is pending) ── */}
+            {pendingAction && needsReason && (
+              <div className="bg-slate-800/80 border border-slate-600 rounded-xl p-4 space-y-2">
+                <label className="text-slate-300 text-sm font-semibold flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  {pendingAction === "needs_revision"
+                    ? "سبب الإرجاع للتعديل (مطلوب — سيُعرض للمالك)"
+                    : "سبب الرفض (مطلوب — سيُعرض للمالك)"}
+                </label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder={pendingAction === "needs_revision"
+                    ? "مثال: الصور غير واضحة، يرجى رفع صور بجودة أعلى..."
+                    : "مثال: المعلومات المقدمة غير مكتملة..."}
+                  rows={3}
+                  autoFocus
+                  className="w-full bg-slate-900 border border-slate-600 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* ── Sticky Bottom Action Bar ──────────────────── */}
+          <div className="shrink-0 border-t border-slate-700 bg-slate-900/95 backdrop-blur px-6 py-4">
+            {!pendingAction ? (
+              <div className="flex gap-3">
+                {/* Approve — always show, disable if already approved */}
+                <Button
+                  className="flex-1 bg-green-700 hover:bg-green-600 text-white font-bold text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => setPendingAction("approved")}
+                  disabled={isPending || s.status === "approved"}
+                  title={s.status === "approved" ? "الطلب مقبول بالفعل" : undefined}
+                >
+                  <CheckCircle className="w-4 h-4 ml-2" />
+                  {s.status === "approved" ? "مقبول بالفعل ✓" : "قبول الطلب"}
+                </Button>
+                {/* Revision */}
+                <Button
+                  className="flex-1 bg-orange-700 hover:bg-orange-600 text-white font-bold text-sm py-2.5"
+                  onClick={() => setPendingAction("needs_revision")}
+                  disabled={isPending}
+                >
+                  <RotateCcw className="w-4 h-4 ml-2" />
+                  إرجاع للتعديل
+                </Button>
+                {/* Reject */}
+                <Button
+                  variant="destructive"
+                  className="flex-1 font-bold text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => setPendingAction("rejected")}
+                  disabled={isPending || s.status === "rejected"}
+                  title={s.status === "rejected" ? "الطلب مرفوض بالفعل" : undefined}
+                >
+                  <XCircle className="w-4 h-4 ml-2" />
+                  {s.status === "rejected" ? "مرفوض بالفعل" : "رفض الطلب"}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={resetAction}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm font-medium transition-colors"
+                >
+                  ← إلغاء
+                </button>
+                <Button
+                  className={`flex-1 text-sm font-bold py-2.5 ${actionConfig[pendingAction].className}`}
+                  onClick={handleDecision}
+                  disabled={!canConfirm}
+                >
+                  {isPending && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                  {actionConfig[pendingAction].label}
+                </Button>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
