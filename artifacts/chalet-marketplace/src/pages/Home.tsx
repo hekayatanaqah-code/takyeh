@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { MapPin, Users, Search, Calendar } from "lucide-react";
+import { MapPin, Users, Search, Calendar, Plus, Minus } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { useGetChalets, Chalet } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
@@ -10,17 +10,42 @@ import { Footer } from "@/components/layout/Footer";
 import { ChaletCard } from "@/components/ui/ChaletCard";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
 import { Skeleton } from "@/components/ui/skeleton";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+/* ── Arabic numeral helpers ─────────────────────────────────── */
+function toArabicNum(n: number): string {
+  return new Intl.NumberFormat("ar-SA").format(n);
+}
+
+function getHijriDate(dateStr: string): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr + "T12:00:00");
+    return new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(d);
+  } catch { return ""; }
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T12:00:00");
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 export default function Home() {
   const [, setLocation] = useLocation();
   const [searchLocation, setSearchLocation] = useState<string>("");
-  const [guests, setGuests] = useState<string>("");
-  const [checkIn, setCheckIn] = useState<string>("");
-  const [checkOut, setCheckOut] = useState<string>("");
+  const [guests, setGuests]                 = useState<string>("");
+  const [bookingDate, setBookingDate]       = useState<string>("");
+  const [numDays, setNumDays]               = useState<number>(1);
 
   const { data: chalets, isLoading } = useGetChalets();
   const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
@@ -36,11 +61,15 @@ export default function Home() {
   const handleSearch = () => {
     const params = new URLSearchParams();
     if (searchLocation && searchLocation !== "all") params.append("location", searchLocation);
-    if (guests) params.append("maxGuests", guests);
-    if (checkIn) params.append("checkIn", checkIn);
-    if (checkOut) params.append("checkOut", checkOut);
-    setLocation(`/chalets${params.toString() ? `?${params.toString()}` : ''}`);
+    if (guests)       params.append("maxGuests", guests);
+    if (bookingDate) {
+      params.append("checkIn", bookingDate);
+      params.append("checkOut", addDays(bookingDate, numDays));
+    }
+    setLocation(`/chalets${params.toString() ? `?${params.toString()}` : ""}`);
   };
+
+  const hijriBookingDate = getHijriDate(bookingDate);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -49,22 +78,22 @@ export default function Home() {
       <main className="flex-1">
         {/* Hero Section */}
         <section className="relative pt-24 pb-32 md:pt-32 md:pb-48 px-4 overflow-hidden">
-          {/* Background Image */}
+          {/* Background */}
           <div className="absolute inset-0 z-0">
-            <img 
-              src={`${import.meta.env.BASE_URL}images/hero-bg.png`} 
-              alt="Chalet in Al-Qassim" 
+            <img
+              src={`${import.meta.env.BASE_URL}images/hero-bg.png`}
+              alt="Chalet in Al-Qassim"
               className="w-full h-full object-cover"
               onError={(e) => {
-                {/* fallback to beautiful desert resort */}
-                (e.target as HTMLImageElement).src = `https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?w=1920&q=80&fit=crop`;
+                (e.target as HTMLImageElement).src =
+                  "https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?w=1920&q=80&fit=crop";
               }}
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-foreground/80 via-foreground/60 to-foreground/80 dark:from-background/90 dark:via-background/80 dark:to-background/90 backdrop-blur-[2px]"></div>
+            <div className="absolute inset-0 bg-gradient-to-r from-foreground/80 via-foreground/60 to-foreground/80 dark:from-background/90 dark:via-background/80 dark:to-background/90 backdrop-blur-[2px]" />
           </div>
 
           <div className="container mx-auto relative z-10">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
@@ -74,11 +103,14 @@ export default function Home() {
                 اكتشف أجمل الشاليهات في <span className="text-primary">القصيم</span>
               </h1>
               <p className="text-lg md:text-xl text-white/80 mb-10 max-w-2xl mx-auto">
-                احجز استراحتك أو شاليهك القادم بكل سهولة. خيارات متنوعة تناسب جميع العائلات والمناسبات بأسعار تنافسية.
+                احجز استراحتك أو شاليهك القادم بكل سهولة. خيارات متنوعة تناسب جميع العائلات
+                والمناسبات بأسعار تنافسية.
               </p>
 
-              {/* Search Glassmorphism Card */}
+              {/* ── Search Card ─────────────────────────────────────── */}
               <div className="bg-white/10 backdrop-blur-md border border-white/20 p-2 md:p-3 rounded-2xl shadow-2xl flex flex-col md:flex-row gap-3">
+
+                {/* City */}
                 <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
                   <MapPin className="w-5 h-5 text-muted-foreground shrink-0" />
                   <div className="w-full">
@@ -97,31 +129,49 @@ export default function Home() {
                   </div>
                 </div>
 
+                {/* Booking date */}
                 <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3 min-w-0">
                   <Calendar className="w-5 h-5 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
                     <DualCalendarPicker
-                      value={checkIn}
-                      onChange={setCheckIn}
-                      placeholder="تاريخ الوصول"
-                      label="تاريخ الوصول"
+                      value={bookingDate}
+                      onChange={setBookingDate}
+                      placeholder="يوم الحجز"
+                      label="يوم الحجز"
                     />
                   </div>
                 </div>
 
-                <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3 min-w-0">
-                  <Calendar className="w-5 h-5 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <DualCalendarPicker
-                      value={checkOut}
-                      onChange={setCheckOut}
-                      placeholder="تاريخ المغادرة"
-                      label="تاريخ المغادرة"
-                      minDate={checkIn || undefined}
-                    />
+                {/* Number of days counter */}
+                <div className="bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                  <div className="flex flex-col items-center w-full gap-1">
+                    <p className="text-xs font-semibold text-muted-foreground">عدد الأيام</p>
+                    <div className="flex items-center gap-3" dir="ltr">
+                      <button
+                        type="button"
+                        onClick={() => setNumDays((n) => Math.max(1, n - 1))}
+                        disabled={numDays <= 1}
+                        className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        aria-label="تقليل عدد الأيام"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="text-xl font-bold text-foreground w-8 text-center tabular-nums">
+                        {toArabicNum(numDays)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setNumDays((n) => n + 1)}
+                        className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-foreground hover:bg-accent transition-colors"
+                        aria-label="زيادة عدد الأيام"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
+                {/* Guests */}
                 <div className="flex-1 bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
                   <Users className="w-5 h-5 text-muted-foreground shrink-0" />
                   <div className="w-full">
@@ -131,16 +181,17 @@ export default function Home() {
                         <SelectValue placeholder="اختر العدد" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="5">حتى 5 أشخاص</SelectItem>
-                        <SelectItem value="10">حتى 10 أشخاص</SelectItem>
-                        <SelectItem value="20">حتى 20 شخص</SelectItem>
-                        <SelectItem value="50">أكثر من 20 شخص</SelectItem>
+                        <SelectItem value="5">حتى ٥ أشخاص</SelectItem>
+                        <SelectItem value="10">حتى ١٠ أشخاص</SelectItem>
+                        <SelectItem value="20">حتى ٢٠ شخص</SelectItem>
+                        <SelectItem value="50">أكثر من ٢٠ شخص</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
-                <Button 
+                {/* Search button */}
+                <Button
                   onClick={handleSearch}
                   className="h-auto md:h-full py-4 px-8 rounded-xl text-lg font-bold shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all shrink-0"
                 >
@@ -148,18 +199,35 @@ export default function Home() {
                   ابحث الآن
                 </Button>
               </div>
+
+              {/* ── Booking summary ─────────────────────────────────── */}
+              {bookingDate && (
+                <motion.p
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-3 text-sm text-white/90 font-medium"
+                >
+                  حجز لمدة{" "}
+                  <span className="font-bold text-primary">
+                    {toArabicNum(numDays)} {numDays === 1 ? "يوم" : "أيام"}
+                  </span>
+                  {" "}· تبدأ من{" "}
+                  <span className="font-bold">{hijriBookingDate}</span>
+                  {" "}هـ
+                </motion.p>
+              )}
             </motion.div>
           </div>
         </section>
 
-        {/* Featured Section */}
+        {/* Featured Chalets */}
         <section className="py-20 px-4 container mx-auto">
           <div className="flex justify-between items-end mb-10">
             <div>
               <h2 className="text-3xl font-bold text-foreground mb-2">شاليهات مميزة</h2>
               <p className="text-muted-foreground">أفضل الشاليهات المختارة بعناية لإقامتك</p>
             </div>
-            <Button variant="outline" onClick={() => setLocation('/chalets')} className="hidden md:flex">
+            <Button variant="outline" onClick={() => setLocation("/chalets")} className="hidden md:flex">
               عرض الكل
             </Button>
           </div>
@@ -189,9 +257,9 @@ export default function Home() {
               ))}
             </div>
           )}
-          
+
           <div className="mt-10 text-center md:hidden">
-            <Button variant="outline" size="lg" className="w-full" onClick={() => setLocation('/chalets')}>
+            <Button variant="outline" size="lg" className="w-full" onClick={() => setLocation("/chalets")}>
               عرض جميع الشاليهات
             </Button>
           </div>
@@ -202,7 +270,9 @@ export default function Home() {
           <div className="container mx-auto">
             <div className="text-center max-w-2xl mx-auto mb-16">
               <h2 className="text-3xl font-bold text-foreground mb-4">لماذا تختار شاليهات القصيم؟</h2>
-              <p className="text-muted-foreground text-lg">نحن نسهل عليك العثور على المكان المثالي لمناسباتك العائلية والخاصة</p>
+              <p className="text-muted-foreground text-lg">
+                نحن نسهل عليك العثور على المكان المثالي لمناسباتك العائلية والخاصة
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
