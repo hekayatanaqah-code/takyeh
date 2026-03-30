@@ -27,14 +27,6 @@ export function Footer() {
   const instagramUrl = settings.instagram_url ?? "#";
   const twitterUrl = settings.twitter_url ?? "#";
 
-  const scrollToContact = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const el = document.getElementById("footer-contact");
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  };
-
   return (
     <footer className="bg-foreground text-background py-12 mt-auto">
       <div className="container mx-auto px-4">
@@ -71,15 +63,6 @@ export function Footer() {
                 <Link href="/terms" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">
                   شروط الاستخدام
                 </Link>
-              </li>
-              <li>
-                <a
-                  href="#footer-contact"
-                  onClick={scrollToContact}
-                  className="text-background/70 hover:text-primary transition-colors inline-block text-sm cursor-pointer"
-                >
-                  تواصل معنا
-                </a>
               </li>
             </ul>
           </div>
