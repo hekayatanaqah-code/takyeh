@@ -1,7 +1,32 @@
 import { Link } from "wouter";
 import { MapPin, Phone, Mail, Instagram, Twitter } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export function Footer() {
+  const { data: settings = {} } = useQuery<Record<string, string>>({
+    queryKey: ["page-content"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include" });
+      if (!r.ok) return {};
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const whatsappRaw = settings.platform_whatsapp ?? "";
+  const whatsappNum = whatsappRaw.replace(/\D/g, "");
+  const whatsappMsg = settings.whatsapp_message ?? "مرحباً، أود الاستفسار عن شاليهات القصيم";
+  const waLink = whatsappNum
+    ? `https://wa.me/${whatsappNum}?text=${encodeURIComponent(whatsappMsg)}`
+    : "#";
+  const displayPhone = whatsappRaw || "+966 50 000 0000";
+
+  const email = settings.platform_email ?? "info@qassim-chalets.com";
+  const instagramUrl = settings.instagram_url ?? "#";
+  const twitterUrl = settings.twitter_url ?? "#";
+
   const scrollToContact = (e: React.MouseEvent) => {
     e.preventDefault();
     const el = document.getElementById("footer-contact");
@@ -59,24 +84,50 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Contact */}
+          {/* Contact — pulled from admin settings */}
           <div id="footer-contact" className="space-y-4">
             <h3 className="text-lg font-semibold border-b border-background/20 pb-2 inline-block">تواصل معنا</h3>
             <ul className="space-y-3">
-              <li className="flex items-center gap-3 text-background/70 text-sm">
-                <Phone className="w-4 h-4 text-primary" />
-                <span dir="ltr">+966 50 000 0000</span>
+              {/* WhatsApp number — opens wa.me with custom message */}
+              <li>
+                <a
+                  href={waLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-3 text-background/70 hover:text-[#25D366] transition-colors text-sm group"
+                >
+                  <Phone className="w-4 h-4 text-[#25D366] group-hover:text-[#25D366]" />
+                  <span dir="ltr">{displayPhone}</span>
+                </a>
               </li>
-              <li className="flex items-center gap-3 text-background/70 text-sm">
-                <Mail className="w-4 h-4 text-primary" />
-                <span>info@qassim-chalets.com</span>
+              {/* Email */}
+              <li>
+                <a
+                  href={`mailto:${email}`}
+                  className="flex items-center gap-3 text-background/70 hover:text-primary transition-colors text-sm"
+                >
+                  <Mail className="w-4 h-4 text-primary" />
+                  <span>{email}</span>
+                </a>
               </li>
             </ul>
+
+            {/* Social links */}
             <div className="flex items-center gap-4 mt-6">
-              <a href="#" className="w-10 h-10 rounded-full bg-background/10 flex items-center justify-center hover:bg-primary transition-colors">
+              <a
+                href={instagramUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="w-10 h-10 rounded-full bg-background/10 flex items-center justify-center hover:bg-primary transition-colors"
+              >
                 <Instagram className="w-5 h-5" />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full bg-background/10 flex items-center justify-center hover:bg-primary transition-colors">
+              <a
+                href={twitterUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="w-10 h-10 rounded-full bg-background/10 flex items-center justify-center hover:bg-primary transition-colors"
+              >
                 <Twitter className="w-5 h-5" />
               </a>
             </div>

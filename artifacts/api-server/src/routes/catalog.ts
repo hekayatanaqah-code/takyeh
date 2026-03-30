@@ -42,9 +42,18 @@ router.get("/categories", async (_req, res) => {
   return res.json(rows.filter((r) => r.isActive));
 });
 
-/* ── Public page content (About / FAQ / Terms) ── */
+/* ── Public page content + contact settings ── */
 router.get("/page-content", async (_req, res) => {
-  const PUBLIC_KEYS = ["about_page_content", "faq_page_content", "terms_page_content"];
+  const PUBLIC_KEYS = [
+    "about_page_content",
+    "faq_page_content",
+    "terms_page_content",
+    "platform_whatsapp",
+    "whatsapp_message",
+    "platform_email",
+    "instagram_url",
+    "twitter_url",
+  ];
   const rows = await db
     .select()
     .from(siteSettingsTable)

@@ -1469,11 +1469,11 @@ function SettingsTab() {
   const [saved, setSaved] = useState(false);
 
   const settingFields = [
-    { key: "platform_whatsapp", label: "رقم واتساب المنصة", placeholder: "966500000000" },
-    { key: "platform_email",    label: "البريد الإلكتروني",  placeholder: "info@example.com" },
-    { key: "facebook_url",      label: "رابط فيسبوك",        placeholder: "https://facebook.com/..." },
-    { key: "twitter_url",       label: "رابط تويتر/X",       placeholder: "https://x.com/..." },
-    { key: "instagram_url",     label: "رابط إنستقرام",      placeholder: "https://instagram.com/..." },
+    { key: "platform_whatsapp",  label: "رقم واتساب المنصة (بدون +)",     placeholder: "966500000000",            isLtr: true,     isTextarea: false },
+    { key: "whatsapp_message",   label: "نص الرسالة التلقائية للواتساب",   placeholder: "مرحباً، أود الاستفسار...", isLtr: false,    isTextarea: true  },
+    { key: "platform_email",     label: "البريد الإلكتروني للتواصل",       placeholder: "info@example.com",        isLtr: true,     isTextarea: false },
+    { key: "instagram_url",      label: "رابط إنستقرام",                   placeholder: "https://instagram.com/...", isLtr: true,   isTextarea: false },
+    { key: "twitter_url",        label: "رابط تويتر/X",                    placeholder: "https://x.com/...",       isLtr: true,     isTextarea: false },
   ];
 
   const { data: settings, isLoading } = useQuery<Record<string, string>>({
@@ -1517,15 +1517,40 @@ function SettingsTab() {
         {settingFields.map((field) => (
           <div key={field.key} className="space-y-1.5">
             <label className="text-sm font-medium text-slate-300">{field.label}</label>
-            <Input
-              value={form[field.key] ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
-              placeholder={field.placeholder}
-              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
-              dir={field.key.includes("url") || field.key.includes("whatsapp") || field.key.includes("email") ? "ltr" : "rtl"}
-            />
+            {field.isTextarea ? (
+              <Textarea
+                value={form[field.key] ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                placeholder={field.placeholder}
+                rows={3}
+                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+                dir={field.isLtr ? "ltr" : "rtl"}
+              />
+            ) : (
+              <Input
+                value={form[field.key] ?? ""}
+                onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                placeholder={field.placeholder}
+                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+                dir={field.isLtr ? "ltr" : "rtl"}
+              />
+            )}
           </div>
         ))}
+        {/* Live WhatsApp preview */}
+        {(form.platform_whatsapp || form.whatsapp_message) && (
+          <div className="bg-slate-900/60 border border-slate-600 rounded-lg p-3 space-y-1">
+            <p className="text-xs text-slate-400 font-semibold">معاينة رابط الواتساب:</p>
+            <a
+              href={`https://wa.me/${(form.platform_whatsapp ?? "").replace(/\D/g, "")}?text=${encodeURIComponent(form.whatsapp_message ?? "")}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-[#25D366] break-all hover:underline"
+            >
+              {`https://wa.me/${(form.platform_whatsapp ?? "").replace(/\D/g, "")}?text=${encodeURIComponent(form.whatsapp_message ?? "").slice(0, 40)}...`}
+            </a>
+          </div>
+        )}
         <Button
           onClick={() => saveSettings.mutate(form)}
           disabled={saveSettings.isPending}
