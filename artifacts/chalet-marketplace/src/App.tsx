@@ -15,7 +15,9 @@ import Services from "./pages/Services";
 import ServiceDetail from "./pages/ServiceDetail";
 import AddServiceProvider from "./pages/AddServiceProvider";
 import ProviderDetail from "./pages/ProviderDetail";
-import { FloatingWhatsApp } from "@/components/layout/FloatingWhatsApp";
+import About from "./pages/About";
+import FAQ from "./pages/FAQ";
+import Terms from "./pages/Terms";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,6 +59,9 @@ function Router() {
         {() => <ProtectedRoute component={AddServiceProvider} returnTo="/add-service-provider" />}
       </Route>
       <Route path="/providers/:id" component={ProviderDetail} />
+      <Route path="/about" component={About} />
+      <Route path="/faq" component={FAQ} />
+      <Route path="/terms" component={Terms} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -75,7 +80,6 @@ function App() {
           <Router />
         </WouterRouter>
         <Toaster />
-        <FloatingWhatsApp />
       </TooltipProvider>
     </QueryClientProvider>
   );

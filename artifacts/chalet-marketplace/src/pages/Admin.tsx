@@ -1474,7 +1474,6 @@ function SettingsTab() {
     { key: "facebook_url",      label: "رابط فيسبوك",        placeholder: "https://facebook.com/..." },
     { key: "twitter_url",       label: "رابط تويتر/X",       placeholder: "https://x.com/..." },
     { key: "instagram_url",     label: "رابط إنستقرام",      placeholder: "https://instagram.com/..." },
-    { key: "about_text",        label: "نص عن المنصة",       placeholder: "وصف قصير عن المنصة..." },
   ];
 
   const { data: settings, isLoading } = useQuery<Record<string, string>>({
@@ -1502,32 +1501,29 @@ function SettingsTab() {
     },
   });
 
+  const pageContentFields = [
+    { key: "about_page_content",  label: "محتوى صفحة «من نحن»",       icon: "ℹ️", path: "/about" },
+    { key: "faq_page_content",    label: "محتوى صفحة «أسئلة شائعة»",  icon: "❓", path: "/faq" },
+    { key: "terms_page_content",  label: "محتوى صفحة «شروط الاستخدام»", icon: "📄", path: "/terms" },
+  ];
+
   if (isLoading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-400 w-6 h-6" /></div>;
 
   return (
     <div className="max-w-2xl space-y-6">
+      {/* ── Contact & Social Settings ── */}
       <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-5">
-        <h3 className="text-slate-200 font-semibold text-lg">إعدادات الموقع</h3>
+        <h3 className="text-slate-200 font-semibold text-lg">معلومات التواصل والسوشيال</h3>
         {settingFields.map((field) => (
           <div key={field.key} className="space-y-1.5">
             <label className="text-sm font-medium text-slate-300">{field.label}</label>
-            {field.key === "about_text" ? (
-              <Textarea
-                value={form[field.key] ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
-                placeholder={field.placeholder}
-                rows={3}
-                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
-              />
-            ) : (
-              <Input
-                value={form[field.key] ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
-                placeholder={field.placeholder}
-                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
-                dir={field.key.includes("url") || field.key.includes("whatsapp") || field.key.includes("email") ? "ltr" : "rtl"}
-              />
-            )}
+            <Input
+              value={form[field.key] ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
+              placeholder={field.placeholder}
+              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+              dir={field.key.includes("url") || field.key.includes("whatsapp") || field.key.includes("email") ? "ltr" : "rtl"}
+            />
           </div>
         ))}
         <Button
@@ -1538,6 +1534,44 @@ function SettingsTab() {
           {saved ? "✓ تم الحفظ" : saveSettings.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
         </Button>
       </div>
+
+      {/* ── Page Content Sections ── */}
+      {pageContentFields.map((field) => (
+        <div key={field.key} className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-slate-200 font-semibold text-base flex items-center gap-2">
+              <span>{field.icon}</span>
+              {field.label}
+            </h3>
+            <a
+              href={field.path}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-amber-400 hover:text-amber-300 underline"
+            >
+              معاينة الصفحة ↗
+            </a>
+          </div>
+          <p className="text-xs text-slate-400">
+            اكتب المحتوى النصي للصفحة. يمكنك استخدام الأسطر الفارغة لتنسيق الفقرات.
+          </p>
+          <Textarea
+            value={form[field.key] ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
+            placeholder={`اكتب محتوى ${field.label} هنا...`}
+            rows={10}
+            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-sm leading-relaxed resize-y"
+            dir="rtl"
+          />
+          <Button
+            onClick={() => saveSettings.mutate(form)}
+            disabled={saveSettings.isPending}
+            className="bg-amber-600 hover:bg-amber-700 w-full"
+          >
+            {saved ? "✓ تم الحفظ" : saveSettings.isPending ? "جاري الحفظ..." : `حفظ ${field.label}`}
+          </Button>
+        </div>
+      ))}
     </div>
   );
 }

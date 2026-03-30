@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { citiesCatalogTable, amenitiesCatalogTable, districtsCatalogTable, chaletCategoriesTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { citiesCatalogTable, amenitiesCatalogTable, districtsCatalogTable, chaletCategoriesTable, siteSettingsTable } from "@workspace/db/schema";
+import { eq, inArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -40,6 +40,18 @@ router.get("/categories", async (_req, res) => {
     .from(chaletCategoriesTable)
     .orderBy(chaletCategoriesTable.createdAt);
   return res.json(rows.filter((r) => r.isActive));
+});
+
+/* ── Public page content (About / FAQ / Terms) ── */
+router.get("/page-content", async (_req, res) => {
+  const PUBLIC_KEYS = ["about_page_content", "faq_page_content", "terms_page_content"];
+  const rows = await db
+    .select()
+    .from(siteSettingsTable)
+    .where(inArray(siteSettingsTable.key, PUBLIC_KEYS));
+  const map: Record<string, string> = {};
+  for (const row of rows) map[row.key] = row.value;
+  return res.json(map);
 });
 
 export default router;

@@ -2,11 +2,20 @@ import { Link } from "wouter";
 import { MapPin, Phone, Mail, Instagram, Twitter } from "lucide-react";
 
 export function Footer() {
+  const scrollToContact = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const el = document.getElementById("footer-contact");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  };
+
   return (
     <footer className="bg-foreground text-background py-12 mt-auto">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
-          
+
+          {/* Brand */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
@@ -19,25 +28,39 @@ export function Footer() {
             </p>
           </div>
 
+          {/* Navigation Links */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b border-background/20 pb-2 inline-block">روابط سريعة</h3>
+            <h3 className="text-lg font-semibold border-b border-background/20 pb-2 inline-block">روابط مفيدة</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">الرئيسية</Link>
+                <Link href="/about" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">
+                  من نحن
+                </Link>
               </li>
               <li>
-                <Link href="/chalets" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">جميع الشاليهات</Link>
+                <Link href="/faq" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">
+                  أسئلة شائعة
+                </Link>
               </li>
               <li>
-                <Link href="/chalets?location=بريدة" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">شاليهات بريدة</Link>
+                <Link href="/terms" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">
+                  شروط الاستخدام
+                </Link>
               </li>
               <li>
-                <Link href="/chalets?location=عنيزة" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">شاليهات عنيزة</Link>
+                <a
+                  href="#footer-contact"
+                  onClick={scrollToContact}
+                  className="text-background/70 hover:text-primary transition-colors inline-block text-sm cursor-pointer"
+                >
+                  تواصل معنا
+                </a>
               </li>
             </ul>
           </div>
 
-          <div className="space-y-4">
+          {/* Contact */}
+          <div id="footer-contact" className="space-y-4">
             <h3 className="text-lg font-semibold border-b border-background/20 pb-2 inline-block">تواصل معنا</h3>
             <ul className="space-y-3">
               <li className="flex items-center gap-3 text-background/70 text-sm">
