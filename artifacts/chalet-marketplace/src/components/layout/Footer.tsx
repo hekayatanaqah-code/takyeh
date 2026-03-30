@@ -16,11 +16,9 @@ export function Footer() {
   });
 
   const whatsappRaw = settings.platform_whatsapp ?? "";
-  const whatsappNum = whatsappRaw.replace(/\D/g, "");
   const whatsappMsg = settings.whatsapp_message ?? "مرحباً، أود الاستفسار عن شاليهات القصيم";
-  const waLink = whatsappNum
-    ? `https://wa.me/${whatsappNum}?text=${encodeURIComponent(whatsappMsg)}`
-    : null;
+  const whatsappNum = whatsappRaw.replace(/\D/g, "") || "966500000000";
+  const waLink = `https://wa.me/${whatsappNum}?text=${encodeURIComponent(whatsappMsg)}`;
   const displayPhone = whatsappRaw || "+966 50 000 0000";
 
   const email = settings.platform_email ?? "info@qassim-chalets.com";
@@ -71,24 +69,18 @@ export function Footer() {
           <div id="footer-contact" className="space-y-4">
             <h3 className="text-lg font-semibold border-b border-background/20 pb-2 inline-block">تواصل معنا</h3>
             <ul className="space-y-3">
-              {/* WhatsApp number — opens wa.me with custom message when configured */}
+              {/* WhatsApp link — always opens wa.me, never routes internally */}
               <li>
-                {waLink ? (
-                  <a
-                    href={waLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-3 text-background/70 hover:text-[#25D366] transition-colors text-sm group"
-                  >
-                    <Phone className="w-4 h-4 text-[#25D366]" />
-                    <span dir="ltr">{displayPhone}</span>
-                  </a>
-                ) : (
-                  <span className="flex items-center gap-3 text-background/70 text-sm">
-                    <Phone className="w-4 h-4 text-[#25D366]" />
-                    <span dir="ltr">{displayPhone}</span>
-                  </span>
-                )}
+                <a
+                  href={waLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ textDecoration: "none" }}
+                  className="flex items-center gap-3 text-background/70 hover:text-[#25D366] transition-colors text-sm"
+                >
+                  <Phone className="w-4 h-4 text-[#25D366] flex-shrink-0" />
+                  <span dir="ltr">{displayPhone}</span>
+                </a>
               </li>
               {/* Email */}
               <li>
