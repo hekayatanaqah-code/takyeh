@@ -136,6 +136,14 @@ export default function AddChalet() {
   const [sections, setSections] = useState("");
   const [legalAccepted, setLegalAccepted] = useState(false);
 
+  /* ── Time-slot pricing ── */
+  const [slotMorning, setSlotMorning] = useState(true);
+  const [slotEvening, setSlotEvening] = useState(true);
+  const [slotFullDay, setSlotFullDay] = useState(true);
+  const [priceMorning, setPriceMorning] = useState("");
+  const [priceEvening, setPriceEvening] = useState("");
+  const [priceFullDay, setPriceFullDay] = useState("");
+
   const mutation = useCreateSubmission();
 
   const handleChange = (field: string, value: string) => {
@@ -240,6 +248,12 @@ export default function AddChalet() {
           socialLink: form.socialLink,
           descriptionAr: form.descriptionAr,
           pricePerNight: 0,
+          priceMorning: slotMorning && priceMorning ? Number(priceMorning) : null,
+          priceEvening: slotEvening && priceEvening ? Number(priceEvening) : null,
+          priceFullDay: slotFullDay && priceFullDay ? Number(priceFullDay) : null,
+          slotMorning,
+          slotEvening,
+          slotFullDay,
           amenities: Array.from(selectedAmenities),
           photos: successfulPhotos,
         },
@@ -513,9 +527,94 @@ export default function AddChalet() {
                       </div>
                     </div>
 
-                    <div className="rounded-xl bg-[#25D366]/10 border border-[#25D366]/30 px-4 py-3">
-                      <p className="text-sm font-bold text-[#25D366]">الأسعار عند التواصل مع المالك</p>
-                      <p className="text-xs text-muted-foreground mt-1">لا داعي لتحديد سعر — سيتواصل معك العملاء مباشرةً عبر واتساب للاستفسار عن السعر وتفاصيل الحجز</p>
+                    {/* Time-slot pricing */}
+                    <div className="space-y-3">
+                      <Label className="text-base font-medium">أسعار الفترات</Label>
+                      <p className="text-xs text-muted-foreground -mt-1">فعّل الفترات التي تتيحها وأدخل سعر كل فترة (اختياري — يمكن تركها فارغة)</p>
+
+                      {/* Morning */}
+                      <div className="rounded-xl border p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium flex items-center gap-1.5">🌅 فترة صباحية</span>
+                          <button
+                            type="button"
+                            onClick={() => setSlotMorning(!slotMorning)}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${slotMorning ? "bg-primary" : "bg-muted"}`}
+                          >
+                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow ${slotMorning ? "translate-x-4" : "translate-x-1"}`} />
+                          </button>
+                        </div>
+                        {slotMorning && (
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              min="0"
+                              placeholder="السعر بالريال (اختياري)"
+                              value={priceMorning}
+                              onChange={(e) => setPriceMorning(e.target.value)}
+                              className="h-10 text-sm pl-12"
+                              dir="rtl"
+                            />
+                            <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Evening */}
+                      <div className="rounded-xl border p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium flex items-center gap-1.5">🌙 فترة مسائية</span>
+                          <button
+                            type="button"
+                            onClick={() => setSlotEvening(!slotEvening)}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${slotEvening ? "bg-primary" : "bg-muted"}`}
+                          >
+                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow ${slotEvening ? "translate-x-4" : "translate-x-1"}`} />
+                          </button>
+                        </div>
+                        {slotEvening && (
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              min="0"
+                              placeholder="السعر بالريال (اختياري)"
+                              value={priceEvening}
+                              onChange={(e) => setPriceEvening(e.target.value)}
+                              className="h-10 text-sm pl-12"
+                              dir="rtl"
+                            />
+                            <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Full day */}
+                      <div className="rounded-xl border p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium flex items-center gap-1.5">☀️ يوم كامل</span>
+                          <button
+                            type="button"
+                            onClick={() => setSlotFullDay(!slotFullDay)}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${slotFullDay ? "bg-primary" : "bg-muted"}`}
+                          >
+                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow ${slotFullDay ? "translate-x-4" : "translate-x-1"}`} />
+                          </button>
+                        </div>
+                        {slotFullDay && (
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              min="0"
+                              placeholder="السعر بالريال (اختياري)"
+                              value={priceFullDay}
+                              onChange={(e) => setPriceFullDay(e.target.value)}
+                              className="h-10 text-sm pl-12"
+                              dir="rtl"
+                            />
+                            <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Social Link — mandatory for trust system */}

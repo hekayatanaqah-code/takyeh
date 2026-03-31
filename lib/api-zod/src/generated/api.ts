@@ -212,7 +212,13 @@ export const CreateSubmissionBody = zod.object({
     .optional()
     .describe("Instagram or Snapchat profile link for verification"),
   descriptionAr: zod.string().describe("Chalet description in Arabic"),
-  pricePerNight: zod.number().describe("Average price per night in SAR"),
+  pricePerNight: zod.number().describe("Average price per night in SAR (kept for backward compat)"),
+  priceMorning: zod.number().nullable().optional().describe("Morning slot price in SAR"),
+  priceEvening: zod.number().nullable().optional().describe("Evening slot price in SAR"),
+  priceFullDay: zod.number().nullable().optional().describe("Full-day price in SAR"),
+  slotMorning: zod.boolean().optional().describe("Whether morning slot is offered"),
+  slotEvening: zod.boolean().optional().describe("Whether evening slot is offered"),
+  slotFullDay: zod.boolean().optional().describe("Whether full-day slot is offered"),
   amenities: zod
     .array(zod.string())
     .optional()

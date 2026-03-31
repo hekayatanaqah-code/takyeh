@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, Link } from "wouter";
 import { useGetChaletById } from "@workspace/api-client-react";
 import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, Info, Phone, ShieldCheck } from "lucide-react";
@@ -8,11 +9,26 @@ import { WhatsAppButton } from "@/components/ui/WhatsAppButton";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
+type Period = "morning" | "evening" | "full_day";
+
+const PERIOD_LABEL: Record<Period, string> = {
+  morning: "🌅 صباحي",
+  evening: "🌙 مسائي",
+  full_day: "☀️ يوم كامل",
+};
+
 export default function ChaletDetail() {
   const { id } = useParams<{ id: string }>();
   const numericId = Number(id);
   const { data: chalet, isLoading, isError } = useGetChaletById(numericId);
   const [emblaRef] = useEmblaCarousel({ direction: "rtl", loop: true });
+
+  /* Read initial period from URL ?period=morning|evening|full_day */
+  const initPeriod = (() => {
+    const p = new URLSearchParams(window.location.search).get("period");
+    return (p === "morning" || p === "evening" || p === "full_day") ? p as Period : null;
+  })();
+  const [selectedPeriod, setSelectedPeriod] = useState<Period | null>(initPeriod);
 
   /* ── Loading skeleton ─────────────────────────────────── */
   if (isLoading) {
@@ -71,7 +87,24 @@ export default function ChaletDetail() {
   const propertyType = (chalet as any).propertyType as string | null | undefined;
   const sections = (chalet as any).sections as string | null | undefined;
   const locationLabel = district ? `حي ${district}، ${chalet.location}` : chalet.location;
-  const whatsappMsg = `أهلاً، أود الاستفسار عن حجز شاليه ${chalet.nameAr} في ${chalet.location}.`;
+  const periodLine = selectedPeriod ? ` — الفترة: ${PERIOD_LABEL[selectedPeriod]}` : "";
+  const whatsappMsg = `أهلاً، أود الاستفسار عن حجز شاليه ${chalet.nameAr} في ${chalet.location}${periodLine}.`;
+
+  /* Available slots */
+  const slots: Period[] = [
+    ...(chalet.slotMorning !== false ? ["morning" as Period] : []),
+    ...(chalet.slotEvening !== false ? ["evening" as Period] : []),
+    ...(chalet.slotFullDay !== false ? ["full_day" as Period] : []),
+  ];
+
+  const getPeriodPrice = (p: Period): string | null => {
+    const c = chalet!;
+    const raw =
+      p === "morning" ? c.priceMorning :
+      p === "evening" ? c.priceEvening :
+      c.priceFullDay;
+    return raw && Number(raw) > 0 ? `${Number(raw).toLocaleString("ar-SA")} ر.س` : null;
+  };
 
   /* ── Coordinate extraction from mapsUrl ──────────────── */
   const mapsUrl: string | null | undefined = (chalet as any).mapsUrl;
@@ -208,6 +241,35 @@ export default function ChaletDetail() {
                     <p className="text-xs text-muted-foreground mt-0.5">الأسعار والتفاصيل عند التواصل المباشر</p>
                   </div>
                 </div>
+
+                {/* Period selector */}
+                {slots.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">اختر الفترة</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {slots.map((p) => {
+                        const price = getPeriodPrice(p);
+                        const active = selectedPeriod === p;
+                        return (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setSelectedPeriod(active ? null : p)}
+                            className={`flex flex-col items-center px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
+                              active
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-secondary/50 text-foreground hover:border-primary/50"
+                            }`}
+                          >
+                            <span>{PERIOD_LABEL[p]}</span>
+                            {price && <span className={`mt-0.5 font-bold ${active ? "text-primary" : "text-muted-foreground"}`}>{price}</span>}
+                            {!price && <span className="mt-0.5 text-muted-foreground">بالتواصل</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2.5 mb-4 py-3 border-y border-border/40">
                   <div className="flex justify-between items-center text-xs">

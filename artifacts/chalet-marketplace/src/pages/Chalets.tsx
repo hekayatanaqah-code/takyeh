@@ -21,6 +21,7 @@ export default function Chalets() {
   const [filterDistrict, setFilterDistrict] = useState<string>(searchParams.get("district") || "all");
   const [filterCategory, setFilterCategory] = useState<string>(searchParams.get("category") || "all");
   const [filterSections, setFilterSections] = useState<string>("all");
+  const [filterPeriod, setFilterPeriod]     = useState<string>(searchParams.get("period") || "all");
   const [filterAmenities, setFilterAmenities] = useState<Set<string>>(new Set());
 
   const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
@@ -100,6 +101,7 @@ export default function Chalets() {
     setFilterDistrict("all");
     setFilterCategory("all");
     setFilterSections("all");
+    setFilterPeriod("all");
     setFilterAmenities(new Set());
   };
 
@@ -153,6 +155,21 @@ export default function Chalets() {
             {categories.map((cat) => (
               <SelectItem key={cat.id} value={cat.nameAr}>{cat.nameAr}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-3">
+        <label className="text-sm font-semibold text-foreground">الفترة</label>
+        <Select value={filterPeriod} onValueChange={setFilterPeriod}>
+          <SelectTrigger className="bg-background">
+            <SelectValue placeholder="جميع الفترات" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">جميع الفترات</SelectItem>
+            <SelectItem value="morning">🌅 صباحي</SelectItem>
+            <SelectItem value="evening">🌙 مسائي</SelectItem>
+            <SelectItem value="full_day">☀️ يوم كامل</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -264,7 +281,11 @@ export default function Chalets() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {filteredChalets.map((chalet) => (
-                  <ChaletCard key={chalet.id} chalet={chalet} />
+                  <ChaletCard
+                    key={chalet.id}
+                    chalet={chalet}
+                    selectedPeriod={filterPeriod !== "all" ? (filterPeriod as "morning" | "evening" | "full_day") : undefined}
+                  />
                 ))}
               </div>
             )}

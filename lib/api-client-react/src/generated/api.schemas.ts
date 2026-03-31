@@ -84,8 +84,20 @@ export interface CreateSubmissionRequest {
   socialLink?: string;
   /** Chalet description in Arabic */
   descriptionAr: string;
-  /** Average price per night in SAR */
+  /** Average price per night in SAR (kept for backward compat) */
   pricePerNight: number;
+  /** Morning slot price in SAR */
+  priceMorning?: number | null;
+  /** Evening slot price in SAR */
+  priceEvening?: number | null;
+  /** Full-day price in SAR */
+  priceFullDay?: number | null;
+  /** Whether morning slot is offered */
+  slotMorning?: boolean;
+  /** Whether evening slot is offered */
+  slotEvening?: boolean;
+  /** Whether full-day slot is offered */
+  slotFullDay?: boolean;
   /** List of selected amenity keys */
   amenities?: string[];
   /** List of object paths (up to 5) */
@@ -113,8 +125,20 @@ export interface Chalet {
   propertyType?: string | null;
   /** Number of sections (قسم واحد، قسمين منفصلة) */
   sections?: string | null;
-  /** Price per night in SAR */
+  /** Price per night in SAR (legacy) */
   pricePerNight: number;
+  /** Morning slot price in SAR */
+  priceMorning?: string | null;
+  /** Evening slot price in SAR */
+  priceEvening?: string | null;
+  /** Full-day price in SAR */
+  priceFullDay?: string | null;
+  /** Whether morning slot is offered */
+  slotMorning?: boolean;
+  /** Whether evening slot is offered */
+  slotEvening?: boolean;
+  /** Whether full-day slot is offered */
+  slotFullDay?: boolean;
   /** Maximum number of guests */
   maxGuests: number;
   /** Number of bedrooms */

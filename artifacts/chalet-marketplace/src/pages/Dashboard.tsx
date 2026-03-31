@@ -156,6 +156,7 @@ function AddBookingDialog({
   const [clientName, setClientName] = useState("");
   const [bookingDate, setBookingDate] = useState("");
   const [durationDays, setDurationDays] = useState(1);
+  const [period, setPeriod] = useState<string>("");
   const [source, setSource] = useState<"platform" | "external">("platform");
   const [submissionId, setSubmissionId] = useState<string>("");
   const [notes, setNotes] = useState("");
@@ -173,6 +174,7 @@ function AddBookingDialog({
           clientName,
           bookingDate,
           durationDays,
+          period: period && period !== "none" ? period : undefined,
           source,
           notes: notes || undefined,
           submissionId: submissionId ? Number(submissionId) : undefined,
@@ -181,7 +183,7 @@ function AddBookingDialog({
       if (!r.ok) { setError("حدث خطأ، يرجى المحاولة مجدداً"); return; }
       onAdded();
       onClose();
-      setClientName(""); setBookingDate(""); setDurationDays(1); setSource("platform"); setSubmissionId(""); setNotes("");
+      setClientName(""); setBookingDate(""); setDurationDays(1); setPeriod(""); setSource("platform"); setSubmissionId(""); setNotes("");
     } finally {
       setSaving(false);
     }
@@ -205,6 +207,18 @@ function AddBookingDialog({
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">عدد الأيام</label>
             <Input type="number" min={1} value={durationDays} onChange={(e) => setDurationDays(Number(e.target.value))} />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">الفترة (اختياري)</label>
+            <Select value={period} onValueChange={setPeriod}>
+              <SelectTrigger><SelectValue placeholder="اختر الفترة" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">—</SelectItem>
+                <SelectItem value="morning">🌅 صباحي</SelectItem>
+                <SelectItem value="evening">🌙 مسائي</SelectItem>
+                <SelectItem value="full_day">☀️ يوم كامل</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">مصدر الحجز</label>
@@ -324,6 +338,11 @@ function BookingsTab({ submissions }: { submissions: any[] }) {
                     {b.bookingDate}
                   </span>
                   <span>{b.durationDays} {b.durationDays === 1 ? "يوم" : "أيام"}</span>
+                  {(b as any).period && (
+                    <span className="text-xs font-medium bg-primary/8 text-primary px-1.5 py-0.5 rounded">
+                      {{ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[(b as any).period as string] ?? (b as any).period}
+                    </span>
+                  )}
                 </div>
                 {b.notes && <p className="text-xs text-muted-foreground mt-1">{b.notes}</p>}
               </div>

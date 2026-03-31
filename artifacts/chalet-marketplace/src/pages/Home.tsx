@@ -38,11 +38,12 @@ function addDays(dateStr: string, days: number): string {
 
 export default function Home() {
   const [, setLocation] = useLocation();
-  const [searchCity, setSearchCity]       = useState<string>("");
+  const [searchCity, setSearchCity]         = useState<string>("");
   const [searchDistrict, setSearchDistrict] = useState<string>("");
   const [searchCategory, setSearchCategory] = useState<string>("");
-  const [bookingDate, setBookingDate]     = useState<string>("");
-  const [numDays, setNumDays]             = useState<number>(1);
+  const [searchPeriod, setSearchPeriod]     = useState<string>("");
+  const [bookingDate, setBookingDate]       = useState<string>("");
+  const [numDays, setNumDays]               = useState<number>(1);
 
   const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["catalog", "cities"],
@@ -81,6 +82,7 @@ export default function Home() {
     if (searchCity && searchCity !== "all") params.append("location", searchCity);
     if (searchDistrict && searchDistrict !== "all") params.append("district", searchDistrict);
     if (searchCategory && searchCategory !== "all") params.append("category", searchCategory);
+    if (searchPeriod && searchPeriod !== "all") params.append("period", searchPeriod);
     if (bookingDate) {
       params.append("checkIn", bookingDate);
       params.append("checkOut", addDays(bookingDate, numDays));
@@ -191,6 +193,25 @@ export default function Home() {
                         {categories.map((cat) => (
                           <SelectItem key={cat.id} value={cat.nameAr}>{cat.nameAr}</SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Period */}
+                <div className="flex-1 min-w-[130px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                  <Tag className="w-5 h-5 text-muted-foreground shrink-0" />
+                  <div className="w-full">
+                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الفترة</p>
+                    <Select value={searchPeriod} onValueChange={setSearchPeriod}>
+                      <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
+                        <SelectValue placeholder="جميع الفترات" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">جميع الفترات</SelectItem>
+                        <SelectItem value="morning">🌅 صباحي</SelectItem>
+                        <SelectItem value="evening">🌙 مسائي</SelectItem>
+                        <SelectItem value="full_day">☀️ يوم كامل</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

@@ -34,6 +34,7 @@ router.post("/bookings", async (req, res) => {
     clientName: z.string().min(1),
     bookingDate: z.string().min(1),
     durationDays: z.number().int().min(1).default(1),
+    period: z.enum(["morning", "evening", "full_day"]).optional(),
     source: z.enum(["platform", "external"]).default("platform"),
     notes: z.string().optional(),
   }).safeParse(req.body);

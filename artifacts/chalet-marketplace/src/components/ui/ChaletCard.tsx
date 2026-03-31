@@ -4,11 +4,63 @@ import { Chalet } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+type Period = "morning" | "evening" | "full_day";
+
 interface ChaletCardProps {
   chalet: Chalet;
+  selectedPeriod?: Period;
 }
 
-export function ChaletCard({ chalet }: ChaletCardProps) {
+const PERIOD_LABEL: Record<Period, string> = {
+  morning: "صباحي",
+  evening: "مسائي",
+  full_day: "يوم كامل",
+};
+
+function getPriceDisplay(chalet: Chalet, period?: Period): React.ReactNode {
+  const fmt = (v: string | null | undefined) =>
+    v && Number(v) > 0 ? `${Number(v).toLocaleString("ar-SA")} ر.س` : null;
+
+  if (period) {
+    const price =
+      period === "morning"
+        ? fmt(chalet.priceMorning)
+        : period === "evening"
+        ? fmt(chalet.priceEvening)
+        : fmt(chalet.priceFullDay);
+    if (price) {
+      return (
+        <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+          {price} / {PERIOD_LABEL[period]}
+        </span>
+      );
+    }
+  }
+
+  /* Find cheapest available price across all slots */
+  const prices = [
+    chalet.slotMorning !== false ? Number(chalet.priceMorning) || null : null,
+    chalet.slotEvening !== false ? Number(chalet.priceEvening) || null : null,
+    chalet.slotFullDay !== false ? Number(chalet.priceFullDay) || null : null,
+  ].filter((p): p is number => p !== null && p > 0);
+
+  if (prices.length > 0) {
+    const min = Math.min(...prices);
+    return (
+      <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+        من {min.toLocaleString("ar-SA")} ر.س
+      </span>
+    );
+  }
+
+  return (
+    <span className="text-xs font-semibold text-[#25D366] bg-[#25D366]/10 px-2 py-0.5 rounded-full">
+      الأسعار عند التواصل
+    </span>
+  );
+}
+
+export function ChaletCard({ chalet, selectedPeriod }: ChaletCardProps) {
   const mainPhoto = chalet.photos && chalet.photos.length > 0
     ? chalet.photos[0]
     : `${import.meta.env.BASE_URL}images/chalet-placeholder-${(chalet.id % 3) + 1}.png`;
@@ -21,7 +73,7 @@ export function ChaletCard({ chalet }: ChaletCardProps) {
 
   return (
     <Card className="group overflow-hidden rounded-2xl border-border/50 bg-card hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
-      <Link href={`/chalets/${chalet.id}`} className="block">
+      <Link href={`/chalets/${chalet.id}${selectedPeriod ? `?period=${selectedPeriod}` : ""}`} className="block">
         <div className="relative aspect-[4/3] overflow-hidden bg-secondary">
           <img
             src={mainPhoto}
@@ -71,9 +123,7 @@ export function ChaletCard({ chalet }: ChaletCardProps) {
               {chalet.nameAr}
             </h3>
             <div className="text-left whitespace-nowrap">
-              <span className="text-xs font-semibold text-[#25D366] bg-[#25D366]/10 px-2 py-0.5 rounded-full">
-                الأسعار عند التواصل
-              </span>
+              {getPriceDisplay(chalet, selectedPeriod)}
             </div>
           </div>
 
