@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   User, LogOut, Plus, MapPin, Calendar, Clock, CheckCircle,
-  XCircle, Home, BookOpen, BarChart2, Trash2, Building2, Globe, Phone, AlertTriangle, RotateCcw, Star,
+  XCircle, Home, BookOpen, Trash2, Building2, Globe, Phone, AlertTriangle, RotateCcw, Star,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -571,7 +571,7 @@ function ReportsTab() {
 /* ── Main Dashboard ──────────────────────────── */
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"chalets" | "services" | "bookings" | "reports">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "services">("chalets");
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const { data: submissions, isLoading: submissionsLoading } = useGetMySubmissions();
 
@@ -596,8 +596,6 @@ export default function Dashboard() {
   const tabs = [
     { id: "chalets",  label: "شاليهاتي",    icon: <Building2 className="w-4 h-4" /> },
     { id: "services", label: "خدماتي",      icon: <Star className="w-4 h-4" /> },
-    { id: "bookings", label: "حجوزاتنا",    icon: <BookOpen className="w-4 h-4" /> },
-    { id: "reports",  label: "التقارير",    icon: <BarChart2 className="w-4 h-4" /> },
   ] as const;
 
   return (
@@ -620,20 +618,26 @@ export default function Dashboard() {
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold text-foreground">
-              أهلاً، {user?.firstName ?? "مالك الشاليه"} 👋
+              أهلاً، {user?.firstName ?? "عزيزنا"} 👋
             </h1>
-            <p className="text-muted-foreground mt-1">مرحباً بك في لوحة تحكم ملاك الشاليهات</p>
+            <p className="text-muted-foreground mt-1">لوحة تحكمك الموحدة — الشاليهات والخدمات في مكان واحد</p>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <Link href="/add-chalet">
-              <Button className="rounded-xl font-semibold">
-                <Plus className="w-4 h-4 me-2" />
+              <Button variant="outline" className="rounded-xl font-semibold text-sm">
+                <Plus className="w-4 h-4 me-1.5" />
                 إضافة شاليه
               </Button>
             </Link>
-            <Button variant="outline" onClick={logout} className="rounded-xl text-muted-foreground hover:text-destructive hover:border-destructive">
-              <LogOut className="w-4 h-4 me-2" />
-              تسجيل خروج
+            <Link href="/add-service-provider">
+              <Button className="rounded-xl font-semibold text-sm">
+                <Plus className="w-4 h-4 me-1.5" />
+                إضافة خدمة
+              </Button>
+            </Link>
+            <Button variant="ghost" onClick={logout} className="rounded-xl text-muted-foreground hover:text-destructive hover:border-destructive text-sm px-3">
+              <LogOut className="w-4 h-4 me-1.5" />
+              خروج
             </Button>
           </div>
         </motion.div>
@@ -662,12 +666,6 @@ export default function Dashboard() {
         )}
         {activeTab === "services" && (
           <ServiceSubmissionsTab />
-        )}
-        {activeTab === "bookings" && (
-          <BookingsTab submissions={submissions as any[] ?? []} />
-        )}
-        {activeTab === "reports" && (
-          <ReportsTab />
         )}
       </div>
     </div>
