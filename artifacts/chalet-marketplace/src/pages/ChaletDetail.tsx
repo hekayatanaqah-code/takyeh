@@ -1,13 +1,17 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useGetChaletById } from "@workspace/api-client-react";
 import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, Info, Phone, ShieldCheck } from "lucide-react";
 import useEmblaCarousel from 'embla-carousel-react';
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { WhatsAppButton } from "@/components/ui/WhatsAppButton";
+
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type Period = "morning" | "evening" | "full_day";
 
@@ -22,6 +26,20 @@ export default function ChaletDetail() {
   const numericId = Number(id);
   const { data: chalet, isLoading, isError } = useGetChaletById(numericId);
   const [emblaRef] = useEmblaCarousel({ direction: "rtl", loop: true });
+
+  const { data: amenityCatalog = [] } = useQuery<{ id: number; key: string; labelAr: string }[]>({
+    queryKey: ["catalog", "amenities"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/amenities`, { credentials: "include" });
+      return r.json();
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const amenityLabelMap = useMemo(() =>
+    Object.fromEntries(amenityCatalog.map(a => [a.key, a.labelAr])),
+    [amenityCatalog]
+  );
 
   /* Read initial period from URL ?period=morning|evening|full_day */
   const initPeriod = (() => {
@@ -384,19 +402,44 @@ export default function ChaletDetail() {
               </section>
 
               {/* ── Amenities ──────────────────────────────────── */}
-              {chalet.amenities.length > 0 && (
-                <section>
-                  <h2 className="text-lg font-bold mb-3">المرافق والمميزات</h2>
-                  <div className="grid grid-cols-2 gap-y-2.5 gap-x-4">
-                    {chalet.amenities.map((amenity: string, idx: number) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
-                        <span className="text-sm text-foreground">{amenity}</span>
+              {chalet.amenities.length > 0 && (() => {
+                const standardAmenities = chalet.amenities.filter((a: string) => !a.startsWith("other:"));
+                const customTags = chalet.amenities
+                  .filter((a: string) => a.startsWith("other:"))
+                  .map((a: string) => a.slice(6).trim())
+                  .filter(Boolean);
+                return (
+                  <section>
+                    <h2 className="text-lg font-bold mb-3">المرافق والمميزات</h2>
+
+                    {standardAmenities.length > 0 && (
+                      <div className="grid grid-cols-2 gap-y-2.5 gap-x-4 mb-4">
+                        {standardAmenities.map((key: string, idx: number) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+                            <span className="text-sm text-foreground">
+                              {amenityLabelMap[key] ?? key}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </section>
-              )}
+                    )}
+
+                    {customTags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {customTags.map((tag: string, idx: number) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full px-3 py-1 text-sm font-medium"
+                          >
+                            ✨ {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                );
+              })()}
 
               {/* ── Location ───────────────────────────────────── */}
               <section>

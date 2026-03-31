@@ -117,7 +117,8 @@ export default function AddChalet() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedAmenities, setSelectedAmenities] = useState<Set<string>>(new Set());
-  const [customAmenity, setCustomAmenity] = useState("");
+  const [customAmenityTags, setCustomAmenityTags] = useState<string[]>([]);
+  const [customAmenityInput, setCustomAmenityInput] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [customDistrict, setCustomDistrict] = useState("");
@@ -234,6 +235,18 @@ export default function AddChalet() {
     });
   };
 
+  const addCustomTag = () => {
+    const tag = customAmenityInput.trim();
+    if (!tag) return;
+    if (customAmenityTags.includes(tag)) { setCustomAmenityInput(""); return; }
+    setCustomAmenityTags((prev) => [...prev, tag]);
+    setCustomAmenityInput("");
+  };
+
+  const removeCustomTag = (index: number) => {
+    setCustomAmenityTags((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleVideoInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -276,9 +289,9 @@ export default function AddChalet() {
       ? customDistrict.trim() || undefined
       : selectedDistrict || undefined;
 
-    const amenitiesList = Array.from(selectedAmenities);
-    if (customAmenity.trim()) {
-      amenitiesList.push(`other:${customAmenity.trim()}`);
+    const amenitiesList = Array.from(selectedAmenities).filter(k => k !== "__other__");
+    for (const tag of customAmenityTags) {
+      if (tag.trim()) amenitiesList.push(`other:${tag.trim()}`);
     }
 
     mutation.mutate(
@@ -321,7 +334,8 @@ export default function AddChalet() {
     setSections("");
     setPhotos([]);
     setSelectedAmenities(new Set());
-    setCustomAmenity("");
+    setCustomAmenityTags([]);
+    setCustomAmenityInput("");
     setSelectedCityId(null);
     setSelectedDistrict("");
     setCustomDistrict("");
@@ -562,14 +576,51 @@ export default function AddChalet() {
                     </label>
                   </div>
                   {selectedAmenities.has("__other__") && (
-                    <div className="mt-3">
-                      <Input
-                        type="text"
-                        placeholder="أدخل الميزة الإضافية هنا..."
-                        value={customAmenity}
-                        onChange={(e) => setCustomAmenity(e.target.value)}
-                        className="h-11 text-sm"
-                      />
+                    <div className="mt-4 space-y-3 rounded-xl border border-dashed border-primary/40 bg-primary/4 p-4">
+                      <p className="text-xs text-muted-foreground">أضف ميزات مخصصة — اكتب الميزة واضغط <strong>Enter</strong> أو <strong>+</strong></p>
+
+                      {/* Tag chips */}
+                      {customAmenityTags.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {customAmenityTags.map((tag, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full px-3 py-1 text-sm font-medium"
+                            >
+                              ✨ {tag}
+                              <button
+                                type="button"
+                                onClick={() => removeCustomTag(i)}
+                                className="text-primary/60 hover:text-destructive transition-colors ml-0.5"
+                                aria-label={`حذف ${tag}`}
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Input row */}
+                      <div className="flex gap-2">
+                        <Input
+                          type="text"
+                          placeholder="مثال: سينما خارجية، شاحن سيارات..."
+                          value={customAmenityInput}
+                          onChange={(e) => setCustomAmenityInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomTag(); } }}
+                          className="h-10 text-sm flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={addCustomTag}
+                          disabled={!customAmenityInput.trim()}
+                          className="h-10 w-10 rounded-xl border border-primary bg-primary text-primary-foreground font-bold text-lg flex items-center justify-center hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
+                          aria-label="إضافة ميزة"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
