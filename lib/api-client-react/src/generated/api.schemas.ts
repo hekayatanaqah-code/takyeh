@@ -106,8 +106,10 @@ export interface CreateSubmissionRequest {
   seasonalDisclaimer?: boolean;
   /** List of selected amenity keys */
   amenities?: string[];
-  /** List of object paths (up to 5) */
+  /** List of object paths (up to 15) */
   photos?: string[];
+  /** Optional video URL for the chalet */
+  videoUrl?: string;
 }
 
 export interface SubmissionResponse {

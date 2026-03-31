@@ -76,7 +76,8 @@ function useCatalog(selectedCityId: number | null) {
   return { cities, districts, amenities };
 }
 
-const MAX_PHOTOS = 5;
+const MAX_PHOTOS = 15;
+const MAX_VIDEO_SIZE_MB = 15;
 
 interface UploadedPhoto {
   url: string;
@@ -84,28 +85,25 @@ interface UploadedPhoto {
   preview: string;
 }
 
-async function uploadPhoto(file: File): Promise<string | null> {
+interface UploadedVideo {
+  url: string;
+  name: string;
+  preview: string;
+}
+
+async function uploadFile(file: File): Promise<string | null> {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   try {
-    const res = await fetch("/api/storage/uploads/request-url", {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${base}/api/storage/uploads/process`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: file.name,
-        size: file.size,
-        contentType: file.type || "image/jpeg",
-      }),
+      body: formData,
+      credentials: "include",
     });
     if (!res.ok) return null;
-    const { uploadURL, objectPath } = await res.json() as { uploadURL: string; objectPath: string };
-
-    const uploadRes = await fetch(uploadURL, {
-      method: "PUT",
-      body: file,
-      headers: { "Content-Type": file.type || "image/jpeg" },
-    });
-    if (!uploadRes.ok) return null;
-
-    return `/api/storage${objectPath}`;
+    const { url } = await res.json() as { url: string };
+    return url ?? null;
   } catch {
     return null;
   }
@@ -119,10 +117,15 @@ export default function AddChalet() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedAmenities, setSelectedAmenities] = useState<Set<string>>(new Set());
+  const [customAmenity, setCustomAmenity] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [customDistrict, setCustomDistrict] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const [video, setVideo] = useState<UploadedVideo | null>(null);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     nameAr: "",
@@ -182,7 +185,7 @@ export default function AddChalet() {
 
     const startIdx = photos.length;
     const results = await Promise.all(
-      toUpload.map((f) => uploadPhoto(f))
+      toUpload.map((f) => uploadFile(f))
     );
 
     setPhotos((prev) => {
@@ -231,14 +234,52 @@ export default function AddChalet() {
     });
   };
 
+  const handleVideoInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      setVideoError("يرجى اختيار ملف فيديو صالح");
+      return;
+    }
+    if (file.size > MAX_VIDEO_SIZE_MB * 1024 * 1024) {
+      setVideoError(`الفيديو يتجاوز الحد الأقصى ${MAX_VIDEO_SIZE_MB}MB`);
+      return;
+    }
+    setVideoError(null);
+    setIsUploadingVideo(true);
+    const preview = URL.createObjectURL(file);
+    setVideo({ url: "", name: file.name, preview });
+    const url = await uploadFile(file);
+    if (url) {
+      setVideo({ url, name: file.name, preview });
+    } else {
+      setVideo({ url: "error", name: file.name, preview });
+      setVideoError("فشل رفع الفيديو. يرجى المحاولة مرة أخرى.");
+    }
+    setIsUploadingVideo(false);
+  };
+
+  const removeVideo = () => {
+    if (video?.preview) URL.revokeObjectURL(video.preview);
+    setVideo(null);
+    setVideoError(null);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     const successfulPhotos = photos.filter((p) => p.url && p.url !== "error").map((p) => p.url);
+    const successfulVideo = video && video.url && video.url !== "error" ? video.url : undefined;
 
     const finalDistrict = selectedDistrict === "__other__"
       ? customDistrict.trim() || undefined
       : selectedDistrict || undefined;
+
+    const amenitiesList = Array.from(selectedAmenities);
+    if (customAmenity.trim()) {
+      amenitiesList.push(`other:${customAmenity.trim()}`);
+    }
 
     mutation.mutate(
       {
@@ -262,8 +303,9 @@ export default function AddChalet() {
           priceWeekday: priceWeekday ? Number(priceWeekday) : null,
           priceWeekend: priceWeekend ? Number(priceWeekend) : null,
           seasonalDisclaimer,
-          amenities: Array.from(selectedAmenities),
+          amenities: amenitiesList,
           photos: successfulPhotos,
+          videoUrl: successfulVideo,
         },
       },
       {
@@ -279,14 +321,17 @@ export default function AddChalet() {
     setSections("");
     setPhotos([]);
     setSelectedAmenities(new Set());
+    setCustomAmenity("");
     setSelectedCityId(null);
     setSelectedDistrict("");
     setCustomDistrict("");
     setLegalAccepted(false);
+    setVideo(null);
+    setVideoError(null);
   };
 
   const canAddMore = photos.length < MAX_PHOTOS && !isUploading;
-  const allUploaded = photos.every((p) => p.url !== "");
+  const allUploaded = photos.every((p) => p.url !== "") && !isUploadingVideo && (video ? video.url !== "" : true);
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
@@ -506,7 +551,27 @@ export default function AddChalet() {
                         </span>
                       </label>
                     ))}
+                    {/* Other / custom amenity */}
+                    <label className="flex items-center gap-3 cursor-pointer group p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 transition-all col-span-full sm:col-span-1">
+                      <Checkbox
+                        checked={selectedAmenities.has("__other__")}
+                        onCheckedChange={() => toggleAmenity("__other__")}
+                        className="shrink-0"
+                      />
+                      <span className="text-sm font-medium text-foreground leading-tight">أخرى</span>
+                    </label>
                   </div>
+                  {selectedAmenities.has("__other__") && (
+                    <div className="mt-3">
+                      <Input
+                        type="text"
+                        placeholder="أدخل الميزة الإضافية هنا..."
+                        value={customAmenity}
+                        onChange={(e) => setCustomAmenity(e.target.value)}
+                        className="h-11 text-sm"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Section: Contact & Pricing */}
@@ -537,8 +602,8 @@ export default function AddChalet() {
 
                     {/* Time-slot pricing */}
                     <div className="space-y-3">
-                      <Label className="text-base font-medium">أسعار الفترات</Label>
-                      <p className="text-xs text-muted-foreground -mt-1">فعّل الفترات التي تتيحها وأدخل سعر كل فترة (اختياري — يمكن تركها فارغة)</p>
+                      <Label className="text-base font-medium">أسعار الفترات — يبدأ من</Label>
+                      <p className="text-xs text-muted-foreground -mt-1">فعّل الفترات التي تتيحها وأدخل السعر الابتدائي (يبدأ من) لكل فترة (اختياري)</p>
 
                       {/* Morning */}
                       <div className="rounded-xl border p-3 space-y-2">
@@ -557,7 +622,7 @@ export default function AddChalet() {
                             <Input
                               type="number"
                               min="0"
-                              placeholder="السعر بالريال (اختياري)"
+                              placeholder="يبدأ من ... ر.س (اختياري)"
                               value={priceMorning}
                               onChange={(e) => setPriceMorning(e.target.value)}
                               className="h-10 text-sm pl-12"
@@ -585,7 +650,7 @@ export default function AddChalet() {
                             <Input
                               type="number"
                               min="0"
-                              placeholder="السعر بالريال (اختياري)"
+                              placeholder="يبدأ من ... ر.س (اختياري)"
                               value={priceEvening}
                               onChange={(e) => setPriceEvening(e.target.value)}
                               className="h-10 text-sm pl-12"
@@ -613,7 +678,7 @@ export default function AddChalet() {
                             <Input
                               type="number"
                               min="0"
-                              placeholder="السعر بالريال (اختياري)"
+                              placeholder="يبدأ من ... ر.س (اختياري)"
                               value={priceFullDay}
                               onChange={(e) => setPriceFullDay(e.target.value)}
                               className="h-10 text-sm pl-12"
@@ -722,7 +787,8 @@ export default function AddChalet() {
                     <div className="space-y-2">
                       <Label htmlFor="mapsUrl" className="text-base font-medium">
                         رابط الموقع على خرائط جوجل{" "}
-                        <span className="text-muted-foreground font-normal text-sm">(اختياري)</span>
+                        <span className="text-destructive">*</span>
+                        <span className="text-xs font-normal text-muted-foreground mr-1">(إلزامي)</span>
                       </Label>
                       <div className="relative">
                         <LinkIcon className="absolute top-3.5 right-3 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -732,26 +798,28 @@ export default function AddChalet() {
                           placeholder="https://maps.google.com/..."
                           value={form.mapsUrl}
                           onChange={(e) => handleChange("mapsUrl", e.target.value)}
+                          required
                           className="h-12 text-base pr-10"
                           dir="ltr"
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        يساعد الضيوف على معرفة الموقع بدقة
+                        افتح خرائط جوجل → اضغط على موقع الشاليه → شارك الرابط هنا
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Section: Photos */}
+                {/* Section: Photos & Video */}
                 <div>
-                  <h2 className="text-lg font-bold text-foreground mb-5 pb-3 border-b border-border flex items-center gap-2">
+                  <h2 className="text-lg font-bold text-foreground mb-2 pb-3 border-b border-border flex items-center gap-2">
                     <ImageIcon className="w-5 h-5 text-primary" />
-                    صور الشاليه
-                    <span className="text-sm font-normal text-muted-foreground">
-                      (حتى {MAX_PHOTOS} صور)
-                    </span>
+                    الصور والفيديو
                   </h2>
+                  <div className="flex flex-col gap-1 mb-5 bg-muted/40 rounded-xl p-3 text-sm text-muted-foreground">
+                    <span>📷 <strong>الصور:</strong> بحد أقصى {MAX_PHOTOS} صورة (حتى 2MB للصورة) صيغة JPG/PNG — تُحفظ تلقائياً بصيغة WebP</span>
+                    <span>🎥 <strong>الفيديو:</strong> فيديو واحد (حتى {MAX_VIDEO_SIZE_MB}MB، مدة 30 ثانية) صيغة MP4 — يُضغط تلقائياً</span>
+                  </div>
 
                   {/* Photo Thumbnails */}
                   {photos.length > 0 && (
@@ -851,6 +919,71 @@ export default function AddChalet() {
                   {uploadError && (
                     <p className="text-sm text-destructive mt-2">{uploadError}</p>
                   )}
+
+                  {/* ── Video Upload ── */}
+                  <div className="mt-6 pt-5 border-t border-border">
+                    <p className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                      🎥 رفع فيديو للشاليه
+                      <span className="font-normal text-muted-foreground text-xs">(فيديو واحد فقط — اختياري)</span>
+                    </p>
+
+                    {video ? (
+                      <div className="relative rounded-xl border border-border overflow-hidden">
+                        <video
+                          src={video.preview}
+                          className="w-full max-h-48 object-cover"
+                          controls
+                          muted
+                        />
+                        {video.url === "" && (
+                          <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-2">
+                            <Loader2 className="w-6 h-6 text-white animate-spin" />
+                            <span className="text-white text-sm">جاري معالجة الفيديو...</span>
+                          </div>
+                        )}
+                        {video.url === "error" && (
+                          <div className="absolute inset-0 bg-destructive/60 flex items-center justify-center">
+                            <X className="w-8 h-8 text-white" />
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={removeVideo}
+                          className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-destructive transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                        {video.url && video.url !== "error" && (
+                          <div className="absolute top-2 right-2 bg-green-600/90 text-white text-xs px-2 py-1 rounded-full">
+                            ✓ تم الرفع
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => videoInputRef.current?.click()}
+                        className="border-2 border-dashed border-border rounded-2xl p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all"
+                      >
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl">
+                            🎬
+                          </div>
+                          <p className="font-medium text-foreground text-sm">اضغط لاختيار فيديو</p>
+                          <p className="text-xs text-muted-foreground">MP4 / MOV — حتى {MAX_VIDEO_SIZE_MB}MB، مدة 30 ثانية</p>
+                        </div>
+                        <input
+                          ref={videoInputRef}
+                          type="file"
+                          accept="video/*"
+                          className="hidden"
+                          onChange={handleVideoInput}
+                        />
+                      </div>
+                    )}
+                    {videoError && (
+                      <p className="text-sm text-destructive mt-2">{videoError}</p>
+                    )}
+                  </div>
                 </div>
 
                 {/* ── Legal Declaration ──────────────────────── */}
@@ -886,7 +1019,7 @@ export default function AddChalet() {
                   type="submit"
                   size="lg"
                   className="w-full h-14 text-lg font-bold rounded-2xl shadow-lg shadow-primary/20"
-                  disabled={mutation.isPending || isUploading || !allUploaded || !legalAccepted || !propertyType || !sections}
+                  disabled={mutation.isPending || isUploading || isUploadingVideo || !allUploaded || !legalAccepted || !propertyType || !sections || !form.mapsUrl}
                 >
                   {mutation.isPending ? (
                     <span className="flex items-center gap-2">

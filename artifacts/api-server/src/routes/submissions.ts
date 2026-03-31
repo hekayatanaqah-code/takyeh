@@ -23,7 +23,8 @@ const SubmissionBodyStrict = CreateSubmissionBody.extend({
   priceWeekend: z.number().min(0).nullable().optional(),
   seasonalDisclaimer: z.boolean().optional(),
   mapsUrl: z.string().url().optional().or(z.literal("")),
-  photos: z.array(z.string()).max(5, "الحد الأقصى للصور هو 5").optional(),
+  photos: z.array(z.string()).max(15, "الحد الأقصى للصور هو 15").optional(),
+  videoUrl: z.string().optional(),
 });
 
 const router = Router();
@@ -73,6 +74,7 @@ router.post("/", async (req, res) => {
       seasonalDisclaimer: data.seasonalDisclaimer ?? true,
       amenities: data.amenities ?? [],
       photos: data.photos ?? [],
+      videoUrl: data.videoUrl || null,
       trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     })
     .returning({ id: chaletSubmissionsTable.id });

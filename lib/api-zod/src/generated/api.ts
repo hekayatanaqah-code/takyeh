@@ -229,5 +229,9 @@ export const CreateSubmissionBody = zod.object({
   photos: zod
     .array(zod.string())
     .optional()
-    .describe("List of object paths (up to 5)"),
+    .describe("List of object paths (up to 15)"),
+  videoUrl: zod
+    .string()
+    .optional()
+    .describe("Optional video URL for the chalet"),
 });

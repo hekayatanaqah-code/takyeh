@@ -88,6 +88,7 @@ router.patch("/submissions/:id/status", async (req, res) => {
         bedrooms: 3,
         amenities: submission.amenities ?? [],
         photos: submission.photos ?? [],
+        videoUrl: submission.videoUrl ?? null,
         whatsappNumber: submission.whatsappNumber,
         mapsUrl: submission.mapsUrl ?? undefined,
         isVerified: false,

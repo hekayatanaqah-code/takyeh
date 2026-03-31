@@ -1,5 +1,12 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
+import { tmpdir } from "os";
+import { join } from "path";
+import { writeFile, readFile, unlink } from "fs/promises";
+import { randomUUID } from "crypto";
+import multer from "multer";
+import sharp from "sharp";
+import ffmpeg from "fluent-ffmpeg";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
@@ -9,6 +16,34 @@ import { ObjectPermission } from "../lib/objectAcl";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
+
+const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024;
+const MAX_VIDEO_SIZE_BYTES = 15 * 1024 * 1024;
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_VIDEO_SIZE_BYTES },
+});
+
+function ffmpegToBuffer(inputPath: string, outputPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .outputOptions([
+        "-c:v libx264",
+        "-crf 28",
+        "-preset fast",
+        "-vf scale=-2:720",
+        "-c:a aac",
+        "-b:a 128k",
+        "-movflags +faststart",
+        "-t 30",
+      ])
+      .output(outputPath)
+      .on("end", () => resolve())
+      .on("error", (err) => reject(err))
+      .run();
+  });
+}
 
 /**
  * POST /storage/uploads/request-url
@@ -42,6 +77,78 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
     res.status(500).json({ error: "Failed to generate upload URL" });
   }
 });
+
+/**
+ * POST /storage/uploads/process
+ *
+ * Server-side media processing upload.
+ * Accepts a single multipart file:
+ *   - Images → compressed to WebP (max 2MB input, quality 82, max 2048px width)
+ *   - Videos → re-encoded to H.264 MP4 (max 15MB input, max 720p, 30s)
+ * Returns { url } with the path for the stored object.
+ */
+router.post(
+  "/storage/uploads/process",
+  upload.single("file"),
+  async (req: Request, res: Response) => {
+    const file = (req as any).file as Express.Multer.File | undefined;
+    if (!file) {
+      res.status(400).json({ error: "No file provided" });
+      return;
+    }
+
+    const isImage = file.mimetype.startsWith("image/");
+    const isVideo = file.mimetype.startsWith("video/");
+
+    if (!isImage && !isVideo) {
+      res.status(400).json({ error: "Only image or video files are accepted" });
+      return;
+    }
+
+    try {
+      let outputBuffer: Buffer;
+      let contentType: string;
+      let ext: string;
+
+      if (isImage) {
+        if (file.size > MAX_IMAGE_SIZE_BYTES) {
+          res.status(400).json({ error: "الصورة تتجاوز الحد الأقصى 2MB" });
+          return;
+        }
+        outputBuffer = await sharp(file.buffer)
+          .resize({ width: 2048, withoutEnlargement: true })
+          .webp({ quality: 82 })
+          .toBuffer();
+        contentType = "image/webp";
+        ext = "webp";
+      } else {
+        if (file.size > MAX_VIDEO_SIZE_BYTES) {
+          res.status(400).json({ error: "الفيديو يتجاوز الحد الأقصى 15MB" });
+          return;
+        }
+        const id = randomUUID();
+        const inputPath = join(tmpdir(), `${id}_in`);
+        const outputPath = join(tmpdir(), `${id}_out.mp4`);
+        await writeFile(inputPath, file.buffer);
+        try {
+          await ffmpegToBuffer(inputPath, outputPath);
+          outputBuffer = await readFile(outputPath);
+        } finally {
+          await unlink(inputPath).catch(() => {});
+          await unlink(outputPath).catch(() => {});
+        }
+        contentType = "video/mp4";
+        ext = "mp4";
+      }
+
+      const url = await objectStorageService.uploadBuffer(outputBuffer, contentType, ext);
+      res.json({ url });
+    } catch (err) {
+      req.log.error({ err }, "Error processing upload");
+      res.status(500).json({ error: "فشل معالجة الملف" });
+    }
+  }
+);
 
 /**
  * GET /storage/public-objects/*

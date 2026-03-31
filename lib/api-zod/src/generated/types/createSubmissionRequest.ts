@@ -31,4 +31,5 @@ export interface CreateSubmissionRequest {
   amenities?: string[];
   /** List of object paths (up to 5) */
   photos?: string[];
+  videoUrl?: string;
 }
