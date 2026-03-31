@@ -86,6 +86,14 @@ export default function ChaletDetail() {
   const isVerified = Boolean((chalet as any).isVerified);
   const propertyType = (chalet as any).propertyType as string | null | undefined;
   const sections = (chalet as any).sections as string | null | undefined;
+  const priceWeekdayRaw = (chalet as any).priceWeekday as string | null | undefined;
+  const priceWeekendRaw = (chalet as any).priceWeekend as string | null | undefined;
+  const seasonalDisclaimer = Boolean((chalet as any).seasonalDisclaimer ?? true);
+  const fmtPrice = (v: string | null | undefined) =>
+    v && Number(v) > 0 ? Number(v).toLocaleString("ar-SA") : null;
+  const weekdayFmt = fmtPrice(priceWeekdayRaw);
+  const weekendFmt = fmtPrice(priceWeekendRaw);
+  const hasDayPrices = weekdayFmt || weekendFmt;
   const locationLabel = district ? `حي ${district}، ${chalet.location}` : chalet.location;
   const periodLine = selectedPeriod ? ` — الفترة: ${PERIOD_LABEL[selectedPeriod]}` : "";
   const whatsappMsg = `أهلاً، أود الاستفسار عن حجز شاليه ${chalet.nameAr} في ${chalet.location}${periodLine}.`;
@@ -238,9 +246,38 @@ export default function ChaletDetail() {
                   </div>
                   <div>
                     <p className="font-bold text-sm text-foreground">تواصل مع المالك</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">الأسعار والتفاصيل عند التواصل المباشر</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {hasDayPrices ? "الأسعار أدناه — ابدأ بالتواصل للحجز" : "الأسعار والتفاصيل عند التواصل المباشر"}
+                    </p>
                   </div>
                 </div>
+
+                {/* ── Price Box ── */}
+                {hasDayPrices && (
+                  <div className="rounded-xl bg-primary/5 border border-primary/15 px-4 py-3 mb-4 space-y-2">
+                    {weekdayFmt && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">📅 وسط الأسبوع</span>
+                        <span className="text-sm font-bold">
+                          يبدأ من <span className="text-primary text-base">{weekdayFmt}</span> ر.س
+                        </span>
+                      </div>
+                    )}
+                    {weekendFmt && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">🎉 نهاية الأسبوع</span>
+                        <span className="text-sm font-bold">
+                          يبدأ من <span className="text-primary text-base">{weekendFmt}</span> ر.س
+                        </span>
+                      </div>
+                    )}
+                    {seasonalDisclaimer && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 pt-2 border-t border-amber-200/50 dark:border-amber-700/30">
+                        ⚠️ تنبيه: الأسعار قد تختلف في المواسم والأعياد
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Period selector */}
                 {slots.length > 0 && (

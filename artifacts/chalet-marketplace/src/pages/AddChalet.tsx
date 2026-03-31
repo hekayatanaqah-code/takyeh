@@ -144,6 +144,11 @@ export default function AddChalet() {
   const [priceEvening, setPriceEvening] = useState("");
   const [priceFullDay, setPriceFullDay] = useState("");
 
+  /* ── Weekday / Weekend pricing ── */
+  const [priceWeekday, setPriceWeekday] = useState("");
+  const [priceWeekend, setPriceWeekend] = useState("");
+  const [seasonalDisclaimer, setSeasonalDisclaimer] = useState(true);
+
   const mutation = useCreateSubmission();
 
   const handleChange = (field: string, value: string) => {
@@ -254,6 +259,9 @@ export default function AddChalet() {
           slotMorning,
           slotEvening,
           slotFullDay,
+          priceWeekday: priceWeekday ? Number(priceWeekday) : null,
+          priceWeekend: priceWeekend ? Number(priceWeekend) : null,
+          seasonalDisclaimer,
           amenities: Array.from(selectedAmenities),
           photos: successfulPhotos,
         },
@@ -615,6 +623,75 @@ export default function AddChalet() {
                           </div>
                         )}
                       </div>
+                    </div>
+
+                    {/* Weekday / Weekend pricing */}
+                    <div className="space-y-3">
+                      <Label className="text-base font-medium">أسعار الأيام <span className="text-destructive">*</span></Label>
+                      <p className="text-xs text-muted-foreground -mt-1">أدخل السعر الابتدائي (يبدأ من) لكل نوع من الأيام</p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Weekday */}
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                            📅 وسط الأسبوع
+                            <span className="text-destructive text-xs">*</span>
+                          </label>
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              min="1"
+                              placeholder="مثال: 500"
+                              value={priceWeekday}
+                              onChange={(e) => setPriceWeekday(e.target.value)}
+                              required
+                              className="h-11 text-sm pl-12"
+                              dir="rtl"
+                            />
+                            <span className="absolute left-3 top-3 text-xs text-muted-foreground">ر.س</span>
+                          </div>
+                        </div>
+
+                        {/* Weekend */}
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                            🎉 نهاية الأسبوع
+                            <span className="text-destructive text-xs">*</span>
+                          </label>
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              min="1"
+                              placeholder="مثال: 800"
+                              value={priceWeekend}
+                              onChange={(e) => setPriceWeekend(e.target.value)}
+                              required
+                              className="h-11 text-sm pl-12"
+                              dir="rtl"
+                            />
+                            <span className="absolute left-3 top-3 text-xs text-muted-foreground">ر.س</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Seasonal disclaimer checkbox */}
+                      <label className="flex items-start gap-3 cursor-pointer group select-none">
+                        <div className="relative mt-0.5 shrink-0">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={seasonalDisclaimer}
+                            onChange={(e) => setSeasonalDisclaimer(e.target.checked)}
+                          />
+                          <div className="w-5 h-5 rounded border-2 border-border peer-checked:border-amber-500 peer-checked:bg-amber-500 transition-all flex items-center justify-center">
+                            {seasonalDisclaimer && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </div>
+                        </div>
+                        <span className="text-sm text-foreground leading-tight">
+                          <span className="font-medium text-amber-600">⚠️ تنبيه:</span> الأسعار تختلف في المناسبات والأعياد
+                          <span className="block text-xs text-muted-foreground mt-0.5">سيظهر هذا التنبيه أسفل الأسعار في صفحة الشاليه</span>
+                        </span>
+                      </label>
                     </div>
 
                     {/* Social Link — mandatory for trust system */}

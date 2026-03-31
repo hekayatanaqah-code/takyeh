@@ -23,6 +23,7 @@ export default function Chalets() {
   const [filterSections, setFilterSections] = useState<string>("all");
   const [filterPeriod, setFilterPeriod]     = useState<string>(searchParams.get("period") || "all");
   const [filterAmenities, setFilterAmenities] = useState<Set<string>>(new Set());
+  const [filterMaxPrice, setFilterMaxPrice] = useState<string>(searchParams.get("maxPrice") || "");
 
   const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["catalog", "cities"],
@@ -84,6 +85,13 @@ export default function Chalets() {
         if (!chaletAmenities.includes(key)) return false;
       }
     }
+    if (filterMaxPrice) {
+      const max = Number(filterMaxPrice);
+      const weekday = Number((c as any).priceWeekday ?? 0);
+      const weekend = Number((c as any).priceWeekend ?? 0);
+      const minPrice = Math.min(weekday || Infinity, weekend || Infinity);
+      if (minPrice !== Infinity && minPrice > max) return false;
+    }
     return true;
   });
 
@@ -103,6 +111,7 @@ export default function Chalets() {
     setFilterSections("all");
     setFilterPeriod("all");
     setFilterAmenities(new Set());
+    setFilterMaxPrice("");
   };
 
   const FilterControls = () => (
@@ -186,6 +195,24 @@ export default function Chalets() {
             <SelectItem value="قسمين منفصلة">🔑🔑 قسمين منفصلة</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="space-y-3">
+        <label className="text-sm font-semibold text-foreground">الميزانية القصوى (ريال)</label>
+        <div className="relative">
+          <input
+            type="number"
+            min="0"
+            step="50"
+            placeholder="مثال: 1000"
+            value={filterMaxPrice}
+            onChange={(e) => setFilterMaxPrice(e.target.value)}
+            className="w-full h-10 rounded-md border border-input bg-background px-3 pl-12 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            dir="rtl"
+          />
+          <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
+        </div>
+        <p className="text-xs text-muted-foreground">يُقارن بسعر وسط الأسبوع</p>
       </div>
 
       {amenitiesCatalog.length > 0 && (

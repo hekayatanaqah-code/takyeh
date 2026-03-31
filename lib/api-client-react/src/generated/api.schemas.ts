@@ -98,6 +98,12 @@ export interface CreateSubmissionRequest {
   slotEvening?: boolean;
   /** Whether full-day slot is offered */
   slotFullDay?: boolean;
+  /** Weekday starting price in SAR */
+  priceWeekday?: number | null;
+  /** Weekend starting price in SAR */
+  priceWeekend?: number | null;
+  /** Whether seasonal price disclaimer applies */
+  seasonalDisclaimer?: boolean;
   /** List of selected amenity keys */
   amenities?: string[];
   /** List of object paths (up to 5) */
@@ -139,6 +145,12 @@ export interface Chalet {
   slotEvening?: boolean;
   /** Whether full-day slot is offered */
   slotFullDay?: boolean;
+  /** Weekday starting price in SAR */
+  priceWeekday?: string | null;
+  /** Weekend starting price in SAR */
+  priceWeekend?: string | null;
+  /** Whether seasonal price disclaimer applies */
+  seasonalDisclaimer?: boolean;
   /** Maximum number of guests */
   maxGuests: number;
   /** Number of bedrooms */

@@ -219,6 +219,9 @@ export const CreateSubmissionBody = zod.object({
   slotMorning: zod.boolean().optional().describe("Whether morning slot is offered"),
   slotEvening: zod.boolean().optional().describe("Whether evening slot is offered"),
   slotFullDay: zod.boolean().optional().describe("Whether full-day slot is offered"),
+  priceWeekday: zod.number().min(0).nullable().optional().describe("Weekday starting price in SAR"),
+  priceWeekend: zod.number().min(0).nullable().optional().describe("Weekend starting price in SAR"),
+  seasonalDisclaimer: zod.boolean().optional().describe("Whether seasonal price disclaimer applies"),
   amenities: zod
     .array(zod.string())
     .optional()

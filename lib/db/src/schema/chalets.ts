@@ -19,6 +19,10 @@ export const chaletsTable = pgTable("chalets", {
   slotMorning: boolean("slot_morning").notNull().default(true),
   slotEvening: boolean("slot_evening").notNull().default(true),
   slotFullDay: boolean("slot_full_day").notNull().default(true),
+  /* ── Weekday / Weekend pricing ── */
+  priceWeekday: numeric("price_weekday", { precision: 10, scale: 2 }),
+  priceWeekend: numeric("price_weekend", { precision: 10, scale: 2 }),
+  seasonalDisclaimer: boolean("seasonal_disclaimer").notNull().default(true),
   maxGuests: integer("max_guests").notNull(),
   bedrooms: integer("bedrooms").notNull(),
   amenities: text("amenities").array().notNull().default([]),
@@ -55,6 +59,10 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   slotMorning: boolean("slot_morning").notNull().default(true),
   slotEvening: boolean("slot_evening").notNull().default(true),
   slotFullDay: boolean("slot_full_day").notNull().default(true),
+  /* ── Weekday / Weekend pricing ── */
+  priceWeekday: numeric("price_weekday", { precision: 10, scale: 2 }),
+  priceWeekend: numeric("price_weekend", { precision: 10, scale: 2 }),
+  seasonalDisclaimer: boolean("seasonal_disclaimer").notNull().default(true),
   amenities: text("amenities").array().notNull().default([]),
   mapsUrl: text("maps_url"),
   socialLink: text("social_link"),

@@ -17,47 +17,8 @@ const PERIOD_LABEL: Record<Period, string> = {
   full_day: "يوم كامل",
 };
 
-function getPriceDisplay(chalet: Chalet, period?: Period): React.ReactNode {
-  const fmt = (v: string | null | undefined) =>
-    v && Number(v) > 0 ? `${Number(v).toLocaleString("ar-SA")} ر.س` : null;
-
-  if (period) {
-    const price =
-      period === "morning"
-        ? fmt(chalet.priceMorning)
-        : period === "evening"
-        ? fmt(chalet.priceEvening)
-        : fmt(chalet.priceFullDay);
-    if (price) {
-      return (
-        <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-          {price} / {PERIOD_LABEL[period]}
-        </span>
-      );
-    }
-  }
-
-  /* Find cheapest available price across all slots */
-  const prices = [
-    chalet.slotMorning !== false ? Number(chalet.priceMorning) || null : null,
-    chalet.slotEvening !== false ? Number(chalet.priceEvening) || null : null,
-    chalet.slotFullDay !== false ? Number(chalet.priceFullDay) || null : null,
-  ].filter((p): p is number => p !== null && p > 0);
-
-  if (prices.length > 0) {
-    const min = Math.min(...prices);
-    return (
-      <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-        من {min.toLocaleString("ar-SA")} ر.س
-      </span>
-    );
-  }
-
-  return (
-    <span className="text-xs font-semibold text-[#25D366] bg-[#25D366]/10 px-2 py-0.5 rounded-full">
-      الأسعار عند التواصل
-    </span>
-  );
+function fmt(v: string | null | undefined): string | null {
+  return v && Number(v) > 0 ? Number(v).toLocaleString("ar-SA") : null;
 }
 
 export function ChaletCard({ chalet, selectedPeriod }: ChaletCardProps) {
@@ -70,6 +31,22 @@ export function ChaletCard({ chalet, selectedPeriod }: ChaletCardProps) {
   const isVerified = Boolean((chalet as any).isVerified);
   const propertyType = (chalet as any).propertyType as string | null | undefined;
   const sections = (chalet as any).sections as string | null | undefined;
+  const seasonalDisclaimer = Boolean((chalet as any).seasonalDisclaimer ?? true);
+
+  /* Weekday / Weekend prices */
+  const weekdayPrice = fmt(chalet.priceWeekday);
+  const weekendPrice = fmt(chalet.priceWeekend);
+  const hasDayPrices = weekdayPrice || weekendPrice;
+
+  /* Period-slot price (for filtered view) */
+  let periodPrice: string | null = null;
+  if (selectedPeriod) {
+    const raw =
+      selectedPeriod === "morning" ? chalet.priceMorning :
+      selectedPeriod === "evening" ? chalet.priceEvening :
+      chalet.priceFullDay;
+    periodPrice = fmt(raw);
+  }
 
   return (
     <Card className="group overflow-hidden rounded-2xl border-border/50 bg-card hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
@@ -118,14 +95,50 @@ export function ChaletCard({ chalet, selectedPeriod }: ChaletCardProps) {
         </div>
 
         <CardContent className="p-5">
-          <div className="flex justify-between items-start mb-4">
-            <h3 className="font-bold text-lg text-foreground line-clamp-1 group-hover:text-primary transition-colors">
-              {chalet.nameAr}
-            </h3>
-            <div className="text-left whitespace-nowrap">
-              {getPriceDisplay(chalet, selectedPeriod)}
+          <h3 className="font-bold text-lg text-foreground line-clamp-1 group-hover:text-primary transition-colors mb-3">
+            {chalet.nameAr}
+          </h3>
+
+          {/* ── Price Box ──────────────────────── */}
+          {hasDayPrices ? (
+            <div className="rounded-xl bg-primary/5 border border-primary/15 px-3.5 py-2.5 mb-3 space-y-1">
+              {weekdayPrice && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">📅 وسط الأسبوع</span>
+                  <span className="font-bold text-foreground">
+                    يبدأ من <span className="text-primary">{weekdayPrice}</span> ر.س
+                  </span>
+                </div>
+              )}
+              {weekendPrice && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">🎉 نهاية الأسبوع</span>
+                  <span className="font-bold text-foreground">
+                    يبدأ من <span className="text-primary">{weekendPrice}</span> ر.س
+                  </span>
+                </div>
+              )}
+              {/* Period price if filtered */}
+              {selectedPeriod && periodPrice && (
+                <div className="flex items-center justify-between text-sm pt-1 border-t border-primary/10 mt-1">
+                  <span className="text-muted-foreground">{PERIOD_LABEL[selectedPeriod]}</span>
+                  <span className="font-bold text-primary">{periodPrice} ر.س</span>
+                </div>
+              )}
+              {/* Seasonal disclaimer */}
+              {seasonalDisclaimer && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 pt-1 border-t border-amber-200/50 dark:border-amber-700/30 mt-1">
+                  ⚠️ تنبيه: الأسعار قد تختلف في المواسم والأعياد
+                </p>
+              )}
             </div>
-          </div>
+          ) : (
+            <div className="mb-3">
+              <span className="text-xs font-semibold text-[#25D366] bg-[#25D366]/10 px-2 py-1 rounded-full">
+                الأسعار عند التواصل
+              </span>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-md">
