@@ -66,6 +66,7 @@ router.patch("/submissions/:id/status", async (req, res) => {
 
     if (submission) {
       await db.insert(chaletsTable).values({
+        submissionId: submission.id,
         nameAr: submission.nameAr,
         descriptionAr: submission.descriptionAr,
         location: submission.location,

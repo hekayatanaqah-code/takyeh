@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { SlidersHorizontal, FilterX, CheckSquare, Square } from "lucide-react";
-import { useGetChalets } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -24,6 +23,9 @@ export default function Chalets() {
   const [filterPeriod, setFilterPeriod]     = useState<string>(searchParams.get("period") || "all");
   const [filterAmenities, setFilterAmenities] = useState<Set<string>>(new Set());
   const [filterMaxPrice, setFilterMaxPrice] = useState<string>(searchParams.get("maxPrice") || "");
+
+  /* Read check-in date from search params (passed by the home search bar) */
+  const searchDate = searchParams.get("checkIn") || "";
 
   const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["catalog", "cities"],
@@ -67,13 +69,22 @@ export default function Chalets() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const { data: chalets, isLoading, refetch } = useGetChalets({
-    location: filterCity !== "all" ? filterCity : undefined,
+  const { data: chalets, isLoading, refetch } = useQuery<any[]>({
+    queryKey: ["chalets", filterCity, searchDate, filterPeriod],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filterCity && filterCity !== "all") params.set("location", filterCity);
+      if (searchDate) params.set("date", searchDate);
+      if (filterPeriod && filterPeriod !== "all") params.set("period", filterPeriod);
+      const r = await fetch(`${BASE}/api/chalets?${params.toString()}`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
   });
 
   useEffect(() => {
     refetch();
-  }, [filterCity, refetch]);
+  }, [filterCity, searchDate, filterPeriod, refetch]);
 
   const filteredChalets = (chalets ?? []).filter((c) => {
     if (filterDistrict && filterDistrict !== "all" && (c as any).district !== filterDistrict) return false;

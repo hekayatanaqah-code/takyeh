@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, chaletsTable } from "@workspace/db";
+import { chaletAvailabilityTable } from "@workspace/db/schema";
 import { eq, lte, gte, and, type SQL } from "drizzle-orm";
 import {
   GetChaletsQueryParams,
@@ -19,6 +20,8 @@ router.get("/", async (req, res) => {
 
   const { location, maxGuests, maxPrice } = parseResult.data;
   const sections = req.query.sections as string | undefined;
+  const searchDate = req.query.date as string | undefined;
+  const searchPeriod = req.query.period as string | undefined;
 
   const conditions: SQL[] = [];
 
@@ -35,11 +38,33 @@ router.get("/", async (req, res) => {
     conditions.push(eq(chaletsTable.sections, sections));
   }
 
-  const rows = await db
+  let rows = await db
     .select()
     .from(chaletsTable)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(chaletsTable.id);
+
+  /* ── Availability filter ─────────────────────────────────── */
+  if (searchDate && /^\d{4}-\d{2}-\d{2}$/.test(searchDate)) {
+    const blockedEntries = await db
+      .select()
+      .from(chaletAvailabilityTable)
+      .where(eq(chaletAvailabilityTable.dateStr, searchDate));
+
+    if (blockedEntries.length > 0) {
+      const blockMap = new Map(blockedEntries.map((b) => [b.chaletId, b]));
+
+      rows = rows.filter((row) => {
+        const entry = blockMap.get(row.id);
+        if (!entry) return true;
+
+        if (searchPeriod === "morning") return !entry.periodMorning;
+        if (searchPeriod === "evening") return !entry.periodEvening;
+        if (searchPeriod === "full_day") return !entry.periodFullDay;
+        return !(entry.periodMorning || entry.periodEvening || entry.periodFullDay);
+      });
+    }
+  }
 
   const data = rows.map((row) => ({
     ...GetChaletsResponseItem.parse({
@@ -78,7 +103,7 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   const parseResult = GetChaletByIdParams.safeParse({ id: req.params.id });
   if (!parseResult.success) {
-    res.status(400).json({ error: "Invalid chalet ID" });
+    res.status(404).json({ error: "Invalid chalet ID" });
     return;
   }
 

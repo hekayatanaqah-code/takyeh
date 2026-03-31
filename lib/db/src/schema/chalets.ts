@@ -4,6 +4,8 @@ import { z } from "zod/v4";
 
 export const chaletsTable = pgTable("chalets", {
   id: serial("id").primaryKey(),
+  /* ── Link back to originating submission (set on admin approval) ── */
+  submissionId: integer("submission_id"),
   nameAr: text("name_ar").notNull(),
   descriptionAr: text("description_ar").notNull(),
   location: text("location").notNull(),
@@ -190,3 +192,29 @@ export const serviceProvidersTable = pgTable("service_providers", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ServiceProvider = typeof serviceProvidersTable.$inferSelect;
+
+/* ── Chalet Availability (date-slot blocking by owner) ─────── */
+export const chaletAvailabilityTable = pgTable("chalet_availability", {
+  id: serial("id").primaryKey(),
+  chaletId: integer("chalet_id").notNull(),
+  ownerId: text("owner_id").notNull(),
+  dateStr: text("date_str").notNull(),
+  periodMorning: boolean("period_morning").notNull().default(false),
+  periodEvening: boolean("period_evening").notNull().default(false),
+  periodFullDay: boolean("period_full_day").notNull().default(false),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ChaletAvailability = typeof chaletAvailabilityTable.$inferSelect;
+
+/* ── Owner Subscriptions ───────────────────────────────────── */
+export const ownerSubscriptionsTable = pgTable("owner_subscriptions", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull().unique(),
+  plan: text("plan").notNull().default("monthly"),
+  status: text("status").notNull().default("active"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  paymentStatus: text("payment_status").notNull().default("paid"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OwnerSubscription = typeof ownerSubscriptionsTable.$inferSelect;
