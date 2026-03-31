@@ -8,6 +8,7 @@ import {
   amenitiesCatalogTable,
   externalServicesTable,
   chaletCategoriesTable,
+  serviceCategoriesTable,
   siteSettingsTable,
   serviceProviderSubmissionsTable,
   serviceProvidersTable,
@@ -361,6 +362,47 @@ router.delete("/categories/:id", async (req, res) => {
   return res.json({ ok: true });
 });
 
+/* ── Service Categories ──────────────────────── */
+
+router.get("/service-categories", async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(serviceCategoriesTable)
+    .orderBy(serviceCategoriesTable.sortOrder, serviceCategoriesTable.createdAt);
+  return res.json(rows);
+});
+
+router.post("/service-categories", async (req, res) => {
+  const body = z.object({
+    key: z.string().min(1),
+    labelAr: z.string().min(1),
+    emoji: z.string().default("✨"),
+    sortOrder: z.number().int().default(0),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const [row] = await db.insert(serviceCategoriesTable).values(body.data).returning();
+  return res.status(201).json(row);
+});
+
+router.patch("/service-categories/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({
+    labelAr: z.string().min(1).optional(),
+    emoji: z.string().optional(),
+    isActive: z.boolean().optional(),
+    sortOrder: z.number().int().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  await db.update(serviceCategoriesTable).set(body.data).where(eq(serviceCategoriesTable.id, id));
+  return res.json({ ok: true });
+});
+
+router.delete("/service-categories/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  await db.delete(serviceCategoriesTable).where(eq(serviceCategoriesTable.id, id));
+  return res.json({ ok: true });
+});
+
 /* ── Site Settings ───────────────────────────── */
 
 router.get("/settings", async (_req, res) => {
@@ -409,6 +451,10 @@ router.patch("/service-submissions/:id/status", async (req, res) => {
         whatsappNumber: submission.whatsappNumber,
         logoUrl: submission.logoUrl ?? undefined,
         galleryPhotos: submission.galleryPhotos ?? [],
+        videoUrl: submission.videoUrl ?? undefined,
+        yearsOfExperience: submission.yearsOfExperience ?? undefined,
+        coverageTags: submission.coverageTags ?? [],
+        customFeatureTags: submission.customFeatureTags ?? [],
         isActive: true,
       }).onConflictDoNothing();
     }

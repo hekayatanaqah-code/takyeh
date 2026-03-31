@@ -48,6 +48,10 @@ router.post("/submit", requireAuth, async (req: any, res) => {
     whatsappNumber: z.string().min(9),
     logoUrl: z.string().url().optional(),
     galleryPhotos: z.array(z.string().url()).min(3, "يجب رفع 3 صور على الأقل"),
+    videoUrl: z.string().url().optional(),
+    yearsOfExperience: z.number().int().min(0).optional(),
+    coverageTags: z.array(z.string()).default([]),
+    customFeatureTags: z.array(z.string()).default([]),
   }).safeParse(req.body);
 
   if (!body.success) {

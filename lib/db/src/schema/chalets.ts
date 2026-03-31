@@ -163,6 +163,18 @@ export const siteSettingsTable = pgTable("site_settings", {
 });
 export type SiteSetting = typeof siteSettingsTable.$inferSelect;
 
+/* ── Service Categories (admin-managed) ────────────────────── */
+export const serviceCategoriesTable = pgTable("service_categories", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  labelAr: text("label_ar").notNull(),
+  emoji: text("emoji").notNull().default("✨"),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ServiceCategory = typeof serviceCategoriesTable.$inferSelect;
+
 /* ── Service Provider Submissions ──────────────────────────── */
 export const serviceProviderSubmissionsTable = pgTable("service_provider_submissions", {
   id: serial("id").primaryKey(),
@@ -174,6 +186,10 @@ export const serviceProviderSubmissionsTable = pgTable("service_provider_submiss
   whatsappNumber: text("whatsapp_number").notNull(),
   logoUrl: text("logo_url"),
   galleryPhotos: text("gallery_photos").array().notNull().default([]),
+  videoUrl: text("video_url"),
+  yearsOfExperience: integer("years_of_experience"),
+  coverageTags: text("coverage_tags").array().notNull().default([]),
+  customFeatureTags: text("custom_feature_tags").array().notNull().default([]),
   status: submissionStatusEnum("status").notNull().default("pending"),
   adminNote: text("admin_note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -190,6 +206,10 @@ export const serviceProvidersTable = pgTable("service_providers", {
   whatsappNumber: text("whatsapp_number").notNull(),
   logoUrl: text("logo_url"),
   galleryPhotos: text("gallery_photos").array().notNull().default([]),
+  videoUrl: text("video_url"),
+  yearsOfExperience: integer("years_of_experience"),
+  coverageTags: text("coverage_tags").array().notNull().default([]),
+  customFeatureTags: text("custom_feature_tags").array().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

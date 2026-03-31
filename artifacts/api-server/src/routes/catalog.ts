@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { citiesCatalogTable, amenitiesCatalogTable, districtsCatalogTable, chaletCategoriesTable, siteSettingsTable } from "@workspace/db/schema";
+import { citiesCatalogTable, amenitiesCatalogTable, districtsCatalogTable, chaletCategoriesTable, serviceCategoriesTable, siteSettingsTable } from "@workspace/db/schema";
 import { eq, inArray } from "drizzle-orm";
 
 const router = Router();
@@ -39,6 +39,14 @@ router.get("/categories", async (_req, res) => {
     .select()
     .from(chaletCategoriesTable)
     .orderBy(chaletCategoriesTable.createdAt);
+  return res.json(rows.filter((r) => r.isActive));
+});
+
+router.get("/service-categories", async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(serviceCategoriesTable)
+    .orderBy(serviceCategoriesTable.sortOrder, serviceCategoriesTable.createdAt);
   return res.json(rows.filter((r) => r.isActive));
 });
 
