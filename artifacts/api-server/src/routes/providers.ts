@@ -4,7 +4,7 @@ import {
   serviceProviderSubmissionsTable,
   serviceProvidersTable,
 } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 
 const router = Router();
@@ -17,11 +17,16 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 /* ── Public: list approved providers ─────────────── */
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
+  const category = typeof req.query.category === "string" ? req.query.category : undefined;
+  const conditions = [eq(serviceProvidersTable.isActive, true)] as ReturnType<typeof eq>[];
+  if (category && category !== "all") {
+    conditions.push(eq(serviceProvidersTable.category, category));
+  }
   const rows = await db
     .select()
     .from(serviceProvidersTable)
-    .where(eq(serviceProvidersTable.isActive, true))
+    .where(and(...conditions))
     .orderBy(serviceProvidersTable.createdAt);
   return res.json(rows.reverse());
 });

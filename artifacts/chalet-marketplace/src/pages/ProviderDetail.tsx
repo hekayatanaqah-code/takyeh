@@ -2,23 +2,12 @@ import { useRoute, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Phone, MapPin, ArrowRight, Loader2, ChevronLeft, ChevronRight, Star } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-const CATEGORY_LABELS: Record<string, { label: string; emoji: string }> = {
-  bounce_houses:       { label: "نطيطات",       emoji: "🎪" },
-  ice_cream:           { label: "آيس كريم",     emoji: "🍦" },
-  productive_families: { label: "أسر منتجة",   emoji: "🎀" },
-  catering:            { label: "تموين وضيافة", emoji: "🍽️" },
-  photography:         { label: "تصوير",        emoji: "📸" },
-  decoration:          { label: "ديكور وتزيين", emoji: "🎊" },
-  entertainment:       { label: "ترفيه وأناشيد", emoji: "🎶" },
-  other:               { label: "خدمات أخرى",  emoji: "✨" },
-};
 
 interface ServiceProvider {
   id: number;
@@ -31,6 +20,12 @@ interface ServiceProvider {
   galleryPhotos: string[];
   isActive: boolean;
   createdAt: string;
+}
+
+interface ServiceCatItem {
+  key: string;
+  labelAr: string;
+  emoji: string;
 }
 
 export default function ProviderDetail() {
@@ -46,6 +41,24 @@ export default function ProviderDetail() {
       return r.json();
     },
   });
+
+  const { data: apiCategories = [] } = useQuery<ServiceCatItem[]>({
+    queryKey: ["catalog", "service-categories"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/service-categories`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 30 * 1000,
+  });
+
+  const categoryLabels = useMemo(() => {
+    const map: Record<string, { label: string; emoji: string }> = {};
+    for (const c of apiCategories) {
+      map[c.key] = { label: c.labelAr, emoji: c.emoji };
+    }
+    return map;
+  }, [apiCategories]);
 
   if (isLoading) {
     return (
@@ -73,7 +86,7 @@ export default function ProviderDetail() {
     );
   }
 
-  const cat = CATEGORY_LABELS[provider.category] ?? { label: provider.category, emoji: "✨" };
+  const cat = categoryLabels[provider.category] ?? { label: provider.category, emoji: "✨" };
   const photos = provider.galleryPhotos ?? [];
   const allPhotos = provider.logoUrl ? [provider.logoUrl, ...photos] : photos;
   const currentPhoto = allPhotos[photoIdx] ?? null;
