@@ -91,9 +91,11 @@ export default function ChaletDetail() {
   const seasonalDisclaimer = Boolean((chalet as any).seasonalDisclaimer ?? true);
   const fmtPrice = (v: string | null | undefined) =>
     v && Number(v) > 0 ? Number(v).toLocaleString("ar-SA") : null;
-  const weekdayFmt = fmtPrice(priceWeekdayRaw);
+  // Use pricePerNight as fallback when weekday/weekend aren't set
+  const legacyFmt = chalet.pricePerNight > 0 ? chalet.pricePerNight.toLocaleString("ar-SA") : null;
+  const weekdayFmt = fmtPrice(priceWeekdayRaw) ?? legacyFmt;
   const weekendFmt = fmtPrice(priceWeekendRaw);
-  const hasDayPrices = weekdayFmt || weekendFmt;
+  const hasDayPrices = true; // Always show the price box — use fallbacks as needed
   const locationLabel = district ? `حي ${district}، ${chalet.location}` : chalet.location;
   const periodLine = selectedPeriod ? ` — الفترة: ${PERIOD_LABEL[selectedPeriod]}` : "";
   const whatsappMsg = `أهلاً، أود الاستفسار عن حجز شاليه ${chalet.nameAr} في ${chalet.location}${periodLine}.`;
@@ -105,13 +107,33 @@ export default function ChaletDetail() {
     ...(chalet.slotFullDay !== false ? ["full_day" as Period] : []),
   ];
 
-  const getPeriodPrice = (p: Period): string | null => {
+  /**
+   * Returns the best price string for a period button.
+   * Priority: exact slot price → weekday fallback → pricePerNight fallback → null
+   */
+  const getPeriodPrice = (p: Period): { text: string; exact: boolean } | null => {
     const c = chalet!;
     const raw =
       p === "morning" ? c.priceMorning :
       p === "evening" ? c.priceEvening :
       c.priceFullDay;
-    return raw && Number(raw) > 0 ? `${Number(raw).toLocaleString("ar-SA")} ر.س` : null;
+
+    if (raw && Number(raw) > 0) {
+      return { text: `${Number(raw).toLocaleString("ar-SA")} ر.س`, exact: true };
+    }
+
+    // Fallback: use weekday starting price
+    const weekdayRaw = (c as any).priceWeekday as string | null | undefined;
+    if (weekdayRaw && Number(weekdayRaw) > 0) {
+      return { text: `يبدأ من ${Number(weekdayRaw).toLocaleString("ar-SA")} ر.س`, exact: false };
+    }
+
+    // Ultimate fallback: pricePerNight (legacy field)
+    if (c.pricePerNight && c.pricePerNight > 0) {
+      return { text: `يبدأ من ${c.pricePerNight.toLocaleString("ar-SA")} ر.س`, exact: false };
+    }
+
+    return null;
   };
 
   /* ── Coordinate extraction from mapsUrl ──────────────── */
@@ -246,38 +268,48 @@ export default function ChaletDetail() {
                   </div>
                   <div>
                     <p className="font-bold text-sm text-foreground">تواصل مع المالك</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {hasDayPrices ? "الأسعار أدناه — ابدأ بالتواصل للحجز" : "الأسعار والتفاصيل عند التواصل المباشر"}
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">الأسعار أدناه — ابدأ بالتواصل للحجز</p>
                   </div>
                 </div>
 
-                {/* ── Price Box ── */}
-                {hasDayPrices && (
-                  <div className="rounded-xl bg-primary/5 border border-primary/15 px-4 py-3 mb-4 space-y-2">
-                    {weekdayFmt && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">📅 وسط الأسبوع</span>
-                        <span className="text-sm font-bold">
-                          يبدأ من <span className="text-primary text-base">{weekdayFmt}</span> ر.س
-                        </span>
-                      </div>
-                    )}
-                    {weekendFmt && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">🎉 نهاية الأسبوع</span>
-                        <span className="text-sm font-bold">
-                          يبدأ من <span className="text-primary text-base">{weekendFmt}</span> ر.س
-                        </span>
-                      </div>
-                    )}
-                    {seasonalDisclaimer && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 pt-2 border-t border-amber-200/50 dark:border-amber-700/30">
-                        ⚠️ تنبيه: الأسعار قد تختلف في المواسم والأعياد
-                      </p>
-                    )}
-                  </div>
-                )}
+                {/* ── Price Box ── always visible ── */}
+                <div className="rounded-xl bg-primary/5 border border-primary/20 px-4 py-3 mb-4 space-y-2.5">
+                  {weekdayFmt && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <span>📅</span> وسط الأسبوع
+                      </span>
+                      <span className="text-sm font-bold text-right">
+                        يبدأ من <span className="text-primary text-base">{weekdayFmt}</span>{" "}
+                        <span className="text-xs font-normal text-muted-foreground">ر.س</span>
+                      </span>
+                    </div>
+                  )}
+                  {weekendFmt ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <span>🎉</span> نهاية الأسبوع
+                      </span>
+                      <span className="text-sm font-bold text-right">
+                        يبدأ من <span className="text-primary text-base">{weekendFmt}</span>{" "}
+                        <span className="text-xs font-normal text-muted-foreground">ر.س</span>
+                      </span>
+                    </div>
+                  ) : weekdayFmt && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <span>🎉</span> نهاية الأسبوع
+                      </span>
+                      <span className="text-xs text-muted-foreground italic">يُحدَّد مع المالك</span>
+                    </div>
+                  )}
+                  {seasonalDisclaimer && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 pt-2 mt-1 border-t border-amber-200/60 dark:border-amber-700/30 flex items-center gap-1.5">
+                      <span>⚠️</span>
+                      <span>الأسعار قد تختلف في المواسم والأعياد</span>
+                    </p>
+                  )}
+                </div>
 
                 {/* Period selector */}
                 {slots.length > 0 && (
@@ -285,22 +317,29 @@ export default function ChaletDetail() {
                     <p className="text-xs font-semibold text-muted-foreground mb-2">اختر الفترة</p>
                     <div className="flex gap-2 flex-wrap">
                       {slots.map((p) => {
-                        const price = getPeriodPrice(p);
+                        const priceInfo = getPeriodPrice(p);
                         const active = selectedPeriod === p;
                         return (
                           <button
                             key={p}
                             type="button"
                             onClick={() => setSelectedPeriod(active ? null : p)}
-                            className={`flex flex-col items-center px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
+                            className={`flex flex-col items-center px-3 py-2.5 rounded-xl border text-xs font-medium transition-all min-w-[90px] ${
                               active
                                 ? "border-primary bg-primary/10 text-primary"
                                 : "border-border bg-secondary/50 text-foreground hover:border-primary/50"
                             }`}
                           >
-                            <span>{PERIOD_LABEL[p]}</span>
-                            {price && <span className={`mt-0.5 font-bold ${active ? "text-primary" : "text-muted-foreground"}`}>{price}</span>}
-                            {!price && <span className="mt-0.5 text-muted-foreground">بالتواصل</span>}
+                            <span className="text-sm">{PERIOD_LABEL[p]}</span>
+                            {priceInfo ? (
+                              <span className={`mt-1 font-bold text-xs leading-tight text-center ${
+                                active ? "text-primary" : priceInfo.exact ? "text-foreground" : "text-muted-foreground"
+                              }`}>
+                                {priceInfo.text}
+                              </span>
+                            ) : (
+                              <span className="mt-1 text-xs text-muted-foreground/60">سعر عند التواصل</span>
+                            )}
                           </button>
                         );
                       })}

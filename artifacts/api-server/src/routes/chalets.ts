@@ -61,6 +61,15 @@ router.get("/", async (req, res) => {
     }),
     propertyType: row.propertyType ?? null,
     sections: row.sections ?? null,
+    priceMorning: row.priceMorning ?? null,
+    priceEvening: row.priceEvening ?? null,
+    priceFullDay: row.priceFullDay ?? null,
+    slotMorning: row.slotMorning ?? true,
+    slotEvening: row.slotEvening ?? true,
+    slotFullDay: row.slotFullDay ?? true,
+    priceWeekday: row.priceWeekday ?? null,
+    priceWeekend: row.priceWeekend ?? null,
+    seasonalDisclaimer: row.seasonalDisclaimer ?? true,
   }));
 
   res.json(data);
@@ -107,6 +116,15 @@ router.get("/:id", async (req, res) => {
     }),
     propertyType: row.propertyType ?? null,
     sections: row.sections ?? null,
+    priceMorning: row.priceMorning ?? null,
+    priceEvening: row.priceEvening ?? null,
+    priceFullDay: row.priceFullDay ?? null,
+    slotMorning: row.slotMorning ?? true,
+    slotEvening: row.slotEvening ?? true,
+    slotFullDay: row.slotFullDay ?? true,
+    priceWeekday: row.priceWeekday ?? null,
+    priceWeekend: row.priceWeekend ?? null,
+    seasonalDisclaimer: row.seasonalDisclaimer ?? true,
   };
 
   res.json(data);
