@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { formatDualDate } from "@/lib/hijri";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, ExternalLink, Instagram, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, ExternalLink, Instagram, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -1462,6 +1462,370 @@ function CategoriesTab() {
   );
 }
 
+/* ── Service Categories Tab ───────────────────── */
+interface ServiceCat {
+  id: number;
+  key: string;
+  labelAr: string;
+  emoji: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+function ServiceCategoriesTab() {
+  const qc = useQueryClient();
+
+  const [items, setItems] = useState<ServiceCat[]>([]);
+  const [isDirtyOrder, setIsDirtyOrder] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
+
+  const [newForm, setNewForm] = useState({ key: "", labelAr: "", emoji: "✨" });
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ labelAr: "", emoji: "" });
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleteLabel, setDeleteLabel] = useState("");
+  const [deleteIsOther, setDeleteIsOther] = useState(false);
+
+  const dragSrc = useRef<number | null>(null);
+
+  const { data: catData, isLoading } = useQuery<ServiceCat[]>({
+    queryKey: ["admin", "service-categories"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/service-categories");
+      if (!r.ok) throw new Error("فشل التحميل");
+      return r.json();
+    },
+  });
+
+  useEffect(() => {
+    if (catData) { setItems(catData); setIsDirtyOrder(false); }
+  }, [catData]);
+
+  const addCategory = useMutation({
+    mutationFn: async () => {
+      const r = await apiFetch("/admin/service-categories", {
+        method: "POST",
+        body: JSON.stringify({
+          key: newForm.key.trim().toLowerCase().replace(/\s+/g, "_"),
+          labelAr: newForm.labelAr.trim(),
+          emoji: newForm.emoji.trim() || "✨",
+          sortOrder: items.length,
+        }),
+      });
+      if (!r.ok) throw new Error("فشل الإضافة");
+      return r.json();
+    },
+    onSuccess: () => {
+      setNewForm({ key: "", labelAr: "", emoji: "✨" });
+      qc.invalidateQueries({ queryKey: ["admin", "service-categories"] });
+      qc.invalidateQueries({ queryKey: ["catalog", "service-categories"] });
+    },
+  });
+
+  const patchCategory = useMutation({
+    mutationFn: async ({ id, patch }: { id: number; patch: Partial<ServiceCat> }) => {
+      const r = await apiFetch(`/admin/service-categories/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
+      if (!r.ok) throw new Error("فشل التحديث");
+    },
+    onSuccess: () => {
+      setEditId(null);
+      qc.invalidateQueries({ queryKey: ["admin", "service-categories"] });
+      qc.invalidateQueries({ queryKey: ["catalog", "service-categories"] });
+    },
+  });
+
+  const deleteCategory = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await apiFetch(`/admin/service-categories/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error("فشل الحذف");
+    },
+    onSuccess: () => {
+      setDeleteId(null);
+      qc.invalidateQueries({ queryKey: ["admin", "service-categories"] });
+      qc.invalidateQueries({ queryKey: ["catalog", "service-categories"] });
+    },
+  });
+
+  const saveOrder = async () => {
+    setSavingOrder(true);
+    try {
+      await apiFetch("/admin/service-categories/reorder", {
+        method: "PATCH",
+        body: JSON.stringify(items.map((c, i) => ({ id: c.id, sortOrder: i }))),
+      });
+      setIsDirtyOrder(false);
+      qc.invalidateQueries({ queryKey: ["admin", "service-categories"] });
+      qc.invalidateQueries({ queryKey: ["catalog", "service-categories"] });
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
+  const handleToggle = (cat: ServiceCat) => {
+    setItems((prev) => prev.map((c) => c.id === cat.id ? { ...c, isActive: !c.isActive } : c));
+    patchCategory.mutate({ id: cat.id, patch: { isActive: !cat.isActive } });
+  };
+
+  const startEdit = (cat: ServiceCat) => {
+    setEditId(cat.id);
+    setEditForm({ labelAr: cat.labelAr, emoji: cat.emoji });
+  };
+
+  const confirmEdit = () => {
+    if (!editId) return;
+    patchCategory.mutate({ id: editId, patch: { labelAr: editForm.labelAr, emoji: editForm.emoji } });
+  };
+
+  /* ── Drag-and-drop ── */
+  const onDragStart = (idx: number) => { dragSrc.current = idx; };
+  const onDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    const src = dragSrc.current;
+    if (src === null || src === idx) return;
+    setItems((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(src, 1);
+      next.splice(idx, 0, moved);
+      dragSrc.current = idx;
+      return next;
+    });
+    setIsDirtyOrder(true);
+  };
+  const onDragEnd = () => { dragSrc.current = null; };
+
+  return (
+    <div className="space-y-6" dir="rtl">
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-white">فئات الخدمات</h2>
+          <p className="text-slate-400 text-sm mt-0.5">تُعرض في قائمة «فئة الخدمة» عند تسجيل مزود خدمة</p>
+        </div>
+        {isDirtyOrder && (
+          <Button
+            onClick={saveOrder}
+            disabled={savingOrder}
+            className="bg-amber-500 hover:bg-amber-600 text-black font-bold"
+          >
+            {savingOrder ? <Loader2 className="w-4 h-4 animate-spin" /> : "💾 حفظ الترتيب"}
+          </Button>
+        )}
+      </div>
+
+      {/* ── Add Form ── */}
+      <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+        <h3 className="text-slate-200 font-semibold mb-4 flex items-center gap-2">
+          <Plus className="w-4 h-4 text-amber-400" />
+          إضافة فئة جديدة
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="space-y-1">
+            <label className="text-slate-400 text-xs font-medium">الإيموجي</label>
+            <Input
+              value={newForm.emoji}
+              onChange={(e) => setNewForm((f) => ({ ...f, emoji: e.target.value }))}
+              placeholder="✨"
+              className="bg-slate-900 border-slate-600 text-white text-center text-xl w-full"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-slate-400 text-xs font-medium">الاسم بالعربية *</label>
+            <Input
+              value={newForm.labelAr}
+              onChange={(e) => setNewForm((f) => ({ ...f, labelAr: e.target.value }))}
+              placeholder="مثال: تصوير، ديكور..."
+              className="bg-slate-900 border-slate-600 text-white placeholder-slate-500"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-slate-400 text-xs font-medium">المفتاح (بالإنجليزية) *</label>
+            <Input
+              value={newForm.key}
+              onChange={(e) => setNewForm((f) => ({ ...f, key: e.target.value }))}
+              placeholder="مثال: photography"
+              className="bg-slate-900 border-slate-600 text-white placeholder-slate-500 font-mono"
+              dir="ltr"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end mt-4">
+          <Button
+            onClick={() => addCategory.mutate()}
+            disabled={!newForm.key.trim() || !newForm.labelAr.trim() || addCategory.isPending}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-semibold"
+          >
+            {addCategory.isPending ? <Loader2 className="w-4 h-4 animate-spin me-1.5" /> : <Plus className="w-4 h-4 me-1.5" />}
+            إضافة الفئة
+          </Button>
+        </div>
+        {addCategory.isError && (
+          <p className="text-red-400 text-sm mt-2">فشل الإضافة — قد يكون المفتاح مستخدماً بالفعل.</p>
+        )}
+      </div>
+
+      {/* ── Hint ── */}
+      <div className="bg-blue-950/40 border border-blue-800/40 rounded-xl px-4 py-3 text-blue-300 text-sm flex items-start gap-2.5">
+        <GripVertical className="w-4 h-4 shrink-0 mt-0.5" />
+        <span>اسحب الصف من مقبض <strong>⠿</strong> لإعادة الترتيب، ثم اضغط <strong>«حفظ الترتيب»</strong>. حذف فئة سينقل مزوديها تلقائياً إلى «أخرى».</span>
+      </div>
+
+      {/* ── List ── */}
+      {isLoading ? (
+        <div className="flex justify-center py-10">
+          <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">
+          <Tag className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p>لا توجد فئات بعد — أضف أولى الفئات أعلاه</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map((cat, idx) => (
+            <div
+              key={cat.id}
+              draggable
+              onDragStart={() => onDragStart(idx)}
+              onDragOver={(e) => onDragOver(e, idx)}
+              onDragEnd={onDragEnd}
+              className={`bg-slate-800 border rounded-2xl transition-all ${
+                cat.isActive
+                  ? "border-slate-700 hover:border-amber-500/40"
+                  : "border-slate-700/50 opacity-60"
+              }`}
+            >
+              {editId === cat.id ? (
+                /* ── Edit Row ── */
+                <div className="p-4 flex items-center gap-3 flex-wrap">
+                  <GripVertical className="w-5 h-5 text-slate-600 shrink-0 cursor-grab" />
+                  <Input
+                    value={editForm.emoji}
+                    onChange={(e) => setEditForm((f) => ({ ...f, emoji: e.target.value }))}
+                    className="w-16 text-center text-xl bg-slate-900 border-slate-600 text-white"
+                  />
+                  <Input
+                    value={editForm.labelAr}
+                    onChange={(e) => setEditForm((f) => ({ ...f, labelAr: e.target.value }))}
+                    className="flex-1 min-w-[140px] bg-slate-900 border-slate-600 text-white"
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter") confirmEdit(); if (e.key === "Escape") setEditId(null); }}
+                  />
+                  <span className="font-mono text-xs text-slate-500 bg-slate-900/60 px-2 py-1 rounded border border-slate-700">{cat.key}</span>
+                  <Button
+                    size="sm"
+                    onClick={confirmEdit}
+                    disabled={patchCategory.isPending || !editForm.labelAr.trim()}
+                    className="bg-green-700 hover:bg-green-600 text-white"
+                  >
+                    {patchCategory.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditId(null)} className="text-slate-400 hover:text-white">
+                    إلغاء
+                  </Button>
+                </div>
+              ) : (
+                /* ── View Row ── */
+                <div className="p-4 flex items-center gap-3">
+                  {/* Drag handle */}
+                  <div
+                    className="cursor-grab active:cursor-grabbing text-slate-600 hover:text-slate-400 transition-colors shrink-0"
+                    title="اسحب لإعادة الترتيب"
+                  >
+                    <GripVertical className="w-5 h-5" />
+                  </div>
+
+                  {/* Emoji */}
+                  <span className="text-2xl shrink-0 w-9 text-center leading-none">{cat.emoji}</span>
+
+                  {/* Label + key */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-semibold">{cat.labelAr}</p>
+                    <p className="text-slate-500 text-xs font-mono">{cat.key}</p>
+                  </div>
+
+                  {/* Active badge */}
+                  <button
+                    onClick={() => handleToggle(cat)}
+                    className={`shrink-0 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-semibold transition-all ${
+                      cat.isActive
+                        ? "bg-green-900/50 text-green-400 hover:bg-green-900 border border-green-800/40"
+                        : "bg-slate-700 text-slate-400 hover:bg-slate-600 border border-slate-600"
+                    }`}
+                    title={cat.isActive ? "انقر لتعطيل الفئة" : "انقر لتفعيل الفئة"}
+                  >
+                    {cat.isActive
+                      ? <><ToggleRight className="w-3.5 h-3.5" />مفعّل</>
+                      : <><ToggleLeft className="w-3.5 h-3.5" />مخفي</>
+                    }
+                  </button>
+
+                  {/* Edit */}
+                  <Button
+                    size="sm" variant="ghost"
+                    onClick={() => startEdit(cat)}
+                    className="text-slate-400 hover:text-amber-400 shrink-0 h-8 w-8 p-0"
+                    title="تعديل"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </Button>
+
+                  {/* Delete */}
+                  <Button
+                    size="sm" variant="ghost"
+                    onClick={() => {
+                      setDeleteId(cat.id);
+                      setDeleteLabel(cat.labelAr);
+                      setDeleteIsOther(cat.key === "other");
+                    }}
+                    className="text-slate-400 hover:text-red-400 shrink-0 h-8 w-8 p-0"
+                    title="حذف"
+                    disabled={cat.key === "other"}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Delete Confirmation ── */}
+      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent className="bg-slate-900 border-slate-700 text-white" dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-right flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+              تأكيد حذف الفئة
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-300 text-right leading-relaxed">
+              سيتم حذف الفئة <strong className="text-white">«{deleteLabel}»</strong> نهائياً.
+              {!deleteIsOther && (
+                <span className="block mt-2 p-3 bg-amber-950/50 border border-amber-700/40 rounded-xl text-amber-300 text-sm">
+                  ⚠️ جميع مزودي الخدمة المسجلين ضمن هذه الفئة سيُنقلون تلقائياً إلى فئة <strong>«أخرى»</strong>.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700">إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => deleteId !== null && deleteCategory.mutate(deleteId)}
+            >
+              {deleteCategory.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : "حذف نهائياً"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 /* ── Site Settings Tab ────────────────────────── */
 function SettingsTab() {
   const qc = useQueryClient();
@@ -2049,15 +2413,16 @@ function ProviderSubmissionsTab() {
 
 /* ── Main Admin Page ──────────────────────────── */
 const TABS = [
-  { id: "submissions",        label: "الطلبات",              icon: Settings },
-  { id: "chaletVerify",       label: "التوثيق",               icon: ShieldCheck },
-  { id: "services",           label: "خدمات المناسبات",      icon: Wrench },
-  { id: "providerSubmissions", label: "طلبات مزودي الخدمات", icon: Star },
-  { id: "locations",          label: "المدن والأحياء",       icon: Building2 },
-  { id: "amenities",          label: "المرافق",               icon: Tag },
-  { id: "categories",         label: "الفئات",                icon: Tag },
-  { id: "owners",             label: "الملاك",                icon: Users },
-  { id: "siteSettings",       label: "إعدادات الموقع",       icon: Settings },
+  { id: "submissions",         label: "الطلبات",               icon: Settings },
+  { id: "chaletVerify",        label: "التوثيق",                icon: ShieldCheck },
+  { id: "services",            label: "خدمات المناسبات",       icon: Wrench },
+  { id: "providerSubmissions", label: "طلبات مزودي الخدمات",  icon: Star },
+  { id: "serviceCategories",   label: "فئات الخدمات",          icon: Tag },
+  { id: "locations",           label: "المدن والأحياء",        icon: Building2 },
+  { id: "amenities",           label: "المرافق",                icon: Tag },
+  { id: "categories",          label: "فئات الشاليهات",        icon: Tag },
+  { id: "owners",              label: "الملاك",                 icon: Users },
+  { id: "siteSettings",        label: "إعدادات الموقع",        icon: Settings },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
@@ -2192,6 +2557,7 @@ export default function Admin() {
         {activeTab === "chaletVerify"        && <ChaletsVerifyTab />}
         {activeTab === "services"            && <ServicesTab />}
         {activeTab === "providerSubmissions" && <ProviderSubmissionsTab />}
+        {activeTab === "serviceCategories"   && <ServiceCategoriesTab />}
         {activeTab === "locations"           && <LocationsTab />}
         {activeTab === "amenities"           && <AmenitiesTab />}
         {activeTab === "categories"          && <CategoriesTab />}

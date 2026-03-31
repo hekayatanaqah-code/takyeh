@@ -13,7 +13,7 @@ import {
   serviceProviderSubmissionsTable,
   serviceProvidersTable,
 } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
@@ -384,6 +384,17 @@ router.post("/service-categories", async (req, res) => {
   return res.status(201).json(row);
 });
 
+router.patch("/service-categories/reorder", async (req, res) => {
+  const body = z.array(z.object({ id: z.number().int(), sortOrder: z.number().int() })).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  await Promise.all(
+    body.data.map(({ id, sortOrder }) =>
+      db.update(serviceCategoriesTable).set({ sortOrder }).where(eq(serviceCategoriesTable.id, id))
+    )
+  );
+  return res.json({ ok: true });
+});
+
 router.patch("/service-categories/:id", async (req, res) => {
   const id = Number(req.params.id);
   const body = z.object({
@@ -399,6 +410,21 @@ router.patch("/service-categories/:id", async (req, res) => {
 
 router.delete("/service-categories/:id", async (req, res) => {
   const id = Number(req.params.id);
+  const [cat] = await db
+    .select({ key: serviceCategoriesTable.key })
+    .from(serviceCategoriesTable)
+    .where(eq(serviceCategoriesTable.id, id))
+    .limit(1);
+  if (cat && cat.key !== "other") {
+    await db
+      .update(serviceProviderSubmissionsTable)
+      .set({ category: "other" })
+      .where(eq(serviceProviderSubmissionsTable.category, cat.key));
+    await db
+      .update(serviceProvidersTable)
+      .set({ category: "other" })
+      .where(eq(serviceProvidersTable.category, cat.key));
+  }
   await db.delete(serviceCategoriesTable).where(eq(serviceCategoriesTable.id, id));
   return res.json({ ok: true });
 });
