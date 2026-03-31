@@ -10,13 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
   User, LogOut, Plus, MapPin, Calendar, Clock, CheckCircle,
   XCircle, Home, BookOpen, Trash2, Building2, Globe, Phone, AlertTriangle,
   RotateCcw, Star, ChevronLeft, ChevronRight, BarChart2, CreditCard,
-  TrendingUp, Sunrise, Moon, Sun,
+  TrendingUp, Sunrise, Moon, Sun, Lock, Zap,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -59,8 +59,122 @@ interface ChaletAvailability {
   notes: string | null;
 }
 
-/* ── Chalets Tab ─────────────────────────────── */
+/* ── Upgrade Popup + Chalets Tab ─────────────── */
+const TIER_PLANS = [
+  {
+    key: "chalet_basic",
+    name: "أساسي - شاليهات",
+    price: "99 ر.س / شهر",
+    chaletLimit: 1,
+    serviceLimit: 0,
+    features: ["شاليه واحد", "تقارير أساسية", "دعم عبر واتساب"],
+    highlight: false,
+  },
+  {
+    key: "chalet_pro",
+    name: "احترافي - شاليهات",
+    price: "199 ر.س / شهر",
+    chaletLimit: 5,
+    serviceLimit: 0,
+    features: ["حتى 5 شاليهات", "تقارير تفصيلية", "أولوية في الدعم"],
+    highlight: true,
+  },
+  {
+    key: "chalet_unlimited",
+    name: "غير محدود - شاليهات",
+    price: "349 ر.س / شهر",
+    chaletLimit: 999,
+    serviceLimit: 0,
+    features: ["شاليهات غير محدودة", "تقارير شهرية واتساب", "مدير حساب خاص"],
+    highlight: false,
+  },
+  {
+    key: "bundle",
+    name: "باقة شاملة",
+    price: "499 ر.س / شهر",
+    chaletLimit: 999,
+    serviceLimit: 999,
+    features: ["شاليهات + خدمات غير محدودة", "تقارير متقدمة", "أولوية قصوى"],
+    highlight: false,
+  },
+];
+
+function UpgradePlanDialog({ open, onClose, context }: { open: boolean; onClose: () => void; context: "chalet" | "service" }) {
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold flex items-center gap-2">
+            <Zap className="w-5 h-5 text-primary" />
+            ترقية الخطة
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            {context === "chalet"
+              ? "لقد وصلت إلى الحد الأقصى من الشاليهات في خطتك الحالية. اختر خطة أعلى للاستمرار."
+              : "لقد وصلت إلى الحد الأقصى من الخدمات. اختر خطة أعلى للاستمرار."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+          {TIER_PLANS.map((plan) => (
+            <div
+              key={plan.key}
+              className={`rounded-2xl border p-4 flex flex-col gap-3 ${
+                plan.highlight
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border bg-card"
+              }`}
+            >
+              {plan.highlight && (
+                <span className="text-xs font-bold bg-primary text-primary-foreground px-2.5 py-0.5 rounded-full self-start">الأكثر طلباً</span>
+              )}
+              <div>
+                <p className="font-bold text-foreground text-sm">{plan.name}</p>
+                <p className="text-lg font-extrabold text-primary mt-0.5">{plan.price}</p>
+              </div>
+              <ul className="space-y-1.5">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Button
+                size="sm"
+                variant={plan.highlight ? "default" : "outline"}
+                className="mt-auto w-full rounded-xl"
+                onClick={() => {
+                  const msg = `أريد الترقية إلى خطة: ${plan.name} (${plan.price})`;
+                  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+                }}
+              >
+                اختر هذه الخطة
+              </Button>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground text-center mt-2">سيتم التواصل معك عبر واتساب لإتمام الاشتراك</p>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ChaletsTab({ submissions, isLoading }: { submissions: any[] | undefined; isLoading: boolean }) {
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
+  const { data: planLimits } = useQuery<{ plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number }>({
+    queryKey: ["owner", "plan-limits"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/plan-limits");
+      if (!r.ok) return { plan: "trial", chaletLimit: 1, chaletCount: 0, serviceLimit: 1 };
+      return r.json();
+    },
+  });
+
+  const atChaletLimit = planLimits
+    ? (submissions?.length ?? 0) >= planLimits.chaletLimit
+    : false;
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -89,6 +203,31 @@ function ChaletsTab({ submissions, isLoading }: { submissions: any[] | undefined
   }
   return (
     <div className="space-y-4">
+      {/* Plan limit banner */}
+      {planLimits && (
+        <div className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border ${
+          atChaletLimit ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/40" : "bg-muted/40 border-border"
+        }`}>
+          <div className="flex items-center gap-2 text-sm">
+            {atChaletLimit ? (
+              <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+            ) : (
+              <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
+            )}
+            <span className={atChaletLimit ? "text-amber-700 dark:text-amber-400 font-medium" : "text-muted-foreground"}>
+              {submissions.length} / {planLimits.chaletLimit === 999 ? "∞" : planLimits.chaletLimit} شاليه
+              {atChaletLimit ? " — وصلت الحد الأقصى" : ""}
+            </span>
+          </div>
+          {atChaletLimit && (
+            <Button size="sm" variant="default" className="rounded-xl shrink-0 text-xs h-8" onClick={() => setShowUpgrade(true)}>
+              <Zap className="w-3.5 h-3.5 me-1" />
+              ترقية الخطة
+            </Button>
+          )}
+        </div>
+      )}
+      <UpgradePlanDialog open={showUpgrade} onClose={() => setShowUpgrade(false)} context="chalet" />
       {submissions.map((sub: any, idx: number) => {
         const status = statusConfig[sub.status as keyof typeof statusConfig] ?? statusConfig.pending;
         return (
@@ -810,11 +949,23 @@ interface MonthReport {
 function ReportsTab() {
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedSubmissionId, setSelectedSubmissionId] = useState<string>("all");
+
+  const { data: mySubmissions = [] } = useQuery<any[]>({
+    queryKey: ["my-submissions-for-report"],
+    queryFn: async () => {
+      const r = await apiFetch("/submissions/mine");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
 
   const { data: report, isLoading } = useQuery<MonthReport>({
-    queryKey: ["owner", "reports", selectedMonth],
+    queryKey: ["owner", "reports", selectedMonth, selectedSubmissionId],
     queryFn: async () => {
-      const r = await apiFetch(`/owner/reports?month=${selectedMonth}`);
+      const params = new URLSearchParams({ month: selectedMonth });
+      if (selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
+      const r = await apiFetch(`/owner/reports?${params}`);
       if (!r.ok) throw new Error("failed");
       return r.json();
     },
@@ -910,19 +1061,51 @@ function ReportsTab() {
         </div>
       )}
 
-      {/* Month Selector */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-foreground">التقارير الشهرية</h2>
-        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {monthOptions.map((o) => (
-              <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Report Filters */}
+      <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+        <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+          <BarChart2 className="w-4 h-4 text-primary" />
+          فلاتر التقرير
+        </h2>
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Property filter */}
+          <div className="flex-1 space-y-1">
+            <label className="text-xs text-muted-foreground font-medium">العقار</label>
+            <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="كل العقارات" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل العقارات</SelectItem>
+                {mySubmissions.map((s: any) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {s.nameAr ?? `شاليه #${s.id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Month filter */}
+          <div className="flex-1 space-y-1">
+            <label className="text-xs text-muted-foreground font-medium">الشهر</label>
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="h-10">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((o) => (
+                  <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {selectedSubmissionId !== "all" && (
+          <p className="text-xs text-primary font-medium flex items-center gap-1">
+            <Building2 className="w-3.5 h-3.5" />
+            يعرض بيانات: {mySubmissions.find((s: any) => String(s.id) === selectedSubmissionId)?.nameAr ?? `شاليه #${selectedSubmissionId}`}
+          </p>
+        )}
       </div>
 
       {isLoading ? (
@@ -1015,8 +1198,19 @@ function ReportsTab() {
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<"chalets" | "services" | "calendar" | "reports">("chalets");
+  const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const { data: submissions, isLoading: submissionsLoading } = useGetMySubmissions();
+
+  const { data: planLimits } = useQuery<{ plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number }>({
+    queryKey: ["owner", "plan-limits"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/plan-limits");
+      if (!r.ok) return { plan: "trial", chaletLimit: 1, chaletCount: 0, serviceLimit: 1 };
+      return r.json();
+    },
+    enabled: isAuthenticated,
+  });
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) navigate("/");
@@ -1068,12 +1262,19 @@ export default function Dashboard() {
             <p className="text-muted-foreground mt-1">لوحة تحكمك الموحدة — الشاليهات والخدمات في مكان واحد</p>
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            <Link href="/add-chalet">
-              <Button variant="outline" className="rounded-xl font-semibold text-sm">
-                <Plus className="w-4 h-4 me-1.5" />
+            {planLimits && (submissions?.length ?? 0) >= planLimits.chaletLimit ? (
+              <Button variant="outline" className="rounded-xl font-semibold text-sm" onClick={() => setShowHeaderUpgrade("chalet")}>
+                <Lock className="w-4 h-4 me-1.5 text-amber-500" />
                 إضافة شاليه
               </Button>
-            </Link>
+            ) : (
+              <Link href="/add-chalet">
+                <Button variant="outline" className="rounded-xl font-semibold text-sm">
+                  <Plus className="w-4 h-4 me-1.5" />
+                  إضافة شاليه
+                </Button>
+              </Link>
+            )}
             <Link href="/add-service-provider">
               <Button className="rounded-xl font-semibold text-sm">
                 <Plus className="w-4 h-4 me-1.5" />
@@ -1086,6 +1287,11 @@ export default function Dashboard() {
             </Button>
           </div>
         </motion.div>
+        <UpgradePlanDialog
+          open={showHeaderUpgrade !== null}
+          onClose={() => setShowHeaderUpgrade(null)}
+          context={showHeaderUpgrade ?? "chalet"}
+        />
 
         {/* Tabs */}
         <div className="flex gap-1 mb-8 border-b border-border overflow-x-auto pb-0 -mx-1 px-1">

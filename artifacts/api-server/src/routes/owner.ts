@@ -171,11 +171,63 @@ router.delete("/availability/:id", async (req, res) => {
   return res.json({ ok: true });
 });
 
+/* ── Plan Limits ───────────────────────────────────────────── */
+
+router.get("/plan-limits", async (req, res) => {
+  const ownerId = req.user!.id;
+
+  const [sub] = await db
+    .select()
+    .from(ownerSubscriptionsTable)
+    .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+
+  const plan = sub?.plan ?? "trial";
+
+  const CHALET_LIMITS: Record<string, number> = {
+    trial: 1,
+    chalet_basic: 1,
+    chalet_pro: 5,
+    chalet_unlimited: Infinity,
+    service_basic: 0,
+    service_pro: Infinity,
+    bundle: Infinity,
+    monthly: 1,
+    yearly: 3,
+  };
+  const SERVICE_LIMITS: Record<string, number> = {
+    trial: 1,
+    chalet_basic: 0,
+    chalet_pro: 0,
+    chalet_unlimited: 0,
+    service_basic: 1,
+    service_pro: Infinity,
+    bundle: Infinity,
+    monthly: 1,
+    yearly: 3,
+  };
+
+  const chaletLimit = CHALET_LIMITS[plan] ?? 1;
+  const serviceLimit = SERVICE_LIMITS[plan] ?? 1;
+
+  const submissions = await db
+    .select({ id: chaletSubmissionsTable.id })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.ownerId, ownerId));
+
+  return res.json({
+    plan,
+    chaletLimit: chaletLimit === Infinity ? 999 : chaletLimit,
+    serviceLimit: serviceLimit === Infinity ? 999 : serviceLimit,
+    chaletCount: submissions.length,
+  });
+});
+
 /* ── Monthly Reports ───────────────────────────────────────── */
 
 router.get("/reports", async (req, res) => {
   const ownerId = req.user!.id;
   const month = (req.query.month as string) ?? new Date().toISOString().slice(0, 7);
+  const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
 
   if (!/^\d{4}-\d{2}$/.test(month)) {
     return res.status(400).json({ error: "تنسيق الشهر غير صحيح (YYYY-MM)" });
@@ -185,8 +237,11 @@ router.get("/reports", async (req, res) => {
     .select()
     .from(ownerBookingsTable)
     .where(eq(ownerBookingsTable.ownerId, ownerId));
+  const filteredBookings = submissionId
+    ? allBookings.filter((b) => b.submissionId === submissionId)
+    : allBookings;
 
-  const monthBookings = allBookings.filter((b) => b.bookingDate.startsWith(month));
+  const monthBookings = filteredBookings.filter((b) => b.bookingDate.startsWith(month));
 
   const totalBookings = monthBookings.length;
   const platformBookings = monthBookings.filter((b) => b.source === "platform");
