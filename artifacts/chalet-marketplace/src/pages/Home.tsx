@@ -42,7 +42,6 @@ export default function Home() {
   const [searchDistrict, setSearchDistrict] = useState<string>("");
   const [searchCategory, setSearchCategory] = useState<string>("");
   const [searchPeriod, setSearchPeriod]     = useState<string>("");
-  const [searchMaxPrice, setSearchMaxPrice] = useState<string>("");
   const [bookingDate, setBookingDate]       = useState<string>("");
   const [numDays, setNumDays]               = useState<number>(1);
 
@@ -84,7 +83,6 @@ export default function Home() {
     if (searchDistrict && searchDistrict !== "all") params.append("district", searchDistrict);
     if (searchCategory && searchCategory !== "all") params.append("category", searchCategory);
     if (searchPeriod && searchPeriod !== "all") params.append("period", searchPeriod);
-    if (searchMaxPrice) params.append("maxPrice", searchMaxPrice);
     if (bookingDate) {
       params.append("checkIn", bookingDate);
       params.append("checkOut", addDays(bookingDate, numDays));
@@ -258,24 +256,6 @@ export default function Home() {
                         <Plus className="w-3 h-3" />
                       </button>
                     </div>
-                  </div>
-                </div>
-
-                {/* Budget max price */}
-                <div className="flex-1 min-w-[130px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
-                  <span className="text-muted-foreground text-base shrink-0">💰</span>
-                  <div className="w-full">
-                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الميزانية (ريال)</p>
-                    <input
-                      type="number"
-                      min="0"
-                      step="50"
-                      placeholder="الكل"
-                      value={searchMaxPrice}
-                      onChange={(e) => setSearchMaxPrice(e.target.value)}
-                      className="w-full border-0 p-0 h-auto bg-transparent text-foreground font-medium text-sm focus:outline-none placeholder:text-muted-foreground/60"
-                      dir="rtl"
-                    />
                   </div>
                 </div>
 
