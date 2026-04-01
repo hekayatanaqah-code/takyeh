@@ -2303,15 +2303,35 @@ function buildYearlyReportHtml(
 
 /* ── HTML → PDF blob (html2canvas + jsPDF) ── */
 async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Blob; fileName: string }> {
-  const container = document.createElement("div");
-  container.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;background:#fff;z-index:-1;";
-  container.innerHTML = html;
-  document.body.appendChild(container);
+  // Use DOMParser to properly extract styles and body content from the full HTML doc
+  const parser = new DOMParser();
+  const parsedDoc = parser.parseFromString(html, "text/html");
+  const styles = Array.from(parsedDoc.querySelectorAll("style")).map((s) => s.textContent ?? "").join("\n");
+  const bodyContent = parsedDoc.body.innerHTML;
+
+  // Build a properly styled off-screen container with RTL direction
+  const wrapper = document.createElement("div");
+  wrapper.dir = "rtl";
+  // Use top:0 left:0 z-index:-9999 so the element is in the layout tree (html2canvas needs this)
+  wrapper.style.cssText = "position:fixed;top:0;left:0;width:794px;background:#fff;direction:rtl;z-index:-9999;pointer-events:none;";
+
+  const styleEl = document.createElement("style");
+  styleEl.textContent = styles;
+  wrapper.appendChild(styleEl);
+
+  const contentEl = document.createElement("div");
+  contentEl.innerHTML = bodyContent;
+  wrapper.appendChild(contentEl);
+
+  document.body.appendChild(wrapper);
 
   try {
-    await new Promise<void>((resolve) => setTimeout(resolve, 300));
+    // Give browser time to apply CSS and layout
+    await new Promise<void>((resolve) => setTimeout(resolve, 400));
 
-    const canvas = await html2canvas(container.querySelector(".page") as HTMLElement ?? container, {
+    const pageEl = wrapper.querySelector<HTMLElement>(".page") ?? wrapper;
+
+    const canvas = await html2canvas(pageEl, {
       scale: 2,
       useCORS: true,
       allowTaint: true,
@@ -2320,12 +2340,13 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
       logging: false,
     });
 
-    const imgData = canvas.toDataURL("image/jpeg", 0.95);
-    const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [794, canvas.height / 2] });
-    pdf.addImage(imgData, "JPEG", 0, 0, 794, canvas.height / 2);
+    const pageW = 794;
+    const pageH = Math.round(canvas.height / 2);
+    const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [pageW, pageH] });
+    pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, pageW, pageH);
     return { blob: pdf.output("blob"), fileName };
   } finally {
-    document.body.removeChild(container);
+    try { document.body.removeChild(wrapper); } catch { /* ignore */ }
   }
 }
 

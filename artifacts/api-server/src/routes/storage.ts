@@ -99,9 +99,10 @@ router.post(
 
     const isImage = file.mimetype.startsWith("image/");
     const isVideo = file.mimetype.startsWith("video/");
+    const isPdf = file.mimetype === "application/pdf" || file.originalname?.endsWith(".pdf");
 
-    if (!isImage && !isVideo) {
-      res.status(400).json({ error: "Only image or video files are accepted" });
+    if (!isImage && !isVideo && !isPdf) {
+      res.status(400).json({ error: "Only image, video, or PDF files are accepted" });
       return;
     }
 
@@ -110,7 +111,14 @@ router.post(
       let contentType: string;
       let ext: string;
 
-      if (isImage) {
+      if (isPdf) {
+        outputBuffer = file.buffer;
+        contentType = "application/pdf";
+        ext = "pdf";
+        const url = await objectStorageService.uploadBuffer(outputBuffer, contentType, ext);
+        res.json({ url });
+        return;
+      } else if (isImage) {
         if (file.size > MAX_IMAGE_SIZE_BYTES) {
           res.status(400).json({ error: "الصورة تتجاوز الحد الأقصى 2MB" });
           return;
