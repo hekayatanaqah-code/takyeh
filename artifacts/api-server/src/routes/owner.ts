@@ -783,7 +783,7 @@ router.get("/reports/archive", async (req, res) => {
 
 router.post("/reports/archive", async (req, res) => {
   const ownerId = req.user!.id;
-  const { reportType, reportPeriod, submissionId, propertyName, data } = req.body;
+  const { reportType, reportPeriod, submissionId, propertyName, pdfUrl, data } = req.body;
   if (!reportType || !reportPeriod) return res.status(400).json({ error: "Missing required fields" });
 
   const existing = await db
@@ -802,7 +802,7 @@ router.post("/reports/archive", async (req, res) => {
   if (existing.length > 0) {
     const [updated] = await db
       .update(ownerReportArchiveTable)
-      .set({ data, propertyName, createdAt: new Date() })
+      .set({ data, propertyName, pdfUrl: pdfUrl ?? null, createdAt: new Date() })
       .where(eq(ownerReportArchiveTable.id, existing[0].id))
       .returning();
     return res.json(updated);
@@ -810,7 +810,7 @@ router.post("/reports/archive", async (req, res) => {
 
   const [created] = await db
     .insert(ownerReportArchiveTable)
-    .values({ ownerId, reportType, reportPeriod, submissionId: submissionId ?? null, propertyName, data })
+    .values({ ownerId, reportType, reportPeriod, submissionId: submissionId ?? null, propertyName, pdfUrl: pdfUrl ?? null, data })
     .returning();
   return res.json(created);
 });

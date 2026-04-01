@@ -310,6 +310,7 @@ export const ownerReportArchiveTable = pgTable("owner_report_archive", {
   reportPeriod: text("report_period").notNull(),
   submissionId: integer("submission_id"),
   propertyName: text("property_name"),
+  pdfUrl: text("pdf_url"),
   data: jsonb("data").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

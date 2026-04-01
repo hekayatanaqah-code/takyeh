@@ -2371,9 +2371,11 @@ function ReportsTab() {
   const [showArchive, setShowArchive] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [archiveSaving, setArchiveSaving] = useState(false);
+  const [archiveSavedId, setArchiveSavedId] = useState<number | null>(null);
   const qc = useQueryClient();
 
-  useEffect(() => { setPdfUrl(null); }, [viewMode, selectedMonth, selectedYear, selectedSubmissionId]);
+  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedYear, selectedSubmissionId]);
 
   const { data: mySubmissions = [] } = useQuery<any[]>({
     queryKey: ["my-submissions-for-report"],
@@ -2588,12 +2590,38 @@ function ReportsTab() {
     window.open(`mailto:${shareEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, shareEmail, pdfUrl, monthOptions]);
 
-  const handleSaveToArchive = () => {
-    const payload = viewMode === "monthly"
-      ? { reportType: "monthly", reportPeriod: selectedMonth, submissionId: selectedSubmissionId !== "all" ? Number(selectedSubmissionId) : undefined, propertyName: selectedPropertyName, data: { report, financial } }
-      : { reportType: "yearly", reportPeriod: selectedYear, submissionId: selectedSubmissionId !== "all" ? Number(selectedSubmissionId) : undefined, propertyName: selectedPropertyName, data: { yearly } };
-    archiveMutation.mutate(payload);
-  };
+  const handleSaveToArchive = useCallback(async () => {
+    setArchiveSaving(true);
+    try {
+      let url = pdfUrl;
+      if (!url) {
+        if (viewMode === "monthly") {
+          url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial });
+        } else if (viewMode === "yearly" && yearly) {
+          url = await generateAndUploadReportPdf("yearly", { year: selectedYear, propertyName: selectedPropertyName, yearly });
+        }
+        if (url) setPdfUrl(url);
+      }
+      const basePayload = {
+        submissionId: selectedSubmissionId !== "all" ? Number(selectedSubmissionId) : undefined,
+        propertyName: selectedPropertyName,
+        pdfUrl: url ?? undefined,
+      };
+      const payload = viewMode === "monthly"
+        ? { ...basePayload, reportType: "monthly", reportPeriod: selectedMonth, data: { report, financial } }
+        : { ...basePayload, reportType: "yearly", reportPeriod: selectedYear, data: { yearly } };
+      const result = await new Promise<any>((resolve, reject) => {
+        archiveMutation.mutate(payload, { onSuccess: resolve, onError: reject });
+      });
+      setArchiveSavedId(result?.id ?? null);
+      setShowArchive(true);
+    } catch (e) {
+      console.error("Archive save failed:", e);
+      alert("تعذّر حفظ التقرير في الأرشيف");
+    } finally {
+      setArchiveSaving(false);
+    }
+  }, [viewMode, selectedMonth, selectedYear, selectedSubmissionId, selectedPropertyName, report, financial, yearly, pdfUrl, archiveMutation]);
 
   const planLabels: Record<string, string> = {
     trial: "تجريبي (30 يوم)",
@@ -2802,8 +2830,18 @@ function ReportsTab() {
                   {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                   بريد
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleSaveToArchive} disabled={archiveMutation.isPending} className="gap-2">
-                  <Archive className="w-4 h-4" />حفظ في الأرشيف
+                <Button
+                  variant={archiveSavedId ? "default" : "outline"}
+                  size="sm"
+                  onClick={handleSaveToArchive}
+                  disabled={archiveSaving || archiveMutation.isPending}
+                  className="gap-2"
+                >
+                  {archiveSaving
+                    ? <><Loader2 className="w-4 h-4 animate-spin" />جاري الحفظ…</>
+                    : archiveSavedId
+                    ? <><Archive className="w-4 h-4" />تم الحفظ ✓</>
+                    : <><Archive className="w-4 h-4" />حفظ في الأرشيف</>}
                 </Button>
               </div>
             </>
@@ -2960,8 +2998,18 @@ function ReportsTab() {
                   {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                   بريد
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleSaveToArchive} disabled={archiveMutation.isPending} className="gap-2">
-                  <Archive className="w-4 h-4" />حفظ في الأرشيف
+                <Button
+                  variant={archiveSavedId ? "default" : "outline"}
+                  size="sm"
+                  onClick={handleSaveToArchive}
+                  disabled={archiveSaving || archiveMutation.isPending}
+                  className="gap-2"
+                >
+                  {archiveSaving
+                    ? <><Loader2 className="w-4 h-4 animate-spin" />جاري الحفظ…</>
+                    : archiveSavedId
+                    ? <><Archive className="w-4 h-4" />تم الحفظ ✓</>
+                    : <><Archive className="w-4 h-4" />حفظ في الأرشيف</>}
                 </Button>
               </div>
             </>
@@ -3022,19 +3070,36 @@ function ReportsTab() {
             ) : (
               <div className="space-y-2">
                 {archive.map((a: any) => (
-                  <div key={a.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-xl">
-                    <div>
+                  <div key={a.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-xl gap-3">
+                    <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-foreground">
                         {a.reportType === "yearly" ? "تقرير سنوي" : "تقرير شهري"} – {a.reportPeriod}
                       </p>
                       <p className="text-xs text-muted-foreground">{a.propertyName} · {new Date(a.createdAt).toLocaleDateString("ar-SA")}</p>
                     </div>
-                    <button
-                      onClick={() => { if (confirm("حذف هذا التقرير من الأرشيف؟")) deleteArchiveMutation.mutate(a.id); }}
-                      className="text-muted-foreground hover:text-destructive transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {a.pdfUrl ? (
+                        <a
+                          href={a.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="عرض / تحميل PDF"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors border border-amber-200 dark:border-amber-800"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          عرض PDF
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/50 px-1">بدون PDF</span>
+                      )}
+                      <button
+                        onClick={() => { if (confirm("حذف هذا التقرير من الأرشيف؟")) deleteArchiveMutation.mutate(a.id); }}
+                        className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                        title="حذف من الأرشيف"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
