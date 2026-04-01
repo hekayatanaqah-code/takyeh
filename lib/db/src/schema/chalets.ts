@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -300,3 +300,17 @@ export const salaryLogsTable = pgTable("salary_logs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type SalaryLog = typeof salaryLogsTable.$inferSelect;
+
+/* ── Report Archive ─────────────────────────────────────────── */
+
+export const ownerReportArchiveTable = pgTable("owner_report_archive", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  reportType: text("report_type").notNull(),
+  reportPeriod: text("report_period").notNull(),
+  submissionId: integer("submission_id"),
+  propertyName: text("property_name"),
+  data: jsonb("data").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OwnerReportArchive = typeof ownerReportArchiveTable.$inferSelect;

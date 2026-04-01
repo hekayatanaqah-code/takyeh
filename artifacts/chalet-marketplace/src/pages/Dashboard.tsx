@@ -18,7 +18,7 @@ import {
   RotateCcw, Star, ChevronLeft, ChevronRight, BarChart2, CreditCard,
   TrendingUp, Sunrise, Moon, Sun, Lock, Zap, DollarSign, Users,
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
-  Camera, Loader2,
+  Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -2203,10 +2203,91 @@ function StaffTab() {
   );
 }
 
+/* ── PDF Print Functions ────────────────────── */
+function printMonthlyReport(
+  month: string,
+  propertyName: string,
+  report: MonthReport | null | undefined,
+  financial: { totalRevenue: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
+) {
+  const win = window.open("", "_blank", "width=794,height=1123");
+  if (!win) return;
+  const monthStr = new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+  const printDate = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
+  const catRows = financial && Object.keys(financial.categoryTotals).length > 0
+    ? Object.entries(financial.categoryTotals).sort(([, a], [, b]) => b - a).map(([key, amt]) => {
+        const cat = catMap[key] ?? { label: key, emoji: "✨" };
+        const pct = financial.totalExpenses > 0 ? Math.round((amt / financial.totalExpenses) * 100) : 0;
+        return `<tr><td>${cat.emoji} ${cat.label}</td><td>${formatAmount(amt)}</td><td>${pct}%</td></tr>`;
+      }).join("") : "";
+  win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+<title>التقرير الشهري – ${monthStr}</title>
+<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;}.page{max-width:794px;margin:0 auto;padding:40px 48px;min-height:1123px;}.header{border-bottom:3px solid #b8860b;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;}.brand-name{font-size:26px;font-weight:800;color:#b8860b;}.brand-sub{font-size:12px;color:#666;margin-top:4px;}.report-title{font-size:18px;font-weight:700;text-align:left;}.report-sub{font-size:12px;color:#666;text-align:left;margin-top:4px;}.section{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#b8860b;border-right:3px solid #b8860b;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}.kpi-note{font-size:10px;color:#aaa;margin-top:2px;}.kpi-green{border-color:#86efac;}.kpi-red{border-color:#fca5a5;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#b8860b;color:#fff;padding:8px 12px;text-align:right;}td{padding:8px 12px;border-bottom:1px solid #ede9dd;}tr:nth-child(even) td{background:#faf9f6;}.footer{margin-top:40px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
+<body><div class="page">
+<div class="header"><div><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
+<div><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · طُبع بتاريخ ${printDate}</div></div></div>
+${financial ? `<div class="section"><div class="section-title">الملخص المالي</div><div class="kpi-grid">
+<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">من الحجوزات المسعّرة</div></div>
+<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات</div><div class="kpi-value">${formatAmount(financial.totalExpenses)}</div><div class="kpi-note">مصروفات + رواتب</div></div>
+<div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value">${formatAmount(financial.netProfit)}</div><div class="kpi-note">الإيرادات - المصروفات</div></div>
+</div></div>${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}` : ""}
+${report ? `<div class="section"><div class="section-title">إحصائيات الحجوزات</div><div class="kpi-grid">
+<div class="kpi-card"><div class="kpi-label">إجمالي الحجوزات</div><div class="kpi-value">${report.totalBookings}</div></div>
+<div class="kpi-card"><div class="kpi-label">نسبة الإشغال</div><div class="kpi-value">${report.occupancyRate}%</div></div>
+<div class="kpi-card"><div class="kpi-label">أيام مشغولة</div><div class="kpi-value">${report.totalDays} / ${report.daysInMonth}</div></div>
+</div></div>` : ""}
+<div class="footer">تم إصدار هذا التقرير عبر منصة حكاية أناقة · ${new Date().getFullYear()}</div>
+</div><script>window.onload=function(){window.print();};<\/script></body></html>`);
+  win.document.close();
+}
+
+function printYearlyReport(
+  year: string,
+  propertyName: string,
+  yearly: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } } | null | undefined,
+) {
+  if (!yearly) return;
+  const win = window.open("", "_blank", "width=794,height=1123");
+  if (!win) return;
+  const printDate = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
+  const rows = yearly.monthly.map(m => {
+    const label = new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
+    const cls = m.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626";
+    return `<tr><td>${label}</td><td>${formatAmount(m.revenue)}</td><td>${formatAmount(m.expenses)}</td><td style="${cls}">${formatAmount(m.netProfit)}</td></tr>`;
+  }).join("");
+  win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+<title>التقرير السنوي – ${year}</title>
+<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;}.page{max-width:794px;margin:0 auto;padding:40px 48px;}.header{border-bottom:3px solid #b8860b;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;}.brand-name{font-size:26px;font-weight:800;color:#b8860b;}.brand-sub{font-size:12px;color:#666;margin-top:4px;}.report-title{font-size:18px;font-weight:700;text-align:left;}.report-sub{font-size:12px;color:#666;text-align:left;margin-top:4px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#b8860b;color:#fff;padding:8px 12px;text-align:right;}td{padding:8px 12px;border-bottom:1px solid #ede9dd;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0!important;border-top:2px solid #b8860b;}.footer{margin-top:40px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
+<body><div class="page">
+<div class="header"><div><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
+<div><div class="report-title">التقرير السنوي – ${year}</div><div class="report-sub">${propertyName} · طُبع بتاريخ ${printDate}</div></div></div>
+<div class="kpi-grid">
+<div class="kpi-card" style="border-color:#86efac"><div class="kpi-label">إجمالي الإيرادات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.revenue)}</div></div>
+<div class="kpi-card" style="border-color:#fca5a5"><div class="kpi-label">إجمالي المصروفات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.expenses)}</div></div>
+<div class="kpi-card" style="border-color:${yearly.totals.netProfit >= 0 ? "#86efac" : "#fca5a5"}"><div class="kpi-label">صافي الربح السنوي</div><div class="kpi-value" style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmount(yearly.totals.netProfit)}</div></div>
+</div>
+<table><thead><tr><th>الشهر</th><th>الإيرادات (ر.س)</th><th>المصروفات (ر.س)</th><th>صافي الربح (ر.س)</th></tr></thead>
+<tbody>${rows}</tbody>
+<tfoot><tr><td>الإجمالي السنوي</td><td>${formatAmount(yearly.totals.revenue)}</td><td>${formatAmount(yearly.totals.expenses)}</td><td style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmount(yearly.totals.netProfit)}</td></tr></tfoot>
+</table>
+<div class="footer">تم إصدار هذا التقرير عبر منصة حكاية أناقة · ${new Date().getFullYear()}</div>
+</div><script>window.onload=function(){window.print();};<\/script></body></html>`);
+  win.document.close();
+}
+
 function ReportsTab() {
   const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentYear = new Date().getFullYear().toString();
+
+  const [viewMode, setViewMode] = useState<"monthly" | "yearly">("monthly");
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string>("all");
+  const [sharePhone, setSharePhone] = useState(() => localStorage.getItem("reportSharePhone") ?? "");
+  const [shareEmail, setShareEmail] = useState(() => localStorage.getItem("reportShareEmail") ?? "");
+  const [showShare, setShowShare] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
+  const qc = useQueryClient();
 
   const { data: mySubmissions = [] } = useQuery<any[]>({
     queryKey: ["my-submissions-for-report"],
@@ -2226,6 +2307,7 @@ function ReportsTab() {
       if (!r.ok) throw new Error("failed");
       return r.json();
     },
+    enabled: viewMode === "monthly",
   });
 
   const { data: subscription } = useQuery({
@@ -2253,6 +2335,50 @@ function ReportsTab() {
       if (!r.ok) return null;
       return r.json();
     },
+    enabled: viewMode === "monthly",
+  });
+
+  const { data: yearly, isLoading: yearlyLoading } = useQuery<{
+    year: string;
+    monthly: { month: string; revenue: number; expenses: number; netProfit: number }[];
+    totals: { revenue: number; expenses: number; netProfit: number };
+  }>({
+    queryKey: ["owner", "yearly-summary", selectedYear, selectedSubmissionId],
+    queryFn: async () => {
+      const params = new URLSearchParams({ year: selectedYear });
+      if (selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
+      const r = await apiFetch(`/owner/yearly-summary?${params}`);
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    },
+    enabled: viewMode === "yearly",
+  });
+
+  const { data: archive = [] } = useQuery<any[]>({
+    queryKey: ["owner", "reports-archive"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/reports/archive");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: showArchive,
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const r = await apiFetch("/owner/reports/archive", { method: "POST", body: JSON.stringify(payload) });
+      if (!r.ok) throw new Error("فشل الحفظ");
+      return r.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "reports-archive"] }),
+  });
+
+  const deleteArchiveMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await apiFetch(`/owner/reports/archive/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "reports-archive"] }),
   });
 
   const monthOptions = useMemo(() => {
@@ -2267,6 +2393,11 @@ function ReportsTab() {
     return opts;
   }, []);
 
+  const yearOptions = useMemo(() => {
+    const cur = new Date().getFullYear();
+    return [cur, cur - 1, cur - 2].map((y) => ({ val: String(y), label: String(y) }));
+  }, []);
+
   const slotLabels: Record<string, { icon: ReactElement; label: string }> = {
     morning:     { icon: <Sunrise className="w-4 h-4" />,  label: "صباحي" },
     evening:     { icon: <Moon className="w-4 h-4" />,     label: "مسائي" },
@@ -2274,15 +2405,53 @@ function ReportsTab() {
     unspecified: { icon: <Clock className="w-4 h-4" />,    label: "غير محدد" },
   };
 
+  const selectedPropertyName = selectedSubmissionId === "all"
+    ? "كل العقارات"
+    : mySubmissions.find((s: any) => String(s.id) === selectedSubmissionId)?.nameAr ?? `شاليه #${selectedSubmissionId}`;
+
   const handleShareWhatsApp = () => {
-    if (!report || !subscription) return;
-    const text = `📊 تقرير شهر ${report.month}\n\n` +
-      `📅 إجمالي الحجوزات: ${report.totalBookings}\n` +
-      `📈 نسبة الإشغال: ${report.occupancyRate}%\n` +
-      `🏆 الفترة الأكثر طلباً: ${report.topSlotLabel}\n` +
-      `🔗 المنصة: ${report.platformBookings} | خارجي: ${report.externalBookings}\n\n` +
-      `شاليهات القصيم — اشتراك نشط (بدون عمولة)`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    const phone = sharePhone.replace(/\D/g, "");
+    let text = "";
+    if (viewMode === "monthly" && report) {
+      text = `📊 تقرير شهر ${monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth}\n\n` +
+        `🏠 العقار: ${selectedPropertyName}\n` +
+        `📅 إجمالي الحجوزات: ${report.totalBookings}\n` +
+        `📈 نسبة الإشغال: ${report.occupancyRate}%\n\n` +
+        `💰 منصة حكاية أناقة – شاليهات القصيم`;
+    } else if (viewMode === "yearly" && yearly) {
+      text = `📊 التقرير السنوي ${selectedYear}\n\n` +
+        `🏠 العقار: ${selectedPropertyName}\n` +
+        `💚 الإيرادات: ${formatAmount(yearly.totals.revenue)}\n` +
+        `🔴 المصروفات: ${formatAmount(yearly.totals.expenses)}\n` +
+        `⭐ صافي الربح: ${formatAmount(yearly.totals.netProfit)}\n\n` +
+        `💰 منصة حكاية أناقة – شاليهات القصيم`;
+    }
+    if (!text) return;
+    const url = phone
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
+  };
+
+  const handleShareEmail = () => {
+    if (!shareEmail) { alert("يرجى إدخال البريد الإلكتروني في إعدادات المشاركة"); return; }
+    let subject = "";
+    let body = "";
+    if (viewMode === "monthly" && report) {
+      subject = `تقرير شهري – ${monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth}`;
+      body = `${selectedPropertyName}\n\nالحجوزات: ${report.totalBookings}\nالإشغال: ${report.occupancyRate}%\n\nحكاية أناقة`;
+    } else if (viewMode === "yearly" && yearly) {
+      subject = `التقرير السنوي – ${selectedYear}`;
+      body = `${selectedPropertyName}\n\nإيرادات: ${formatAmount(yearly.totals.revenue)}\nمصروفات: ${formatAmount(yearly.totals.expenses)}\nصافي: ${formatAmount(yearly.totals.netProfit)}\n\nحكاية أناقة`;
+    }
+    window.open(`mailto:${shareEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+  };
+
+  const handleSaveToArchive = () => {
+    const payload = viewMode === "monthly"
+      ? { reportType: "monthly", reportPeriod: selectedMonth, submissionId: selectedSubmissionId !== "all" ? Number(selectedSubmissionId) : undefined, propertyName: selectedPropertyName, data: { report, financial } }
+      : { reportType: "yearly", reportPeriod: selectedYear, submissionId: selectedSubmissionId !== "all" ? Number(selectedSubmissionId) : undefined, propertyName: selectedPropertyName, data: { yearly } };
+    archiveMutation.mutate(payload);
   };
 
   const planLabels: Record<string, string> = {
@@ -2298,6 +2467,22 @@ function ReportsTab() {
 
   return (
     <div className="space-y-6">
+
+      {/* ── View Mode Toggle ── */}
+      <div className="flex items-center gap-2 bg-muted/50 rounded-xl p-1 w-fit">
+        {(["monthly", "yearly"] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setViewMode(m)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+              viewMode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {m === "monthly" ? "شهري" : "سنوي"}
+          </button>
+        ))}
+      </div>
+
       {/* Subscription Card */}
       {subscription && (
         <div className="bg-card border border-border rounded-2xl p-5">
@@ -2336,234 +2521,380 @@ function ReportsTab() {
         </div>
       )}
 
-      {/* Report Filters */}
+      {/* ── Filters ── */}
       <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
         <h2 className="text-base font-bold text-foreground flex items-center gap-2">
           <BarChart2 className="w-4 h-4 text-primary" />
           فلاتر التقرير
         </h2>
         <div className="flex flex-col sm:flex-row gap-3">
-          {/* Property filter */}
           <div className="flex-1 space-y-1">
             <label className="text-xs text-muted-foreground font-medium">العقار</label>
             <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
-              <SelectTrigger className="h-10">
-                <SelectValue placeholder="كل العقارات" />
-              </SelectTrigger>
+              <SelectTrigger className="h-10"><SelectValue placeholder="كل العقارات" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">كل العقارات</SelectItem>
                 {mySubmissions.map((s: any) => (
-                  <SelectItem key={s.id} value={String(s.id)}>
-                    {s.nameAr ?? `شاليه #${s.id}`}
-                  </SelectItem>
+                  <SelectItem key={s.id} value={String(s.id)}>{s.nameAr ?? `شاليه #${s.id}`}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          {/* Month filter */}
-          <div className="flex-1 space-y-1">
-            <label className="text-xs text-muted-foreground font-medium">الشهر</label>
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="h-10">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {monthOptions.map((o) => (
-                  <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {viewMode === "monthly" ? (
+            <div className="flex-1 space-y-1">
+              <label className="text-xs text-muted-foreground font-medium">الشهر</label>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {monthOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="flex-1 space-y-1">
+              <label className="text-xs text-muted-foreground font-medium">السنة</label>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
         {selectedSubmissionId !== "all" && (
           <p className="text-xs text-primary font-medium flex items-center gap-1">
             <Building2 className="w-3.5 h-3.5" />
-            يعرض بيانات: {mySubmissions.find((s: any) => String(s.id) === selectedSubmissionId)?.nameAr ?? `شاليه #${selectedSubmissionId}`}
+            يعرض بيانات: {selectedPropertyName}
           </p>
         )}
       </div>
 
-      {/* ── Financial Summary (P&L) ── */}
-      {financial && (
+      {/* ── YEARLY VIEW ── */}
+      {viewMode === "yearly" && (
         <>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              {
-                label: "إجمالي الإيرادات",
-                value: formatAmount(financial.totalRevenue),
-                icon: <TrendingUp className="w-5 h-5" />,
-                color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-                note: "من الحجوزات المسعّرة",
-              },
-              {
-                label: "إجمالي المصروفات",
-                value: formatAmount(financial.totalExpenses),
-                icon: <TrendingDown className="w-5 h-5" />,
-                color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-                note: "مصروفات + رواتب",
-              },
-              {
-                label: "صافي الربح",
-                value: formatAmount(financial.netProfit),
-                icon: <DollarSign className="w-5 h-5" />,
-                color: financial.netProfit >= 0
-                  ? "bg-primary/10 text-primary"
-                  : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-                note: "الإيرادات - المصروفات",
-              },
-            ].map((stat) => (
-              <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stat.color}`}>{stat.icon}</div>
-                <p className="text-xl font-bold text-foreground leading-none">{stat.value}</p>
-                <p className="text-xs text-muted-foreground leading-tight">{stat.label}</p>
-                <p className="text-[10px] text-muted-foreground/60">{stat.note}</p>
+          {yearlyLoading ? (
+            <div className="space-y-4">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
+          ) : yearly ? (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "إجمالي الإيرادات", value: formatAmount(yearly.totals.revenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+                  { label: "إجمالي المصروفات", value: formatAmount(yearly.totals.expenses), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+                  { label: "صافي الربح السنوي", value: formatAmount(yearly.totals.netProfit), icon: <DollarSign className="w-5 h-5" />, color: yearly.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700" },
+                ].map((s) => (
+                  <div key={s.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>{s.icon}</div>
+                    <p className="text-xl font-bold text-foreground leading-none">{s.value}</p>
+                    <p className="text-xs text-muted-foreground">{s.label}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {/* Expense Breakdown */}
-          {Object.keys(financial.categoryTotals).length > 0 && (
-            <div className="bg-card border border-border rounded-2xl p-5">
-              <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
-                <Wallet className="w-4 h-4 text-primary" />
-                توزيع المصروفات
-              </h3>
-              <div className="space-y-2">
-                {Object.entries(financial.categoryTotals)
-                  .sort(([, a], [, b]) => b - a)
-                  .map(([key, amount]) => {
-                    const cat = catMap[key] ?? { label: key, emoji: "✨", color: "bg-slate-100 text-slate-700" };
-                    const pct = financial.totalExpenses > 0 ? Math.round((amount / financial.totalExpenses) * 100) : 0;
+              {yearly.monthly.some((m) => m.revenue > 0 || m.expenses > 0) && (
+                <div className="bg-card border border-border rounded-2xl p-5">
+                  <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
+                    <BarChart2 className="w-4 h-4 text-primary" />
+                    الإيرادات والمصروفات لعام {selectedYear}
+                  </h3>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={yearly.monthly.map((m) => ({
+                      name: new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "short" }),
+                      الإيرادات: m.revenue,
+                      المصروفات: m.expenses,
+                    }))} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                      <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: 12 }} formatter={(v: number) => [formatAmount(v)]} />
+                      <Legend wrapperStyle={{ fontSize: 12, direction: "rtl" }} />
+                      <Bar dataKey="الإيرادات" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="المصروفات" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              <div className="bg-card border border-border rounded-2xl p-5">
+                <h3 className="font-bold text-foreground text-sm mb-4">تفصيل شهري لعام {selectedYear}</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-right py-2 font-medium text-muted-foreground">الشهر</th>
+                        <th className="text-right py-2 font-medium text-muted-foreground">الإيرادات</th>
+                        <th className="text-right py-2 font-medium text-muted-foreground">المصروفات</th>
+                        <th className="text-right py-2 font-medium text-muted-foreground">صافي الربح</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {yearly.monthly.map((m) => (
+                        <tr key={m.month} className="border-b border-border/50">
+                          <td className="py-2 text-muted-foreground">{new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" })}</td>
+                          <td className="py-2 font-medium text-green-600">{formatAmount(m.revenue)}</td>
+                          <td className="py-2 font-medium text-red-600">{formatAmount(m.expenses)}</td>
+                          <td className={`py-2 font-bold ${m.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmount(m.netProfit)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-border">
+                        <td className="py-2 font-bold">الإجمالي</td>
+                        <td className="py-2 font-bold text-green-600">{formatAmount(yearly.totals.revenue)}</td>
+                        <td className="py-2 font-bold text-red-600">{formatAmount(yearly.totals.expenses)}</td>
+                        <td className={`py-2 font-bold ${yearly.totals.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmount(yearly.totals.netProfit)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => printYearlyReport(selectedYear, selectedPropertyName, yearly)} className="gap-2">
+                  <FileText className="w-4 h-4" />طباعة التقرير السنوي
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleShareWhatsApp} className="gap-2">
+                  <MessageSquare className="w-4 h-4" />واتساب
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleSaveToArchive} disabled={archiveMutation.isPending} className="gap-2">
+                  <Archive className="w-4 h-4" />حفظ في الأرشيف
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="bg-card border border-dashed border-border rounded-2xl p-12 text-center">
+              <BarChart2 className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
+              <p className="text-muted-foreground">لا توجد بيانات لهذه السنة</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── MONTHLY VIEW ── */}
+      {viewMode === "monthly" && (
+        <>
+          {financial && (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "إجمالي الإيرادات", value: formatAmount(financial.totalRevenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", note: "من الحجوزات المسعّرة" },
+                  { label: "إجمالي المصروفات", value: formatAmount(financial.totalExpenses), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "مصروفات + رواتب" },
+                  { label: "صافي الربح", value: formatAmount(financial.netProfit), icon: <DollarSign className="w-5 h-5" />, color: financial.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "الإيرادات - المصروفات" },
+                ].map((stat) => (
+                  <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stat.color}`}>{stat.icon}</div>
+                    <p className="text-xl font-bold text-foreground leading-none">{stat.value}</p>
+                    <p className="text-xs text-muted-foreground leading-tight">{stat.label}</p>
+                    <p className="text-[10px] text-muted-foreground/60">{stat.note}</p>
+                  </div>
+                ))}
+              </div>
+
+              {Object.keys(financial.categoryTotals).length > 0 && (
+                <div className="bg-card border border-border rounded-2xl p-5">
+                  <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-primary" />توزيع المصروفات
+                  </h3>
+                  <div className="space-y-2">
+                    {Object.entries(financial.categoryTotals).sort(([, a], [, b]) => b - a).map(([key, amount]) => {
+                      const cat = catMap[key] ?? { label: key, emoji: "✨", color: "bg-slate-100 text-slate-700" };
+                      const pct = financial.totalExpenses > 0 ? Math.round((amount / financial.totalExpenses) * 100) : 0;
+                      return (
+                        <div key={key}>
+                          <div className="flex items-center justify-between text-sm mb-1">
+                            <span className="flex items-center gap-1.5 text-muted-foreground"><span>{cat.emoji}</span>{cat.label}</span>
+                            <span className="font-semibold">{formatAmount(amount)} <span className="text-xs text-muted-foreground">({pct}%)</span></span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-1.5">
+                            <div className="h-1.5 rounded-full bg-destructive/70 transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {financial.trend.some((t) => t.revenue > 0 || t.expenses > 0) && (
+                <div className="bg-card border border-border rounded-2xl p-5">
+                  <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
+                    <BarChart2 className="w-4 h-4 text-primary" />مقارنة الإيرادات والمصروفات (آخر 6 أشهر)
+                  </h3>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={financial.trend.map((t) => ({
+                      name: new Date(t.month + "-15").toLocaleDateString("ar-SA", { month: "short" }),
+                      الإيرادات: t.revenue,
+                      المصروفات: t.expenses,
+                    }))} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                      <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: 12 }} formatter={(value: number) => [formatAmount(value)]} />
+                      <Legend wrapperStyle={{ fontSize: 12, direction: "rtl" }} />
+                      <Bar dataKey="الإيرادات" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="المصروفات" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </>
+          )}
+
+          {isLoading ? (
+            <div className="space-y-4">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
+          ) : !report ? (
+            <div className="bg-card border border-dashed border-border rounded-2xl p-12 text-center">
+              <BarChart2 className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
+              <p className="text-muted-foreground">لا توجد بيانات حجوزات لهذا الشهر</p>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: "إجمالي الحجوزات", value: report.totalBookings, icon: <BookOpen className="w-5 h-5" />, color: "bg-primary/10 text-primary" },
+                  { label: "نسبة الإشغال", value: `${report.occupancyRate}%`, icon: <TrendingUp className="w-5 h-5" />, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+                  { label: "عبر المنصة", value: report.platformBookings, icon: <Globe className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+                  { label: "من خارج المنصة", value: report.externalBookings, icon: <Phone className="w-5 h-5" />, color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+                ].map((stat) => (
+                  <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stat.color}`}>{stat.icon}</div>
+                    <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                    <p className="text-xs text-muted-foreground leading-tight">{stat.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-foreground text-sm">نسبة الإشغال — {monthOptions.find((o) => o.val === selectedMonth)?.label}</h3>
+                  <span className="text-2xl font-bold text-primary">{report.occupancyRate}%</span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-3">
+                  <div className="bg-primary h-3 rounded-full transition-all duration-500" style={{ width: `${report.occupancyRate}%` }} />
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">{report.totalDays} يوم محجوز من أصل {report.daysInMonth} يوم</p>
+              </div>
+
+              <div className="bg-card border border-border rounded-2xl p-5">
+                <h3 className="font-bold text-foreground mb-4 text-sm">توزيع الفترات الزمنية</h3>
+                <div className="space-y-3">
+                  {(["morning", "evening", "full_day"] as const).map((key) => {
+                    const count = report.slotStats[key];
+                    const total = report.totalBookings || 1;
+                    const pct = Math.round((count / total) * 100);
+                    const { icon, label } = slotLabels[key];
+                    const isTop = key === report.topSlot;
                     return (
                       <div key={key}>
                         <div className="flex items-center justify-between text-sm mb-1">
-                          <span className="flex items-center gap-1.5 text-muted-foreground">
-                            <span>{cat.emoji}</span>{cat.label}
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            {icon} {label}
+                            {isTop && count > 0 && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold">الأعلى</span>}
                           </span>
-                          <span className="font-semibold">{formatAmount(amount)} <span className="text-xs text-muted-foreground">({pct}%)</span></span>
+                          <span className="font-semibold">{count} ({pct}%)</span>
                         </div>
-                        <div className="w-full bg-muted rounded-full h-1.5">
-                          <div className="h-1.5 rounded-full bg-destructive/70 transition-all" style={{ width: `${pct}%` }} />
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div className={`h-2 rounded-full transition-all duration-500 ${isTop && count > 0 ? "bg-primary" : "bg-muted-foreground/40"}`} style={{ width: `${pct}%` }} />
                         </div>
                       </div>
                     );
                   })}
+                </div>
               </div>
-            </div>
-          )}
 
-          {/* Monthly Trend Chart */}
-          {financial.trend.some((t) => t.revenue > 0 || t.expenses > 0) && (
-            <div className="bg-card border border-border rounded-2xl p-5">
-              <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
-                <BarChart2 className="w-4 h-4 text-primary" />
-                مقارنة الإيرادات والمصروفات (آخر 6 أشهر)
-              </h3>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={financial.trend.map((t) => ({
-                  name: new Date(t.month + "-15").toLocaleDateString("ar-SA", { month: "short" }),
-                  الإيرادات: t.revenue,
-                  المصروفات: t.expenses,
-                }))} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                  <Tooltip
-                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: 12 }}
-                    formatter={(value: number) => [formatAmount(value)]}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 12, direction: "rtl" }} />
-                  <Bar dataKey="الإيرادات" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="المصروفات" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+              <div className="flex flex-wrap gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => printMonthlyReport(selectedMonth, selectedPropertyName, report, financial)} className="gap-2">
+                  <FileText className="w-4 h-4" />طباعة التقرير
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleShareWhatsApp} className="gap-2">
+                  <MessageSquare className="w-4 h-4" />واتساب
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleShareEmail} className="gap-2">
+                  <Mail className="w-4 h-4" />بريد
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleSaveToArchive} disabled={archiveMutation.isPending} className="gap-2">
+                  <Archive className="w-4 h-4" />حفظ في الأرشيف
+                </Button>
+              </div>
+            </>
           )}
         </>
       )}
 
-      {isLoading ? (
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
-        </div>
-      ) : !report ? (
-        <div className="bg-card border border-dashed border-border rounded-2xl p-12 text-center">
-          <BarChart2 className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
-          <p className="text-muted-foreground">لا توجد بيانات حجوزات لهذا الشهر</p>
-        </div>
-      ) : (
-        <>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { label: "إجمالي الحجوزات", value: report.totalBookings, icon: <BookOpen className="w-5 h-5" />, color: "bg-primary/10 text-primary" },
-              { label: "نسبة الإشغال", value: `${report.occupancyRate}%`, icon: <TrendingUp className="w-5 h-5" />, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-              { label: "عبر المنصة", value: report.platformBookings, icon: <Globe className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-              { label: "من خارج المنصة", value: report.externalBookings, icon: <Phone className="w-5 h-5" />, color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
-            ].map((stat) => (
-              <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stat.color}`}>{stat.icon}</div>
-                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                <p className="text-xs text-muted-foreground leading-tight">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Occupancy bar */}
-          <div className="bg-card border border-border rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-foreground text-sm">نسبة الإشغال — {monthOptions.find(o => o.val === selectedMonth)?.label}</h3>
-              <span className="text-2xl font-bold text-primary">{report.occupancyRate}%</span>
-            </div>
-            <div className="w-full bg-muted rounded-full h-3">
-              <div
-                className="bg-primary h-3 rounded-full transition-all duration-500"
-                style={{ width: `${report.occupancyRate}%` }}
+      {/* ── Sharing Settings ── */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <button
+          onClick={() => setShowShare((v) => !v)}
+          className="w-full flex items-center justify-between text-sm font-bold text-foreground"
+        >
+          <span className="flex items-center gap-2"><Settings className="w-4 h-4 text-primary" />إعدادات المشاركة</span>
+          {showShare ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+        {showShare && (
+          <div className="mt-4 space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground font-medium">رقم واتساب (للمشاركة المباشرة)</label>
+              <Input
+                dir="ltr"
+                placeholder="+966XXXXXXXXX"
+                value={sharePhone}
+                onChange={(e) => { setSharePhone(e.target.value); localStorage.setItem("reportSharePhone", e.target.value); }}
+                className="h-10"
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-2">{report.totalDays} يوم محجوز من أصل {report.daysInMonth} يوم</p>
-          </div>
-
-          {/* Slot breakdown */}
-          <div className="bg-card border border-border rounded-2xl p-5">
-            <h3 className="font-bold text-foreground mb-4 text-sm">توزيع الفترات الزمنية</h3>
-            <div className="space-y-3">
-              {(["morning", "evening", "full_day"] as const).map((key) => {
-                const count = report.slotStats[key];
-                const total = report.totalBookings || 1;
-                const pct = Math.round((count / total) * 100);
-                const { icon, label } = slotLabels[key];
-                const isTop = key === report.topSlot;
-                return (
-                  <div key={key}>
-                    <div className="flex items-center justify-between text-sm mb-1">
-                      <span className="flex items-center gap-2 text-muted-foreground">
-                        {icon} {label}
-                        {isTop && count > 0 && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold">الأعلى</span>}
-                      </span>
-                      <span className="font-semibold">{count} ({pct}%)</span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full transition-all duration-500 ${isTop && count > 0 ? "bg-primary" : "bg-muted-foreground/40"}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground font-medium">البريد الإلكتروني</label>
+              <Input
+                dir="ltr"
+                type="email"
+                placeholder="example@email.com"
+                value={shareEmail}
+                onChange={(e) => { setShareEmail(e.target.value); localStorage.setItem("reportShareEmail", e.target.value); }}
+                className="h-10"
+              />
             </div>
+            <p className="text-xs text-muted-foreground">تُحفظ هذه الإعدادات تلقائياً على هذا الجهاز</p>
           </div>
+        )}
+      </div>
 
-          {/* Share Report */}
-          <div className="flex justify-end">
-            <Button variant="outline" onClick={handleShareWhatsApp} className="gap-2">
-              <span>📤</span>
-              مشاركة التقرير عبر واتساب
-            </Button>
+      {/* ── Archive ── */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <button
+          onClick={() => setShowArchive((v) => !v)}
+          className="w-full flex items-center justify-between text-sm font-bold text-foreground"
+        >
+          <span className="flex items-center gap-2"><Archive className="w-4 h-4 text-primary" />أرشيف التقارير</span>
+          {showArchive ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+        {showArchive && (
+          <div className="mt-4">
+            {archive.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground py-6">لا توجد تقارير محفوظة بعد</p>
+            ) : (
+              <div className="space-y-2">
+                {archive.map((a: any) => (
+                  <div key={a.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-xl">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">
+                        {a.reportType === "yearly" ? "تقرير سنوي" : "تقرير شهري"} – {a.reportPeriod}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{a.propertyName} · {new Date(a.createdAt).toLocaleDateString("ar-SA")}</p>
+                    </div>
+                    <button
+                      onClick={() => { if (confirm("حذف هذا التقرير من الأرشيف؟")) deleteArchiveMutation.mutate(a.id); }}
+                      className="text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </>
-      )}
+        )}
+      </div>
+
     </div>
   );
 }

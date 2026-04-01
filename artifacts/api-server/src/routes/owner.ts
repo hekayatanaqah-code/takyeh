@@ -9,6 +9,7 @@ import {
   ownerExpensesTable,
   ownerStaffTable,
   salaryLogsTable,
+  ownerReportArchiveTable,
 } from "@workspace/db/schema";
 import { eq, and, inArray, gte, lte, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -709,6 +710,118 @@ router.get("/financial-summary", async (req, res) => {
     categoryTotals,
     trend,
   });
+});
+
+/* ── Yearly Summary ─────────────────────────────────────────── */
+
+router.get("/yearly-summary", async (req, res) => {
+  const ownerId = req.user!.id;
+  const year = (typeof req.query.year === "string" && /^\d{4}$/.test(req.query.year))
+    ? req.query.year
+    : new Date().getFullYear().toString();
+  const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
+
+  const staffRows = await db
+    .select({ id: ownerStaffTable.id, baseSalary: ownerStaffTable.baseSalary })
+    .from(ownerStaffTable)
+    .where(eq(ownerStaffTable.ownerId, ownerId));
+  const staffMap = Object.fromEntries(staffRows.map((s) => [s.id, Number(s.baseSalary)]));
+
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
+
+  const monthly = await Promise.all(months.map(async (m) => {
+    const bConds: any[] = [
+      eq(ownerBookingsTable.ownerId, ownerId),
+      gte(ownerBookingsTable.bookingDate, `${m}-01`),
+      lte(ownerBookingsTable.bookingDate, `${m}-31`),
+    ];
+    if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
+    const bRows = await db.select({ rev: ownerBookingsTable.revenueAmount }).from(ownerBookingsTable).where(and(...bConds));
+    const revenue = bRows.reduce((s, r) => s + (r.rev ? Number(r.rev) : 0), 0);
+
+    const eConds: any[] = [
+      eq(ownerExpensesTable.ownerId, ownerId),
+      gte(ownerExpensesTable.dateStr, `${m}-01`),
+      lte(ownerExpensesTable.dateStr, `${m}-31`),
+    ];
+    if (submissionId) eConds.push(eq(ownerExpensesTable.submissionId, submissionId));
+    const eRows = await db.select({ amt: ownerExpensesTable.amount }).from(ownerExpensesTable).where(and(...eConds));
+    const exp = eRows.reduce((s, r) => s + Number(r.amt), 0);
+
+    const slRows = await db
+      .select({ bonus: salaryLogsTable.bonus, deduction: salaryLogsTable.deduction, staffId: salaryLogsTable.staffId })
+      .from(salaryLogsTable)
+      .where(and(eq(salaryLogsTable.ownerId, ownerId), eq(salaryLogsTable.month, m)));
+    const salExp = slRows.reduce((s, log) => {
+      const base = staffMap[log.staffId] ?? 0;
+      return s + base + Number(log.bonus) - Number(log.deduction);
+    }, 0);
+
+    const expenses = exp + salExp;
+    return { month: m, revenue, expenses, netProfit: revenue - expenses };
+  }));
+
+  const totals = monthly.reduce(
+    (s, m) => ({ revenue: s.revenue + m.revenue, expenses: s.expenses + m.expenses, netProfit: s.netProfit + m.netProfit }),
+    { revenue: 0, expenses: 0, netProfit: 0 },
+  );
+
+  return res.json({ year, monthly, totals });
+});
+
+/* ── Report Archive ─────────────────────────────────────────── */
+
+router.get("/reports/archive", async (req, res) => {
+  const ownerId = req.user!.id;
+  const rows = await db
+    .select()
+    .from(ownerReportArchiveTable)
+    .where(eq(ownerReportArchiveTable.ownerId, ownerId))
+    .orderBy(sql`${ownerReportArchiveTable.createdAt} DESC`);
+  return res.json(rows);
+});
+
+router.post("/reports/archive", async (req, res) => {
+  const ownerId = req.user!.id;
+  const { reportType, reportPeriod, submissionId, propertyName, data } = req.body;
+  if (!reportType || !reportPeriod) return res.status(400).json({ error: "Missing required fields" });
+
+  const existing = await db
+    .select({ id: ownerReportArchiveTable.id })
+    .from(ownerReportArchiveTable)
+    .where(and(
+      eq(ownerReportArchiveTable.ownerId, ownerId),
+      eq(ownerReportArchiveTable.reportType, reportType),
+      eq(ownerReportArchiveTable.reportPeriod, reportPeriod),
+      submissionId
+        ? eq(ownerReportArchiveTable.submissionId, submissionId)
+        : sql`${ownerReportArchiveTable.submissionId} IS NULL` as any,
+    ))
+    .limit(1);
+
+  if (existing.length > 0) {
+    const [updated] = await db
+      .update(ownerReportArchiveTable)
+      .set({ data, propertyName, createdAt: new Date() })
+      .where(eq(ownerReportArchiveTable.id, existing[0].id))
+      .returning();
+    return res.json(updated);
+  }
+
+  const [created] = await db
+    .insert(ownerReportArchiveTable)
+    .values({ ownerId, reportType, reportPeriod, submissionId: submissionId ?? null, propertyName, data })
+    .returning();
+  return res.json(created);
+});
+
+router.delete("/reports/archive/:id", async (req, res) => {
+  const ownerId = req.user!.id;
+  const id = Number(req.params.id);
+  await db
+    .delete(ownerReportArchiveTable)
+    .where(and(eq(ownerReportArchiveTable.id, id), eq(ownerReportArchiveTable.ownerId, ownerId)));
+  return res.json({ ok: true });
 });
 
 export default router;
