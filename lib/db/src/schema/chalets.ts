@@ -151,6 +151,7 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   period: text("period"),
   source: bookingSourceEnum("source").notNull().default("platform"),
   notes: text("notes"),
+  revenueAmount: numeric("revenue_amount", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;
@@ -240,3 +241,46 @@ export const ownerSubscriptionsTable = pgTable("owner_subscriptions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type OwnerSubscription = typeof ownerSubscriptionsTable.$inferSelect;
+
+/* ── Expense Management ────────────────────────────────────── */
+
+export const expenseCategoryEnum = pgEnum("expense_category", [
+  "salaries", "electricity", "water", "internet", "maintenance", "supplies", "other",
+]);
+
+export const ownerExpensesTable = pgTable("owner_expenses", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  submissionId: integer("submission_id").references(() => chaletSubmissionsTable.id, { onDelete: "set null" }),
+  dateStr: text("date_str").notNull(),
+  category: expenseCategoryEnum("category").notNull(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  notes: text("notes"),
+  receiptUrl: text("receipt_url"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OwnerExpense = typeof ownerExpensesTable.$inferSelect;
+
+/* ── Staff & Salary ─────────────────────────────────────────── */
+
+export const ownerStaffTable = pgTable("owner_staff", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  name: text("name").notNull(),
+  baseSalary: numeric("base_salary", { precision: 10, scale: 2 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OwnerStaff = typeof ownerStaffTable.$inferSelect;
+
+export const salaryLogsTable = pgTable("salary_logs", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  staffId: integer("staff_id").references(() => ownerStaffTable.id, { onDelete: "cascade" }).notNull(),
+  month: text("month").notNull(),
+  bonus: numeric("bonus", { precision: 10, scale: 2 }).notNull().default("0"),
+  deduction: numeric("deduction", { precision: 10, scale: 2 }).notNull().default("0"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type SalaryLog = typeof salaryLogsTable.$inferSelect;

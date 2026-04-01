@@ -6,8 +6,12 @@ import {
   chaletsTable,
   chaletAvailabilityTable,
   ownerSubscriptionsTable,
+  ownerExpensesTable,
+  ownerStaffTable,
+  salaryLogsTable,
+  expenseCategoryEnum,
 } from "@workspace/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, gte, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
@@ -45,6 +49,7 @@ router.post("/bookings", async (req, res) => {
     period: z.enum(["morning", "evening", "full_day"]).optional(),
     source: z.enum(["platform", "external"]).default("platform"),
     notes: z.string().optional(),
+    revenueAmount: z.number().nonnegative().optional(),
   }).safeParse(req.body);
 
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
@@ -59,9 +64,14 @@ router.post("/bookings", async (req, res) => {
     }
   }
 
+  const { revenueAmount, ...restBooking } = body.data;
   const [booking] = await db
     .insert(ownerBookingsTable)
-    .values({ ...body.data, ownerId })
+    .values({
+      ...restBooking,
+      ownerId,
+      revenueAmount: revenueAmount !== undefined ? String(revenueAmount) : null,
+    })
     .returning();
 
   return res.status(201).json(booking);
@@ -309,6 +319,294 @@ router.get("/subscription", async (req, res) => {
   }
 
   return res.json(sub);
+});
+
+/* ── Expenses ──────────────────────────────────────────────── */
+
+const EXPENSE_CATEGORIES = expenseCategoryEnum.enumValues;
+
+router.get("/expenses", async (req, res) => {
+  const ownerId = req.user!.id;
+  const month = typeof req.query.month === "string" ? req.query.month : undefined;
+  const conditions = [eq(ownerExpensesTable.ownerId, ownerId)];
+  if (month) {
+    conditions.push(
+      gte(ownerExpensesTable.dateStr, `${month}-01`),
+      lte(ownerExpensesTable.dateStr, `${month}-31`),
+    );
+  }
+  const rows = await db
+    .select()
+    .from(ownerExpensesTable)
+    .where(and(...conditions))
+    .orderBy(ownerExpensesTable.dateStr);
+  return res.json(rows.reverse());
+});
+
+router.post("/expenses", async (req, res) => {
+  const ownerId = req.user!.id;
+  const body = z.object({
+    submissionId: z.number().int().positive().optional(),
+    dateStr: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    category: z.enum(EXPENSE_CATEGORIES),
+    amount: z.number().positive(),
+    notes: z.string().optional(),
+    receiptUrl: z.string().url().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: body.error.flatten() });
+  const { amount, ...expRest } = body.data;
+  const [row] = await db
+    .insert(ownerExpensesTable)
+    .values({ ownerId, ...expRest, amount: String(amount) })
+    .returning();
+  return res.status(201).json(row);
+});
+
+router.delete("/expenses/:id", async (req, res) => {
+  const ownerId = req.user!.id;
+  const id = Number(req.params.id);
+  await db.delete(ownerExpensesTable).where(and(eq(ownerExpensesTable.id, id), eq(ownerExpensesTable.ownerId, ownerId)));
+  return res.json({ ok: true });
+});
+
+/* ── Staff ─────────────────────────────────────────────────── */
+
+router.get("/staff", async (req, res) => {
+  const ownerId = req.user!.id;
+  const rows = await db
+    .select()
+    .from(ownerStaffTable)
+    .where(eq(ownerStaffTable.ownerId, ownerId))
+    .orderBy(ownerStaffTable.createdAt);
+  return res.json(rows);
+});
+
+router.post("/staff", async (req, res) => {
+  const ownerId = req.user!.id;
+  const body = z.object({
+    name: z.string().min(1),
+    baseSalary: z.number().nonnegative(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const [row] = await db
+    .insert(ownerStaffTable)
+    .values({ ownerId, name: body.data.name, baseSalary: String(body.data.baseSalary) })
+    .returning();
+  return res.status(201).json(row);
+});
+
+router.patch("/staff/:id", async (req, res) => {
+  const ownerId = req.user!.id;
+  const id = Number(req.params.id);
+  const body = z.object({
+    name: z.string().min(1).optional(),
+    baseSalary: z.number().nonnegative().optional(),
+    isActive: z.boolean().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const staffPatch: Record<string, unknown> = {};
+  if (body.data.name !== undefined) staffPatch.name = body.data.name;
+  if (body.data.isActive !== undefined) staffPatch.isActive = body.data.isActive;
+  if (body.data.baseSalary !== undefined) staffPatch.baseSalary = String(body.data.baseSalary);
+  const [row] = await db
+    .update(ownerStaffTable)
+    .set(staffPatch as any)
+    .where(and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)))
+    .returning();
+  if (!row) return res.status(404).json({ error: "لم يُعثر على الموظف" });
+  return res.json(row);
+});
+
+router.delete("/staff/:id", async (req, res) => {
+  const ownerId = req.user!.id;
+  const id = Number(req.params.id);
+  await db.delete(ownerStaffTable).where(and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)));
+  return res.json({ ok: true });
+});
+
+/* ── Salary Logs ───────────────────────────────────────────── */
+
+router.get("/salary-logs", async (req, res) => {
+  const ownerId = req.user!.id;
+  const month = typeof req.query.month === "string" ? req.query.month : undefined;
+  const conditions = [eq(salaryLogsTable.ownerId, ownerId)];
+  if (month) conditions.push(eq(salaryLogsTable.month, month));
+  const logs = await db
+    .select()
+    .from(salaryLogsTable)
+    .where(and(...conditions))
+    .orderBy(salaryLogsTable.createdAt);
+  return res.json(logs);
+});
+
+router.post("/salary-logs", async (req, res) => {
+  const ownerId = req.user!.id;
+  const body = z.object({
+    staffId: z.number().int().positive(),
+    month: z.string().regex(/^\d{4}-\d{2}$/),
+    bonus: z.number().nonnegative().default(0),
+    deduction: z.number().nonnegative().default(0),
+    notes: z.string().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const [staff] = await db
+    .select()
+    .from(ownerStaffTable)
+    .where(and(eq(ownerStaffTable.id, body.data.staffId), eq(ownerStaffTable.ownerId, ownerId)));
+  if (!staff) return res.status(403).json({ error: "غير مصرح" });
+
+  const [existing] = await db
+    .select()
+    .from(salaryLogsTable)
+    .where(and(eq(salaryLogsTable.staffId, body.data.staffId), eq(salaryLogsTable.month, body.data.month)))
+    .limit(1);
+
+  if (existing) {
+    const [updated] = await db
+      .update(salaryLogsTable)
+      .set({ bonus: String(body.data.bonus), deduction: String(body.data.deduction), notes: body.data.notes ?? null })
+      .where(eq(salaryLogsTable.id, existing.id))
+      .returning();
+    return res.json(updated);
+  }
+
+  const [row] = await db
+    .insert(salaryLogsTable)
+    .values({
+      ownerId,
+      staffId: body.data.staffId,
+      month: body.data.month,
+      bonus: String(body.data.bonus),
+      deduction: String(body.data.deduction),
+      notes: body.data.notes ?? null,
+    })
+    .returning();
+  return res.status(201).json(row);
+});
+
+router.delete("/salary-logs/:id", async (req, res) => {
+  const ownerId = req.user!.id;
+  const id = Number(req.params.id);
+  await db.delete(salaryLogsTable).where(and(eq(salaryLogsTable.id, id), eq(salaryLogsTable.ownerId, ownerId)));
+  return res.json({ ok: true });
+});
+
+/* ── Financial Summary ─────────────────────────────────────── */
+
+router.get("/financial-summary", async (req, res) => {
+  const ownerId = req.user!.id;
+
+  // Build last 6 months list
+  const months: string[] = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(d.toISOString().slice(0, 7));
+  }
+
+  const selectedMonth = (typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month))
+    ? req.query.month
+    : months[months.length - 1];
+  const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
+
+  // Revenue: sum of revenueAmount in ownerBookings for this month
+  const bookingConditions = [
+    eq(ownerBookingsTable.ownerId, ownerId),
+    gte(ownerBookingsTable.bookingDate, `${selectedMonth}-01`),
+    lte(ownerBookingsTable.bookingDate, `${selectedMonth}-31`),
+  ];
+  if (submissionId) bookingConditions.push(eq(ownerBookingsTable.submissionId, submissionId));
+
+  const monthBookings = await db
+    .select()
+    .from(ownerBookingsTable)
+    .where(and(...bookingConditions));
+  const totalRevenue = monthBookings.reduce((s, b) => s + (b.revenueAmount ? Number(b.revenueAmount) : 0), 0);
+
+  // Expenses: for this month
+  const expenseConditions = [
+    eq(ownerExpensesTable.ownerId, ownerId),
+    gte(ownerExpensesTable.dateStr, `${selectedMonth}-01`),
+    lte(ownerExpensesTable.dateStr, `${selectedMonth}-31`),
+  ];
+  if (submissionId) expenseConditions.push(eq(ownerExpensesTable.submissionId, submissionId));
+
+  const monthExpenses = await db
+    .select()
+    .from(ownerExpensesTable)
+    .where(and(...expenseConditions));
+
+  const totalExpenses = monthExpenses.reduce((s, e) => s + Number(e.amount), 0);
+
+  // Salary expenses for this month (not linked to submission)
+  const salaryLogs = await db
+    .select({ bonus: salaryLogsTable.bonus, deduction: salaryLogsTable.deduction, staffId: salaryLogsTable.staffId })
+    .from(salaryLogsTable)
+    .where(and(eq(salaryLogsTable.ownerId, ownerId), eq(salaryLogsTable.month, selectedMonth)));
+
+  const staffRows = await db
+    .select({ id: ownerStaffTable.id, baseSalary: ownerStaffTable.baseSalary })
+    .from(ownerStaffTable)
+    .where(eq(ownerStaffTable.ownerId, ownerId));
+
+  const staffMap = Object.fromEntries(staffRows.map((s) => [s.id, Number(s.baseSalary)]));
+  const totalSalaries = salaryLogs.reduce((s, log) => {
+    const base = staffMap[log.staffId] ?? 0;
+    return s + base + Number(log.bonus) - Number(log.deduction);
+  }, 0);
+
+  // Expense breakdown by category
+  const categoryTotals: Record<string, number> = {};
+  for (const e of monthExpenses) {
+    categoryTotals[e.category] = (categoryTotals[e.category] ?? 0) + Number(e.amount);
+  }
+  if (totalSalaries > 0) {
+    categoryTotals["salaries"] = (categoryTotals["salaries"] ?? 0) + totalSalaries;
+  }
+  const totalExpensesAll = totalExpenses + totalSalaries;
+  const netProfit = totalRevenue - totalExpensesAll;
+
+  // Monthly trend for chart (last 6 months)
+  const trend = await Promise.all(months.map(async (m) => {
+    const bConds = [
+      eq(ownerBookingsTable.ownerId, ownerId),
+      gte(ownerBookingsTable.bookingDate, `${m}-01`),
+      lte(ownerBookingsTable.bookingDate, `${m}-31`),
+    ];
+    if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
+    const bRows = await db.select({ rev: ownerBookingsTable.revenueAmount }).from(ownerBookingsTable).where(and(...bConds));
+    const rev = bRows.reduce((s, r) => s + (r.rev ? Number(r.rev) : 0), 0);
+
+    const eConds = [
+      eq(ownerExpensesTable.ownerId, ownerId),
+      gte(ownerExpensesTable.dateStr, `${m}-01`),
+      lte(ownerExpensesTable.dateStr, `${m}-31`),
+    ];
+    if (submissionId) eConds.push(eq(ownerExpensesTable.submissionId, submissionId));
+    const eRows = await db.select({ amt: ownerExpensesTable.amount }).from(ownerExpensesTable).where(and(...eConds));
+    const exp = eRows.reduce((s, r) => s + Number(r.amt), 0);
+
+    const slRows = await db
+      .select({ bonus: salaryLogsTable.bonus, deduction: salaryLogsTable.deduction, staffId: salaryLogsTable.staffId })
+      .from(salaryLogsTable)
+      .where(and(eq(salaryLogsTable.ownerId, ownerId), eq(salaryLogsTable.month, m)));
+    const salExp = slRows.reduce((s, log) => {
+      const base = staffMap[log.staffId] ?? 0;
+      return s + base + Number(log.bonus) - Number(log.deduction);
+    }, 0);
+
+    return { month: m, revenue: rev, expenses: exp + salExp };
+  }));
+
+  return res.json({
+    month: selectedMonth,
+    totalRevenue,
+    totalExpenses: totalExpensesAll,
+    netProfit,
+    categoryTotals,
+    trend,
+  });
 });
 
 export default router;

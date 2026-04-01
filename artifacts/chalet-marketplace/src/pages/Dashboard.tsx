@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, type ReactElement } from "react";
+import { useEffect, useState, useMemo, useRef, type ReactElement } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -16,9 +16,14 @@ import {
   User, LogOut, Plus, MapPin, Calendar, Clock, CheckCircle,
   XCircle, Home, BookOpen, Trash2, Building2, Globe, Phone, AlertTriangle,
   RotateCcw, Star, ChevronLeft, ChevronRight, BarChart2, CreditCard,
-  TrendingUp, Sunrise, Moon, Sun, Lock, Zap,
+  TrendingUp, Sunrise, Moon, Sun, Lock, Zap, DollarSign, Users,
+  Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
+  Camera, Loader2,
 } from "lucide-react";
 import { Link } from "wouter";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid,
+} from "recharts";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -946,6 +951,557 @@ interface MonthReport {
   topSlotLabel: string;
 }
 
+/* ── Expense Categories ──────────────────────────── */
+const EXPENSE_CATS: { key: string; label: string; emoji: string; color: string }[] = [
+  { key: "salaries",    label: "الرواتب",       emoji: "💰", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  { key: "electricity", label: "الكهرباء",      emoji: "⚡", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" },
+  { key: "water",       label: "الماء",          emoji: "💧", color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300" },
+  { key: "internet",    label: "الإنترنت",       emoji: "🌐", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" },
+  { key: "maintenance", label: "الصيانة",        emoji: "🔧", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
+  { key: "supplies",    label: "المستلزمات",     emoji: "📦", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+  { key: "other",       label: "أخرى",           emoji: "✨", color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
+];
+const catMap = Object.fromEntries(EXPENSE_CATS.map((c) => [c.key, c]));
+
+async function uploadFile(file: File): Promise<string | null> {
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    const r = await fetch(`${BASE}/api/storage/uploads/process`, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    return data.url ?? data.originalUrl ?? null;
+  } catch { return null; }
+}
+
+function formatAmount(n: number) {
+  return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n);
+}
+
+/* ── Expenses Tab ────────────────────────────────── */
+interface OwnerExpense {
+  id: number;
+  category: string;
+  dateStr: string;
+  amount: string;
+  notes: string | null;
+  receiptUrl: string | null;
+  submissionId: number | null;
+}
+
+function ExpensesTab() {
+  const qc = useQueryClient();
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const [month, setMonth] = useState(currentMonth);
+  const [form, setForm] = useState({ category: "other", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", submissionId: "" });
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const monthOptions = useMemo(() => {
+    const opts = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const val = d.toISOString().slice(0, 7);
+      const label = d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+      opts.push({ val, label });
+    }
+    return opts;
+  }, []);
+
+  const { data: mySubmissions = [] } = useQuery<any[]>({
+    queryKey: ["my-submissions-for-report"],
+    queryFn: async () => {
+      const r = await apiFetch("/submissions/mine");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const { data: expenses = [], isLoading } = useQuery<OwnerExpense[]>({
+    queryKey: ["owner", "expenses", month],
+    queryFn: async () => {
+      const r = await apiFetch(`/owner/expenses?month=${month}`);
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const addMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const r = await apiFetch("/owner/expenses", { method: "POST", body: JSON.stringify(data) });
+      if (!r.ok) throw new Error("فشل الحفظ");
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
+      qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
+      setForm({ category: "other", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", submissionId: "" });
+      setReceiptUrl(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await apiFetch(`/owner/expenses/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
+      qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
+    },
+  });
+
+  async function handleReceiptUpload(file: File) {
+    setUploading(true);
+    const url = await uploadFile(file);
+    setReceiptUrl(url);
+    setUploading(false);
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const amt = parseFloat(form.amount);
+    if (!amt || isNaN(amt)) return;
+    addMutation.mutate({
+      category: form.category,
+      dateStr: form.dateStr,
+      amount: amt,
+      notes: form.notes || undefined,
+      receiptUrl: receiptUrl || undefined,
+      submissionId: form.submissionId ? Number(form.submissionId) : undefined,
+    });
+  }
+
+  const totalMonth = expenses.reduce((s, e) => s + Number(e.amount), 0);
+
+  return (
+    <div className="space-y-5">
+      {/* Quick Entry Form */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
+          <Receipt className="w-4 h-4 text-primary" />
+          تسجيل مصروف جديد
+        </h2>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {/* Row 1: Category + Amount */}
+          <div className="flex gap-3 flex-wrap">
+            <div className="flex-1 min-w-[140px]">
+              <label className="text-xs text-muted-foreground font-medium mb-1 block">الفئة</label>
+              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXPENSE_CATS.map((c) => (
+                    <SelectItem key={c.key} value={c.key}>{c.emoji} {c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex-1 min-w-[120px]">
+              <label className="text-xs text-muted-foreground font-medium mb-1 block">المبلغ (ر.س)</label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={form.amount}
+                onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                className="h-11"
+                required
+              />
+            </div>
+          </div>
+          {/* Row 2: Date + Property */}
+          <div className="flex gap-3 flex-wrap">
+            <div className="flex-1 min-w-[140px]">
+              <label className="text-xs text-muted-foreground font-medium mb-1 block">التاريخ</label>
+              <Input
+                type="date"
+                value={form.dateStr}
+                onChange={(e) => setForm((f) => ({ ...f, dateStr: e.target.value }))}
+                className="h-11"
+                required
+              />
+            </div>
+            {mySubmissions.length > 0 && (
+              <div className="flex-1 min-w-[140px]">
+                <label className="text-xs text-muted-foreground font-medium mb-1 block">العقار (اختياري)</label>
+                <Select value={form.submissionId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, submissionId: v === "none" ? "" : v }))}>
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="عام" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">عام (غير مرتبط)</SelectItem>
+                    {mySubmissions.map((s: any) => (
+                      <SelectItem key={s.id} value={String(s.id)}>{s.nameAr ?? `شاليه #${s.id}`}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          {/* Row 3: Notes */}
+          <div>
+            <label className="text-xs text-muted-foreground font-medium mb-1 block">ملاحظات (اختياري)</label>
+            <Input
+              placeholder="تفاصيل إضافية..."
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+              className="h-11"
+            />
+          </div>
+          {/* Row 4: Receipt upload */}
+          <div className="flex items-center gap-3">
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleReceiptUpload(e.target.files[0])} />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+            >
+              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+              {receiptUrl ? "تم رفع الإيصال ✓" : "رفع إيصال (اختياري)"}
+            </button>
+            {receiptUrl && (
+              <a href={receiptUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">عرض</a>
+            )}
+          </div>
+          <Button type="submit" className="w-full h-11 font-bold" disabled={addMutation.isPending || !form.amount}>
+            {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <Plus className="w-4 h-4 me-2" />}
+            تسجيل المصروف
+          </Button>
+        </form>
+      </div>
+
+      {/* Month Filter + List */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+            <Wallet className="w-4 h-4 text-primary" />
+            المصروفات
+          </h2>
+          <div className="flex items-center gap-2">
+            <Select value={month} onValueChange={setMonth}>
+              <SelectTrigger className="h-9 text-sm w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((o) => (
+                  <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
+        ) : expenses.length === 0 ? (
+          <div className="text-center py-10 text-muted-foreground">
+            <Receipt className="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">لا توجد مصروفات في هذا الشهر</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {expenses.map((exp) => {
+              const cat = catMap[exp.category] ?? { label: exp.category, emoji: "✨", color: "bg-slate-100 text-slate-700" };
+              return (
+                <div key={exp.id} className="flex items-center gap-3 p-3 bg-muted/40 rounded-xl">
+                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold shrink-0 ${cat.color}`}>
+                    {cat.emoji} {cat.label}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-foreground">{formatAmount(Number(exp.amount))}</p>
+                    <p className="text-xs text-muted-foreground truncate">{exp.dateStr}{exp.notes ? ` · ${exp.notes}` : ""}</p>
+                  </div>
+                  {exp.receiptUrl && (
+                    <a href={exp.receiptUrl} target="_blank" rel="noreferrer" className="text-xs text-primary shrink-0">
+                      <Receipt className="w-4 h-4" />
+                    </a>
+                  )}
+                  <button
+                    onClick={() => { if (confirm("حذف هذا المصروف؟")) deleteMutation.mutate(exp.id); }}
+                    className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {expenses.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">إجمالي الشهر</span>
+            <span className="text-lg font-bold text-destructive">{formatAmount(totalMonth)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Staff & Salaries Tab ────────────────────────── */
+interface StaffMember { id: number; name: string; baseSalary: string; isActive: boolean; }
+interface SalaryLog { id: number; staffId: number; month: string; bonus: string; deduction: string; notes: string | null; }
+
+function StaffTab() {
+  const qc = useQueryClient();
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const [month, setMonth] = useState(currentMonth);
+  const [addForm, setAddForm] = useState({ name: "", baseSalary: "" });
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", baseSalary: "" });
+  const [expandedStaff, setExpandedStaff] = useState<number | null>(null);
+  const [salaryForm, setSalaryForm] = useState<Record<number, { bonus: string; deduction: string; notes: string }>>({});
+
+  const monthOptions = useMemo(() => {
+    const opts = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      opts.push({ val: d.toISOString().slice(0, 7), label: d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" }) });
+    }
+    return opts;
+  }, []);
+
+  const { data: staff = [], isLoading } = useQuery<StaffMember[]>({
+    queryKey: ["owner", "staff"],
+    queryFn: async () => { const r = await apiFetch("/owner/staff"); if (!r.ok) return []; return r.json(); },
+  });
+
+  const { data: salaryLogs = [] } = useQuery<SalaryLog[]>({
+    queryKey: ["owner", "salary-logs", month],
+    queryFn: async () => { const r = await apiFetch(`/owner/salary-logs?month=${month}`); if (!r.ok) return []; return r.json(); },
+  });
+
+  const addStaff = useMutation({
+    mutationFn: async (data: any) => {
+      const r = await apiFetch("/owner/staff", { method: "POST", body: JSON.stringify(data) });
+      if (!r.ok) throw new Error();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["owner", "staff"] }); setAddForm({ name: "", baseSalary: "" }); },
+  });
+
+  const editStaff = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const r = await apiFetch(`/owner/staff/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+      if (!r.ok) throw new Error();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["owner", "staff"] }); setEditId(null); },
+  });
+
+  const deleteStaff = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await apiFetch(`/owner/staff/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "staff"] }),
+  });
+
+  const saveSalary = useMutation({
+    mutationFn: async (data: any) => {
+      const r = await apiFetch("/owner/salary-logs", { method: "POST", body: JSON.stringify(data) });
+      if (!r.ok) throw new Error();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "salary-logs"] });
+      qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
+    },
+  });
+
+  const getLog = (staffId: number) => salaryLogs.find((l) => l.staffId === staffId);
+
+  const getNetSalary = (member: StaffMember, bonus: number, deduction: number) =>
+    Number(member.baseSalary) + bonus - deduction;
+
+  return (
+    <div className="space-y-5">
+      {/* Add Staff Form */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
+          <UserCheck className="w-4 h-4 text-primary" />
+          إضافة موظف جديد
+        </h2>
+        <form onSubmit={(e) => { e.preventDefault(); const s = parseFloat(addForm.baseSalary); if (!addForm.name || isNaN(s)) return; addStaff.mutate({ name: addForm.name, baseSalary: s }); }} className="flex gap-3 flex-wrap">
+          <Input
+            placeholder="اسم الموظف"
+            value={addForm.name}
+            onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
+            className="flex-1 min-w-[140px] h-11"
+            required
+          />
+          <Input
+            type="number"
+            min="0"
+            step="1"
+            placeholder="الراتب الأساسي (ر.س)"
+            value={addForm.baseSalary}
+            onChange={(e) => setAddForm((f) => ({ ...f, baseSalary: e.target.value }))}
+            className="flex-1 min-w-[160px] h-11"
+            required
+          />
+          <Button type="submit" className="h-11 px-5 font-bold" disabled={addStaff.isPending}>
+            <Plus className="w-4 h-4 me-1.5" />
+            إضافة
+          </Button>
+        </form>
+      </div>
+
+      {/* Staff List + Salary Logs */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+            <Users className="w-4 h-4 text-primary" />
+            الموظفون والرواتب
+          </h2>
+          <Select value={month} onValueChange={setMonth}>
+            <SelectTrigger className="h-9 text-sm w-[150px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {monthOptions.map((o) => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+        ) : staff.length === 0 ? (
+          <div className="text-center py-10 text-muted-foreground">
+            <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">لا يوجد موظفون مسجلون بعد</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {staff.map((member) => {
+              const log = getLog(member.id);
+              const sf = salaryForm[member.id] ?? { bonus: log ? String(Number(log.bonus)) : "0", deduction: log ? String(Number(log.deduction)) : "0", notes: log?.notes ?? "" };
+              const bonus = parseFloat(sf.bonus) || 0;
+              const deduction = parseFloat(sf.deduction) || 0;
+              const net = getNetSalary(member, bonus, deduction);
+              const isExpanded = expandedStaff === member.id;
+
+              return (
+                <div key={member.id} className="border border-border rounded-2xl overflow-hidden">
+                  {/* Header */}
+                  <div className="flex items-center gap-3 p-4">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <User className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {editId === member.id ? (
+                        <div className="flex gap-2 flex-wrap">
+                          <Input
+                            value={editForm.name}
+                            onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                            className="flex-1 min-w-[120px] h-8 text-sm"
+                            placeholder="الاسم"
+                          />
+                          <Input
+                            type="number"
+                            value={editForm.baseSalary}
+                            onChange={(e) => setEditForm((f) => ({ ...f, baseSalary: e.target.value }))}
+                            className="w-32 h-8 text-sm"
+                            placeholder="الراتب"
+                          />
+                          <Button size="sm" onClick={() => editStaff.mutate({ id: member.id, data: { name: editForm.name, baseSalary: parseFloat(editForm.baseSalary) } })}>حفظ</Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditId(null)}>إلغاء</Button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="font-bold text-foreground text-sm">{member.name}</p>
+                          <p className="text-xs text-muted-foreground">الراتب الأساسي: {formatAmount(Number(member.baseSalary))}</p>
+                        </>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {editId !== member.id && (
+                        <button onClick={() => { setEditId(member.id); setEditForm({ name: member.name, baseSalary: member.baseSalary }); }} className="p-2 text-muted-foreground hover:text-foreground transition-colors">
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button onClick={() => { if (confirm(`حذف ${member.name}؟`)) deleteStaff.mutate(member.id); }} className="p-2 text-muted-foreground hover:text-destructive transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => setExpandedStaff(isExpanded ? null : member.id)} className="p-2 text-muted-foreground hover:text-foreground transition-colors">
+                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Salary Log Accordion */}
+                  {isExpanded && (
+                    <div className="border-t border-border p-4 bg-muted/30 space-y-3">
+                      <p className="text-xs font-semibold text-muted-foreground">راتب {monthOptions.find((m) => m.val === month)?.label}</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-muted-foreground font-medium mb-1 block">مكافأة (+) ر.س</label>
+                          <Input
+                            type="number" min="0" step="1"
+                            value={sf.bonus}
+                            onChange={(e) => setSalaryForm((f) => ({ ...f, [member.id]: { ...sf, bonus: e.target.value } }))}
+                            className="h-9"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground font-medium mb-1 block">خصم (-) ر.س</label>
+                          <Input
+                            type="number" min="0" step="1"
+                            value={sf.deduction}
+                            onChange={(e) => setSalaryForm((f) => ({ ...f, [member.id]: { ...sf, deduction: e.target.value } }))}
+                            className="h-9"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground font-medium mb-1 block">ملاحظات</label>
+                        <Input
+                          placeholder="أي ملاحظات..."
+                          value={sf.notes}
+                          onChange={(e) => setSalaryForm((f) => ({ ...f, [member.id]: { ...sf, notes: e.target.value } }))}
+                          className="h-9"
+                        />
+                      </div>
+                      {/* Net Salary Display */}
+                      <div className="flex items-center justify-between bg-background rounded-xl px-4 py-3 border border-border">
+                        <div className="text-sm text-muted-foreground space-y-0.5">
+                          <p>الراتب الأساسي: <span className="text-foreground font-semibold">{formatAmount(Number(member.baseSalary))}</span></p>
+                          {bonus > 0 && <p className="text-green-600 text-xs">+ مكافأة: {formatAmount(bonus)}</p>}
+                          {deduction > 0 && <p className="text-red-600 text-xs">- خصم: {formatAmount(deduction)}</p>}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground mb-0.5">صافي الراتب</p>
+                          <p className={`text-xl font-bold ${net < 0 ? "text-destructive" : "text-green-600"}`}>{formatAmount(net)}</p>
+                        </div>
+                      </div>
+                      <Button
+                        className="w-full h-10"
+                        onClick={() => saveSalary.mutate({ staffId: member.id, month, bonus, deduction, notes: sf.notes || undefined })}
+                        disabled={saveSalary.isPending}
+                      >
+                        {saveSalary.isPending ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <CheckCircle className="w-4 h-4 me-2" />}
+                        {log ? "تحديث الراتب" : "حفظ الراتب"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ReportsTab() {
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
@@ -975,6 +1531,24 @@ function ReportsTab() {
     queryKey: ["owner", "subscription"],
     queryFn: async () => {
       const r = await apiFetch("/owner/subscription");
+      if (!r.ok) return null;
+      return r.json();
+    },
+  });
+
+  const { data: financial } = useQuery<{
+    month: string;
+    totalRevenue: number;
+    totalExpenses: number;
+    netProfit: number;
+    categoryTotals: Record<string, number>;
+    trend: { month: string; revenue: number; expenses: number }[];
+  }>({
+    queryKey: ["owner", "financial-summary", selectedMonth, selectedSubmissionId],
+    queryFn: async () => {
+      const params = new URLSearchParams({ month: selectedMonth });
+      if (selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
+      const r = await apiFetch(`/owner/financial-summary?${params}`);
       if (!r.ok) return null;
       return r.json();
     },
@@ -1108,6 +1682,105 @@ function ReportsTab() {
         )}
       </div>
 
+      {/* ── Financial Summary (P&L) ── */}
+      {financial && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              {
+                label: "إجمالي الإيرادات",
+                value: formatAmount(financial.totalRevenue),
+                icon: <TrendingUp className="w-5 h-5" />,
+                color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+                note: "من الحجوزات المسعّرة",
+              },
+              {
+                label: "إجمالي المصروفات",
+                value: formatAmount(financial.totalExpenses),
+                icon: <TrendingDown className="w-5 h-5" />,
+                color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+                note: "مصروفات + رواتب",
+              },
+              {
+                label: "صافي الربح",
+                value: formatAmount(financial.netProfit),
+                icon: <DollarSign className="w-5 h-5" />,
+                color: financial.netProfit >= 0
+                  ? "bg-primary/10 text-primary"
+                  : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+                note: "الإيرادات - المصروفات",
+              },
+            ].map((stat) => (
+              <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stat.color}`}>{stat.icon}</div>
+                <p className="text-xl font-bold text-foreground leading-none">{stat.value}</p>
+                <p className="text-xs text-muted-foreground leading-tight">{stat.label}</p>
+                <p className="text-[10px] text-muted-foreground/60">{stat.note}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Expense Breakdown */}
+          {Object.keys(financial.categoryTotals).length > 0 && (
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
+                <Wallet className="w-4 h-4 text-primary" />
+                توزيع المصروفات
+              </h3>
+              <div className="space-y-2">
+                {Object.entries(financial.categoryTotals)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([key, amount]) => {
+                    const cat = catMap[key] ?? { label: key, emoji: "✨", color: "bg-slate-100 text-slate-700" };
+                    const pct = financial.totalExpenses > 0 ? Math.round((amount / financial.totalExpenses) * 100) : 0;
+                    return (
+                      <div key={key}>
+                        <div className="flex items-center justify-between text-sm mb-1">
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <span>{cat.emoji}</span>{cat.label}
+                          </span>
+                          <span className="font-semibold">{formatAmount(amount)} <span className="text-xs text-muted-foreground">({pct}%)</span></span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-1.5">
+                          <div className="h-1.5 rounded-full bg-destructive/70 transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* Monthly Trend Chart */}
+          {financial.trend.some((t) => t.revenue > 0 || t.expenses > 0) && (
+            <div className="bg-card border border-border rounded-2xl p-5">
+              <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-primary" />
+                مقارنة الإيرادات والمصروفات (آخر 6 أشهر)
+              </h3>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={financial.trend.map((t) => ({
+                  name: new Date(t.month + "-15").toLocaleDateString("ar-SA", { month: "short" }),
+                  الإيرادات: t.revenue,
+                  المصروفات: t.expenses,
+                }))} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                  <Tooltip
+                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: 12 }}
+                    formatter={(value: number) => [formatAmount(value)]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12, direction: "rtl" }} />
+                  <Bar dataKey="الإيرادات" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="المصروفات" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </>
+      )}
+
       {isLoading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
@@ -1115,7 +1788,7 @@ function ReportsTab() {
       ) : !report ? (
         <div className="bg-card border border-dashed border-border rounded-2xl p-12 text-center">
           <BarChart2 className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
-          <p className="text-muted-foreground">لا توجد بيانات لهذا الشهر</p>
+          <p className="text-muted-foreground">لا توجد بيانات حجوزات لهذا الشهر</p>
         </div>
       ) : (
         <>
@@ -1197,7 +1870,7 @@ function ReportsTab() {
 /* ── Main Dashboard ──────────────────────────── */
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"chalets" | "services" | "calendar" | "reports">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "services" | "calendar" | "expenses" | "staff" | "reports">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const { data: submissions, isLoading: submissionsLoading } = useGetMySubmissions();
@@ -1234,7 +1907,9 @@ export default function Dashboard() {
     { id: "chalets",   label: "شاليهاتي",         icon: <Building2 className="w-4 h-4" /> },
     { id: "services",  label: "خدماتي",            icon: <Star className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات", icon: <Calendar className="w-4 h-4" /> },
-    { id: "reports",   label: "التقارير",          icon: <BarChart2 className="w-4 h-4" /> },
+    { id: "expenses",  label: "المصروفات",          icon: <Wallet className="w-4 h-4" /> },
+    { id: "staff",     label: "الموظفون",           icon: <Users className="w-4 h-4" /> },
+    { id: "reports",   label: "التقارير",           icon: <BarChart2 className="w-4 h-4" /> },
   ] as const;
 
   return (
@@ -1320,6 +1995,12 @@ export default function Dashboard() {
         )}
         {activeTab === "calendar" && (
           <BookingCalendarTab submissions={submissions as any[] ?? []} />
+        )}
+        {activeTab === "expenses" && (
+          <ExpensesTab />
+        )}
+        {activeTab === "staff" && (
+          <StaffTab />
         )}
         {activeTab === "reports" && (
           <ReportsTab />
