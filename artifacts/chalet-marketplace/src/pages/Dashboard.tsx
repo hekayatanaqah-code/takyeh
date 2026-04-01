@@ -2600,61 +2600,85 @@ function ReportsTab() {
 
   const handleShareWhatsApp = useCallback(async () => {
     const phone = sharePhone.replace(/\D/g, "");
+
+    // ── Build report metadata ──────────────────────────────────────────────
+    let titleText = "";
+    let bodyText = "";
+    let fileName = "";
+    let htmlContent = "";
+
+    if (viewMode === "monthly" && report) {
+      const monthLabel = monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth;
+      titleText = `تقرير ${monthLabel} – ${selectedPropertyName}`;
+      bodyText =
+        `📊 تقرير شهر ${monthLabel}\n` +
+        `🏠 العقار: ${selectedPropertyName}\n` +
+        `📅 الحجوزات: ${report.totalBookings} · الإشغال: ${report.occupancyRate}%\n` +
+        (financial ? `💰 صافي الربح: ${formatAmount(financial.netProfit)}\n` : "") +
+        `✨ منصة حكاية أناقة – شاليهات القصيم`;
+      fileName = `Monthly_Report_${selectedMonth}.pdf`;
+    } else if (viewMode === "yearly" && yearly) {
+      titleText = `التقرير السنوي ${selectedYear} – ${selectedPropertyName}`;
+      bodyText =
+        `📊 التقرير السنوي ${selectedYear}\n` +
+        `🏠 العقار: ${selectedPropertyName}\n` +
+        `💚 الإيرادات: ${formatAmount(yearly.totals.revenue)}\n` +
+        `🔴 المصروفات: ${formatAmount(yearly.totals.expenses)}\n` +
+        `⭐ صافي الربح: ${formatAmount(yearly.totals.netProfit)}\n` +
+        `✨ منصة حكاية أناقة – شاليهات القصيم`;
+      fileName = `Annual_Report_${selectedYear}.pdf`;
+    } else return;
+
+    // ── Fast path: desktop + cached URL (no need to regenerate) ───────────
+    const canShareFiles = typeof navigator.share === "function" && typeof navigator.canShare === "function";
+    if (!canShareFiles && pdfUrl) {
+      const text = bodyText + `\n📎 التقرير (PDF): ${pdfUrl}`;
+      const waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(waLink, "_blank");
+      return;
+    }
+
     setPdfLoading(true);
     try {
-      let url = pdfUrl;
-      if (!url) {
-        if (viewMode === "monthly") {
-          url = await generateAndUploadReportPdf("monthly", {
-            month: selectedMonth,
-            propertyName: selectedPropertyName,
-            report,
-            financial,
-          });
-        } else if (viewMode === "yearly" && yearly) {
-          url = await generateAndUploadReportPdf("yearly", {
-            year: selectedYear,
-            propertyName: selectedPropertyName,
-            yearly,
-          });
-        }
-        if (url) setPdfUrl(url);
+      // ── Generate PDF blob ──────────────────────────────────────────────
+      const qr = viewMode === "monthly"
+        ? await generateReportQrDataUrl("monthly", selectedMonth)
+        : await generateReportQrDataUrl("yearly", selectedYear);
+
+      if (viewMode === "monthly") {
+        htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr);
+      } else {
+        htmlContent = buildYearlyReportHtml(selectedYear, selectedPropertyName, yearly!, false, qr);
       }
 
-      let text = "";
-      if (viewMode === "monthly" && report) {
-        const monthLabel = monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth;
-        text = `📊 تقرير شهر ${monthLabel}\n\n` +
-          `🏠 العقار: ${selectedPropertyName}\n` +
-          `📅 إجمالي الحجوزات: ${report.totalBookings}\n` +
-          `📈 نسبة الإشغال: ${report.occupancyRate}%\n` +
-          (financial ? `💰 صافي الربح: ${formatAmount(financial.netProfit)}\n` : "") +
-          (url ? `\n📎 التقرير (PDF): ${url}\n` : "") +
-          `\n✨ منصة حكاية أناقة – شاليهات القصيم`;
-      } else if (viewMode === "yearly" && yearly) {
-        text = `📊 التقرير السنوي ${selectedYear}\n\n` +
-          `🏠 العقار: ${selectedPropertyName}\n` +
-          `💚 الإيرادات: ${formatAmount(yearly.totals.revenue)}\n` +
-          `🔴 المصروفات: ${formatAmount(yearly.totals.expenses)}\n` +
-          `⭐ صافي الربح: ${formatAmount(yearly.totals.netProfit)}\n` +
-          (url ? `\n📎 التقرير (PDF): ${url}\n` : "") +
-          `\n✨ منصة حكاية أناقة – شاليهات القصيم`;
+      const { blob } = await htmlToPdfBlob(htmlContent, fileName);
+      const pdfFile = new File([blob], fileName, { type: "application/pdf" });
+
+      // ── Try Web Share API (mobile) — sends ACTUAL FILE to WhatsApp ─────
+      // On mobile the OS share sheet appears; user picks WhatsApp → PDF attached.
+      if (canShareFiles && navigator.canShare({ files: [pdfFile] })) {
+        try {
+          await navigator.share({ files: [pdfFile], title: titleText, text: bodyText });
+          return; // File shared successfully via native share sheet
+        } catch (shareErr: unknown) {
+          if ((shareErr as Error)?.name === "AbortError") return; // User cancelled
+          // Other error — fall through to wa.me fallback
+        }
       }
-      if (!text) return;
-      const waUrl = phone
-        ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
-        : `https://wa.me/?text=${encodeURIComponent(text)}`;
-      window.open(waUrl, "_blank");
+
+      // ── Desktop fallback: upload PDF → wa.me link ──────────────────────
+      // wa.me only supports text; we include a download link as the best alternative.
+      let url: string | null = pdfUrl;
+      if (!url) {
+        url = await uploadFile(pdfFile);
+        if (url) setPdfUrl(url);
+      }
+      const text = bodyText + (url ? `\n📎 التقرير (PDF): ${url}` : "");
+      const waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(waLink, "_blank");
     } catch (e) {
-      console.error("PDF generation failed:", e);
-      alert("تعذّر إنشاء ملف PDF، سيتم مشاركة ملخص نصي.");
-      const phone = sharePhone.replace(/\D/g, "");
-      let text = viewMode === "monthly" && report
-        ? `📊 تقرير شهر ${monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth}\n🏠 ${selectedPropertyName}\n✨ منصة حكاية أناقة`
-        : viewMode === "yearly" && yearly
-        ? `📊 التقرير السنوي ${selectedYear}\n🏠 ${selectedPropertyName}\n✨ منصة حكاية أناقة`
-        : "";
-      if (text) window.open(phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+      console.error("Share failed:", e);
+      alert("تعذّر مشاركة التقرير، يرجى المحاولة مرة أخرى.");
     } finally {
       setPdfLoading(false);
     }
