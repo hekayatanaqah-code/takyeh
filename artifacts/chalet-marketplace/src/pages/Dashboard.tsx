@@ -987,6 +987,7 @@ function formatAmount(n: number) {
 interface OwnerExpense {
   id: number;
   category: string;
+  customCategory: string | null;
   dateStr: string;
   amount: string;
   notes: string | null;
@@ -994,14 +995,71 @@ interface OwnerExpense {
   submissionId: number | null;
 }
 
+interface ExpenseCatItem {
+  id: number;
+  name: string;
+  emoji: string;
+  color: string;
+  isOther: boolean;
+  sortOrder: number;
+}
+
+const COLOR_CLASSES: Record<string, string> = {
+  blue:   "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  yellow: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300",
+  cyan:   "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300",
+  purple: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
+  orange: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+  green:  "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+  slate:  "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  red:    "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+  pink:   "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300",
+  teal:   "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",
+};
+
+function catColorClass(color: string) {
+  return COLOR_CLASSES[color] ?? COLOR_CLASSES.slate;
+}
+
 function ExpensesTab() {
   const qc = useQueryClient();
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [month, setMonth] = useState(currentMonth);
-  const [form, setForm] = useState({ category: "other", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", submissionId: "" });
+  const [form, setForm] = useState({ categoryId: "", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", customCategory: "", submissionId: "" });
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  /* ── dynamic categories ── */
+  const { data: expenseCats = [] } = useQuery<ExpenseCatItem[]>({
+    queryKey: ["catalog", "expense-categories"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/expense-categories`, { credentials: "include" });
+      if (!r.ok) return EXPENSE_CATS.map((c, i) => ({ id: i + 1, name: c.label, emoji: c.emoji, color: c.key === "other" ? "slate" : c.color.split("-")[1] ?? "slate", isOther: c.key === "other", sortOrder: i }));
+      return r.json();
+    },
+  });
+
+  useEffect(() => {
+    if (expenseCats.length > 0 && !form.categoryId) {
+      setForm((f) => ({ ...f, categoryId: String(expenseCats[0].id) }));
+    }
+  }, [expenseCats]);
+
+  const selectedCat = expenseCats.find((c) => String(c.id) === form.categoryId);
+  const isOtherSelected = selectedCat?.isOther ?? false;
+
+  /* combined lookup for list display (supports both old enum keys + new names) */
+  const catDisplayMap = useMemo(() => {
+    const map: Record<string, { label: string; emoji: string; colorClass: string }> = {};
+    for (const c of expenseCats) {
+      map[c.name] = { label: c.name, emoji: c.emoji, colorClass: catColorClass(c.color) };
+    }
+    for (const c of EXPENSE_CATS) {
+      map[c.key] = { label: c.label, emoji: c.emoji, colorClass: c.color };
+    }
+    return map;
+  }, [expenseCats]);
 
   const monthOptions = useMemo(() => {
     const opts = [];
@@ -1042,7 +1100,7 @@ function ExpensesTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
       qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
-      setForm({ category: "other", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", submissionId: "" });
+      setForm((f) => ({ ...f, amount: "", notes: "", customCategory: "" }));
       setReceiptUrl(null);
     },
   });
@@ -1069,8 +1127,10 @@ function ExpensesTab() {
     e.preventDefault();
     const amt = parseFloat(form.amount);
     if (!amt || isNaN(amt)) return;
+    if (isOtherSelected && !form.customCategory.trim()) return;
     addMutation.mutate({
-      category: form.category,
+      category: selectedCat?.name ?? "أخرى",
+      customCategory: isOtherSelected ? form.customCategory.trim() : undefined,
       dateStr: form.dateStr,
       amount: amt,
       notes: form.notes || undefined,
@@ -1094,13 +1154,13 @@ function ExpensesTab() {
           <div className="flex gap-3 flex-wrap">
             <div className="flex-1 min-w-[140px]">
               <label className="text-xs text-muted-foreground font-medium mb-1 block">الفئة</label>
-              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+              <Select value={form.categoryId} onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v, customCategory: "" }))}>
                 <SelectTrigger className="h-11">
-                  <SelectValue />
+                  <SelectValue placeholder="اختر الفئة" />
                 </SelectTrigger>
                 <SelectContent>
-                  {EXPENSE_CATS.map((c) => (
-                    <SelectItem key={c.key} value={c.key}>{c.emoji} {c.label}</SelectItem>
+                  {expenseCats.map((c) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.emoji} {c.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1119,6 +1179,22 @@ function ExpensesTab() {
               />
             </div>
           </div>
+          {/* Custom category name — shown only when isOther category is selected */}
+          {isOtherSelected && (
+            <div>
+              <label className="text-xs text-muted-foreground font-medium mb-1 block">
+                اسم المصروف <span className="text-destructive">*</span>
+              </label>
+              <Input
+                placeholder="مثال: تنظيف المكيفات، صيانة مسبح..."
+                value={form.customCategory}
+                onChange={(e) => setForm((f) => ({ ...f, customCategory: e.target.value }))}
+                className="h-11"
+                required
+              />
+            </div>
+          )}
+
           {/* Row 2: Date + Property */}
           <div className="flex gap-3 flex-wrap">
             <div className="flex-1 min-w-[140px]">
@@ -1211,11 +1287,12 @@ function ExpensesTab() {
         ) : (
           <div className="space-y-2">
             {expenses.map((exp) => {
-              const cat = catMap[exp.category] ?? { label: exp.category, emoji: "✨", color: "bg-slate-100 text-slate-700" };
+              const cat = catDisplayMap[exp.category] ?? { label: exp.category, emoji: "✨", colorClass: "bg-slate-100 text-slate-700" };
+              const displayLabel = exp.customCategory ? exp.customCategory : cat.label;
               return (
                 <div key={exp.id} className="flex items-center gap-3 p-3 bg-muted/40 rounded-xl">
-                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold shrink-0 ${cat.color}`}>
-                    {cat.emoji} {cat.label}
+                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold shrink-0 ${cat.colorClass}`}>
+                    {cat.emoji} {displayLabel}
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-foreground">{formatAmount(Number(exp.amount))}</p>
@@ -1444,6 +1521,148 @@ function monthLabel(ym: string) {
   return new Date(ym + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
 }
 
+/* ── Bulk Voucher Printer ─────────────────────── */
+async function printBulkVouchers(logs: any[], ownerName: string) {
+  if (logs.length === 0) return;
+  const win = window.open("", "_blank", "width=900,height=1200");
+  if (!win) return;
+
+  const pages: string[] = [];
+  for (const log of logs) {
+    const base = Number(log.baseSalary ?? 0);
+    const bonus = Number(log.bonus);
+    const deduction = Number(log.deduction);
+    const net = base + bonus - deduction;
+    const paidAtStr = log.paidAt ? String(log.paidAt) : new Date().toISOString();
+    const voucherNo = `SAL-${log.month.replace("-","")}-${log.staffId}`;
+    const dateStr = new Date(paidAtStr).toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
+    const monthStr = monthLabel(log.month);
+    const qrDataUrl = await buildVoucherQR(log.id, voucherNo);
+    const qrHtml = qrDataUrl ? `<div class="qr-section"><img src="${qrDataUrl}" alt="QR"/><div class="qr-cap">امسح للتحقق</div></div>` : "";
+
+    pages.push(`
+<div class="page" style="page-break-after:always;">
+  <div class="header">
+    <div class="brand"><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
+    <div class="badge"><div class="badge-title">مسيّر رواتب</div><div class="badge-no"># ${voucherNo}</div></div>
+    ${qrHtml}
+  </div>
+  <div class="meta">
+    <div class="meta-item"><div class="meta-label">اسم الموظف</div><div class="meta-val">${log.staffName ?? "—"}</div></div>
+    <div class="meta-item"><div class="meta-label">صاحب العمل</div><div class="meta-val">${ownerName}</div></div>
+    <div class="meta-item"><div class="meta-label">فترة الراتب</div><div class="meta-val">${monthStr}</div></div>
+    <div class="meta-item"><div class="meta-label">تاريخ الصرف</div><div class="meta-val">${dateStr}</div></div>
+  </div>
+  <table class="sal-table">
+    <thead><tr><th>البند</th><th>المبلغ (ر.س)</th></tr></thead>
+    <tbody>
+      <tr><td>الراتب الأساسي</td><td>${base.toLocaleString("ar-SA")}</td></tr>
+      ${bonus > 0 ? `<tr><td>مكافأة</td><td class="green">+${bonus.toLocaleString("ar-SA")}</td></tr>` : ""}
+      ${deduction > 0 ? `<tr><td>خصم</td><td class="red">-${deduction.toLocaleString("ar-SA")}</td></tr>` : ""}
+    </tbody>
+    <tfoot><tr><td>الصافي</td><td class="net">${net.toLocaleString("ar-SA")}</td></tr></tfoot>
+  </table>
+  ${log.notes ? `<div class="notes">ملاحظات: ${log.notes}</div>` : ""}
+  <div class="sigs"><div class="sig"><div class="sig-line"></div><p>توقيع صاحب العمل</p></div><div class="sig"><div class="sig-line"></div><p>توقيع الموظف</p></div></div>
+</div>`);
+  }
+
+  win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'Segoe UI',Tahoma,Arial,sans-serif; direction:rtl; color:#111; }
+.page { max-width:794px; margin:0 auto; padding:40px 48px; min-height:1123px; position:relative; }
+.header { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:16px; border-bottom:3px solid #b8860b; padding-bottom:16px; margin-bottom:20px; }
+.brand-name { font-size:24px; font-weight:800; color:#b8860b; }
+.brand-sub { font-size:11px; color:#888; }
+.badge { background:#b8860b; color:#fff; border-radius:10px; padding:8px 18px; text-align:center; }
+.badge-title { font-size:14px; font-weight:700; }
+.badge-no { font-size:10px; opacity:.8; }
+.qr-section { display:flex; flex-direction:column; align-items:flex-start; gap:3px; }
+.qr-section img { width:72px; height:72px; border:1px solid #ddd; border-radius:4px; }
+.qr-cap { font-size:8px; color:#aaa; }
+.meta { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px; }
+.meta-item { background:#faf9f6; border:1px solid #e8e2d0; border-radius:8px; padding:10px 12px; }
+.meta-label { font-size:10px; color:#999; margin-bottom:2px; }
+.meta-val { font-size:13px; font-weight:600; }
+.sal-table { width:100%; border-collapse:collapse; margin-bottom:20px; }
+.sal-table th,.sal-table td { padding:10px 14px; border:1px solid #e8e2d0; text-align:right; }
+.sal-table thead { background:#b8860b; color:#fff; }
+.sal-table tfoot { background:#fff9ed; font-weight:700; }
+.green { color:#15803d; } .red { color:#dc2626; } .net { font-size:16px; color:#b8860b; }
+.notes { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:12px; margin-bottom:20px; }
+.sigs { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:30px; }
+.sig { text-align:center; } .sig-line { height:1px; background:#ccc; margin-bottom:8px; } .sig p { font-size:11px; color:#888; }
+</style></head><body>${pages.join("")}</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 600);
+}
+
+async function printMasterPayroll(filterMonth: string, logs: any[], ownerName: string) {
+  const filtered = filterMonth ? logs.filter((l) => l.month === filterMonth) : logs;
+  if (filtered.length === 0) return;
+  const win = window.open("", "_blank", "width=860,height=700");
+  if (!win) return;
+  const total = filtered.reduce((s: number, l: any) => {
+    const base = Number(l.baseSalary ?? 0);
+    return s + base + Number(l.bonus) - Number(l.deduction);
+  }, 0);
+  const monthStr = filterMonth ? monthLabel(filterMonth) : "كل الشهور";
+  const dateNow = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
+
+  const rows = filtered.map((l: any, i: number) => {
+    const base = Number(l.baseSalary ?? 0);
+    const bonus = Number(l.bonus);
+    const deduction = Number(l.deduction);
+    const net = base + bonus - deduction;
+    return `<tr>
+      <td>${i + 1}</td>
+      <td>${l.staffName ?? "—"}</td>
+      <td>${base.toLocaleString("ar-SA")}</td>
+      <td style="color:#15803d">${bonus > 0 ? `+${bonus.toLocaleString("ar-SA")}` : "—"}</td>
+      <td style="color:#dc2626">${deduction > 0 ? `-${deduction.toLocaleString("ar-SA")}` : "—"}</td>
+      <td style="font-weight:700;color:#b8860b">${net.toLocaleString("ar-SA")}</td>
+    </tr>`;
+  }).join("");
+
+  win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'Segoe UI',Tahoma,Arial,sans-serif; direction:rtl; color:#111; padding:40px 48px; }
+h1 { font-size:22px; color:#b8860b; font-weight:800; margin-bottom:4px; }
+.sub { font-size:12px; color:#888; margin-bottom:6px; }
+.meta-row { display:flex; gap:32px; margin-bottom:20px; font-size:12px; color:#555; }
+table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+th,td { padding:10px 12px; border:1px solid #e0d8c0; text-align:right; font-size:13px; }
+thead { background:#b8860b; color:#fff; }
+tfoot { background:#fff9ed; font-weight:700; }
+.sig-row { display:grid; grid-template-columns:1fr 1fr; gap:60px; margin-top:40px; }
+.sig { text-align:center; } .sig-line { height:1px; background:#ccc; margin-bottom:8px; } .sig p { font-size:11px; color:#888; }
+</style></head><body>
+<h1>حكاية أناقة — مسيّر رواتب جماعي</h1>
+<div class="sub">منصة إدارة الشاليهات – القصيم</div>
+<div class="meta-row">
+  <span>الشهر: <strong>${monthStr}</strong></span>
+  <span>صاحب العمل: <strong>${ownerName}</strong></span>
+  <span>تاريخ الطباعة: <strong>${dateNow}</strong></span>
+</div>
+<table>
+  <thead><tr><th>#</th><th>اسم الموظف</th><th>الأساسي</th><th>مكافأة</th><th>خصم</th><th>الصافي (ر.س)</th></tr></thead>
+  <tbody>${rows}</tbody>
+  <tfoot><tr><td colspan="5" style="text-align:right">الإجمالي</td><td style="color:#b8860b;font-size:15px">${total.toLocaleString("ar-SA")}</td></tr></tfoot>
+</table>
+<div class="sig-row">
+  <div class="sig"><div class="sig-line"></div><p>توقيع صاحب العمل</p></div>
+  <div class="sig"><div class="sig-line"></div><p>المدير المالي / المراجع</p></div>
+</div>
+</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
+}
+
+/* ──────────────────────────────────────────────── */
 function StaffTab() {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -1457,6 +1676,9 @@ function StaffTab() {
   const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", notes: "" });
   /* Voucher (shown in dialog after successful payment) */
   const [paidVoucher, setPaidVoucher] = useState<VoucherData | null>(null);
+  /* Bulk print selection */
+  const [selectedLogIds, setSelectedLogIds] = useState<Set<number>>(new Set());
+  const [masterMonth, setMasterMonth] = useState(currentMonth);
 
   /* ── month select options ── */
   const monthOptions = useMemo(() => {
@@ -1686,10 +1908,53 @@ function StaffTab() {
 
       {/* ── Payment History Table ── */}
       <div className="bg-card border border-border rounded-2xl p-5">
-        <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
-          <Receipt className="w-4 h-4 text-primary" />
-          سجل صرف الرواتب
-        </h2>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-primary" />
+            سجل صرف الرواتب
+          </h2>
+          {history.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Master payroll month picker */}
+              <Select value={masterMonth} onValueChange={setMasterMonth}>
+                <SelectTrigger className="h-8 text-xs w-[130px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthOptions.map((o) => (
+                    <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5"
+                onClick={() => {
+                  const ownerName = user?.name ?? user?.username ?? "صاحب العمل";
+                  printMasterPayroll(masterMonth, history as any[], ownerName);
+                }}
+              >
+                <Receipt className="w-3.5 h-3.5" />
+                مسيّر جماعي
+              </Button>
+              {selectedLogIds.size > 0 && (
+                <Button
+                  size="sm"
+                  className="h-8 text-xs gap-1.5"
+                  onClick={async () => {
+                    const ownerName = user?.name ?? user?.username ?? "صاحب العمل";
+                    const selected = (history as any[]).filter((l) => selectedLogIds.has(l.id));
+                    await printBulkVouchers(selected, ownerName);
+                  }}
+                >
+                  <Receipt className="w-3.5 h-3.5" />
+                  طباعة المسيرات ({selectedLogIds.size})
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
         {histLoading ? (
           <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-10 rounded-xl" />)}</div>
         ) : history.length === 0 ? (
@@ -1699,9 +1964,20 @@ function StaffTab() {
           </div>
         ) : (
           <div className="overflow-x-auto -mx-5 px-5">
-            <table className="w-full text-sm min-w-[540px]">
+            <table className="w-full text-sm min-w-[600px]">
               <thead>
                 <tr className="border-b border-border text-muted-foreground text-xs">
+                  <th className="pb-3 w-8">
+                    <input
+                      type="checkbox"
+                      className="w-3.5 h-3.5 rounded accent-primary"
+                      checked={selectedLogIds.size === history.length && history.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedLogIds(new Set((history as any[]).map((l) => l.id)));
+                        else setSelectedLogIds(new Set());
+                      }}
+                    />
+                  </th>
                   <th className="text-right pb-3 font-semibold">الموظف</th>
                   <th className="text-right pb-3 font-semibold">الشهر</th>
                   <th className="text-right pb-3 font-semibold">الأساسي</th>
@@ -1720,8 +1996,22 @@ function StaffTab() {
                   const net = base + bonus - deduction;
                   const paidAtStr = log.paidAt ? String(log.paidAt) : new Date().toISOString();
                   const voucherNo = `SAL-${log.month.replace("-","")}-${log.staffId}`;
+                  const isSelected = selectedLogIds.has(log.id);
                   return (
-                    <tr key={log.id} className="hover:bg-muted/30 transition-colors">
+                    <tr key={log.id} className={`hover:bg-muted/30 transition-colors ${isSelected ? "bg-primary/5" : ""}`}>
+                      <td className="py-3">
+                        <input
+                          type="checkbox"
+                          className="w-3.5 h-3.5 rounded accent-primary"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            const next = new Set(selectedLogIds);
+                            if (e.target.checked) next.add(log.id);
+                            else next.delete(log.id);
+                            setSelectedLogIds(next);
+                          }}
+                        />
+                      </td>
                       <td className="py-3 font-semibold text-foreground">{(log as any).staffName ?? "—"}</td>
                       <td className="py-3 text-muted-foreground">{monthLabel(log.month)}</td>
                       <td className="py-3">{formatAmount(base)}</td>

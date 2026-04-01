@@ -9,6 +9,7 @@ import {
   externalServicesTable,
   chaletCategoriesTable,
   serviceCategoriesTable,
+  expenseCategoriesTable,
   siteSettingsTable,
   serviceProviderSubmissionsTable,
   serviceProvidersTable,
@@ -426,6 +427,59 @@ router.delete("/service-categories/:id", async (req, res) => {
       .where(eq(serviceProvidersTable.category, cat.key));
   }
   await db.delete(serviceCategoriesTable).where(eq(serviceCategoriesTable.id, id));
+  return res.json({ ok: true });
+});
+
+/* ── Expense Categories ──────────────────────────────────────── */
+
+const DEFAULT_EXPENSE_CATS = [
+  { name: "الرواتب",     emoji: "💰", color: "blue",   isOther: false, sortOrder: 0 },
+  { name: "الكهرباء",    emoji: "⚡", color: "yellow", isOther: false, sortOrder: 1 },
+  { name: "الماء",       emoji: "💧", color: "cyan",   isOther: false, sortOrder: 2 },
+  { name: "الإنترنت",    emoji: "🌐", color: "purple", isOther: false, sortOrder: 3 },
+  { name: "الصيانة",     emoji: "🔧", color: "orange", isOther: false, sortOrder: 4 },
+  { name: "المستلزمات",  emoji: "📦", color: "green",  isOther: false, sortOrder: 5 },
+  { name: "أخرى",        emoji: "✨", color: "slate",  isOther: true,  sortOrder: 6 },
+];
+
+router.get("/expense-categories", async (_req, res) => {
+  let rows = await db.select().from(expenseCategoriesTable).orderBy(expenseCategoriesTable.sortOrder, expenseCategoriesTable.createdAt);
+  if (rows.length === 0) {
+    rows = await db.insert(expenseCategoriesTable).values(DEFAULT_EXPENSE_CATS).returning();
+  }
+  return res.json(rows);
+});
+
+router.post("/expense-categories", async (req, res) => {
+  const body = z.object({
+    name: z.string().min(1),
+    emoji: z.string().default("✨"),
+    color: z.string().default("slate"),
+    isOther: z.boolean().default(false),
+    sortOrder: z.number().int().default(0),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const [row] = await db.insert(expenseCategoriesTable).values(body.data).returning();
+  return res.status(201).json(row);
+});
+
+router.patch("/expense-categories/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({
+    name: z.string().min(1).optional(),
+    emoji: z.string().optional(),
+    color: z.string().optional(),
+    isOther: z.boolean().optional(),
+    sortOrder: z.number().int().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  await db.update(expenseCategoriesTable).set(body.data).where(eq(expenseCategoriesTable.id, id));
+  return res.json({ ok: true });
+});
+
+router.delete("/expense-categories/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  await db.delete(expenseCategoriesTable).where(eq(expenseCategoriesTable.id, id));
   return res.json({ ok: true });
 });
 

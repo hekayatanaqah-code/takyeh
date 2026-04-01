@@ -2411,6 +2411,190 @@ function ProviderSubmissionsTab() {
   );
 }
 
+/* ── Expense Categories Tab ────────────────────── */
+interface ExpCat { id: number; name: string; emoji: string; color: string; isOther: boolean; sortOrder: number; }
+
+function ExpenseCategoriesTab() {
+  const qc = useQueryClient();
+  const [newForm, setNewForm] = useState({ name: "", emoji: "✨", color: "slate", isOther: false });
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", emoji: "", color: "", isOther: false });
+
+  const { data: cats = [], isLoading } = useQuery<ExpCat[]>({
+    queryKey: ["admin", "expense-categories"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/expense-categories");
+      if (!r.ok) throw new Error();
+      return r.json();
+    },
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["admin", "expense-categories"] });
+    qc.invalidateQueries({ queryKey: ["catalog", "expense-categories"] });
+  };
+
+  const addCat = useMutation({
+    mutationFn: async () => {
+      if (!newForm.name.trim()) throw new Error("الاسم مطلوب");
+      const r = await apiFetch("/admin/expense-categories", {
+        method: "POST",
+        body: JSON.stringify({ ...newForm, name: newForm.name.trim(), sortOrder: cats.length }),
+      });
+      if (!r.ok) throw new Error("فشل الإضافة");
+    },
+    onSuccess: () => { setNewForm({ name: "", emoji: "✨", color: "slate", isOther: false }); invalidate(); },
+  });
+
+  const patchCat = useMutation({
+    mutationFn: async ({ id, patch }: { id: number; patch: Partial<ExpCat> }) => {
+      const r = await apiFetch(`/admin/expense-categories/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+      if (!r.ok) throw new Error("فشل التحديث");
+    },
+    onSuccess: () => { setEditId(null); invalidate(); },
+  });
+
+  const deleteCat = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await apiFetch(`/admin/expense-categories/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error("فشل الحذف");
+    },
+    onSuccess: () => invalidate(),
+  });
+
+  const COLORS = ["blue","yellow","cyan","purple","orange","green","slate","red","pink","teal"];
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-bold text-amber-400">فئات المصروفات</h2>
+
+      {/* Add form */}
+      <div className="bg-slate-800 rounded-2xl p-5 border border-slate-700">
+        <h3 className="text-sm font-bold text-amber-300 mb-4">إضافة فئة جديدة</h3>
+        <div className="flex gap-3 flex-wrap items-end">
+          <div className="flex-1 min-w-[140px]">
+            <label className="text-xs text-slate-400 mb-1 block">اسم الفئة</label>
+            <Input
+              placeholder="مثال: تأمين، ضرائب..."
+              value={newForm.name}
+              onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))}
+              className="h-9 text-sm bg-slate-700 border-slate-600 text-white"
+            />
+          </div>
+          <div className="w-20">
+            <label className="text-xs text-slate-400 mb-1 block">الأيقونة</label>
+            <Input
+              value={newForm.emoji}
+              onChange={(e) => setNewForm((f) => ({ ...f, emoji: e.target.value }))}
+              className="h-9 text-sm bg-slate-700 border-slate-600 text-white text-center"
+            />
+          </div>
+          <div className="w-32">
+            <label className="text-xs text-slate-400 mb-1 block">اللون</label>
+            <select
+              value={newForm.color}
+              onChange={(e) => setNewForm((f) => ({ ...f, color: e.target.value }))}
+              className="h-9 w-full rounded-md border border-slate-600 bg-slate-700 text-white text-sm px-2"
+            >
+              {COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="flex items-center gap-2 pb-1">
+            <input
+              id="isOther"
+              type="checkbox"
+              checked={newForm.isOther}
+              onChange={(e) => setNewForm((f) => ({ ...f, isOther: e.target.checked }))}
+              className="w-4 h-4 accent-amber-400"
+            />
+            <label htmlFor="isOther" className="text-xs text-slate-300">يتطلب تسمية يدوية (أخرى)</label>
+          </div>
+          <Button
+            size="sm"
+            className="h-9 bg-amber-500 hover:bg-amber-600 text-black font-bold"
+            onClick={() => addCat.mutate()}
+            disabled={addCat.isPending || !newForm.name.trim()}
+          >
+            إضافة
+          </Button>
+        </div>
+      </div>
+
+      {/* Categories list */}
+      <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
+        {isLoading ? (
+          <div className="p-6 text-center text-slate-400 text-sm">جارٍ التحميل...</div>
+        ) : cats.length === 0 ? (
+          <div className="p-6 text-center text-slate-400 text-sm">لا توجد فئات بعد</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-700 text-slate-400 text-xs">
+                <th className="text-right p-4 font-medium">الفئة</th>
+                <th className="text-right p-4 font-medium">اللون</th>
+                <th className="text-right p-4 font-medium">نوع</th>
+                <th className="p-4 w-32"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-700">
+              {cats.map((cat) => (
+                <tr key={cat.id} className="hover:bg-slate-700/30">
+                  <td className="p-4">
+                    {editId === cat.id ? (
+                      <div className="flex gap-2 items-center">
+                        <Input value={editForm.emoji} onChange={(e) => setEditForm((f) => ({ ...f, emoji: e.target.value }))} className="w-12 h-8 text-center bg-slate-700 border-slate-600 text-white text-sm" />
+                        <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 h-8 bg-slate-700 border-slate-600 text-white text-sm" />
+                      </div>
+                    ) : (
+                      <span className="font-semibold text-white">{cat.emoji} {cat.name}</span>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    {editId === cat.id ? (
+                      <select value={editForm.color} onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))} className="h-8 rounded border border-slate-600 bg-slate-700 text-white text-xs px-2">
+                        {COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    ) : (
+                      <span className="text-slate-300 text-xs">{cat.color}</span>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    {editId === cat.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <input type="checkbox" checked={editForm.isOther} onChange={(e) => setEditForm((f) => ({ ...f, isOther: e.target.checked }))} className="w-4 h-4 accent-amber-400" />
+                        <span className="text-xs text-slate-300">أخرى</span>
+                      </div>
+                    ) : cat.isOther ? (
+                      <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full">يدوية</span>
+                    ) : (
+                      <span className="text-xs text-slate-500">عادية</span>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    <div className="flex items-center justify-end gap-2">
+                      {editId === cat.id ? (
+                        <>
+                          <button onClick={() => patchCat.mutate({ id: cat.id, patch: { name: editForm.name.trim(), emoji: editForm.emoji, color: editForm.color, isOther: editForm.isOther } })} className="text-xs text-green-400 hover:text-green-300 font-semibold">حفظ</button>
+                          <button onClick={() => setEditId(null)} className="text-xs text-slate-400 hover:text-slate-300">إلغاء</button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => { setEditId(cat.id); setEditForm({ name: cat.name, emoji: cat.emoji, color: cat.color, isOther: cat.isOther }); }} className="text-xs text-amber-400 hover:text-amber-300">تعديل</button>
+                          <button onClick={() => { if (confirm(`حذف فئة "${cat.name}"؟`)) deleteCat.mutate(cat.id); }} className="text-xs text-red-400 hover:text-red-300">حذف</button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main Admin Page ──────────────────────────── */
 const TABS = [
   { id: "submissions",         label: "الطلبات",               icon: Settings },
@@ -2418,6 +2602,7 @@ const TABS = [
   { id: "services",            label: "خدمات المناسبات",       icon: Wrench },
   { id: "providerSubmissions", label: "طلبات مزودي الخدمات",  icon: Star },
   { id: "serviceCategories",   label: "فئات الخدمات",          icon: Tag },
+  { id: "expenseCategories",   label: "فئات المصروفات",        icon: Tag },
   { id: "locations",           label: "المدن والأحياء",        icon: Building2 },
   { id: "amenities",           label: "المرافق",                icon: Tag },
   { id: "categories",          label: "فئات الشاليهات",        icon: Tag },
@@ -2558,6 +2743,7 @@ export default function Admin() {
         {activeTab === "services"            && <ServicesTab />}
         {activeTab === "providerSubmissions" && <ProviderSubmissionsTab />}
         {activeTab === "serviceCategories"   && <ServiceCategoriesTab />}
+        {activeTab === "expenseCategories"   && <ExpenseCategoriesTab />}
         {activeTab === "locations"           && <LocationsTab />}
         {activeTab === "amenities"           && <AmenitiesTab />}
         {activeTab === "categories"          && <CategoriesTab />}

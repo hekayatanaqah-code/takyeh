@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { citiesCatalogTable, amenitiesCatalogTable, districtsCatalogTable, chaletCategoriesTable, serviceCategoriesTable, siteSettingsTable } from "@workspace/db/schema";
+import { citiesCatalogTable, amenitiesCatalogTable, districtsCatalogTable, chaletCategoriesTable, serviceCategoriesTable, expenseCategoriesTable, siteSettingsTable } from "@workspace/db/schema";
 import { eq, inArray } from "drizzle-orm";
 
 const router = Router();
@@ -48,6 +48,14 @@ router.get("/service-categories", async (_req, res) => {
     .from(serviceCategoriesTable)
     .orderBy(serviceCategoriesTable.sortOrder, serviceCategoriesTable.createdAt);
   return res.json(rows.filter((r) => r.isActive));
+});
+
+router.get("/expense-categories", async (_req, res) => {
+  const rows = await db
+    .select()
+    .from(expenseCategoriesTable)
+    .orderBy(expenseCategoriesTable.sortOrder, expenseCategoriesTable.createdAt);
+  return res.json(rows);
 });
 
 /* ── Public page content + contact settings ── */

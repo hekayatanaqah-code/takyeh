@@ -9,7 +9,6 @@ import {
   ownerExpensesTable,
   ownerStaffTable,
   salaryLogsTable,
-  expenseCategoryEnum,
 } from "@workspace/db/schema";
 import { eq, and, inArray, gte, lte, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -323,8 +322,6 @@ router.get("/subscription", async (req, res) => {
 
 /* ── Expenses ──────────────────────────────────────────────── */
 
-const EXPENSE_CATEGORIES = expenseCategoryEnum.enumValues;
-
 router.get("/expenses", async (req, res) => {
   const ownerId = req.user!.id;
   const month = typeof req.query.month === "string" ? req.query.month : undefined;
@@ -348,7 +345,8 @@ router.post("/expenses", async (req, res) => {
   const body = z.object({
     submissionId: z.number().int().positive().optional(),
     dateStr: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    category: z.enum(EXPENSE_CATEGORIES),
+    category: z.string().min(1),
+    customCategory: z.string().optional(),
     amount: z.number().positive(),
     notes: z.string().optional(),
     receiptUrl: z.string().url().optional(),

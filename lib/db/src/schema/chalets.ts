@@ -244,16 +244,30 @@ export type OwnerSubscription = typeof ownerSubscriptionsTable.$inferSelect;
 
 /* ── Expense Management ────────────────────────────────────── */
 
+/** Legacy enum — kept so existing imports don't break; no longer used as column type. */
 export const expenseCategoryEnum = pgEnum("expense_category", [
   "salaries", "electricity", "water", "internet", "maintenance", "supplies", "other",
 ]);
+
+/** Dynamic expense categories managed by the Admin. */
+export const expenseCategoriesTable = pgTable("expense_categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  emoji: text("emoji").notNull().default("✨"),
+  color: text("color").notNull().default("slate"),
+  isOther: boolean("is_other").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ExpenseCategory = typeof expenseCategoriesTable.$inferSelect;
 
 export const ownerExpensesTable = pgTable("owner_expenses", {
   id: serial("id").primaryKey(),
   ownerId: text("owner_id").notNull(),
   submissionId: integer("submission_id").references(() => chaletSubmissionsTable.id, { onDelete: "set null" }),
   dateStr: text("date_str").notNull(),
-  category: expenseCategoryEnum("category").notNull(),
+  category: text("category").notNull().default("other"),
+  customCategory: text("custom_category"),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   notes: text("notes"),
   receiptUrl: text("receipt_url"),
