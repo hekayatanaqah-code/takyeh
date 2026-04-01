@@ -44,12 +44,16 @@ router.post("/bookings", async (req, res) => {
   const body = z.object({
     submissionId: z.number().int().positive().optional(),
     clientName: z.string().min(1),
+    clientPhone: z.string().optional(),
     bookingDate: z.string().min(1),
     durationDays: z.number().int().min(1).default(1),
     period: z.enum(["morning", "evening", "full_day"]).optional(),
     source: z.enum(["platform", "external"]).default("platform"),
     notes: z.string().optional(),
     revenueAmount: z.number().nonnegative().optional(),
+    totalPrice: z.number().nonnegative().optional(),
+    depositPaid: z.number().nonnegative().optional(),
+    insuranceFee: z.number().nonnegative().optional(),
   }).safeParse(req.body);
 
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
@@ -64,17 +68,50 @@ router.post("/bookings", async (req, res) => {
     }
   }
 
-  const { revenueAmount, ...restBooking } = body.data;
+  const { revenueAmount, totalPrice, depositPaid, insuranceFee, ...restBooking } = body.data;
   const [booking] = await db
     .insert(ownerBookingsTable)
     .values({
       ...restBooking,
       ownerId,
       revenueAmount: revenueAmount !== undefined ? String(revenueAmount) : null,
+      totalPrice: totalPrice !== undefined ? String(totalPrice) : null,
+      depositPaid: depositPaid !== undefined ? String(depositPaid) : null,
+      insuranceFee: insuranceFee !== undefined ? String(insuranceFee) : null,
     })
     .returning();
 
   return res.status(201).json(booking);
+});
+
+router.patch("/bookings/:id", async (req, res) => {
+  const ownerId = req.user!.id;
+  const id = Number(req.params.id);
+  const body = z.object({
+    balanceCollected: z.boolean().optional(),
+    insuranceRefunded: z.boolean().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const [row] = await db
+    .update(ownerBookingsTable)
+    .set(body.data)
+    .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)))
+    .returning();
+  if (!row) return res.status(404).json({ error: "not found" });
+  return res.json(row);
+});
+
+/* Phone lookup — auto-fill client name from previous bookings */
+router.get("/bookings/lookup", async (req, res) => {
+  const ownerId = req.user!.id;
+  const phone = typeof req.query.phone === "string" ? req.query.phone.trim() : "";
+  if (phone.length < 3) return res.json(null);
+  const rows = await db
+    .select({ clientName: ownerBookingsTable.clientName, clientPhone: ownerBookingsTable.clientPhone })
+    .from(ownerBookingsTable)
+    .where(and(eq(ownerBookingsTable.ownerId, ownerId), eq(ownerBookingsTable.clientPhone, phone)))
+    .limit(1);
+  return res.json(rows[0] ?? null);
 });
 
 router.delete("/bookings/:id", async (req, res) => {
@@ -625,7 +662,20 @@ router.get("/financial-summary", async (req, res) => {
     .select()
     .from(ownerBookingsTable)
     .where(and(...bookingConditions));
-  const totalRevenue = monthBookings.reduce((s, b) => s + (b.revenueAmount ? Number(b.revenueAmount) : 0), 0);
+
+  // Revenue: if totalPrice is set, use deposit + remaining (if collected); else fall back to revenueAmount
+  const calcBookingRevenue = (b: typeof monthBookings[number]) => {
+    if (b.totalPrice !== null) {
+      const deposit = Number(b.depositPaid ?? 0);
+      const remaining = Number(b.totalPrice) - deposit;
+      return deposit + (b.balanceCollected ? remaining : 0);
+    }
+    return b.revenueAmount ? Number(b.revenueAmount) : 0;
+  };
+  const totalRevenue = monthBookings.reduce((s, b) => s + calcBookingRevenue(b), 0);
+  // Insurance held (not counted as revenue — refundable)
+  const totalInsuranceHeld = monthBookings.reduce((s, b) =>
+    s + (!b.insuranceRefunded && b.insuranceFee ? Number(b.insuranceFee) : 0), 0);
 
   // Expenses: for this month
   const expenseConditions = [
@@ -678,8 +728,16 @@ router.get("/financial-summary", async (req, res) => {
       lte(ownerBookingsTable.bookingDate, `${m}-31`),
     ];
     if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
-    const bRows = await db.select({ rev: ownerBookingsTable.revenueAmount }).from(ownerBookingsTable).where(and(...bConds));
-    const rev = bRows.reduce((s, r) => s + (r.rev ? Number(r.rev) : 0), 0);
+    const bRows = await db
+      .select({ rev: ownerBookingsTable.revenueAmount, totalPrice: ownerBookingsTable.totalPrice, depositPaid: ownerBookingsTable.depositPaid, balanceCollected: ownerBookingsTable.balanceCollected })
+      .from(ownerBookingsTable).where(and(...bConds));
+    const rev = bRows.reduce((s, r) => {
+      if (r.totalPrice !== null) {
+        const dep = Number(r.depositPaid ?? 0);
+        return s + dep + (r.balanceCollected ? Number(r.totalPrice) - dep : 0);
+      }
+      return s + (r.rev ? Number(r.rev) : 0);
+    }, 0);
 
     const eConds = [
       eq(ownerExpensesTable.ownerId, ownerId),
@@ -705,6 +763,7 @@ router.get("/financial-summary", async (req, res) => {
   return res.json({
     month: selectedMonth,
     totalRevenue,
+    totalInsuranceHeld,
     totalExpenses: totalExpensesAll,
     netProfit,
     categoryTotals,
@@ -736,8 +795,16 @@ router.get("/yearly-summary", async (req, res) => {
       lte(ownerBookingsTable.bookingDate, `${m}-31`),
     ];
     if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
-    const bRows = await db.select({ rev: ownerBookingsTable.revenueAmount }).from(ownerBookingsTable).where(and(...bConds));
-    const revenue = bRows.reduce((s, r) => s + (r.rev ? Number(r.rev) : 0), 0);
+    const bRows = await db
+      .select({ rev: ownerBookingsTable.revenueAmount, totalPrice: ownerBookingsTable.totalPrice, depositPaid: ownerBookingsTable.depositPaid, balanceCollected: ownerBookingsTable.balanceCollected })
+      .from(ownerBookingsTable).where(and(...bConds));
+    const revenue = bRows.reduce((s, r) => {
+      if (r.totalPrice !== null) {
+        const dep = Number(r.depositPaid ?? 0);
+        return s + dep + (r.balanceCollected ? Number(r.totalPrice) - dep : 0);
+      }
+      return s + (r.rev ? Number(r.rev) : 0);
+    }, 0);
 
     const eConds: any[] = [
       eq(ownerExpensesTable.ownerId, ownerId),

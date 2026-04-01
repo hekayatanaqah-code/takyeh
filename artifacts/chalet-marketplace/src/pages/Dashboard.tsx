@@ -49,11 +49,18 @@ interface OwnerBooking {
   id: number;
   submissionId?: number | null;
   clientName: string;
+  clientPhone?: string | null;
   bookingDate: string;
   durationDays: number;
   source: "platform" | "external";
   notes?: string | null;
   period?: string | null;
+  revenueAmount?: string | null;
+  totalPrice?: string | null;
+  depositPaid?: string | null;
+  insuranceFee?: string | null;
+  balanceCollected: boolean;
+  insuranceRefunded: boolean;
   createdAt: string;
 }
 
@@ -312,14 +319,45 @@ function AddBookingDialog({
   onAdded: () => void;
 }) {
   const [clientName, setClientName] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  const [phoneLoading, setPhoneLoading] = useState(false);
   const [bookingDate, setBookingDate] = useState("");
   const [durationDays, setDurationDays] = useState(1);
   const [period, setPeriod] = useState<string>("");
   const [source, setSource] = useState<"platform" | "external">("external");
   const [submissionId, setSubmissionId] = useState<string>("");
   const [notes, setNotes] = useState("");
+  const [totalPrice, setTotalPrice] = useState("");
+  const [depositPaid, setDepositPaid] = useState("");
+  const [insuranceFee, setInsuranceFee] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const remainingBalance = totalPrice && depositPaid
+    ? Math.max(0, Number(totalPrice) - Number(depositPaid))
+    : null;
+
+  // Auto-fill client name from phone lookup
+  const handlePhoneBlur = async () => {
+    const phone = clientPhone.trim();
+    if (phone.length < 9) return;
+    setPhoneLoading(true);
+    try {
+      const r = await apiFetch(`/owner/bookings/lookup?phone=${encodeURIComponent(phone)}`);
+      if (r.ok) {
+        const data = await r.json();
+        if (data?.clientName && !clientName) setClientName(data.clientName);
+      }
+    } catch { /* silent */ } finally {
+      setPhoneLoading(false);
+    }
+  };
+
+  const reset = () => {
+    setClientName(""); setClientPhone(""); setBookingDate(""); setDurationDays(1);
+    setPeriod(""); setSource("external"); setSubmissionId(""); setNotes("");
+    setTotalPrice(""); setDepositPaid(""); setInsuranceFee("");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -330,45 +368,71 @@ function AddBookingDialog({
         method: "POST",
         body: JSON.stringify({
           clientName,
+          clientPhone: clientPhone || undefined,
           bookingDate,
           durationDays,
           period: period && period !== "none" ? period : undefined,
           source,
           notes: notes || undefined,
-          submissionId: submissionId ? Number(submissionId) : undefined,
+          submissionId: submissionId && submissionId !== "none" ? Number(submissionId) : undefined,
+          totalPrice: totalPrice ? Number(totalPrice) : undefined,
+          depositPaid: depositPaid ? Number(depositPaid) : undefined,
+          insuranceFee: insuranceFee ? Number(insuranceFee) : undefined,
         }),
       });
       if (!r.ok) { setError("حدث خطأ، يرجى المحاولة مجدداً"); return; }
       onAdded();
       onClose();
-      setClientName(""); setBookingDate(""); setDurationDays(1); setPeriod(""); setSource("external"); setSubmissionId(""); setNotes("");
+      reset();
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent dir="rtl" className="max-w-md">
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); reset(); } }}>
+      <DialogContent dir="rtl" className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-right">إضافة حجز يدوي خارجي</DialogTitle>
+          <DialogTitle className="text-right">إضافة حجز يدوي</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground -mt-2">لتسجيل حجوزات قادمة من واتساب أو انستقرام أو أي مصدر خارج المنصة</p>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+
+          {/* Phone — first so auto-fill works */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">رقم الجوال (للتعرف التلقائي)</label>
+            <div className="relative">
+              <Input
+                type="tel"
+                value={clientPhone}
+                onChange={(e) => setClientPhone(e.target.value)}
+                onBlur={handlePhoneBlur}
+                placeholder="05xxxxxxxx"
+                dir="ltr"
+                className="text-left"
+              />
+              {phoneLoading && <span className="absolute left-3 top-2.5 text-xs text-muted-foreground animate-pulse">جاري البحث…</span>}
+            </div>
+          </div>
+
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">اسم العميل *</label>
             <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="اسم العميل" />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold">تاريخ الحجز *</label>
-            <Input type="date" value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">تاريخ الحجز *</label>
+              <Input type="date" value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">عدد الأيام</label>
+              <Input type="number" min={1} value={durationDays} onChange={(e) => setDurationDays(Number(e.target.value))} />
+            </div>
           </div>
+
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold">عدد الأيام</label>
-            <Input type="number" min={1} value={durationDays} onChange={(e) => setDurationDays(Number(e.target.value))} />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold">الفترة الزمنية (اختياري)</label>
+            <label className="text-sm font-semibold">الفترة الزمنية</label>
             <Select value={period} onValueChange={setPeriod}>
               <SelectTrigger><SelectValue placeholder="اختر الفترة" /></SelectTrigger>
               <SelectContent>
@@ -379,6 +443,32 @@ function AddBookingDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {/* ── Financial Fields ── */}
+          <div className="bg-muted/40 rounded-xl p-3 space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">تفاصيل المبالغ</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">إجمالي قيمة الحجز (ر.س)</label>
+                <Input type="number" min={0} step={0.01} value={totalPrice} onChange={(e) => setTotalPrice(e.target.value)} placeholder="0.00" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">العربون المدفوع (ر.س)</label>
+                <Input type="number" min={0} step={0.01} value={depositPaid} onChange={(e) => setDepositPaid(e.target.value)} placeholder="0.00" />
+              </div>
+            </div>
+            {remainingBalance !== null && (
+              <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">المبلغ المتبقي:</span>
+                <span className="text-sm font-bold text-amber-700 dark:text-amber-400">{remainingBalance.toLocaleString("ar-SA")} ر.س</span>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">مبلغ التأمين (ر.س) — قابل للإعادة</label>
+              <Input type="number" min={0} step={0.01} value={insuranceFee} onChange={(e) => setInsuranceFee(e.target.value)} placeholder="0.00" />
+            </div>
+          </div>
+
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">مصدر الحجز</label>
             <Select value={source} onValueChange={(v) => setSource(v as "platform" | "external")}>
@@ -389,6 +479,7 @@ function AddBookingDialog({
               </SelectContent>
             </Select>
           </div>
+
           {submissions.length > 0 && (
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">الشاليه (اختياري)</label>
@@ -403,16 +494,18 @@ function AddBookingDialog({
               </Select>
             </div>
           )}
+
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">ملاحظات (اختياري)</label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="أي ملاحظات إضافية..." />
           </div>
+
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex gap-3 pt-2">
             <Button type="submit" className="flex-1" disabled={saving}>
               {saving ? "جاري الحفظ..." : "حفظ الحجز"}
             </Button>
-            <Button type="button" variant="outline" onClick={onClose}>إلغاء</Button>
+            <Button type="button" variant="outline" onClick={() => { onClose(); reset(); }}>إلغاء</Button>
           </div>
         </form>
       </DialogContent>
@@ -624,6 +717,13 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "bookings"] }),
   });
 
+  const patchBookingStatus = useMutation({
+    mutationFn: async ({ id, patch }: { id: number; patch: { balanceCollected?: boolean; insuranceRefunded?: boolean } }) => {
+      await apiFetch(`/owner/bookings/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "bookings"] }),
+  });
+
   const calAvailability = useMemo(() => {
     return availability.filter((a) => {
       const [y, m] = a.dateStr.split("-").map(Number);
@@ -746,46 +846,141 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           </div>
         ) : (
           <div className="space-y-3">
-            {bookings.map((b) => (
-              <motion.div
-                key={b.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-card border border-border rounded-xl p-4 flex items-start gap-4"
-              >
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  {b.source === "platform" ? <Globe className="w-5 h-5 text-primary" /> : <Phone className="w-5 h-5 text-primary" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <p className="font-semibold text-foreground">{b.clientName}</p>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${b.source === "platform" ? "bg-primary/10 text-primary" : "bg-amber-100 text-amber-700"}`}>
-                      {b.source === "platform" ? "المنصة" : "خارجي"}
-                    </span>
+            {bookings.map((b) => {
+              const tp = b.totalPrice ? Number(b.totalPrice) : null;
+              const dp = b.depositPaid ? Number(b.depositPaid) : null;
+              const ins = b.insuranceFee ? Number(b.insuranceFee) : null;
+              const remaining = tp !== null && dp !== null ? Math.max(0, tp - dp) : null;
+              const fmtAR = (n: number) => n.toLocaleString("ar-SA", { maximumFractionDigits: 2 });
+
+              const sendReceiptWhatsApp = () => {
+                const phone = b.clientPhone?.replace(/\D/g, "") ?? "";
+                const periodLabel = b.period ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[b.period] ?? b.period) : "";
+                let msg = `🏡 إيصال حجز – حكاية أناقة\n\nالعميل: ${b.clientName}\nالتاريخ: ${b.bookingDate}\nالمدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`;
+                if (tp !== null) msg += `\n\n💰 تفاصيل المبالغ:\n• الإجمالي: ${fmtAR(tp)} ر.س\n• العربون المدفوع: ${fmtAR(dp ?? 0)} ر.س\n• المتبقي: ${fmtAR(remaining ?? 0)} ر.س`;
+                if (ins) msg += `\n• التأمين (قابل للإعادة): ${fmtAR(ins)} ر.س`;
+                msg += `\n\n✨ منصة حكاية أناقة – شاليهات القصيم`;
+                const waUrl = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+                window.open(waUrl, "_blank");
+              };
+
+              return (
+                <motion.div
+                  key={b.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-card border border-border rounded-xl p-4 space-y-3"
+                >
+                  {/* Header row */}
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      {b.source === "platform" ? <Globe className="w-4 h-4 text-primary" /> : <Phone className="w-4 h-4 text-primary" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2 flex-wrap">
+                        <div>
+                          <p className="font-semibold text-foreground leading-tight">{b.clientName}</p>
+                          {b.clientPhone && <p className="text-xs text-muted-foreground" dir="ltr">{b.clientPhone}</p>}
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${b.source === "platform" ? "bg-primary/10 text-primary" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                            {b.source === "platform" ? "المنصة" : "خارجي"}
+                          </span>
+                          {b.balanceCollected && (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">✓ تم التحصيل</span>
+                          )}
+                          {ins && !b.insuranceRefunded && (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">🔒 تأمين محتجز</span>
+                          )}
+                          {b.insuranceRefunded && (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">↩ تم إعادة التأمين</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{b.bookingDate}</span>
+                        <span>{b.durationDays} {b.durationDays === 1 ? "يوم" : "أيام"}</span>
+                        {b.period && (
+                          <span className="font-medium text-primary">
+                            {{ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[b.period as string] ?? b.period}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => deleteBooking.mutate(b.id)}
+                      className="text-muted-foreground hover:text-destructive transition-colors shrink-0 mt-0.5"
+                      aria-label="حذف الحجز"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {b.bookingDate}
-                    </span>
-                    <span>{b.durationDays} {b.durationDays === 1 ? "يوم" : "أيام"}</span>
-                    {b.period && (
-                      <span className="text-xs font-medium bg-primary/8 text-primary px-1.5 py-0.5 rounded">
-                        {{ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[b.period as string] ?? b.period}
+
+                  {/* Financial summary */}
+                  {tp !== null && (
+                    <div className="grid grid-cols-3 gap-2 bg-muted/40 rounded-lg p-2.5 text-center">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">الإجمالي</p>
+                        <p className="text-xs font-bold text-foreground">{fmtAR(tp)} ر.س</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">العربون</p>
+                        <p className="text-xs font-bold text-green-600 dark:text-green-400">{fmtAR(dp ?? 0)} ر.س</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">المتبقي</p>
+                        <p className={`text-xs font-bold ${b.balanceCollected ? "text-green-600 dark:text-green-400 line-through" : "text-amber-600 dark:text-amber-400"}`}>
+                          {fmtAR(remaining ?? 0)} ر.س
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {ins !== null && (
+                    <div className="flex items-center justify-between bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-lg px-3 py-1.5">
+                      <span className="text-xs text-orange-700 dark:text-orange-400 font-semibold">🔒 مبلغ التأمين</span>
+                      <span className={`text-xs font-bold ${b.insuranceRefunded ? "text-slate-500 line-through" : "text-orange-700 dark:text-orange-400"}`}>
+                        {fmtAR(ins)} ر.س
                       </span>
+                    </div>
+                  )}
+
+                  {b.notes && <p className="text-xs text-muted-foreground border-t border-border pt-2">{b.notes}</p>}
+
+                  {/* Action buttons */}
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {/* WhatsApp receipt */}
+                    <button
+                      onClick={sendReceiptWhatsApp}
+                      className="flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-2.5 py-1 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      إيصال واتساب
+                    </button>
+                    {/* Collect balance */}
+                    {remaining !== null && remaining > 0 && !b.balanceCollected && (
+                      <button
+                        onClick={() => patchBookingStatus.mutate({ id: b.id, patch: { balanceCollected: true } })}
+                        disabled={patchBookingStatus.isPending}
+                        className="flex items-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-2.5 py-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors disabled:opacity-50"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        تم تحصيل المتبقي
+                      </button>
+                    )}
+                    {/* Refund insurance */}
+                    {ins && !b.insuranceRefunded && (
+                      <button
+                        onClick={() => patchBookingStatus.mutate({ id: b.id, patch: { insuranceRefunded: true } })}
+                        disabled={patchBookingStatus.isPending}
+                        className="flex items-center gap-1.5 text-xs font-medium text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg px-2.5 py-1 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors disabled:opacity-50"
+                      >
+                        ↩ تم إعادة التأمين
+                      </button>
                     )}
                   </div>
-                  {b.notes && <p className="text-xs text-muted-foreground mt-1">{b.notes}</p>}
-                </div>
-                <button
-                  onClick={() => deleteBooking.mutate(b.id)}
-                  className="text-muted-foreground hover:text-destructive transition-colors shrink-0 mt-1"
-                  aria-label="حذف الحجز"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -2226,7 +2421,7 @@ async function printMonthlyReport(
   month: string,
   propertyName: string,
   report: MonthReport | null | undefined,
-  financial: { totalRevenue: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
+  financial: { totalRevenue: number; totalInsuranceHeld?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
 ) {
   const win = window.open("", "_blank", "width=794,height=1123");
   if (!win) return;
@@ -2255,7 +2450,7 @@ function buildMonthlyReportHtml(
   month: string,
   propertyName: string,
   report: MonthReport | null | undefined,
-  financial: { totalRevenue: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
+  financial: { totalRevenue: number; totalInsuranceHeld?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
   forPrint = false,
   qrDataUrl: string | null = null,
 ): string {
@@ -2271,6 +2466,7 @@ function buildMonthlyReportHtml(
   const qrHtml = qrDataUrl
     ? `<div class="qr-block"><img src="${qrDataUrl}" class="qr-img" /><div class="qr-caption">مسح للتحقق</div></div>`
     : `<div class="qr-block" style="width:80px;"></div>`;
+  const insuranceHeld = financial?.totalInsuranceHeld ?? 0;
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <title>التقرير_الشهري_${monthStr}.pdf</title>
 <style>${REPORT_CSS}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
@@ -2280,10 +2476,10 @@ function buildMonthlyReportHtml(
 <div class="header-center"><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
 ${qrHtml}</div>
 ${financial ? `<div class="section"><div class="section-title">الملخص المالي (أرباح وخسائر)</div><div class="kpi-grid">
-<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">من الحجوزات المسعّرة</div></div>
+<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">عربون + مبالغ محصّلة</div></div>
 <div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات</div><div class="kpi-value">${formatAmount(financial.totalExpenses)}</div><div class="kpi-note">مصروفات + رواتب</div></div>
 <div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value">${formatAmount(financial.netProfit)}</div><div class="kpi-note">الإيرادات - المصروفات</div></div>
-</div></div>${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}` : ""}
+</div>${insuranceHeld > 0 ? `<div style="margin-top:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#c2410c;">🔒 تأمينات محتجزة (غير محسوبة في الأرباح)</span><span style="font-size:16px;font-weight:700;color:#c2410c;">${formatAmount(insuranceHeld)}</span></div>` : ""}</div>${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}` : ""}
 ${report ? `<div class="section"><div class="section-title">إحصائيات الحجوزات</div><div class="kpi-grid">
 <div class="kpi-card"><div class="kpi-label">إجمالي الحجوزات</div><div class="kpi-value">${report.totalBookings}</div></div>
 <div class="kpi-card"><div class="kpi-label">نسبة الإشغال</div><div class="kpi-value">${report.occupancyRate}%</div></div>
@@ -2436,7 +2632,7 @@ async function generateAndUploadReportPdf(
     year?: string;
     propertyName: string;
     report?: MonthReport | null;
-    financial?: { totalRevenue: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null;
+    financial?: { totalRevenue: number; totalInsuranceHeld?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null;
     yearly?: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } } | null;
   }
 ): Promise<string | null> {
@@ -2511,6 +2707,7 @@ function ReportsTab() {
   const { data: financial } = useQuery<{
     month: string;
     totalRevenue: number;
+    totalInsuranceHeld: number;
     totalExpenses: number;
     netProfit: number;
     categoryTotals: Record<string, number>;
@@ -2986,7 +3183,7 @@ function ReportsTab() {
             <>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "إجمالي الإيرادات", value: formatAmount(financial.totalRevenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", note: "من الحجوزات المسعّرة" },
+                  { label: "إجمالي الإيرادات", value: formatAmount(financial.totalRevenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", note: "عربون + مبالغ محصّلة" },
                   { label: "إجمالي المصروفات", value: formatAmount(financial.totalExpenses), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "مصروفات + رواتب" },
                   { label: "صافي الربح", value: formatAmount(financial.netProfit), icon: <DollarSign className="w-5 h-5" />, color: financial.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "الإيرادات - المصروفات" },
                 ].map((stat) => (
@@ -2998,6 +3195,22 @@ function ReportsTab() {
                   </div>
                 ))}
               </div>
+
+              {/* Insurance held — shown separately since it's refundable and NOT counted in profit */}
+              {financial.totalInsuranceHeld > 0 && (
+                <div className="flex items-center justify-between bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-2xl px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                      <span className="text-base">🔒</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-orange-700 dark:text-orange-400">تأمينات محتجزة</p>
+                      <p className="text-[10px] text-orange-600/70 dark:text-orange-500/70">غير محسوبة في الأرباح · قابلة للإعادة</p>
+                    </div>
+                  </div>
+                  <p className="text-lg font-bold text-orange-700 dark:text-orange-400">{formatAmount(financial.totalInsuranceHeld)}</p>
+                </div>
+              )}
 
               {Object.keys(financial.categoryTotals).length > 0 && (
                 <div className="bg-card border border-border rounded-2xl p-5">

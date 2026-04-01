@@ -146,12 +146,18 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   ownerId: text("owner_id").notNull(),
   submissionId: integer("submission_id").references(() => chaletSubmissionsTable.id, { onDelete: "set null" }),
   clientName: text("client_name").notNull(),
+  clientPhone: text("client_phone"),
   bookingDate: text("booking_date").notNull(),
   durationDays: integer("duration_days").notNull().default(1),
   period: text("period"),
   source: bookingSourceEnum("source").notNull().default("platform"),
   notes: text("notes"),
   revenueAmount: numeric("revenue_amount", { precision: 10, scale: 2 }),
+  totalPrice: numeric("total_price", { precision: 10, scale: 2 }),
+  depositPaid: numeric("deposit_paid", { precision: 10, scale: 2 }),
+  insuranceFee: numeric("insurance_fee", { precision: 10, scale: 2 }),
+  balanceCollected: boolean("balance_collected").notNull().default(false),
+  insuranceRefunded: boolean("insurance_refunded").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;
