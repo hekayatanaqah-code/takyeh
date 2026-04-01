@@ -1250,18 +1250,43 @@ function ExpensesTab() {
 
 /* ── Staff & Salaries Tab ────────────────────────── */
 interface StaffMember { id: number; name: string; baseSalary: string; isActive: boolean; }
-interface SalaryLog { id: number; staffId: number; month: string; bonus: string; deduction: string; notes: string | null; }
+interface SalaryLog {
+  id: number;
+  staffId: number;
+  staffName?: string;
+  baseSalary?: string;
+  month: string;
+  bonus: string;
+  deduction: string;
+  notes: string | null;
+  paidAt?: string | null;
+  expenseId?: number | null;
+}
+
+/** next payment month string after lastPaidMonth (YYYY-MM) */
+function nextDueMonth(lastPaidMonth: string | null): string {
+  if (!lastPaidMonth) return new Date().toISOString().slice(0, 7);
+  const [y, m] = lastPaidMonth.split("-").map(Number);
+  const d = new Date(y, m, 1); // month is 0-indexed, so m is already next
+  return d.toISOString().slice(0, 7);
+}
+
+function monthLabel(ym: string) {
+  return new Date(ym + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+}
 
 function StaffTab() {
   const qc = useQueryClient();
   const currentMonth = new Date().toISOString().slice(0, 7);
-  const [month, setMonth] = useState(currentMonth);
+  /* ── state ── */
   const [addForm, setAddForm] = useState({ name: "", baseSalary: "" });
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ name: "", baseSalary: "" });
-  const [expandedStaff, setExpandedStaff] = useState<number | null>(null);
-  const [salaryForm, setSalaryForm] = useState<Record<number, { bonus: string; deduction: string; notes: string }>>({});
+  /* Pay dialog */
+  const [payTarget, setPayTarget] = useState<StaffMember | null>(null);
+  const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", notes: "" });
 
+  /* ── month select options ── */
   const monthOptions = useMemo(() => {
     const opts = [];
     const now = new Date();
@@ -1272,16 +1297,18 @@ function StaffTab() {
     return opts;
   }, []);
 
+  /* ── queries ── */
   const { data: staff = [], isLoading } = useQuery<StaffMember[]>({
     queryKey: ["owner", "staff"],
     queryFn: async () => { const r = await apiFetch("/owner/staff"); if (!r.ok) return []; return r.json(); },
   });
 
-  const { data: salaryLogs = [] } = useQuery<SalaryLog[]>({
-    queryKey: ["owner", "salary-logs", month],
-    queryFn: async () => { const r = await apiFetch(`/owner/salary-logs?month=${month}`); if (!r.ok) return []; return r.json(); },
+  const { data: history = [], isLoading: histLoading } = useQuery<SalaryLog[]>({
+    queryKey: ["owner", "salary-logs-history"],
+    queryFn: async () => { const r = await apiFetch("/owner/salary-logs/history"); if (!r.ok) return []; return r.json(); },
   });
 
+  /* ── mutations ── */
   const addStaff = useMutation({
     mutationFn: async (data: any) => {
       const r = await apiFetch("/owner/staff", { method: "POST", body: JSON.stringify(data) });
@@ -1306,48 +1333,58 @@ function StaffTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "staff"] }),
   });
 
-  const saveSalary = useMutation({
+  const paySalary = useMutation({
     mutationFn: async (data: any) => {
-      const r = await apiFetch("/owner/salary-logs", { method: "POST", body: JSON.stringify(data) });
-      if (!r.ok) throw new Error();
+      const r = await apiFetch("/owner/salary-logs/pay", { method: "POST", body: JSON.stringify(data) });
+      if (!r.ok) throw new Error("فشل صرف الراتب");
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["owner", "salary-logs"] });
+      qc.invalidateQueries({ queryKey: ["owner", "salary-logs-history"] });
+      qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
       qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
+      setPayTarget(null);
+      setPayForm({ month: currentMonth, bonus: "0", deduction: "0", notes: "" });
     },
   });
 
-  const getLog = (staffId: number) => salaryLogs.find((l) => l.staffId === staffId);
+  /* ── per-staff computed stats from history ── */
+  const staffStats = useMemo(() => {
+    const map: Record<number, { totalEarned: number; lastPaidMonth: string | null }> = {};
+    for (const log of history) {
+      if (!map[log.staffId]) map[log.staffId] = { totalEarned: 0, lastPaidMonth: null };
+      const base = Number((log as any).baseSalary ?? 0);
+      const net = base + Number(log.bonus) - Number(log.deduction);
+      map[log.staffId].totalEarned += net;
+      const prev = map[log.staffId].lastPaidMonth;
+      if (!prev || log.month > prev) map[log.staffId].lastPaidMonth = log.month;
+    }
+    return map;
+  }, [history]);
 
-  const getNetSalary = (member: StaffMember, bonus: number, deduction: number) =>
-    Number(member.baseSalary) + bonus - deduction;
+  /* ── pay dialog net salary ── */
+  const payNet = payTarget
+    ? Number(payTarget.baseSalary) + (parseFloat(payForm.bonus) || 0) - (parseFloat(payForm.deduction) || 0)
+    : 0;
 
   return (
     <div className="space-y-5">
-      {/* Add Staff Form */}
+      {/* ── Add Staff Form ── */}
       <div className="bg-card border border-border rounded-2xl p-5">
         <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
           <UserCheck className="w-4 h-4 text-primary" />
           إضافة موظف جديد
         </h2>
-        <form onSubmit={(e) => { e.preventDefault(); const s = parseFloat(addForm.baseSalary); if (!addForm.name || isNaN(s)) return; addStaff.mutate({ name: addForm.name, baseSalary: s }); }} className="flex gap-3 flex-wrap">
-          <Input
-            placeholder="اسم الموظف"
-            value={addForm.name}
-            onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
-            className="flex-1 min-w-[140px] h-11"
-            required
-          />
-          <Input
-            type="number"
-            min="0"
-            step="1"
-            placeholder="الراتب الأساسي (ر.س)"
-            value={addForm.baseSalary}
-            onChange={(e) => setAddForm((f) => ({ ...f, baseSalary: e.target.value }))}
-            className="flex-1 min-w-[160px] h-11"
-            required
-          />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const s = parseFloat(addForm.baseSalary);
+            if (!addForm.name || isNaN(s)) return;
+            addStaff.mutate({ name: addForm.name, baseSalary: s });
+          }}
+          className="flex gap-3 flex-wrap"
+        >
+          <Input placeholder="اسم الموظف" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-[140px] h-11" required />
+          <Input type="number" min="0" step="1" placeholder="الراتب الأساسي (ر.س)" value={addForm.baseSalary} onChange={(e) => setAddForm((f) => ({ ...f, baseSalary: e.target.value }))} className="flex-1 min-w-[160px] h-11" required />
           <Button type="submit" className="h-11 px-5 font-bold" disabled={addStaff.isPending}>
             <Plus className="w-4 h-4 me-1.5" />
             إضافة
@@ -1355,25 +1392,15 @@ function StaffTab() {
         </form>
       </div>
 
-      {/* Staff List + Salary Logs */}
+      {/* ── Staff Cards ── */}
       <div className="bg-card border border-border rounded-2xl p-5">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-            <Users className="w-4 h-4 text-primary" />
-            الموظفون والرواتب
-          </h2>
-          <Select value={month} onValueChange={setMonth}>
-            <SelectTrigger className="h-9 text-sm w-[150px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {monthOptions.map((o) => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+        <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
+          <Users className="w-4 h-4 text-primary" />
+          الموظفون
+        </h2>
 
         {isLoading ? (
-          <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)}</div>
+          <div className="space-y-3">{[1,2,3].map((i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}</div>
         ) : staff.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground">
             <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
@@ -1382,122 +1409,226 @@ function StaffTab() {
         ) : (
           <div className="space-y-3">
             {staff.map((member) => {
-              const log = getLog(member.id);
-              const sf = salaryForm[member.id] ?? { bonus: log ? String(Number(log.bonus)) : "0", deduction: log ? String(Number(log.deduction)) : "0", notes: log?.notes ?? "" };
-              const bonus = parseFloat(sf.bonus) || 0;
-              const deduction = parseFloat(sf.deduction) || 0;
-              const net = getNetSalary(member, bonus, deduction);
-              const isExpanded = expandedStaff === member.id;
+              const stats = staffStats[member.id] ?? { totalEarned: 0, lastPaidMonth: null };
+              const nextDue = nextDueMonth(stats.lastPaidMonth);
+              const nextDueLabel = monthLabel(nextDue);
+              const isDueThisMonth = nextDue === currentMonth;
 
               return (
                 <div key={member.id} className="border border-border rounded-2xl overflow-hidden">
-                  {/* Header */}
-                  <div className="flex items-center gap-3 p-4">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                      <User className="w-5 h-5 text-primary" />
+                  <div className="flex items-start gap-4 p-4">
+                    {/* Avatar */}
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <User className="w-6 h-6 text-primary" />
                     </div>
+
+                    {/* Info */}
                     <div className="flex-1 min-w-0">
                       {editId === member.id ? (
                         <div className="flex gap-2 flex-wrap">
-                          <Input
-                            value={editForm.name}
-                            onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                            className="flex-1 min-w-[120px] h-8 text-sm"
-                            placeholder="الاسم"
-                          />
-                          <Input
-                            type="number"
-                            value={editForm.baseSalary}
-                            onChange={(e) => setEditForm((f) => ({ ...f, baseSalary: e.target.value }))}
-                            className="w-32 h-8 text-sm"
-                            placeholder="الراتب"
-                          />
+                          <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-[120px] h-8 text-sm" placeholder="الاسم" />
+                          <Input type="number" value={editForm.baseSalary} onChange={(e) => setEditForm((f) => ({ ...f, baseSalary: e.target.value }))} className="w-32 h-8 text-sm" placeholder="الراتب" />
                           <Button size="sm" onClick={() => editStaff.mutate({ id: member.id, data: { name: editForm.name, baseSalary: parseFloat(editForm.baseSalary) } })}>حفظ</Button>
                           <Button size="sm" variant="ghost" onClick={() => setEditId(null)}>إلغاء</Button>
                         </div>
                       ) : (
                         <>
-                          <p className="font-bold text-foreground text-sm">{member.name}</p>
-                          <p className="text-xs text-muted-foreground">الراتب الأساسي: {formatAmount(Number(member.baseSalary))}</p>
+                          <p className="font-bold text-foreground">{member.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">الراتب الأساسي: <span className="font-semibold text-foreground">{formatAmount(Number(member.baseSalary))}</span></p>
                         </>
                       )}
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {editId !== member.id && (
-                        <button onClick={() => { setEditId(member.id); setEditForm({ name: member.name, baseSalary: member.baseSalary }); }} className="p-2 text-muted-foreground hover:text-foreground transition-colors">
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <button onClick={() => { if (confirm(`حذف ${member.name}؟`)) deleteStaff.mutate(member.id); }} className="p-2 text-muted-foreground hover:text-destructive transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => setExpandedStaff(isExpanded ? null : member.id)} className="p-2 text-muted-foreground hover:text-foreground transition-colors">
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
 
-                  {/* Salary Log Accordion */}
-                  {isExpanded && (
-                    <div className="border-t border-border p-4 bg-muted/30 space-y-3">
-                      <p className="text-xs font-semibold text-muted-foreground">راتب {monthOptions.find((m) => m.val === month)?.label}</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-xs text-muted-foreground font-medium mb-1 block">مكافأة (+) ر.س</label>
-                          <Input
-                            type="number" min="0" step="1"
-                            value={sf.bonus}
-                            onChange={(e) => setSalaryForm((f) => ({ ...f, [member.id]: { ...sf, bonus: e.target.value } }))}
-                            className="h-9"
-                          />
+                      {/* Stats row */}
+                      {editId !== member.id && (
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <div className="bg-green-50 dark:bg-green-950/30 rounded-xl px-3 py-2">
+                            <p className="text-[10px] text-muted-foreground mb-0.5">إجمالي المصروف</p>
+                            <p className="text-sm font-bold text-green-700 dark:text-green-400">{formatAmount(stats.totalEarned)}</p>
+                          </div>
+                          <div className={`rounded-xl px-3 py-2 ${isDueThisMonth ? "bg-amber-50 dark:bg-amber-950/30" : "bg-muted/50"}`}>
+                            <p className="text-[10px] text-muted-foreground mb-0.5">موعد الراتب القادم</p>
+                            <p className={`text-sm font-bold ${isDueThisMonth ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+                              {nextDueLabel} {isDueThisMonth ? "⚠️" : ""}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <label className="text-xs text-muted-foreground font-medium mb-1 block">خصم (-) ر.س</label>
-                          <Input
-                            type="number" min="0" step="1"
-                            value={sf.deduction}
-                            onChange={(e) => setSalaryForm((f) => ({ ...f, [member.id]: { ...sf, deduction: e.target.value } }))}
-                            className="h-9"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-muted-foreground font-medium mb-1 block">ملاحظات</label>
-                        <Input
-                          placeholder="أي ملاحظات..."
-                          value={sf.notes}
-                          onChange={(e) => setSalaryForm((f) => ({ ...f, [member.id]: { ...sf, notes: e.target.value } }))}
-                          className="h-9"
-                        />
-                      </div>
-                      {/* Net Salary Display */}
-                      <div className="flex items-center justify-between bg-background rounded-xl px-4 py-3 border border-border">
-                        <div className="text-sm text-muted-foreground space-y-0.5">
-                          <p>الراتب الأساسي: <span className="text-foreground font-semibold">{formatAmount(Number(member.baseSalary))}</span></p>
-                          {bonus > 0 && <p className="text-green-600 text-xs">+ مكافأة: {formatAmount(bonus)}</p>}
-                          {deduction > 0 && <p className="text-red-600 text-xs">- خصم: {formatAmount(deduction)}</p>}
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground mb-0.5">صافي الراتب</p>
-                          <p className={`text-xl font-bold ${net < 0 ? "text-destructive" : "text-green-600"}`}>{formatAmount(net)}</p>
-                        </div>
+                      )}
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <div className="flex items-center gap-1">
+                        {editId !== member.id && (
+                          <button onClick={() => { setEditId(member.id); setEditForm({ name: member.name, baseSalary: member.baseSalary }); }} className="p-2 text-muted-foreground hover:text-foreground transition-colors">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button onClick={() => { if (confirm(`حذف ${member.name}؟`)) deleteStaff.mutate(member.id); }} className="p-2 text-muted-foreground hover:text-destructive transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       <Button
-                        className="w-full h-10"
-                        onClick={() => saveSalary.mutate({ staffId: member.id, month, bonus, deduction, notes: sf.notes || undefined })}
-                        disabled={saveSalary.isPending}
+                        size="sm"
+                        className="h-9 px-4 font-bold text-xs"
+                        onClick={() => {
+                          setPayTarget(member);
+                          setPayForm({ month: nextDue, bonus: "0", deduction: "0", notes: "" });
+                        }}
                       >
-                        {saveSalary.isPending ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <CheckCircle className="w-4 h-4 me-2" />}
-                        {log ? "تحديث الراتب" : "حفظ الراتب"}
+                        <DollarSign className="w-3.5 h-3.5 me-1" />
+                        صرف راتب
                       </Button>
                     </div>
-                  )}
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
       </div>
+
+      {/* ── Payment History Table ── */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
+          <Receipt className="w-4 h-4 text-primary" />
+          سجل صرف الرواتب
+        </h2>
+        {histLoading ? (
+          <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-10 rounded-xl" />)}</div>
+        ) : history.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Receipt className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">لم يتم صرف أي راتب بعد</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto -mx-5 px-5">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead>
+                <tr className="border-b border-border text-muted-foreground text-xs">
+                  <th className="text-right pb-3 font-semibold">الموظف</th>
+                  <th className="text-right pb-3 font-semibold">الشهر</th>
+                  <th className="text-right pb-3 font-semibold">الأساسي</th>
+                  <th className="text-right pb-3 font-semibold">مكافأة</th>
+                  <th className="text-right pb-3 font-semibold">خصم</th>
+                  <th className="text-right pb-3 font-semibold">الصافي</th>
+                  <th className="text-right pb-3 font-semibold">تاريخ الصرف</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {history.map((log) => {
+                  const base = Number((log as any).baseSalary ?? 0);
+                  const net = base + Number(log.bonus) - Number(log.deduction);
+                  return (
+                    <tr key={log.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="py-3 font-semibold text-foreground">{(log as any).staffName ?? "—"}</td>
+                      <td className="py-3 text-muted-foreground">{monthLabel(log.month)}</td>
+                      <td className="py-3">{formatAmount(base)}</td>
+                      <td className="py-3 text-green-600">{Number(log.bonus) > 0 ? `+${formatAmount(Number(log.bonus))}` : "—"}</td>
+                      <td className="py-3 text-red-600">{Number(log.deduction) > 0 ? `-${formatAmount(Number(log.deduction))}` : "—"}</td>
+                      <td className="py-3 font-bold text-foreground">{formatAmount(net)}</td>
+                      <td className="py-3 text-muted-foreground text-xs">
+                        {log.paidAt ? new Date(log.paidAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Pay Salary Dialog ── */}
+      <Dialog open={!!payTarget} onOpenChange={(open) => { if (!open) setPayTarget(null); }}>
+        <DialogContent className="max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-right">
+              <DollarSign className="w-5 h-5 text-primary" />
+              صرف راتب – {payTarget?.name}
+            </DialogTitle>
+            <DialogDescription className="text-right text-xs">
+              سيتم إضافة الراتب تلقائياً ضمن المصروفات تحت بند الرواتب.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            {/* Month picker */}
+            <div>
+              <label className="text-xs text-muted-foreground font-medium mb-1 block">الشهر</label>
+              <Select value={payForm.month} onValueChange={(v) => setPayForm((f) => ({ ...f, month: v }))}>
+                <SelectTrigger className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthOptions.map((o) => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Bonus + Deduction */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground font-medium mb-1 block">مكافأة (+) ر.س</label>
+                <Input type="number" min="0" step="1" value={payForm.bonus} onChange={(e) => setPayForm((f) => ({ ...f, bonus: e.target.value }))} className="h-10" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground font-medium mb-1 block">خصم (-) ر.س</label>
+                <Input type="number" min="0" step="1" value={payForm.deduction} onChange={(e) => setPayForm((f) => ({ ...f, deduction: e.target.value }))} className="h-10" />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="text-xs text-muted-foreground font-medium mb-1 block">ملاحظات (اختياري)</label>
+              <Input placeholder="سبب المكافأة أو الخصم..." value={payForm.notes} onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))} className="h-10" />
+            </div>
+
+            {/* Net salary preview */}
+            {payTarget && (
+              <div className="bg-muted/50 rounded-xl p-4 space-y-1.5 text-sm">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>الراتب الأساسي</span>
+                  <span>{formatAmount(Number(payTarget.baseSalary))}</span>
+                </div>
+                {(parseFloat(payForm.bonus) || 0) > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>مكافأة</span>
+                    <span>+ {formatAmount(parseFloat(payForm.bonus) || 0)}</span>
+                  </div>
+                )}
+                {(parseFloat(payForm.deduction) || 0) > 0 && (
+                  <div className="flex justify-between text-red-600">
+                    <span>خصم</span>
+                    <span>- {formatAmount(parseFloat(payForm.deduction) || 0)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-foreground border-t border-border pt-2">
+                  <span>صافي الراتب</span>
+                  <span className={payNet >= 0 ? "text-green-600" : "text-destructive"}>{formatAmount(payNet)}</span>
+                </div>
+              </div>
+            )}
+
+            <Button
+              className="w-full h-11 font-bold"
+              disabled={paySalary.isPending}
+              onClick={() => {
+                if (!payTarget) return;
+                paySalary.mutate({
+                  staffId: payTarget.id,
+                  month: payForm.month,
+                  bonus: parseFloat(payForm.bonus) || 0,
+                  deduction: parseFloat(payForm.deduction) || 0,
+                  notes: payForm.notes || undefined,
+                });
+              }}
+            >
+              {paySalary.isPending ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <CheckCircle className="w-4 h-4 me-2" />}
+              تأكيد صرف الراتب
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

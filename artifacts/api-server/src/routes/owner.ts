@@ -485,6 +485,110 @@ router.post("/salary-logs", async (req, res) => {
   return res.status(201).json(row);
 });
 
+/* Payment history – all paid logs with staff name */
+router.get("/salary-logs/history", async (req, res) => {
+  const ownerId = req.user!.id;
+  const staffId = typeof req.query.staffId === "string" ? Number(req.query.staffId) : undefined;
+  const conditions: ReturnType<typeof eq>[] = [
+    eq(salaryLogsTable.ownerId, ownerId),
+    sql`${salaryLogsTable.paidAt} IS NOT NULL` as any,
+  ];
+  if (staffId && !isNaN(staffId)) conditions.push(eq(salaryLogsTable.staffId, staffId) as any);
+  const rows = await db
+    .select({
+      id: salaryLogsTable.id,
+      staffId: salaryLogsTable.staffId,
+      staffName: ownerStaffTable.name,
+      baseSalary: ownerStaffTable.baseSalary,
+      month: salaryLogsTable.month,
+      bonus: salaryLogsTable.bonus,
+      deduction: salaryLogsTable.deduction,
+      notes: salaryLogsTable.notes,
+      paidAt: salaryLogsTable.paidAt,
+      expenseId: salaryLogsTable.expenseId,
+    })
+    .from(salaryLogsTable)
+    .innerJoin(ownerStaffTable, eq(salaryLogsTable.staffId, ownerStaffTable.id))
+    .where(and(...conditions))
+    .orderBy(sql`${salaryLogsTable.paidAt} DESC`);
+  return res.json(rows);
+});
+
+/* Pay salary – marks log as paid + auto-creates expense */
+router.post("/salary-logs/pay", async (req, res) => {
+  const ownerId = req.user!.id;
+  const body = z.object({
+    staffId: z.number().int().positive(),
+    month: z.string().regex(/^\d{4}-\d{2}$/),
+    bonus: z.number().nonnegative().default(0),
+    deduction: z.number().nonnegative().default(0),
+    notes: z.string().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const [staff] = await db
+    .select()
+    .from(ownerStaffTable)
+    .where(and(eq(ownerStaffTable.id, body.data.staffId), eq(ownerStaffTable.ownerId, ownerId)));
+  if (!staff) return res.status(403).json({ error: "غير مصرح" });
+
+  const netSalary = Number(staff.baseSalary) + body.data.bonus - body.data.deduction;
+  const paidAt = new Date();
+  const dateStr = paidAt.toISOString().slice(0, 10);
+
+  /* Create expense entry automatically */
+  const [expense] = await db
+    .insert(ownerExpensesTable)
+    .values({
+      ownerId,
+      category: "salaries",
+      amount: String(netSalary),
+      dateStr,
+      notes: `راتب ${staff.name} – ${body.data.month}${body.data.notes ? ` – ${body.data.notes}` : ""}`,
+      receiptUrl: null,
+      submissionId: null,
+    })
+    .returning();
+
+  /* Upsert salary log with paidAt + expenseId */
+  const [existing] = await db
+    .select()
+    .from(salaryLogsTable)
+    .where(and(eq(salaryLogsTable.staffId, body.data.staffId), eq(salaryLogsTable.month, body.data.month)))
+    .limit(1);
+
+  let row;
+  if (existing) {
+    [row] = await db
+      .update(salaryLogsTable)
+      .set({
+        bonus: String(body.data.bonus),
+        deduction: String(body.data.deduction),
+        notes: body.data.notes ?? null,
+        paidAt,
+        expenseId: expense.id,
+      })
+      .where(eq(salaryLogsTable.id, existing.id))
+      .returning();
+  } else {
+    [row] = await db
+      .insert(salaryLogsTable)
+      .values({
+        ownerId,
+        staffId: body.data.staffId,
+        month: body.data.month,
+        bonus: String(body.data.bonus),
+        deduction: String(body.data.deduction),
+        notes: body.data.notes ?? null,
+        paidAt,
+        expenseId: expense.id,
+      })
+      .returning();
+  }
+
+  return res.json({ salaryLog: row, expense });
+});
+
 router.delete("/salary-logs/:id", async (req, res) => {
   const ownerId = req.user!.id;
   const id = Number(req.params.id);
