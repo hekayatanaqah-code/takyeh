@@ -24,6 +24,7 @@ import { Link } from "wouter";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid,
 } from "recharts";
+import QRCode from "qrcode";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -1251,6 +1252,7 @@ function ExpensesTab() {
 /* ── Salary Voucher Printer ──────────────────────── */
 interface VoucherData {
   voucherNo: string;
+  logId?: number;
   staffName: string;
   ownerName: string;
   month: string;
@@ -1260,6 +1262,20 @@ interface VoucherData {
   deduction: number;
   net: number;
   notes?: string;
+  qrDataUrl?: string;
+}
+
+async function buildVoucherQR(logId: number | undefined, voucherNo: string): Promise<string> {
+  try {
+    const verifyUrl = logId
+      ? `${window.location.origin}/dashboard?tab=staff&verify=${logId}`
+      : `${window.location.origin}/dashboard?voucher=${encodeURIComponent(voucherNo)}`;
+    return await QRCode.toDataURL(verifyUrl, {
+      margin: 1,
+      width: 180,
+      color: { dark: "#1a1a1a", light: "#ffffff" },
+    });
+  } catch { return ""; }
 }
 
 function printSalaryVoucher(v: VoucherData) {
@@ -1278,13 +1294,17 @@ function printSalaryVoucher(v: VoucherData) {
   body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background:#fff; color:#111; direction:rtl; }
   .page { max-width: 794px; margin: 0 auto; padding: 40px 48px; min-height: 1123px; position: relative; }
   /* header */
-  .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #b8860b; padding-bottom: 18px; margin-bottom: 24px; }
+  .header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; border-bottom: 3px solid #b8860b; padding-bottom: 18px; margin-bottom: 24px; }
   .brand { display: flex; flex-direction: column; gap: 2px; }
   .brand-name { font-size: 26px; font-weight: 800; color: #b8860b; letter-spacing: -0.5px; }
   .brand-sub  { font-size: 12px; color: #666; }
   .voucher-badge { background: #b8860b; color: #fff; border-radius: 10px; padding: 8px 18px; text-align: center; }
   .voucher-badge-title { font-size: 15px; font-weight: 700; }
   .voucher-badge-no   { font-size: 11px; opacity: .85; margin-top: 2px; }
+  /* QR */
+  .qr-section { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+  .qr-section img { width: 80px; height: 80px; border: 1px solid #e0d8c0; border-radius: 6px; padding: 2px; }
+  .qr-caption { font-size: 9px; color: #999; text-align: center; }
   /* meta grid */
   .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
   .meta-item { background: #faf9f6; border: 1px solid #e8e2d0; border-radius: 8px; padding: 10px 14px; }
@@ -1331,6 +1351,10 @@ function printSalaryVoucher(v: VoucherData) {
       <div class="voucher-badge-title">مسيّر رواتب</div>
       <div class="voucher-badge-no"># ${v.voucherNo}</div>
     </div>
+    ${v.qrDataUrl ? `<div class="qr-section">
+      <img src="${v.qrDataUrl}" alt="QR للتحقق"/>
+      <div class="qr-caption">امسح للتحقق</div>
+    </div>` : '<div></div>'}
   </div>
 
   <!-- Meta -->
@@ -1487,20 +1511,23 @@ function StaffTab() {
       if (!r.ok) throw new Error("فشل صرف الراتب");
       return r.json() as Promise<{ salaryLog: any; expense: any }>;
     },
-    onSuccess: (result, variables) => {
+    onSuccess: async (result, variables) => {
       qc.invalidateQueries({ queryKey: ["owner", "salary-logs-history"] });
       qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
       qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
-      /* Build voucher data from the result + payTarget context */
+      /* Build voucher data (with QR) from the result + payTarget context */
       if (payTarget) {
         const base  = Number(payTarget.baseSalary);
         const bonus = variables.bonus ?? 0;
         const deduction = variables.deduction ?? 0;
         const net   = base + bonus - deduction;
         const paidAt = result.salaryLog?.paidAt ?? new Date().toISOString();
+        const logId  = result.salaryLog?.id as number | undefined;
         const voucherNo = `SAL-${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,"0")}-${payTarget.id}`;
+        const qrDataUrl = await buildVoucherQR(logId, voucherNo);
         setPaidVoucher({
           voucherNo,
+          logId,
           staffName:  payTarget.name,
           ownerName:  user?.name ?? user?.username ?? "صاحب العمل",
           month:      variables.month,
@@ -1510,6 +1537,7 @@ function StaffTab() {
           deduction,
           net,
           notes:      variables.notes,
+          qrDataUrl,
         });
       }
       setPayForm({ month: currentMonth, bonus: "0", deduction: "0", notes: "" });
@@ -1705,18 +1733,23 @@ function StaffTab() {
                       </td>
                       <td className="py-3">
                         <button
-                          onClick={() => printSalaryVoucher({
-                            voucherNo,
-                            staffName:  (log as any).staffName ?? "موظف",
-                            ownerName:  user?.name ?? user?.username ?? "صاحب العمل",
-                            month:      log.month,
-                            paidAt:     paidAtStr,
-                            baseSalary: base,
-                            bonus,
-                            deduction,
-                            net,
-                            notes:      log.notes ?? undefined,
-                          })}
+                          onClick={async () => {
+                            const qrDataUrl = await buildVoucherQR(log.id, voucherNo);
+                            printSalaryVoucher({
+                              voucherNo,
+                              logId:      log.id,
+                              staffName:  (log as any).staffName ?? "موظف",
+                              ownerName:  user?.name ?? user?.username ?? "صاحب العمل",
+                              month:      log.month,
+                              paidAt:     paidAtStr,
+                              baseSalary: base,
+                              bonus,
+                              deduction,
+                              net,
+                              notes:      log.notes ?? undefined,
+                              qrDataUrl,
+                            });
+                          }}
                           className="flex items-center gap-1 text-xs text-primary hover:underline whitespace-nowrap"
                         >
                           <Receipt className="w-3 h-3" />
