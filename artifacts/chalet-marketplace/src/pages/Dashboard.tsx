@@ -531,12 +531,12 @@ function ManageInsuranceDialog({
   apiFetch: (url: string, opts?: RequestInit) => Promise<Response>;
   formatAmount: (v: string | number | null | undefined) => string;
 }) {
-  const [mode, setMode] = React.useState<"choose" | "refund" | "deduct">("choose");
-  const [deductAmount, setDeductAmount] = React.useState("");
-  const [deductReason, setDeductReason] = React.useState("");
-  const [saving, setSaving] = React.useState(false);
+  const [mode, setMode] = useState<"choose" | "refund" | "deduct">("choose");
+  const [deductAmount, setDeductAmount] = useState("");
+  const [deductReason, setDeductReason] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) { setMode("choose"); setDeductAmount(""); setDeductReason(""); setSaving(false); }
   }, [open]);
 
