@@ -90,11 +90,14 @@ router.patch("/bookings/:id", async (req, res) => {
   const body = z.object({
     balanceCollected: z.boolean().optional(),
     insuranceRefunded: z.boolean().optional(),
+    insuranceDeducted: z.number().nonnegative().optional(),
+    insuranceDeductReason: z.string().optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const { insuranceDeducted, ...rest } = body.data;
   const [row] = await db
     .update(ownerBookingsTable)
-    .set(body.data)
+    .set({ ...rest, insuranceDeducted: insuranceDeducted !== undefined ? String(insuranceDeducted) : undefined })
     .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)))
     .returning();
   if (!row) return res.status(404).json({ error: "not found" });
@@ -672,8 +675,11 @@ router.get("/financial-summary", async (req, res) => {
     }
     return b.revenueAmount ? Number(b.revenueAmount) : 0;
   };
-  const totalRevenue = monthBookings.reduce((s, b) => s + calcBookingRevenue(b), 0);
-  // Insurance held (not counted as revenue — refundable)
+  // Insurance deductions → treated as revenue under "تلفيات" category
+  const totalInsuranceDeducted = monthBookings.reduce((s, b) =>
+    s + (b.insuranceDeducted ? Number(b.insuranceDeducted) : 0), 0);
+  const totalRevenue = monthBookings.reduce((s, b) => s + calcBookingRevenue(b), 0) + totalInsuranceDeducted;
+  // Insurance held (refundable, NOT in revenue — only unresolved insurance fees)
   const totalInsuranceHeld = monthBookings.reduce((s, b) =>
     s + (!b.insuranceRefunded && b.insuranceFee ? Number(b.insuranceFee) : 0), 0);
 
@@ -719,6 +725,11 @@ router.get("/financial-summary", async (req, res) => {
   }
   const totalExpensesAll = totalExpenses + totalSalaries;
   const netProfit = totalRevenue - totalExpensesAll;
+  // Insurance revenue category (deductions from insurance → تلفيات)
+  const insuranceRevenueTotals: Record<string, number> = {};
+  if (totalInsuranceDeducted > 0) {
+    insuranceRevenueTotals["insurance_damage"] = totalInsuranceDeducted;
+  }
 
   // Monthly trend for chart (last 6 months)
   const trend = await Promise.all(months.map(async (m) => {
@@ -764,9 +775,11 @@ router.get("/financial-summary", async (req, res) => {
     month: selectedMonth,
     totalRevenue,
     totalInsuranceHeld,
+    totalInsuranceDeducted,
     totalExpenses: totalExpensesAll,
     netProfit,
     categoryTotals,
+    insuranceRevenueTotals,
     trend,
   });
 });

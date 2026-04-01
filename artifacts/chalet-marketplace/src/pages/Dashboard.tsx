@@ -61,6 +61,8 @@ interface OwnerBooking {
   insuranceFee?: string | null;
   balanceCollected: boolean;
   insuranceRefunded: boolean;
+  insuranceDeducted?: string | null;
+  insuranceDeductReason?: string | null;
   createdAt: string;
 }
 
@@ -513,6 +515,156 @@ function AddBookingDialog({
   );
 }
 
+/* ── Manage Insurance Dialog ───────────────────────── */
+function ManageInsuranceDialog({
+  booking,
+  open,
+  onClose,
+  onSaved,
+  apiFetch,
+  formatAmount,
+}: {
+  booking: OwnerBooking | null;
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+  apiFetch: (url: string, opts?: RequestInit) => Promise<Response>;
+  formatAmount: (v: string | number | null | undefined) => string;
+}) {
+  const [mode, setMode] = React.useState<"choose" | "refund" | "deduct">("choose");
+  const [deductAmount, setDeductAmount] = React.useState("");
+  const [deductReason, setDeductReason] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    if (open) { setMode("choose"); setDeductAmount(""); setDeductReason(""); setSaving(false); }
+  }, [open]);
+
+  if (!booking) return null;
+
+  const insurance = Number(booking.insuranceFee ?? 0);
+  const deductVal = Number(deductAmount) || 0;
+  const remaining = Math.max(0, insurance - deductVal);
+
+  const handleFullRefund = async () => {
+    setSaving(true);
+    await apiFetch(`/owner/bookings/${booking.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ insuranceRefunded: true, insuranceDeducted: 0, insuranceDeductReason: null }),
+    });
+    onSaved(); onClose();
+  };
+
+  const handleDeduct = async () => {
+    if (deductVal <= 0 || deductVal > insurance) return;
+    setSaving(true);
+    await apiFetch(`/owner/bookings/${booking.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ insuranceRefunded: true, insuranceDeducted: deductVal, insuranceDeductReason: deductReason || undefined }),
+    });
+    onSaved(); onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            🔒 إدارة التأمين — {booking.clientName}
+          </DialogTitle>
+          <div className="text-sm text-muted-foreground">
+            مبلغ التأمين: <span className="font-bold text-orange-600">{formatAmount(booking.insuranceFee)}</span>
+          </div>
+        </DialogHeader>
+
+        {mode === "choose" && (
+          <div className="flex flex-col gap-3 py-2">
+            <button
+              onClick={() => setMode("refund")}
+              className="w-full rounded-lg border-2 border-green-200 bg-green-50 p-4 text-right hover:bg-green-100 transition"
+            >
+              <div className="font-bold text-green-700">✅ إرجاع بالكامل</div>
+              <div className="text-sm text-green-600 mt-1">إعادة كامل مبلغ التأمين للعميل دون أي خصم</div>
+            </button>
+            <button
+              onClick={() => setMode("deduct")}
+              className="w-full rounded-lg border-2 border-red-200 bg-red-50 p-4 text-right hover:bg-red-100 transition"
+            >
+              <div className="font-bold text-red-700">✂️ خصم من التأمين</div>
+              <div className="text-sm text-red-600 mt-1">خصم مبلغ بسبب تلفيات وإرجاع الباقي للعميل</div>
+            </button>
+          </div>
+        )}
+
+        {mode === "refund" && (
+          <div className="flex flex-col gap-4 py-2">
+            <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-center">
+              <div className="text-2xl font-bold text-green-700">{formatAmount(booking.insuranceFee)}</div>
+              <div className="text-sm text-green-600 mt-1">سيتم إرجاع كامل مبلغ التأمين للعميل</div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setMode("choose")} disabled={saving}>رجوع</Button>
+              <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={handleFullRefund} disabled={saving}>
+                {saving ? "جاري الحفظ..." : "✅ تأكيد الإرجاع"}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {mode === "deduct" && (
+          <div className="flex flex-col gap-3 py-2">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-center">
+                <div className="text-xs text-red-500">المخصوم (تلفيات)</div>
+                <div className="text-xl font-bold text-red-700">{formatAmount(deductVal)}</div>
+              </div>
+              <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-center">
+                <div className="text-xs text-green-500">المُرجَع للعميل</div>
+                <div className="text-xl font-bold text-green-700">{formatAmount(remaining)}</div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">المبلغ المخصوم (ر.س)</label>
+              <input
+                type="number" min="0" max={insurance} step="1"
+                value={deductAmount}
+                onChange={e => setDeductAmount(e.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-left text-base"
+                placeholder={`أقصى مبلغ: ${insurance}`}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">سبب الخصم</label>
+              <input
+                type="text"
+                value={deductReason}
+                onChange={e => setDeductReason(e.target.value)}
+                className="w-full rounded-md border px-3 py-2 text-base"
+                placeholder="مثال: كسر أثاث، تلف فعلي..."
+              />
+            </div>
+            <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
+              ⚠️ المبلغ المخصوم سيُضاف تلقائياً كإيراد تحت فئة <strong>تلفيات</strong> في التقارير الشهرية.
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setMode("choose")} disabled={saving}>رجوع</Button>
+              <Button
+                className="flex-1 bg-red-600 hover:bg-red-700"
+                onClick={handleDeduct}
+                disabled={saving || deductVal <= 0 || deductVal > insurance}
+              >
+                {saving ? "جاري الحفظ..." : "✂️ تأكيد الخصم"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ── Block Date Dialog ───────────────────────── */
 function BlockDateDialog({
   open, onClose, dateStr, chaletId, existing, onSaved,
@@ -710,6 +862,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     },
   });
 
+  const [insuranceTarget, setInsuranceTarget] = useState<OwnerBooking | null>(null);
+
   const deleteBooking = useMutation({
     mutationFn: async (id: number) => {
       await apiFetch(`/owner/bookings/${id}`, { method: "DELETE" });
@@ -857,8 +1011,21 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 const phone = b.clientPhone?.replace(/\D/g, "") ?? "";
                 const periodLabel = b.period ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[b.period] ?? b.period) : "";
                 let msg = `🏡 إيصال حجز – حكاية أناقة\n\nالعميل: ${b.clientName}\nالتاريخ: ${b.bookingDate}\nالمدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`;
-                if (tp !== null) msg += `\n\n💰 تفاصيل المبالغ:\n• الإجمالي: ${fmtAR(tp)} ر.س\n• العربون المدفوع: ${fmtAR(dp ?? 0)} ر.س\n• المتبقي: ${fmtAR(remaining ?? 0)} ر.س`;
-                if (ins) msg += `\n• التأمين (قابل للإعادة): ${fmtAR(ins)} ر.س`;
+                if (tp !== null) msg += `\n\n💰 تفاصيل المبالغ:\n• الإجمالي: ${fmtAR(tp)} ر.س\n• العربون المدفوع: ${fmtAR(dp ?? 0)} ر.س\n• المتبقي: ${fmtAR(remaining ?? 0)} ر.س${b.balanceCollected ? " ✓ (تم التحصيل)" : ""}`;
+                if (ins) {
+                  if (!b.insuranceRefunded) {
+                    msg += `\n• التأمين المحتجز: ${fmtAR(ins)} ر.س 🔒`;
+                  } else if (b.insuranceDeducted && Number(b.insuranceDeducted) > 0) {
+                    const deducted = Number(b.insuranceDeducted);
+                    const refunded = Math.max(0, ins - deducted);
+                    msg += `\n• التأمين: ${fmtAR(ins)} ر.س`;
+                    msg += `\n  ✂️ خصم تلفيات: ${fmtAR(deducted)} ر.س`;
+                    if (b.insuranceDeductReason) msg += ` (${b.insuranceDeductReason})`;
+                    if (refunded > 0) msg += `\n  ↩ مُرجَع للعميل: ${fmtAR(refunded)} ر.س`;
+                  } else {
+                    msg += `\n• التأمين: ${fmtAR(ins)} ر.س ↩ تم الإرجاع بالكامل`;
+                  }
+                }
                 msg += `\n\n✨ منصة حكاية أناقة – شاليهات القصيم`;
                 const waUrl = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
                 window.open(waUrl, "_blank");
@@ -892,8 +1059,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           {ins && !b.insuranceRefunded && (
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">🔒 تأمين محتجز</span>
                           )}
-                          {b.insuranceRefunded && (
+                          {b.insuranceRefunded && !b.insuranceDeducted && (
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">↩ تم إعادة التأمين</span>
+                          )}
+                          {b.insuranceRefunded && b.insuranceDeducted && Number(b.insuranceDeducted) > 0 && (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">✂️ تلفيات: {fmtAR(Number(b.insuranceDeducted))} ر.س</span>
                           )}
                         </div>
                       </div>
@@ -936,11 +1106,28 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     </div>
                   )}
                   {ins !== null && (
-                    <div className="flex items-center justify-between bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-lg px-3 py-1.5">
-                      <span className="text-xs text-orange-700 dark:text-orange-400 font-semibold">🔒 مبلغ التأمين</span>
-                      <span className={`text-xs font-bold ${b.insuranceRefunded ? "text-slate-500 line-through" : "text-orange-700 dark:text-orange-400"}`}>
-                        {fmtAR(ins)} ر.س
-                      </span>
+                    <div className={`rounded-lg border px-3 py-2 ${b.insuranceRefunded ? "bg-slate-50 dark:bg-slate-900/20 border-slate-200 dark:border-slate-700" : "bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800"}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-semibold ${b.insuranceRefunded ? "text-slate-500" : "text-orange-700 dark:text-orange-400"}`}>🔒 مبلغ التأمين</span>
+                        <span className={`text-xs font-bold ${b.insuranceRefunded ? "text-slate-400 line-through" : "text-orange-700 dark:text-orange-400"}`}>
+                          {fmtAR(ins)} ر.س
+                        </span>
+                      </div>
+                      {b.insuranceDeducted && Number(b.insuranceDeducted) > 0 && (
+                        <div className="mt-1 pt-1 border-t border-slate-200 dark:border-slate-700 flex flex-col gap-0.5">
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-red-600">✂️ خصم تلفيات</span>
+                            <span className="font-bold text-red-700">{fmtAR(Number(b.insuranceDeducted))} ر.س</span>
+                          </div>
+                          {b.insuranceDeductReason && (
+                            <div className="text-[10px] text-muted-foreground">السبب: {b.insuranceDeductReason}</div>
+                          )}
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-green-600">↩ مُرجَع للعميل</span>
+                            <span className="font-bold text-green-700">{fmtAR(Math.max(0, ins - Number(b.insuranceDeducted)))} ر.س</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -967,14 +1154,13 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         تم تحصيل المتبقي
                       </button>
                     )}
-                    {/* Refund insurance */}
+                    {/* Manage insurance */}
                     {ins && !b.insuranceRefunded && (
                       <button
-                        onClick={() => patchBookingStatus.mutate({ id: b.id, patch: { insuranceRefunded: true } })}
-                        disabled={patchBookingStatus.isPending}
-                        className="flex items-center gap-1.5 text-xs font-medium text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg px-2.5 py-1 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors disabled:opacity-50"
+                        onClick={() => setInsuranceTarget(b)}
+                        className="flex items-center gap-1.5 text-xs font-medium text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg px-2.5 py-1 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors"
                       >
-                        ↩ تم إعادة التأمين
+                        🔒 إدارة التأمين
                       </button>
                     )}
                   </div>
@@ -984,6 +1170,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           </div>
         )}
       </div>
+
+      {/* Manage Insurance Dialog */}
+      <ManageInsuranceDialog
+        booking={insuranceTarget}
+        open={!!insuranceTarget}
+        onClose={() => setInsuranceTarget(null)}
+        onSaved={() => qc.invalidateQueries({ queryKey: ["owner", "bookings"] })}
+        apiFetch={apiFetch}
+        formatAmount={(v) => v === null || v === undefined ? "0" : Number(v).toLocaleString("ar-SA")}
+      />
 
       {/* Block Date Dialog */}
       {blockDateStr && activeChaletId && (
@@ -2421,7 +2617,7 @@ async function printMonthlyReport(
   month: string,
   propertyName: string,
   report: MonthReport | null | undefined,
-  financial: { totalRevenue: number; totalInsuranceHeld?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
+  financial: { totalRevenue: number; totalInsuranceHeld?: number; totalInsuranceDeducted?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
 ) {
   const win = window.open("", "_blank", "width=794,height=1123");
   if (!win) return;
@@ -2450,7 +2646,7 @@ function buildMonthlyReportHtml(
   month: string,
   propertyName: string,
   report: MonthReport | null | undefined,
-  financial: { totalRevenue: number; totalInsuranceHeld?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
+  financial: { totalRevenue: number; totalInsuranceHeld?: number; totalInsuranceDeducted?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
   forPrint = false,
   qrDataUrl: string | null = null,
 ): string {
@@ -2467,6 +2663,7 @@ function buildMonthlyReportHtml(
     ? `<div class="qr-block"><img src="${qrDataUrl}" class="qr-img" /><div class="qr-caption">مسح للتحقق</div></div>`
     : `<div class="qr-block" style="width:80px;"></div>`;
   const insuranceHeld = financial?.totalInsuranceHeld ?? 0;
+  const insuranceDeducted = financial?.totalInsuranceDeducted ?? 0;
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <title>التقرير_الشهري_${monthStr}.pdf</title>
 <style>${REPORT_CSS}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
@@ -2476,10 +2673,10 @@ function buildMonthlyReportHtml(
 <div class="header-center"><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
 ${qrHtml}</div>
 ${financial ? `<div class="section"><div class="section-title">الملخص المالي (أرباح وخسائر)</div><div class="kpi-grid">
-<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">عربون + مبالغ محصّلة</div></div>
+<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">عربون + محصّل + تلفيات</div></div>
 <div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات</div><div class="kpi-value">${formatAmount(financial.totalExpenses)}</div><div class="kpi-note">مصروفات + رواتب</div></div>
 <div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value">${formatAmount(financial.netProfit)}</div><div class="kpi-note">الإيرادات - المصروفات</div></div>
-</div>${insuranceHeld > 0 ? `<div style="margin-top:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#c2410c;">🔒 تأمينات محتجزة (غير محسوبة في الأرباح)</span><span style="font-size:16px;font-weight:700;color:#c2410c;">${formatAmount(insuranceHeld)}</span></div>` : ""}</div>${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}` : ""}
+</div>${insuranceDeducted > 0 ? `<div style="margin-top:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#b91c1c;">✂️ إيرادات تلفيات (محوّلة من التأمين)</span><span style="font-size:16px;font-weight:700;color:#b91c1c;">${formatAmount(insuranceDeducted)}</span></div>` : ""}${insuranceHeld > 0 ? `<div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#c2410c;">🔒 تأمينات محتجزة (غير محسوبة في الأرباح)</span><span style="font-size:16px;font-weight:700;color:#c2410c;">${formatAmount(insuranceHeld)}</span></div>` : ""}</div>${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}` : ""}
 ${report ? `<div class="section"><div class="section-title">إحصائيات الحجوزات</div><div class="kpi-grid">
 <div class="kpi-card"><div class="kpi-label">إجمالي الحجوزات</div><div class="kpi-value">${report.totalBookings}</div></div>
 <div class="kpi-card"><div class="kpi-label">نسبة الإشغال</div><div class="kpi-value">${report.occupancyRate}%</div></div>
@@ -2632,7 +2829,7 @@ async function generateAndUploadReportPdf(
     year?: string;
     propertyName: string;
     report?: MonthReport | null;
-    financial?: { totalRevenue: number; totalInsuranceHeld?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null;
+    financial?: { totalRevenue: number; totalInsuranceHeld?: number; totalInsuranceDeducted?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null;
     yearly?: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } } | null;
   }
 ): Promise<string | null> {
@@ -2708,6 +2905,7 @@ function ReportsTab() {
     month: string;
     totalRevenue: number;
     totalInsuranceHeld: number;
+    totalInsuranceDeducted: number;
     totalExpenses: number;
     netProfit: number;
     categoryTotals: Record<string, number>;
@@ -3195,6 +3393,22 @@ function ReportsTab() {
                   </div>
                 ))}
               </div>
+
+              {/* Insurance damage deductions — converted to revenue under تلفيات */}
+              {financial.totalInsuranceDeducted > 0 && (
+                <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-2xl px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                      <span className="text-base">✂️</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-red-700 dark:text-red-400">إيرادات تلفيات</p>
+                      <p className="text-[10px] text-red-600/70 dark:text-red-500/70">مخصومة من التأمين · محسوبة في الإيرادات</p>
+                    </div>
+                  </div>
+                  <p className="text-lg font-bold text-red-700 dark:text-red-400">{formatAmount(financial.totalInsuranceDeducted)}</p>
+                </div>
+              )}
 
               {/* Insurance held — shown separately since it's refundable and NOT counted in profit */}
               {financial.totalInsuranceHeld > 0 && (
