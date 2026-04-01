@@ -2231,7 +2231,7 @@ function printYearlyReport(
 }
 
 /* ── Shared Report HTML builders (for print + PDF export) ── */
-const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;}.page{width:794px;padding:40px 48px;background:#fff;}.header{border-bottom:3px solid #b8860b;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;}.brand-name{font-size:26px;font-weight:800;color:#b8860b;}.brand-sub{font-size:12px;color:#666;margin-top:4px;}.report-title{font-size:18px;font-weight:700;text-align:left;}.report-sub{font-size:12px;color:#666;text-align:left;margin-top:4px;}.section{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#b8860b;border-right:3px solid #b8860b;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}.kpi-note{font-size:10px;color:#aaa;margin-top:2px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#b8860b;color:#fff;padding:8px 12px;text-align:right;}td{padding:8px 12px;border-bottom:1px solid #ede9dd;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #b8860b;}.footer{margin-top:40px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
+const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:36px 40px;background:#fff;overflow:hidden;}.header{border-bottom:3px solid #b8860b;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;flex-direction:row;}.brand-name{font-size:26px;font-weight:800;color:#b8860b;}.brand-sub{font-size:12px;color:#666;margin-top:4px;}.report-title{font-size:18px;font-weight:700;text-align:end;}.report-sub{font-size:12px;color:#666;text-align:end;margin-top:4px;}.section{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#b8860b;border-right:3px solid #b8860b;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}.kpi-note{font-size:10px;color:#aaa;margin-top:2px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;word-wrap:break-word;}th{background:#b8860b;color:#fff;padding:8px 10px;text-align:right;}td{padding:8px 10px;border-bottom:1px solid #ede9dd;word-break:break-word;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #b8860b;}.footer{margin-top:40px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
 
 function buildMonthlyReportHtml(
   month: string,
@@ -2309,11 +2309,31 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
   const styles = Array.from(parsedDoc.querySelectorAll("style")).map((s) => s.textContent ?? "").join("\n");
   const bodyContent = parsedDoc.body.innerHTML;
 
-  // Build a properly styled off-screen container with RTL direction
+  // A4 page: 210mm × 297mm. Content width = 180mm (with 15mm side margins).
+  // At 96dpi, 1mm ≈ 3.7795px → content canvas width = 750px → 198.4mm → fits in 180mm after margins.
+  const CONTENT_PX = 750; // must match .page width in REPORT_CSS
+
+  // Wrapper: position in viewport so html2canvas can capture it.
+  // visibility:hidden and opacity:0 cause html2canvas to skip rendering,
+  // so we position the element above the viewport fold via negative top margin
+  // and use clip:rect(0,0,0,0) combined with overflow:hidden on html.
+  // Simplest reliable approach: fixed top:0 left:0, above content (z-index:99999),
+  // pointer-events:none. The element is briefly visible during ~500ms generation
+  // but the loading state in the UI makes this imperceptible.
   const wrapper = document.createElement("div");
   wrapper.dir = "rtl";
-  // Use top:0 left:0 z-index:-9999 so the element is in the layout tree (html2canvas needs this)
-  wrapper.style.cssText = "position:fixed;top:0;left:0;width:794px;background:#fff;direction:rtl;z-index:-9999;pointer-events:none;";
+  wrapper.style.cssText = [
+    "position:fixed",
+    "top:0",
+    "left:0",
+    `width:${CONTENT_PX}px`,
+    "background:#fff",
+    "direction:rtl",
+    "pointer-events:none",
+    "z-index:99999",
+    // Clip so only the area behind the page header is used (no flash effect)
+    "overflow:hidden",
+  ].join(";");
 
   const styleEl = document.createElement("style");
   styleEl.textContent = styles;
@@ -2326,24 +2346,52 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
   document.body.appendChild(wrapper);
 
   try {
-    // Give browser time to apply CSS and layout
-    await new Promise<void>((resolve) => setTimeout(resolve, 400));
+    // Wait for CSS to apply and fonts to render
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
 
     const pageEl = wrapper.querySelector<HTMLElement>(".page") ?? wrapper;
 
+    // Fix: pass scrollX=0/scrollY=0 so position:fixed elements aren't shifted by page scroll.
+    // windowWidth matches the fixed width so responsive breakpoints don't misfire.
     const canvas = await html2canvas(pageEl, {
       scale: 2,
       useCORS: true,
       allowTaint: true,
       backgroundColor: "#ffffff",
-      width: 794,
+      width: CONTENT_PX,
+      windowWidth: CONTENT_PX,
+      scrollX: 0,
+      scrollY: 0,
       logging: false,
     });
 
-    const pageW = 794;
-    const pageH = Math.round(canvas.height / 2);
-    const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [pageW, pageH] });
-    pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, pageW, pageH);
+    // Build an A4 PDF (210mm × 297mm) with 15mm margins.
+    // jsPDF unit 'mm': page width 210, content area 180mm (210 - 2×15).
+    const A4_W_MM = 210;
+    const MARGIN_MM = 15;
+    const contentWidthMm = A4_W_MM - MARGIN_MM * 2; // 180mm
+    const contentHeightMm = (canvas.height / canvas.width) * contentWidthMm;
+    const pageHeightMm = contentHeightMm + MARGIN_MM * 2;
+
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: [A4_W_MM, Math.max(pageHeightMm, 297)], // at least A4 height
+    });
+
+    // Draw white background first (ensures no transparency artifacts)
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, A4_W_MM, Math.max(pageHeightMm, 297), "F");
+
+    pdf.addImage(
+      canvas.toDataURL("image/jpeg", 0.95),
+      "JPEG",
+      MARGIN_MM,  // x — 15mm from left
+      MARGIN_MM,  // y — 15mm from top
+      contentWidthMm,
+      contentHeightMm,
+    );
+
     return { blob: pdf.output("blob"), fileName };
   } finally {
     try { document.body.removeChild(wrapper); } catch { /* ignore */ }
