@@ -1,6 +1,8 @@
-import { useEffect, useState, useMemo, useRef, type ReactElement } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback, type ReactElement } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useGetMySubmissions } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -2212,32 +2214,7 @@ function printMonthlyReport(
 ) {
   const win = window.open("", "_blank", "width=794,height=1123");
   if (!win) return;
-  const monthStr = new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
-  const printDate = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
-  const catRows = financial && Object.keys(financial.categoryTotals).length > 0
-    ? Object.entries(financial.categoryTotals).sort(([, a], [, b]) => b - a).map(([key, amt]) => {
-        const cat = catMap[key] ?? { label: key, emoji: "✨" };
-        const pct = financial.totalExpenses > 0 ? Math.round((amt / financial.totalExpenses) * 100) : 0;
-        return `<tr><td>${cat.emoji} ${cat.label}</td><td>${formatAmount(amt)}</td><td>${pct}%</td></tr>`;
-      }).join("") : "";
-  win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
-<title>التقرير الشهري – ${monthStr}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;}.page{max-width:794px;margin:0 auto;padding:40px 48px;min-height:1123px;}.header{border-bottom:3px solid #b8860b;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;}.brand-name{font-size:26px;font-weight:800;color:#b8860b;}.brand-sub{font-size:12px;color:#666;margin-top:4px;}.report-title{font-size:18px;font-weight:700;text-align:left;}.report-sub{font-size:12px;color:#666;text-align:left;margin-top:4px;}.section{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#b8860b;border-right:3px solid #b8860b;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}.kpi-note{font-size:10px;color:#aaa;margin-top:2px;}.kpi-green{border-color:#86efac;}.kpi-red{border-color:#fca5a5;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#b8860b;color:#fff;padding:8px 12px;text-align:right;}td{padding:8px 12px;border-bottom:1px solid #ede9dd;}tr:nth-child(even) td{background:#faf9f6;}.footer{margin-top:40px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
-<body><div class="page">
-<div class="header"><div><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
-<div><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · طُبع بتاريخ ${printDate}</div></div></div>
-${financial ? `<div class="section"><div class="section-title">الملخص المالي</div><div class="kpi-grid">
-<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">من الحجوزات المسعّرة</div></div>
-<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات</div><div class="kpi-value">${formatAmount(financial.totalExpenses)}</div><div class="kpi-note">مصروفات + رواتب</div></div>
-<div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value">${formatAmount(financial.netProfit)}</div><div class="kpi-note">الإيرادات - المصروفات</div></div>
-</div></div>${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}` : ""}
-${report ? `<div class="section"><div class="section-title">إحصائيات الحجوزات</div><div class="kpi-grid">
-<div class="kpi-card"><div class="kpi-label">إجمالي الحجوزات</div><div class="kpi-value">${report.totalBookings}</div></div>
-<div class="kpi-card"><div class="kpi-label">نسبة الإشغال</div><div class="kpi-value">${report.occupancyRate}%</div></div>
-<div class="kpi-card"><div class="kpi-label">أيام مشغولة</div><div class="kpi-value">${report.totalDays} / ${report.daysInMonth}</div></div>
-</div></div>` : ""}
-<div class="footer">تم إصدار هذا التقرير عبر منصة حكاية أناقة · ${new Date().getFullYear()}</div>
-</div><script>window.onload=function(){window.print();};<\/script></body></html>`);
+  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true));
   win.document.close();
 }
 
@@ -2249,30 +2226,135 @@ function printYearlyReport(
   if (!yearly) return;
   const win = window.open("", "_blank", "width=794,height=1123");
   if (!win) return;
+  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true));
+  win.document.close();
+}
+
+/* ── Shared Report HTML builders (for print + PDF export) ── */
+const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;}.page{width:794px;padding:40px 48px;background:#fff;}.header{border-bottom:3px solid #b8860b;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;}.brand-name{font-size:26px;font-weight:800;color:#b8860b;}.brand-sub{font-size:12px;color:#666;margin-top:4px;}.report-title{font-size:18px;font-weight:700;text-align:left;}.report-sub{font-size:12px;color:#666;text-align:left;margin-top:4px;}.section{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#b8860b;border-right:3px solid #b8860b;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}.kpi-note{font-size:10px;color:#aaa;margin-top:2px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#b8860b;color:#fff;padding:8px 12px;text-align:right;}td{padding:8px 12px;border-bottom:1px solid #ede9dd;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #b8860b;}.footer{margin-top:40px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
+
+function buildMonthlyReportHtml(
+  month: string,
+  propertyName: string,
+  report: MonthReport | null | undefined,
+  financial: { totalRevenue: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
+  forPrint = false,
+): string {
+  const monthStr = new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+  const printDate = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
+  const catRows = financial && Object.keys(financial.categoryTotals).length > 0
+    ? Object.entries(financial.categoryTotals).sort(([, a], [, b]) => b - a).map(([key, amt]) => {
+        const cat = catMap[key] ?? { label: key, emoji: "✨" };
+        const pct = financial.totalExpenses > 0 ? Math.round((amt / financial.totalExpenses) * 100) : 0;
+        return `<tr><td>${cat.emoji} ${cat.label}</td><td>${formatAmount(amt)}</td><td>${pct}%</td></tr>`;
+      }).join("") : "";
+  const scriptTag = forPrint ? `<script>window.onload=function(){window.print();};<\/script>` : "";
+  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+<title>التقرير_الشهري_${monthStr}.pdf</title>
+<style>${REPORT_CSS}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
+<body><div class="page">
+<div class="header"><div><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
+<div><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · ${printDate}</div></div></div>
+${financial ? `<div class="section"><div class="section-title">الملخص المالي (أرباح وخسائر)</div><div class="kpi-grid">
+<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">من الحجوزات المسعّرة</div></div>
+<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات</div><div class="kpi-value">${formatAmount(financial.totalExpenses)}</div><div class="kpi-note">مصروفات + رواتب</div></div>
+<div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value">${formatAmount(financial.netProfit)}</div><div class="kpi-note">الإيرادات - المصروفات</div></div>
+</div></div>${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}` : ""}
+${report ? `<div class="section"><div class="section-title">إحصائيات الحجوزات</div><div class="kpi-grid">
+<div class="kpi-card"><div class="kpi-label">إجمالي الحجوزات</div><div class="kpi-value">${report.totalBookings}</div></div>
+<div class="kpi-card"><div class="kpi-label">نسبة الإشغال</div><div class="kpi-value">${report.occupancyRate}%</div></div>
+<div class="kpi-card"><div class="kpi-label">أيام مشغولة</div><div class="kpi-value">${report.totalDays} / ${report.daysInMonth}</div></div>
+</div></div>` : ""}
+<div class="footer">تم إصدار هذا التقرير عبر منصة حكاية أناقة · ${new Date().getFullYear()}</div>
+</div>${scriptTag}</body></html>`;
+}
+
+function buildYearlyReportHtml(
+  year: string,
+  propertyName: string,
+  yearly: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } },
+  forPrint = false,
+): string {
   const printDate = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
   const rows = yearly.monthly.map(m => {
     const label = new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
     const cls = m.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626";
     return `<tr><td>${label}</td><td>${formatAmount(m.revenue)}</td><td>${formatAmount(m.expenses)}</td><td style="${cls}">${formatAmount(m.netProfit)}</td></tr>`;
   }).join("");
-  win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
-<title>التقرير السنوي – ${year}</title>
-<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;}.page{max-width:794px;margin:0 auto;padding:40px 48px;}.header{border-bottom:3px solid #b8860b;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;}.brand-name{font-size:26px;font-weight:800;color:#b8860b;}.brand-sub{font-size:12px;color:#666;margin-top:4px;}.report-title{font-size:18px;font-weight:700;text-align:left;}.report-sub{font-size:12px;color:#666;text-align:left;margin-top:4px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#b8860b;color:#fff;padding:8px 12px;text-align:right;}td{padding:8px 12px;border-bottom:1px solid #ede9dd;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0!important;border-top:2px solid #b8860b;}.footer{margin-top:40px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
+  const scriptTag = forPrint ? `<script>window.onload=function(){window.print();};<\/script>` : "";
+  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+<title>التقرير_السنوي_${year}.pdf</title>
+<style>${REPORT_CSS}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
 <body><div class="page">
 <div class="header"><div><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
-<div><div class="report-title">التقرير السنوي – ${year}</div><div class="report-sub">${propertyName} · طُبع بتاريخ ${printDate}</div></div></div>
-<div class="kpi-grid">
-<div class="kpi-card" style="border-color:#86efac"><div class="kpi-label">إجمالي الإيرادات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.revenue)}</div></div>
-<div class="kpi-card" style="border-color:#fca5a5"><div class="kpi-label">إجمالي المصروفات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.expenses)}</div></div>
-<div class="kpi-card" style="border-color:${yearly.totals.netProfit >= 0 ? "#86efac" : "#fca5a5"}"><div class="kpi-label">صافي الربح السنوي</div><div class="kpi-value" style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmount(yearly.totals.netProfit)}</div></div>
+<div><div class="report-title">التقرير السنوي – ${year}</div><div class="report-sub">${propertyName} · ${printDate}</div></div></div>
+<div class="kpi-grid" style="margin-bottom:24px">
+<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.revenue)}</div></div>
+<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.expenses)}</div></div>
+<div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح السنوي</div><div class="kpi-value" style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmount(yearly.totals.netProfit)}</div></div>
 </div>
 <table><thead><tr><th>الشهر</th><th>الإيرادات (ر.س)</th><th>المصروفات (ر.س)</th><th>صافي الربح (ر.س)</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr><td>الإجمالي السنوي</td><td>${formatAmount(yearly.totals.revenue)}</td><td>${formatAmount(yearly.totals.expenses)}</td><td style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmount(yearly.totals.netProfit)}</td></tr></tfoot>
 </table>
 <div class="footer">تم إصدار هذا التقرير عبر منصة حكاية أناقة · ${new Date().getFullYear()}</div>
-</div><script>window.onload=function(){window.print();};<\/script></body></html>`);
-  win.document.close();
+</div>${scriptTag}</body></html>`;
+}
+
+/* ── HTML → PDF blob (html2canvas + jsPDF) ── */
+async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Blob; fileName: string }> {
+  const container = document.createElement("div");
+  container.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;background:#fff;z-index:-1;";
+  container.innerHTML = html;
+  document.body.appendChild(container);
+
+  try {
+    await new Promise<void>((resolve) => setTimeout(resolve, 300));
+
+    const canvas = await html2canvas(container.querySelector(".page") as HTMLElement ?? container, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#ffffff",
+      width: 794,
+      logging: false,
+    });
+
+    const imgData = canvas.toDataURL("image/jpeg", 0.95);
+    const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [794, canvas.height / 2] });
+    pdf.addImage(imgData, "JPEG", 0, 0, 794, canvas.height / 2);
+    return { blob: pdf.output("blob"), fileName };
+  } finally {
+    document.body.removeChild(container);
+  }
+}
+
+/* ── Generate PDF → upload to storage → return public URL ── */
+async function generateAndUploadReportPdf(
+  type: "monthly" | "yearly",
+  params: {
+    month?: string;
+    year?: string;
+    propertyName: string;
+    report?: MonthReport | null;
+    financial?: { totalRevenue: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null;
+    yearly?: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } } | null;
+  }
+): Promise<string | null> {
+  let html: string;
+  let fileName: string;
+
+  if (type === "monthly") {
+    fileName = `Monthly_Report_${params.month ?? "report"}.pdf`;
+    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial);
+  } else {
+    fileName = `Annual_Report_${params.year ?? new Date().getFullYear()}.pdf`;
+    html = buildYearlyReportHtml(params.year!, params.propertyName, params.yearly!);
+  }
+
+  const { blob } = await htmlToPdfBlob(html, fileName);
+  const file = new File([blob], fileName, { type: "application/pdf" });
+  return uploadFile(file);
 }
 
 function ReportsTab() {
@@ -2287,7 +2369,11 @@ function ReportsTab() {
   const [shareEmail, setShareEmail] = useState(() => localStorage.getItem("reportShareEmail") ?? "");
   const [showShare, setShowShare] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const qc = useQueryClient();
+
+  useEffect(() => { setPdfUrl(null); }, [viewMode, selectedMonth, selectedYear, selectedSubmissionId]);
 
   const { data: mySubmissions = [] } = useQuery<any[]>({
     queryKey: ["my-submissions-for-report"],
@@ -2409,43 +2495,98 @@ function ReportsTab() {
     ? "كل العقارات"
     : mySubmissions.find((s: any) => String(s.id) === selectedSubmissionId)?.nameAr ?? `شاليه #${selectedSubmissionId}`;
 
-  const handleShareWhatsApp = () => {
+  const handleShareWhatsApp = useCallback(async () => {
     const phone = sharePhone.replace(/\D/g, "");
-    let text = "";
-    if (viewMode === "monthly" && report) {
-      text = `📊 تقرير شهر ${monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth}\n\n` +
-        `🏠 العقار: ${selectedPropertyName}\n` +
-        `📅 إجمالي الحجوزات: ${report.totalBookings}\n` +
-        `📈 نسبة الإشغال: ${report.occupancyRate}%\n\n` +
-        `💰 منصة حكاية أناقة – شاليهات القصيم`;
-    } else if (viewMode === "yearly" && yearly) {
-      text = `📊 التقرير السنوي ${selectedYear}\n\n` +
-        `🏠 العقار: ${selectedPropertyName}\n` +
-        `💚 الإيرادات: ${formatAmount(yearly.totals.revenue)}\n` +
-        `🔴 المصروفات: ${formatAmount(yearly.totals.expenses)}\n` +
-        `⭐ صافي الربح: ${formatAmount(yearly.totals.netProfit)}\n\n` +
-        `💰 منصة حكاية أناقة – شاليهات القصيم`;
-    }
-    if (!text) return;
-    const url = phone
-      ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
-      : `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(url, "_blank");
-  };
+    setPdfLoading(true);
+    try {
+      let url = pdfUrl;
+      if (!url) {
+        if (viewMode === "monthly") {
+          url = await generateAndUploadReportPdf("monthly", {
+            month: selectedMonth,
+            propertyName: selectedPropertyName,
+            report,
+            financial,
+          });
+        } else if (viewMode === "yearly" && yearly) {
+          url = await generateAndUploadReportPdf("yearly", {
+            year: selectedYear,
+            propertyName: selectedPropertyName,
+            yearly,
+          });
+        }
+        if (url) setPdfUrl(url);
+      }
 
-  const handleShareEmail = () => {
+      let text = "";
+      if (viewMode === "monthly" && report) {
+        const monthLabel = monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth;
+        text = `📊 تقرير شهر ${monthLabel}\n\n` +
+          `🏠 العقار: ${selectedPropertyName}\n` +
+          `📅 إجمالي الحجوزات: ${report.totalBookings}\n` +
+          `📈 نسبة الإشغال: ${report.occupancyRate}%\n` +
+          (financial ? `💰 صافي الربح: ${formatAmount(financial.netProfit)}\n` : "") +
+          (url ? `\n📎 التقرير (PDF): ${url}\n` : "") +
+          `\n✨ منصة حكاية أناقة – شاليهات القصيم`;
+      } else if (viewMode === "yearly" && yearly) {
+        text = `📊 التقرير السنوي ${selectedYear}\n\n` +
+          `🏠 العقار: ${selectedPropertyName}\n` +
+          `💚 الإيرادات: ${formatAmount(yearly.totals.revenue)}\n` +
+          `🔴 المصروفات: ${formatAmount(yearly.totals.expenses)}\n` +
+          `⭐ صافي الربح: ${formatAmount(yearly.totals.netProfit)}\n` +
+          (url ? `\n📎 التقرير (PDF): ${url}\n` : "") +
+          `\n✨ منصة حكاية أناقة – شاليهات القصيم`;
+      }
+      if (!text) return;
+      const waUrl = phone
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+        : `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(waUrl, "_blank");
+    } catch (e) {
+      console.error("PDF generation failed:", e);
+      alert("تعذّر إنشاء ملف PDF، سيتم مشاركة ملخص نصي.");
+      const phone = sharePhone.replace(/\D/g, "");
+      let text = viewMode === "monthly" && report
+        ? `📊 تقرير شهر ${monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth}\n🏠 ${selectedPropertyName}\n✨ منصة حكاية أناقة`
+        : viewMode === "yearly" && yearly
+        ? `📊 التقرير السنوي ${selectedYear}\n🏠 ${selectedPropertyName}\n✨ منصة حكاية أناقة`
+        : "";
+      if (text) window.open(phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, sharePhone, pdfUrl, monthOptions]);
+
+  const handleShareEmail = useCallback(async () => {
     if (!shareEmail) { alert("يرجى إدخال البريد الإلكتروني في إعدادات المشاركة"); return; }
+    let url = pdfUrl;
+    if (!url) {
+      setPdfLoading(true);
+      try {
+        if (viewMode === "monthly") {
+          url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial });
+        } else if (viewMode === "yearly" && yearly) {
+          url = await generateAndUploadReportPdf("yearly", { year: selectedYear, propertyName: selectedPropertyName, yearly });
+        }
+        if (url) setPdfUrl(url);
+      } catch (e) { console.error(e); } finally { setPdfLoading(false); }
+    }
     let subject = "";
     let body = "";
     if (viewMode === "monthly" && report) {
       subject = `تقرير شهري – ${monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth}`;
-      body = `${selectedPropertyName}\n\nالحجوزات: ${report.totalBookings}\nالإشغال: ${report.occupancyRate}%\n\nحكاية أناقة`;
+      body = `${selectedPropertyName}\n\nالحجوزات: ${report.totalBookings}\nالإشغال: ${report.occupancyRate}%` +
+        (financial ? `\nصافي الربح: ${formatAmount(financial.netProfit)}` : "") +
+        (url ? `\n\nرابط التقرير PDF:\n${url}` : "") +
+        `\n\nحكاية أناقة – شاليهات القصيم`;
     } else if (viewMode === "yearly" && yearly) {
       subject = `التقرير السنوي – ${selectedYear}`;
-      body = `${selectedPropertyName}\n\nإيرادات: ${formatAmount(yearly.totals.revenue)}\nمصروفات: ${formatAmount(yearly.totals.expenses)}\nصافي: ${formatAmount(yearly.totals.netProfit)}\n\nحكاية أناقة`;
+      body = `${selectedPropertyName}\n\nإيرادات: ${formatAmount(yearly.totals.revenue)}\nمصروفات: ${formatAmount(yearly.totals.expenses)}\nصافي: ${formatAmount(yearly.totals.netProfit)}` +
+        (url ? `\n\nرابط التقرير PDF:\n${url}` : "") +
+        `\n\nحكاية أناقة – شاليهات القصيم`;
     }
     window.open(`mailto:${shareEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
-  };
+  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, shareEmail, pdfUrl, monthOptions]);
 
   const handleSaveToArchive = () => {
     const payload = viewMode === "monthly"
@@ -2653,8 +2794,13 @@ function ReportsTab() {
                 <Button variant="outline" size="sm" onClick={() => printYearlyReport(selectedYear, selectedPropertyName, yearly)} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير السنوي
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleShareWhatsApp} className="gap-2">
-                  <MessageSquare className="w-4 h-4" />واتساب
+                <Button variant="outline" size="sm" onClick={handleShareWhatsApp} disabled={pdfLoading} className="gap-2">
+                  {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                  {pdfLoading ? "جاري إنشاء PDF…" : "مشاركة PDF واتساب"}
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleShareEmail} disabled={pdfLoading} className="gap-2">
+                  {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                  بريد
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleSaveToArchive} disabled={archiveMutation.isPending} className="gap-2">
                   <Archive className="w-4 h-4" />حفظ في الأرشيف
@@ -2806,11 +2952,13 @@ function ReportsTab() {
                 <Button variant="outline" size="sm" onClick={() => printMonthlyReport(selectedMonth, selectedPropertyName, report, financial)} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleShareWhatsApp} className="gap-2">
-                  <MessageSquare className="w-4 h-4" />واتساب
+                <Button variant="outline" size="sm" onClick={handleShareWhatsApp} disabled={pdfLoading} className="gap-2">
+                  {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                  {pdfLoading ? "جاري إنشاء PDF…" : "مشاركة PDF واتساب"}
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleShareEmail} className="gap-2">
-                  <Mail className="w-4 h-4" />بريد
+                <Button variant="outline" size="sm" onClick={handleShareEmail} disabled={pdfLoading} className="gap-2">
+                  {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                  بريد
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleSaveToArchive} disabled={archiveMutation.isPending} className="gap-2">
                   <Archive className="w-4 h-4" />حفظ في الأرشيف
