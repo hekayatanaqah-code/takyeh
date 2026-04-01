@@ -2205,8 +2205,24 @@ function StaffTab() {
   );
 }
 
+/* ── QR Code helper for report verification links ── */
+async function generateReportQrDataUrl(type: "monthly" | "yearly", period: string): Promise<string | null> {
+  try {
+    const param = type === "monthly" ? `month=${period}` : `year=${period}`;
+    const url = `${window.location.origin}${BASE}/dashboard?tab=reports&view=${type}&${param}`;
+    return await QRCode.toDataURL(url, {
+      width: 200,
+      margin: 1,
+      color: { dark: "#000000", light: "#ffffff" },
+      errorCorrectionLevel: "M",
+    });
+  } catch {
+    return null;
+  }
+}
+
 /* ── PDF Print Functions ────────────────────── */
-function printMonthlyReport(
+async function printMonthlyReport(
   month: string,
   propertyName: string,
   report: MonthReport | null | undefined,
@@ -2214,11 +2230,12 @@ function printMonthlyReport(
 ) {
   const win = window.open("", "_blank", "width=794,height=1123");
   if (!win) return;
-  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true));
+  const qr = await generateReportQrDataUrl("monthly", month);
+  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr));
   win.document.close();
 }
 
-function printYearlyReport(
+async function printYearlyReport(
   year: string,
   propertyName: string,
   yearly: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } } | null | undefined,
@@ -2226,12 +2243,13 @@ function printYearlyReport(
   if (!yearly) return;
   const win = window.open("", "_blank", "width=794,height=1123");
   if (!win) return;
-  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true));
+  const qr = await generateReportQrDataUrl("yearly", year);
+  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr));
   win.document.close();
 }
 
 /* ── Shared Report HTML builders (for print + PDF export) ── */
-const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:36px 40px;background:#fff;overflow:hidden;}.header{border-bottom:3px solid #b8860b;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;flex-direction:row;}.brand-name{font-size:26px;font-weight:800;color:#b8860b;}.brand-sub{font-size:12px;color:#666;margin-top:4px;}.report-title{font-size:18px;font-weight:700;text-align:end;}.report-sub{font-size:12px;color:#666;text-align:end;margin-top:4px;}.section{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#b8860b;border-right:3px solid #b8860b;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}.kpi-note{font-size:10px;color:#aaa;margin-top:2px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;word-wrap:break-word;}th{background:#b8860b;color:#fff;padding:8px 10px;text-align:right;}td{padding:8px 10px;border-bottom:1px solid #ede9dd;word-break:break-word;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #b8860b;}.footer{margin-top:40px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
+const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:36px 40px;background:#fff;overflow:hidden;}.header{border-bottom:3px solid #b8860b;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#b8860b;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.section{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#b8860b;border-right:3px solid #b8860b;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}.kpi-note{font-size:10px;color:#aaa;margin-top:2px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;word-wrap:break-word;}th{background:#b8860b;color:#fff;padding:8px 10px;text-align:right;}td{padding:8px 10px;border-bottom:1px solid #ede9dd;word-break:break-word;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #b8860b;}.footer{margin-top:40px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
 
 function buildMonthlyReportHtml(
   month: string,
@@ -2239,6 +2257,7 @@ function buildMonthlyReportHtml(
   report: MonthReport | null | undefined,
   financial: { totalRevenue: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
   forPrint = false,
+  qrDataUrl: string | null = null,
 ): string {
   const monthStr = new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
   const printDate = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
@@ -2249,12 +2268,17 @@ function buildMonthlyReportHtml(
         return `<tr><td>${cat.emoji} ${cat.label}</td><td>${formatAmount(amt)}</td><td>${pct}%</td></tr>`;
       }).join("") : "";
   const scriptTag = forPrint ? `<script>window.onload=function(){window.print();};<\/script>` : "";
+  const qrHtml = qrDataUrl
+    ? `<div class="qr-block"><img src="${qrDataUrl}" class="qr-img" /><div class="qr-caption">مسح للتحقق</div></div>`
+    : `<div class="qr-block" style="width:80px;"></div>`;
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <title>التقرير_الشهري_${monthStr}.pdf</title>
 <style>${REPORT_CSS}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
 <body><div class="page">
-<div class="header"><div><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
-<div><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · ${printDate}</div></div></div>
+<div class="header">
+<div class="header-brand"><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
+<div class="header-center"><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
+${qrHtml}</div>
 ${financial ? `<div class="section"><div class="section-title">الملخص المالي (أرباح وخسائر)</div><div class="kpi-grid">
 <div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">من الحجوزات المسعّرة</div></div>
 <div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات</div><div class="kpi-value">${formatAmount(financial.totalExpenses)}</div><div class="kpi-note">مصروفات + رواتب</div></div>
@@ -2274,6 +2298,7 @@ function buildYearlyReportHtml(
   propertyName: string,
   yearly: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } },
   forPrint = false,
+  qrDataUrl: string | null = null,
 ): string {
   const printDate = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
   const rows = yearly.monthly.map(m => {
@@ -2282,12 +2307,17 @@ function buildYearlyReportHtml(
     return `<tr><td>${label}</td><td>${formatAmount(m.revenue)}</td><td>${formatAmount(m.expenses)}</td><td style="${cls}">${formatAmount(m.netProfit)}</td></tr>`;
   }).join("");
   const scriptTag = forPrint ? `<script>window.onload=function(){window.print();};<\/script>` : "";
+  const qrHtml = qrDataUrl
+    ? `<div class="qr-block"><img src="${qrDataUrl}" class="qr-img" /><div class="qr-caption">مسح للتحقق</div></div>`
+    : `<div class="qr-block" style="width:80px;"></div>`;
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <title>التقرير_السنوي_${year}.pdf</title>
 <style>${REPORT_CSS}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
 <body><div class="page">
-<div class="header"><div><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
-<div><div class="report-title">التقرير السنوي – ${year}</div><div class="report-sub">${propertyName} · ${printDate}</div></div></div>
+<div class="header">
+<div class="header-brand"><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
+<div class="header-center"><div class="report-title">التقرير السنوي – ${year}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
+${qrHtml}</div>
 <div class="kpi-grid" style="margin-bottom:24px">
 <div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.revenue)}</div></div>
 <div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.expenses)}</div></div>
@@ -2415,10 +2445,12 @@ async function generateAndUploadReportPdf(
 
   if (type === "monthly") {
     fileName = `Monthly_Report_${params.month ?? "report"}.pdf`;
-    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial);
+    const qr = await generateReportQrDataUrl("monthly", params.month!);
+    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial, false, qr);
   } else {
     fileName = `Annual_Report_${params.year ?? new Date().getFullYear()}.pdf`;
-    html = buildYearlyReportHtml(params.year!, params.propertyName, params.yearly!);
+    const qr = await generateReportQrDataUrl("yearly", params.year!);
+    html = buildYearlyReportHtml(params.year!, params.propertyName, params.yearly!, false, qr);
   }
 
   const { blob } = await htmlToPdfBlob(html, fileName);
