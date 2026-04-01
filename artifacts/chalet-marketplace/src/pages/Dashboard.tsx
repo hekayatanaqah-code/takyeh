@@ -1248,6 +1248,151 @@ function ExpensesTab() {
   );
 }
 
+/* ── Salary Voucher Printer ──────────────────────── */
+interface VoucherData {
+  voucherNo: string;
+  staffName: string;
+  ownerName: string;
+  month: string;
+  paidAt: string;
+  baseSalary: number;
+  bonus: number;
+  deduction: number;
+  net: number;
+  notes?: string;
+}
+
+function printSalaryVoucher(v: VoucherData) {
+  const win = window.open("", "_blank", "width=794,height=1123");
+  if (!win) return;
+  const monthStr = monthLabel(v.month);
+  const dateStr = new Date(v.paidAt).toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
+  win.document.write(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>مسيّر رواتب – ${v.staffName}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background:#fff; color:#111; direction:rtl; }
+  .page { max-width: 794px; margin: 0 auto; padding: 40px 48px; min-height: 1123px; position: relative; }
+  /* header */
+  .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #b8860b; padding-bottom: 18px; margin-bottom: 24px; }
+  .brand { display: flex; flex-direction: column; gap: 2px; }
+  .brand-name { font-size: 26px; font-weight: 800; color: #b8860b; letter-spacing: -0.5px; }
+  .brand-sub  { font-size: 12px; color: #666; }
+  .voucher-badge { background: #b8860b; color: #fff; border-radius: 10px; padding: 8px 18px; text-align: center; }
+  .voucher-badge-title { font-size: 15px; font-weight: 700; }
+  .voucher-badge-no   { font-size: 11px; opacity: .85; margin-top: 2px; }
+  /* meta grid */
+  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+  .meta-item { background: #faf9f6; border: 1px solid #e8e2d0; border-radius: 8px; padding: 10px 14px; }
+  .meta-label { font-size: 11px; color: #888; margin-bottom: 3px; }
+  .meta-value { font-size: 14px; font-weight: 600; color: #111; }
+  /* salary table */
+  .salary-table { width: 100%; border-collapse: collapse; margin-bottom: 28px; font-size: 14px; }
+  .salary-table th { background: #b8860b; color: #fff; padding: 10px 14px; text-align: right; font-weight: 600; }
+  .salary-table td { padding: 10px 14px; border-bottom: 1px solid #ede9dd; }
+  .salary-table tr:nth-child(even) td { background: #faf9f6; }
+  .salary-table .total-row td { font-weight: 700; font-size: 16px; border-top: 2px solid #b8860b; background: #fffbf0; }
+  .pos { color: #16a34a; }
+  .neg { color: #dc2626; }
+  .amount { font-variant-numeric: tabular-nums; }
+  /* notes */
+  .notes-box { background: #faf9f6; border: 1px solid #e8e2d0; border-radius: 8px; padding: 12px 14px; margin-bottom: 28px; font-size: 13px; color: #444; }
+  .notes-box strong { color: #111; display: block; margin-bottom: 4px; }
+  /* signatures */
+  .sig-section { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 32px; }
+  .sig-box { display: flex; flex-direction: column; gap: 8px; }
+  .sig-label { font-size: 13px; font-weight: 600; color: #555; }
+  .sig-name  { font-size: 15px; font-weight: 700; color: #111; }
+  .sig-line  { border-bottom: 1.5px solid #999; margin-top: 40px; }
+  .sig-caption { font-size: 11px; color: #999; margin-top: 4px; }
+  /* footer */
+  .footer { position: absolute; bottom: 32px; left: 48px; right: 48px; text-align: center; font-size: 11px; color: #aaa; border-top: 1px solid #eee; padding-top: 10px; }
+  /* print */
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { padding: 20px 30px; }
+    .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">
+      <div class="brand-name">حكاية أناقة</div>
+      <div class="brand-sub">منصة إدارة الشاليهات – القصيم</div>
+    </div>
+    <div class="voucher-badge">
+      <div class="voucher-badge-title">مسيّر رواتب</div>
+      <div class="voucher-badge-no"># ${v.voucherNo}</div>
+    </div>
+  </div>
+
+  <!-- Meta -->
+  <div class="meta">
+    <div class="meta-item">
+      <div class="meta-label">اسم الموظف</div>
+      <div class="meta-value">${v.staffName}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">اسم صاحب العمل</div>
+      <div class="meta-value">${v.ownerName}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">فترة الراتب</div>
+      <div class="meta-value">${monthStr}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">تاريخ الصرف</div>
+      <div class="meta-value">${dateStr}</div>
+    </div>
+  </div>
+
+  <!-- Salary Breakdown -->
+  <table class="salary-table">
+    <thead>
+      <tr><th>البيان</th><th>المبلغ (ر.س)</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>الراتب الأساسي</td><td class="amount">${v.baseSalary.toLocaleString("ar-SA")}</td></tr>
+      ${v.bonus > 0 ? `<tr><td class="pos">مكافأة / بدل</td><td class="pos amount">+ ${v.bonus.toLocaleString("ar-SA")}</td></tr>` : ""}
+      ${v.deduction > 0 ? `<tr><td class="neg">خصومات</td><td class="neg amount">- ${v.deduction.toLocaleString("ar-SA")}</td></tr>` : ""}
+      <tr class="total-row"><td>صافي الراتب المستحق</td><td class="amount">${v.net.toLocaleString("ar-SA")} ر.س</td></tr>
+    </tbody>
+  </table>
+
+  ${v.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${v.notes}</div>` : ""}
+
+  <!-- Signatures -->
+  <div class="sig-section">
+    <div class="sig-box">
+      <div class="sig-label">توقيع صاحب العمل</div>
+      <div class="sig-name">${v.ownerName}</div>
+      <div class="sig-line"></div>
+      <div class="sig-caption">التوقيع والختم</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-label">توقيع الموظف / إقرار الاستلام</div>
+      <div class="sig-name">${v.staffName}</div>
+      <div class="sig-line"></div>
+      <div class="sig-caption">التوقيع بما يفيد الاستلام</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    تم إصدار هذا المسيّر إلكترونياً عبر منصة حكاية أناقة · ${new Date().getFullYear()}
+  </div>
+</div>
+<script>window.onload = function(){ window.print(); };<\/script>
+</body></html>`);
+  win.document.close();
+}
+
 /* ── Staff & Salaries Tab ────────────────────────── */
 interface StaffMember { id: number; name: string; baseSalary: string; isActive: boolean; }
 interface SalaryLog {
@@ -1277,6 +1422,7 @@ function monthLabel(ym: string) {
 
 function StaffTab() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const currentMonth = new Date().toISOString().slice(0, 7);
   /* ── state ── */
   const [addForm, setAddForm] = useState({ name: "", baseSalary: "" });
@@ -1285,6 +1431,8 @@ function StaffTab() {
   /* Pay dialog */
   const [payTarget, setPayTarget] = useState<StaffMember | null>(null);
   const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", notes: "" });
+  /* Voucher (shown in dialog after successful payment) */
+  const [paidVoucher, setPaidVoucher] = useState<VoucherData | null>(null);
 
   /* ── month select options ── */
   const monthOptions = useMemo(() => {
@@ -1337,12 +1485,33 @@ function StaffTab() {
     mutationFn: async (data: any) => {
       const r = await apiFetch("/owner/salary-logs/pay", { method: "POST", body: JSON.stringify(data) });
       if (!r.ok) throw new Error("فشل صرف الراتب");
+      return r.json() as Promise<{ salaryLog: any; expense: any }>;
     },
-    onSuccess: () => {
+    onSuccess: (result, variables) => {
       qc.invalidateQueries({ queryKey: ["owner", "salary-logs-history"] });
       qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
       qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
-      setPayTarget(null);
+      /* Build voucher data from the result + payTarget context */
+      if (payTarget) {
+        const base  = Number(payTarget.baseSalary);
+        const bonus = variables.bonus ?? 0;
+        const deduction = variables.deduction ?? 0;
+        const net   = base + bonus - deduction;
+        const paidAt = result.salaryLog?.paidAt ?? new Date().toISOString();
+        const voucherNo = `SAL-${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,"0")}-${payTarget.id}`;
+        setPaidVoucher({
+          voucherNo,
+          staffName:  payTarget.name,
+          ownerName:  user?.name ?? user?.username ?? "صاحب العمل",
+          month:      variables.month,
+          paidAt,
+          baseSalary: base,
+          bonus,
+          deduction,
+          net,
+          notes:      variables.notes,
+        });
+      }
       setPayForm({ month: currentMonth, bonus: "0", deduction: "0", notes: "" });
     },
   });
@@ -1502,7 +1671,7 @@ function StaffTab() {
           </div>
         ) : (
           <div className="overflow-x-auto -mx-5 px-5">
-            <table className="w-full text-sm min-w-[480px]">
+            <table className="w-full text-sm min-w-[540px]">
               <thead>
                 <tr className="border-b border-border text-muted-foreground text-xs">
                   <th className="text-right pb-3 font-semibold">الموظف</th>
@@ -1512,22 +1681,47 @@ function StaffTab() {
                   <th className="text-right pb-3 font-semibold">خصم</th>
                   <th className="text-right pb-3 font-semibold">الصافي</th>
                   <th className="text-right pb-3 font-semibold">تاريخ الصرف</th>
+                  <th className="pb-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {history.map((log) => {
                   const base = Number((log as any).baseSalary ?? 0);
-                  const net = base + Number(log.bonus) - Number(log.deduction);
+                  const bonus = Number(log.bonus);
+                  const deduction = Number(log.deduction);
+                  const net = base + bonus - deduction;
+                  const paidAtStr = log.paidAt ? String(log.paidAt) : new Date().toISOString();
+                  const voucherNo = `SAL-${log.month.replace("-","")}-${log.staffId}`;
                   return (
                     <tr key={log.id} className="hover:bg-muted/30 transition-colors">
                       <td className="py-3 font-semibold text-foreground">{(log as any).staffName ?? "—"}</td>
                       <td className="py-3 text-muted-foreground">{monthLabel(log.month)}</td>
                       <td className="py-3">{formatAmount(base)}</td>
-                      <td className="py-3 text-green-600">{Number(log.bonus) > 0 ? `+${formatAmount(Number(log.bonus))}` : "—"}</td>
-                      <td className="py-3 text-red-600">{Number(log.deduction) > 0 ? `-${formatAmount(Number(log.deduction))}` : "—"}</td>
+                      <td className="py-3 text-green-600">{bonus > 0 ? `+${formatAmount(bonus)}` : "—"}</td>
+                      <td className="py-3 text-red-600">{deduction > 0 ? `-${formatAmount(deduction)}` : "—"}</td>
                       <td className="py-3 font-bold text-foreground">{formatAmount(net)}</td>
                       <td className="py-3 text-muted-foreground text-xs">
-                        {log.paidAt ? new Date(log.paidAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                        {log.paidAt ? new Date(paidAtStr).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                      </td>
+                      <td className="py-3">
+                        <button
+                          onClick={() => printSalaryVoucher({
+                            voucherNo,
+                            staffName:  (log as any).staffName ?? "موظف",
+                            ownerName:  user?.name ?? user?.username ?? "صاحب العمل",
+                            month:      log.month,
+                            paidAt:     paidAtStr,
+                            baseSalary: base,
+                            bonus,
+                            deduction,
+                            net,
+                            notes:      log.notes ?? undefined,
+                          })}
+                          className="flex items-center gap-1 text-xs text-primary hover:underline whitespace-nowrap"
+                        >
+                          <Receipt className="w-3 h-3" />
+                          طباعة
+                        </button>
                       </td>
                     </tr>
                   );
@@ -1539,94 +1733,147 @@ function StaffTab() {
       </div>
 
       {/* ── Pay Salary Dialog ── */}
-      <Dialog open={!!payTarget} onOpenChange={(open) => { if (!open) setPayTarget(null); }}>
+      <Dialog
+        open={!!payTarget}
+        onOpenChange={(open) => {
+          if (!open) { setPayTarget(null); setPaidVoucher(null); }
+        }}
+      >
         <DialogContent className="max-w-sm" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-right">
-              <DollarSign className="w-5 h-5 text-primary" />
-              صرف راتب – {payTarget?.name}
-            </DialogTitle>
-            <DialogDescription className="text-right text-xs">
-              سيتم إضافة الراتب تلقائياً ضمن المصروفات تحت بند الرواتب.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 pt-2">
-            {/* Month picker */}
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1 block">الشهر</label>
-              <Select value={payForm.month} onValueChange={(v) => setPayForm((f) => ({ ...f, month: v }))}>
-                <SelectTrigger className="h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {monthOptions.map((o) => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Bonus + Deduction */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground font-medium mb-1 block">مكافأة (+) ر.س</label>
-                <Input type="number" min="0" step="1" value={payForm.bonus} onChange={(e) => setPayForm((f) => ({ ...f, bonus: e.target.value }))} className="h-10" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground font-medium mb-1 block">خصم (-) ر.س</label>
-                <Input type="number" min="0" step="1" value={payForm.deduction} onChange={(e) => setPayForm((f) => ({ ...f, deduction: e.target.value }))} className="h-10" />
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1 block">ملاحظات (اختياري)</label>
-              <Input placeholder="سبب المكافأة أو الخصم..." value={payForm.notes} onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))} className="h-10" />
-            </div>
-
-            {/* Net salary preview */}
-            {payTarget && (
-              <div className="bg-muted/50 rounded-xl p-4 space-y-1.5 text-sm">
-                <div className="flex justify-between text-muted-foreground">
-                  <span>الراتب الأساسي</span>
-                  <span>{formatAmount(Number(payTarget.baseSalary))}</span>
+          {/* ── Success / Voucher state ── */}
+          {paidVoucher ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-right text-green-600">
+                  <CheckCircle className="w-5 h-5" />
+                  تم صرف الراتب بنجاح
+                </DialogTitle>
+                <DialogDescription className="text-right text-xs">
+                  تمت إضافة الراتب تلقائياً في المصروفات تحت بند الرواتب.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                {/* Mini summary */}
+                <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">الموظف</span>
+                    <span className="font-semibold">{paidVoucher.staffName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">الشهر</span>
+                    <span className="font-semibold">{monthLabel(paidVoucher.month)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-green-200 dark:border-green-800 pt-2 font-bold">
+                    <span>صافي الراتب</span>
+                    <span className="text-green-700 dark:text-green-400 text-base">{formatAmount(paidVoucher.net)}</span>
+                  </div>
                 </div>
-                {(parseFloat(payForm.bonus) || 0) > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>مكافأة</span>
-                    <span>+ {formatAmount(parseFloat(payForm.bonus) || 0)}</span>
+                <Button
+                  className="w-full h-11 font-bold"
+                  onClick={() => printSalaryVoucher(paidVoucher)}
+                >
+                  <Receipt className="w-4 h-4 me-2" />
+                  طباعة مسيّر الراتب (PDF)
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full h-10"
+                  onClick={() => { setPayTarget(null); setPaidVoucher(null); }}
+                >
+                  إغلاق
+                </Button>
+              </div>
+            </>
+          ) : (
+            /* ── Pay Form state ── */
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-right">
+                  <DollarSign className="w-5 h-5 text-primary" />
+                  صرف راتب – {payTarget?.name}
+                </DialogTitle>
+                <DialogDescription className="text-right text-xs">
+                  سيتم تسجيل الراتب تلقائياً ضمن المصروفات تحت بند الرواتب.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                {/* Month picker */}
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">الشهر</label>
+                  <Select value={payForm.month} onValueChange={(v) => setPayForm((f) => ({ ...f, month: v }))}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {monthOptions.map((o) => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Base salary (read-only) */}
+                {payTarget && (
+                  <div className="flex items-center justify-between bg-muted/40 rounded-xl px-4 py-2.5 text-sm">
+                    <span className="text-muted-foreground">الراتب الأساسي</span>
+                    <span className="font-bold">{formatAmount(Number(payTarget.baseSalary))}</span>
                   </div>
                 )}
-                {(parseFloat(payForm.deduction) || 0) > 0 && (
-                  <div className="flex justify-between text-red-600">
-                    <span>خصم</span>
-                    <span>- {formatAmount(parseFloat(payForm.deduction) || 0)}</span>
+                {/* Bonus + Deduction */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium mb-1 block">مكافأة / بدل (+)</label>
+                    <Input type="number" min="0" step="1" value={payForm.bonus} onChange={(e) => setPayForm((f) => ({ ...f, bonus: e.target.value }))} className="h-10" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium mb-1 block">خصومات (-)</label>
+                    <Input type="number" min="0" step="1" value={payForm.deduction} onChange={(e) => setPayForm((f) => ({ ...f, deduction: e.target.value }))} className="h-10" />
+                  </div>
+                </div>
+                {/* Reason */}
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">سبب المكافأة / الخصم (اختياري)</label>
+                  <Input placeholder="مثال: مكافأة أداء، غياب..." value={payForm.notes} onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))} className="h-10" />
+                </div>
+                {/* Net preview */}
+                {payTarget && (
+                  <div className="bg-muted/50 rounded-xl p-4 space-y-1.5 text-sm">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>الأساسي</span><span>{formatAmount(Number(payTarget.baseSalary))}</span>
+                    </div>
+                    {(parseFloat(payForm.bonus)||0) > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span>مكافأة</span><span>+ {formatAmount(parseFloat(payForm.bonus)||0)}</span>
+                      </div>
+                    )}
+                    {(parseFloat(payForm.deduction)||0) > 0 && (
+                      <div className="flex justify-between text-red-600">
+                        <span>خصم</span><span>- {formatAmount(parseFloat(payForm.deduction)||0)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-foreground border-t border-border pt-2">
+                      <span>صافي الراتب</span>
+                      <span className={payNet >= 0 ? "text-green-600" : "text-destructive"}>{formatAmount(payNet)}</span>
+                    </div>
                   </div>
                 )}
-                <div className="flex justify-between font-bold text-foreground border-t border-border pt-2">
-                  <span>صافي الراتب</span>
-                  <span className={payNet >= 0 ? "text-green-600" : "text-destructive"}>{formatAmount(payNet)}</span>
-                </div>
+                <Button
+                  className="w-full h-11 font-bold"
+                  disabled={paySalary.isPending}
+                  onClick={() => {
+                    if (!payTarget) return;
+                    paySalary.mutate({
+                      staffId: payTarget.id,
+                      month: payForm.month,
+                      bonus: parseFloat(payForm.bonus) || 0,
+                      deduction: parseFloat(payForm.deduction) || 0,
+                      notes: payForm.notes || undefined,
+                    });
+                  }}
+                >
+                  {paySalary.isPending ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <CheckCircle className="w-4 h-4 me-2" />}
+                  تأكيد صرف الراتب
+                </Button>
               </div>
-            )}
-
-            <Button
-              className="w-full h-11 font-bold"
-              disabled={paySalary.isPending}
-              onClick={() => {
-                if (!payTarget) return;
-                paySalary.mutate({
-                  staffId: payTarget.id,
-                  month: payForm.month,
-                  bonus: parseFloat(payForm.bonus) || 0,
-                  deduction: parseFloat(payForm.deduction) || 0,
-                  notes: payForm.notes || undefined,
-                });
-              }}
-            >
-              {paySalary.isPending ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <CheckCircle className="w-4 h-4 me-2" />}
-              تأكيد صرف الراتب
-            </Button>
-          </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
