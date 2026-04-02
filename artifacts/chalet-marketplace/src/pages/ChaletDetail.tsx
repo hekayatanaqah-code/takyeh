@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useGetChaletById } from "@workspace/api-client-react";
-import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, Info, Phone, ShieldCheck, Star, X, ChevronDown } from "lucide-react";
+import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, Info, Phone, ShieldCheck, Star, X, ChevronDown, CalendarDays, AlertCircle } from "lucide-react";
 import useEmblaCarousel from 'embla-carousel-react';
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -20,6 +20,21 @@ const PERIOD_LABEL: Record<Period, string> = {
   evening: "🌙 مسائي",
   full_day: "☀️ يوم كامل",
 };
+
+const PERIOD_LABEL_PLAIN: Record<Period, string> = {
+  morning: "صباحي",
+  evening: "مسائي",
+  full_day: "يوم كامل",
+};
+
+const ARABIC_DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+function getArabicDay(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T12:00:00"); // noon prevents timezone shifts
+  return ARABIC_DAYS[d.getDay()] ?? "";
+}
+
+const TODAY = new Date().toISOString().split("T")[0];
 
 export default function ChaletDetail() {
   const { id } = useParams<{ id: string }>();
@@ -47,6 +62,8 @@ export default function ChaletDetail() {
     return (p === "morning" || p === "evening" || p === "full_day") ? p as Period : null;
   })();
   const [selectedPeriod, setSelectedPeriod] = useState<Period | null>(initPeriod);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [showDateError, setShowDateError] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showBookingConfirmModal, setShowBookingConfirmModal] = useState(false);
   const [showRedirectNotice, setShowRedirectNotice] = useState(false);
@@ -119,7 +136,15 @@ export default function ChaletDetail() {
   const hasDayPrices = true; // Always show the price box — use fallbacks as needed
   const locationLabel = district ? `حي ${district}، ${chalet.location}` : chalet.location;
   const periodLine = selectedPeriod ? ` — الفترة: ${PERIOD_LABEL[selectedPeriod]}` : "";
-  const whatsappMsg = `أهلاً، أود الاستفسار عن حجز شاليه ${chalet.nameAr} في ${chalet.location}${periodLine}.`;
+
+  /* Date/day helpers for WhatsApp message */
+  const arabicDay = selectedDate ? getArabicDay(selectedDate) : "";
+  const formattedDate = selectedDate ? selectedDate.replace(/-/g, "/") : "";
+  const periodPlain = selectedPeriod ? PERIOD_LABEL_PLAIN[selectedPeriod] : "";
+
+  const whatsappMsg = selectedDate
+    ? `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} لـ ${arabicDay} الموافق ${formattedDate}${periodPlain ? ` - الفترة: ${periodPlain}` : ""}.`
+    : `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} في ${chalet.location}${periodLine}.`;
 
   /* Available slots */
   const slots: Period[] = [
@@ -199,10 +224,14 @@ export default function ChaletDetail() {
   const termsInline = termsList.join(" | ");
   const termsAreShort = termsInline.length <= TERMS_CHAR_LIMIT;
 
+  const dateFragment = selectedDate
+    ? `لـ ${arabicDay} الموافق ${formattedDate}${periodPlain ? ` - الفترة: ${periodPlain}` : ""}`
+    : `في ${chalet.location}${periodLine}`;
+
   const whatsappMsgWithTerms = hasTerms
     ? termsAreShort
-      ? `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} في ${chalet.location}${periodLine}.\n\nلقد اطلعت على كافة الشروط والأحكام الخاصة بالمالك المذكورة في المنصة (مثل: ${termsInline}) وأوافق عليها.\n\nكم المبلغ المطلوب للتأكيد؟`
-      : `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} في ${chalet.location}${periodLine}.\n\nلقد اطلعت على كافة الشروط الخاصة المذكورة في صفحة الشاليه وأوافق عليها.\n\nكم المبلغ المطلوب للتأكيد؟`
+      ? `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} ${dateFragment}.\n\nلقد اطلعت على شروط المالك الخاصة (مثل: ${termsInline}) وأوافق عليها.\n\nكم مبلغ العربون لتأكيد الحجز؟`
+      : `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} ${dateFragment}.\n\nلقد اطلعت على كافة الشروط الخاصة المذكورة في صفحة الشاليه وأوافق عليها.\n\nكم مبلغ العربون لتأكيد الحجز؟`
     : whatsappMsg;
 
   const openWhatsApp = (includeTerms = false) => {
@@ -223,6 +252,27 @@ export default function ChaletDetail() {
       setShowRedirectNotice(false);
       openWhatsApp(true);
     }, 1800);
+  };
+
+  /* Validate date then open confirm modal or direct WhatsApp */
+  const handleBookClick = () => {
+    if (!selectedDate) {
+      setShowDateError(true);
+      document.getElementById("booking-date-input")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => setShowDateError(false), 3000);
+      return;
+    }
+    setShowDateError(false);
+    if (hasTerms) {
+      setShowBookingConfirmModal(true);
+    } else {
+      // No terms — go straight to redirect notice
+      setShowRedirectNotice(true);
+      setTimeout(() => {
+        setShowRedirectNotice(false);
+        openWhatsApp(false);
+      }, 1800);
+    }
   };
 
   const handleShare = () => {
@@ -371,6 +421,37 @@ export default function ChaletDetail() {
                   )}
                 </div>
 
+                {/* ── Date Picker ─────────────────────────── */}
+                <div className="mb-4" id="booking-date-input">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <CalendarDays className="w-3.5 h-3.5" />
+                    تاريخ الحجز <span className="text-destructive">*</span>
+                  </p>
+                  <div className={`relative rounded-xl border transition-all ${showDateError ? "border-destructive bg-destructive/5 animate-pulse" : selectedDate ? "border-primary/50 bg-primary/5" : "border-border bg-secondary/30"}`}>
+                    <input
+                      type="date"
+                      min={TODAY}
+                      value={selectedDate}
+                      onChange={(e) => { setSelectedDate(e.target.value); setShowDateError(false); }}
+                      className="w-full bg-transparent px-3 py-2.5 text-sm rounded-xl outline-none cursor-pointer"
+                      dir="ltr"
+                    />
+                    {selectedDate && (
+                      <div className="px-3 pb-2 -mt-0.5">
+                        <span className="text-xs font-semibold text-primary">
+                          {arabicDay} الموافق {formattedDate}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {showDateError && (
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
+                      <p className="text-xs text-destructive font-medium">يرجى اختيار تاريخ الحجز أولاً</p>
+                    </div>
+                  )}
+                </div>
+
                 {/* Period selector */}
                 {slots.length > 0 && (
                   <div className="mb-4">
@@ -447,25 +528,16 @@ export default function ChaletDetail() {
                 )}
 
                 {/* ── Book Button ─────────────────────────── */}
-                {hasTerms ? (
-                  <Button
-                    className="w-full bg-[#25D366] hover:bg-[#1DA851] text-white shadow-lg shadow-[#25D366]/20 border-none transition-all duration-300 hover:scale-[1.02] active:scale-95 py-3 text-base rounded-xl font-bold"
-                    onClick={() => setShowBookingConfirmModal(true)}
-                    size="lg"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="me-2">
-                      <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
-                    </svg>
-                    احجز الآن عبر واتساب
-                  </Button>
-                ) : (
-                  <WhatsAppButton
-                    phoneNumber={chalet.whatsappNumber}
-                    message={whatsappMsg}
-                    fullWidth
-                    className="py-3 text-base rounded-xl font-bold"
-                  />
-                )}
+                <Button
+                  className="w-full bg-[#25D366] hover:bg-[#1DA851] text-white shadow-lg shadow-[#25D366]/20 border-none transition-all duration-300 hover:scale-[1.02] active:scale-95 py-3 text-base rounded-xl font-bold"
+                  onClick={handleBookClick}
+                  size="lg"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="me-2">
+                    <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
+                  </svg>
+                  احجز الآن عبر واتساب
+                </Button>
                 <p className="text-xs text-center text-muted-foreground mt-3">
                   تواصل مباشرةً مع المالك عبر واتساب للحجز والاستفسار
                 </p>
@@ -639,23 +711,15 @@ export default function ChaletDetail() {
           <p className="text-xs font-bold text-foreground truncate">{chalet.nameAr}</p>
           <p className="text-xs text-[#25D366] font-semibold">الأسعار عند التواصل</p>
         </div>
-        {hasTerms ? (
-          <Button
-            className="shrink-0 bg-[#25D366] hover:bg-[#1DA851] text-white border-none px-5 py-2.5 text-sm font-bold rounded-xl"
-            onClick={() => setShowBookingConfirmModal(true)}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="me-1.5">
-              <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
-            </svg>
-            احجز الآن
-          </Button>
-        ) : (
-          <WhatsAppButton
-            phoneNumber={chalet.whatsappNumber}
-            message={whatsappMsg}
-            className="shrink-0 px-5 py-2.5 text-sm font-bold rounded-xl"
-          />
-        )}
+        <Button
+          className="shrink-0 bg-[#25D366] hover:bg-[#1DA851] text-white border-none px-5 py-2.5 text-sm font-bold rounded-xl"
+          onClick={handleBookClick}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="me-1.5">
+            <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
+          </svg>
+          احجز الآن
+        </Button>
       </div>
 
       {/* ═══════════════════════════════════════════════════
