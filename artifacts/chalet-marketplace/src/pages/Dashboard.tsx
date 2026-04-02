@@ -22,7 +22,7 @@ import {
   RotateCcw, Star, ChevronLeft, ChevronRight, BarChart2, CreditCard,
   TrendingUp, Sunrise, Moon, Sun, Lock, Zap, DollarSign, Users,
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
-  Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings,
+  Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -4330,32 +4330,45 @@ export default function Dashboard() {
           context={showHeaderUpgrade ?? "chalet"}
         />
 
-        {/* Subscription / Account Settings — compact banner */}
+        {/* Subscription / Account Settings — clickable banner */}
         {subscription && (() => {
-          const planLabels: Record<string, string> = { trial: "تجريبي", basic: "أساسي", premium: "بريميوم", enterprise: "مؤسسي" };
-          const statusCls: Record<string, string> = {
-            active: "bg-green-100 text-green-700",
-            trial: "bg-blue-100 text-blue-700",
-            expired: "bg-red-100 text-red-700",
-            suspended: "bg-amber-100 text-amber-700",
+          const planLabels: Record<string, string> = {
+            trial: "تجريبي", monthly: "شهري", yearly: "سنوي",
+            chalet_basic: "شاليه — أساسي", chalet_pro: "شاليه — احترافي",
+            chalet_unlimited: "شاليه — غير محدود", service_basic: "خدمات — أساسي",
+            service_pro: "خدمات — احترافي", bundle: "حزمة شاملة",
           };
+          const statusCls: Record<string, string> = {
+            active: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+            trial:  "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+            expired: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+            suspended: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+          };
+          const days = subscription.expiresAt
+            ? Math.ceil((new Date(subscription.expiresAt).getTime() - Date.now()) / 86_400_000)
+            : null;
           return (
-            <div className="mb-5 bg-card border border-border rounded-2xl px-5 py-3 flex items-center gap-3 flex-wrap text-sm">
+            <button
+              type="button"
+              onClick={() => navigate("/subscription")}
+              className="mb-5 w-full bg-card border border-border rounded-2xl px-5 py-3 flex items-center gap-3 flex-wrap text-sm hover:bg-accent/40 transition-colors text-start cursor-pointer"
+            >
               <CreditCard className="w-4 h-4 text-primary shrink-0" />
               <span className="font-semibold text-foreground">حسابي والاشتراك</span>
               <span className="font-medium text-muted-foreground">{planLabels[subscription.plan] ?? subscription.plan}</span>
               <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${statusCls[subscription.status] ?? "bg-muted text-muted-foreground"}`}>
                 {{ active: "نشط ✓", trial: "تجريبي", expired: "منتهي", suspended: "موقوف" }[subscription.status] ?? subscription.status}
               </span>
-              {subscription.expiresAt && (
-                <span className="text-xs text-muted-foreground ms-auto">
-                  انتهاء الاشتراك: {new Date(subscription.expiresAt).toLocaleDateString("ar-SA")}
+              {days !== null && (
+                <span className={`text-xs font-medium ${days < 7 ? "text-red-600" : "text-muted-foreground"}`}>
+                  {Math.max(0, days)} يوم متبقي
                 </span>
               )}
-              <span className={`text-xs font-medium ${subscription.paymentStatus === "paid" ? "text-green-600" : subscription.paymentStatus === "overdue" ? "text-red-600" : "text-amber-600"}`}>
-                {{ paid: "مدفوع ✓", pending: "قيد الدفع", overdue: "متأخر ⚠️" }[subscription.paymentStatus] ?? subscription.paymentStatus}
+              <span className="ms-auto flex items-center gap-1.5 text-xs font-semibold text-primary">
+                إدارة
+                <ExternalLink className="w-3.5 h-3.5" />
               </span>
-            </div>
+            </button>
           );
         })()}
 

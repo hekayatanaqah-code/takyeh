@@ -18,6 +18,7 @@ import ProviderDetail from "./pages/ProviderDetail";
 import About from "./pages/About";
 import FAQ from "./pages/FAQ";
 import Terms from "./pages/Terms";
+import SubscriptionPage from "./pages/SubscriptionPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,6 +60,9 @@ function Router() {
         {() => <ProtectedRoute component={AddServiceProvider} returnTo="/add-service-provider" />}
       </Route>
       <Route path="/providers/:id" component={ProviderDetail} />
+      <Route path="/subscription">
+        {() => <ProtectedRoute component={SubscriptionPage} returnTo="/subscription" />}
+      </Route>
       <Route path="/about" component={About} />
       <Route path="/faq" component={FAQ} />
       <Route path="/terms" component={Terms} />
