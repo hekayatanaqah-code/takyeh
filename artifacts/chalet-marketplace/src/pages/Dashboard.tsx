@@ -1260,6 +1260,17 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   }
                 }
 
+                // Include chalet terms if available
+                const activeChalet = ownerChalets.find((c: any) => c.id === activeChaletId);
+                const terms: string = activeChalet?.termsAndConditions ?? "";
+                if (terms.trim()) {
+                  const termLines = terms.split("\n").map((l: string) => l.trim()).filter(Boolean);
+                  if (termLines.length > 0) {
+                    lines.push(``, `📋 الشروط والأحكام:`);
+                    termLines.forEach((t: string) => lines.push(`• ${t}`));
+                  }
+                }
+
                 lines.push(``, `✨ منصة حكاية أناقة – شاليهات القصيم`);
                 const msg = lines.join("\n");
 

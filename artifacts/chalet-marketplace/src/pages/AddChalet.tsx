@@ -128,6 +128,8 @@ export default function AddChalet() {
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
 
+  const TERMS_PLACEHOLDER = "يمنع التدخين داخل الشاليه\nوقت تسجيل الخروج الساعة ١٠:٠٠ صباحاً\nيمنع إحضار الحيوانات الأليفة\nالضيوف المسموح بهم فقط كما هو محدد عند الحجز\nأي أضرار تلحق بالمكان تُحسب على الضيف";
+
   const [form, setForm] = useState({
     nameAr: "",
     whatsappNumber: "",
@@ -135,6 +137,7 @@ export default function AddChalet() {
     mapsUrl: "",
     socialLink: "",
     descriptionAr: "",
+    termsAndConditions: TERMS_PLACEHOLDER,
   });
   const [propertyType, setPropertyType] = useState("");
   const [sections, setSections] = useState("");
@@ -306,6 +309,7 @@ export default function AddChalet() {
           mapsUrl: form.mapsUrl || undefined,
           socialLink: form.socialLink,
           descriptionAr: form.descriptionAr,
+          termsAndConditions: form.termsAndConditions || null,
           pricePerNight: 0,
           priceMorning: slotMorning && priceMorning ? Number(priceMorning) : null,
           priceEvening: slotEvening && priceEvening ? Number(priceEvening) : null,
@@ -329,7 +333,7 @@ export default function AddChalet() {
 
   const resetForm = () => {
     setSubmitted(false);
-    setForm({ nameAr: "", whatsappNumber: "", location: "", mapsUrl: "", socialLink: "", descriptionAr: "" });
+    setForm({ nameAr: "", whatsappNumber: "", location: "", mapsUrl: "", socialLink: "", descriptionAr: "", termsAndConditions: TERMS_PLACEHOLDER });
     setPropertyType("");
     setSections("");
     setPhotos([]);
@@ -539,6 +543,26 @@ export default function AddChalet() {
                           className="min-h-[120px] text-base pr-10 resize-none"
                         />
                       </div>
+                    </div>
+
+                    {/* ── Terms & Conditions ── */}
+                    <div className="space-y-2">
+                      <Label htmlFor="termsAndConditions" className="text-base font-medium flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-primary" />
+                        الشروط والأحكام الخاصة
+                        <span className="text-xs font-normal text-muted-foreground">(اختياري — تظهر للضيوف قبل الحجز)</span>
+                      </Label>
+                      <Textarea
+                        id="termsAndConditions"
+                        placeholder={TERMS_PLACEHOLDER}
+                        value={form.termsAndConditions}
+                        onChange={(e) => handleChange("termsAndConditions", e.target.value)}
+                        className="min-h-[140px] text-sm resize-none leading-relaxed"
+                        dir="rtl"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        اكتب كل شرط في سطر مستقل. تظهر هذه الشروط في صفحة الشاليه وفي رسالة تأكيد الحجز.
+                      </p>
                     </div>
                   </div>
                 </div>

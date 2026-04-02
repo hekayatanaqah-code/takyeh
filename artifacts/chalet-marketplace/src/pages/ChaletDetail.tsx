@@ -401,6 +401,29 @@ export default function ChaletDetail() {
                 <p className="text-sm text-muted-foreground leading-relaxed">{chalet.descriptionAr}</p>
               </section>
 
+              {/* ── Terms & Conditions ─────────────────────────── */}
+              {(chalet as any).termsAndConditions && (
+                <section>
+                  <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
+                    <span className="text-base">📋</span> الشروط والأحكام
+                  </h2>
+                  <div className="bg-muted/40 border border-border rounded-xl p-4">
+                    <ul className="space-y-2">
+                      {String((chalet as any).termsAndConditions)
+                        .split("\n")
+                        .map((line: string) => line.trim())
+                        .filter(Boolean)
+                        .map((line: string, i: number) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-foreground/80">
+                            <span className="text-primary mt-0.5 shrink-0">•</span>
+                            <span>{line}</span>
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                </section>
+              )}
+
               {/* ── Amenities ──────────────────────────────────── */}
               {chalet.amenities.length > 0 && (() => {
                 const standardAmenities = chalet.amenities.filter((a: string) => !a.startsWith("other:"));

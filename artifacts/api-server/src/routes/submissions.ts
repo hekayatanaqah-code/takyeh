@@ -25,6 +25,7 @@ const SubmissionBodyStrict = CreateSubmissionBody.extend({
   mapsUrl: z.string().url().optional().or(z.literal("")),
   photos: z.array(z.string()).max(15, "الحد الأقصى للصور هو 15").optional(),
   videoUrl: z.string().optional(),
+  termsAndConditions: z.string().optional().nullable(),
 });
 
 const router = Router();
@@ -75,6 +76,7 @@ router.post("/", async (req, res) => {
       amenities: data.amenities ?? [],
       photos: data.photos ?? [],
       videoUrl: data.videoUrl || null,
+      termsAndConditions: data.termsAndConditions || null,
       trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     })
     .returning({ id: chaletSubmissionsTable.id });

@@ -94,6 +94,7 @@ router.patch("/submissions/:id/status", async (req, res) => {
         videoUrl: submission.videoUrl ?? null,
         whatsappNumber: submission.whatsappNumber,
         mapsUrl: submission.mapsUrl ?? undefined,
+        termsAndConditions: submission.termsAndConditions ?? null,
         isVerified: false,
       }).onConflictDoNothing();
     }

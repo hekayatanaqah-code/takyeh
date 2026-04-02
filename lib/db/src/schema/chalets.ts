@@ -32,6 +32,7 @@ export const chaletsTable = pgTable("chalets", {
   videoUrl: text("video_url"),
   whatsappNumber: text("whatsapp_number").notNull(),
   mapsUrl: text("maps_url"),
+  termsAndConditions: text("terms_and_conditions"),
   isVerified: boolean("is_verified").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -69,6 +70,7 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   amenities: text("amenities").array().notNull().default([]),
   mapsUrl: text("maps_url"),
   socialLink: text("social_link"),
+  termsAndConditions: text("terms_and_conditions"),
   photos: text("photos").array().notNull().default([]),
   videoUrl: text("video_url"),
   status: submissionStatusEnum("status").notNull().default("pending"),
