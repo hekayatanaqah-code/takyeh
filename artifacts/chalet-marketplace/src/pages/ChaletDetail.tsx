@@ -49,6 +49,7 @@ export default function ChaletDetail() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period | null>(initPeriod);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showBookingConfirmModal, setShowBookingConfirmModal] = useState(false);
+  const [showRedirectNotice, setShowRedirectNotice] = useState(false);
 
   /* ── Loading skeleton ─────────────────────────────────── */
   if (isLoading) {
@@ -193,8 +194,15 @@ export default function ChaletDetail() {
   const termsPreview = termsList.slice(0, PREVIEW_COUNT);
   const termsHidden = termsList.slice(PREVIEW_COUNT);
 
+  /* Smart message: inline terms if under 300 chars, generic otherwise */
+  const TERMS_CHAR_LIMIT = 300;
+  const termsInline = termsList.join(" | ");
+  const termsAreShort = termsInline.length <= TERMS_CHAR_LIMIT;
+
   const whatsappMsgWithTerms = hasTerms
-    ? `${whatsappMsg}\n\n✅ اطلعت على شروط الشاليه وأوافق عليها:\n${termsList.map((t: string) => `• ${t}`).join("\n")}`
+    ? termsAreShort
+      ? `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} في ${chalet.location}${periodLine}.\n\nلقد اطلعت على كافة الشروط والأحكام الخاصة بالمالك المذكورة في المنصة (مثل: ${termsInline}) وأوافق عليها.\n\nكم المبلغ المطلوب للتأكيد؟`
+      : `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} في ${chalet.location}${periodLine}.\n\nلقد اطلعت على كافة الشروط الخاصة المذكورة في صفحة الشاليه وأوافق عليها.\n\nكم المبلغ المطلوب للتأكيد؟`
     : whatsappMsg;
 
   const openWhatsApp = (includeTerms = false) => {
@@ -204,6 +212,17 @@ export default function ChaletDetail() {
     if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
     const waUrl = `https://wa.me/${rawPhone}?text=${encodeURIComponent(msg)}`;
     window.open(waUrl, "_blank");
+  };
+
+  /* Show redirect notice, then open WhatsApp after brief delay */
+  const handleConfirmAndBook = () => {
+    setShowBookingConfirmModal(false);
+    setShowTermsModal(false);
+    setShowRedirectNotice(true);
+    setTimeout(() => {
+      setShowRedirectNotice(false);
+      openWhatsApp(true);
+    }, 1800);
   };
 
   const handleShare = () => {
@@ -679,8 +698,11 @@ export default function ChaletDetail() {
             <div className="px-5 pb-6 pt-3 border-t border-border shrink-0">
               <Button
                 className="w-full bg-[#25D366] hover:bg-[#1DA851] text-white rounded-xl py-3 text-sm font-bold"
-                onClick={() => { setShowTermsModal(false); setShowBookingConfirmModal(true); }}
+                onClick={handleConfirmAndBook}
               >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="me-2">
+                  <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
+                </svg>
                 أوافق وأتعهد بالالتزام — احجز الآن
               </Button>
             </div>
@@ -734,7 +756,7 @@ export default function ChaletDetail() {
               </p>
               <Button
                 className="w-full bg-[#25D366] hover:bg-[#1DA851] text-white rounded-xl py-3.5 text-sm font-bold mb-2.5 shadow-lg shadow-[#25D366]/20"
-                onClick={() => { setShowBookingConfirmModal(false); openWhatsApp(true); }}
+                onClick={handleConfirmAndBook}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="me-2">
                   <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
@@ -748,6 +770,38 @@ export default function ChaletDetail() {
               >
                 إلغاء
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════
+          REDIRECT NOTICE (auto-dismiss after 1.8s)
+      ═══════════════════════════════════════════════════ */}
+      {showRedirectNotice && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative z-10 bg-background rounded-2xl shadow-2xl px-7 py-8 max-w-xs w-full text-center animate-in fade-in zoom-in-90 duration-200">
+            <div className="w-14 h-14 bg-[#25D366]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#25D366">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                <path d="M12 0C5.373 0 0 5.373 0 12c0 2.122.558 4.118 1.532 5.852L0 24l6.307-1.507A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 0 1-5.006-1.366l-.359-.214-3.743.894.934-3.637-.235-.375A9.818 9.818 0 1 1 12 21.818z"/>
+              </svg>
+            </div>
+            <p className="font-bold text-base mb-1.5">جارٍ فتح واتساب...</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              بإتمامك للمراسلة، أنت توافق على شروط المالك المذكورة في الصفحة
+            </p>
+            <div className="mt-4 flex justify-center">
+              <div className="flex gap-1">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="w-2 h-2 rounded-full bg-[#25D366] opacity-60 animate-bounce"
+                    style={{ animationDelay: `${i * 0.15}s` }}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </div>
