@@ -9,6 +9,7 @@ type Period = "morning" | "evening" | "full_day";
 interface ChaletCardProps {
   chalet: Chalet;
   selectedPeriod?: Period;
+  searchDate?: string;
 }
 
 const PERIOD_LABEL: Record<Period, string> = {
@@ -21,7 +22,7 @@ function fmt(v: string | null | undefined): string | null {
   return v && Number(v) > 0 ? Number(v).toLocaleString("ar-SA") : null;
 }
 
-export function ChaletCard({ chalet, selectedPeriod }: ChaletCardProps) {
+export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardProps) {
   const mainPhoto = chalet.photos && chalet.photos.length > 0
     ? chalet.photos[0]
     : `${import.meta.env.BASE_URL}images/chalet-placeholder-${(chalet.id % 3) + 1}.png`;
@@ -50,7 +51,18 @@ export function ChaletCard({ chalet, selectedPeriod }: ChaletCardProps) {
 
   return (
     <Card className="group overflow-hidden rounded-2xl border-border/50 bg-card hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
-      <Link href={`/chalets/${chalet.id}${selectedPeriod ? `?period=${selectedPeriod}` : ""}`} className="block">
+      <Link
+        href={`/chalets/${chalet.id}${
+          (() => {
+            const p = new URLSearchParams();
+            if (selectedPeriod) p.set("period", selectedPeriod);
+            if (searchDate) p.set("date", searchDate);
+            const q = p.toString();
+            return q ? `?${q}` : "";
+          })()
+        }`}
+        className="block"
+      >
         <div className="relative aspect-[4/3] overflow-hidden bg-secondary">
           <img
             src={mainPhoto}

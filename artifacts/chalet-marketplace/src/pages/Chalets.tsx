@@ -323,6 +323,7 @@ export default function Chalets() {
                     key={chalet.id}
                     chalet={chalet}
                     selectedPeriod={filterPeriod !== "all" ? (filterPeriod as "morning" | "evening" | "full_day") : undefined}
+                    searchDate={searchDate || undefined}
                   />
                 ))}
               </div>

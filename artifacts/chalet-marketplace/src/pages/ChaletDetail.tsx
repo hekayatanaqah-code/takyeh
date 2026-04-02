@@ -61,8 +61,20 @@ export default function ChaletDetail() {
     const p = new URLSearchParams(window.location.search).get("period");
     return (p === "morning" || p === "evening" || p === "full_day") ? p as Period : null;
   })();
+
+  /* Read initial date from URL ?date=YYYY-MM-DD (passed by search bar) */
+  const initDate = (() => {
+    const d = new URLSearchParams(window.location.search).get("date");
+    if (!d) return "";
+    // Validate it's a real date and not in the past
+    const parsed = new Date(d + "T12:00:00");
+    if (isNaN(parsed.getTime())) return "";
+    const todayStr = new Date().toISOString().split("T")[0];
+    return d >= todayStr ? d : "";
+  })();
+
   const [selectedPeriod, setSelectedPeriod] = useState<Period | null>(initPeriod);
-  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedDate, setSelectedDate] = useState(initDate);
   const [showDateError, setShowDateError] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showBookingConfirmModal, setShowBookingConfirmModal] = useState(false);
