@@ -1629,6 +1629,297 @@ function ServiceSubmissionsTab() {
   );
 }
 
+/* ── Revenue Tab ─────────────────────────────── */
+function RevenueTab() {
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
+  const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
+
+  const monthOptions = useMemo(() => {
+    const opts: { val: string; label: string }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - i);
+      const val = d.toISOString().slice(0, 7);
+      const label = d.toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" });
+      opts.push({ val, label });
+    }
+    return opts.reverse();
+  }, []);
+
+  const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
+
+  const { data: financial, isLoading: finLoading } = useQuery<{
+    totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
+    totalInsuranceHeld: number; totalInsuranceDeducted: number;
+  }>({
+    queryKey: ["owner", "financial-summary-rev", selectedMonth],
+    queryFn: async () => {
+      const r = await apiFetch(`/owner/financial-summary?month=${selectedMonth}`);
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    },
+  });
+
+  const { data: allBookings = [], isLoading: bkLoading } = useQuery<OwnerBooking[]>({
+    queryKey: ["owner", "bookings-revenue"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/bookings");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  // Filter bookings to selected month
+  const monthBookings = useMemo(() =>
+    allBookings.filter(b => b.bookingDate?.startsWith(selectedMonth))
+  , [allBookings, selectedMonth]);
+
+  // Build revenue rows: each booking can generate 1-3 rows
+  interface RevenueRow {
+    bookingId: number;
+    clientName: string;
+    bookingDate: string;
+    type: "deposit" | "balance" | "damage";
+    amount: number;
+    reason?: string;
+    proofImages?: string | null;
+    booking: OwnerBooking;
+  }
+
+  const rows = useMemo<RevenueRow[]>(() => {
+    const result: RevenueRow[] = [];
+    for (const b of monthBookings) {
+      const dep = Math.round(Number(b.depositPaid ?? 0));
+      const total = b.totalPrice ? Math.round(Number(b.totalPrice)) : null;
+
+      // Deposit row (always, if deposit recorded)
+      if (dep > 0) {
+        result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "deposit", amount: dep, booking: b });
+      } else if (b.revenueAmount && !b.totalPrice) {
+        result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "deposit", amount: Math.round(Number(b.revenueAmount)), booking: b });
+      }
+
+      // Remaining / balance row (only if collected)
+      if (total !== null && dep > 0 && b.balanceCollected) {
+        const rem = Math.max(0, total - dep);
+        if (rem > 0) result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "balance", amount: rem, booking: b });
+      }
+
+      // Damage deduction row
+      if (b.insuranceDeducted && Number(b.insuranceDeducted) > 0) {
+        result.push({
+          bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate,
+          type: "damage", amount: Math.round(Number(b.insuranceDeducted)),
+          reason: b.insuranceDeductReason ?? undefined,
+          proofImages: b.insuranceProofImages, booking: b,
+        });
+      }
+    }
+    return result;
+  }, [monthBookings]);
+
+  const filteredRows = filter === "all" ? rows : rows.filter(r => r.type === filter);
+
+  const TYPE_META = {
+    deposit: { label: "عربون",       emoji: "💵", cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+    balance: { label: "متبقي محصّل", emoji: "✅", cls: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+    damage:  { label: "خصم تلفيات", emoji: "✂️", cls: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
+  } as const;
+
+  const loading = finLoading || bkLoading;
+
+  return (
+    <div className="space-y-5" dir="rtl">
+      {/* Month selector */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <TrendingUp className="w-5 h-5 text-primary shrink-0" />
+        <h2 className="text-lg font-bold text-foreground">الإيرادات</h2>
+        <div className="ms-auto w-48">
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {monthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* 3 Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Total Monthly Revenue */}
+        <div className="bg-card border border-border rounded-2xl p-4 space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+            <DollarSign className="w-3.5 h-3.5 text-green-500" />
+            إجمالي إيرادات الشهر
+          </div>
+          {loading ? <Skeleton className="h-7 w-24" /> : (
+            <div className="text-2xl font-bold text-green-600">{fmtN(financial?.totalRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+          )}
+          <div className="text-[11px] text-muted-foreground">عربون + متبقي محصّل + تلفيات</div>
+        </div>
+
+        {/* Insurance Held */}
+        <div className="bg-card border border-orange-200 rounded-2xl p-4 space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+            <Lock className="w-3.5 h-3.5 text-orange-500" />
+            تأمينات محتجزة حالياً
+          </div>
+          {loading ? <Skeleton className="h-7 w-24" /> : (
+            <div className="text-2xl font-bold text-orange-600">{fmtN(financial?.totalInsuranceHeld ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+          )}
+          <div className="text-[11px] text-muted-foreground">غير محتسبة في الأرباح</div>
+        </div>
+
+        {/* Pending Collections */}
+        <div className="bg-card border border-amber-200 rounded-2xl p-4 space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+            <Clock className="w-3.5 h-3.5 text-amber-500" />
+            مبالغ متبقية لم تُحصَّل
+          </div>
+          {loading ? <Skeleton className="h-7 w-24" /> : (
+            <div className="text-2xl font-bold text-amber-600">{fmtN(financial?.totalPendingBalance ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+          )}
+          <div className="text-[11px] text-muted-foreground">مبالغ مستحقة من العملاء</div>
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Receipt className="w-4 h-4 text-primary" />
+          <h3 className="font-bold text-sm text-foreground">سجل الإيرادات</h3>
+          <div className="ms-auto flex gap-1 flex-wrap">
+            {([["all", "الكل"], ["deposit", "عربون"], ["balance", "متبقي"], ["damage", "تلفيات"]] as const).map(([v, l]) => (
+              <button
+                key={v}
+                onClick={() => setFilter(v)}
+                className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${filter === v ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        ) : filteredRows.length === 0 ? (
+          <div className="text-center text-muted-foreground text-sm py-8">لا توجد إيرادات لهذا الشهر</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[500px]">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">العميل</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">التاريخ</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">النوع</th>
+                  <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">المبلغ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((row, i) => {
+                  const { hijri, gregorian } = formatDualDate(row.bookingDate);
+                  const meta = TYPE_META[row.type];
+                  const hasProof = row.type === "damage" && (() => { try { return JSON.parse(row.proofImages ?? "[]").length > 0; } catch { return false; } })();
+                  return (
+                    <tr key={`${row.bookingId}-${row.type}-${i}`} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                      <td className="py-2.5 px-3 font-medium">{row.clientName}</td>
+                      <td className="py-2.5 px-3 text-xs">
+                        <div className="font-medium">{hijri}</div>
+                        <div className="text-muted-foreground">{gregorian}</div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${meta.cls}`}>
+                          {meta.emoji} {meta.label}
+                        </span>
+                        {row.reason && <div className="text-[10px] text-muted-foreground mt-0.5">{row.reason}</div>}
+                        {hasProof && (
+                          <button
+                            type="button"
+                            onClick={() => setProofTarget(row.booking)}
+                            className="text-[10px] text-purple-600 underline mt-0.5 block"
+                          >📸 عرض الإثبات</button>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-left font-bold text-base tabular-nums">
+                        <span className={row.type === "damage" ? "text-red-600" : row.type === "balance" ? "text-green-600" : "text-blue-600"}>
+                          {fmtN(row.amount)}
+                        </span>
+                        <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-muted/30">
+                  <td colSpan={3} className="py-2 px-3 text-xs font-bold text-muted-foreground">المجموع</td>
+                  <td className="py-2 px-3 text-left font-extrabold text-base text-primary tabular-nums">
+                    {fmtN(filteredRows.reduce((s, r) => s + r.amount, 0))} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Damage Deductions sub-section */}
+      {rows.filter(r => r.type === "damage").length > 0 && (
+        <div className="bg-card border border-red-200 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-base">✂️</span>
+            <h3 className="font-bold text-sm text-red-700">سجل خصومات التأمين (تلفيات)</h3>
+          </div>
+          <div className="space-y-2">
+            {rows.filter(r => r.type === "damage").map((row, i) => {
+              const { hijri, gregorian } = formatDualDate(row.bookingDate);
+              const proofImgs: string[] = (() => { try { return JSON.parse(row.proofImages ?? "[]"); } catch { return []; } })();
+              const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+              return (
+                <div key={i} className="rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-100 p-3 space-y-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-semibold text-sm text-foreground">{row.clientName}</div>
+                      <div className="text-[11px] text-muted-foreground">{hijri} | {gregorian}</div>
+                      {row.reason && <div className="text-xs text-red-700 mt-0.5">📋 {row.reason}</div>}
+                    </div>
+                    <div className="text-left shrink-0">
+                      <div className="text-xl font-bold text-red-600 tabular-nums">{fmtN(row.amount)} <span className="text-xs font-normal">ر.س</span></div>
+                    </div>
+                  </div>
+                  {proofImgs.length > 0 && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <div className="flex gap-1">
+                        {proofImgs.slice(0, 3).map((u, pi) => {
+                          const fu = u.startsWith("http") ? u : `${window.location.origin}${base}${u}`;
+                          return (
+                            <button key={pi} type="button" onClick={() => setProofTarget(row.booking)} className="w-10 h-10 rounded overflow-hidden bg-muted border">
+                              <img src={fu} alt="" className="w-full h-full object-cover" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button type="button" onClick={() => setProofTarget(row.booking)} className="text-xs text-purple-600 underline">
+                        📸 عرض الإثبات ({proofImgs.length})
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <ProofViewerDialog booking={proofTarget} open={!!proofTarget} onClose={() => setProofTarget(null)} />
+    </div>
+  );
+}
+
 /* ── Reports Tab ─────────────────────────────── */
 interface MonthReport {
   month: string;
@@ -3471,42 +3762,7 @@ function ReportsTab() {
       </div>
 
       {/* Subscription Card */}
-      {subscription && (
-        <div className="bg-card border border-border rounded-2xl p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <CreditCard className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p className="font-bold text-foreground text-sm">الاشتراك والخطة</p>
-              <p className="text-xs text-muted-foreground">نموذج بدون عمولة — سعر ثابت فقط</p>
-            </div>
-            <span className={`ms-auto text-xs font-semibold px-3 py-1 rounded-full ${statusLabels[subscription.status]?.className ?? "bg-muted text-muted-foreground"}`}>
-              {statusLabels[subscription.status]?.label ?? subscription.status}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-            <div className="bg-muted/50 rounded-xl p-3">
-              <p className="text-xs text-muted-foreground mb-1">الخطة الحالية</p>
-              <p className="font-semibold">{planLabels[subscription.plan] ?? subscription.plan}</p>
-            </div>
-            <div className="bg-muted/50 rounded-xl p-3">
-              <p className="text-xs text-muted-foreground mb-1">تاريخ الانتهاء</p>
-              <p className="font-semibold">
-                {subscription.expiresAt
-                  ? new Date(subscription.expiresAt).toLocaleDateString("ar-SA")
-                  : "—"}
-              </p>
-            </div>
-            <div className="bg-muted/50 rounded-xl p-3">
-              <p className="text-xs text-muted-foreground mb-1">حالة الدفع</p>
-              <p className={`font-semibold ${subscription.paymentStatus === "paid" ? "text-green-600" : subscription.paymentStatus === "overdue" ? "text-red-600" : "text-amber-600"}`}>
-                {{paid: "مدفوع ✓", pending: "قيد الدفع", overdue: "متأخر!"}[subscription.paymentStatus as string] ?? subscription.paymentStatus}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Subscription card moved to profile header area — not shown in Reports */}
 
       {/* ── Filters ── */}
       <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
@@ -3965,7 +4221,7 @@ function ReportsTab() {
 /* ── Main Dashboard ──────────────────────────── */
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"chalets" | "services" | "calendar" | "expenses" | "staff" | "reports">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const { data: submissions, isLoading: submissionsLoading } = useGetMySubmissions();
@@ -3975,6 +4231,16 @@ export default function Dashboard() {
     queryFn: async () => {
       const r = await apiFetch("/owner/plan-limits");
       if (!r.ok) return { plan: "trial", chaletLimit: 1, chaletCount: 0, serviceLimit: 1 };
+      return r.json();
+    },
+    enabled: isAuthenticated,
+  });
+
+  const { data: subscription } = useQuery<{ plan: string; status: string; expiresAt: string | null; paymentStatus: string } | null>({
+    queryKey: ["owner", "subscription-header"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/subscription");
+      if (!r.ok) return null;
       return r.json();
     },
     enabled: isAuthenticated,
@@ -4002,6 +4268,7 @@ export default function Dashboard() {
     { id: "chalets",   label: "شاليهاتي",         icon: <Building2 className="w-4 h-4" /> },
     { id: "services",  label: "خدماتي",            icon: <Star className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات", icon: <Calendar className="w-4 h-4" /> },
+    { id: "revenue",   label: "الإيرادات",          icon: <TrendingUp className="w-4 h-4" /> },
     { id: "expenses",  label: "المصروفات",          icon: <Wallet className="w-4 h-4" /> },
     { id: "staff",     label: "الموظفون",           icon: <Users className="w-4 h-4" /> },
     { id: "reports",   label: "التقارير",           icon: <BarChart2 className="w-4 h-4" /> },
@@ -4063,6 +4330,35 @@ export default function Dashboard() {
           context={showHeaderUpgrade ?? "chalet"}
         />
 
+        {/* Subscription / Account Settings — compact banner */}
+        {subscription && (() => {
+          const planLabels: Record<string, string> = { trial: "تجريبي", basic: "أساسي", premium: "بريميوم", enterprise: "مؤسسي" };
+          const statusCls: Record<string, string> = {
+            active: "bg-green-100 text-green-700",
+            trial: "bg-blue-100 text-blue-700",
+            expired: "bg-red-100 text-red-700",
+            suspended: "bg-amber-100 text-amber-700",
+          };
+          return (
+            <div className="mb-5 bg-card border border-border rounded-2xl px-5 py-3 flex items-center gap-3 flex-wrap text-sm">
+              <CreditCard className="w-4 h-4 text-primary shrink-0" />
+              <span className="font-semibold text-foreground">حسابي والاشتراك</span>
+              <span className="font-medium text-muted-foreground">{planLabels[subscription.plan] ?? subscription.plan}</span>
+              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${statusCls[subscription.status] ?? "bg-muted text-muted-foreground"}`}>
+                {{ active: "نشط ✓", trial: "تجريبي", expired: "منتهي", suspended: "موقوف" }[subscription.status] ?? subscription.status}
+              </span>
+              {subscription.expiresAt && (
+                <span className="text-xs text-muted-foreground ms-auto">
+                  انتهاء الاشتراك: {new Date(subscription.expiresAt).toLocaleDateString("ar-SA")}
+                </span>
+              )}
+              <span className={`text-xs font-medium ${subscription.paymentStatus === "paid" ? "text-green-600" : subscription.paymentStatus === "overdue" ? "text-red-600" : "text-amber-600"}`}>
+                {{ paid: "مدفوع ✓", pending: "قيد الدفع", overdue: "متأخر ⚠️" }[subscription.paymentStatus] ?? subscription.paymentStatus}
+              </span>
+            </div>
+          );
+        })()}
+
         {/* Tabs */}
         <div className="flex gap-1 mb-8 border-b border-border overflow-x-auto pb-0 -mx-1 px-1">
           {tabs.map((tab) => (
@@ -4090,6 +4386,9 @@ export default function Dashboard() {
         )}
         {activeTab === "calendar" && (
           <BookingCalendarTab submissions={submissions as any[] ?? []} />
+        )}
+        {activeTab === "revenue" && (
+          <RevenueTab />
         )}
         {activeTab === "expenses" && (
           <ExpensesTab />

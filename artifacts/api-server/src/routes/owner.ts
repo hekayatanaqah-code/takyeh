@@ -776,9 +776,18 @@ router.get("/financial-summary", async (req, res) => {
     return { month: m, revenue: rev, expenses: exp + salExp };
   }));
 
+  // Deposit / pending breakdown for Revenue tab
+  const totalDeposits = Math.round(monthBookings.reduce((s, b) => s + Number(b.depositPaid ?? 0), 0));
+  const totalPendingBalance = Math.round(monthBookings.reduce((s, b) => {
+    if (!b.totalPrice || b.balanceCollected) return s;
+    return s + Math.max(0, Number(b.totalPrice) - Number(b.depositPaid ?? 0));
+  }, 0));
+
   return res.json({
     month: selectedMonth,
     totalRevenue,
+    totalDeposits,
+    totalPendingBalance,
     totalInsuranceHeld,
     totalInsuranceDeducted,
     totalExpenses: totalExpensesAll,
