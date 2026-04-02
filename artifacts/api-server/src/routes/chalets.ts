@@ -75,8 +75,8 @@ router.get("/", async (req, res) => {
       district: row.district ?? null,
       category: row.category ?? null,
       pricePerNight: Number(row.pricePerNight),
-      maxGuests: row.maxGuests,
-      bedrooms: row.bedrooms,
+      maxGuests: row.maxGuests ?? 0,
+      bedrooms: row.bedrooms ?? 0,
       amenities: row.amenities,
       photos: row.photos,
       whatsappNumber: row.whatsappNumber,
@@ -84,6 +84,8 @@ router.get("/", async (req, res) => {
       isVerified: row.isVerified ?? false,
       createdAt: row.createdAt,
     }),
+    maxGuests: row.maxGuests ?? null,
+    bedrooms: row.bedrooms ?? null,
     propertyType: row.propertyType ?? null,
     sections: row.sections ?? null,
     priceMorning: row.priceMorning ?? null,
@@ -96,6 +98,8 @@ router.get("/", async (req, res) => {
     priceWeekend: row.priceWeekend ?? null,
     seasonalDisclaimer: row.seasonalDisclaimer ?? true,
     termsAndConditions: row.termsAndConditions ?? null,
+    checkInTime: row.checkInTime ?? null,
+    checkOutTime: row.checkOutTime ?? null,
   }));
 
   res.json(data);
@@ -131,8 +135,8 @@ router.get("/:id", async (req, res) => {
       district: row.district ?? null,
       category: row.category ?? null,
       pricePerNight: Number(row.pricePerNight),
-      maxGuests: row.maxGuests,
-      bedrooms: row.bedrooms,
+      maxGuests: row.maxGuests ?? 0,
+      bedrooms: row.bedrooms ?? 0,
       amenities: row.amenities,
       photos: row.photos,
       whatsappNumber: row.whatsappNumber,
@@ -140,6 +144,8 @@ router.get("/:id", async (req, res) => {
       isVerified: row.isVerified ?? false,
       createdAt: row.createdAt,
     }),
+    maxGuests: row.maxGuests ?? null,
+    bedrooms: row.bedrooms ?? null,
     propertyType: row.propertyType ?? null,
     sections: row.sections ?? null,
     priceMorning: row.priceMorning ?? null,
@@ -152,6 +158,8 @@ router.get("/:id", async (req, res) => {
     priceWeekend: row.priceWeekend ?? null,
     seasonalDisclaimer: row.seasonalDisclaimer ?? true,
     termsAndConditions: row.termsAndConditions ?? null,
+    checkInTime: row.checkInTime ?? null,
+    checkOutTime: row.checkOutTime ?? null,
   };
 
   res.json(data);

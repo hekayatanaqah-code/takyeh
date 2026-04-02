@@ -153,6 +153,46 @@ router.get("/chalets", async (req, res) => {
   return res.json(chalets);
 });
 
+/* ── Update chalet check-in/check-out times ────────────────── */
+
+router.patch("/chalets/:chaletId/times", async (req, res) => {
+  const ownerId = req.user!.id;
+  const chaletId = Number(req.params.chaletId);
+
+  const body = z.object({
+    checkInTime: z.string().nullable().optional(),
+    checkOutTime: z.string().nullable().optional(),
+  }).safeParse(req.body);
+
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const subs = await db
+    .select({ id: chaletSubmissionsTable.id })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.ownerId, ownerId));
+
+  const subIds = subs.map((s) => s.id);
+
+  const chaletRows = await db
+    .select({ id: chaletsTable.id })
+    .from(chaletsTable)
+    .where(and(eq(chaletsTable.id, chaletId), inArray(chaletsTable.submissionId, subIds.length > 0 ? subIds : [-1])))
+    .limit(1);
+
+  if (chaletRows.length === 0) return res.status(403).json({ error: "غير مصرح" });
+
+  const [updated] = await db
+    .update(chaletsTable)
+    .set({
+      checkInTime: body.data.checkInTime ?? null,
+      checkOutTime: body.data.checkOutTime ?? null,
+    })
+    .where(eq(chaletsTable.id, chaletId))
+    .returning();
+
+  return res.json(updated);
+});
+
 /* ── Availability (date-slot blocking) ─────────────────────── */
 
 router.get("/availability", async (req, res) => {

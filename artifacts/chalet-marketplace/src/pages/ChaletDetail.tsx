@@ -193,7 +193,7 @@ export default function ChaletDetail() {
       c.priceFullDay;
 
     if (raw && Number(raw) > 0) {
-      return { text: `${Number(raw).toLocaleString("ar-SA")} ر.س`, exact: true };
+      return { text: `يبدأ من ${Number(raw).toLocaleString("ar-SA")} ر.س`, exact: true };
     }
 
     // Fallback: use weekday starting price
@@ -376,14 +376,18 @@ export default function ChaletDetail() {
                 </div>
                 {/* Quick stats chips */}
                 <div className="flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1.5 bg-secondary rounded-lg px-3 py-1.5 text-xs font-medium">
-                    <Users className="w-3.5 h-3.5 text-primary" />
-                    {chalet.maxGuests} ضيوف
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 bg-secondary rounded-lg px-3 py-1.5 text-xs font-medium">
-                    <Bed className="w-3.5 h-3.5 text-primary" />
-                    {chalet.bedrooms} غرف نوم
-                  </span>
+                  {(chalet.maxGuests != null && chalet.maxGuests > 0) && (
+                    <span className="inline-flex items-center gap-1.5 bg-secondary rounded-lg px-3 py-1.5 text-xs font-medium">
+                      <Users className="w-3.5 h-3.5 text-primary" />
+                      {chalet.maxGuests} ضيوف
+                    </span>
+                  )}
+                  {(chalet.bedrooms != null && chalet.bedrooms > 0) && (
+                    <span className="inline-flex items-center gap-1.5 bg-secondary rounded-lg px-3 py-1.5 text-xs font-medium">
+                      <Bed className="w-3.5 h-3.5 text-primary" />
+                      {chalet.bedrooms} غرف نوم
+                    </span>
+                  )}
                   {propertyType && (
                     <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-lg px-3 py-1.5 text-xs font-semibold">
                       {propertyType}
@@ -475,7 +479,7 @@ export default function ChaletDetail() {
                     {selectedDate && (
                       <div className="px-3 pb-2 -mt-0.5">
                         <span className="text-xs font-semibold text-primary">
-                          {arabicDay} — {hijriDate} هـ ({formattedDate} م)
+                          {arabicDay} — {hijriDate} هـ
                         </span>
                       </div>
                     )}
@@ -538,10 +542,34 @@ export default function ChaletDetail() {
                     <span className="text-muted-foreground">مبلغ التأمين</span>
                     <span className="font-semibold">يُحدَّد مع المالك</span>
                   </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-muted-foreground">أوقات الدخول والخروج</span>
-                    <span className="font-semibold">مرنة بالاتفاق</span>
-                  </div>
+                  {(() => {
+                    const cin = (chalet as any).checkInTime as string | null | undefined;
+                    const cout = (chalet as any).checkOutTime as string | null | undefined;
+                    if (cin || cout) {
+                      return (
+                        <>
+                          {cin && (
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-muted-foreground">وقت الدخول</span>
+                              <span className="font-semibold">{cin}</span>
+                            </div>
+                          )}
+                          {cout && (
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-muted-foreground">وقت الخروج</span>
+                              <span className="font-semibold">{cout}</span>
+                            </div>
+                          )}
+                        </>
+                      );
+                    }
+                    return (
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground">أوقات الدخول والخروج</span>
+                        <span className="font-semibold">مرنة بالاتفاق</span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* ── Terms Preview (above book button) ───── */}
@@ -666,8 +694,23 @@ export default function ChaletDetail() {
                     فتح في خرائط قوقل
                   </a>
                 </div>
-                <p className="text-sm font-medium text-foreground mb-3">{locationLabel}</p>
-                <div className="w-full rounded-xl overflow-hidden border border-border/50 mb-3" style={{ height: "220px" }}>
+                <a
+                  href={mapsOpenUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block text-sm font-medium text-primary hover:underline mb-3"
+                >
+                  <MapPin className="w-3.5 h-3.5 inline-block me-1 mb-0.5" />
+                  {locationLabel}
+                </a>
+                <a
+                  href={mapsOpenUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full rounded-xl overflow-hidden border border-border/50 mb-1 cursor-pointer"
+                  style={{ height: "220px" }}
+                  aria-label="فتح في خرائط قوقل"
+                >
                   <iframe
                     key={mapEmbedUrl}
                     title="موقع الشاليه"
@@ -677,25 +720,10 @@ export default function ChaletDetail() {
                     loading="lazy"
                     referrerPolicy="no-referrer-when-downgrade"
                     src={mapEmbedUrl}
-                    className="w-full h-full"
+                    className="w-full h-full pointer-events-none"
                     allowFullScreen
                   />
-                </div>
-                {coords ? (
-                  <div className="flex items-start gap-2 bg-primary/5 border border-primary/20 px-3 py-2.5 rounded-xl">
-                    <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                    <p className="text-xs text-foreground/80 leading-relaxed">
-                      الموقع الدقيق للشاليه — اضغط "فتح في خرائط قوقل" للتوجيه المباشر.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-2 bg-secondary/60 px-3 py-2.5 rounded-xl">
-                    <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      الخريطة تُظهر المنطقة التقريبية. سيتم مشاركة العنوان الدقيق عبر واتساب بعد التواصل مع المالك.
-                    </p>
-                  </div>
-                )}
+                </a>
               </section>
             </div>
 
