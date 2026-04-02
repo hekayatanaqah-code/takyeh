@@ -2839,15 +2839,15 @@ function PlansTab() {
 
       {/* Add/Edit Form Dialog */}
       <Dialog open={showForm} onOpenChange={(o) => { if (!o) setShowForm(false); }}>
-        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg" dir="rtl">
-          <DialogHeader>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg max-h-[90dvh] flex flex-col" dir="rtl">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="text-white flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-amber-400" />
               {editId ? "تعديل الخطة" : "إضافة خطة جديدة"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 mt-2">
+          <div className="space-y-4 mt-2 overflow-y-auto flex-1 pb-1">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">اسم الخطة *</label>

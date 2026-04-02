@@ -239,7 +239,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o && !paying) onClose(); }}>
       <DialogContent
-        className="max-w-lg rounded-3xl p-0 overflow-hidden"
+        className="max-w-lg rounded-3xl p-0 flex flex-col max-h-[90dvh] overflow-hidden"
         dir="rtl"
         style={{ fontFamily: "inherit" }}
       >
@@ -247,7 +247,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
         {/* ── Step: Plan Selection ── */}
         {step === "plan" && (
           <>
-            <DialogHeader className="p-6 pb-2 bg-gradient-to-br from-primary/10 to-background">
+            <DialogHeader className="p-6 pb-2 bg-gradient-to-br from-primary/10 to-background shrink-0">
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <Crown className="w-5 h-5 text-primary" />
                 اختر خطتك
@@ -256,7 +256,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                 اشتراك بدون عمولة — سعر ثابت فقط
               </DialogDescription>
             </DialogHeader>
-            <div className="p-5 grid gap-2 max-h-[65vh] overflow-y-auto">
+            <div className="p-5 grid gap-2 overflow-y-auto flex-1">
               {plans.length === 0 && (
                 <div className="flex justify-center py-8">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -307,7 +307,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
         {/* ── Step: Payment Form ── */}
         {step === "pay" && selectedPlan && (
           <>
-            <DialogHeader className="p-6 pb-2 bg-gradient-to-br from-primary/10 to-background">
+            <DialogHeader className="p-6 pb-2 bg-gradient-to-br from-primary/10 to-background shrink-0">
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-primary" />
                 إتمام الدفع
@@ -321,7 +321,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
               </DialogDescription>
             </DialogHeader>
 
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
               {/* Moyasar form mount point */}
               {!scriptReady && (
                 <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">

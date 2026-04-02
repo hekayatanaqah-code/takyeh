@@ -2733,7 +2733,7 @@ function StaffTab() {
           voucherNo,
           logId,
           staffName:  payTarget.name,
-          ownerName:  user?.name ?? user?.username ?? "صاحب العمل",
+          ownerName:  [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل",
           month:      variables.month,
           paidAt,
           baseSalary: base,
@@ -2913,7 +2913,7 @@ function StaffTab() {
                 variant="outline"
                 className="h-8 text-xs gap-1.5"
                 onClick={() => {
-                  const ownerName = user?.name ?? user?.username ?? "صاحب العمل";
+                  const ownerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل";
                   printMasterPayroll(masterMonth, history as any[], ownerName);
                 }}
               >
@@ -2925,7 +2925,7 @@ function StaffTab() {
                   size="sm"
                   className="h-8 text-xs gap-1.5"
                   onClick={async () => {
-                    const ownerName = user?.name ?? user?.username ?? "صاحب العمل";
+                    const ownerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل";
                     const selected = (history as any[]).filter((l) => selectedLogIds.has(l.id));
                     await printBulkVouchers(selected, ownerName);
                   }}
@@ -3011,7 +3011,7 @@ function StaffTab() {
                               voucherNo,
                               logId:      log.id,
                               staffName:  (log as any).staffName ?? "موظف",
-                              ownerName:  user?.name ?? user?.username ?? "صاحب العمل",
+                              ownerName:  [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل",
                               month:      log.month,
                               paidAt:     paidAtStr,
                               baseSalary: base,
