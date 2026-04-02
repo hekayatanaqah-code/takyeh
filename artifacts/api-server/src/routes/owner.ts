@@ -91,13 +91,18 @@ router.patch("/bookings/:id", async (req, res) => {
     balanceCollected: z.boolean().optional(),
     insuranceRefunded: z.boolean().optional(),
     insuranceDeducted: z.number().nonnegative().optional(),
-    insuranceDeductReason: z.string().optional(),
+    insuranceDeductReason: z.string().nullable().optional(),
+    insuranceProofImages: z.array(z.string()).optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
-  const { insuranceDeducted, ...rest } = body.data;
+  const { insuranceDeducted, insuranceProofImages, ...rest } = body.data;
   const [row] = await db
     .update(ownerBookingsTable)
-    .set({ ...rest, insuranceDeducted: insuranceDeducted !== undefined ? String(Math.round(insuranceDeducted)) : undefined })
+    .set({
+      ...rest,
+      insuranceDeducted: insuranceDeducted !== undefined ? String(Math.round(insuranceDeducted)) : undefined,
+      insuranceProofImages: insuranceProofImages !== undefined ? JSON.stringify(insuranceProofImages) : undefined,
+    })
     .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)))
     .returning();
   if (!row) return res.status(404).json({ error: "not found" });

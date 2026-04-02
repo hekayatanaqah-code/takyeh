@@ -160,6 +160,7 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   insuranceRefunded: boolean("insurance_refunded").notNull().default(false),
   insuranceDeducted: numeric("insurance_deducted", { precision: 10, scale: 2 }),
   insuranceDeductReason: text("insurance_deduct_reason"),
+  insuranceProofImages: text("insurance_proof_images"), // JSON array of image URLs
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;

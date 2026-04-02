@@ -64,6 +64,7 @@ interface OwnerBooking {
   insuranceRefunded: boolean;
   insuranceDeducted?: string | null;
   insuranceDeductReason?: string | null;
+  insuranceProofImages?: string | null; // JSON-encoded array of URLs
   createdAt: string;
 }
 
@@ -543,6 +544,80 @@ function AddBookingDialog({
   );
 }
 
+/* ── Proof Viewer Dialog ───────────────────────────────── */
+function ProofViewerDialog({
+  booking,
+  open,
+  onClose,
+}: {
+  booking: OwnerBooking | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  if (!booking) return null;
+  const images: string[] = (() => {
+    try { return JSON.parse(booking.insuranceProofImages ?? "[]"); } catch { return []; }
+  })();
+
+  const fullUrl = (url: string) =>
+    url.startsWith("http") ? url : `${window.location.origin}${BASE}${url}`;
+
+  return (
+    <>
+      <Dialog open={open && !lightbox} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-base">📸 إثبات التلفيات — {booking.clientName}</DialogTitle>
+            {booking.insuranceDeductReason && (
+              <div className="text-sm text-muted-foreground mt-1">السبب: {booking.insuranceDeductReason}</div>
+            )}
+          </DialogHeader>
+          {images.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">لا توجد صور مرفقة</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto">
+              {images.map((url, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setLightbox(fullUrl(url))}
+                  className="relative rounded-lg overflow-hidden aspect-square bg-muted hover:opacity-90 transition"
+                >
+                  <img
+                    src={fullUrl(url)}
+                    alt={`إثبات ${i + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                    {i + 1} / {images.length}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox */}
+      {lightbox && (
+        <Dialog open={!!lightbox} onOpenChange={() => setLightbox(null)}>
+          <DialogContent className="max-w-3xl p-2 bg-black/95 border-0">
+            <button
+              type="button"
+              onClick={() => setLightbox(null)}
+              className="absolute top-2 left-2 z-50 text-white bg-black/60 rounded-full w-8 h-8 flex items-center justify-center text-lg"
+            >✕</button>
+            <img src={lightbox} alt="proof" className="w-full max-h-[80vh] object-contain rounded" />
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
 /* ── Manage Insurance Dialog ───────────────────────── */
 function ManageInsuranceDialog({
   booking,
@@ -559,20 +634,54 @@ function ManageInsuranceDialog({
   apiFetch: (url: string, opts?: RequestInit) => Promise<Response>;
   formatAmount: (v: string | number | null | undefined) => string;
 }) {
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
   const [mode, setMode] = useState<"choose" | "refund" | "deduct">("choose");
   const [deductAmount, setDeductAmount] = useState("");
   const [deductReason, setDeductReason] = useState("");
+  const [proofImages, setProofImages] = useState<string[]>([]);      // uploaded URLs
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (open) { setMode("choose"); setDeductAmount(""); setDeductReason(""); setSaving(false); }
+    if (open) {
+      setMode("choose"); setDeductAmount(""); setDeductReason("");
+      setProofImages([]); setUploading(false); setSaving(false);
+    }
   }, [open]);
 
   if (!booking) return null;
 
   const insurance = Number(booking.insuranceFee ?? 0);
-  const deductVal = Number(deductAmount) || 0;
+  const deductVal = Math.round(Number(deductAmount) || 0);
   const remaining = Math.max(0, insurance - deductVal);
+
+  const handleUploadImages = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const uploaded: string[] = [];
+    for (const file of Array.from(files)) {
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const r = await fetch(`${BASE}/api/storage/uploads/process`, {
+          method: "POST", credentials: "include", body: fd,
+        });
+        if (r.ok) {
+          const data = await r.json();
+          if (data?.url) uploaded.push(data.url);
+        }
+      } catch { /* skip failed */ }
+    }
+    setProofImages(prev => [...prev, ...uploaded]);
+    setUploading(false);
+  };
+
+  const removeProofImage = (url: string) =>
+    setProofImages(prev => prev.filter(u => u !== url));
+
+  const fullUrl = (url: string) =>
+    url.startsWith("http") ? url : `${window.location.origin}${BASE}${url}`;
 
   const handleFullRefund = async () => {
     setSaving(true);
@@ -590,14 +699,19 @@ function ManageInsuranceDialog({
     await apiFetch(`/owner/bookings/${booking.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ insuranceRefunded: true, insuranceDeducted: deductVal, insuranceDeductReason: deductReason || undefined }),
+      body: JSON.stringify({
+        insuranceRefunded: true,
+        insuranceDeducted: deductVal,
+        insuranceDeductReason: deductReason || undefined,
+        insuranceProofImages: proofImages,
+      }),
     });
     onSaved(); onClose();
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md" dir="rtl">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             🔒 إدارة التأمين — {booking.clientName}
@@ -621,7 +735,7 @@ function ManageInsuranceDialog({
               className="w-full rounded-lg border-2 border-red-200 bg-red-50 p-4 text-right hover:bg-red-100 transition"
             >
               <div className="font-bold text-red-700">✂️ خصم من التأمين</div>
-              <div className="text-sm text-red-600 mt-1">خصم مبلغ بسبب تلفيات وإرجاع الباقي للعميل</div>
+              <div className="text-sm text-red-600 mt-1">خصم مبلغ بسبب تلفيات مع رفع صور الإثبات</div>
             </button>
           </div>
         )}
@@ -643,6 +757,7 @@ function ManageInsuranceDialog({
 
         {mode === "deduct" && (
           <div className="flex flex-col gap-3 py-2">
+            {/* Amount preview */}
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-center">
                 <div className="text-xs text-red-500">المخصوم (تلفيات)</div>
@@ -653,16 +768,20 @@ function ManageInsuranceDialog({
                 <div className="text-xl font-bold text-green-700">{formatAmount(remaining)}</div>
               </div>
             </div>
+
+            {/* Deduction amount */}
             <div>
               <label className="block text-sm font-medium mb-1">المبلغ المخصوم (ر.س)</label>
               <input
-                type="number" min="0" max={insurance} step="1"
+                type="number" min="0" max={insurance} step="1" inputMode="numeric"
                 value={deductAmount}
                 onChange={e => setDeductAmount(e.target.value)}
                 className="w-full rounded-md border px-3 py-2 text-left text-base"
                 placeholder={`أقصى مبلغ: ${insurance}`}
               />
             </div>
+
+            {/* Reason */}
             <div>
               <label className="block text-sm font-medium mb-1">سبب الخصم</label>
               <input
@@ -673,6 +792,50 @@ function ManageInsuranceDialog({
                 placeholder="مثال: كسر أثاث، تلف فعلي..."
               />
             </div>
+
+            {/* Image upload */}
+            <div>
+              <label className="block text-sm font-medium mb-2">📸 صور الإثبات (اختياري)</label>
+
+              {/* Thumbnail grid */}
+              {proofImages.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {proofImages.map((url, i) => (
+                    <div key={i} className="relative rounded-lg overflow-hidden aspect-square bg-muted">
+                      <img src={fullUrl(url)} alt={`صورة ${i + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeProofImage(url)}
+                        className="absolute top-0.5 left-0.5 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs leading-none"
+                      >✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload button */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={e => handleUploadImages(e.target.files)}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="w-full border-2 border-dashed border-muted-foreground/30 rounded-lg py-3 text-sm text-muted-foreground hover:border-primary/50 hover:text-primary transition disabled:opacity-50"
+              >
+                {uploading
+                  ? "⏳ جاري الرفع..."
+                  : proofImages.length > 0
+                    ? `📎 إضافة المزيد من الصور (${proofImages.length} مُرفق)`
+                    : "📎 انقر لرفع صور الإثبات"}
+              </button>
+            </div>
+
             <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
               ⚠️ المبلغ المخصوم سيُضاف تلقائياً كإيراد تحت فئة <strong>تلفيات</strong> في التقارير الشهرية.
             </div>
@@ -681,7 +844,7 @@ function ManageInsuranceDialog({
               <Button
                 className="flex-1 bg-red-600 hover:bg-red-700"
                 onClick={handleDeduct}
-                disabled={saving || deductVal <= 0 || deductVal > insurance}
+                disabled={saving || uploading || deductVal <= 0 || deductVal > insurance}
               >
                 {saving ? "جاري الحفظ..." : "✂️ تأكيد الخصم"}
               </Button>
@@ -891,6 +1054,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   });
 
   const [insuranceTarget, setInsuranceTarget] = useState<OwnerBooking | null>(null);
+  const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
 
   const deleteBooking = useMutation({
     mutationFn: async (id: number) => {
@@ -1046,10 +1210,19 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   } else if (b.insuranceDeducted && Number(b.insuranceDeducted) > 0) {
                     const deducted = Number(b.insuranceDeducted);
                     const refunded = Math.max(0, ins - deducted);
+                    const base2 = import.meta.env.BASE_URL.replace(/\/$/, "");
+                    const proofImgs2: string[] = (() => { try { return JSON.parse(b.insuranceProofImages ?? "[]"); } catch { return []; } })();
                     msg += `\n• التأمين: ${fmtAR(ins)} ر.س`;
                     msg += `\n  ✂️ خصم تلفيات: ${fmtAR(deducted)} ر.س`;
                     if (b.insuranceDeductReason) msg += ` (${b.insuranceDeductReason})`;
                     if (refunded > 0) msg += `\n  ↩ مُرجَع للعميل: ${fmtAR(refunded)} ر.س`;
+                    if (proofImgs2.length > 0) {
+                      msg += `\n\n📸 صور إثبات التلفيات (${proofImgs2.length}):`;
+                      proofImgs2.forEach((u, i) => {
+                        const fullU2 = u.startsWith("http") ? u : `${window.location.origin}${base2}${u}`;
+                        msg += `\n  ${i + 1}. ${fullU2}`;
+                      });
+                    }
                   } else {
                     msg += `\n• التأمين: ${fmtAR(ins)} ر.س ↩ تم الإرجاع بالكامل`;
                   }
@@ -1141,21 +1314,55 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           {fmtAR(ins)} ر.س
                         </span>
                       </div>
-                      {b.insuranceDeducted && Number(b.insuranceDeducted) > 0 && (
-                        <div className="mt-1 pt-1 border-t border-slate-200 dark:border-slate-700 flex flex-col gap-0.5">
-                          <div className="flex justify-between text-[11px]">
-                            <span className="text-red-600">✂️ خصم تلفيات</span>
-                            <span className="font-bold text-red-700">{fmtAR(Number(b.insuranceDeducted))} ر.س</span>
+                      {b.insuranceDeducted && Number(b.insuranceDeducted) > 0 && (() => {
+                        const proofImgs: string[] = (() => { try { return JSON.parse(b.insuranceProofImages ?? "[]"); } catch { return []; } })();
+                        const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+                        const fullU = (u: string) => u.startsWith("http") ? u : `${window.location.origin}${base}${u}`;
+                        return (
+                          <div className="mt-1 pt-1 border-t border-slate-200 dark:border-slate-700 flex flex-col gap-0.5">
+                            <div className="flex justify-between text-[11px]">
+                              <span className="text-red-600">✂️ خصم تلفيات</span>
+                              <span className="font-bold text-red-700">{fmtAR(Number(b.insuranceDeducted))} ر.س</span>
+                            </div>
+                            {b.insuranceDeductReason && (
+                              <div className="text-[10px] text-muted-foreground">السبب: {b.insuranceDeductReason}</div>
+                            )}
+                            <div className="flex justify-between text-[11px]">
+                              <span className="text-green-600">↩ مُرجَع للعميل</span>
+                              <span className="font-bold text-green-700">{fmtAR(Math.max(0, ins - Number(b.insuranceDeducted)))} ر.س</span>
+                            </div>
+                            {/* Proof image thumbnails */}
+                            {proofImgs.length > 0 && (
+                              <div className="mt-1.5 flex flex-col gap-1">
+                                <div className="grid grid-cols-3 gap-1">
+                                  {proofImgs.slice(0, 3).map((u, i) => (
+                                    <button
+                                      key={i}
+                                      type="button"
+                                      onClick={() => setProofTarget(b)}
+                                      className="relative rounded overflow-hidden aspect-square bg-muted hover:opacity-80 transition"
+                                    >
+                                      <img src={fullU(u)} alt={`إثبات ${i+1}`} className="w-full h-full object-cover" />
+                                      {i === 2 && proofImgs.length > 3 && (
+                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-xs font-bold">
+                                          +{proofImgs.length - 3}
+                                        </div>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setProofTarget(b)}
+                                  className="text-[10px] text-blue-600 underline text-right mt-0.5"
+                                >
+                                  📸 عرض الإثبات ({proofImgs.length} صورة)
+                                </button>
+                              </div>
+                            )}
                           </div>
-                          {b.insuranceDeductReason && (
-                            <div className="text-[10px] text-muted-foreground">السبب: {b.insuranceDeductReason}</div>
-                          )}
-                          <div className="flex justify-between text-[11px]">
-                            <span className="text-green-600">↩ مُرجَع للعميل</span>
-                            <span className="font-bold text-green-700">{fmtAR(Math.max(0, ins - Number(b.insuranceDeducted)))} ر.س</span>
-                          </div>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -1191,6 +1398,18 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         🔒 إدارة التأمين
                       </button>
                     )}
+                    {/* View damage proof */}
+                    {b.insuranceDeducted && Number(b.insuranceDeducted) > 0 && (() => {
+                      const imgs: string[] = (() => { try { return JSON.parse(b.insuranceProofImages ?? "[]"); } catch { return []; } })();
+                      return imgs.length > 0 ? (
+                        <button
+                          onClick={() => setProofTarget(b)}
+                          className="flex items-center gap-1.5 text-xs font-medium text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg px-2.5 py-1 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
+                        >
+                          📸 عرض الإثبات
+                        </button>
+                      ) : null;
+                    })()}
                   </div>
                 </motion.div>
               );
@@ -1207,6 +1426,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         onSaved={() => qc.invalidateQueries({ queryKey: ["owner", "bookings"] })}
         apiFetch={apiFetch}
         formatAmount={(v) => v === null || v === undefined ? "0" : Number(v).toLocaleString("ar-SA")}
+      />
+
+      <ProofViewerDialog
+        booking={proofTarget}
+        open={!!proofTarget}
+        onClose={() => setProofTarget(null)}
       />
 
       {/* Block Date Dialog */}
