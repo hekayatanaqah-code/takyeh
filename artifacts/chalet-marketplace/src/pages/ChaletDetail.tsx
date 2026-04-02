@@ -34,6 +34,20 @@ function getArabicDay(dateStr: string): string {
   return ARABIC_DAYS[d.getDay()] ?? "";
 }
 
+function getHijriDate(dateStr: string): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr + "T12:00:00");
+    return new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", {
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    }).format(d);
+  } catch {
+    return "";
+  }
+}
+
 const TODAY = new Date().toISOString().split("T")[0];
 
 export default function ChaletDetail() {
@@ -76,6 +90,7 @@ export default function ChaletDetail() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period | null>(initPeriod);
   const [selectedDate, setSelectedDate] = useState(initDate);
   const [showDateError, setShowDateError] = useState(false);
+  const [showPeriodError, setShowPeriodError] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showBookingConfirmModal, setShowBookingConfirmModal] = useState(false);
   const [showRedirectNotice, setShowRedirectNotice] = useState(false);
@@ -152,10 +167,11 @@ export default function ChaletDetail() {
   /* Date/day helpers for WhatsApp message */
   const arabicDay = selectedDate ? getArabicDay(selectedDate) : "";
   const formattedDate = selectedDate ? selectedDate.replace(/-/g, "/") : "";
+  const hijriDate = selectedDate ? getHijriDate(selectedDate) : "";
   const periodPlain = selectedPeriod ? PERIOD_LABEL_PLAIN[selectedPeriod] : "";
 
   const whatsappMsg = selectedDate
-    ? `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} لـ ${arabicDay} الموافق ${formattedDate}${periodPlain ? ` - الفترة: ${periodPlain}` : ""}.`
+    ? `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} لـ ${arabicDay} الموافق ${hijriDate} هـ (${formattedDate} م)${periodPlain ? ` - الفترة: ${periodPlain}` : ""}.`
     : `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} في ${chalet.location}${periodLine}.`;
 
   /* Available slots */
@@ -237,17 +253,19 @@ export default function ChaletDetail() {
   const termsAreShort = termsInline.length <= TERMS_CHAR_LIMIT;
 
   const dateFragment = selectedDate
-    ? `لـ ${arabicDay} الموافق ${formattedDate}${periodPlain ? ` - الفترة: ${periodPlain}` : ""}`
+    ? `لـ ${arabicDay} الموافق ${hijriDate} هـ (${formattedDate} م)${periodPlain ? ` - الفترة: ${periodPlain}` : ""}`
     : `في ${chalet.location}${periodLine}`;
 
-  const whatsappMsgWithTerms = hasTerms
+  const termsSuffix = hasTerms
     ? termsAreShort
-      ? `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} ${dateFragment}.\n\nلقد اطلعت على شروط المالك الخاصة (مثل: ${termsInline}) وأوافق عليها.\n\nكم مبلغ العربون لتأكيد الحجز؟`
-      : `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} ${dateFragment}.\n\nلقد اطلعت على كافة الشروط الخاصة المذكورة في صفحة الشاليه وأوافق عليها.\n\nكم مبلغ العربون لتأكيد الحجز؟`
-    : whatsappMsg;
+      ? `لقد اطلعت على شروط المالك الخاصة (مثل: ${termsInline}) وأوافق عليها.`
+      : `لقد اطلعت على كافة الشروط الخاصة المذكورة في صفحة الشاليه وأوافق عليها.`
+    : "";
 
-  const openWhatsApp = (includeTerms = false) => {
-    const msg = includeTerms && hasTerms ? whatsappMsgWithTerms : whatsappMsg;
+  const whatsappMsgWithTerms = `مرحباً، أود الاستفسار عن حجز ${chalet.nameAr} ${dateFragment}.${termsSuffix ? `\n\n${termsSuffix}` : ""}\n\nكم مبلغ العربون لتأكيد الحجز؟`;
+
+  const openWhatsApp = () => {
+    const msg = whatsappMsgWithTerms;
     let rawPhone = chalet.whatsappNumber.replace(/\D/g, "");
     if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
     if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
@@ -262,11 +280,11 @@ export default function ChaletDetail() {
     setShowRedirectNotice(true);
     setTimeout(() => {
       setShowRedirectNotice(false);
-      openWhatsApp(true);
+      openWhatsApp();
     }, 1800);
   };
 
-  /* Validate date then open confirm modal or direct WhatsApp */
+  /* Validate date + period then open confirm modal or redirect */
   const handleBookClick = () => {
     if (!selectedDate) {
       setShowDateError(true);
@@ -275,14 +293,20 @@ export default function ChaletDetail() {
       return;
     }
     setShowDateError(false);
+    if (slots.length > 0 && !selectedPeriod) {
+      setShowPeriodError(true);
+      document.getElementById("period-selector")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => setShowPeriodError(false), 3000);
+      return;
+    }
+    setShowPeriodError(false);
     if (hasTerms) {
       setShowBookingConfirmModal(true);
     } else {
-      // No terms — go straight to redirect notice
       setShowRedirectNotice(true);
       setTimeout(() => {
         setShowRedirectNotice(false);
-        openWhatsApp(false);
+        openWhatsApp();
       }, 1800);
     }
   };
@@ -451,7 +475,7 @@ export default function ChaletDetail() {
                     {selectedDate && (
                       <div className="px-3 pb-2 -mt-0.5">
                         <span className="text-xs font-semibold text-primary">
-                          {arabicDay} الموافق {formattedDate}
+                          {arabicDay} — {hijriDate} هـ ({formattedDate} م)
                         </span>
                       </div>
                     )}
@@ -466,9 +490,12 @@ export default function ChaletDetail() {
 
                 {/* Period selector */}
                 {slots.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-xs font-semibold text-muted-foreground mb-2">اختر الفترة</p>
-                    <div className="flex gap-2 flex-wrap">
+                  <div className="mb-4" id="period-selector">
+                    <p className={`text-xs font-semibold mb-2 flex items-center gap-1.5 ${showPeriodError ? "text-destructive" : "text-muted-foreground"}`}>
+                      {showPeriodError && <AlertCircle className="w-3.5 h-3.5 shrink-0" />}
+                      اختر الفترة {slots.length > 0 && <span className="text-destructive">*</span>}
+                    </p>
+                    <div className={`flex gap-2 flex-wrap rounded-xl transition-all ${showPeriodError ? "ring-2 ring-destructive/40 bg-destructive/5 p-1.5" : ""}`}>
                       {slots.map((p) => {
                         const priceInfo = getPeriodPrice(p);
                         const active = selectedPeriod === p;
@@ -497,6 +524,12 @@ export default function ChaletDetail() {
                         );
                       })}
                     </div>
+                    {showPeriodError && (
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0" />
+                        <p className="text-xs text-destructive font-medium">يرجى اختيار الفترة (صباحي / مسائي) أولاً</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -512,32 +545,38 @@ export default function ChaletDetail() {
                 </div>
 
                 {/* ── Terms Preview (above book button) ───── */}
-                {hasTerms && (
-                  <div className="mb-4 rounded-xl border border-amber-300/70 dark:border-amber-700/50 bg-amber-50/80 dark:bg-amber-950/30 p-3.5">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm">📋</span>
-                      <span className="text-xs font-bold text-amber-800 dark:text-amber-300">شروط الشاليه</span>
-                    </div>
-                    <ul className="space-y-1.5">
-                      {termsPreview.map((t: string, i: number) => (
-                        <li key={i} className="flex items-start gap-1.5 text-xs text-amber-900 dark:text-amber-200">
-                          <span className="text-amber-500 mt-0.5 shrink-0">•</span>
-                          <span>{t}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    {termsHidden.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowTermsModal(true)}
-                        className="mt-2.5 flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline"
-                      >
-                        <ChevronDown className="w-3.5 h-3.5" />
-                        عرض كامل الشروط ({termsList.length})
-                      </button>
-                    )}
+                <div className="mb-4 rounded-xl border border-amber-300/70 dark:border-amber-700/50 bg-amber-50/80 dark:bg-amber-950/30 p-3.5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm">📋</span>
+                    <span className="text-xs font-bold text-amber-800 dark:text-amber-300">شروط الشاليه</span>
                   </div>
-                )}
+                  {hasTerms ? (
+                    <>
+                      <ul className="space-y-1.5">
+                        {termsPreview.map((t: string, i: number) => (
+                          <li key={i} className="flex items-start gap-1.5 text-xs text-amber-900 dark:text-amber-200">
+                            <span className="text-amber-500 mt-0.5 shrink-0">•</span>
+                            <span>{t}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {termsHidden.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowTermsModal(true)}
+                          className="mt-2.5 flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                          عرض كامل الشروط ({termsList.length})
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-amber-800/70 dark:text-amber-300/70 italic">
+                      لا توجد شروط خاصة إضافية من المالك — تطبق الشروط والأحكام العامة للمنصة.
+                    </p>
+                  )}
+                </div>
 
                 {/* ── Book Button ─────────────────────────── */}
                 <Button

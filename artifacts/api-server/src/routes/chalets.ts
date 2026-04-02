@@ -95,6 +95,7 @@ router.get("/", async (req, res) => {
     priceWeekday: row.priceWeekday ?? null,
     priceWeekend: row.priceWeekend ?? null,
     seasonalDisclaimer: row.seasonalDisclaimer ?? true,
+    termsAndConditions: row.termsAndConditions ?? null,
   }));
 
   res.json(data);
@@ -150,6 +151,7 @@ router.get("/:id", async (req, res) => {
     priceWeekday: row.priceWeekday ?? null,
     priceWeekend: row.priceWeekend ?? null,
     seasonalDisclaimer: row.seasonalDisclaimer ?? true,
+    termsAndConditions: row.termsAndConditions ?? null,
   };
 
   res.json(data);
