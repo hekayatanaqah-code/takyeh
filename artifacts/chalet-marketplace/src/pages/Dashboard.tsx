@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
+import { formatDualDate } from "@/lib/hijri";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -1209,11 +1210,13 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 const periodLabel = b.period ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[b.period] ?? b.period) : "";
 
                 // Build compact message (keep well under WhatsApp's ~4000 char limit)
+                const { hijri: hijriDate, gregorian: gregDate } = formatDualDate(b.bookingDate);
+                const dualDate = hijriDate && gregDate ? `${hijriDate} | ${gregDate}` : b.bookingDate;
                 const lines: string[] = [
                   `🏡 إيصال حجز – حكاية أناقة`,
                   ``,
                   `👤 العميل: ${b.clientName}`,
-                  `📅 التاريخ: ${b.bookingDate}`,
+                  `📅 التاريخ: ${dualDate}`,
                   `⏱ المدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`,
                 ];
 
@@ -1242,7 +1245,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         ? proofImgs2[0]
                         : `${window.location.origin}${base2}${proofImgs2[0]}`;
                       lines.push(``, `✨ منصة حكاية أناقة – شاليهات القصيم`);
-                      lines.push(``, `🔗 لمشاهدة صور التوثيق (الإثبات) اضغط هنا:`, firstUrl);
+                      lines.push(``, `🔗 صور التوثيق: ${firstUrl}`);
                       // Skip the shared footer below since we already pushed it
                       const msg = lines.join("\n");
                       const encoded = encodeURIComponent(msg);
