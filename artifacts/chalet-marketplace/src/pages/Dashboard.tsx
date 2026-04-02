@@ -1245,7 +1245,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         ? proofImgs2[0]
                         : `${window.location.origin}${base2}${proofImgs2[0]}`;
                       lines.push(``, `✨ منصة حكاية أناقة – شاليهات القصيم`);
-                      lines.push(``, `🔗 صور التوثيق: ${firstUrl}`);
+                      lines.push(``, `📸 صور التوثيق الإضافية:`, firstUrl);
                       // Skip the shared footer below since we already pushed it
                       const msg = lines.join("\n");
                       const encoded = encodeURIComponent(msg);
