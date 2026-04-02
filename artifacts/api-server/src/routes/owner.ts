@@ -74,10 +74,10 @@ router.post("/bookings", async (req, res) => {
     .values({
       ...restBooking,
       ownerId,
-      revenueAmount: revenueAmount !== undefined ? String(revenueAmount) : null,
-      totalPrice: totalPrice !== undefined ? String(totalPrice) : null,
-      depositPaid: depositPaid !== undefined ? String(depositPaid) : null,
-      insuranceFee: insuranceFee !== undefined ? String(insuranceFee) : null,
+      revenueAmount: revenueAmount !== undefined ? String(Math.round(revenueAmount)) : null,
+      totalPrice: totalPrice !== undefined ? String(Math.round(totalPrice)) : null,
+      depositPaid: depositPaid !== undefined ? String(Math.round(depositPaid)) : null,
+      insuranceFee: insuranceFee !== undefined ? String(Math.round(insuranceFee)) : null,
     })
     .returning();
 
@@ -97,7 +97,7 @@ router.patch("/bookings/:id", async (req, res) => {
   const { insuranceDeducted, ...rest } = body.data;
   const [row] = await db
     .update(ownerBookingsTable)
-    .set({ ...rest, insuranceDeducted: insuranceDeducted !== undefined ? String(insuranceDeducted) : undefined })
+    .set({ ...rest, insuranceDeducted: insuranceDeducted !== undefined ? String(Math.round(insuranceDeducted)) : undefined })
     .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)))
     .returning();
   if (!row) return res.status(404).json({ error: "not found" });

@@ -323,6 +323,7 @@ function AddBookingDialog({
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [phoneLoading, setPhoneLoading] = useState(false);
+  const [isReturningCustomer, setIsReturningCustomer] = useState<boolean | null>(null);
   const [bookingDate, setBookingDate] = useState("");
   const [durationDays, setDurationDays] = useState(1);
   const [period, setPeriod] = useState<string>("");
@@ -335,20 +336,25 @@ function AddBookingDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const remainingBalance = totalPrice && depositPaid
-    ? Math.max(0, Number(totalPrice) - Number(depositPaid))
-    : null;
+  const tp = totalPrice ? Math.round(Number(totalPrice)) : null;
+  const dp = depositPaid ? Math.round(Number(depositPaid)) : null;
+  const remainingBalance = tp !== null && dp !== null ? Math.max(0, tp - dp) : null;
 
-  // Auto-fill client name from phone lookup
+  // Auto-fill client name + detect new/returning customer
   const handlePhoneBlur = async () => {
     const phone = clientPhone.trim();
-    if (phone.length < 9) return;
+    if (phone.length < 9) { setIsReturningCustomer(null); return; }
     setPhoneLoading(true);
     try {
       const r = await apiFetch(`/owner/bookings/lookup?phone=${encodeURIComponent(phone)}`);
       if (r.ok) {
         const data = await r.json();
-        if (data?.clientName && !clientName) setClientName(data.clientName);
+        if (data?.clientName) {
+          if (!clientName) setClientName(data.clientName);
+          setIsReturningCustomer(true);
+        } else {
+          setIsReturningCustomer(false);
+        }
       }
     } catch { /* silent */ } finally {
       setPhoneLoading(false);
@@ -359,6 +365,7 @@ function AddBookingDialog({
     setClientName(""); setClientPhone(""); setBookingDate(""); setDurationDays(1);
     setPeriod(""); setSource("external"); setSubmissionId(""); setNotes("");
     setTotalPrice(""); setDepositPaid(""); setInsuranceFee("");
+    setIsReturningCustomer(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -377,9 +384,9 @@ function AddBookingDialog({
           source,
           notes: notes || undefined,
           submissionId: submissionId && submissionId !== "none" ? Number(submissionId) : undefined,
-          totalPrice: totalPrice ? Number(totalPrice) : undefined,
-          depositPaid: depositPaid ? Number(depositPaid) : undefined,
-          insuranceFee: insuranceFee ? Number(insuranceFee) : undefined,
+          totalPrice: totalPrice ? Math.round(Number(totalPrice)) : undefined,
+          depositPaid: depositPaid ? Math.round(Number(depositPaid)) : undefined,
+          insuranceFee: insuranceFee ? Math.round(Number(insuranceFee)) : undefined,
         }),
       });
       if (!r.ok) { setError("حدث خطأ، يرجى المحاولة مجدداً"); return; }
@@ -402,16 +409,29 @@ function AddBookingDialog({
 
           {/* Phone — first so auto-fill works */}
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold">رقم الجوال (للتعرف التلقائي)</label>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-semibold">رقم الجوال (للتعرف التلقائي)</label>
+              {isReturningCustomer === true && (
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                  🔄 زبون سابق
+                </span>
+              )}
+              {isReturningCustomer === false && (
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                  🆕 زبون جديد
+                </span>
+              )}
+            </div>
             <div className="relative">
               <Input
                 type="tel"
                 value={clientPhone}
-                onChange={(e) => setClientPhone(e.target.value)}
+                onChange={(e) => { setClientPhone(e.target.value); setIsReturningCustomer(null); }}
                 onBlur={handlePhoneBlur}
                 placeholder="05xxxxxxxx"
                 dir="ltr"
                 className="text-left"
+                inputMode="numeric"
               />
               {phoneLoading && <span className="absolute left-3 top-2.5 text-xs text-muted-foreground animate-pulse">جاري البحث…</span>}
             </div>
@@ -452,11 +472,11 @@ function AddBookingDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">إجمالي قيمة الحجز (ر.س)</label>
-                <Input type="number" min={0} step={0.01} value={totalPrice} onChange={(e) => setTotalPrice(e.target.value)} placeholder="0.00" />
+                <Input type="number" min={0} step={1} inputMode="numeric" value={totalPrice} onChange={(e) => setTotalPrice(e.target.value)} placeholder="0" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">العربون المدفوع (ر.س)</label>
-                <Input type="number" min={0} step={0.01} value={depositPaid} onChange={(e) => setDepositPaid(e.target.value)} placeholder="0.00" />
+                <Input type="number" min={0} step={1} inputMode="numeric" value={depositPaid} onChange={(e) => setDepositPaid(e.target.value)} placeholder="0" />
               </div>
             </div>
             {remainingBalance !== null && (
@@ -467,7 +487,7 @@ function AddBookingDialog({
             )}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold">مبلغ التأمين (ر.س) — قابل للإعادة</label>
-              <Input type="number" min={0} step={0.01} value={insuranceFee} onChange={(e) => setInsuranceFee(e.target.value)} placeholder="0.00" />
+              <Input type="number" min={0} step={1} inputMode="numeric" value={insuranceFee} onChange={(e) => setInsuranceFee(e.target.value)} placeholder="0" />
             </div>
           </div>
 
