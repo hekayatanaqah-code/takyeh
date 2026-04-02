@@ -2839,7 +2839,11 @@ function PlansTab() {
 
       {/* Add/Edit Form Dialog */}
       <Dialog open={showForm} onOpenChange={(o) => { if (!o) setShowForm(false); }}>
-        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg max-h-[90dvh] flex flex-col" dir="rtl">
+        <DialogContent
+          className="bg-slate-900 border-slate-700 text-white max-w-lg flex flex-col"
+          dir="rtl"
+          style={{ top: '50px', transform: 'translateX(-50%)', maxHeight: 'calc(100dvh - 70px)' }}
+        >
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-white flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-amber-400" />
@@ -2847,7 +2851,7 @@ function PlansTab() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 mt-2 overflow-y-auto flex-1 pb-[50px]">
+          <div className="space-y-4 mt-2 overflow-y-auto flex-1" style={{ paddingBottom: '100px' }}>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">اسم الخطة *</label>
