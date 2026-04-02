@@ -1200,36 +1200,71 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               const fmtAR = (n: number) => n.toLocaleString("ar-SA", { maximumFractionDigits: 2 });
 
               const sendReceiptWhatsApp = () => {
-                const phone = b.clientPhone?.replace(/\D/g, "") ?? "";
+                // Normalize Saudi phone: strip non-digits, add 966 if starts with 0
+                let rawPhone = b.clientPhone?.replace(/\D/g, "") ?? "";
+                if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
+                if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
+                const phone = rawPhone;
+
                 const periodLabel = b.period ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[b.period] ?? b.period) : "";
-                let msg = `🏡 إيصال حجز – حكاية أناقة\n\nالعميل: ${b.clientName}\nالتاريخ: ${b.bookingDate}\nالمدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`;
-                if (tp !== null) msg += `\n\n💰 تفاصيل المبالغ:\n• الإجمالي: ${fmtAR(tp)} ر.س\n• العربون المدفوع: ${fmtAR(dp ?? 0)} ر.س\n• المتبقي: ${fmtAR(remaining ?? 0)} ر.س${b.balanceCollected ? " ✓ (تم التحصيل)" : ""}`;
+
+                // Build compact message (keep well under WhatsApp's ~4000 char limit)
+                const lines: string[] = [
+                  `🏡 إيصال حجز – حكاية أناقة`,
+                  ``,
+                  `👤 العميل: ${b.clientName}`,
+                  `📅 التاريخ: ${b.bookingDate}`,
+                  `⏱ المدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`,
+                ];
+
+                if (tp !== null) {
+                  lines.push(``, `💰 تفاصيل المبالغ:`);
+                  lines.push(`• الإجمالي: ${fmtAR(tp)} ر.س`);
+                  lines.push(`• العربون: ${fmtAR(dp ?? 0)} ر.س`);
+                  lines.push(`• المتبقي: ${fmtAR(remaining ?? 0)} ر.س${b.balanceCollected ? " ✓" : ""}`);
+                }
+
                 if (ins) {
                   if (!b.insuranceRefunded) {
-                    msg += `\n• التأمين المحتجز: ${fmtAR(ins)} ر.س 🔒`;
+                    lines.push(`• التأمين: ${fmtAR(ins)} ر.س 🔒 (محتجز)`);
                   } else if (b.insuranceDeducted && Number(b.insuranceDeducted) > 0) {
                     const deducted = Number(b.insuranceDeducted);
                     const refunded = Math.max(0, ins - deducted);
-                    const base2 = import.meta.env.BASE_URL.replace(/\/$/, "");
                     const proofImgs2: string[] = (() => { try { return JSON.parse(b.insuranceProofImages ?? "[]"); } catch { return []; } })();
-                    msg += `\n• التأمين: ${fmtAR(ins)} ر.س`;
-                    msg += `\n  ✂️ خصم تلفيات: ${fmtAR(deducted)} ر.س`;
-                    if (b.insuranceDeductReason) msg += ` (${b.insuranceDeductReason})`;
-                    if (refunded > 0) msg += `\n  ↩ مُرجَع للعميل: ${fmtAR(refunded)} ر.س`;
+                    lines.push(``, `✂️ خصم تلفيات من التأمين:`);
+                    lines.push(`• المخصوم: ${fmtAR(deducted)} ر.س`);
+                    if (b.insuranceDeductReason) lines.push(`• السبب: ${b.insuranceDeductReason}`);
+                    if (refunded > 0) lines.push(`• المُرجَع إليك: ${fmtAR(refunded)} ر.س`);
+                    // Include first proof image URL only (keep message short)
                     if (proofImgs2.length > 0) {
-                      msg += `\n\n📸 صور إثبات التلفيات (${proofImgs2.length}):`;
-                      proofImgs2.forEach((u, i) => {
-                        const fullU2 = u.startsWith("http") ? u : `${window.location.origin}${base2}${u}`;
-                        msg += `\n  ${i + 1}. ${fullU2}`;
-                      });
+                      const base2 = import.meta.env.BASE_URL.replace(/\/$/, "");
+                      const firstUrl = proofImgs2[0].startsWith("http")
+                        ? proofImgs2[0]
+                        : `${window.location.origin}${base2}${proofImgs2[0]}`;
+                      lines.push(``, `📸 إثبات التلفيات (${proofImgs2.length} صورة):`);
+                      lines.push(firstUrl);
+                      if (proofImgs2.length > 1) lines.push(`(+ ${proofImgs2.length - 1} صور إضافية)`);
                     }
                   } else {
-                    msg += `\n• التأمين: ${fmtAR(ins)} ر.س ↩ تم الإرجاع بالكامل`;
+                    lines.push(`• التأمين: ${fmtAR(ins)} ر.س ↩ تم الإرجاع بالكامل`);
                   }
                 }
-                msg += `\n\n✨ منصة حكاية أناقة – شاليهات القصيم`;
-                const waUrl = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
-                window.open(waUrl, "_blank");
+
+                lines.push(``, `✨ منصة حكاية أناقة – شاليهات القصيم`);
+                const msg = lines.join("\n");
+
+                // Use <a> click — works reliably inside iframes unlike window.open
+                const encoded = encodeURIComponent(msg);
+                const waUrl = phone
+                  ? `https://wa.me/${phone}?text=${encoded}`
+                  : `https://wa.me/?text=${encoded}`;
+                const a = document.createElement("a");
+                a.href = waUrl;
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
               };
 
               return (
