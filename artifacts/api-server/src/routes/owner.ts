@@ -343,6 +343,170 @@ router.get("/reports", async (req, res) => {
 
 /* ── Subscription ──────────────────────────────────────────── */
 
+/* Plan config: price in SAR and duration */
+const PLAN_CONFIG: Record<string, { price: number; days: number; label: string }> = {
+  monthly:          { price: 99,   days: 30,  label: "الخطة الشهرية" },
+  yearly:           { price: 799,  days: 365, label: "الخطة السنوية" },
+  chalet_basic:     { price: 149,  days: 30,  label: "شاليه — أساسي" },
+  chalet_pro:       { price: 299,  days: 30,  label: "شاليه — احترافي" },
+  chalet_unlimited: { price: 499,  days: 30,  label: "شاليه — غير محدود" },
+  service_basic:    { price: 99,   days: 30,  label: "خدمات — أساسي" },
+  service_pro:      { price: 249,  days: 30,  label: "خدمات — احترافي" },
+  bundle:           { price: 599,  days: 30,  label: "حزمة شاملة" },
+};
+
+/* GET /owner/plans — return available plans with pricing */
+router.get("/plans", async (_req, res) => {
+  return res.json(
+    Object.entries(PLAN_CONFIG).map(([id, cfg]) => ({ id, ...cfg }))
+  );
+});
+
+/* POST /owner/subscription/initiate — create a Moyasar payment and return payment_id + form data */
+router.post("/subscription/initiate", async (req, res) => {
+  const ownerId = req.user!.id;
+  const { plan } = req.body as { plan: string };
+
+  const cfg = PLAN_CONFIG[plan];
+  if (!cfg) {
+    return res.status(400).json({ error: "خطة غير صالحة" });
+  }
+
+  const secretKey = process.env.MOYASAR_SECRET_KEY;
+  if (!secretKey) {
+    return res.status(500).json({ error: "بوابة الدفع غير مُهيأة — يرجى إضافة MOYASAR_SECRET_KEY" });
+  }
+
+  const amountHalala = cfg.price * 100; // Moyasar uses smallest currency unit
+
+  // Create a Moyasar payment (token-based, no redirect needed — we verify manually)
+  const payload = {
+    amount: amountHalala,
+    currency: "SAR",
+    description: `${cfg.label} — حكاية أناقة`,
+    callback_url: "https://unused.placeholder/callback",
+    source: { type: "token" }, // placeholder; real tokenization happens on client
+    metadata: {
+      owner_id: ownerId,
+      plan,
+    },
+  };
+
+  // We do NOT pre-create the payment on server here.
+  // Instead we return the publishable key and plan info, and let the client use
+  // Moyasar.js form (hosted fields) to submit directly to Moyasar and get a payment_id back.
+  // The client then calls /subscription/confirm with the payment_id.
+
+  return res.json({
+    publishableKey: process.env.MOYASAR_PUBLISHABLE_KEY ?? "",
+    plan,
+    amountHalala,
+    label: cfg.label,
+    days: cfg.days,
+  });
+});
+
+/* POST /owner/subscription/confirm — verify payment with Moyasar and activate subscription */
+router.post("/subscription/confirm", async (req, res) => {
+  const ownerId = req.user!.id;
+  const { paymentId, plan } = req.body as { paymentId: string; plan: string };
+
+  if (!paymentId || !plan) {
+    return res.status(400).json({ error: "بيانات غير مكتملة" });
+  }
+
+  const cfg = PLAN_CONFIG[plan];
+  if (!cfg) {
+    return res.status(400).json({ error: "خطة غير صالحة" });
+  }
+
+  const secretKey = process.env.MOYASAR_SECRET_KEY;
+  if (!secretKey) {
+    return res.status(500).json({ error: "بوابة الدفع غير مُهيأة" });
+  }
+
+  // Fetch payment from Moyasar to verify it
+  let moyasarPayment: any;
+  try {
+    const moyasarRes = await fetch(`https://api.moyasar.com/v1/payments/${paymentId}`, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(secretKey + ":").toString("base64")}`,
+      },
+    });
+    if (!moyasarRes.ok) {
+      const errText = await moyasarRes.text();
+      return res.status(400).json({ error: `فشل التحقق من الدفع: ${errText}` });
+    }
+    moyasarPayment = await moyasarRes.json();
+  } catch (e: any) {
+    return res.status(500).json({ error: `خطأ في الاتصال بموياسار: ${e.message}` });
+  }
+
+  // Verify payment status and amount
+  const expectedAmount = cfg.price * 100;
+  if (moyasarPayment.status !== "paid") {
+    return res.status(400).json({ error: `حالة الدفع: ${moyasarPayment.status} — لم يكتمل` });
+  }
+  if (moyasarPayment.amount !== expectedAmount) {
+    return res.status(400).json({ error: "المبلغ المدفوع لا يتطابق مع الخطة المطلوبة" });
+  }
+
+  // Activate / extend subscription
+  const now = new Date();
+  const [existing] = await db
+    .select()
+    .from(ownerSubscriptionsTable)
+    .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+
+  // If sub exists and is still active, extend from current expiry; otherwise from today
+  const baseDate =
+    existing?.expiresAt && new Date(existing.expiresAt) > now
+      ? new Date(existing.expiresAt)
+      : now;
+
+  const newExpiry = new Date(baseDate.getTime() + cfg.days * 24 * 60 * 60 * 1000);
+
+  if (existing) {
+    await db
+      .update(ownerSubscriptionsTable)
+      .set({
+        plan,
+        status: "active",
+        expiresAt: newExpiry,
+        paymentStatus: "paid",
+      })
+      .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+  } else {
+    await db.insert(ownerSubscriptionsTable).values({
+      ownerId,
+      plan,
+      status: "active",
+      expiresAt: newExpiry,
+      paymentStatus: "paid",
+    });
+  }
+
+  // Return updated subscription + invoice details
+  const [updated] = await db
+    .select()
+    .from(ownerSubscriptionsTable)
+    .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+
+  return res.json({
+    subscription: updated,
+    invoice: {
+      paymentId: moyasarPayment.id,
+      plan,
+      label: cfg.label,
+      amount: cfg.price,
+      currency: "SAR",
+      paidAt: moyasarPayment.created_at ?? now.toISOString(),
+      expiresAt: newExpiry.toISOString(),
+      ownerName: (req.user as any)?.firstName ?? "صاحب الحساب",
+    },
+  });
+});
+
 router.get("/subscription", async (req, res) => {
   const ownerId = req.user!.id;
 

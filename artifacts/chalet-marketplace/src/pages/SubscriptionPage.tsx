@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
+import { useState } from "react";
 import {
   CreditCard, ArrowRight, CheckCircle2, Clock, AlertTriangle,
   Building2, Star, Zap, Crown, Package, RefreshCw, MessageCircle,
@@ -9,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/layout/Navbar";
 import { useAuth } from "@workspace/replit-auth-web";
+import { PaymentModal } from "@/components/PaymentModal";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 async function apiFetch(path: string) {
@@ -114,6 +116,7 @@ function daysUntil(dateStr: string | null): number | null {
 export default function SubscriptionPage() {
   const [, navigate] = useLocation();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [showPayment, setShowPayment] = useState(false);
 
   const { data: sub, isLoading: subLoading } = useQuery<{
     id: number | null; plan: string; status: string; expiresAt: string | null;
@@ -164,6 +167,7 @@ export default function SubscriptionPage() {
   const paymentLabel: Record<string, string> = { paid: "مدفوع ✓", pending: "قيد الدفع", overdue: "متأخر ⚠️" };
 
   return (
+    <>
     <div className="min-h-screen bg-background" dir="rtl">
       <Navbar />
       <div className="container mx-auto px-4 py-10 max-w-3xl">
@@ -333,16 +337,7 @@ export default function SubscriptionPage() {
           <Button
             size="lg"
             className="rounded-2xl font-bold w-full gap-2"
-            onClick={() => {
-              const msg = encodeURIComponent(`مرحباً، أود تجديد أو ترقية اشتراكي في منصة حكاية أناقة.\nالخطة الحالية: ${meta.label}`);
-              const a = document.createElement("a");
-              a.href = `https://wa.me/966500000000?text=${msg}`;
-              a.target = "_blank";
-              a.rel = "noopener noreferrer";
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-            }}
+            onClick={() => setShowPayment(true)}
           >
             <Crown className="w-4 h-4" />
             ترقية / تجديد
@@ -380,6 +375,13 @@ export default function SubscriptionPage() {
 
       </div>
     </div>
+
+    <PaymentModal
+      open={showPayment}
+      onClose={() => setShowPayment(false)}
+      currentPlan={plan}
+    />
+    </>
   );
 }
 
