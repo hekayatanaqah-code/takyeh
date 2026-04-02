@@ -193,6 +193,43 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
 });
 
 /**
+ * GET /storage/objects/uploads/*
+ *
+ * Public read access for processed uploads (insurance proof images, etc.).
+ * No authentication required — these files are safe to share via WhatsApp links.
+ * Must be registered BEFORE the authenticated /storage/objects/* route.
+ */
+router.get("/storage/objects/uploads/*path", async (req: Request, res: Response) => {
+  try {
+    const raw = req.params.path;
+    const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
+    const objectPath = `/objects/uploads/${wildcardPath}`;
+    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+
+    const response = await objectStorageService.downloadObject(objectFile);
+
+    res.status(response.status);
+    response.headers.forEach((value, key) => res.setHeader(key, value));
+    // Cache public uploads for 1 day
+    res.setHeader("Cache-Control", "public, max-age=86400");
+
+    if (response.body) {
+      const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
+      nodeStream.pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "File not found" });
+      return;
+    }
+    req.log.error({ err: error }, "Error serving public upload");
+    res.status(500).json({ error: "Failed to serve file" });
+  }
+});
+
+/**
  * GET /storage/objects/*
  *
  * Serve object entities from PRIVATE_OBJECT_DIR.

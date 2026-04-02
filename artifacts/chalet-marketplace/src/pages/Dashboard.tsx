@@ -1231,19 +1231,26 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     const deducted = Number(b.insuranceDeducted);
                     const refunded = Math.max(0, ins - deducted);
                     const proofImgs2: string[] = (() => { try { return JSON.parse(b.insuranceProofImages ?? "[]"); } catch { return []; } })();
-                    lines.push(``, `✂️ خصم تلفيات من التأمين:`);
-                    lines.push(`• المخصوم: ${fmtAR(deducted)} ر.س`);
-                    if (b.insuranceDeductReason) lines.push(`• السبب: ${b.insuranceDeductReason}`);
-                    if (refunded > 0) lines.push(`• المُرجَع إليك: ${fmtAR(refunded)} ر.س`);
-                    // Include first proof image URL only (keep message short)
+                    lines.push(``, `✂️ تم خصم مبلغ ${fmtAR(deducted)} ر.س من التأمين`);
+                    if (b.insuranceDeductReason) lines.push(`📋 بسبب: ${b.insuranceDeductReason}`);
+                    if (refunded > 0) lines.push(`💚 المبلغ المتبقي المُرجَع إليك: ${fmtAR(refunded)} ر.س`);
+                    else lines.push(`💚 المبلغ المُرجَع: ٠ ر.س`);
+                    // Proof link goes at the very end — assembled after pushing footer
                     if (proofImgs2.length > 0) {
                       const base2 = import.meta.env.BASE_URL.replace(/\/$/, "");
                       const firstUrl = proofImgs2[0].startsWith("http")
                         ? proofImgs2[0]
                         : `${window.location.origin}${base2}${proofImgs2[0]}`;
-                      lines.push(``, `📸 إثبات التلفيات (${proofImgs2.length} صورة):`);
-                      lines.push(firstUrl);
-                      if (proofImgs2.length > 1) lines.push(`(+ ${proofImgs2.length - 1} صور إضافية)`);
+                      lines.push(``, `✨ منصة حكاية أناقة – شاليهات القصيم`);
+                      lines.push(``, `🔗 لمشاهدة صور التوثيق (الإثبات) اضغط هنا:`, firstUrl);
+                      // Skip the shared footer below since we already pushed it
+                      const msg = lines.join("\n");
+                      const encoded = encodeURIComponent(msg);
+                      const waUrl = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+                      const a = document.createElement("a");
+                      a.href = waUrl; a.target = "_blank"; a.rel = "noopener noreferrer";
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                      return;
                     }
                   } else {
                     lines.push(`• التأمين: ${fmtAR(ins)} ر.س ↩ تم الإرجاع بالكامل`);
