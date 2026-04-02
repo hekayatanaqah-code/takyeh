@@ -143,6 +143,11 @@ export default function AddChalet() {
   const [sections, setSections] = useState("");
   const [legalAccepted, setLegalAccepted] = useState(false);
 
+  /* ── Bedrooms / Guests ── */
+  const [hasBedrooms, setHasBedrooms] = useState(false);
+  const [bedroomCount, setBedroomCount] = useState("");
+  const [maxGuestsInput, setMaxGuestsInput] = useState("");
+
   /* ── Time-slot pricing ── */
   const [slotMorning, setSlotMorning] = useState(true);
   const [slotEvening, setSlotEvening] = useState(true);
@@ -150,6 +155,14 @@ export default function AddChalet() {
   const [priceMorning, setPriceMorning] = useState("");
   const [priceEvening, setPriceEvening] = useState("");
   const [priceFullDay, setPriceFullDay] = useState("");
+
+  /* ── Per-period check-in / check-out times ── */
+  const [morningCheckIn, setMorningCheckIn] = useState("");
+  const [morningCheckOut, setMorningCheckOut] = useState("");
+  const [eveningCheckIn, setEveningCheckIn] = useState("");
+  const [eveningCheckOut, setEveningCheckOut] = useState("");
+  const [fullDayCheckIn, setFullDayCheckIn] = useState("");
+  const [fullDayCheckOut, setFullDayCheckOut] = useState("");
 
   /* ── Weekday / Weekend pricing ── */
   const [priceWeekday, setPriceWeekday] = useState("");
@@ -311,12 +324,20 @@ export default function AddChalet() {
           descriptionAr: form.descriptionAr,
           termsAndConditions: form.termsAndConditions || null,
           pricePerNight: 0,
+          maxGuests: maxGuestsInput ? Number(maxGuestsInput) : null,
+          bedrooms: hasBedrooms && bedroomCount ? Number(bedroomCount) : null,
           priceMorning: slotMorning && priceMorning ? Number(priceMorning) : null,
           priceEvening: slotEvening && priceEvening ? Number(priceEvening) : null,
           priceFullDay: slotFullDay && priceFullDay ? Number(priceFullDay) : null,
           slotMorning,
           slotEvening,
           slotFullDay,
+          morningCheckIn: slotMorning && morningCheckIn ? morningCheckIn : null,
+          morningCheckOut: slotMorning && morningCheckOut ? morningCheckOut : null,
+          eveningCheckIn: slotEvening && eveningCheckIn ? eveningCheckIn : null,
+          eveningCheckOut: slotEvening && eveningCheckOut ? eveningCheckOut : null,
+          fullDayCheckIn: slotFullDay && fullDayCheckIn ? fullDayCheckIn : null,
+          fullDayCheckOut: slotFullDay && fullDayCheckOut ? fullDayCheckOut : null,
           priceWeekday: priceWeekday ? Number(priceWeekday) : null,
           priceWeekend: priceWeekend ? Number(priceWeekend) : null,
           seasonalDisclaimer,
@@ -346,6 +367,12 @@ export default function AddChalet() {
     setLegalAccepted(false);
     setVideo(null);
     setVideoError(null);
+    setHasBedrooms(false);
+    setBedroomCount("");
+    setMaxGuestsInput("");
+    setMorningCheckIn(""); setMorningCheckOut("");
+    setEveningCheckIn(""); setEveningCheckOut("");
+    setFullDayCheckIn(""); setFullDayCheckOut("");
   };
 
   const canAddMore = photos.length < MAX_PHOTOS && !isUploading;
@@ -528,6 +555,61 @@ export default function AddChalet() {
                       </div>
                     </div>
 
+                    {/* ── Bedrooms & Guests ── */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Bedrooms toggle */}
+                      <div className="rounded-xl border border-border p-3.5 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-medium">هل يوجد غرف نوم؟</Label>
+                          <button
+                            type="button"
+                            onClick={() => { setHasBedrooms(!hasBedrooms); if (hasBedrooms) setBedroomCount(""); }}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${hasBedrooms ? "bg-primary" : "bg-muted"}`}
+                          >
+                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow ${hasBedrooms ? "translate-x-4" : "translate-x-1"}`} />
+                          </button>
+                        </div>
+                        {hasBedrooms && (
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              min="1"
+                              max="30"
+                              placeholder="عدد الغرف"
+                              value={bedroomCount}
+                              onChange={(e) => setBedroomCount(e.target.value)}
+                              className="h-10 text-sm"
+                              dir="rtl"
+                            />
+                          </div>
+                        )}
+                        {!hasBedrooms && (
+                          <p className="text-xs text-muted-foreground">نظام مفتوح / لا يوجد</p>
+                        )}
+                      </div>
+
+                      {/* Max guests */}
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">
+                          عدد الضيوف
+                          <span className="text-muted-foreground font-normal text-xs me-1"> (اختياري)</span>
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            min="1"
+                            max="200"
+                            placeholder="مثال: 20"
+                            value={maxGuestsInput}
+                            onChange={(e) => setMaxGuestsInput(e.target.value)}
+                            className="h-12 text-base"
+                            dir="rtl"
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">إذا تُرك فارغاً لن يظهر للضيوف</p>
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="descriptionAr" className="text-base font-medium">
                         وصف الشاليه <span className="text-destructive">*</span>
@@ -681,7 +763,7 @@ export default function AddChalet() {
                       <p className="text-xs text-muted-foreground -mt-1">فعّل الفترات التي تتيحها وأدخل السعر الابتدائي (يبدأ من) لكل فترة (اختياري)</p>
 
                       {/* Morning */}
-                      <div className="rounded-xl border p-3 space-y-2">
+                      <div className="rounded-xl border p-3 space-y-2.5">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium flex items-center gap-1.5">🌅 فترة صباحية</span>
                           <button
@@ -693,23 +775,49 @@ export default function AddChalet() {
                           </button>
                         </div>
                         {slotMorning && (
-                          <div className="relative">
-                            <Input
-                              type="number"
-                              min="0"
-                              placeholder="يبدأ من ... ر.س (اختياري)"
-                              value={priceMorning}
-                              onChange={(e) => setPriceMorning(e.target.value)}
-                              className="h-10 text-sm pl-12"
-                              dir="rtl"
-                            />
-                            <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
-                          </div>
+                          <>
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                min="0"
+                                placeholder="يبدأ من ... ر.س (اختياري)"
+                                value={priceMorning}
+                                onChange={(e) => setPriceMorning(e.target.value)}
+                                className="h-10 text-sm pl-12"
+                                dir="rtl"
+                              />
+                              <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground">وقت الدخول</p>
+                                <Input
+                                  type="text"
+                                  placeholder="مثال: ٢:٠٠ م"
+                                  value={morningCheckIn}
+                                  onChange={(e) => setMorningCheckIn(e.target.value)}
+                                  className="h-9 text-xs"
+                                  dir="rtl"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground">وقت الخروج</p>
+                                <Input
+                                  type="text"
+                                  placeholder="مثال: ١٠:٠٠ ص"
+                                  value={morningCheckOut}
+                                  onChange={(e) => setMorningCheckOut(e.target.value)}
+                                  className="h-9 text-xs"
+                                  dir="rtl"
+                                />
+                              </div>
+                            </div>
+                          </>
                         )}
                       </div>
 
                       {/* Evening */}
-                      <div className="rounded-xl border p-3 space-y-2">
+                      <div className="rounded-xl border p-3 space-y-2.5">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium flex items-center gap-1.5">🌙 فترة مسائية</span>
                           <button
@@ -721,23 +829,49 @@ export default function AddChalet() {
                           </button>
                         </div>
                         {slotEvening && (
-                          <div className="relative">
-                            <Input
-                              type="number"
-                              min="0"
-                              placeholder="يبدأ من ... ر.س (اختياري)"
-                              value={priceEvening}
-                              onChange={(e) => setPriceEvening(e.target.value)}
-                              className="h-10 text-sm pl-12"
-                              dir="rtl"
-                            />
-                            <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
-                          </div>
+                          <>
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                min="0"
+                                placeholder="يبدأ من ... ر.س (اختياري)"
+                                value={priceEvening}
+                                onChange={(e) => setPriceEvening(e.target.value)}
+                                className="h-10 text-sm pl-12"
+                                dir="rtl"
+                              />
+                              <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground">وقت الدخول</p>
+                                <Input
+                                  type="text"
+                                  placeholder="مثال: ٤:٠٠ م"
+                                  value={eveningCheckIn}
+                                  onChange={(e) => setEveningCheckIn(e.target.value)}
+                                  className="h-9 text-xs"
+                                  dir="rtl"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground">وقت الخروج</p>
+                                <Input
+                                  type="text"
+                                  placeholder="مثال: ١٢:٠٠ ص"
+                                  value={eveningCheckOut}
+                                  onChange={(e) => setEveningCheckOut(e.target.value)}
+                                  className="h-9 text-xs"
+                                  dir="rtl"
+                                />
+                              </div>
+                            </div>
+                          </>
                         )}
                       </div>
 
                       {/* Full day */}
-                      <div className="rounded-xl border p-3 space-y-2">
+                      <div className="rounded-xl border p-3 space-y-2.5">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium flex items-center gap-1.5">☀️ يوم كامل</span>
                           <button
@@ -749,18 +883,44 @@ export default function AddChalet() {
                           </button>
                         </div>
                         {slotFullDay && (
-                          <div className="relative">
-                            <Input
-                              type="number"
-                              min="0"
-                              placeholder="يبدأ من ... ر.س (اختياري)"
-                              value={priceFullDay}
-                              onChange={(e) => setPriceFullDay(e.target.value)}
-                              className="h-10 text-sm pl-12"
-                              dir="rtl"
-                            />
-                            <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
-                          </div>
+                          <>
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                min="0"
+                                placeholder="يبدأ من ... ر.س (اختياري)"
+                                value={priceFullDay}
+                                onChange={(e) => setPriceFullDay(e.target.value)}
+                                className="h-10 text-sm pl-12"
+                                dir="rtl"
+                              />
+                              <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground">وقت الدخول</p>
+                                <Input
+                                  type="text"
+                                  placeholder="مثال: ٢:٠٠ م"
+                                  value={fullDayCheckIn}
+                                  onChange={(e) => setFullDayCheckIn(e.target.value)}
+                                  className="h-9 text-xs"
+                                  dir="rtl"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-xs text-muted-foreground">وقت الخروج</p>
+                                <Input
+                                  type="text"
+                                  placeholder="مثال: ١٢:٠٠ ص"
+                                  value={fullDayCheckOut}
+                                  onChange={(e) => setFullDayCheckOut(e.target.value)}
+                                  className="h-9 text-xs"
+                                  dir="rtl"
+                                />
+                              </div>
+                            </div>
+                          </>
                         )}
                       </div>
                     </div>

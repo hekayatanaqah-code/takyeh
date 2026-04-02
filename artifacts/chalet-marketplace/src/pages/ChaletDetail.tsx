@@ -479,7 +479,7 @@ export default function ChaletDetail() {
                     {selectedDate && (
                       <div className="px-3 pb-2 -mt-0.5">
                         <span className="text-xs font-semibold text-primary">
-                          {arabicDay} — {hijriDate} هـ
+                          {arabicDay} — {hijriDate} هـ ({formattedDate} م)
                         </span>
                       </div>
                     )}
@@ -543,8 +543,15 @@ export default function ChaletDetail() {
                     <span className="font-semibold">يُحدَّد مع المالك</span>
                   </div>
                   {(() => {
-                    const cin = (chalet as any).checkInTime as string | null | undefined;
-                    const cout = (chalet as any).checkOutTime as string | null | undefined;
+                    const c = chalet as any;
+                    const periodMap: Record<string, { cin: string | null; cout: string | null }> = {
+                      morning: { cin: c.morningCheckIn ?? null, cout: c.morningCheckOut ?? null },
+                      evening: { cin: c.eveningCheckIn ?? null, cout: c.eveningCheckOut ?? null },
+                      full_day: { cin: c.fullDayCheckIn ?? null, cout: c.fullDayCheckOut ?? null },
+                    };
+                    const perPeriod = selectedPeriod ? periodMap[selectedPeriod] : null;
+                    const cin = (perPeriod?.cin) || (c.checkInTime as string | null | undefined) || null;
+                    const cout = (perPeriod?.cout) || (c.checkOutTime as string | null | undefined) || null;
                     if (cin || cout) {
                       return (
                         <>
@@ -563,12 +570,16 @@ export default function ChaletDetail() {
                         </>
                       );
                     }
-                    return (
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-muted-foreground">أوقات الدخول والخروج</span>
-                        <span className="font-semibold">مرنة بالاتفاق</span>
-                      </div>
-                    );
+                    const hasAnyTimes = Object.values(periodMap).some(v => v.cin || v.cout);
+                    if (!hasAnyTimes) {
+                      return (
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">أوقات الدخول والخروج</span>
+                          <span className="font-semibold">مرنة بالاتفاق</span>
+                        </div>
+                      );
+                    }
+                    return null;
                   })()}
                 </div>
 

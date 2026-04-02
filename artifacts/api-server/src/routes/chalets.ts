@@ -100,6 +100,12 @@ router.get("/", async (req, res) => {
     termsAndConditions: row.termsAndConditions ?? null,
     checkInTime: row.checkInTime ?? null,
     checkOutTime: row.checkOutTime ?? null,
+    morningCheckIn: row.morningCheckIn ?? null,
+    morningCheckOut: row.morningCheckOut ?? null,
+    eveningCheckIn: row.eveningCheckIn ?? null,
+    eveningCheckOut: row.eveningCheckOut ?? null,
+    fullDayCheckIn: row.fullDayCheckIn ?? null,
+    fullDayCheckOut: row.fullDayCheckOut ?? null,
   }));
 
   res.json(data);
@@ -160,6 +166,12 @@ router.get("/:id", async (req, res) => {
     termsAndConditions: row.termsAndConditions ?? null,
     checkInTime: row.checkInTime ?? null,
     checkOutTime: row.checkOutTime ?? null,
+    morningCheckIn: row.morningCheckIn ?? null,
+    morningCheckOut: row.morningCheckOut ?? null,
+    eveningCheckIn: row.eveningCheckIn ?? null,
+    eveningCheckOut: row.eveningCheckOut ?? null,
+    fullDayCheckIn: row.fullDayCheckIn ?? null,
+    fullDayCheckOut: row.fullDayCheckOut ?? null,
   };
 
   res.json(data);

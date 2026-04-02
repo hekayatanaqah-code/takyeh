@@ -162,6 +162,12 @@ router.patch("/chalets/:chaletId/times", async (req, res) => {
   const body = z.object({
     checkInTime: z.string().nullable().optional(),
     checkOutTime: z.string().nullable().optional(),
+    morningCheckIn: z.string().nullable().optional(),
+    morningCheckOut: z.string().nullable().optional(),
+    eveningCheckIn: z.string().nullable().optional(),
+    eveningCheckOut: z.string().nullable().optional(),
+    fullDayCheckIn: z.string().nullable().optional(),
+    fullDayCheckOut: z.string().nullable().optional(),
   }).safeParse(req.body);
 
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
@@ -186,6 +192,12 @@ router.patch("/chalets/:chaletId/times", async (req, res) => {
     .set({
       checkInTime: body.data.checkInTime ?? null,
       checkOutTime: body.data.checkOutTime ?? null,
+      morningCheckIn: body.data.morningCheckIn ?? null,
+      morningCheckOut: body.data.morningCheckOut ?? null,
+      eveningCheckIn: body.data.eveningCheckIn ?? null,
+      eveningCheckOut: body.data.eveningCheckOut ?? null,
+      fullDayCheckIn: body.data.fullDayCheckIn ?? null,
+      fullDayCheckOut: body.data.fullDayCheckOut ?? null,
     })
     .where(eq(chaletsTable.id, chaletId))
     .returning();

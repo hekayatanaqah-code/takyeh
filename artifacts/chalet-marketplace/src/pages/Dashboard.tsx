@@ -1058,8 +1058,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
 
   const activeChalet = ownerChalets.find((c: any) => c.id === activeChaletId) as any | undefined;
-  const [checkInTime, setCheckInTime] = useState<string>("");
-  const [checkOutTime, setCheckOutTime] = useState<string>("");
+  const [morningCheckIn, setMorningCheckIn] = useState<string>("");
+  const [morningCheckOut, setMorningCheckOut] = useState<string>("");
+  const [eveningCheckIn, setEveningCheckIn] = useState<string>("");
+  const [eveningCheckOut, setEveningCheckOut] = useState<string>("");
+  const [fullDayCheckIn, setFullDayCheckIn] = useState<string>("");
+  const [fullDayCheckOut, setFullDayCheckOut] = useState<string>("");
   const [savingTimes, setSavingTimes] = useState(false);
   const [timesSaved, setTimesSaved] = useState(false);
 
@@ -1067,8 +1071,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const prevChaletRef = useRef<number | null>(null);
   if (activeChaletId !== prevChaletRef.current) {
     prevChaletRef.current = activeChaletId;
-    setCheckInTime(activeChalet?.checkInTime ?? "");
-    setCheckOutTime(activeChalet?.checkOutTime ?? "");
+    setMorningCheckIn(activeChalet?.morningCheckIn ?? "");
+    setMorningCheckOut(activeChalet?.morningCheckOut ?? "");
+    setEveningCheckIn(activeChalet?.eveningCheckIn ?? "");
+    setEveningCheckOut(activeChalet?.eveningCheckOut ?? "");
+    setFullDayCheckIn(activeChalet?.fullDayCheckIn ?? "");
+    setFullDayCheckOut(activeChalet?.fullDayCheckOut ?? "");
     setTimesSaved(false);
   }
 
@@ -1079,8 +1087,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       await apiFetch(`/owner/chalets/${activeChaletId}/times`, {
         method: "PATCH",
         body: JSON.stringify({
-          checkInTime: checkInTime.trim() || null,
-          checkOutTime: checkOutTime.trim() || null,
+          morningCheckIn: morningCheckIn.trim() || null,
+          morningCheckOut: morningCheckOut.trim() || null,
+          eveningCheckIn: eveningCheckIn.trim() || null,
+          eveningCheckOut: eveningCheckOut.trim() || null,
+          fullDayCheckIn: fullDayCheckIn.trim() || null,
+          fullDayCheckOut: fullDayCheckOut.trim() || null,
         }),
       });
       await qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
@@ -1205,38 +1217,103 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
             </div>
             <p className="text-xs text-muted-foreground mt-2">انقر على أي تاريخ لضبط الفترات المحجوزة.</p>
 
-            {/* Check-in / Check-out times */}
+            {/* Check-in / Check-out times — per period */}
             {activeChaletId && (
               <div className="mt-5 pt-5 border-t border-border/50">
-                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                <h4 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
                   <Clock className="w-4 h-4 text-primary" />
                   أوقات الدخول والخروج
                 </h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">وقت الدخول</label>
-                    <input
-                      type="text"
-                      value={checkInTime}
-                      onChange={(e) => setCheckInTime(e.target.value)}
-                      placeholder="مثال: ٢:٠٠ م"
-                      className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      dir="rtl"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">وقت الخروج</label>
-                    <input
-                      type="text"
-                      value={checkOutTime}
-                      onChange={(e) => setCheckOutTime(e.target.value)}
-                      placeholder="مثال: ١٢:٠٠ م"
-                      className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      dir="rtl"
-                    />
+                <p className="text-xs text-muted-foreground mb-3">حدد أوقات الدخول والخروج لكل فترة — تظهر للضيوف عند الاستعراض</p>
+
+                {/* Morning */}
+                <div className="rounded-xl border border-border p-3 space-y-2 mb-2">
+                  <p className="text-xs font-medium">🌅 الفترة الصباحية</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">وقت الدخول</label>
+                      <input
+                        type="text"
+                        value={morningCheckIn}
+                        onChange={(e) => setMorningCheckIn(e.target.value)}
+                        placeholder="مثال: ٢:٠٠ م"
+                        className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        dir="rtl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">وقت الخروج</label>
+                      <input
+                        type="text"
+                        value={morningCheckOut}
+                        onChange={(e) => setMorningCheckOut(e.target.value)}
+                        placeholder="مثال: ١٠:٠٠ ص"
+                        className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        dir="rtl"
+                      />
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 mt-3">
+
+                {/* Evening */}
+                <div className="rounded-xl border border-border p-3 space-y-2 mb-2">
+                  <p className="text-xs font-medium">🌙 الفترة المسائية</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">وقت الدخول</label>
+                      <input
+                        type="text"
+                        value={eveningCheckIn}
+                        onChange={(e) => setEveningCheckIn(e.target.value)}
+                        placeholder="مثال: ٤:٠٠ م"
+                        className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        dir="rtl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">وقت الخروج</label>
+                      <input
+                        type="text"
+                        value={eveningCheckOut}
+                        onChange={(e) => setEveningCheckOut(e.target.value)}
+                        placeholder="مثال: ١٢:٠٠ ص"
+                        className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        dir="rtl"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Full day */}
+                <div className="rounded-xl border border-border p-3 space-y-2 mb-3">
+                  <p className="text-xs font-medium">☀️ يوم كامل</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">وقت الدخول</label>
+                      <input
+                        type="text"
+                        value={fullDayCheckIn}
+                        onChange={(e) => setFullDayCheckIn(e.target.value)}
+                        placeholder="مثال: ٢:٠٠ م"
+                        className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        dir="rtl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">وقت الخروج</label>
+                      <input
+                        type="text"
+                        value={fullDayCheckOut}
+                        onChange={(e) => setFullDayCheckOut(e.target.value)}
+                        placeholder="مثال: ١٢:٠٠ ص"
+                        className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        dir="rtl"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
                   <Button
                     size="sm"
                     onClick={saveTimes}
@@ -1253,7 +1330,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">تظهر هذه الأوقات للضيوف في صفحة الشاليه.</p>
               </div>
             )}
           </>
