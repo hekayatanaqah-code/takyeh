@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, ExternalLink, Instagram, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, ExternalLink, Instagram, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -2595,7 +2595,408 @@ function ExpenseCategoriesTab() {
   );
 }
 
-/* ── Main Admin Page ──────────────────────────── */
+/* ── Plans Manager Tab ───────────────────────────────────── */
+interface Plan {
+  id: number;
+  slug: string;
+  nameAr: string;
+  price: string;
+  durationDays: number;
+  trialDays: number;
+  features: string[];
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
+const BLANK_PLAN = {
+  slug: "",
+  nameAr: "",
+  price: "",
+  durationDays: 30,
+  trialDays: 0,
+  features: [] as string[],
+  isActive: true,
+  sortOrder: 0,
+};
+
+async function adminFetch(path: string, opts?: RequestInit) {
+  return fetch(`${API}/admin${path}`, { credentials: "include", ...opts });
+}
+
+function PlansTab() {
+  const qc = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [form, setForm] = useState({ ...BLANK_PLAN });
+  const [featuresInput, setFeaturesInput] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const { data: plans = [], isLoading } = useQuery<Plan[]>({
+    queryKey: ["admin", "plans"],
+    queryFn: async () => {
+      const r = await adminFetch("/plans");
+      if (!r.ok) throw new Error("فشل تحميل الخطط");
+      return r.json();
+    },
+  });
+
+  function openAdd() {
+    setEditId(null);
+    setForm({ ...BLANK_PLAN, sortOrder: plans.length });
+    setFeaturesInput("");
+    setError(null);
+    setShowForm(true);
+  }
+
+  function openEdit(p: Plan) {
+    setEditId(p.id);
+    setForm({
+      slug: p.slug,
+      nameAr: p.nameAr,
+      price: String(Number(p.price)),
+      durationDays: p.durationDays,
+      trialDays: p.trialDays,
+      features: p.features ?? [],
+      isActive: p.isActive,
+      sortOrder: p.sortOrder,
+    });
+    setFeaturesInput((p.features ?? []).join("\n"));
+    setError(null);
+    setShowForm(true);
+  }
+
+  async function handleSave() {
+    setError(null);
+    setSaving(true);
+    try {
+      const features = featuresInput
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+      const body = {
+        ...form,
+        price: Number(form.price),
+        durationDays: Number(form.durationDays),
+        trialDays: Number(form.trialDays),
+        sortOrder: Number(form.sortOrder),
+        features,
+      };
+      const r = editId
+        ? await adminFetch(`/plans/${editId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          })
+        : await adminFetch("/plans", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+      if (!r.ok) {
+        const d = await r.json();
+        setError(d.error ?? "فشل الحفظ");
+        return;
+      }
+      await qc.invalidateQueries({ queryKey: ["admin", "plans"] });
+      setShowForm(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    await adminFetch(`/plans/${id}`, { method: "DELETE" });
+    await qc.invalidateQueries({ queryKey: ["admin", "plans"] });
+    setDeleteId(null);
+  }
+
+  async function toggleActive(p: Plan) {
+    await adminFetch(`/plans/${p.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !p.isActive }),
+    });
+    await qc.invalidateQueries({ queryKey: ["admin", "plans"] });
+  }
+
+  const deletePlan = plans.find((p) => p.id === deleteId);
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-amber-400" />
+            إدارة خطط الاشتراك
+          </h2>
+          <p className="text-slate-400 text-sm mt-1">
+            الخطط المُفعّلة ستظهر للملاك في صفحة الاشتراك وتُستخدم في الدفع
+          </p>
+        </div>
+        <Button
+          onClick={openAdd}
+          className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          إضافة خطة
+        </Button>
+      </div>
+
+      {/* Plans list */}
+      {isLoading ? (
+        <div className="flex justify-center py-16">
+          <Loader2 className="animate-spin text-amber-400 w-8 h-8" />
+        </div>
+      ) : plans.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">
+          <CreditCard className="w-12 h-12 mx-auto mb-4 opacity-30" />
+          <p className="font-semibold mb-1">لا توجد خطط بعد</p>
+          <p className="text-sm">أضف خطة اشتراك أولى لتبدأ</p>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {plans.map((p) => (
+            <div
+              key={p.id}
+              className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex items-start gap-4"
+            >
+              {/* Active toggle */}
+              <button
+                onClick={() => toggleActive(p)}
+                className="mt-0.5 shrink-0"
+                title={p.isActive ? "إلغاء التفعيل" : "تفعيل"}
+              >
+                {p.isActive ? (
+                  <ToggleRight className="w-7 h-7 text-green-400" />
+                ) : (
+                  <ToggleLeft className="w-7 h-7 text-slate-500" />
+                )}
+              </button>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span className="font-bold text-white text-base">{p.nameAr}</span>
+                  <span className="text-xs font-mono text-slate-400 bg-slate-700 px-2 py-0.5 rounded">
+                    {p.slug}
+                  </span>
+                  {p.isActive ? (
+                    <span className="text-xs font-semibold text-green-400 bg-green-900/30 px-2 py-0.5 rounded-full">مُفعّل</span>
+                  ) : (
+                    <span className="text-xs font-semibold text-slate-500 bg-slate-700 px-2 py-0.5 rounded-full">معطّل</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-4 text-sm text-slate-300">
+                  <span>
+                    <span className="text-amber-400 font-bold">{Number(p.price).toLocaleString("ar-SA")}</span>
+                    {" "}ر.س
+                  </span>
+                  <span>مدة: <span className="text-white font-semibold">{p.durationDays}</span> يوم</span>
+                  {p.trialDays > 0 && (
+                    <span className="text-blue-400">تجريبي: {p.trialDays} يوم</span>
+                  )}
+                  <span className="text-slate-500">ترتيب: {p.sortOrder}</span>
+                </div>
+                {(p.features ?? []).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(p.features ?? []).slice(0, 4).map((f, i) => (
+                      <span key={i} className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">
+                        {f}
+                      </span>
+                    ))}
+                    {(p.features ?? []).length > 4 && (
+                      <span className="text-xs text-slate-500">+{(p.features ?? []).length - 4} أخرى</span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => openEdit(p)}
+                  className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+                  title="تعديل"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setDeleteId(p.id)}
+                  className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                  title="حذف"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add/Edit Form Dialog */}
+      <Dialog open={showForm} onOpenChange={(o) => { if (!o) setShowForm(false); }}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-amber-400" />
+              {editId ? "تعديل الخطة" : "إضافة خطة جديدة"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">اسم الخطة *</label>
+                <Input
+                  placeholder="مثال: الخطة الذهبية"
+                  value={form.nameAr}
+                  onChange={(e) => setForm({ ...form, nameAr: e.target.value })}
+                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">المعرّف (slug) *</label>
+                <Input
+                  placeholder="مثال: gold_plan"
+                  value={form.slug}
+                  onChange={(e) => setForm({ ...form, slug: e.target.value })}
+                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 font-mono"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">السعر (ر.س) *</label>
+                <Input
+                  type="number"
+                  placeholder="99"
+                  value={form.price}
+                  onChange={(e) => setForm({ ...form, price: e.target.value })}
+                  className="bg-slate-800 border-slate-600 text-white"
+                  dir="ltr"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">المدة (أيام) *</label>
+                <Input
+                  type="number"
+                  placeholder="30"
+                  value={form.durationDays}
+                  onChange={(e) => setForm({ ...form, durationDays: Number(e.target.value) })}
+                  className="bg-slate-800 border-slate-600 text-white"
+                  dir="ltr"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">أيام تجريبية</label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={form.trialDays}
+                  onChange={(e) => setForm({ ...form, trialDays: Number(e.target.value) })}
+                  className="bg-slate-800 border-slate-600 text-white"
+                  dir="ltr"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">ترتيب العرض</label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={form.sortOrder}
+                  onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })}
+                  className="bg-slate-800 border-slate-600 text-white"
+                  dir="ltr"
+                />
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 cursor-pointer pb-2">
+                  <input
+                    type="checkbox"
+                    checked={form.isActive}
+                    onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                    className="w-4 h-4 accent-amber-500"
+                  />
+                  <span className="text-sm text-slate-300">تفعيل الخطة</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">
+                المميزات (سطر لكل ميزة)
+              </label>
+              <Textarea
+                placeholder={"شاليه واحد\nإدارة الحجوزات\nتقارير شهرية"}
+                value={featuresInput}
+                onChange={(e) => setFeaturesInput(e.target.value)}
+                className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 min-h-[100px] resize-none"
+                rows={5}
+              />
+            </div>
+
+            {error && (
+              <p className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <Button
+                onClick={handleSave}
+                disabled={saving || !form.nameAr || !form.slug || !form.price}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white gap-2"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {editId ? "حفظ التعديلات" : "إضافة الخطة"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowForm(false)}
+                className="border-slate-600 text-slate-300 hover:bg-slate-800 gap-2"
+              >
+                <X className="w-4 h-4" />
+                إلغاء
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm */}
+      <AlertDialog open={deleteId !== null} onOpenChange={(o) => { if (!o) setDeleteId(null); }}>
+        <AlertDialogContent className="bg-slate-900 border-slate-700 text-white" dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">حذف الخطة</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400">
+              هل تريد حذف خطة <span className="text-white font-semibold">"{deletePlan?.nameAr}"</span> بشكل نهائي؟
+              <br />لن يؤثر الحذف على الاشتراكات الحالية.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-slate-700 text-white border-0 hover:bg-slate-600">إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => deleteId && handleDelete(deleteId)}
+            >
+              حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 const TABS = [
   { id: "submissions",         label: "الطلبات",               icon: Settings },
   { id: "chaletVerify",        label: "التوثيق",                icon: ShieldCheck },
@@ -2607,6 +3008,7 @@ const TABS = [
   { id: "amenities",           label: "المرافق",                icon: Tag },
   { id: "categories",          label: "فئات الشاليهات",        icon: Tag },
   { id: "owners",              label: "الملاك",                 icon: Users },
+  { id: "plans",               label: "خطط الاشتراك",          icon: CreditCard },
   { id: "siteSettings",        label: "إعدادات الموقع",        icon: Settings },
 ] as const;
 
@@ -2748,6 +3150,7 @@ export default function Admin() {
         {activeTab === "amenities"           && <AmenitiesTab />}
         {activeTab === "categories"          && <CategoriesTab />}
         {activeTab === "owners"              && <OwnersTab />}
+        {activeTab === "plans"               && <PlansTab />}
         {activeTab === "siteSettings"        && <SettingsTab />}
       </main>
     </div>

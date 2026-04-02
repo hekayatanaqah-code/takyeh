@@ -251,6 +251,21 @@ export const ownerSubscriptionsTable = pgTable("owner_subscriptions", {
 });
 export type OwnerSubscription = typeof ownerSubscriptionsTable.$inferSelect;
 
+/* ── Subscription Plans (admin-managed) ─────────────────── */
+export const subscriptionPlansTable = pgTable("subscription_plans", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  nameAr: text("name_ar").notNull(),
+  price: numeric("price", { precision: 10, scale: 2 }).notNull(),
+  durationDays: integer("duration_days").notNull(),
+  trialDays: integer("trial_days").notNull().default(0),
+  features: jsonb("features").$type<string[]>().notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type SubscriptionPlan = typeof subscriptionPlansTable.$inferSelect;
+
 /* ── Expense Management ────────────────────────────────────── */
 
 /** Legacy enum — kept so existing imports don't break; no longer used as column type. */

@@ -29,7 +29,7 @@ const PLAN_META: Record<string, PlanMeta> = {
   trial: {
     label: "تجريبي",
     icon: <Clock className="w-5 h-5" />,
-    color: "from-blue-500 to-blue-400",
+    color: "from-stone-500 to-stone-400",
     features: [
       "شاليه واحد",
       "خدمة تقديم واحدة",
@@ -40,7 +40,7 @@ const PLAN_META: Record<string, PlanMeta> = {
   monthly: {
     label: "شهري",
     icon: <Package className="w-5 h-5" />,
-    color: "from-indigo-500 to-indigo-400",
+    color: "from-amber-700 to-amber-500",
     features: [
       "شاليه واحد",
       "خدمة تقديم واحدة",
@@ -52,7 +52,7 @@ const PLAN_META: Record<string, PlanMeta> = {
   yearly: {
     label: "سنوي",
     icon: <Crown className="w-5 h-5" />,
-    color: "from-amber-500 to-amber-400",
+    color: "from-amber-600 to-yellow-500",
     features: [
       "حتى 3 شاليهات",
       "حتى 3 خدمات",
@@ -65,37 +65,37 @@ const PLAN_META: Record<string, PlanMeta> = {
   chalet_basic: {
     label: "شاليه — أساسي",
     icon: <Building2 className="w-5 h-5" />,
-    color: "from-green-500 to-green-400",
+    color: "from-stone-600 to-amber-500",
     features: ["شاليه واحد", "إدارة الحجوزات", "تقارير أساسية"],
   },
   chalet_pro: {
     label: "شاليه — احترافي",
     icon: <Zap className="w-5 h-5" />,
-    color: "from-violet-500 to-violet-400",
+    color: "from-amber-700 to-orange-500",
     features: ["حتى 5 شاليهات", "إدارة مالية كاملة", "تقارير تفصيلية", "دعم أولوية"],
   },
   chalet_unlimited: {
     label: "شاليه — غير محدود",
     icon: <Crown className="w-5 h-5" />,
-    color: "from-rose-500 to-rose-400",
+    color: "from-amber-800 to-amber-600",
     features: ["شاليهات غير محدودة", "إدارة مالية كاملة", "تقارير تفصيلية", "دعم أولوية VIP"],
   },
   service_basic: {
     label: "خدمات — أساسي",
     icon: <Star className="w-5 h-5" />,
-    color: "from-teal-500 to-teal-400",
+    color: "from-stone-500 to-stone-400",
     features: ["خدمة واحدة", "ملف مزود الخدمة", "إدارة أساسية"],
   },
   service_pro: {
     label: "خدمات — احترافي",
     icon: <Zap className="w-5 h-5" />,
-    color: "from-cyan-500 to-cyan-400",
+    color: "from-stone-600 to-amber-600",
     features: ["خدمات غير محدودة", "ملف موسع", "إدارة كاملة", "دعم أولوية"],
   },
   bundle: {
     label: "حزمة شاملة",
     icon: <Crown className="w-5 h-5" />,
-    color: "from-yellow-500 to-orange-400",
+    color: "from-amber-600 to-orange-500",
     features: ["شاليهات + خدمات غير محدودة", "إدارة مالية كاملة", "تقارير VIP", "دعم أولوية قصوى"],
   },
 };
@@ -167,10 +167,9 @@ export default function SubscriptionPage() {
   const paymentLabel: Record<string, string> = { paid: "مدفوع ✓", pending: "قيد الدفع", overdue: "متأخر ⚠️" };
 
   return (
-    <>
     <div className="min-h-screen bg-background" dir="rtl">
       <Navbar />
-      <div className="container mx-auto px-4 py-10 max-w-3xl">
+      <div className="container mx-auto px-4 py-8 max-w-3xl pb-16">
 
         {/* Back */}
         <button
@@ -374,14 +373,13 @@ export default function SubscriptionPage() {
         </motion.div>
 
       </div>
-    </div>
 
-    <PaymentModal
-      open={showPayment}
-      onClose={() => setShowPayment(false)}
-      currentPlan={plan}
-    />
-    </>
+      <PaymentModal
+        open={showPayment}
+        onClose={() => setShowPayment(false)}
+        currentPlan={plan}
+      />
+    </div>
   );
 }
 

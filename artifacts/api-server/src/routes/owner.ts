@@ -10,6 +10,7 @@ import {
   ownerStaffTable,
   salaryLogsTable,
   ownerReportArchiveTable,
+  subscriptionPlansTable,
 } from "@workspace/db/schema";
 import { eq, and, inArray, gte, lte, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -355,8 +356,29 @@ const PLAN_CONFIG: Record<string, { price: number; days: number; label: string }
   bundle:           { price: 599,  days: 30,  label: "حزمة شاملة" },
 };
 
-/* GET /owner/plans — return available plans with pricing */
+/* GET /owner/plans — return available plans (DB-first, fallback to hardcoded) */
 router.get("/plans", async (_req, res) => {
+  const dbPlans = await db
+    .select()
+    .from(subscriptionPlansTable)
+    .orderBy(subscriptionPlansTable.sortOrder, subscriptionPlansTable.id);
+
+  if (dbPlans.length > 0) {
+    return res.json(
+      dbPlans
+        .filter((p) => p.isActive)
+        .map((p) => ({
+          id: p.slug,
+          label: p.nameAr,
+          price: Number(p.price),
+          days: p.durationDays,
+          trialDays: p.trialDays,
+          features: p.features ?? [],
+        }))
+    );
+  }
+
+  // Fallback to hardcoded config if no plans in DB yet
   return res.json(
     Object.entries(PLAN_CONFIG).map(([id, cfg]) => ({ id, ...cfg }))
   );
@@ -367,10 +389,23 @@ router.post("/subscription/initiate", async (req, res) => {
   const ownerId = req.user!.id;
   const { plan } = req.body as { plan: string };
 
-  const cfg = PLAN_CONFIG[plan];
-  if (!cfg) {
+  // Resolve plan from DB or fallback to hardcoded
+  let resolvedCfg: { price: number; days: number; label: string } | undefined;
+  const [dbPlan] = await db
+    .select()
+    .from(subscriptionPlansTable)
+    .where(eq(subscriptionPlansTable.slug, plan))
+    .limit(1);
+  if (dbPlan) {
+    resolvedCfg = { price: Number(dbPlan.price), days: dbPlan.durationDays, label: dbPlan.nameAr };
+  } else {
+    resolvedCfg = PLAN_CONFIG[plan];
+  }
+
+  if (!resolvedCfg) {
     return res.status(400).json({ error: "خطة غير صالحة" });
   }
+  const cfg = resolvedCfg;
 
   const secretKey = process.env.MOYASAR_SECRET_KEY;
   if (!secretKey) {
@@ -378,19 +413,6 @@ router.post("/subscription/initiate", async (req, res) => {
   }
 
   const amountHalala = cfg.price * 100; // Moyasar uses smallest currency unit
-
-  // Create a Moyasar payment (token-based, no redirect needed — we verify manually)
-  const payload = {
-    amount: amountHalala,
-    currency: "SAR",
-    description: `${cfg.label} — حكاية أناقة`,
-    callback_url: "https://unused.placeholder/callback",
-    source: { type: "token" }, // placeholder; real tokenization happens on client
-    metadata: {
-      owner_id: ownerId,
-      plan,
-    },
-  };
 
   // We do NOT pre-create the payment on server here.
   // Instead we return the publishable key and plan info, and let the client use
@@ -415,10 +437,22 @@ router.post("/subscription/confirm", async (req, res) => {
     return res.status(400).json({ error: "بيانات غير مكتملة" });
   }
 
-  const cfg = PLAN_CONFIG[plan];
-  if (!cfg) {
+  // Resolve plan from DB or fallback to hardcoded
+  let resolvedConfirmCfg: { price: number; days: number; label: string } | undefined;
+  const [dbConfirmPlan] = await db
+    .select()
+    .from(subscriptionPlansTable)
+    .where(eq(subscriptionPlansTable.slug, plan))
+    .limit(1);
+  if (dbConfirmPlan) {
+    resolvedConfirmCfg = { price: Number(dbConfirmPlan.price), days: dbConfirmPlan.durationDays, label: dbConfirmPlan.nameAr };
+  } else {
+    resolvedConfirmCfg = PLAN_CONFIG[plan];
+  }
+  if (!resolvedConfirmCfg) {
     return res.status(400).json({ error: "خطة غير صالحة" });
   }
+  const cfg = resolvedConfirmCfg;
 
   const secretKey = process.env.MOYASAR_SECRET_KEY;
   if (!secretKey) {

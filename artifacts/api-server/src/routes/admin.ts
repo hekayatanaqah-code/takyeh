@@ -13,6 +13,7 @@ import {
   siteSettingsTable,
   serviceProviderSubmissionsTable,
   serviceProvidersTable,
+  subscriptionPlansTable,
 } from "@workspace/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -563,6 +564,58 @@ router.patch("/settings", async (req, res) => {
       .values({ key, value, updatedAt: new Date() })
       .onConflictDoUpdate({ target: siteSettingsTable.key, set: { value, updatedAt: new Date() } });
   }
+  return res.json({ ok: true });
+});
+
+/* ── Subscription Plans Management ──────────────────────── */
+
+const PlanSchema = z.object({
+  slug: z.string().min(1),
+  nameAr: z.string().min(1),
+  price: z.number().min(0),
+  durationDays: z.number().int().min(1),
+  trialDays: z.number().int().min(0).default(0),
+  features: z.array(z.string()).default([]),
+  isActive: z.boolean().default(true),
+  sortOrder: z.number().int().default(0),
+});
+
+router.get("/plans", async (_req, res) => {
+  const plans = await db
+    .select()
+    .from(subscriptionPlansTable)
+    .orderBy(subscriptionPlansTable.sortOrder, subscriptionPlansTable.id);
+  return res.json(plans);
+});
+
+router.post("/plans", async (req, res) => {
+  const parsed = PlanSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة", issues: parsed.error.issues });
+  const { slug, nameAr, price, durationDays, trialDays, features, isActive, sortOrder } = parsed.data;
+  const [plan] = await db
+    .insert(subscriptionPlansTable)
+    .values({ slug, nameAr, price: String(price), durationDays, trialDays, features, isActive, sortOrder })
+    .returning();
+  return res.json(plan);
+});
+
+router.put("/plans/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const parsed = PlanSchema.partial().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const { price, ...rest } = parsed.data;
+  const [plan] = await db
+    .update(subscriptionPlansTable)
+    .set({ ...rest, ...(price !== undefined ? { price: String(price) } : {}) })
+    .where(eq(subscriptionPlansTable.id, id))
+    .returning();
+  if (!plan) return res.status(404).json({ error: "الخطة غير موجودة" });
+  return res.json(plan);
+});
+
+router.delete("/plans/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  await db.delete(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id));
   return res.json({ ok: true });
 });
 
