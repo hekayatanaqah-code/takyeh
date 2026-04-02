@@ -27,3 +27,9 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+MOYASAR_PUBLISHABLE_KEY = "pk_test_vcFUHJDBwiyRypcFChTLtgpI4skLeU6R6Tez5SrF"
+MOYASAR_SECRET_KEY_PLACEHOLDER = "sk_test_vcFUHJDBwiyRypcFChTLtgpI4skLeU6R6Tez5SrF"
