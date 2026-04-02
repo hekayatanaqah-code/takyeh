@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useGetChaletById } from "@workspace/api-client-react";
-import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, Info, Phone, ShieldCheck } from "lucide-react";
+import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, Info, Phone, ShieldCheck, Star, X, ChevronDown } from "lucide-react";
 import useEmblaCarousel from 'embla-carousel-react';
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -47,6 +47,8 @@ export default function ChaletDetail() {
     return (p === "morning" || p === "evening" || p === "full_day") ? p as Period : null;
   })();
   const [selectedPeriod, setSelectedPeriod] = useState<Period | null>(initPeriod);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showBookingConfirmModal, setShowBookingConfirmModal] = useState(false);
 
   /* ── Loading skeleton ─────────────────────────────────── */
   if (isLoading) {
@@ -182,6 +184,27 @@ export default function ChaletDetail() {
     : (mapsUrl ?? `https://www.google.com/maps/search/${encodeURIComponent(
         [chalet.location, "القصيم", "المملكة العربية السعودية"].filter(Boolean).join("، ")
       )}`);
+
+  /* ── Terms helpers ─────────────────────────────────────── */
+  const termsText = (chalet as any).termsAndConditions as string | null | undefined;
+  const termsList = termsText ? termsText.split("\n").map((l: string) => l.trim()).filter(Boolean) : [];
+  const hasTerms = termsList.length > 0;
+  const PREVIEW_COUNT = 2;
+  const termsPreview = termsList.slice(0, PREVIEW_COUNT);
+  const termsHidden = termsList.slice(PREVIEW_COUNT);
+
+  const whatsappMsgWithTerms = hasTerms
+    ? `${whatsappMsg}\n\n✅ اطلعت على شروط الشاليه وأوافق عليها:\n${termsList.map((t: string) => `• ${t}`).join("\n")}`
+    : whatsappMsg;
+
+  const openWhatsApp = (includeTerms = false) => {
+    const msg = includeTerms && hasTerms ? whatsappMsgWithTerms : whatsappMsg;
+    let rawPhone = chalet.whatsappNumber.replace(/\D/g, "");
+    if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
+    if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
+    const waUrl = `https://wa.me/${rawPhone}?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, "_blank");
+  };
 
   const handleShare = () => {
     if (navigator.share) {
@@ -376,12 +399,54 @@ export default function ChaletDetail() {
                   </div>
                 </div>
 
-                <WhatsAppButton
-                  phoneNumber={chalet.whatsappNumber}
-                  message={whatsappMsg}
-                  fullWidth
-                  className="py-3 text-base rounded-xl font-bold"
-                />
+                {/* ── Terms Preview (above book button) ───── */}
+                {hasTerms && (
+                  <div className="mb-4 rounded-xl border border-amber-300/70 dark:border-amber-700/50 bg-amber-50/80 dark:bg-amber-950/30 p-3.5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm">📋</span>
+                      <span className="text-xs font-bold text-amber-800 dark:text-amber-300">شروط الشاليه</span>
+                    </div>
+                    <ul className="space-y-1.5">
+                      {termsPreview.map((t: string, i: number) => (
+                        <li key={i} className="flex items-start gap-1.5 text-xs text-amber-900 dark:text-amber-200">
+                          <span className="text-amber-500 mt-0.5 shrink-0">•</span>
+                          <span>{t}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {termsHidden.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowTermsModal(true)}
+                        className="mt-2.5 flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                        عرض كامل الشروط ({termsList.length})
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Book Button ─────────────────────────── */}
+                {hasTerms ? (
+                  <Button
+                    className="w-full bg-[#25D366] hover:bg-[#1DA851] text-white shadow-lg shadow-[#25D366]/20 border-none transition-all duration-300 hover:scale-[1.02] active:scale-95 py-3 text-base rounded-xl font-bold"
+                    onClick={() => setShowBookingConfirmModal(true)}
+                    size="lg"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="me-2">
+                      <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
+                    </svg>
+                    احجز الآن عبر واتساب
+                  </Button>
+                ) : (
+                  <WhatsAppButton
+                    phoneNumber={chalet.whatsappNumber}
+                    message={whatsappMsg}
+                    fullWidth
+                    className="py-3 text-base rounded-xl font-bold"
+                  />
+                )}
                 <p className="text-xs text-center text-muted-foreground mt-3">
                   تواصل مباشرةً مع المالك عبر واتساب للحجز والاستفسار
                 </p>
@@ -400,29 +465,6 @@ export default function ChaletDetail() {
                 <h2 className="text-lg font-bold mb-2">عن الشاليه</h2>
                 <p className="text-sm text-muted-foreground leading-relaxed">{chalet.descriptionAr}</p>
               </section>
-
-              {/* ── Terms & Conditions ─────────────────────────── */}
-              {(chalet as any).termsAndConditions && (
-                <section>
-                  <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
-                    <span className="text-base">📋</span> الشروط والأحكام
-                  </h2>
-                  <div className="bg-muted/40 border border-border rounded-xl p-4">
-                    <ul className="space-y-2">
-                      {String((chalet as any).termsAndConditions)
-                        .split("\n")
-                        .map((line: string) => line.trim())
-                        .filter(Boolean)
-                        .map((line: string, i: number) => (
-                          <li key={i} className="flex items-start gap-2 text-sm text-foreground/80">
-                            <span className="text-primary mt-0.5 shrink-0">•</span>
-                            <span>{line}</span>
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-                </section>
-              )}
 
               {/* ── Amenities ──────────────────────────────────── */}
               {chalet.amenities.length > 0 && (() => {
@@ -578,29 +620,138 @@ export default function ChaletDetail() {
           <p className="text-xs font-bold text-foreground truncate">{chalet.nameAr}</p>
           <p className="text-xs text-[#25D366] font-semibold">الأسعار عند التواصل</p>
         </div>
-        <WhatsAppButton
-          phoneNumber={chalet.whatsappNumber}
-          message={whatsappMsg}
-          className="shrink-0 px-5 py-2.5 text-sm font-bold rounded-xl"
-        />
+        {hasTerms ? (
+          <Button
+            className="shrink-0 bg-[#25D366] hover:bg-[#1DA851] text-white border-none px-5 py-2.5 text-sm font-bold rounded-xl"
+            onClick={() => setShowBookingConfirmModal(true)}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="me-1.5">
+              <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
+            </svg>
+            احجز الآن
+          </Button>
+        ) : (
+          <WhatsAppButton
+            phoneNumber={chalet.whatsappNumber}
+            message={whatsappMsg}
+            className="shrink-0 px-5 py-2.5 text-sm font-bold rounded-xl"
+          />
+        )}
       </div>
-    </div>
-  );
-}
 
-function Star({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
+      {/* ═══════════════════════════════════════════════════
+          FULL TERMS MODAL
+      ═══════════════════════════════════════════════════ */}
+      {showTermsModal && (
+        <div
+          className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setShowTermsModal(false)}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className="relative z-10 w-full sm:max-w-lg bg-background rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+              <h2 className="text-base font-bold flex items-center gap-2">
+                <span>📋</span> كامل شروط الشاليه
+              </h2>
+              <button
+                onClick={() => setShowTermsModal(false)}
+                className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Terms list */}
+            <div className="overflow-y-auto flex-1 px-5 py-4">
+              <ul className="space-y-3">
+                {termsList.map((t: string, i: number) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-foreground/80">
+                    <span className="text-primary mt-0.5 shrink-0 font-bold">{i + 1}.</span>
+                    <span>{t}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {/* Footer */}
+            <div className="px-5 pb-6 pt-3 border-t border-border shrink-0">
+              <Button
+                className="w-full bg-[#25D366] hover:bg-[#1DA851] text-white rounded-xl py-3 text-sm font-bold"
+                onClick={() => { setShowTermsModal(false); setShowBookingConfirmModal(true); }}
+              >
+                أوافق وأتعهد بالالتزام — احجز الآن
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════
+          BOOKING CONFIRMATION MODAL
+      ═══════════════════════════════════════════════════ */}
+      {showBookingConfirmModal && (
+        <div
+          className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setShowBookingConfirmModal(false)}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className="relative z-10 w-full sm:max-w-md bg-background rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h2 className="text-base font-bold flex items-center gap-2">
+                <span>⚠️</span> قواعد هذا الشاليه
+              </h2>
+              <button
+                onClick={() => setShowBookingConfirmModal(false)}
+                className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4">
+              <p className="text-sm text-muted-foreground mb-3">
+                تنبيه: يشترط المالك الالتزام بالقواعد التالية:
+              </p>
+              <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-xl p-3.5 mb-4 max-h-52 overflow-y-auto">
+                <ul className="space-y-2">
+                  {termsList.map((t: string, i: number) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-amber-900 dark:text-amber-200">
+                      <span className="text-amber-500 mt-0.5 shrink-0">•</span>
+                      <span>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <p className="text-xs text-muted-foreground text-center mb-4">
+                بالمتابعة، تقر بأنك اطلعت على الشروط وتوافق عليها.
+              </p>
+              <Button
+                className="w-full bg-[#25D366] hover:bg-[#1DA851] text-white rounded-xl py-3.5 text-sm font-bold mb-2.5 shadow-lg shadow-[#25D366]/20"
+                onClick={() => { setShowBookingConfirmModal(false); openWhatsApp(true); }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="me-2">
+                  <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21" />
+                </svg>
+                أوافق وأتعهد بالالتزام
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full text-sm text-muted-foreground"
+                onClick={() => setShowBookingConfirmModal(false)}
+              >
+                إلغاء
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
