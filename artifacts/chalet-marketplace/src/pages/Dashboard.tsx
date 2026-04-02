@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -445,7 +446,14 @@ function AddBookingDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">تاريخ الحجز *</label>
-              <Input type="date" value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} />
+              <div className="rounded-md border bg-background px-3 py-2 text-sm min-h-[2.5rem] flex items-center">
+                <DualCalendarPicker
+                  value={bookingDate}
+                  onChange={setBookingDate}
+                  placeholder="اختر التاريخ"
+                  minDate={new Date().toISOString().slice(0, 10)}
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">عدد الأيام</label>
