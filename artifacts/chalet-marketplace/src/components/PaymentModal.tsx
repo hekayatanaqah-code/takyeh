@@ -256,7 +256,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                 اشتراك بدون عمولة — سعر ثابت فقط
               </DialogDescription>
             </DialogHeader>
-            <div className="p-5 grid gap-2 overflow-y-auto flex-1">
+            <div className="p-5 grid gap-2 overflow-y-auto flex-1 pb-[50px]">
               {plans.length === 0 && (
                 <div className="flex justify-center py-8">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -321,7 +321,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
               </DialogDescription>
             </DialogHeader>
 
-            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 pb-[50px]">
               {/* Moyasar form mount point */}
               {!scriptReady && (
                 <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">

@@ -2847,7 +2847,7 @@ function PlansTab() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 mt-2 overflow-y-auto flex-1 pb-1">
+          <div className="space-y-4 mt-2 overflow-y-auto flex-1 pb-[50px]">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">اسم الخطة *</label>

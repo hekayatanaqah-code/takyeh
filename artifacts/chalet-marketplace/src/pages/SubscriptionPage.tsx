@@ -169,7 +169,7 @@ export default function SubscriptionPage() {
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       <Navbar />
-      <div className="container mx-auto px-4 py-8 max-w-3xl pb-16">
+      <div className="container mx-auto px-4 pt-8 pb-28 max-w-3xl">
 
         {/* Back */}
         <button
@@ -240,7 +240,7 @@ export default function SubscriptionPage() {
         </motion.div>
 
         {/* ── Summary cards ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 [&>*]:shrink-0">
           <SummaryCard
             icon={<Building2 className="w-5 h-5 text-indigo-500" />}
             label="الشاليهات"
