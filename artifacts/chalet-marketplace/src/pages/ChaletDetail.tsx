@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useGetChaletById } from "@workspace/api-client-react";
-import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, Info, Phone, ShieldCheck, Star, X, ChevronDown, CalendarDays, AlertCircle } from "lucide-react";
+import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, Info, Phone, ShieldCheck, Star, X, ChevronDown, CalendarDays, AlertCircle, ClipboardList } from "lucide-react";
 import useEmblaCarousel from 'embla-carousel-react';
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -546,17 +546,18 @@ export default function ChaletDetail() {
 
                 {/* ── Terms Preview (above book button) ───── */}
                 <div className="mb-4 rounded-xl border border-amber-300/70 dark:border-amber-700/50 bg-amber-50/80 dark:bg-amber-950/30 p-3.5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm">📋</span>
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    <ClipboardList className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
                     <span className="text-xs font-bold text-amber-800 dark:text-amber-300">شروط الشاليه</span>
+                    <Info className="w-3 h-3 text-amber-500/70 dark:text-amber-500/50 shrink-0 ms-0.5" />
                   </div>
                   {hasTerms ? (
                     <>
-                      <ul className="space-y-1.5">
+                      <ul className="space-y-2 ps-1">
                         {termsPreview.map((t: string, i: number) => (
-                          <li key={i} className="flex items-start gap-1.5 text-xs text-amber-900 dark:text-amber-200">
-                            <span className="text-amber-500 mt-0.5 shrink-0">•</span>
-                            <span>{t}</span>
+                          <li key={i} className="flex items-start gap-2 text-xs text-amber-900 dark:text-amber-200">
+                            <span className="text-amber-500 mt-0.5 shrink-0 text-sm leading-none">•</span>
+                            <span className="leading-relaxed">{t}</span>
                           </li>
                         ))}
                       </ul>
