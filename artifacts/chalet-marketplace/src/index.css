@@ -235,3 +235,12 @@
     inset: -1px;
   }
 }
+
+@layer utilities {
+  .chip {
+    @apply inline-flex items-center gap-1.5 bg-secondary rounded-lg px-3 py-1.5 text-xs font-medium;
+  }
+  .chip-primary {
+    @apply inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-lg px-3 py-1.5 text-xs font-semibold;
+  }
+}
