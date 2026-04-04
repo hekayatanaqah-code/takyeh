@@ -23,9 +23,18 @@ const SubmissionBodyStrict = CreateSubmissionBody.extend({
   priceWeekend: z.number().min(0).nullable().optional(),
   seasonalDisclaimer: z.boolean().optional(),
   mapsUrl: z.string().url().optional().or(z.literal("")),
+  socialLink: z.string().optional().nullable(),
   photos: z.array(z.string()).max(15, "الحد الأقصى للصور هو 15").optional(),
   videoUrl: z.string().optional(),
   termsAndConditions: z.string().optional().nullable(),
+  maxGuests: z.number().int().min(1).nullable().optional(),
+  bedrooms: z.number().int().min(0).nullable().optional(),
+  morningCheckIn: z.string().optional().nullable(),
+  morningCheckOut: z.string().optional().nullable(),
+  eveningCheckIn: z.string().optional().nullable(),
+  eveningCheckOut: z.string().optional().nullable(),
+  fullDayCheckIn: z.string().optional().nullable(),
+  fullDayCheckOut: z.string().optional().nullable(),
 });
 
 const router = Router();
@@ -76,7 +85,16 @@ router.post("/", async (req, res) => {
       amenities: data.amenities ?? [],
       photos: data.photos ?? [],
       videoUrl: data.videoUrl || null,
+      socialLink: data.socialLink || null,
       termsAndConditions: data.termsAndConditions || null,
+      maxGuests: data.maxGuests ?? null,
+      bedrooms: data.bedrooms ?? null,
+      morningCheckIn: data.morningCheckIn || null,
+      morningCheckOut: data.morningCheckOut || null,
+      eveningCheckIn: data.eveningCheckIn || null,
+      eveningCheckOut: data.eveningCheckOut || null,
+      fullDayCheckIn: data.fullDayCheckIn || null,
+      fullDayCheckOut: data.fullDayCheckOut || null,
       trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     })
     .returning({ id: chaletSubmissionsTable.id });

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useGetChaletById } from "@workspace/api-client-react";
+import { useGetChaletById, getGetChaletByIdQueryKey } from "@workspace/api-client-react";
 import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, ChevronLeft, Info, Phone, ShieldCheck, Star, X, ChevronDown, CalendarDays, AlertCircle, ClipboardList } from "lucide-react";
 import useEmblaCarousel from 'embla-carousel-react';
 import { Navbar } from "@/components/layout/Navbar";
@@ -53,7 +53,9 @@ const TODAY = new Date().toISOString().split("T")[0];
 export default function ChaletDetail() {
   const { id } = useParams<{ id: string }>();
   const numericId = Number(id);
-  const { data: chalet, isLoading, isError } = useGetChaletById(numericId);
+  const { data: chalet, isLoading, isError } = useGetChaletById(numericId, {
+    query: { queryKey: getGetChaletByIdQueryKey(numericId), staleTime: 0, refetchOnMount: true },
+  });
   const [emblaRef] = useEmblaCarousel({ direction: "rtl", loop: true });
 
   const { data: amenityCatalog = [] } = useQuery<{ id: number; key: string; labelAr: string }[]>({
@@ -1079,10 +1081,10 @@ export default function ChaletDetail() {
             else lightboxPrev(images.length);
           }}
         >
-          {/* Close button */}
+          {/* Close button — top-right corner */}
           <button
             onClick={(e) => { e.stopPropagation(); window.history.back(); }}
-            className="absolute top-4 left-4 z-10 w-10 h-10 rounded-full bg-white/10 hover:bg-white/25 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
+            className="absolute top-4 right-4 z-10 w-11 h-11 rounded-full bg-white/15 hover:bg-white/30 backdrop-blur-sm flex items-center justify-center text-white transition-colors shadow-lg"
             aria-label="إغلاق"
           >
             <X className="w-5 h-5" />
