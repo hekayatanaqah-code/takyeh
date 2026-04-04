@@ -110,6 +110,24 @@ export interface CreateSubmissionRequest {
   photos?: string[];
   /** Optional video URL for the chalet */
   videoUrl?: string;
+  /** Maximum number of guests allowed */
+  maxGuests?: number | null;
+  /** Number of bedrooms */
+  bedrooms?: number | null;
+  /** Custom terms and conditions from owner */
+  termsAndConditions?: string | null;
+  /** Morning period check-in time (HH:MM) */
+  morningCheckIn?: string | null;
+  /** Morning period check-out time (HH:MM) */
+  morningCheckOut?: string | null;
+  /** Evening period check-in time (HH:MM) */
+  eveningCheckIn?: string | null;
+  /** Evening period check-out time (HH:MM) */
+  eveningCheckOut?: string | null;
+  /** Full-day period check-in time (HH:MM) */
+  fullDayCheckIn?: string | null;
+  /** Full-day period check-out time (HH:MM) */
+  fullDayCheckOut?: string | null;
 }
 
 export interface SubmissionResponse {

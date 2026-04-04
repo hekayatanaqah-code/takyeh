@@ -1,8 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useGetChaletById } from "@workspace/api-client-react";
-import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, Info, Phone, ShieldCheck, Star, X, ChevronDown, CalendarDays, AlertCircle, ClipboardList } from "lucide-react";
+import { MapPin, Users, Bed, CheckCircle2, Share2, ChevronRight, ChevronLeft, Info, Phone, ShieldCheck, Star, X, ChevronDown, CalendarDays, AlertCircle, ClipboardList } from "lucide-react";
 import useEmblaCarousel from 'embla-carousel-react';
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -70,6 +70,16 @@ export default function ChaletDetail() {
     [amenityCatalog]
   );
 
+  /* ── Images (hoisted above early-returns so hooks can reference it) ── */
+  const images = useMemo(() => {
+    if (chalet?.photos && chalet.photos.length > 0) return chalet.photos;
+    return [
+      `${import.meta.env.BASE_URL}images/chalet-placeholder-1.png`,
+      `${import.meta.env.BASE_URL}images/chalet-placeholder-2.png`,
+      `${import.meta.env.BASE_URL}images/chalet-placeholder-3.png`,
+    ];
+  }, [chalet]);
+
   /* Read initial period from URL ?period=morning|evening|full_day */
   const initPeriod = (() => {
     const p = new URLSearchParams(window.location.search).get("period");
@@ -94,6 +104,49 @@ export default function ChaletDetail() {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showBookingConfirmModal, setShowBookingConfirmModal] = useState(false);
   const [showRedirectNotice, setShowRedirectNotice] = useState(false);
+
+  /* ── Lightbox state ──────────────────────────────────── */
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+
+  const openLightbox = useCallback((idx: number) => {
+    setLightboxIndex(idx);
+    window.history.pushState({ lightbox: true }, "");
+  }, []);
+
+  const closeLightbox = useCallback(() => {
+    setLightboxIndex(null);
+  }, []);
+
+  const lightboxPrev = useCallback((total: number) => {
+    setLightboxIndex(i => i !== null ? (i - 1 + total) % total : null);
+  }, []);
+
+  const lightboxNext = useCallback((total: number) => {
+    setLightboxIndex(i => i !== null ? (i + 1) % total : null);
+  }, []);
+
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { window.history.back(); }
+      if (e.key === "ArrowLeft") lightboxPrev(images.length);
+      if (e.key === "ArrowRight") lightboxNext(images.length);
+    };
+
+    const handlePop = () => closeLightbox();
+
+    window.addEventListener("keydown", handleKey);
+    window.addEventListener("popstate", handlePop);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      window.removeEventListener("popstate", handlePop);
+      document.body.style.overflow = "";
+    };
+  }, [lightboxIndex, lightboxPrev, lightboxNext, closeLightbox]);
 
   /* ── Loading skeleton ─────────────────────────────────── */
   if (isLoading) {
@@ -138,15 +191,6 @@ export default function ChaletDetail() {
     );
   }
 
-  const images =
-    chalet.photos && chalet.photos.length > 0
-      ? chalet.photos
-      : [
-          `${import.meta.env.BASE_URL}images/chalet-placeholder-1.png`,
-          `${import.meta.env.BASE_URL}images/chalet-placeholder-2.png`,
-          `${import.meta.env.BASE_URL}images/chalet-placeholder-3.png`,
-        ];
-
   const district = (chalet as any).district as string | undefined;
   const isVerified = Boolean((chalet as any).isVerified);
   const propertyType = (chalet as any).propertyType as string | null | undefined;
@@ -161,6 +205,7 @@ export default function ChaletDetail() {
   const weekdayFmt = fmtPrice(priceWeekdayRaw) ?? legacyFmt;
   const weekendFmt = fmtPrice(priceWeekendRaw);
   const hasDayPrices = true; // Always show the price box — use fallbacks as needed
+  const socialLink = (chalet as any).socialLink as string | null | undefined;
   const locationLabel = district ? `حي ${district}، ${chalet.location}` : chalet.location;
   const periodLine = selectedPeriod ? ` — الفترة: ${PERIOD_LABEL[selectedPeriod]}` : "";
 
@@ -640,6 +685,34 @@ export default function ChaletDetail() {
                     <span className="font-semibold">لضمان حقك:</span> تأكد من مطابقة اسم الحساب البنكي مع اسم المالك الموثق في المنصة.
                   </p>
                 </div>
+
+                {/* ── Instagram Link ──────────────────────── */}
+                {socialLink && (
+                  <a
+                    href={socialLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 mt-3 text-sm font-semibold text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors"
+                  >
+                    {/* Instagram SVG icon */}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="w-5 h-5 shrink-0"
+                      aria-hidden="true"
+                    >
+                      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+                      <circle cx="12" cy="12" r="4" />
+                      <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" stroke="none" />
+                    </svg>
+                    تابع الشاليه على إنستغرام
+                  </a>
+                )}
               </div>
 
               {/* ── Description ────────────────────────────────── */}
@@ -743,44 +816,65 @@ export default function ChaletDetail() {
             {/* Desktop: order-last → RTL end = left side (60%) */}
             <div className="order-1 lg:order-last lg:w-[60%]">
 
-              {/* Desktop gallery: main image + thumbnail strip */}
+              {/* Desktop gallery: main image + thumbnail strip — click any image to open lightbox */}
               <div className="hidden lg:block space-y-3">
                 {/* Primary image */}
-                <div className="w-full rounded-2xl overflow-hidden bg-muted" style={{ aspectRatio: "16/10" }}>
+                <button
+                  onClick={() => openLightbox(0)}
+                  className="block w-full rounded-2xl overflow-hidden bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  style={{ aspectRatio: "16/10" }}
+                  aria-label="فتح معرض الصور"
+                >
                   <img
                     src={images[0]}
                     alt={chalet.nameAr}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-700"
+                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-700 cursor-zoom-in"
                   />
-                </div>
+                </button>
 
                 {/* Secondary images grid */}
                 {images.length > 1 && (
                   <div className={`grid gap-3 ${images.length >= 4 ? "grid-cols-3" : "grid-cols-2"}`}>
-                    {images.slice(1, images.length >= 4 ? 4 : 3).map((img: string, i: number) => (
-                      <div key={i} className="rounded-xl overflow-hidden bg-muted relative" style={{ aspectRatio: "4/3" }}>
-                        <img
-                          src={img}
-                          alt={`صورة ${i + 2}`}
-                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
-                        />
-                        {i === (images.length >= 4 ? 2 : 1) && images.length > (images.length >= 4 ? 4 : 3) && (
-                          <div className="absolute inset-0 bg-black/55 flex items-center justify-center cursor-pointer hover:bg-black/45 transition-colors">
-                            <span className="text-white font-bold text-lg">+{images.length - (images.length >= 4 ? 4 : 3)} صور</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                    {images.slice(1, images.length >= 4 ? 4 : 3).map((img: string, i: number) => {
+                      const realIdx = i + 1;
+                      const isLast = i === (images.length >= 4 ? 2 : 1);
+                      const hiddenCount = images.length - (images.length >= 4 ? 4 : 3);
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => openLightbox(isLast && hiddenCount > 0 ? realIdx : realIdx)}
+                          className="rounded-xl overflow-hidden bg-muted relative focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          style={{ aspectRatio: "4/3" }}
+                          aria-label={`صورة ${realIdx + 1}`}
+                        >
+                          <img
+                            src={img}
+                            alt={`صورة ${realIdx + 1}`}
+                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-500 cursor-zoom-in"
+                          />
+                          {isLast && hiddenCount > 0 && (
+                            <div className="absolute inset-0 bg-black/55 flex items-center justify-center hover:bg-black/45 transition-colors">
+                              <span className="text-white font-bold text-lg">+{hiddenCount} صور</span>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
-              {/* Mobile / Tablet: Embla carousel */}
+              {/* Mobile / Tablet: Embla carousel — tap image to open lightbox */}
               <div className="lg:hidden overflow-hidden rounded-2xl bg-muted" ref={emblaRef} dir="rtl">
                 <div className="flex">
                   {images.map((img: string, i: number) => (
-                    <div key={i} className="flex-[0_0_100%] min-w-0 relative" style={{ aspectRatio: "4/3" }}>
-                      <img src={img} alt={`صورة ${i + 1}`} className="w-full h-full object-cover" />
+                    <div
+                      key={i}
+                      className="flex-[0_0_100%] min-w-0 relative"
+                      style={{ aspectRatio: "4/3" }}
+                      onClick={() => openLightbox(i)}
+                    >
+                      <img src={img} alt={`صورة ${i + 1}`} className="w-full h-full object-cover cursor-zoom-in" />
                       <div className="absolute bottom-3 left-3 bg-black/65 text-white px-2.5 py-1 rounded-full text-xs backdrop-blur-sm font-medium">
                         {i + 1} / {images.length}
                       </div>
@@ -959,6 +1053,95 @@ export default function ChaletDetail() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════
+          IMAGE LIGHTBOX
+          - X close button top-corner
+          - Prev / Next arrows
+          - Swipe left/right to navigate
+          - Counter "1 / N"
+          - Keyboard: ← → Esc
+          - Browser Back closes (via popstate)
+      ═══════════════════════════════════════════════════ */}
+      {lightboxIndex !== null && (
+        <div
+          className="fixed inset-0 z-[500] flex items-center justify-center bg-black/95"
+          onClick={() => { window.history.back(); }}
+          onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+          onTouchEnd={(e) => {
+            if (touchStartX.current === null) return;
+            const delta = e.changedTouches[0].clientX - touchStartX.current;
+            touchStartX.current = null;
+            if (Math.abs(delta) < 40) return;
+            if (delta < 0) lightboxNext(images.length);
+            else lightboxPrev(images.length);
+          }}
+        >
+          {/* Close button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); window.history.back(); }}
+            className="absolute top-4 left-4 z-10 w-10 h-10 rounded-full bg-white/10 hover:bg-white/25 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
+            aria-label="إغلاق"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Counter */}
+          <div className="absolute top-4 inset-x-0 flex justify-center z-10 pointer-events-none">
+            <span className="bg-black/60 text-white text-sm font-medium px-4 py-1.5 rounded-full backdrop-blur-sm">
+              {lightboxIndex + 1} / {images.length}
+            </span>
+          </div>
+
+          {/* Prev arrow */}
+          {images.length > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); lightboxPrev(images.length); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/10 hover:bg-white/25 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
+              aria-label="السابق"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
+
+          {/* Next arrow */}
+          {images.length > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); lightboxNext(images.length); }}
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/10 hover:bg-white/25 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
+              aria-label="التالي"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
+
+          {/* Image */}
+          <div
+            className="relative max-w-[92vw] max-h-[88vh] flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              key={lightboxIndex}
+              src={images[lightboxIndex]}
+              alt={`صورة ${lightboxIndex + 1}`}
+              className="max-w-full max-h-[88vh] object-contain rounded-lg shadow-2xl select-none animate-in fade-in zoom-in-95 duration-200"
+              draggable={false}
+            />
+          </div>
+
+          {/* Dot indicators */}
+          {images.length > 1 && images.length <= 10 && (
+            <div className="absolute bottom-5 inset-x-0 flex justify-center gap-1.5 z-10 pointer-events-none">
+              {images.map((_: string, i: number) => (
+                <span
+                  key={i}
+                  className={`w-2 h-2 rounded-full transition-all ${i === lightboxIndex ? "bg-white scale-125" : "bg-white/40"}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
