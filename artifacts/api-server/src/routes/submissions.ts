@@ -7,10 +7,10 @@ import { z } from "zod";
 import { sendAdminNewSubmissionEmail } from "../lib/email";
 
 const SubmissionBodyStrict = CreateSubmissionBody.extend({
-  nameAr: z.string().trim().min(2, "اسم الشاليه مطلوب"),
+  nameAr: z.string().trim().min(2, "اسم الشاليه مطلوب (حرفان على الأقل)"),
   location: z.string().trim().min(2, "المدينة مطلوبة"),
   district: z.string().trim().optional(),
-  descriptionAr: z.string().trim().min(10, "الوصف قصير جداً"),
+  descriptionAr: z.string().trim().min(3, "الوصف قصير جداً (٣ أحرف على الأقل)"),
   whatsappNumber: z.string().trim().min(9, "رقم واتساب غير صحيح"),
   pricePerNight: z.number().min(0),
   priceMorning: z.number().nullable().optional(),
@@ -22,7 +22,7 @@ const SubmissionBodyStrict = CreateSubmissionBody.extend({
   priceWeekday: z.number().min(0).nullable().optional(),
   priceWeekend: z.number().min(0).nullable().optional(),
   seasonalDisclaimer: z.boolean().optional(),
-  mapsUrl: z.string().url().optional().or(z.literal("")),
+  mapsUrl: z.string().optional().nullable().or(z.literal("")),
   socialLink: z.string().optional().nullable(),
   photos: z.array(z.string()).max(15, "الحد الأقصى للصور هو 15").optional(),
   videoUrl: z.string().optional(),

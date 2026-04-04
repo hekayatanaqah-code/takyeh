@@ -170,6 +170,7 @@ export default function AddChalet() {
   const [seasonalDisclaimer, setSeasonalDisclaimer] = useState(true);
 
   const mutation = useCreateSubmission();
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
   const handleChange = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -297,6 +298,8 @@ export default function AddChalet() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFieldErrors({});
+    mutation.reset();
 
     const successfulPhotos = photos.filter((p) => p.url && p.url !== "error").map((p) => p.url);
     const successfulVideo = video && video.url && video.url !== "error" ? video.url : undefined;
@@ -348,6 +351,15 @@ export default function AddChalet() {
       },
       {
         onSuccess: () => setSubmitted(true),
+        onError: (err: unknown) => {
+          try {
+            const apiErr = err as { data?: { details?: Record<string, string[]> } };
+            if (apiErr?.data?.details && typeof apiErr.data.details === "object") {
+              setFieldErrors(apiErr.data.details);
+            }
+          } catch {
+          }
+        },
       }
     );
   };
@@ -1244,8 +1256,31 @@ export default function AddChalet() {
 
                 {/* Error message */}
                 {mutation.isError && (
-                  <div className="bg-destructive/10 text-destructive rounded-xl p-4 text-center">
-                    حدث خطأ أثناء إرسال البيانات. يرجى المحاولة مرة أخرى.
+                  <div className="bg-destructive/10 text-destructive rounded-xl p-4 space-y-2">
+                    <p className="font-semibold text-center">حدث خطأ أثناء إرسال البيانات</p>
+                    {Object.keys(fieldErrors).length > 0 ? (
+                      <ul className="text-sm space-y-1 list-disc list-inside">
+                        {Object.entries(fieldErrors).map(([field, errors]) => {
+                          const fieldLabels: Record<string, string> = {
+                            nameAr: "اسم الشاليه",
+                            location: "المدينة",
+                            descriptionAr: "وصف الشاليه",
+                            whatsappNumber: "رقم الواتساب",
+                            mapsUrl: "رابط الخرائط",
+                            socialLink: "رابط الحساب",
+                            priceWeekday: "سعر وسط الأسبوع",
+                            priceWeekend: "سعر نهاية الأسبوع",
+                          };
+                          return errors.map((msg, i) => (
+                            <li key={`${field}-${i}`}>
+                              <strong>{fieldLabels[field] ?? field}:</strong> {msg}
+                            </li>
+                          ));
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-center">يرجى التحقق من البيانات والمحاولة مرة أخرى</p>
+                    )}
                   </div>
                 )}
 
