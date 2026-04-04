@@ -23,7 +23,10 @@ import SubscriptionPage from "./pages/SubscriptionPage";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false,
+      staleTime: 0,
+      gcTime: 0,
+      refetchOnMount: true,
+      refetchOnWindowFocus: true,
       retry: 1,
     },
   },
