@@ -457,6 +457,13 @@ export default function ChaletDetail() {
                 </div>
               </div>
 
+              {/* ── Description (below title chips) ─────────────── */}
+              {chalet.descriptionAr && (
+                <div className="bg-secondary/30 rounded-xl px-4 py-3 border border-border/40">
+                  <p className="text-sm text-foreground leading-relaxed">{chalet.descriptionAr}</p>
+                </div>
+              )}
+
               {/* ── WhatsApp Contact Card ───────────────────────── */}
               <div className="bg-card border border-border/60 shadow-lg shadow-primary/5 rounded-2xl p-5">
                 <div className="flex items-start gap-3 mb-4">
@@ -716,12 +723,6 @@ export default function ChaletDetail() {
                   </a>
                 )}
               </div>
-
-              {/* ── Description ────────────────────────────────── */}
-              <section>
-                <h2 className="text-lg font-bold mb-2">عن الشاليه</h2>
-                <p className="text-sm text-muted-foreground leading-relaxed">{chalet.descriptionAr}</p>
-              </section>
 
               {/* ── Amenities ──────────────────────────────────── */}
               {chalet.amenities.length > 0 && (() => {
