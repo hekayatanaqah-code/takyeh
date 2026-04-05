@@ -7,7 +7,6 @@ import { useAuth } from "@workspace/replit-auth-web";
 import NotFound from "@/pages/not-found";
 import Home from "./pages/Home";
 import Chalets from "./pages/Chalets";
-import ChaletFullView from "./pages/ChaletFullView";
 import AddChalet from "./pages/AddChalet";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
@@ -51,7 +50,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/chalets" component={Chalets} />
-      <Route path="/chalets/:id" component={ChaletFullView} />
+      <Route path="/chalets/:id" component={NotFound} />
       <Route path="/add-chalet" component={AddChalet} />
       <Route path="/dashboard">
         {() => <ProtectedRoute component={Dashboard} />}
