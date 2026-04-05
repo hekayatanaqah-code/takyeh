@@ -195,6 +195,10 @@ function SubmissionReviewModal({
           style={{ maxHeight: "92vh" }}
           dir="rtl"
         >
+          {/* ── GHOST FOUND ── */}
+          <div style={{ background: "#00FF00", color: "#000", fontWeight: "bold", fontSize: 22, textAlign: "center", padding: "16px", letterSpacing: 2 }}>
+            ✅ FOUND YOU — هذا هو النافذة المنبثقة (SubmissionReviewModal في Admin.tsx سطر 140)
+          </div>
           {/* ── Sticky Header ───────────────────────────── */}
           <div className="shrink-0 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-6 py-4">
             <h2 className="text-xl font-bold text-white leading-tight">{s.nameAr}</h2>
