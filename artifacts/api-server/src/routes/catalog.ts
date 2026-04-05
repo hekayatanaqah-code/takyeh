@@ -84,6 +84,13 @@ router.get("/page-content", async (_req, res) => {
     "tiktok_show",
     "instagram_show",
     "twitter_show",
+    "feat_card1_title",
+    "feat_card1_text",
+    "feat_card2_title",
+    "feat_card2_text",
+    "footer_title",
+    "footer_desc",
+    "copyright_text",
   ];
   const rows = await db
     .select()

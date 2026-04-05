@@ -326,8 +326,8 @@ export default function Home() {
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                 </div>
-                <h3 className="text-xl font-bold mb-3">تغطية شاملة</h3>
-                <p className="text-muted-foreground">خيارات واسعة تشمل بريدة، عنيزة، الرس وكافة مدن ومحافظات القصيم.</p>
+                <h3 className="text-xl font-bold mb-3">{siteSettings.feat_card1_title || "تغطية شاملة"}</h3>
+                <p className="text-muted-foreground">{siteSettings.feat_card1_text || "خيارات واسعة تشمل بريدة، عنيزة، الرس وكافة مدن ومحافظات القصيم."}</p>
               </div>
               <div className="bg-card p-8 rounded-2xl text-center shadow-sm border border-border/50 hover:shadow-md transition-shadow">
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
@@ -340,8 +340,8 @@ export default function Home() {
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h4l2-9 5 18 2-9h5"></path></svg>
                 </div>
-                <h3 className="text-xl font-bold mb-3">معلومات دقيقة</h3>
-                <p className="text-muted-foreground">تفاصيل كاملة عن المرافق والصور لتتخذ قرارك بثقة.</p>
+                <h3 className="text-xl font-bold mb-3">{siteSettings.feat_card2_title || "معلومات دقيقة"}</h3>
+                <p className="text-muted-foreground">{siteSettings.feat_card2_text || "تفاصيل كاملة عن المرافق والصور لتتخذ قرارك بثقة."}</p>
               </div>
             </div>
           </div>

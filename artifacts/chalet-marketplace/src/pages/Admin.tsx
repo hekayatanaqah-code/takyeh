@@ -1896,6 +1896,49 @@ function SettingsTab() {
         </div>
       </div>
 
+      {/* ══ 2.5. Bottom Feature Cards ══ */}
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div className="bg-gradient-to-l from-teal-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-teal-400" />
+          <h3 className="text-slate-100 font-bold text-lg">قسم المميزات السفلي</h3>
+          <span className="text-xs text-slate-500 mr-auto">البطاقات الثلاث في أسفل الصفحة الرئيسية</span>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Feature Card 1 */}
+          <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 space-y-3">
+            <p className="text-xs font-bold text-teal-400 uppercase tracking-wider">البطاقة الأولى</p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">العنوان</label>
+              <Input value={form.feat_card1_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card1_title: e.target.value }))}
+                placeholder="تغطية شاملة" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">النص الوصفي</label>
+              <Textarea value={form.feat_card1_text ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card1_text: e.target.value }))}
+                placeholder="خيارات واسعة تشمل بريدة، عنيزة، الرس وكافة مدن ومحافظات القصيم." rows={2}
+                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
+            </div>
+          </div>
+          {/* Feature Card 2 */}
+          <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 space-y-3">
+            <p className="text-xs font-bold text-teal-400 uppercase tracking-wider">البطاقة الثانية</p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">العنوان</label>
+              <Input value={form.feat_card2_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card2_title: e.target.value }))}
+                placeholder="معلومات دقيقة" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">النص الوصفي</label>
+              <Textarea value={form.feat_card2_text ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card2_text: e.target.value }))}
+                placeholder="تفاصيل كاملة عن المرافق والصور لتتخذ قرارك بثقة." rows={2}
+                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
+            </div>
+          </div>
+          <p className="text-xs text-slate-500">اترك أي حقل فارغاً لاستخدام النص الافتراضي.</p>
+          <SaveBtn label="حفظ بطاقات المميزات" />
+        </div>
+      </div>
+
       {/* ══ 3. Contact Info ══ */}
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
         <div className="bg-gradient-to-l from-blue-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
@@ -2004,6 +2047,36 @@ function SettingsTab() {
             </div>
           </div>
           <SaveBtn label="حفظ الهوية البصرية" />
+        </div>
+      </div>
+
+      {/* ══ 5.5. Footer Branding ══ */}
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div className="bg-gradient-to-l from-slate-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+          <MapPin className="w-5 h-5 text-slate-400" />
+          <h3 className="text-slate-100 font-bold text-lg">هوية التذييل (Footer)</h3>
+          <span className="text-xs text-slate-500 mr-auto">النصوص التي تظهر في أسفل كل صفحة</span>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">اسم الموقع في التذييل</label>
+            <Input value={form.footer_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, footer_title: e.target.value }))}
+              placeholder="شاليهات القصيم" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
+            <p className="text-xs text-slate-500">يُستخدم في التذييل بشكل مستقل عن اسم الموقع في القائمة العلوية.</p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">وصف قصير للموقع (التذييل)</label>
+            <Textarea value={form.footer_desc ?? ""} onChange={(e) => setForm((f) => ({ ...f, footer_desc: e.target.value }))}
+              placeholder="المنصة الأولى لحجز الشاليهات والاستراحات الفاخرة في منطقة القصيم. اكتشف أجمل الأماكن لقضاء أوقات لا تُنسى."
+              rows={3} className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص حقوق النشر</label>
+            <Input value={form.copyright_text ?? ""} onChange={(e) => setForm((f) => ({ ...f, copyright_text: e.target.value }))}
+              placeholder="جميع الحقوق محفوظة." className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
+            <p className="text-xs text-slate-500">يُضاف تلقائياً قبله: © {new Date().getFullYear()} + اسم التذييل.</p>
+          </div>
+          <SaveBtn label="حفظ هوية التذييل" />
         </div>
       </div>
 

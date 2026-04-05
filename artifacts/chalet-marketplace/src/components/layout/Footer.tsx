@@ -61,10 +61,10 @@ export function Footer() {
               <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
                 <MapPin className="w-5 h-5" />
               </div>
-              <span className="text-xl font-bold">{settings.site_title || "شاليهات القصيم"}</span>
+              <span className="text-xl font-bold">{settings.footer_title || settings.site_title || "شاليهات القصيم"}</span>
             </div>
             <p className="text-background/70 text-sm leading-relaxed max-w-xs">
-              المنصة الأولى لحجز الشاليهات والاستراحات الفاخرة في منطقة القصيم. اكتشف أجمل الأماكن لقضاء أوقات لا تُنسى.
+              {settings.footer_desc || "المنصة الأولى لحجز الشاليهات والاستراحات الفاخرة في منطقة القصيم. اكتشف أجمل الأماكن لقضاء أوقات لا تُنسى."}
             </p>
           </div>
 
@@ -131,7 +131,7 @@ export function Footer() {
         </div>
 
         <div className="border-t border-background/20 mt-12 pt-6 text-center text-sm text-background/50">
-          <p>© {new Date().getFullYear()} {settings.site_title || "شاليهات القصيم"}. جميع الحقوق محفوظة.</p>
+          <p>© {new Date().getFullYear()} {settings.footer_title || settings.site_title || "شاليهات القصيم"}. {settings.copyright_text || "جميع الحقوق محفوظة."}</p>
         </div>
       </div>
     </footer>
