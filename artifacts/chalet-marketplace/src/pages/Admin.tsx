@@ -65,6 +65,7 @@ interface Submission {
   propertyType?: string | null;
   sections?: string | null;
   adminNote?: string | null;
+  category?: string | null;
   /* extended pricing + terms fields (returned by API if submitted) */
   termsAndConditions?: string | null;
   maxGuests?: number | null;
@@ -246,12 +247,14 @@ function SubmissionReviewModal({
                   bedrooms: s.bedrooms,
                   propertyType: s.propertyType,
                   sections: s.sections,
+                  category: s.category,
                   amenities: s.amenities,
                   photos: s.photos,
                   whatsappNumber: s.whatsappNumber,
                   mapsUrl: s.mapsUrl,
                   socialLink: s.socialLink,
                   termsAndConditions: s.termsAndConditions,
+                  pricePerNight: s.pricePerNight,
                   priceMorning: s.priceMorning,
                   priceEvening: s.priceEvening,
                   priceFullDay: s.priceFullDay,
