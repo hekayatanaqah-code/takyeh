@@ -38,6 +38,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { ChaletDiamondContent } from "@/components/chalet/ChaletDiamondContent";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const API = `${BASE}/api`;
@@ -64,6 +65,24 @@ interface Submission {
   propertyType?: string | null;
   sections?: string | null;
   adminNote?: string | null;
+  /* extended pricing + terms fields (returned by API if submitted) */
+  termsAndConditions?: string | null;
+  maxGuests?: number | null;
+  bedrooms?: number | null;
+  priceMorning?: string | null;
+  priceEvening?: string | null;
+  priceFullDay?: string | null;
+  priceWeekday?: string | null;
+  priceWeekend?: string | null;
+  slotMorning?: boolean;
+  slotEvening?: boolean;
+  slotFullDay?: boolean;
+  morningCheckIn?: string | null;
+  morningCheckOut?: string | null;
+  eveningCheckIn?: string | null;
+  eveningCheckOut?: string | null;
+  fullDayCheckIn?: string | null;
+  fullDayCheckOut?: string | null;
 }
 
 interface AdminChalet {
@@ -191,14 +210,10 @@ function SubmissionReviewModal({
 
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent
-          className="bg-slate-900 border-slate-700 text-white max-w-3xl p-0 flex flex-col"
+          className="bg-slate-900 border-slate-700 text-white max-w-5xl w-full p-0 flex flex-col"
           style={{ maxHeight: "92vh" }}
           dir="rtl"
         >
-          {/* ── GHOST FOUND ── */}
-          <div style={{ background: "#00FF00", color: "#000", fontWeight: "bold", fontSize: 22, textAlign: "center", padding: "16px", letterSpacing: 2 }}>
-            ✅ FOUND YOU — هذا هو النافذة المنبثقة (SubmissionReviewModal في Admin.tsx سطر 140)
-          </div>
           {/* ── Sticky Header ───────────────────────────── */}
           <div className="shrink-0 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-6 py-4">
             <h2 className="text-xl font-bold text-white leading-tight">{s.nameAr}</h2>
@@ -217,210 +232,76 @@ function SubmissionReviewModal({
             </div>
           </div>
 
-          {/* ── Scrollable Body ──────────────────────────── */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
-
-            {/* ── Photo Gallery ── */}
-            <div>
-              <p className="text-slate-300 text-sm font-semibold mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-4 bg-amber-500 rounded-full shrink-0" />
-                الصور المرفوعة {s.photos && s.photos.length > 0 ? `(${s.photos.length})` : ""}
-              </p>
-              {s.photos && s.photos.length > 0 ? (
-                <div className={`grid gap-2 ${s.photos.length === 1 ? "grid-cols-1" : s.photos.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
-                  {s.photos.map((url, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setLightboxUrl(url)}
-                      className="relative group overflow-hidden rounded-xl border border-slate-700 hover:border-amber-500/60 transition-colors cursor-zoom-in"
-                    >
-                      <img
-                        src={url}
-                        alt={`صورة ${i + 1}`}
-                        className="w-full h-40 object-cover transition-transform duration-300 group-hover:scale-105"
-                      />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                        <Eye className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-24 rounded-xl border border-dashed border-slate-700 text-slate-500 text-sm">
-                  لم يتم رفع أي صور
-                </div>
-              )}
+          {/* ── Scrollable Body: Diamond Edition ── */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="p-6">
+              <ChaletDiamondContent
+                mode="modal"
+                data={{
+                  nameAr: s.nameAr,
+                  descriptionAr: s.descriptionAr,
+                  location: s.location,
+                  district: s.district,
+                  maxGuests: s.maxGuests,
+                  bedrooms: s.bedrooms,
+                  propertyType: s.propertyType,
+                  sections: s.sections,
+                  amenities: s.amenities,
+                  photos: s.photos,
+                  whatsappNumber: s.whatsappNumber,
+                  mapsUrl: s.mapsUrl,
+                  socialLink: s.socialLink,
+                  termsAndConditions: s.termsAndConditions,
+                  priceMorning: s.priceMorning,
+                  priceEvening: s.priceEvening,
+                  priceFullDay: s.priceFullDay,
+                  priceWeekday: s.priceWeekday,
+                  priceWeekend: s.priceWeekend,
+                  slotMorning: s.slotMorning,
+                  slotEvening: s.slotEvening,
+                  slotFullDay: s.slotFullDay,
+                  morningCheckIn: s.morningCheckIn,
+                  morningCheckOut: s.morningCheckOut,
+                  eveningCheckIn: s.eveningCheckIn,
+                  eveningCheckOut: s.eveningCheckOut,
+                  fullDayCheckIn: s.fullDayCheckIn,
+                  fullDayCheckOut: s.fullDayCheckOut,
+                }}
+              />
             </div>
 
-            {/* ── Full Info Grid ── */}
-            <div>
-              <p className="text-slate-300 text-sm font-semibold mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-4 bg-amber-500 rounded-full shrink-0" />
-                المعلومات الأساسية
-              </p>
-              <div className="grid grid-cols-2 gap-3 bg-slate-800/60 rounded-xl p-4 text-sm">
-                {/* City / District */}
-                <div className="space-y-0.5">
-                  <p className="text-slate-400 text-xs">المدينة / الحي</p>
-                  <p className="text-white font-medium">
-                    {s.location}
-                    {s.district ? <span className="text-slate-400"> — {s.district}</span> : ""}
-                  </p>
-                </div>
-                {/* WhatsApp */}
-                <div className="space-y-0.5">
-                  <p className="text-slate-400 text-xs">رقم واتساب</p>
-                  <p className="text-white font-mono" dir="ltr">{s.whatsappNumber}</p>
-                </div>
-                {/* Property Type */}
-                <div className="space-y-0.5">
-                  <p className="text-slate-400 text-xs">نوع العقار</p>
-                  {s.propertyType
-                    ? <p className="text-amber-400 font-semibold">{s.propertyType}</p>
-                    : <p className="text-slate-600">—</p>
-                  }
-                </div>
-                {/* Sections */}
-                <div className="space-y-0.5">
-                  <p className="text-slate-400 text-xs">عدد الأقسام</p>
-                  {s.sections
-                    ? <p className="text-amber-400 font-semibold">{s.sections}</p>
-                    : <p className="text-slate-600">—</p>
-                  }
-                </div>
-                {/* Maps URL */}
-                <div className="col-span-2 space-y-0.5">
-                  <p className="text-slate-400 text-xs">رابط الخريطة</p>
-                  {s.mapsUrl ? (
-                    <a href={s.mapsUrl} target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-blue-400 hover:text-blue-300 text-xs font-medium">
-                      <MapPin className="w-3.5 h-3.5" />
-                      عرض الموقع على خرائط قوقل
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  ) : (
-                    <p className="text-slate-600 text-xs">لم يتم إدخال رابط</p>
-                  )}
-                </div>
-                {/* Trial ends */}
-                {s.trialEndsAt && (
-                  <div className="col-span-2 space-y-0.5">
-                    <p className="text-slate-400 text-xs">انتهاء الفترة التجريبية</p>
-                    {(() => {
-                      const d = formatDualDate(s.trialEndsAt!.split("T")[0]);
-                      return (
-                        <p className="text-amber-400 font-medium">
-                          {d.gregorian}
-                          <span className="text-amber-600 text-xs mr-2">({d.hijri})</span>
-                        </p>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* ── Social Link Verification ── */}
-            <div>
-              <p className="text-slate-300 text-sm font-semibold mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-4 bg-amber-500 rounded-full shrink-0" />
-                التحقق من هوية المالك
-              </p>
-              {s.socialLink ? (
-                <div className="bg-pink-950/40 border border-pink-800/50 rounded-xl p-4 flex items-start gap-3">
-                  <div className="w-9 h-9 bg-pink-900/60 rounded-lg flex items-center justify-center shrink-0">
-                    <Instagram className="w-5 h-5 text-pink-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-pink-300 font-bold text-sm mb-0.5">يجب التحقق قبل الموافقة</p>
-                    <p className="text-slate-400 text-xs mb-2 break-all">{s.socialLink}</p>
-                    <a
-                      href={s.socialLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 bg-pink-900/40 hover:bg-pink-900/70 border border-pink-700/40 text-pink-300 hover:text-pink-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      فتح الحساب الاجتماعي
-                    </a>
+            {/* Admin-only: previous note + reason input */}
+            <div className="px-6 pb-4 space-y-4">
+              {s.adminNote && (
+                <div className="bg-orange-950/40 border border-orange-700/50 rounded-xl p-4 flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-orange-300 text-sm font-bold mb-1">ملاحظة الإدارة السابقة</p>
+                    <p className="text-slate-300 text-sm">{s.adminNote}</p>
                   </div>
                 </div>
-              ) : (
-                <div className="flex items-center gap-2 bg-slate-800/40 border border-slate-700 rounded-xl px-4 py-3 text-slate-500 text-sm">
-                  <Instagram className="w-4 h-4 shrink-0" />
-                  لم يتم تقديم رابط تواصل اجتماعي
+              )}
+              {pendingAction && needsReason && (
+                <div className="bg-slate-800/80 border border-slate-600 rounded-xl p-4 space-y-2">
+                  <label className="text-slate-300 text-sm font-semibold flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    {pendingAction === "needs_revision"
+                      ? "سبب الإرجاع للتعديل (مطلوب — سيُعرض للمالك)"
+                      : "سبب الرفض (مطلوب — سيُعرض للمالك)"}
+                  </label>
+                  <textarea
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder={pendingAction === "needs_revision"
+                      ? "مثال: الصور غير واضحة، يرجى رفع صور بجودة أعلى..."
+                      : "مثال: المعلومات المقدمة غير مكتملة..."}
+                    rows={3}
+                    autoFocus
+                    className="w-full bg-slate-900 border border-slate-600 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50"
+                  />
                 </div>
               )}
             </div>
-
-            {/* ── Description ── */}
-            <div>
-              <p className="text-slate-300 text-sm font-semibold mb-2 flex items-center gap-2">
-                <span className="w-1.5 h-4 bg-amber-500 rounded-full shrink-0" />
-                وصف العقار
-              </p>
-              {s.descriptionAr ? (
-                <p className="text-slate-200 text-sm leading-relaxed bg-slate-800/60 rounded-xl p-4 border border-slate-700">
-                  {s.descriptionAr}
-                </p>
-              ) : (
-                <p className="text-slate-600 text-sm bg-slate-800/40 rounded-xl p-4 border border-slate-700">لا يوجد وصف</p>
-              )}
-            </div>
-
-            {/* ── Amenities ── */}
-            <div>
-              <p className="text-slate-300 text-sm font-semibold mb-2 flex items-center gap-2">
-                <span className="w-1.5 h-4 bg-amber-500 rounded-full shrink-0" />
-                المرافق والمميزات {s.amenities && s.amenities.length > 0 ? `(${s.amenities.length})` : ""}
-              </p>
-              {s.amenities && s.amenities.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {s.amenities.map((a) => (
-                    <span key={a} className="inline-flex items-center gap-1 text-xs bg-slate-700/80 text-slate-200 border border-slate-600 px-2.5 py-1 rounded-full">
-                      <CheckCircle className="w-3 h-3 text-green-400" />
-                      {a}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-slate-600 text-sm">لم يتم اختيار أي مرافق</p>
-              )}
-            </div>
-
-            {/* ── Previous admin note ── */}
-            {s.adminNote && (
-              <div className="bg-orange-950/40 border border-orange-700/50 rounded-xl p-4 flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-orange-300 text-sm font-bold mb-1">ملاحظة الإدارة السابقة</p>
-                  <p className="text-slate-300 text-sm">{s.adminNote}</p>
-                </div>
-              </div>
-            )}
-
-            {/* ── Reason input (shown when a reject/revision action is pending) ── */}
-            {pendingAction && needsReason && (
-              <div className="bg-slate-800/80 border border-slate-600 rounded-xl p-4 space-y-2">
-                <label className="text-slate-300 text-sm font-semibold flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                  {pendingAction === "needs_revision"
-                    ? "سبب الإرجاع للتعديل (مطلوب — سيُعرض للمالك)"
-                    : "سبب الرفض (مطلوب — سيُعرض للمالك)"}
-                </label>
-                <textarea
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder={pendingAction === "needs_revision"
-                    ? "مثال: الصور غير واضحة، يرجى رفع صور بجودة أعلى..."
-                    : "مثال: المعلومات المقدمة غير مكتملة..."}
-                  rows={3}
-                  autoFocus
-                  className="w-full bg-slate-900 border border-slate-600 text-slate-100 placeholder-slate-500 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50"
-                />
-              </div>
-            )}
           </div>
 
           {/* ── Sticky Bottom Action Bar ──────────────────── */}
