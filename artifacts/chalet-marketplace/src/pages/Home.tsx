@@ -45,6 +45,16 @@ export default function Home() {
   const [bookingDate, setBookingDate]       = useState<string>("");
   const [numDays, setNumDays]               = useState<number>(1);
 
+  const { data: siteSettings = {} } = useQuery<Record<string, string>>({
+    queryKey: ["siteSettings"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/catalog/page-content`, { credentials: "include" });
+      if (!r.ok) return {};
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
   const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["catalog", "cities"],
     queryFn: async () => {
@@ -101,7 +111,7 @@ export default function Home() {
         <section className="relative pt-24 pb-32 md:pt-32 md:pb-48 px-4 overflow-hidden">
           <div className="absolute inset-0 z-0">
             <img
-              src={`${import.meta.env.BASE_URL}images/hero-bg.png`}
+              src={siteSettings.hero_bg_url || `${import.meta.env.BASE_URL}images/hero-bg.png`}
               alt="Chalet in Al-Qassim"
               className="w-full h-full object-cover"
               onError={(e) => {
@@ -120,11 +130,10 @@ export default function Home() {
               className="max-w-4xl mx-auto text-center text-white"
             >
               <h1 className="text-4xl md:text-6xl font-extrabold mb-6 leading-tight">
-                اكتشف أجمل الشاليهات في <span className="text-primary">القصيم</span>
+                {siteSettings.hero_title || <>اكتشف أجمل الشاليهات في <span className="text-primary">القصيم</span></>}
               </h1>
               <p className="text-lg md:text-xl text-white/80 mb-10 max-w-2xl mx-auto">
-                احجز استراحتك أو شاليهك القادم بكل سهولة. خيارات متنوعة تناسب جميع العائلات
-                والمناسبات.
+                {siteSettings.hero_subtitle || "احجز استراحتك أو شاليهك القادم بكل سهولة. خيارات متنوعة تناسب جميع العائلات والمناسبات."}
               </p>
 
               {/* ── Search Card ─────────────────────────────────────── */}

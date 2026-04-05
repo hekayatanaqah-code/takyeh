@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, ExternalLink, Instagram, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, ExternalLink, Instagram, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -1715,18 +1715,23 @@ function ServiceCategoriesTab() {
 }
 
 /* ── Site Settings Tab ────────────────────────── */
+const PRESET_COLORS = ["#d97706", "#16a34a", "#2563eb", "#9333ea", "#dc2626", "#0891b2", "#c2410c", "#0f766e"];
+
+async function uploadSettingImage(file: File): Promise<string | null> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${BASE}/api/storage/uploads/process`, { method: "POST", body: formData });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.url ?? null;
+}
+
 function SettingsTab() {
   const qc = useQueryClient();
   const [form, setForm] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
-
-  const settingFields = [
-    { key: "platform_whatsapp",  label: "رقم واتساب المنصة (بدون +)",     placeholder: "966500000000",            isLtr: true,     isTextarea: false },
-    { key: "whatsapp_message",   label: "نص الرسالة التلقائية للواتساب",   placeholder: "مرحباً، أود الاستفسار...", isLtr: false,    isTextarea: true  },
-    { key: "platform_email",     label: "البريد الإلكتروني للتواصل",       placeholder: "info@example.com",        isLtr: true,     isTextarea: false },
-    { key: "instagram_url",      label: "رابط إنستقرام",                   placeholder: "https://instagram.com/...", isLtr: true,   isTextarea: false },
-    { key: "twitter_url",        label: "رابط تويتر/X",                    placeholder: "https://x.com/...",       isLtr: true,     isTextarea: false },
-  ];
+  const [logoUploading, setLogoUploading]     = useState(false);
+  const [heroBgUploading, setHeroBgUploading] = useState(false);
 
   const { data: settings, isLoading } = useQuery<Record<string, string>>({
     queryKey: ["admin", "settings"],
@@ -1737,9 +1742,7 @@ function SettingsTab() {
     },
   });
 
-  useEffect(() => {
-    if (settings) setForm(settings);
-  }, [settings]);
+  useEffect(() => { if (settings) setForm(settings); }, [settings]);
 
   const saveSettings = useMutation({
     mutationFn: async (data: Record<string, string>) => {
@@ -1748,22 +1751,215 @@ function SettingsTab() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "settings"] });
+      qc.invalidateQueries({ queryKey: ["siteSettings"] });
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      setTimeout(() => setSaved(false), 2500);
     },
   });
 
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    const url = await uploadSettingImage(file);
+    setLogoUploading(false);
+    if (url) setForm((f) => ({ ...f, site_logo_url: `${BASE}${url}` }));
+  }
+
+  async function handleHeroBgUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setHeroBgUploading(true);
+    const url = await uploadSettingImage(file);
+    setHeroBgUploading(false);
+    if (url) setForm((f) => ({ ...f, hero_bg_url: `${BASE}${url}` }));
+  }
+
+  const settingFields = [
+    { key: "platform_whatsapp", label: "رقم واتساب المنصة (بدون +)",     placeholder: "966500000000",             isLtr: true,  isTextarea: false },
+    { key: "whatsapp_message",  label: "نص الرسالة التلقائية للواتساب",   placeholder: "مرحباً، أود الاستفسار...", isLtr: false, isTextarea: true  },
+    { key: "platform_email",    label: "البريد الإلكتروني للتواصل",       placeholder: "info@example.com",         isLtr: true,  isTextarea: false },
+    { key: "instagram_url",     label: "رابط إنستقرام",                   placeholder: "https://instagram.com/...", isLtr: true,  isTextarea: false },
+    { key: "twitter_url",       label: "رابط تويتر/X",                    placeholder: "https://x.com/...",        isLtr: true,  isTextarea: false },
+  ];
+
   const pageContentFields = [
-    { key: "about_page_content",  label: "محتوى صفحة «من نحن»",       icon: "ℹ️", path: "/about" },
-    { key: "faq_page_content",    label: "محتوى صفحة «أسئلة شائعة»",  icon: "❓", path: "/faq" },
+    { key: "about_page_content",  label: "محتوى صفحة «من نحن»",         icon: "ℹ️", path: "/about" },
+    { key: "faq_page_content",    label: "محتوى صفحة «أسئلة شائعة»",    icon: "❓", path: "/faq"   },
     { key: "terms_page_content",  label: "محتوى صفحة «شروط الاستخدام»", icon: "📄", path: "/terms" },
   ];
 
   if (isLoading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-400 w-6 h-6" /></div>;
 
+  const SaveBtn = ({ label }: { label: string }) => (
+    <Button onClick={() => saveSettings.mutate(form)} disabled={saveSettings.isPending} className="bg-amber-600 hover:bg-amber-700 w-full">
+      {saved ? "✓ تم الحفظ" : saveSettings.isPending ? "جاري الحفظ..." : label}
+    </Button>
+  );
+
   return (
     <div className="max-w-2xl space-y-6">
-      {/* ── Contact & Social Settings ── */}
+
+      {/* ══ 1. Brand Identity Card ══ */}
+      <div className="bg-slate-800 rounded-xl p-6 border border-amber-500/30 space-y-6">
+        <h3 className="text-slate-200 font-bold text-lg flex items-center gap-2">
+          <Palette className="w-5 h-5 text-amber-400" />
+          الهوية البصرية للموقع
+        </h3>
+
+        {/* Logo Upload */}
+        <div className="space-y-3">
+          <label className="text-sm font-semibold text-slate-300">شعار الموقع (Logo)</label>
+          {form.site_logo_url && (
+            <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-900 border border-slate-600 flex items-center justify-center">
+              <img src={form.site_logo_url} alt="Logo" className="w-full h-full object-contain p-1" />
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" id="logo-upload" />
+            <label htmlFor="logo-upload" className="cursor-pointer bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm px-4 py-2 rounded-lg border border-slate-600 transition-colors flex items-center gap-2">
+              <Upload className="w-4 h-4" />
+              {logoUploading ? "جاري الرفع..." : "رفع الشعار"}
+            </label>
+            {form.site_logo_url && <span className="text-xs text-green-400 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> تم رفع الشعار</span>}
+          </div>
+          {form.site_logo_url && (
+            <div className="flex items-center gap-2">
+              <Input value={form.site_logo_url} onChange={(e) => setForm((f) => ({ ...f, site_logo_url: e.target.value }))} className="bg-slate-900 border-slate-600 text-slate-400 text-xs" dir="ltr" placeholder="أو أدخل رابط الشعار مباشرة" />
+              <Button variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, site_logo_url: "" }))} className="text-slate-500 hover:text-red-400 shrink-0"><X className="w-4 h-4" /></Button>
+            </div>
+          )}
+        </div>
+
+        {/* Site Title */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-slate-300">اسم الموقع</label>
+          <Input
+            value={form.site_title ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, site_title: e.target.value }))}
+            placeholder="شاليهات القصيم"
+            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-base"
+            dir="rtl"
+          />
+          <p className="text-xs text-slate-500">يظهر في شريط التنقل العلوي وعلامة تبويب المتصفح.</p>
+        </div>
+
+        {/* Primary Color Picker */}
+        <div className="space-y-2">
+          <label className="text-sm font-semibold text-slate-300">اللون الرئيسي للموقع</label>
+          <div className="flex items-center gap-3">
+            <input
+              type="color"
+              value={form.primary_color || "#d97706"}
+              onChange={(e) => setForm((f) => ({ ...f, primary_color: e.target.value }))}
+              className="w-11 h-11 rounded-lg cursor-pointer border-2 border-slate-600 bg-transparent p-0.5"
+            />
+            <Input
+              value={form.primary_color ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, primary_color: e.target.value }))}
+              placeholder="#d97706"
+              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 font-mono w-28"
+              dir="ltr"
+              maxLength={7}
+            />
+            <span className="text-xs text-slate-400">الافتراضي: <span className="text-amber-400 font-mono">#d97706</span></span>
+          </div>
+          {/* Preset color swatches */}
+          <div className="flex gap-2 mt-1 flex-wrap">
+            {PRESET_COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setForm((f) => ({ ...f, primary_color: c }))}
+                title={c}
+                className="w-7 h-7 rounded-full border-2 transition-all hover:scale-110"
+                style={{ backgroundColor: c, borderColor: form.primary_color === c ? "white" : "transparent" }}
+              />
+            ))}
+          </div>
+          {/* Live preview */}
+          {form.primary_color && (
+            <div className="flex items-center gap-3 mt-2 bg-slate-900/60 rounded-lg px-3 py-2">
+              <span className="text-xs text-slate-400">معاينة:</span>
+              <span className="text-sm font-bold px-3 py-1 rounded-full" style={{ backgroundColor: form.primary_color + "33", color: form.primary_color }}>
+                زر رئيسي
+              </span>
+              <span className="text-sm font-semibold" style={{ color: form.primary_color }}>رابط ← نص مميز</span>
+            </div>
+          )}
+        </div>
+
+        <SaveBtn label="حفظ الهوية البصرية" />
+      </div>
+
+      {/* ══ 2. Hero Section Card ══ */}
+      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-5">
+        <h3 className="text-slate-200 font-bold text-lg flex items-center gap-2">
+          <Home className="w-5 h-5 text-amber-400" />
+          قسم الصفحة الرئيسية (Hero)
+        </h3>
+
+        {/* Hero Title */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-slate-300">العنوان الرئيسي</label>
+          <Input
+            value={form.hero_title ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, hero_title: e.target.value }))}
+            placeholder="اكتشف أجمل الشاليهات في القصيم"
+            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+            dir="rtl"
+          />
+        </div>
+
+        {/* Hero Subtitle */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-slate-300">النص الوصفي</label>
+          <Textarea
+            value={form.hero_subtitle ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, hero_subtitle: e.target.value }))}
+            placeholder="نوفر لك أفضل تجربة إقامة بأسعار تنافسية في أجمل شاليهات المنطقة..."
+            rows={3}
+            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none"
+            dir="rtl"
+          />
+        </div>
+
+        {/* Hero BG Image */}
+        <div className="space-y-2">
+          <label className="text-sm font-semibold text-slate-300">صورة خلفية القسم الرئيسي</label>
+          {form.hero_bg_url && (
+            <div className="relative w-full h-36 rounded-xl overflow-hidden bg-slate-900 border border-slate-600">
+              <img src={form.hero_bg_url} alt="Hero BG" className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+              <Button
+                variant="ghost" size="sm"
+                onClick={() => setForm((f) => ({ ...f, hero_bg_url: "" }))}
+                className="absolute top-2 left-2 text-white bg-black/50 hover:bg-red-600/80 h-7 w-7 p-0 rounded-full"
+              ><X className="w-3.5 h-3.5" /></Button>
+            </div>
+          )}
+          <div className="flex items-center gap-3">
+            <input type="file" accept="image/*" onChange={handleHeroBgUpload} className="hidden" id="hero-bg-upload" />
+            <label htmlFor="hero-bg-upload" className="cursor-pointer bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm px-4 py-2 rounded-lg border border-slate-600 transition-colors flex items-center gap-2">
+              <ImageIcon className="w-4 h-4" />
+              {heroBgUploading ? "جاري الرفع..." : "رفع صورة الخلفية"}
+            </label>
+            {form.hero_bg_url && <span className="text-xs text-green-400 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> تم رفع الصورة</span>}
+          </div>
+          {!form.hero_bg_url && (
+            <Input
+              value={form.hero_bg_url ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, hero_bg_url: e.target.value }))}
+              placeholder="أو أدخل رابط الصورة مباشرة"
+              className="bg-slate-900 border-slate-600 text-slate-400 text-xs"
+              dir="ltr"
+            />
+          )}
+        </div>
+
+        <SaveBtn label="حفظ إعدادات الصفحة الرئيسية" />
+      </div>
+
+      {/* ══ 3. Contact & Social Settings ══ */}
       <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-5">
         <h3 className="text-slate-200 font-semibold text-lg">معلومات التواصل والسوشيال</h3>
         {settingFields.map((field) => (
@@ -1789,30 +1985,22 @@ function SettingsTab() {
             )}
           </div>
         ))}
-        {/* Live WhatsApp preview */}
         {(form.platform_whatsapp || form.whatsapp_message) && (
           <div className="bg-slate-900/60 border border-slate-600 rounded-lg p-3 space-y-1">
             <p className="text-xs text-slate-400 font-semibold">معاينة رابط الواتساب:</p>
             <a
               href={`https://wa.me/${(form.platform_whatsapp ?? "").replace(/\D/g, "")}?text=${encodeURIComponent(form.whatsapp_message ?? "")}`}
-              target="_blank"
-              rel="noreferrer"
+              target="_blank" rel="noreferrer"
               className="text-xs text-[#25D366] break-all hover:underline"
             >
               {`https://wa.me/${(form.platform_whatsapp ?? "").replace(/\D/g, "")}?text=${encodeURIComponent(form.whatsapp_message ?? "").slice(0, 40)}...`}
             </a>
           </div>
         )}
-        <Button
-          onClick={() => saveSettings.mutate(form)}
-          disabled={saveSettings.isPending}
-          className="bg-amber-600 hover:bg-amber-700 w-full"
-        >
-          {saved ? "✓ تم الحفظ" : saveSettings.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
-        </Button>
+        <SaveBtn label="حفظ الإعدادات" />
       </div>
 
-      {/* ── Page Content Sections ── */}
+      {/* ══ 4. Page Content Sections ══ */}
       {pageContentFields.map((field) => (
         <div key={field.key} className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-4">
           <div className="flex items-center justify-between">
@@ -1820,18 +2008,11 @@ function SettingsTab() {
               <span>{field.icon}</span>
               {field.label}
             </h3>
-            <a
-              href={field.path}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-amber-400 hover:text-amber-300 underline"
-            >
+            <a href={field.path} target="_blank" rel="noreferrer" className="text-xs text-amber-400 hover:text-amber-300 underline">
               معاينة الصفحة ↗
             </a>
           </div>
-          <p className="text-xs text-slate-400">
-            اكتب المحتوى النصي للصفحة. يمكنك استخدام الأسطر الفارغة لتنسيق الفقرات.
-          </p>
+          <p className="text-xs text-slate-400">اكتب المحتوى النصي للصفحة. يمكنك استخدام الأسطر الفارغة لتنسيق الفقرات.</p>
           <Textarea
             value={form[field.key] ?? ""}
             onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
@@ -1840,13 +2021,7 @@ function SettingsTab() {
             className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-sm leading-relaxed resize-y"
             dir="rtl"
           />
-          <Button
-            onClick={() => saveSettings.mutate(form)}
-            disabled={saveSettings.isPending}
-            className="bg-amber-600 hover:bg-amber-700 w-full"
-          >
-            {saved ? "✓ تم الحفظ" : saveSettings.isPending ? "جاري الحفظ..." : `حفظ ${field.label}`}
-          </Button>
+          <SaveBtn label={`حفظ ${field.label}`} />
         </div>
       ))}
     </div>

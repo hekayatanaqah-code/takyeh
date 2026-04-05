@@ -69,6 +69,12 @@ router.get("/page-content", async (_req, res) => {
     "platform_email",
     "instagram_url",
     "twitter_url",
+    "site_title",
+    "site_logo_url",
+    "primary_color",
+    "hero_title",
+    "hero_subtitle",
+    "hero_bg_url",
   ];
   const rows = await db
     .select()
