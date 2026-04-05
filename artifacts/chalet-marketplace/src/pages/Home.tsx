@@ -132,9 +132,23 @@ export default function Home() {
               <h1 className="text-4xl md:text-6xl font-extrabold mb-6 leading-tight">
                 {siteSettings.hero_title || <>اكتشف أجمل الشاليهات في <span className="text-primary">القصيم</span></>}
               </h1>
-              <p className="text-lg md:text-xl text-white/80 mb-10 max-w-2xl mx-auto">
+              <p className="text-lg md:text-xl text-white/80 mb-8 max-w-2xl mx-auto">
                 {siteSettings.hero_subtitle || "احجز استراحتك أو شاليهك القادم بكل سهولة. خيارات متنوعة تناسب جميع العائلات والمناسبات."}
               </p>
+
+              {/* ── Feature Badges ── */}
+              <div className="flex items-center justify-center flex-wrap gap-3 mb-8">
+                {[
+                  siteSettings.feature_1 || "أفضل الشاليهات",
+                  siteSettings.feature_2 || "حجز سهل وآمن",
+                  siteSettings.feature_3 || "دعم فني متواصل",
+                ].map((feat, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 px-4 py-2 rounded-full text-white text-sm font-medium">
+                    <span className="w-5 h-5 rounded-full bg-amber-400/30 flex items-center justify-center text-amber-300 text-xs font-bold">✓</span>
+                    {feat}
+                  </div>
+                ))}
+              </div>
 
               {/* ── Search Card ─────────────────────────────────────── */}
               <div className="bg-white/10 backdrop-blur-md border border-white/20 p-2 md:p-3 rounded-2xl shadow-2xl flex flex-col md:flex-row flex-wrap gap-3">

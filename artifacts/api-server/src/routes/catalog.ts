@@ -75,6 +75,15 @@ router.get("/page-content", async (_req, res) => {
     "hero_title",
     "hero_subtitle",
     "hero_bg_url",
+    "feature_1",
+    "feature_2",
+    "feature_3",
+    "snapchat_url",
+    "snapchat_show",
+    "tiktok_url",
+    "tiktok_show",
+    "instagram_show",
+    "twitter_show",
   ];
   const rows = await db
     .select()
