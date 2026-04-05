@@ -88,7 +88,11 @@ function amenityLabel(key: string) {
     const text = key.slice(6).trim();
     return { ar: `مرافق أخرى: ${text}`, icon: "✨", color: "bg-amber-500/15 border-amber-500/25 text-amber-300" };
   }
-  return AMENITY_MAP[key] ?? AMENITY_AR_MAP[key] ?? { ar: key, icon: "🏡", color: "bg-stone-700/50 border-stone-600 text-stone-300" };
+  if (AMENITY_MAP[key])    return AMENITY_MAP[key];
+  if (AMENITY_AR_MAP[key]) return AMENITY_AR_MAP[key];
+  /* Unknown key — never show raw English: strip underscores → Arabic "مرفق: x" */
+  const readable = key.replace(/_/g, " ");
+  return { ar: `مرفق: ${readable}`, icon: "🏡", color: "bg-stone-700/50 border-stone-600 text-stone-300" };
 }
 
 function toHijri(date: Date) {
@@ -515,10 +519,10 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
           {/* ── Basic Information Card ── */}
           {(() => {
             const rows: { icon: ReactNode; label: string; value: string; highlight?: boolean }[] = [];
-            rows.push({ icon: <Users     className="w-4 h-4 text-amber-400" />, label: "الطاقة الاستيعابية", value: data.maxGuests ? `${data.maxGuests} ضيف` : "—",  highlight: !!data.maxGuests });
-            if (data.bedrooms != null && data.bedrooms > 0)   rows.push({ icon: <BedDouble className="w-4 h-4 text-amber-400" />, label: "غرف النوم",          value: `${data.bedrooms} غرفة`      });
-            rows.push({ icon: <Sofa      className="w-4 h-4 text-amber-400" />, label: "عدد الأقسام",        value: data.sections ? String(data.sections) : "—",  highlight: !!data.sections });
-            rows.push({ icon: <Home      className="w-4 h-4 text-amber-400" />, label: "نوع العقار",          value: data.propertyType ?? "—",                     highlight: !!data.propertyType });
+            rows.push({ icon: <Users     className="w-4 h-4 text-amber-400" />, label: "الطاقة الاستيعابية", value: data.maxGuests ? `${data.maxGuests} ضيف` : "غير محدد",  highlight: !!data.maxGuests });
+            if (data.bedrooms != null && data.bedrooms > 0)   rows.push({ icon: <BedDouble className="w-4 h-4 text-amber-400" />, label: "غرف النوم",          value: `${data.bedrooms} غرفة`          });
+            rows.push({ icon: <Sofa      className="w-4 h-4 text-amber-400" />, label: "عدد الأقسام",        value: data.sections ? String(data.sections) : "غير محدد",  highlight: !!data.sections });
+            rows.push({ icon: <Home      className="w-4 h-4 text-amber-400" />, label: "نوع العقار",          value: data.propertyType ?? "غير محدد",                         highlight: !!data.propertyType });
             if (data.category)                                 rows.push({ icon: <Tag      className="w-4 h-4 text-amber-400" />, label: "الفئة",               value: data.category                });
             if (data.whatsappNumber)                           rows.push({ icon: <MessageCircle className="w-4 h-4 text-green-400" />, label: "رقم التواصل",   value: data.whatsappNumber          });
             if (data.location)                                 rows.push({ icon: <MapPin   className="w-4 h-4 text-amber-400" />, label: "المدينة / الحي",      value: `${data.location}${data.district ? ` · ${data.district}` : ""}` });
