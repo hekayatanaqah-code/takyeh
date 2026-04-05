@@ -90,9 +90,7 @@ function amenityLabel(key: string) {
   }
   if (AMENITY_MAP[key])    return AMENITY_MAP[key];
   if (AMENITY_AR_MAP[key]) return AMENITY_AR_MAP[key];
-  /* Unknown key — never show raw English: strip underscores → Arabic "مرفق: x" */
-  const readable = key.replace(/_/g, " ");
-  return { ar: `مرفق: ${readable}`, icon: "🏡", color: "bg-stone-700/50 border-stone-600 text-stone-300" };
+  return { ar: "مرفق إضافي", icon: "🏡", color: "bg-stone-700/50 border-stone-600 text-stone-300" };
 }
 
 function toHijri(date: Date) {
