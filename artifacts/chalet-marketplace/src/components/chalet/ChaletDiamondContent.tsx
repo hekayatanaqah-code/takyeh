@@ -477,15 +477,15 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
           {/* ── Basic Information Card ── */}
           {(() => {
             const rows: { icon: ReactNode; label: string; value: string; highlight?: boolean }[] = [];
-            rows.push({ icon: <Users     className="w-4 h-4 text-amber-400" />, label: "أقصى عدد الضيوف",  value: data.maxGuests ? `${data.maxGuests} ضيف` : "—",        highlight: !!data.maxGuests });
-            if (data.bedrooms != null && data.bedrooms > 0)   rows.push({ icon: <BedDouble className="w-4 h-4 text-amber-400" />, label: "غرف النوم",         value: `${data.bedrooms} غرفة`       });
-            rows.push({ icon: <Sofa      className="w-4 h-4 text-amber-400" />, label: "عدد الأقسام",       value: data.sections ? String(data.sections) : "—",          highlight: !!data.sections });
-            if (data.propertyType)                             rows.push({ icon: <Home     className="w-4 h-4 text-amber-400" />, label: "نوع العقار",         value: data.propertyType             });
-            if (data.category)                                 rows.push({ icon: <Tag      className="w-4 h-4 text-amber-400" />, label: "الفئة",              value: data.category                 });
-            if (data.checkInTime)                              rows.push({ icon: <LogIn    className="w-4 h-4 text-green-400" />, label: "وقت الدخول",         value: data.checkInTime              });
-            if (data.checkOutTime)                             rows.push({ icon: <LogOut   className="w-4 h-4 text-red-400"   />, label: "وقت الخروج",        value: data.checkOutTime             });
-            if (data.whatsappNumber)                           rows.push({ icon: <MessageCircle className="w-4 h-4 text-green-400" />, label: "رقم التواصل",  value: data.whatsappNumber });
-            if (data.location)                                 rows.push({ icon: <MapPin   className="w-4 h-4 text-amber-400" />, label: "المدينة / الحي",     value: `${data.location}${data.district ? ` · ${data.district}` : ""}` });
+            rows.push({ icon: <Users     className="w-4 h-4 text-amber-400" />, label: "الطاقة الاستيعابية", value: data.maxGuests ? `${data.maxGuests} ضيف` : "—",  highlight: !!data.maxGuests });
+            if (data.bedrooms != null && data.bedrooms > 0)   rows.push({ icon: <BedDouble className="w-4 h-4 text-amber-400" />, label: "غرف النوم",          value: `${data.bedrooms} غرفة`      });
+            rows.push({ icon: <Sofa      className="w-4 h-4 text-amber-400" />, label: "عدد الأقسام",        value: data.sections ? String(data.sections) : "—",  highlight: !!data.sections });
+            rows.push({ icon: <Home      className="w-4 h-4 text-amber-400" />, label: "نوع العقار",          value: data.propertyType ?? "—",                     highlight: !!data.propertyType });
+            if (data.category)                                 rows.push({ icon: <Tag      className="w-4 h-4 text-amber-400" />, label: "الفئة",               value: data.category                });
+            rows.push({ icon: <LogIn     className="w-4 h-4 text-green-400" />, label: "وقت الدخول",          value: data.checkInTime  ?? "—",                     highlight: !!data.checkInTime  });
+            rows.push({ icon: <LogOut    className="w-4 h-4 text-red-400"   />, label: "وقت الخروج",          value: data.checkOutTime ?? "—",                     highlight: !!data.checkOutTime });
+            if (data.whatsappNumber)                           rows.push({ icon: <MessageCircle className="w-4 h-4 text-green-400" />, label: "رقم التواصل",   value: data.whatsappNumber          });
+            if (data.location)                                 rows.push({ icon: <MapPin   className="w-4 h-4 text-amber-400" />, label: "المدينة / الحي",      value: `${data.location}${data.district ? ` · ${data.district}` : ""}` });
             return (
               <div className="border-t border-stone-800 pt-6">
                 <h3 className="text-sm font-bold text-stone-100 mb-4 flex items-center gap-2">
@@ -561,20 +561,20 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
             </p>
           )}
 
-          {/* Amenities — colorful chip cards */}
+          {/* Amenities — 4-column icon grid */}
           {amenities.length > 0 && (
             <div className="border-t border-stone-800 pt-6">
               <h3 className="text-sm font-bold text-stone-100 mb-4 flex items-center gap-2">
                 <span className="w-1 h-4 bg-amber-500 rounded-full" />
                 المرافق والمميزات
               </h3>
-              <div className="flex flex-wrap gap-2.5">
+              <div className="grid grid-cols-4 gap-2.5">
                 {amenities.map(key => {
                   const { ar, icon, color } = amenityLabel(key);
                   return (
-                    <div key={key} className={`inline-flex items-center gap-2 border rounded-xl px-3.5 py-2.5 ${color}`}>
-                      <span className="text-xl leading-none">{icon}</span>
-                      <span className="text-xs font-semibold">{ar}</span>
+                    <div key={key} className={`flex flex-col items-center justify-center gap-1.5 border rounded-2xl p-3 text-center ${color}`}>
+                      <span className="text-2xl leading-none">{icon}</span>
+                      <span className="text-xs font-semibold leading-tight line-clamp-2">{ar}</span>
                     </div>
                   );
                 })}
@@ -583,30 +583,37 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
           )}
 
           {/* Map */}
-          {(coords || data.mapsUrl) && (
-            <div className="border-t border-stone-800 pt-6">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-stone-100">الموقع</h3>
-                {data.mapsUrl && (
-                  <a href={data.mapsUrl} target="_blank" rel="noreferrer"
-                    className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors">
-                    <MapPin className="w-3.5 h-3.5" /> فتح في خرائط قوقل
-                  </a>
-                )}
-              </div>
-              {coords && !isModal ? (
-                <div className="rounded-xl overflow-hidden border border-stone-800 h-44">
-                  <iframe title="map" width="100%" height="100%" style={{ border: 0 }} loading="lazy"
-                    src={`https://maps.google.com/maps?q=${coords.lat},${coords.lng}&z=15&output=embed`} />
+          {(coords || data.mapsUrl) && (() => {
+            const mapHref = coords
+              ? `https://www.google.com/maps?q=${coords.lat},${coords.lng}`
+              : data.mapsUrl!;
+            return (
+              <div className="border-t border-stone-800 pt-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold text-stone-100 flex items-center gap-2">
+                    <span className="w-1 h-4 bg-amber-500 rounded-full" />
+                    الموقع
+                  </h3>
                 </div>
-              ) : data.mapsUrl ? (
-                <a href={data.mapsUrl} target="_blank" rel="noreferrer"
-                  className="flex items-center gap-2 text-sm text-amber-400 hover:text-amber-300 p-3 rounded-xl border border-stone-800 hover:border-amber-800/50 transition-colors">
-                  <ExternalLink className="w-4 h-4" /> فتح الموقع على خرائط قوقل
+                {coords && !isModal && (
+                  <div className="rounded-xl overflow-hidden border border-stone-800 h-44 mb-3">
+                    <iframe title="map" width="100%" height="100%" style={{ border: 0 }} loading="lazy"
+                      src={`https://maps.google.com/maps?q=${coords.lat},${coords.lng}&z=15&output=embed`} />
+                  </div>
+                )}
+                <a
+                  href={mapHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-2.5 w-full py-3 rounded-xl border border-stone-700 bg-stone-800/60 hover:bg-stone-700/80 hover:border-amber-600/50 transition-colors text-sm font-semibold text-stone-200 hover:text-amber-300"
+                >
+                  <MapPin className="w-4 h-4 text-amber-400" />
+                  عرض الموقع على الخريطة
+                  <ExternalLink className="w-3.5 h-3.5 text-stone-500" />
                 </a>
-              ) : null}
-            </div>
-          )}
+              </div>
+            );
+          })()}
 
           {/* Terms box */}
           {terms.length > 0 && (
