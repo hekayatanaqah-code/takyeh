@@ -48,9 +48,47 @@ const AMENITY_MAP: Record<string, { ar: string; icon: string; color: string }> =
   game_room:         { ar: "غرفة ألعاب",          icon: "🎮",  color: "bg-purple-400/15 border-purple-400/25 text-purple-300" },
 };
 
+/* Arabic label → icon/color (for old data stored as Arabic text directly) */
+const AMENITY_AR_MAP: Record<string, { ar: string; icon: string; color: string }> = {
+  "مسبح خاص":      { ar: "مسبح خاص",       icon: "🏊",  color: "bg-blue-500/15 border-blue-500/25 text-blue-300"       },
+  "مسبح":          { ar: "مسبح",            icon: "🏊",  color: "bg-blue-500/15 border-blue-500/25 text-blue-300"       },
+  "مسبح داخلي":   { ar: "مسبح داخلي",      icon: "🏊",  color: "bg-blue-500/15 border-blue-500/25 text-blue-300"       },
+  "مسبح خارجي":   { ar: "مسبح خارجي",      icon: "🌊",  color: "bg-blue-400/15 border-blue-400/25 text-blue-300"       },
+  "حديقة":         { ar: "حديقة",           icon: "🌿",  color: "bg-green-500/15 border-green-500/25 text-green-300"    },
+  "شواء":          { ar: "ركن شواء",        icon: "🔥",  color: "bg-orange-500/15 border-orange-500/25 text-orange-300" },
+  "ركن شواء":      { ar: "ركن شواء",        icon: "🔥",  color: "bg-orange-500/15 border-orange-500/25 text-orange-300" },
+  "شواء خارجي":    { ar: "شواء خارجي",      icon: "🍖",  color: "bg-orange-400/15 border-orange-400/25 text-orange-300" },
+  "واي فاي":       { ar: "واي فاي",         icon: "📶",  color: "bg-sky-500/15 border-sky-500/25 text-sky-300"          },
+  "مكيف":          { ar: "مكيف",            icon: "❄️",  color: "bg-cyan-500/15 border-cyan-500/25 text-cyan-300"       },
+  "مطبخ مجهز":     { ar: "مطبخ مجهز",       icon: "🍳",  color: "bg-yellow-500/15 border-yellow-500/25 text-yellow-300" },
+  "مطبخ":          { ar: "مطبخ",            icon: "🍳",  color: "bg-yellow-500/15 border-yellow-500/25 text-yellow-300" },
+  "موقف سيارات":  { ar: "موقف سيارات",     icon: "🅿️",  color: "bg-slate-500/15 border-slate-500/25 text-slate-300"   },
+  "موقف":          { ar: "موقف",            icon: "🅿️",  color: "bg-slate-500/15 border-slate-500/25 text-slate-300"   },
+  "ملعب أطفال":    { ar: "ألعاب أطفال",     icon: "🎠",  color: "bg-pink-500/15 border-pink-500/25 text-pink-300"       },
+  "العاب أطفال":   { ar: "ألعاب أطفال",     icon: "🎠",  color: "bg-pink-500/15 border-pink-500/25 text-pink-300"       },
+  "ألعاب أطفال":   { ar: "ألعاب أطفال",     icon: "🎠",  color: "bg-pink-500/15 border-pink-500/25 text-pink-300"       },
+  "مجالس مستقلة": { ar: "مجالس مستقلة",    icon: "🛋️",  color: "bg-amber-500/15 border-amber-500/25 text-amber-300"    },
+  "جاكوزي":        { ar: "جاكوزي",          icon: "🛁",  color: "bg-teal-500/15 border-teal-500/25 text-teal-300"       },
+  "صالة رياضية":   { ar: "صالة رياضية",     icon: "🏋️",  color: "bg-purple-500/15 border-purple-500/25 text-purple-300" },
+  "ملعب كرة قدم":  { ar: "ملعب كرة قدم",   icon: "⚽",  color: "bg-green-500/15 border-green-500/25 text-green-300"    },
+  "سينما خارجية":  { ar: "سينما خارجية",   icon: "🎬",  color: "bg-indigo-500/15 border-indigo-500/25 text-indigo-300" },
+  "بلياردو":       { ar: "بلياردو",         icon: "🎱",  color: "bg-stone-500/15 border-stone-500/25 text-stone-300"    },
+  "تنس طاولة":     { ar: "تنس طاولة",       icon: "🏓",  color: "bg-emerald-500/15 border-emerald-500/25 text-emerald-300" },
+  "ساونا":         { ar: "ساونا",           icon: "🧖",  color: "bg-red-500/15 border-red-500/25 text-red-300"          },
+  "غرفة صلاة":     { ar: "غرفة صلاة",       icon: "🕌",  color: "bg-emerald-400/15 border-emerald-400/25 text-emerald-300" },
+  "مولد كهربائي":  { ar: "مولد كهربائي",   icon: "⚡",  color: "bg-yellow-500/15 border-yellow-500/25 text-yellow-300" },
+  "غسالة":         { ar: "غسالة",           icon: "🫧",  color: "bg-sky-400/15 border-sky-400/25 text-sky-300"          },
+  "شاشة ذكية":     { ar: "شاشة ذكية",       icon: "📺",  color: "bg-indigo-400/15 border-indigo-400/25 text-indigo-300" },
+  "غرفة ألعاب":    { ar: "غرفة ألعاب",      icon: "🎮",  color: "bg-purple-400/15 border-purple-400/25 text-purple-300" },
+  "حراسة أمنية":   { ar: "حراسة أمنية",     icon: "🔒",  color: "bg-slate-500/15 border-slate-500/25 text-slate-300"   },
+};
+
 function amenityLabel(key: string) {
-  if (key.startsWith("other:")) return { ar: key.slice(6), icon: "✨", color: "bg-amber-500/15 border-amber-500/25 text-amber-300" };
-  return AMENITY_MAP[key] ?? { ar: key, icon: "✅", color: "bg-stone-700/50 border-stone-600 text-stone-300" };
+  if (key.startsWith("other:")) {
+    const text = key.slice(6).trim();
+    return { ar: `مرافق أخرى: ${text}`, icon: "✨", color: "bg-amber-500/15 border-amber-500/25 text-amber-300" };
+  }
+  return AMENITY_MAP[key] ?? AMENITY_AR_MAP[key] ?? { ar: key, icon: "🏡", color: "bg-stone-700/50 border-stone-600 text-stone-300" };
 }
 
 function toHijri(date: Date) {
@@ -482,8 +520,6 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
             rows.push({ icon: <Sofa      className="w-4 h-4 text-amber-400" />, label: "عدد الأقسام",        value: data.sections ? String(data.sections) : "—",  highlight: !!data.sections });
             rows.push({ icon: <Home      className="w-4 h-4 text-amber-400" />, label: "نوع العقار",          value: data.propertyType ?? "—",                     highlight: !!data.propertyType });
             if (data.category)                                 rows.push({ icon: <Tag      className="w-4 h-4 text-amber-400" />, label: "الفئة",               value: data.category                });
-            rows.push({ icon: <LogIn     className="w-4 h-4 text-green-400" />, label: "وقت الدخول",          value: data.checkInTime  ?? "—",                     highlight: !!data.checkInTime  });
-            rows.push({ icon: <LogOut    className="w-4 h-4 text-red-400"   />, label: "وقت الخروج",          value: data.checkOutTime ?? "—",                     highlight: !!data.checkOutTime });
             if (data.whatsappNumber)                           rows.push({ icon: <MessageCircle className="w-4 h-4 text-green-400" />, label: "رقم التواصل",   value: data.whatsappNumber          });
             if (data.location)                                 rows.push({ icon: <MapPin   className="w-4 h-4 text-amber-400" />, label: "المدينة / الحي",      value: `${data.location}${data.district ? ` · ${data.district}` : ""}` });
             return (
