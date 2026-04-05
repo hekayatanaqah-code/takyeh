@@ -16,27 +16,41 @@ import {
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 /* ─── helpers ─── */
-const AMENITY_MAP: Record<string, { ar: string; icon: string }> = {
-  pool:           { ar: "مسبح",             icon: "🏊" },
-  kids_games:     { ar: "ألعاب أطفال",       icon: "🎠" },
-  private_majlis: { ar: "مجالس مستقلة",      icon: "🛋️" },
-  bbq:            { ar: "ركن شواء",           icon: "🔥" },
-  kitchen:        { ar: "مطبخ مجهز",          icon: "🍳" },
-  wifi:           { ar: "واي فاي",            icon: "📶" },
-  ac:             { ar: "مكيف",               icon: "❄️" },
-  parking:        { ar: "موقف سيارات",        icon: "🅿️" },
-  garden:         { ar: "حديقة",              icon: "🌿" },
-  gym:            { ar: "صالة رياضية",        icon: "🏋️" },
-  cinema:         { ar: "سينما خارجية",       icon: "🎬" },
-  jacuzzi:        { ar: "جاكوزي",             icon: "🛁" },
-  football:       { ar: "ملعب كرة قدم",       icon: "⚽" },
-  billiards:      { ar: "بلياردو",            icon: "🎱" },
-  table_tennis:   { ar: "تنس طاولة",          icon: "🏓" },
+const AMENITY_MAP: Record<string, { ar: string; icon: string; color: string }> = {
+  pool:              { ar: "مسبح",              icon: "🏊",  color: "bg-blue-500/15 border-blue-500/25 text-blue-300"   },
+  kids_games:        { ar: "ألعاب أطفال",        icon: "🎠",  color: "bg-pink-500/15 border-pink-500/25 text-pink-300"   },
+  private_majlis:    { ar: "مجالس مستقلة",       icon: "🛋️",  color: "bg-amber-500/15 border-amber-500/25 text-amber-300" },
+  bbq:               { ar: "ركن شواء",            icon: "🔥",  color: "bg-orange-500/15 border-orange-500/25 text-orange-300" },
+  kitchen:           { ar: "مطبخ مجهز",           icon: "🍳",  color: "bg-yellow-500/15 border-yellow-500/25 text-yellow-300" },
+  wifi:              { ar: "واي فاي",             icon: "📶",  color: "bg-sky-500/15 border-sky-500/25 text-sky-300"      },
+  ac:                { ar: "مكيف",                icon: "❄️",  color: "bg-cyan-500/15 border-cyan-500/25 text-cyan-300"    },
+  parking:           { ar: "موقف سيارات",         icon: "🅿️",  color: "bg-slate-500/15 border-slate-500/25 text-slate-300" },
+  garden:            { ar: "حديقة",               icon: "🌿",  color: "bg-green-500/15 border-green-500/25 text-green-300" },
+  gym:               { ar: "صالة رياضية",         icon: "🏋️",  color: "bg-purple-500/15 border-purple-500/25 text-purple-300" },
+  cinema:            { ar: "سينما خارجية",        icon: "🎬",  color: "bg-indigo-500/15 border-indigo-500/25 text-indigo-300" },
+  jacuzzi:           { ar: "جاكوزي",              icon: "🛁",  color: "bg-teal-500/15 border-teal-500/25 text-teal-300"   },
+  football:          { ar: "ملعب كرة قدم",        icon: "⚽",  color: "bg-green-500/15 border-green-500/25 text-green-300" },
+  billiards:         { ar: "بلياردو",             icon: "🎱",  color: "bg-stone-500/15 border-stone-500/25 text-stone-300" },
+  table_tennis:      { ar: "تنس طاولة",           icon: "🏓",  color: "bg-emerald-500/15 border-emerald-500/25 text-emerald-300" },
+  indoor_pool:       { ar: "مسبح داخلي",          icon: "🏊",  color: "bg-blue-500/15 border-blue-500/25 text-blue-300"   },
+  outdoor_pool:      { ar: "مسبح خارجي",          icon: "🌊",  color: "bg-blue-400/15 border-blue-400/25 text-blue-300"   },
+  sauna:             { ar: "ساونا",               icon: "🧖",  color: "bg-red-500/15 border-red-500/25 text-red-300"      },
+  private_beach:     { ar: "شاطئ خاص",            icon: "🏖️",  color: "bg-yellow-400/15 border-yellow-400/25 text-yellow-300" },
+  security:          { ar: "حراسة أمنية",         icon: "🔒",  color: "bg-slate-500/15 border-slate-500/25 text-slate-300" },
+  generator:         { ar: "مولد كهربائي",        icon: "⚡",  color: "bg-yellow-500/15 border-yellow-500/25 text-yellow-300" },
+  laundry:           { ar: "غسالة",               icon: "🫧",  color: "bg-sky-400/15 border-sky-400/25 text-sky-300"      },
+  bbq_outdoor:       { ar: "شواء خارجي",          icon: "🍖",  color: "bg-orange-400/15 border-orange-400/25 text-orange-300" },
+  prayer_room:       { ar: "غرفة صلاة",           icon: "🕌",  color: "bg-emerald-400/15 border-emerald-400/25 text-emerald-300" },
+  baby_items:        { ar: "مستلزمات أطفال",      icon: "🍼",  color: "bg-pink-400/15 border-pink-400/25 text-pink-300"   },
+  fire_pit:          { ar: "موقد نار",             icon: "🪵",  color: "bg-orange-600/15 border-orange-600/25 text-orange-300" },
+  pets_allowed:      { ar: "يسمح بالحيوانات",     icon: "🐾",  color: "bg-stone-400/15 border-stone-400/25 text-stone-300" },
+  smart_tv:          { ar: "شاشة ذكية",           icon: "📺",  color: "bg-indigo-400/15 border-indigo-400/25 text-indigo-300" },
+  game_room:         { ar: "غرفة ألعاب",          icon: "🎮",  color: "bg-purple-400/15 border-purple-400/25 text-purple-300" },
 };
 
 function amenityLabel(key: string) {
-  if (key.startsWith("other:")) return { ar: key.slice(6), icon: "✨" };
-  return AMENITY_MAP[key] ?? { ar: key, icon: "✅" };
+  if (key.startsWith("other:")) return { ar: key.slice(6), icon: "✨", color: "bg-amber-500/15 border-amber-500/25 text-amber-300" };
+  return AMENITY_MAP[key] ?? { ar: key, icon: "✅", color: "bg-stone-700/50 border-stone-600 text-stone-300" };
 }
 
 function toHijri(date: Date) {
@@ -381,10 +395,10 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
       )}
 
       {/* ── CONTENT ── */}
-      <div className={isModal ? "space-y-5 px-1" : "grid md:grid-cols-[1fr_320px] gap-6 items-start"}>
+      <div className={isModal ? "space-y-7 px-1" : "grid md:grid-cols-[1fr_320px] gap-8 items-start"}>
 
         {/* Left / main column */}
-        <div className="space-y-5">
+        <div className="space-y-7">
 
           {/* Title */}
           <div>
@@ -462,29 +476,28 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
 
           {/* ── Basic Information Card ── */}
           {(() => {
-            const rows: { icon: ReactNode; label: string; value: string }[] = [];
-            if (data.maxGuests)                                rows.push({ icon: <Users    className="w-4 h-4 text-amber-400" />, label: "أقصى عدد الضيوف",   value: `${data.maxGuests} ضيف`       });
-            if (data.bedrooms != null && data.bedrooms > 0)   rows.push({ icon: <BedDouble className="w-4 h-4 text-amber-400" />, label: "غرف النوم",          value: `${data.bedrooms} غرفة`       });
-            if (data.sections)                                 rows.push({ icon: <Sofa     className="w-4 h-4 text-amber-400" />, label: "الأقسام / المجالس",  value: String(data.sections)         });
-            if (data.propertyType)                             rows.push({ icon: <Home     className="w-4 h-4 text-amber-400" />, label: "نوع العقار",          value: data.propertyType             });
-            if (data.category)                                 rows.push({ icon: <Tag      className="w-4 h-4 text-amber-400" />, label: "الفئة",               value: data.category                 });
-            if (data.checkInTime)                              rows.push({ icon: <LogIn    className="w-4 h-4 text-green-400" />, label: "وقت الدخول",          value: data.checkInTime              });
-            if (data.checkOutTime)                             rows.push({ icon: <LogOut   className="w-4 h-4 text-red-400"   />, label: "وقت الخروج",         value: data.checkOutTime             });
-            if (data.whatsappNumber)                           rows.push({ icon: <MessageCircle className="w-4 h-4 text-green-400" />, label: "رقم التواصل",   value: data.whatsappNumber });
-            if (data.location)                                 rows.push({ icon: <MapPin   className="w-4 h-4 text-amber-400" />, label: "المدينة / الحي",      value: `${data.location}${data.district ? ` · ${data.district}` : ""}` });
-            if (rows.length === 0) return null;
+            const rows: { icon: ReactNode; label: string; value: string; highlight?: boolean }[] = [];
+            rows.push({ icon: <Users     className="w-4 h-4 text-amber-400" />, label: "أقصى عدد الضيوف",  value: data.maxGuests ? `${data.maxGuests} ضيف` : "—",        highlight: !!data.maxGuests });
+            if (data.bedrooms != null && data.bedrooms > 0)   rows.push({ icon: <BedDouble className="w-4 h-4 text-amber-400" />, label: "غرف النوم",         value: `${data.bedrooms} غرفة`       });
+            rows.push({ icon: <Sofa      className="w-4 h-4 text-amber-400" />, label: "عدد الأقسام",       value: data.sections ? String(data.sections) : "—",          highlight: !!data.sections });
+            if (data.propertyType)                             rows.push({ icon: <Home     className="w-4 h-4 text-amber-400" />, label: "نوع العقار",         value: data.propertyType             });
+            if (data.category)                                 rows.push({ icon: <Tag      className="w-4 h-4 text-amber-400" />, label: "الفئة",              value: data.category                 });
+            if (data.checkInTime)                              rows.push({ icon: <LogIn    className="w-4 h-4 text-green-400" />, label: "وقت الدخول",         value: data.checkInTime              });
+            if (data.checkOutTime)                             rows.push({ icon: <LogOut   className="w-4 h-4 text-red-400"   />, label: "وقت الخروج",        value: data.checkOutTime             });
+            if (data.whatsappNumber)                           rows.push({ icon: <MessageCircle className="w-4 h-4 text-green-400" />, label: "رقم التواصل",  value: data.whatsappNumber });
+            if (data.location)                                 rows.push({ icon: <MapPin   className="w-4 h-4 text-amber-400" />, label: "المدينة / الحي",     value: `${data.location}${data.district ? ` · ${data.district}` : ""}` });
             return (
-              <div className="border-t border-stone-800 pt-4">
-                <h3 className="text-sm font-bold text-stone-100 mb-3 flex items-center gap-2">
+              <div className="border-t border-stone-800 pt-6">
+                <h3 className="text-sm font-bold text-stone-100 mb-4 flex items-center gap-2">
                   <span className="w-1 h-4 bg-amber-500 rounded-full" />
                   معلومات أساسية
                 </h3>
-                <div className="rounded-2xl border border-stone-800 bg-stone-900 overflow-hidden divide-y divide-stone-800">
-                  {rows.map(({ icon, label, value }, i) => (
-                    <div key={i} className="flex items-center gap-3 px-4 py-3">
+                <div className="rounded-2xl border border-stone-800 bg-stone-900/60 overflow-hidden divide-y divide-stone-800">
+                  {rows.map(({ icon, label, value, highlight }, i) => (
+                    <div key={i} className="flex items-center gap-3 px-4 py-3.5">
                       <span className="w-8 h-8 rounded-lg bg-stone-800 border border-stone-700 flex items-center justify-center shrink-0">{icon}</span>
-                      <span className="text-xs text-stone-500 w-32 shrink-0">{label}</span>
-                      <span className="text-sm text-stone-100 font-medium flex-1">{value}</span>
+                      <span className="text-xs text-stone-500 w-36 shrink-0">{label}</span>
+                      <span className={`text-sm font-medium flex-1 ${highlight === false ? "text-stone-600" : "text-stone-100"}`}>{value}</span>
                     </div>
                   ))}
                 </div>
@@ -498,7 +511,7 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
             (data.slotEvening && (data.eveningCheckIn || data.eveningCheckOut)) ||
             (data.slotFullDay && (data.fullDayCheckIn || data.fullDayCheckOut))
           ) && (
-            <div className="border-t border-stone-800 pt-4">
+            <div className="border-t border-stone-800 pt-6">
               <h3 className="text-sm font-bold text-stone-100 mb-3 flex items-center gap-2">
                 <span className="w-1 h-4 bg-amber-500 rounded-full" />
                 أوقات الفترات
@@ -543,22 +556,25 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
 
           {/* Description */}
           {data.descriptionAr && (
-            <p className="text-stone-300 leading-relaxed text-sm border-t border-stone-800 pt-4">
+            <p className="text-stone-300 leading-relaxed text-sm border-t border-stone-800 pt-6">
               {data.descriptionAr}
             </p>
           )}
 
-          {/* Amenities */}
+          {/* Amenities — colorful chip cards */}
           {amenities.length > 0 && (
-            <div className="border-t border-stone-800 pt-4">
-              <h3 className="text-sm font-bold text-stone-100 mb-3">المرافق والمميزات</h3>
-              <div className="grid grid-cols-2 gap-y-2.5 gap-x-2">
+            <div className="border-t border-stone-800 pt-6">
+              <h3 className="text-sm font-bold text-stone-100 mb-4 flex items-center gap-2">
+                <span className="w-1 h-4 bg-amber-500 rounded-full" />
+                المرافق والمميزات
+              </h3>
+              <div className="flex flex-wrap gap-2.5">
                 {amenities.map(key => {
-                  const { ar, icon } = amenityLabel(key);
+                  const { ar, icon, color } = amenityLabel(key);
                   return (
-                    <div key={key} className="flex items-center gap-2 text-sm text-stone-300">
-                      <span className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-base shrink-0">{icon}</span>
-                      {ar}
+                    <div key={key} className={`inline-flex items-center gap-2 border rounded-xl px-3.5 py-2.5 ${color}`}>
+                      <span className="text-xl leading-none">{icon}</span>
+                      <span className="text-xs font-semibold">{ar}</span>
                     </div>
                   );
                 })}
@@ -568,7 +584,7 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
 
           {/* Map */}
           {(coords || data.mapsUrl) && (
-            <div className="border-t border-stone-800 pt-4">
+            <div className="border-t border-stone-800 pt-6">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-bold text-stone-100">الموقع</h3>
                 {data.mapsUrl && (
@@ -594,7 +610,7 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
 
           {/* Terms box */}
           {terms.length > 0 && (
-            <div className="border-t border-stone-800 pt-4">
+            <div className="border-t border-stone-800 pt-6">
               <div className="rounded-2xl border border-amber-700/40 bg-gradient-to-br from-amber-950/40 to-stone-900 p-5">
                 <h3 className="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2">
                   📋 شروط الشاليه
@@ -613,7 +629,7 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
 
           {/* Instagram */}
           {data.socialLink && (
-            <div className="border-t border-stone-800 pt-4">
+            <div className="border-t border-stone-800 pt-6">
               <a href={data.socialLink} target="_blank" rel="noreferrer"
                 className="flex items-center gap-3 p-4 rounded-xl border border-stone-800 hover:border-pink-800/60 hover:bg-pink-950/20 transition-colors group">
                 <div className="w-11 h-11 rounded-full bg-gradient-to-br from-pink-500 via-rose-500 to-amber-500 flex items-center justify-center shrink-0">
@@ -624,6 +640,23 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
                   <p className="text-xs text-stone-500 truncate">{data.socialLink}</p>
                 </div>
                 <ExternalLink className="w-4 h-4 text-stone-600 mr-auto group-hover:text-pink-400 transition-colors shrink-0" />
+              </a>
+            </div>
+          )}
+
+          {/* WhatsApp booking CTA — modal mode only */}
+          {isModal && data.whatsappNumber && (
+            <div className="border-t border-stone-800 pt-6 pb-2">
+              <a
+                href={`https://wa.me/${data.whatsappNumber.replace(/\D/g, "")}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center gap-3 w-full py-4 rounded-2xl bg-green-600 hover:bg-green-500 active:bg-green-700 transition-colors text-white font-bold text-base shadow-lg shadow-green-900/40"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                حجز عبر الواتساب
               </a>
             </div>
           )}
