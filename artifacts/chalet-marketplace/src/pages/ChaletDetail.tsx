@@ -135,22 +135,6 @@ export default function ChaletDetail() {
     return m ? { lat: m[1], lng: m[2] } : null;
   }
 
-  /* ── DEBUG: prove data is reaching the component ─────────── */
-  if (chalet) {
-    console.log('CHALET_DEBUG_DATA:', {
-      nameAr: chalet.nameAr,
-      descriptionAr: chalet.descriptionAr,
-      termsAndConditions: chalet.termsAndConditions,
-      socialLink: chalet.socialLink,
-      maxGuests: chalet.maxGuests,
-      bedrooms: chalet.bedrooms,
-      amenities: chalet.amenities,
-      priceMorning: chalet.priceMorning,
-      priceEvening: chalet.priceEvening,
-      priceFullDay: chalet.priceFullDay,
-    });
-  }
-
   /* ─────────────────────────────────────── LOADING ─────────── */
   if (isLoading) {
     return (
