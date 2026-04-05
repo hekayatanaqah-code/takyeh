@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -1760,6 +1760,52 @@ function SocialToggleRow({
   );
 }
 
+const FEAT_ICONS: { key: string; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: "map-pin",      label: "موقع",    Icon: MapPin },
+  { key: "shield",       label: "أمان",    Icon: Shield },
+  { key: "clock",        label: "وقت",     Icon: Clock },
+  { key: "credit-card",  label: "دفع",     Icon: CreditCard },
+  { key: "star",         label: "مميز",    Icon: Star },
+  { key: "users",        label: "مجتمع",   Icon: Users },
+  { key: "home",         label: "منزل",    Icon: Home },
+  { key: "phone",        label: "دعم",     Icon: Phone },
+  { key: "check-circle", label: "تحقق",    Icon: CheckCircle },
+  { key: "zap",          label: "سرعة",    Icon: Zap },
+  { key: "calendar",     label: "مواعيد",  Icon: Calendar },
+  { key: "globe",        label: "شامل",    Icon: Globe },
+  { key: "heart",        label: "مفضل",    Icon: Heart },
+  { key: "search",       label: "بحث",     Icon: Eye },
+];
+
+function IconPickerField({
+  fieldKey, form, setForm,
+}: { fieldKey: string; form: Record<string, string>; setForm: React.Dispatch<React.SetStateAction<Record<string, string>>> }) {
+  const selected = form[fieldKey];
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">الأيقونة</label>
+      <div className="flex flex-wrap gap-2">
+        {FEAT_ICONS.map(({ key, label, Icon }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setForm((f) => ({ ...f, [fieldKey]: key }))}
+            title={label}
+            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl border text-xs transition-all ${
+              selected === key
+                ? "border-amber-400 bg-amber-500/20 text-amber-300"
+                : "border-slate-600 bg-slate-900/70 text-slate-400 hover:border-slate-400"
+            }`}
+          >
+            <Icon className="w-5 h-5" />
+            <span>{label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SettingsTab() {
   const qc = useQueryClient();
   const [form, setForm] = useState<Record<string, string>>({});
@@ -1904,9 +1950,14 @@ function SettingsTab() {
           <span className="text-xs text-slate-500 mr-auto">البطاقات الثلاث في أسفل الصفحة الرئيسية</span>
         </div>
         <div className="p-6 space-y-5">
-          {/* Feature Card 1 */}
+
+          {/* ─ Card 1 ─ */}
           <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 space-y-3">
-            <p className="text-xs font-bold text-teal-400 uppercase tracking-wider">البطاقة الأولى</p>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-teal-500/20 text-teal-400 text-xs font-bold flex items-center justify-center">١</span>
+              <p className="text-xs font-bold text-teal-400 uppercase tracking-wider">البطاقة الأولى</p>
+            </div>
+            <IconPickerField fieldKey="feat_card1_icon" form={form} setForm={setForm} />
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">العنوان</label>
               <Input value={form.feat_card1_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card1_title: e.target.value }))}
@@ -1919,22 +1970,48 @@ function SettingsTab() {
                 className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
             </div>
           </div>
-          {/* Feature Card 2 */}
+
+          {/* ─ Card 2 ─ */}
           <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 space-y-3">
-            <p className="text-xs font-bold text-teal-400 uppercase tracking-wider">البطاقة الثانية</p>
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-teal-500/20 text-teal-400 text-xs font-bold flex items-center justify-center">٢</span>
+              <p className="text-xs font-bold text-teal-400 uppercase tracking-wider">البطاقة الثانية</p>
+            </div>
+            <IconPickerField fieldKey="feat_card2_icon" form={form} setForm={setForm} />
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">العنوان</label>
               <Input value={form.feat_card2_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card2_title: e.target.value }))}
-                placeholder="معلومات دقيقة" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
+                placeholder="حجز مباشر وآمن" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">النص الوصفي</label>
               <Textarea value={form.feat_card2_text ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card2_text: e.target.value }))}
-                placeholder="تفاصيل كاملة عن المرافق والصور لتتخذ قرارك بثقة." rows={2}
+                placeholder="تواصل مباشر مع الملاك وإدارة الشاليهات عبر الواتساب بدون وسطاء." rows={2}
                 className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
             </div>
           </div>
-          <p className="text-xs text-slate-500">اترك أي حقل فارغاً لاستخدام النص الافتراضي.</p>
+
+          {/* ─ Card 3 ─ */}
+          <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-teal-500/20 text-teal-400 text-xs font-bold flex items-center justify-center">٣</span>
+              <p className="text-xs font-bold text-teal-400 uppercase tracking-wider">البطاقة الثالثة</p>
+            </div>
+            <IconPickerField fieldKey="feat_card3_icon" form={form} setForm={setForm} />
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">العنوان</label>
+              <Input value={form.feat_card3_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card3_title: e.target.value }))}
+                placeholder="سهولة الدفع" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">النص الوصفي</label>
+              <Textarea value={form.feat_card3_text ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card3_text: e.target.value }))}
+                placeholder="طرق دفع متعددة وآمنة تناسب احتياجاتك." rows={2}
+                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-500">اترك أي حقل فارغاً لاستخدام النص الافتراضي. انقر على الأيقونة لتغييرها.</p>
           <SaveBtn label="حفظ بطاقات المميزات" />
         </div>
       </div>

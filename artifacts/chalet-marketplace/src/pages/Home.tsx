@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { MapPin, Search, Calendar, Plus, Minus, Tag } from "lucide-react";
+import { MapPin, Search, Calendar, Plus, Minus, Tag, Shield, Clock, Zap, Globe, Heart, CreditCard, Star, Users, Home as HomeIcon, Phone, CheckCircle, Eye } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -34,6 +34,28 @@ function addDays(dateStr: string, days: number): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
+}
+
+const FEAT_ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+  "map-pin":      MapPin,
+  "shield":       Shield,
+  "clock":        Clock,
+  "credit-card":  CreditCard,
+  "star":         Star,
+  "users":        Users,
+  "home":         HomeIcon,
+  "phone":        Phone,
+  "check-circle": CheckCircle,
+  "zap":          Zap,
+  "calendar":     Calendar,
+  "globe":        Globe,
+  "heart":        Heart,
+  "search":       Eye,
+};
+
+function FeatIcon({ iconKey }: { iconKey?: string }) {
+  const Icon = FEAT_ICON_MAP[iconKey ?? ""] ?? MapPin;
+  return <Icon size={32} />;
 }
 
 export default function Home() {
@@ -321,28 +343,32 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="bg-card p-8 rounded-2xl text-center shadow-sm border border-border/50 hover:shadow-md transition-shadow">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 md:gap-8">
+              {[
+                {
+                  iconKey: siteSettings.feat_card1_icon || "map-pin",
+                  title:   siteSettings.feat_card1_title || "تغطية شاملة",
+                  text:    siteSettings.feat_card1_text  || "خيارات واسعة تشمل بريدة، عنيزة، الرس وكافة مدن ومحافظات القصيم.",
+                },
+                {
+                  iconKey: siteSettings.feat_card2_icon || "shield",
+                  title:   siteSettings.feat_card2_title || "حجز مباشر وآمن",
+                  text:    siteSettings.feat_card2_text  || "تواصل مباشر مع الملاك وإدارة الشاليهات عبر الواتساب بدون وسطاء.",
+                },
+                {
+                  iconKey: siteSettings.feat_card3_icon || "credit-card",
+                  title:   siteSettings.feat_card3_title || "سهولة الدفع",
+                  text:    siteSettings.feat_card3_text  || "طرق دفع متعددة وآمنة تناسب احتياجاتك.",
+                },
+              ].map((card, i) => (
+                <div key={i} className="bg-card p-8 rounded-2xl text-center shadow-sm border border-border/50 hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                  <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
+                    <FeatIcon iconKey={card.iconKey} />
+                  </div>
+                  <h3 className="text-xl font-bold mb-3">{card.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{card.text}</p>
                 </div>
-                <h3 className="text-xl font-bold mb-3">{siteSettings.feat_card1_title || "تغطية شاملة"}</h3>
-                <p className="text-muted-foreground">{siteSettings.feat_card1_text || "خيارات واسعة تشمل بريدة، عنيزة، الرس وكافة مدن ومحافظات القصيم."}</p>
-              </div>
-              <div className="bg-card p-8 rounded-2xl text-center shadow-sm border border-border/50 hover:shadow-md transition-shadow">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"></path></svg>
-                </div>
-                <h3 className="text-xl font-bold mb-3">حجز مباشر وآمن</h3>
-                <p className="text-muted-foreground">تواصل مباشر مع الملاك وإدارة الشاليهات عبر الواتساب بدون وسطاء.</p>
-              </div>
-              <div className="bg-card p-8 rounded-2xl text-center shadow-sm border border-border/50 hover:shadow-md transition-shadow">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 text-primary">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h4l2-9 5 18 2-9h5"></path></svg>
-                </div>
-                <h3 className="text-xl font-bold mb-3">{siteSettings.feat_card2_title || "معلومات دقيقة"}</h3>
-                <p className="text-muted-foreground">{siteSettings.feat_card2_text || "تفاصيل كاملة عن المرافق والصور لتتخذ قرارك بثقة."}</p>
-              </div>
+              ))}
             </div>
           </div>
         </section>
