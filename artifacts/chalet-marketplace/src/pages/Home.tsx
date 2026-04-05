@@ -48,7 +48,7 @@ export default function Home() {
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
     queryFn: async () => {
-      const r = await fetch(`${BASE}/api/catalog/page-content`, { credentials: "include" });
+      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include" });
       if (!r.ok) return {};
       return r.json();
     },
