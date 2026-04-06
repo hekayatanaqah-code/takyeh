@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -39,6 +39,7 @@ const SLOT_META: Record<string, { emoji: string; ar: string; color: string }> = 
 
 export default function ChaletBooking() {
   const { id } = useParams<{ id: string }>();
+  const [, setLocation] = useLocation();
 
   const { data: chalet, isLoading, error } = useQuery<DiamondData>({
     queryKey: ["chalet-master", id],
@@ -138,17 +139,17 @@ export default function ChaletBooking() {
         {/* Breadcrumb */}
         <div style={{ maxWidth: 1080, margin: "0 auto", padding: "16px 24px 8px" }}>
           <nav style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#78716c", flexWrap: "wrap" }}>
-            <a href={`${BASE}/`} style={{ color: "#78716c", textDecoration: "none" }}
-              onMouseEnter={e => (e.currentTarget.style.color = "#f59e0b")}
-              onMouseLeave={e => (e.currentTarget.style.color = "#78716c")}>الرئيسية</a>
+            <button onClick={() => setLocation("/")} style={{ background: "none", border: "none", cursor: "pointer", color: "#78716c", fontSize: 12, padding: 0 }}
+              onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.color = "#f59e0b")}
+              onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.color = "#78716c")}>الرئيسية</button>
             <ChevronLeft size={12} />
-            <a href={`${BASE}/chalets`} style={{ color: "#78716c", textDecoration: "none" }}
-              onMouseEnter={e => (e.currentTarget.style.color = "#f59e0b")}
-              onMouseLeave={e => (e.currentTarget.style.color = "#78716c")}>الشاليهات</a>
+            <button onClick={() => setLocation("/chalets")} style={{ background: "none", border: "none", cursor: "pointer", color: "#78716c", fontSize: 12, padding: 0 }}
+              onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.color = "#f59e0b")}
+              onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.color = "#78716c")}>الشاليهات</button>
             <ChevronLeft size={12} />
-            <a href={`${BASE}/chalets/${id}`} style={{ color: "#78716c", textDecoration: "none" }}
-              onMouseEnter={e => (e.currentTarget.style.color = "#f59e0b")}
-              onMouseLeave={e => (e.currentTarget.style.color = "#78716c")}>{chalet.nameAr}</a>
+            <button onClick={() => setLocation(`/chalets/${id}`)} style={{ background: "none", border: "none", cursor: "pointer", color: "#78716c", fontSize: 12, padding: 0, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.color = "#f59e0b")}
+              onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.color = "#78716c")}>{chalet.nameAr}</button>
             <ChevronLeft size={12} />
             <span style={{ color: "#f59e0b", fontWeight: 600 }}>الحجز</span>
           </nav>
@@ -590,29 +591,30 @@ export default function ChaletBooking() {
               )}
 
               {/* Back to detail */}
-              <a
-                href={`${BASE}/chalets/${id}`}
+              <button
+                onClick={() => setLocation(`/chalets/${id}`)}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                   padding: "10px 16px", borderRadius: 12,
                   border: "1px solid rgba(120,113,108,0.3)",
                   color: "#a8a29e", fontSize: 13, fontWeight: 600,
-                  textDecoration: "none",
                   background: "transparent",
+                  cursor: "pointer",
                   transition: "background 0.2s, color 0.2s",
+                  width: "100%",
                 }}
                 onMouseEnter={e => {
-                  (e.currentTarget as HTMLAnchorElement).style.background = "#1c1917";
-                  (e.currentTarget as HTMLAnchorElement).style.color = "#e7e5e4";
+                  (e.currentTarget as HTMLButtonElement).style.background = "#1c1917";
+                  (e.currentTarget as HTMLButtonElement).style.color = "#e7e5e4";
                 }}
                 onMouseLeave={e => {
-                  (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-                  (e.currentTarget as HTMLAnchorElement).style.color = "#a8a29e";
+                  (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                  (e.currentTarget as HTMLButtonElement).style.color = "#a8a29e";
                 }}
               >
                 <ChevronRight size={15} />
                 عرض تفاصيل الشاليه
-              </a>
+              </button>
             </div>
           </div>
 

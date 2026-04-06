@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -10,6 +10,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function ChaletMasterView() {
   const { id } = useParams<{ id: string }>();
+  const [, setLocation] = useLocation();
 
   const { data: chalet, isLoading, error } = useQuery<DiamondData>({
     queryKey: ["chalet-master", id],
@@ -62,9 +63,9 @@ export default function ChaletMasterView() {
       {/* Breadcrumb */}
       <div className="container mx-auto px-4 pt-4 pb-1 max-w-5xl">
         <nav className="text-xs text-stone-500 flex items-center gap-1.5 flex-wrap">
-          <a href={`${BASE}/`} className="hover:text-amber-400 transition-colors">الرئيسية</a>
+          <button onClick={() => setLocation("/")} className="hover:text-amber-400 transition-colors bg-transparent border-none cursor-pointer text-stone-500 text-xs p-0">الرئيسية</button>
           <ChevronLeft className="w-3 h-3" />
-          <a href={`${BASE}/chalets`} className="hover:text-amber-400 transition-colors">الشاليهات</a>
+          <button onClick={() => setLocation("/chalets")} className="hover:text-amber-400 transition-colors bg-transparent border-none cursor-pointer text-stone-500 text-xs p-0">الشاليهات</button>
           <ChevronLeft className="w-3 h-3" />
           <span className="text-stone-300 font-medium truncate max-w-[160px]">{chalet.nameAr}</span>
         </nav>
@@ -85,12 +86,12 @@ export default function ChaletMasterView() {
               </p>
             )}
           </div>
-          <a
-            href={`${BASE}/chalets/${id}/book`}
+          <button
+            onClick={() => setLocation(`/chalets/${id}/book`)}
             className="shrink-0 h-11 px-5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-stone-900 font-bold text-sm flex items-center gap-2 transition-colors"
           >
             <Calendar className="w-4 h-4" /> احجز الآن
-          </a>
+          </button>
         </div>
       </div>
 
