@@ -391,8 +391,13 @@ export default function ChaletDetail() {
                     return (
                       <div key={s.key} style={{ borderRadius: 14, border: `1.5px solid ${c.border}`, background: c.bg, padding: "18px 18px" }}>
                         <p style={{ fontSize: 26, margin: "0 0 8px" }}>{s.emoji}</p>
-                        <p style={{ margin: "0 0 4px", fontWeight: 800, color: c.text, fontSize: 14 }}>{s.label}</p>
-                        {s.price && <p style={{ margin: "0 0 4px", fontWeight: 900, color: c.text, fontSize: 16 }}>{s.price}</p>}
+                        <p style={{ margin: "0 0 6px", fontWeight: 800, color: c.text, fontSize: 14 }}>{s.label}</p>
+                        {s.price && (
+                          <>
+                            <p style={{ margin: "0 0 2px", fontSize: 10, color: c.text, opacity: 0.65, fontWeight: 600 }}>يبدأ من</p>
+                            <p style={{ margin: "0 0 4px", fontWeight: 900, color: c.text, fontSize: 17 }}>{s.price}</p>
+                          </>
+                        )}
                         {(s.ci || s.co) && (
                           <p style={{ margin: 0, fontSize: 12, color: c.text, opacity: 0.8, lineHeight: 1.7 }}>
                             {s.ci && `دخول ${s.ci}`}{s.ci && s.co && <br />}{s.co && `خروج ${s.co}`}
