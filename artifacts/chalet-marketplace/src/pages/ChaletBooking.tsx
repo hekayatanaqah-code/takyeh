@@ -117,21 +117,68 @@ export default function ChaletBooking() {
 
   /* ── Shared inline style tokens ── */
   const card: React.CSSProperties = {
-    background: "linear-gradient(145deg, #1c1917 0%, #171412 100%)",
-    border: "1px solid rgba(245,158,11,0.18)",
+    background: "#111111",
+    border: "1px solid rgba(212,175,55,0.25)",
     borderRadius: 20,
     overflow: "hidden",
-    boxShadow: "0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(245,158,11,0.06)",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.7)",
   };
 
   return (
-    <div dir="rtl" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#0c0a09", color: "#f5f5f4" }}>
+    <div dir="rtl" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#000000", color: "#ffffff" }}>
+
+      {/* ══════════════════════════════════════════════
+          FORCED GLOBAL STYLE OVERRIDE — NO EXTERNAL CSS
+      ══════════════════════════════════════════════ */}
+      <style>{`
+        body, html {
+          background-color: #000000 !important;
+          color: #ffffff !important;
+        }
+        #root, [data-reactroot] {
+          background-color: #000000 !important;
+        }
+        .booking-page-wrap {
+          background-color: #000000 !important;
+          color: #ffffff !important;
+          min-height: 100vh;
+        }
+        .booking-page-wrap * {
+          box-sizing: border-box;
+        }
+        .booking-gold-btn {
+          background: #D4AF37 !important;
+          color: #000000 !important;
+          font-weight: 800 !important;
+          border: none !important;
+          cursor: pointer !important;
+          transition: opacity 0.2s !important;
+        }
+        .booking-gold-btn:hover {
+          opacity: 0.88 !important;
+        }
+        .booking-card {
+          background: #111111 !important;
+          border: 1px solid rgba(212,175,55,0.25) !important;
+          border-radius: 20px !important;
+          overflow: hidden !important;
+        }
+        @keyframes bk-spin { to { transform: rotate(360deg); } }
+        @media (max-width: 767px) {
+          .booking-grid { grid-template-columns: 1fr !important; }
+          .md-hide-mobile-bar { display: none !important; }
+        }
+        @media (min-width: 768px) {
+          .md-hide-mobile-bar { display: none !important; }
+        }
+      `}</style>
+
       <Navbar />
 
       {/* ── Subtle ambient glow ── */}
       <div style={{
         position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0,
-        background: "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(245,158,11,0.06) 0%, transparent 70%)",
+        background: "radial-gradient(ellipse 60% 40% at 50% 0%, rgba(212,175,55,0.07) 0%, transparent 70%)",
       }} />
 
       <div style={{ position: "relative", zIndex: 1, flex: 1 }}>
@@ -182,8 +229,8 @@ export default function ChaletBooking() {
 
             {/* Form header */}
             <div style={{
-              background: "linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(245,158,11,0.04) 100%)",
-              borderBottom: "1px solid rgba(245,158,11,0.14)",
+              background: "linear-gradient(135deg, rgba(212,175,55,0.14) 0%, rgba(212,175,55,0.05) 100%)",
+              borderBottom: "1px solid rgba(212,175,55,0.2)",
               padding: "20px 24px",
             }}>
               <p style={{ margin: 0, fontWeight: 700, fontSize: 18, color: "#f5f5f4" }}>تفاصيل الحجز</p>
@@ -213,9 +260,9 @@ export default function ChaletBooking() {
                   style={{
                     width: "100%", boxSizing: "border-box",
                     height: 50, borderRadius: 12,
-                    border: date ? "1.5px solid rgba(245,158,11,0.5)" : "1.5px solid rgba(120,113,108,0.4)",
-                    background: "#1c1917",
-                    color: "#f5f5f4", fontSize: 15,
+                    border: date ? "1.5px solid #D4AF37" : "1.5px solid rgba(212,175,55,0.3)",
+                    background: "#1a1a1a",
+                    color: "#ffffff", fontSize: 15,
                     padding: "0 16px",
                     outline: "none",
                     colorScheme: "dark",
@@ -267,8 +314,8 @@ export default function ChaletBooking() {
                               ? `2px solid ${meta.color}`
                               : "2px solid rgba(120,113,108,0.3)",
                             background: active
-                              ? `linear-gradient(145deg, ${meta.color}18 0%, ${meta.color}08 100%)`
-                              : "#1c1917",
+                              ? `linear-gradient(145deg, ${meta.color}22 0%, ${meta.color}0a 100%)`
+                              : "#1a1a1a",
                             padding: "14px 8px",
                             textAlign: "center",
                             transition: "all 0.2s",
@@ -382,28 +429,21 @@ export default function ChaletBooking() {
               {phone ? (
                 <button
                   onClick={handleBook}
+                  className="booking-gold-btn"
                   style={{
-                    width: "100%", height: 56, borderRadius: 16, border: "none",
-                    background: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
-                    color: "#fff", fontWeight: 800, fontSize: 16,
+                    width: "100%", height: 56, borderRadius: 16,
+                    background: "#D4AF37",
+                    color: "#000000", fontWeight: 800, fontSize: 16,
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
-                    cursor: "pointer",
-                    boxShadow: "0 4px 20px rgba(34,197,94,0.35)",
-                    transition: "transform 0.15s, box-shadow 0.15s",
+                    cursor: "pointer", border: "none",
+                    boxShadow: "0 4px 24px rgba(212,175,55,0.4)",
+                    transition: "transform 0.15s, opacity 0.15s",
                   }}
-                  onMouseEnter={e => {
-                    (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
-                    (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 8px 28px rgba(34,197,94,0.45)";
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLButtonElement).style.transform = "none";
-                    (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 20px rgba(34,197,94,0.35)";
-                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = "none"; }}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" style={{ width: 20, height: 20 }}>
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                  </svg>
-                  احجز الآن عبر واتساب
+                  <Calendar size={20} />
+                  احجز الآن
                 </button>
               ) : (
                 <div style={{
