@@ -301,46 +301,67 @@ export default function ChaletDetail() {
           {/* ════════════ MAIN CONTENT — 70% ════════════ */}
           <div style={{ flex: "1 1 0", minWidth: 0 }}>
 
-            {/* Title + Category + Sections + Quick stats */}
+            {/* Title + Info bar + Quick stats */}
             <div style={CARD}>
-              {/* Category & Sections badges */}
-              {(catInfo || secInfo) && (
-                <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-                  {catInfo && (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 24, background: "#f0fdf4", border: "1.5px solid #bbf7d0", fontSize: 13, fontWeight: 700, color: "#15803d" }}>
-                      {catInfo.icon} {catInfo.ar}
-                    </span>
-                  )}
-                  {secInfo && (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px", borderRadius: 24, background: "#eff6ff", border: "1.5px solid #bfdbfe", fontSize: 13, fontWeight: 700, color: "#1d4ed8" }}>
-                      {secInfo.icon} {secInfo.ar}
-                    </span>
-                  )}
-                </div>
-              )}
 
               <h1 style={{ margin: 0, fontSize: 30, fontWeight: 900, color: "#111827", lineHeight: 1.25 }}>{chalet.nameAr}</h1>
 
               {(chalet.location || chalet.district) && (
-                <p style={{ margin: "10px 0 0", fontSize: 14, color: "#6b7280", display: "flex", alignItems: "center", gap: 6 }}>
+                <p style={{ margin: "8px 0 0", fontSize: 14, color: "#6b7280", display: "flex", alignItems: "center", gap: 6 }}>
                   <span>📍</span>{[chalet.district, chalet.location].filter(Boolean).join("، ")}
                 </p>
               )}
 
               {chalet.isVerified && (
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10, padding: "4px 12px", borderRadius: 20, background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, padding: "4px 12px", borderRadius: 20, background: "#f0fdf4", border: "1px solid #bbf7d0" }}>
                   <span style={{ color: "#f59e0b", fontSize: 15 }}>★★★★★</span>
                   <span style={{ color: "#15803d", fontWeight: 600, fontSize: 12 }}>تقييم عالي</span>
                 </div>
               )}
+
+              {/* ── Structured info bar: always visible ── */}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+                {/* Property type */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 14, background: "#f0fdf4", border: "1.5px solid #bbf7d0", minWidth: 120 }}>
+                  <span style={{ fontSize: 18 }}>🏕️</span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 10, color: "#6b7280", fontWeight: 600 }}>نوع العقار</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 800, color: chalet.propertyType ? "#15803d" : "#9ca3af" }}>
+                      {chalet.propertyType ?? "—"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Category (الفئة) */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 14, background: "#eff6ff", border: "1.5px solid #bfdbfe", minWidth: 120 }}>
+                  <span style={{ fontSize: 18 }}>🏷️</span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 10, color: "#6b7280", fontWeight: 600 }}>الفئة</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 800, color: chalet.category ? "#1d4ed8" : "#9ca3af" }}>
+                      {chalet.category ?? "—"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Sections (عدد الأقسام) */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 14, background: "#fefce8", border: "1.5px solid #fde68a", minWidth: 140 }}>
+                  <span style={{ fontSize: 18 }}>🔑</span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 10, color: "#6b7280", fontWeight: 600 }}>عدد الأقسام</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 800, color: chalet.sections ? "#92400e" : "#9ca3af" }}>
+                      {chalet.sections ?? "—"}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
               <div style={{ height: 1, background: "#f3f4f6", margin: "18px 0" }} />
 
               {/* Quick stats row */}
               <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
                 {([
-                  chalet.maxGuests   && { icon: "👥", lbl: "الطاقة الاستيعابية", val: `${chalet.maxGuests} ضيف` },
-                  chalet.bedrooms    && { icon: "🛏️", lbl: "غرف النوم",           val: `${chalet.bedrooms} غرفة` },
+                  chalet.maxGuests    && { icon: "👥", lbl: "الطاقة الاستيعابية", val: `${chalet.maxGuests} ضيف` },
+                  chalet.bedrooms     && { icon: "🛏️", lbl: "غرف النوم",          val: `${chalet.bedrooms} غرفة` },
                   chalet.checkInTime  && { icon: "🕐", lbl: "وقت الدخول",         val: chalet.checkInTime },
                   chalet.checkOutTime && { icon: "🕓", lbl: "وقت الخروج",         val: chalet.checkOutTime },
                 ] as const).filter(Boolean).map((s: any, i) => (
