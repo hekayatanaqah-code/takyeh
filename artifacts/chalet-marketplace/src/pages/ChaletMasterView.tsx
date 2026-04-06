@@ -3,7 +3,7 @@ import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { MessageCircle, ChevronLeft } from "lucide-react";
+import { MessageCircle, ChevronLeft, Calendar } from "lucide-react";
 import { ChaletDiamondContent, DiamondData } from "@/components/chalet/ChaletDiamondContent";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -85,20 +85,12 @@ export default function ChaletMasterView() {
               </p>
             )}
           </div>
-          {phone && (
-            <button
-              onClick={() => {
-                const termsBlock = terms.length
-                  ? "\n\n📋 شروط الشاليه:\n" + terms.map(t => `• ${t}`).join("\n")
-                  : "";
-                const msg = `السلام عليكم، أرغب في حجز شاليه: ${chalet.nameAr}${termsBlock}`;
-                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
-              }}
-              className="shrink-0 h-11 px-5 rounded-2xl bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold text-sm flex items-center gap-2 transition-colors"
-            >
-              <MessageCircle className="w-4 h-4" /> احجز الآن
-            </button>
-          )}
+          <a
+            href={`${BASE}/chalets/${id}/book`}
+            className="shrink-0 h-11 px-5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-stone-900 font-bold text-sm flex items-center gap-2 transition-colors"
+          >
+            <Calendar className="w-4 h-4" /> احجز الآن
+          </a>
         </div>
       </div>
 

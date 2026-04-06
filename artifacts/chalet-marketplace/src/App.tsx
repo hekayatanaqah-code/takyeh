@@ -8,6 +8,7 @@ import NotFound from "@/pages/not-found";
 import Home from "./pages/Home";
 import Chalets from "./pages/Chalets";
 import ChaletMasterView from "./pages/ChaletMasterView";
+import ChaletBooking from "./pages/ChaletBooking";
 import AddChalet from "./pages/AddChalet";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
@@ -51,6 +52,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/chalets" component={Chalets} />
+      <Route path="/chalets/:id/book" component={ChaletBooking} />
       <Route path="/chalets/:id" component={ChaletMasterView} />
       <Route path="/add-chalet" component={AddChalet} />
       <Route path="/dashboard">

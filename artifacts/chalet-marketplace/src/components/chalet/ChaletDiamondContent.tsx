@@ -325,7 +325,16 @@ function BookingPanel({ data }: { data: DiamondData }) {
             )}
           </div>
         )}
-        {data.whatsappNumber && (
+        {data.id && (
+          <a
+            href={`${BASE}/chalets/${data.id}/book`}
+            className="w-full h-12 rounded-2xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-stone-900 font-bold text-base flex items-center justify-center gap-2.5 transition-all duration-200 shadow-lg shadow-amber-900/30 hover:-translate-y-0.5"
+          >
+            <Calendar className="w-5 h-5" />
+            احجز الآن
+          </a>
+        )}
+        {!data.id && data.whatsappNumber && (
           <button onClick={handleWhatsApp}
             className="w-full h-12 rounded-2xl bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold text-base flex items-center justify-center gap-2.5 transition-colors shadow-lg shadow-green-900/30">
             <MessageCircle className="w-5 h-5" />
