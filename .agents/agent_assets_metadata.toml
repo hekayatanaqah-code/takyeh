@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "q-FovPlfhFUuDRdwobygV"
+uri = "file://screenshots/booking-page-redesign.jpg"
+type = "image"
+title = "صفحة الحجز الجديدة — تصميم فاخر"
