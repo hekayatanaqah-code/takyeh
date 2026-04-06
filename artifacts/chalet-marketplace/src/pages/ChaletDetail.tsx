@@ -129,8 +129,9 @@ export default function ChaletDetail() {
   const selectedDate   = qp.get("date")   ?? "";
   const selectedPeriod = qp.get("period") ?? "";
 
-  const [mainPhoto,  setMainPhoto]  = useState(0);
-  const [termsOpen,  setTermsOpen]  = useState(false);
+  const [mainPhoto,      setMainPhoto]      = useState(0);
+  const [termsOpen,      setTermsOpen]      = useState(false);
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
 
   const { data: chalet, isLoading, error } = useQuery<DiamondData>({
     queryKey: ["chalet-detail", id],
@@ -200,17 +201,30 @@ export default function ChaletDetail() {
   const mapQuery = encodeURIComponent([chalet.nameAr, chalet.district, chalet.location, "القصيم"].filter(Boolean).join(" "));
   const mapSrc   = `https://maps.google.com/maps?q=${mapQuery}&output=embed&hl=ar&z=14`;
 
-  /* ── WhatsApp booking handler ── */
+  /* ── Build the WhatsApp message ── */
+  const buildWaMessage = () => {
+    const periodLabel = activePeriod?.label ?? selectedPeriod;
+    const lines = [`مرحباً، أريد حجز ${chalet!.nameAr} عبر المنصة.`];
+    if (selectedDate)  lines.push(`📅 التاريخ: ${toHijri(selectedDate)}`);
+    if (periodLabel)   lines.push(`🕐 الفترة: ${activePeriod?.emoji ?? ""} ${periodLabel}`.trim());
+    if (displayPrice)  lines.push(`💰 السعر: ${displayPrice}`);
+    return lines.join("\n");
+  };
+
+  /* Step 1 — click button → show terms modal (if terms exist, else open directly) */
   const handleBook = () => {
     if (!phone) return;
-    const periodLabel = activePeriod?.label ?? (activePeriodConf ? (activePeriodConf as any).ar : null) ?? selectedPeriod;
-    const lines = [
-      `مرحباً، أريد حجز ${chalet.nameAr} عبر المنصة.`,
-    ];
-    if (selectedDate)   lines.push(`📅 التاريخ: ${toHijri(selectedDate)}`);
-    if (periodLabel)    lines.push(`🕐 الفترة: ${activePeriod?.emoji ?? ""} ${periodLabel}`.trim());
-    if (displayPrice)   lines.push(`💰 السعر: ${displayPrice}`);
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
+    if (terms.length > 0) {
+      setTermsModalOpen(true);
+    } else {
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(buildWaMessage())}`, "_blank");
+    }
+  };
+
+  /* Step 2 — user agreed in modal → open WhatsApp */
+  const confirmBook = () => {
+    setTermsModalOpen(false);
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(buildWaMessage())}`, "_blank");
   };
 
   /* ════════════════════════════════════════════
@@ -443,7 +457,7 @@ export default function ChaletDetail() {
 
               {/* Price header */}
               <div style={{ padding: "22px 24px 16px", borderBottom: "1px solid #f3f4f6", background: "#f9feff" }}>
-                <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>السعر</p>
+                <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>تبدأ من</p>
                 <p style={{ margin: "6px 0 0", fontSize: 30, fontWeight: 900, color: "#111827", lineHeight: 1 }}>
                   {displayPrice ?? "تواصل للسعر"}
                 </p>
@@ -569,6 +583,72 @@ export default function ChaletDetail() {
       </div>
 
       <Footer />
+
+      {/* ══════════════ TERMS MODAL ══════════════ */}
+      {termsModalOpen && (
+        <div
+          onClick={() => setTermsModalOpen(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            dir="rtl"
+            style={{ background: "#fff", borderRadius: 24, width: "100%", maxWidth: 520, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.25)", overflow: "hidden" }}
+          >
+            {/* Modal header */}
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fafafa" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 22 }}>📋</span>
+                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 900, color: "#111827" }}>شروط الحجز</h3>
+                <span style={{ fontSize: 13, color: "#9ca3af", fontWeight: 500 }}>({terms.length} شرط)</span>
+              </div>
+              <button
+                onClick={() => setTermsModalOpen(false)}
+                style={{ background: "#f3f4f6", border: "none", width: 32, height: 32, borderRadius: "50%", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", color: "#6b7280" }}
+              >✕</button>
+            </div>
+
+            {/* Chalet name sub-header */}
+            <div style={{ padding: "12px 24px", background: "#f0fdf4", borderBottom: "1px solid #dcfce7" }}>
+              <p style={{ margin: 0, fontSize: 13, color: "#15803d", fontWeight: 700 }}>🏡 {chalet.nameAr}</p>
+            </div>
+
+            {/* Terms list – scrollable */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+              <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 12 }}>
+                {terms.map((t, i) => (
+                  <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 14px", borderRadius: 12, background: "#f9fafb", border: "1px solid #f3f4f6" }}>
+                    <span style={{ color: "#16a34a", fontWeight: 900, fontSize: 15, flexShrink: 0, marginTop: 2 }}>✓</span>
+                    <span style={{ fontSize: 14, color: "#374151", lineHeight: 1.9 }}>{t}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Modal footer actions */}
+            <div style={{ padding: "16px 24px", borderTop: "1px solid #f3f4f6", display: "flex", gap: 12, background: "#fafafa" }}>
+              <button
+                onClick={confirmBook}
+                style={{ flex: 1, height: 50, borderRadius: 14, border: "none", background: "#16a34a", color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "0 4px 16px rgba(22,163,74,0.30)", transition: "background .2s" }}
+                onMouseEnter={e => (e.currentTarget.style.background = "#15803d")}
+                onMouseLeave={e => (e.currentTarget.style.background = "#16a34a")}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 18, height: 18, flexShrink: 0 }}>
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                أوافق وأكمل الحجز عبر واتساب
+              </button>
+              <button
+                onClick={() => setTermsModalOpen(false)}
+                style={{ height: 50, padding: "0 20px", borderRadius: 14, border: "1.5px solid #e5e7eb", background: "#fff", color: "#6b7280", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+              >
+                رجوع
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
