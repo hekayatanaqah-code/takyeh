@@ -176,7 +176,8 @@ export default function ChaletDetail() {
       if (!r.ok) return {};
       return r.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   /* ── Loading ── */

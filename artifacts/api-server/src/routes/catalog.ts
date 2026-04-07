@@ -96,6 +96,10 @@ router.get("/page-content", async (_req, res) => {
     "footer_title",
     "footer_desc",
     "copyright_text",
+    "wa_message_template",
+    "svc_btn_enabled",
+    "svc_btn_label",
+    "svc_btn_color",
   ];
   const rows = await db
     .select()
