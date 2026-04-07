@@ -58,6 +58,17 @@ function FeatIcon({ iconKey }: { iconKey?: string }) {
   return <Icon size={32} />;
 }
 
+/* ─── Service category icons shown in the hero ─── */
+const HERO_SERVICES = [
+  { emoji: "🏠", label: "شاليهات"  },
+  { emoji: "🌴", label: "استراحات" },
+  { emoji: "🥩", label: "مطابخ"    },
+  { emoji: "🎈", label: "فعاليات"  },
+  { emoji: "☕", label: "ضيافة"    },
+  { emoji: "🎭", label: "مناسبات"  },
+  { emoji: "🏕️", label: "مزارع"   },
+];
+
 export default function Home() {
   const [, setLocation] = useLocation();
   const [searchCity, setSearchCity]         = useState<string>("");
@@ -66,6 +77,8 @@ export default function Home() {
   const [searchPeriod, setSearchPeriod]     = useState<string>("");
   const [bookingDate, setBookingDate]       = useState<string>("");
   const [numDays, setNumDays]               = useState<number>(1);
+  /* Hero tab — "properties" (default) | "services" */
+  const [heroTab, setHeroTab]               = useState<"properties" | "services">("properties");
 
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
@@ -158,8 +171,28 @@ export default function Home() {
                 {siteSettings.hero_subtitle || "احجز استراحتك أو شاليهك القادم بكل سهولة. خيارات متنوعة تناسب جميع العائلات والمناسبات."}
               </p>
 
+              {/* ── Service Icons Row ── */}
+              <div
+                className="flex gap-4 overflow-x-auto pb-1 mb-7 justify-start md:justify-center"
+                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              >
+                {HERO_SERVICES.map((svc) => (
+                  <button
+                    key={svc.label}
+                    type="button"
+                    onClick={() => { setSearchCategory(svc.label); setHeroTab("properties"); }}
+                    className="flex flex-col items-center gap-2 shrink-0 group focus:outline-none"
+                  >
+                    <span className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-sm border border-white/25 group-hover:bg-amber-600/40 group-hover:border-amber-400/60 flex items-center justify-center text-2xl transition-all duration-200 shadow-md">
+                      {svc.emoji}
+                    </span>
+                    <span className="text-xs font-semibold text-white/85 group-hover:text-amber-300 transition-colors">{svc.label}</span>
+                  </button>
+                ))}
+              </div>
+
               {/* ── Feature Badges ── */}
-              <div className="flex items-center justify-center flex-wrap gap-3 mb-8">
+              <div className="flex items-center justify-center flex-wrap gap-3 mb-6">
                 {[
                   siteSettings.feature_1 || "أفضل الشاليهات",
                   siteSettings.feature_2 || "حجز سهل وآمن",
@@ -171,6 +204,33 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+
+              {/* ── Hero Tabs ── */}
+              <div className="flex items-center justify-center gap-2 mb-5">
+                {(["properties", "services"] as const).map((tab) => {
+                  const label   = tab === "properties" ? "عقارات" : "خدمات";
+                  const icon    = tab === "properties" ? "🏠" : "🛎️";
+                  const active  = heroTab === tab;
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setHeroTab(tab)}
+                      className={`flex items-center gap-2 px-7 py-2.5 rounded-full text-sm font-bold border transition-all duration-200 focus:outline-none shadow-md ${
+                        active
+                          ? "bg-amber-700 border-amber-600 text-white shadow-amber-900/40"
+                          : "bg-white/10 backdrop-blur-sm border-white/30 text-white/80 hover:bg-white/20 hover:text-white"
+                      }`}
+                    >
+                      <span>{icon}</span>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* ══ PROPERTIES TAB — search card + booking summary ══ */}
+              {heroTab === "properties" && (<>
 
               {/* ── Search Card ─────────────────────────────────────── */}
               <div className="bg-white/10 backdrop-blur-md border border-white/20 p-2 md:p-3 rounded-2xl shadow-2xl flex flex-col md:flex-row flex-wrap gap-3">
@@ -329,6 +389,49 @@ export default function Home() {
                   <span className="font-bold">{hijriBookingDate}</span>
                 </motion.p>
               )}
+
+              {/* end of properties tab */}
+              </>)}
+
+              {/* ══ SERVICES TAB ══ */}
+              {heroTab === "services" && (
+                <motion.div
+                  key="services-panel"
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="mt-2"
+                >
+                  <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl p-6 md:p-8">
+                    <p className="text-white/70 text-sm mb-6 font-medium">اختر نوع الخدمة المطلوبة</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[
+                        { emoji: "🥩", label: "مطابخ وضيافة",    desc: "وجبات وبوفيه",        link: "/services" },
+                        { emoji: "🎈", label: "تنظيم فعاليات",   desc: "أعياد وحفلات",         link: "/services" },
+                        { emoji: "☕", label: "خدمات استضافة",   desc: "قهوة ومشروبات",        link: "/services" },
+                        { emoji: "🎭", label: "مناسبات خاصة",    desc: "أعراس وتخرج",          link: "/services" },
+                      ].map((s) => (
+                        <button
+                          key={s.label}
+                          type="button"
+                          onClick={() => setLocation(s.link)}
+                          className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-white/10 hover:bg-amber-700/40 border border-white/20 hover:border-amber-500/60 transition-all duration-200 group text-center focus:outline-none"
+                        >
+                          <span className="text-4xl">{s.emoji}</span>
+                          <div>
+                            <p className="text-white font-bold text-sm group-hover:text-amber-200">{s.label}</p>
+                            <p className="text-white/55 text-xs mt-0.5">{s.desc}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-white/40 text-xs mt-6 text-center">
+                      سيتم إطلاق خدمات إضافية قريباً · تواصل معنا الآن عبر الواتساب
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+
             </motion.div>
           </div>
         </section>
