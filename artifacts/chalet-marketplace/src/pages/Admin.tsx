@@ -84,6 +84,7 @@ interface Submission {
   eveningCheckOut?: string | null;
   fullDayCheckIn?: string | null;
   fullDayCheckOut?: string | null;
+  dailyPrices?: Record<string, Record<string, number>> | null;
 }
 
 interface AdminChalet {
@@ -269,6 +270,7 @@ function SubmissionReviewModal({
                   eveningCheckOut: s.eveningCheckOut,
                   fullDayCheckIn: s.fullDayCheckIn,
                   fullDayCheckOut: s.fullDayCheckOut,
+                  dailyPrices: s.dailyPrices,
                 }}
               />
             </div>

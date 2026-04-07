@@ -271,6 +271,59 @@ function BookingPanel({ data }: { data: DiamondData }) {
             )}
           </div>
         )}
+
+        {/* 7-day pricing grid — shown when dailyPrices is set */}
+        {data.dailyPrices && (() => {
+          const DAYS = [
+            { idx: 0, label: "الأحد",    isWeekend: false },
+            { idx: 1, label: "الاثنين",  isWeekend: false },
+            { idx: 2, label: "الثلاثاء", isWeekend: false },
+            { idx: 3, label: "الأربعاء", isWeekend: false },
+            { idx: 4, label: "الخميس",   isWeekend: false },
+            { idx: 5, label: "الجمعة",   isWeekend: true  },
+            { idx: 6, label: "السبت",    isWeekend: true  },
+          ];
+          const daily = data.dailyPrices!;
+          const hasAny = (p: string, d: number) => daily[p]?.[String(d)] != null;
+          const cell = (p: string, d: number) =>
+            hasAny(p, d) ? (
+              <span style={{ color: "#fcd34d", fontWeight: 700, fontSize: 11 }}>
+                {Number(daily[p][String(d)]).toLocaleString("ar-SA")}
+              </span>
+            ) : (
+              <span style={{ color: "#57534e", fontSize: 10 }}>—</span>
+            );
+          return (
+            <div className="rounded-xl overflow-hidden border border-stone-700">
+              <div className="bg-stone-700/60 px-3 py-2 flex items-center gap-2">
+                <span className="text-[11px] font-bold text-amber-400">جدول الأسعار اليومية</span>
+                <span className="text-[10px] text-stone-400 mr-auto">(ر.س)</span>
+              </div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#292524" }}>
+                    <th style={{ padding: "6px 10px", textAlign: "right", fontSize: 10, color: "#a8a29e", fontWeight: 600 }}>اليوم</th>
+                    <th style={{ padding: "6px 6px", textAlign: "center", fontSize: 10, color: "#92400e", fontWeight: 700 }}>🌅</th>
+                    <th style={{ padding: "6px 6px", textAlign: "center", fontSize: 10, color: "#3730a3", fontWeight: 700 }}>🌙</th>
+                    <th style={{ padding: "6px 6px", textAlign: "center", fontSize: 10, color: "#065f46", fontWeight: 700 }}>☀️</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {DAYS.map(({ idx, label, isWeekend }) => (
+                    <tr key={idx} style={{ background: isWeekend ? "rgba(251,191,36,0.06)" : "transparent", borderTop: "1px solid rgba(120,113,108,0.2)" }}>
+                      <td style={{ padding: "5px 10px", fontSize: 12, color: isWeekend ? "#fcd34d" : "#d6d3d1", fontWeight: isWeekend ? 700 : 500 }}>
+                        {label}
+                      </td>
+                      <td style={{ padding: "5px 6px", textAlign: "center" }}>{cell("morning", idx)}</td>
+                      <td style={{ padding: "5px 6px", textAlign: "center" }}>{cell("evening", idx)}</td>
+                      <td style={{ padding: "5px 6px", textAlign: "center" }}>{cell("fullday", idx)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-stone-300 flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5 text-amber-400" />

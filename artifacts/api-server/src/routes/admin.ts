@@ -95,6 +95,7 @@ router.patch("/submissions/:id/status", async (req, res) => {
         eveningCheckOut: submission.eveningCheckOut ?? null,
         fullDayCheckIn: submission.fullDayCheckIn ?? null,
         fullDayCheckOut: submission.fullDayCheckOut ?? null,
+        dailyPrices: submission.dailyPrices ?? null,
         amenities: submission.amenities ?? [],
         photos: submission.photos ?? [],
         videoUrl: submission.videoUrl ?? null,

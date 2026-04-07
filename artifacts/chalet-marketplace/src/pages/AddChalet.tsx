@@ -272,6 +272,15 @@ export default function AddChalet() {
     });
   };
 
+  const setMainPhoto = (idx: number) => {
+    if (idx === 0) return;
+    setPhotos((prev) => {
+      const next = [...prev];
+      const [selected] = next.splice(idx, 1);
+      return [selected, ...next];
+    });
+  };
+
   const addCustomTag = () => {
     const tag = customAmenityInput.trim();
     if (!tag) return;
@@ -990,6 +999,7 @@ export default function AddChalet() {
                   <div className="flex flex-col gap-1 mb-5 bg-muted/40 rounded-xl p-3 text-sm text-muted-foreground">
                     <span>📷 <strong>الصور:</strong> بحد أقصى {MAX_PHOTOS} صورة (حتى 2MB للصورة) صيغة JPG/PNG — تُحفظ تلقائياً بصيغة WebP</span>
                     <span>🎥 <strong>الفيديو:</strong> فيديو واحد (حتى {MAX_VIDEO_SIZE_MB}MB، مدة 30 ثانية) صيغة MP4 — يُضغط تلقائياً</span>
+                    <span className="text-primary font-medium">★ <strong>الصورة الرئيسية:</strong> أول صورة تُرفع ستكون الصورة الرئيسية — مرّر على أي صورة أخرى لتعيينها كرئيسية</span>
                   </div>
 
                   {/* Photo Thumbnails */}
@@ -1002,13 +1012,25 @@ export default function AddChalet() {
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.8 }}
-                            className="relative aspect-square rounded-xl overflow-hidden border border-border group"
+                            className="relative aspect-square rounded-xl overflow-hidden border group"
+                            style={{ borderColor: idx === 0 ? "#16a34a" : undefined, borderWidth: idx === 0 ? 2 : 1 }}
                           >
                             <img
                               src={photo.preview}
                               alt={photo.name}
                               className="w-full h-full object-cover"
                             />
+                            {/* Main image badge */}
+                            {idx === 0 && (
+                              <>
+                                <div className="absolute top-1 right-1 bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center shadow-md">
+                                  <span style={{ fontSize: 11 }}>★</span>
+                                </div>
+                                <div className="absolute bottom-0 inset-x-0 bg-primary/80 text-white text-[10px] font-bold text-center py-0.5">
+                                  الرئيسية
+                                </div>
+                              </>
+                            )}
                             {/* Upload state overlay */}
                             {photo.url === "" && (
                               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -1019,6 +1041,16 @@ export default function AddChalet() {
                               <div className="absolute inset-0 bg-destructive/60 flex items-center justify-center">
                                 <X className="w-6 h-6 text-white" />
                               </div>
+                            )}
+                            {/* Set as main button (non-main photos only) */}
+                            {idx > 0 && photo.url && photo.url !== "error" && (
+                              <button
+                                type="button"
+                                onClick={() => setMainPhoto(idx)}
+                                className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-bold py-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/80 text-center"
+                              >
+                                تعيين كرئيسية
+                              </button>
                             )}
                             {/* Remove button */}
                             <button
