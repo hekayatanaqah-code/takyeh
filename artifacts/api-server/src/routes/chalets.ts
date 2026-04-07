@@ -63,6 +63,25 @@ router.get("/", async (req, res) => {
         if (searchPeriod === "full_day") return !entry.periodFullDay;
         return !(entry.periodMorning || entry.periodEvening || entry.periodFullDay);
       });
+
+    }
+
+    /* Additionally filter by dailyPrices granularity when period is specified */
+    if (searchPeriod) {
+      const dayOfWeek = new Date(searchDate + "T12:00:00").getDay();
+      const periodKey = searchPeriod === "full_day" ? "fullday" : searchPeriod;
+      rows = rows.filter((row) => {
+        const daily = row.dailyPrices as Record<string, Record<string, number>> | null;
+        if (daily) {
+          /* dailyPrices is set — only include chalet if this day+period has a price */
+          return daily[periodKey]?.[String(dayOfWeek)] != null;
+        }
+        /* No dailyPrices — fall back to slot booleans */
+        if (searchPeriod === "morning") return row.slotMorning ?? true;
+        if (searchPeriod === "evening") return row.slotEvening ?? true;
+        if (searchPeriod === "full_day") return row.slotFullDay ?? true;
+        return true;
+      });
     }
   }
 

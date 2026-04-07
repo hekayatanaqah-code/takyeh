@@ -148,13 +148,15 @@ export default function AddChalet() {
   const [bedroomCount, setBedroomCount] = useState("");
   const [maxGuestsInput, setMaxGuestsInput] = useState("");
 
-  /* ── Time-slot pricing ── */
-  const [slotMorning, setSlotMorning] = useState(true);
-  const [slotEvening, setSlotEvening] = useState(true);
-  const [slotFullDay, setSlotFullDay] = useState(true);
-  const [priceMorning, setPriceMorning] = useState("");
-  const [priceEvening, setPriceEvening] = useState("");
-  const [priceFullDay, setPriceFullDay] = useState("");
+  /* ── 7-day granular pricing grid ── */
+  /* dailyPriceGrid[dayIndex][period] — empty string = not available */
+  type DayPriceRow = { morning: string; evening: string; fullday: string };
+  const initGrid = (): Record<number, DayPriceRow> =>
+    Object.fromEntries([0,1,2,3,4,5,6].map(d => [d, { morning: "", evening: "", fullday: "" }]));
+  const [dailyPriceGrid, setDailyPriceGrid] = useState<Record<number, DayPriceRow>>(initGrid());
+
+  const setDayCell = (day: number, period: keyof DayPriceRow, val: string) =>
+    setDailyPriceGrid(prev => ({ ...prev, [day]: { ...prev[day], [period]: val.replace(/[^\d.]/g, "") } }));
 
   /* ── Per-period check-in / check-out times ── */
   const [morningCheckIn, setMorningCheckIn] = useState("");
@@ -164,9 +166,27 @@ export default function AddChalet() {
   const [fullDayCheckIn, setFullDayCheckIn] = useState("");
   const [fullDayCheckOut, setFullDayCheckOut] = useState("");
 
-  /* ── Weekday / Weekend pricing ── */
-  const [priceWeekday, setPriceWeekday] = useState("");
-  const [priceWeekend, setPriceWeekend] = useState("");
+  /* Helper: derive payload values from the grid */
+  const minPeriodPrice = (period: keyof DayPriceRow): number | null => {
+    const vals = [0,1,2,3,4,5,6]
+      .map(d => dailyPriceGrid[d][period])
+      .filter(v => v.trim() !== "")
+      .map(Number)
+      .filter(n => !isNaN(n));
+    return vals.length > 0 ? Math.min(...vals) : null;
+  };
+  const buildDailyPricesPayload = (): Record<string, Record<string, number>> | null => {
+    const result: Record<string, Record<string, number>> = {};
+    (["morning","evening","fullday"] as const).forEach(p => {
+      const entries: Record<string, number> = {};
+      [0,1,2,3,4,5,6].forEach(d => {
+        const v = dailyPriceGrid[d][p];
+        if (v.trim() !== "" && !isNaN(Number(v))) entries[String(d)] = Number(v);
+      });
+      if (Object.keys(entries).length > 0) result[p] = entries;
+    });
+    return Object.keys(result).length > 0 ? result : null;
+  };
   const [seasonalDisclaimer, setSeasonalDisclaimer] = useState(true);
 
   const mutation = useCreateSubmission();
@@ -329,20 +349,27 @@ export default function AddChalet() {
           pricePerNight: 0,
           maxGuests: maxGuestsInput ? Number(maxGuestsInput) : null,
           bedrooms: hasBedrooms && bedroomCount ? Number(bedroomCount) : null,
-          priceMorning: slotMorning && priceMorning ? Number(priceMorning) : null,
-          priceEvening: slotEvening && priceEvening ? Number(priceEvening) : null,
-          priceFullDay: slotFullDay && priceFullDay ? Number(priceFullDay) : null,
-          slotMorning,
-          slotEvening,
-          slotFullDay,
-          morningCheckIn: slotMorning && morningCheckIn ? morningCheckIn : null,
-          morningCheckOut: slotMorning && morningCheckOut ? morningCheckOut : null,
-          eveningCheckIn: slotEvening && eveningCheckIn ? eveningCheckIn : null,
-          eveningCheckOut: slotEvening && eveningCheckOut ? eveningCheckOut : null,
-          fullDayCheckIn: slotFullDay && fullDayCheckIn ? fullDayCheckIn : null,
-          fullDayCheckOut: slotFullDay && fullDayCheckOut ? fullDayCheckOut : null,
-          priceWeekday: priceWeekday ? Number(priceWeekday) : null,
-          priceWeekend: priceWeekend ? Number(priceWeekend) : null,
+          priceMorning: minPeriodPrice("morning"),
+          priceEvening: minPeriodPrice("evening"),
+          priceFullDay: minPeriodPrice("fullday"),
+          slotMorning: [0,1,2,3,4,5,6].some(d => !!dailyPriceGrid[d].morning.trim()),
+          slotEvening: [0,1,2,3,4,5,6].some(d => !!dailyPriceGrid[d].evening.trim()),
+          slotFullDay: [0,1,2,3,4,5,6].some(d => !!dailyPriceGrid[d].fullday.trim()),
+          dailyPrices: buildDailyPricesPayload(),
+          morningCheckIn: morningCheckIn || null,
+          morningCheckOut: morningCheckOut || null,
+          eveningCheckIn: eveningCheckIn || null,
+          eveningCheckOut: eveningCheckOut || null,
+          fullDayCheckIn: fullDayCheckIn || null,
+          fullDayCheckOut: fullDayCheckOut || null,
+          priceWeekday: (() => {
+            const vals = [1,2,3,4].flatMap(d => (["morning","evening","fullday"] as const).map(p => dailyPriceGrid[d][p])).filter(v=>v.trim()).map(Number).filter(n=>!isNaN(n));
+            return vals.length > 0 ? Math.min(...vals) : null;
+          })(),
+          priceWeekend: (() => {
+            const vals = [5,6].flatMap(d => (["morning","evening","fullday"] as const).map(p => dailyPriceGrid[d][p])).filter(v=>v.trim()).map(Number).filter(n=>!isNaN(n));
+            return vals.length > 0 ? Math.min(...vals) : null;
+          })(),
           seasonalDisclaimer,
           amenities: amenitiesList,
           photos: successfulPhotos,
@@ -769,222 +796,119 @@ export default function AddChalet() {
                       </div>
                     </div>
 
-                    {/* Time-slot pricing */}
+                    {/* 7-Day Pricing Grid */}
                     <div className="space-y-3">
-                      <Label className="text-base font-medium">أسعار الفترات — يبدأ من</Label>
-                      <p className="text-xs text-muted-foreground -mt-1">فعّل الفترات التي تتيحها وأدخل السعر الابتدائي (يبدأ من) لكل فترة (اختياري)</p>
+                      <Label className="text-base font-medium">جدول الأسعار اليومية</Label>
+                      <p className="text-xs text-muted-foreground -mt-1">أدخل سعر كل فترة لكل يوم. اتركه فارغاً إذا كانت الفترة غير متاحة في ذلك اليوم.</p>
 
-                      {/* Morning */}
-                      <div className="rounded-xl border p-3 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium flex items-center gap-1.5">🌅 فترة صباحية</span>
-                          <button
-                            type="button"
-                            onClick={() => setSlotMorning(!slotMorning)}
-                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${slotMorning ? "bg-primary" : "bg-muted"}`}
-                          >
-                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow ${slotMorning ? "translate-x-4" : "translate-x-1"}`} />
-                          </button>
-                        </div>
-                        {slotMorning && (
-                          <>
-                            <div className="relative">
-                              <Input
-                                type="number"
-                                min="0"
-                                placeholder="يبدأ من ... ر.س (اختياري)"
-                                value={priceMorning}
-                                onChange={(e) => setPriceMorning(e.target.value)}
-                                className="h-10 text-sm pl-12"
-                                dir="rtl"
-                              />
-                              <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground">وقت الدخول</p>
-                                <Input
-                                  type="text"
-                                  placeholder="مثال: ٢:٠٠ م"
-                                  value={morningCheckIn}
-                                  onChange={(e) => setMorningCheckIn(e.target.value)}
-                                  className="h-9 text-xs"
-                                  dir="rtl"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground">وقت الخروج</p>
-                                <Input
-                                  type="text"
-                                  placeholder="مثال: ١٠:٠٠ ص"
-                                  value={morningCheckOut}
-                                  onChange={(e) => setMorningCheckOut(e.target.value)}
-                                  className="h-9 text-xs"
-                                  dir="rtl"
-                                />
-                              </div>
-                            </div>
-                          </>
-                        )}
+                      {/* 7-day pricing table */}
+                      <div className="overflow-x-auto rounded-xl border border-border">
+                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 340 }}>
+                          <thead>
+                            <tr style={{ background: "#f8fafc" }}>
+                              <th style={{ padding: "10px 12px", textAlign: "right", fontSize: 12, fontWeight: 700, color: "#374151", borderBottom: "1px solid #e5e7eb", minWidth: 80 }}>اليوم</th>
+                              <th style={{ padding: "10px 8px", textAlign: "center", fontSize: 12, fontWeight: 700, color: "#92400e", borderBottom: "1px solid #e5e7eb" }}>🌅 صباحي</th>
+                              <th style={{ padding: "10px 8px", textAlign: "center", fontSize: 12, fontWeight: 700, color: "#3730a3", borderBottom: "1px solid #e5e7eb" }}>🌙 مسائي</th>
+                              <th style={{ padding: "10px 8px", textAlign: "center", fontSize: 12, fontWeight: 700, color: "#065f46", borderBottom: "1px solid #e5e7eb" }}>☀️ يوم كامل</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {([
+                              { idx: 0, label: "الأحد", isWeekend: false },
+                              { idx: 1, label: "الاثنين", isWeekend: false },
+                              { idx: 2, label: "الثلاثاء", isWeekend: false },
+                              { idx: 3, label: "الأربعاء", isWeekend: false },
+                              { idx: 4, label: "الخميس", isWeekend: false },
+                              { idx: 5, label: "الجمعة", isWeekend: true },
+                              { idx: 6, label: "السبت", isWeekend: true },
+                            ] as const).map(({ idx, label, isWeekend }) => (
+                              <tr key={idx} style={{ background: isWeekend ? "#fefce8" : "#ffffff", borderTop: "1px solid #f3f4f6" }}>
+                                <td style={{ padding: "8px 12px", fontSize: 13, fontWeight: 600, color: isWeekend ? "#92400e" : "#374151", whiteSpace: "nowrap" }}>
+                                  {label}{isWeekend ? " 🎉" : ""}
+                                </td>
+                                {(["morning", "evening", "fullday"] as const).map(period => (
+                                  <td key={period} style={{ padding: "6px 6px" }}>
+                                    <div style={{ position: "relative" }}>
+                                      <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={dailyPriceGrid[idx][period]}
+                                        onChange={e => setDayCell(idx, period, e.target.value)}
+                                        placeholder="—"
+                                        style={{
+                                          width: "100%",
+                                          minWidth: 70,
+                                          padding: "6px 26px 6px 6px",
+                                          borderRadius: 8,
+                                          border: "1px solid",
+                                          borderColor: dailyPriceGrid[idx][period] ? "#86efac" : "#e5e7eb",
+                                          fontSize: 13,
+                                          textAlign: "center",
+                                          background: dailyPriceGrid[idx][period] ? "#f0fdf4" : "#f9fafb",
+                                          outline: "none",
+                                          direction: "ltr",
+                                          transition: "border-color 0.15s, background 0.15s",
+                                        }}
+                                      />
+                                      {dailyPriceGrid[idx][period] && (
+                                        <span style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", fontSize: 9, color: "#9ca3af", pointerEvents: "none" }}>ر.س</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
+                      <p className="text-xs text-muted-foreground">💡 اتركه فارغاً إذا لم تكن الفترة متاحة في ذلك اليوم — الأسعار تُحسب تلقائياً</p>
 
-                      {/* Evening */}
-                      <div className="rounded-xl border p-3 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium flex items-center gap-1.5">🌙 فترة مسائية</span>
-                          <button
-                            type="button"
-                            onClick={() => setSlotEvening(!slotEvening)}
-                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${slotEvening ? "bg-primary" : "bg-muted"}`}
-                          >
-                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow ${slotEvening ? "translate-x-4" : "translate-x-1"}`} />
-                          </button>
-                        </div>
-                        {slotEvening && (
-                          <>
-                            <div className="relative">
-                              <Input
-                                type="number"
-                                min="0"
-                                placeholder="يبدأ من ... ر.س (اختياري)"
-                                value={priceEvening}
-                                onChange={(e) => setPriceEvening(e.target.value)}
-                                className="h-10 text-sm pl-12"
-                                dir="rtl"
-                              />
-                              <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
+                      {/* Check-in / Check-out per period (shown only when that period has at least one price) */}
+                      {[0,1,2,3,4,5,6].some(d => !!dailyPriceGrid[d].morning.trim()) && (
+                        <div className="rounded-xl border p-3 space-y-2">
+                          <p className="text-sm font-medium flex items-center gap-1.5">🌅 أوقات الفترة الصباحية</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">وقت الدخول</p>
+                              <Input type="text" placeholder="مثال: ٢:٠٠ م" value={morningCheckIn} onChange={e => setMorningCheckIn(e.target.value)} className="h-9 text-xs" dir="rtl" />
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground">وقت الدخول</p>
-                                <Input
-                                  type="text"
-                                  placeholder="مثال: ٤:٠٠ م"
-                                  value={eveningCheckIn}
-                                  onChange={(e) => setEveningCheckIn(e.target.value)}
-                                  className="h-9 text-xs"
-                                  dir="rtl"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground">وقت الخروج</p>
-                                <Input
-                                  type="text"
-                                  placeholder="مثال: ١٢:٠٠ ص"
-                                  value={eveningCheckOut}
-                                  onChange={(e) => setEveningCheckOut(e.target.value)}
-                                  className="h-9 text-xs"
-                                  dir="rtl"
-                                />
-                              </div>
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">وقت الخروج</p>
+                              <Input type="text" placeholder="مثال: ١٠:٠٠ ص" value={morningCheckOut} onChange={e => setMorningCheckOut(e.target.value)} className="h-9 text-xs" dir="rtl" />
                             </div>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Full day */}
-                      <div className="rounded-xl border p-3 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium flex items-center gap-1.5">☀️ يوم كامل</span>
-                          <button
-                            type="button"
-                            onClick={() => setSlotFullDay(!slotFullDay)}
-                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${slotFullDay ? "bg-primary" : "bg-muted"}`}
-                          >
-                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow ${slotFullDay ? "translate-x-4" : "translate-x-1"}`} />
-                          </button>
-                        </div>
-                        {slotFullDay && (
-                          <>
-                            <div className="relative">
-                              <Input
-                                type="number"
-                                min="0"
-                                placeholder="يبدأ من ... ر.س (اختياري)"
-                                value={priceFullDay}
-                                onChange={(e) => setPriceFullDay(e.target.value)}
-                                className="h-10 text-sm pl-12"
-                                dir="rtl"
-                              />
-                              <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground">وقت الدخول</p>
-                                <Input
-                                  type="text"
-                                  placeholder="مثال: ٢:٠٠ م"
-                                  value={fullDayCheckIn}
-                                  onChange={(e) => setFullDayCheckIn(e.target.value)}
-                                  className="h-9 text-xs"
-                                  dir="rtl"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground">وقت الخروج</p>
-                                <Input
-                                  type="text"
-                                  placeholder="مثال: ١٢:٠٠ ص"
-                                  value={fullDayCheckOut}
-                                  onChange={(e) => setFullDayCheckOut(e.target.value)}
-                                  className="h-9 text-xs"
-                                  dir="rtl"
-                                />
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Weekday / Weekend pricing */}
-                    <div className="space-y-3">
-                      <Label className="text-base font-medium">أسعار الأيام <span className="text-destructive">*</span></Label>
-                      <p className="text-xs text-muted-foreground -mt-1">أدخل السعر الابتدائي (يبدأ من) لكل نوع من الأيام</p>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Weekday */}
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                            📅 وسط الأسبوع
-                            <span className="text-destructive text-xs">*</span>
-                          </label>
-                          <div className="relative">
-                            <Input
-                              type="number"
-                              min="1"
-                              placeholder="مثال: 500"
-                              value={priceWeekday}
-                              onChange={(e) => setPriceWeekday(e.target.value)}
-                              required
-                              className="h-11 text-sm pl-12"
-                              dir="rtl"
-                            />
-                            <span className="absolute left-3 top-3 text-xs text-muted-foreground">ر.س</span>
                           </div>
                         </div>
-
-                        {/* Weekend */}
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                            🎉 نهاية الأسبوع
-                            <span className="text-destructive text-xs">*</span>
-                          </label>
-                          <div className="relative">
-                            <Input
-                              type="number"
-                              min="1"
-                              placeholder="مثال: 800"
-                              value={priceWeekend}
-                              onChange={(e) => setPriceWeekend(e.target.value)}
-                              required
-                              className="h-11 text-sm pl-12"
-                              dir="rtl"
-                            />
-                            <span className="absolute left-3 top-3 text-xs text-muted-foreground">ر.س</span>
+                      )}
+                      {[0,1,2,3,4,5,6].some(d => !!dailyPriceGrid[d].evening.trim()) && (
+                        <div className="rounded-xl border p-3 space-y-2">
+                          <p className="text-sm font-medium flex items-center gap-1.5">🌙 أوقات الفترة المسائية</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">وقت الدخول</p>
+                              <Input type="text" placeholder="مثال: ٤:٠٠ م" value={eveningCheckIn} onChange={e => setEveningCheckIn(e.target.value)} className="h-9 text-xs" dir="rtl" />
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">وقت الخروج</p>
+                              <Input type="text" placeholder="مثال: ١٢:٠٠ ص" value={eveningCheckOut} onChange={e => setEveningCheckOut(e.target.value)} className="h-9 text-xs" dir="rtl" />
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
+                      {[0,1,2,3,4,5,6].some(d => !!dailyPriceGrid[d].fullday.trim()) && (
+                        <div className="rounded-xl border p-3 space-y-2">
+                          <p className="text-sm font-medium flex items-center gap-1.5">☀️ أوقات اليوم الكامل</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">وقت الدخول</p>
+                              <Input type="text" placeholder="مثال: ٢:٠٠ م" value={fullDayCheckIn} onChange={e => setFullDayCheckIn(e.target.value)} className="h-9 text-xs" dir="rtl" />
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">وقت الخروج</p>
+                              <Input type="text" placeholder="مثال: ١٢:٠٠ ص" value={fullDayCheckOut} onChange={e => setFullDayCheckOut(e.target.value)} className="h-9 text-xs" dir="rtl" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Seasonal disclaimer checkbox */}
                       <label className="flex items-start gap-3 cursor-pointer group select-none">

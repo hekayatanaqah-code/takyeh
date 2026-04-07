@@ -230,7 +230,13 @@ export default function ChaletDetail() {
       hasDayPrice: getDayPrice((chalet as any).dailyPrices, "fullday", selectedDate) != null,
       ci: chalet.fullDayCheckIn, co: chalet.fullDayCheckOut,
     },
-  ].filter(Boolean) as { key: string; label: string; emoji: string; price: string | null; hasDayPrice: boolean; ci?: string | null; co?: string | null }[];
+  ].filter(Boolean).filter((s: any) => {
+    /* When dailyPrices is set AND a date is selected:
+       hide any period that has no price for that specific day */
+    const daily = (chalet as any).dailyPrices as Record<string, Record<string, number>> | null;
+    if (daily && selectedDate) return s.hasDayPrice;
+    return true;
+  }) as { key: string; label: string; emoji: string; price: string | null; hasDayPrice: boolean; ci?: string | null; co?: string | null }[];
 
   /* active period = what was selected on the search/listing page */
   const activePeriod = slots.find(s => s.key === selectedPeriod);

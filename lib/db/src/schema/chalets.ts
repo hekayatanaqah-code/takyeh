@@ -81,6 +81,8 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   /* ── Weekday / Weekend pricing ── */
   priceWeekday: numeric("price_weekday", { precision: 10, scale: 2 }),
   priceWeekend: numeric("price_weekend", { precision: 10, scale: 2 }),
+  /* ── Per-day-of-week pricing per period ── */
+  dailyPrices: jsonb("daily_prices").$type<Record<string, Record<string, number>>>(),
   seasonalDisclaimer: boolean("seasonal_disclaimer").notNull().default(true),
   maxGuests: integer("max_guests"),
   bedrooms: integer("bedrooms"),
