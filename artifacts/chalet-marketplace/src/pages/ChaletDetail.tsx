@@ -582,22 +582,19 @@ export default function ChaletDetail() {
 
                     {selectedDate && (() => {
                       const d = new Date(selectedDate + "T12:00:00");
-                      const dayName = new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(d);
-                      const gregDate = new Intl.DateTimeFormat("ar-SA", { day: "numeric", month: "long", year: "numeric", calendar: "gregory" }).format(d);
-                      const hijriDate = toHijri(selectedDate);
+                      const dayName  = new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(d);
+                      /* Hijri: ar-SA-u-ca-islamic-umalqura already uses Arabic-Indic numerals */
+                      const hijriDate = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric" }).format(d);
+                      /* Gregorian: u-nu-arab extension forces Arabic-Indic digits (٢٠٢٦ not 2026) */
+                      const gregDate  = new Intl.DateTimeFormat("ar-SA-u-nu-arab", { day: "numeric", month: "long", year: "numeric", calendar: "gregory" }).format(d);
                       return (
                         <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                           <span style={{ fontSize: 18, marginTop: 2 }}>📅</span>
                           <div>
                             <p style={{ margin: 0, fontSize: 10, color: "#6b7280" }}>تاريخ الحجز</p>
-                            <p style={{ margin: "3px 0 0", fontWeight: 700, color: "#111827", fontSize: 13, lineHeight: 1.5 }}>
-                              {dayName}، {gregDate}
+                            <p style={{ margin: "3px 0 0", fontWeight: 700, color: "#111827", fontSize: 13, lineHeight: 1.6 }}>
+                              {dayName}، {hijriDate} هـ / {gregDate} م
                             </p>
-                            {hijriDate && (
-                              <p style={{ margin: "2px 0 0", fontSize: 11, color: "#16a34a", fontWeight: 600 }}>
-                                🗓 {hijriDate}
-                              </p>
-                            )}
                           </div>
                         </div>
                       );
