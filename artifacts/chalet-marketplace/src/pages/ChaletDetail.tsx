@@ -5,6 +5,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
 import { toAr } from "@/lib/utils";
+import { toHijri } from "@/lib/hijri";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -469,7 +470,7 @@ export default function ChaletDetail() {
                         )}
                         {(s.ci || s.co) && (
                           <p style={{ margin: 0, fontSize: 12, color: c.text, opacity: 0.8, lineHeight: 1.7 }}>
-                            {s.ci && `دخول ${s.ci}`}{s.ci && s.co && <br />}{s.co && `خروج ${s.co}`}
+                            {s.ci && `دخول ${toAr(s.ci)}`}{s.ci && s.co && <br />}{s.co && `خروج ${toAr(s.co)}`}
                           </p>
                         )}
                       </div>
@@ -579,15 +580,28 @@ export default function ChaletDetail() {
                   <div style={{ borderRadius: 14, border: "1.5px solid #bbf7d0", background: "#f0fdf4", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
                     <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: "#15803d" }}>تفاصيل الحجز المحددة</p>
 
-                    {selectedDate && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 18 }}>📅</span>
-                        <div>
-                          <p style={{ margin: 0, fontSize: 10, color: "#6b7280" }}>تاريخ الحجز</p>
-                          <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#111827", fontSize: 13 }}>{toDateWithDay(selectedDate)}</p>
+                    {selectedDate && (() => {
+                      const d = new Date(selectedDate + "T12:00:00");
+                      const dayName = new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(d);
+                      const gregDate = new Intl.DateTimeFormat("ar-SA", { day: "numeric", month: "long", year: "numeric", calendar: "gregory" }).format(d);
+                      const hijriDate = toHijri(selectedDate);
+                      return (
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                          <span style={{ fontSize: 18, marginTop: 2 }}>📅</span>
+                          <div>
+                            <p style={{ margin: 0, fontSize: 10, color: "#6b7280" }}>تاريخ الحجز</p>
+                            <p style={{ margin: "3px 0 0", fontWeight: 700, color: "#111827", fontSize: 13, lineHeight: 1.5 }}>
+                              {dayName}، {gregDate}
+                            </p>
+                            {hijriDate && (
+                              <p style={{ margin: "2px 0 0", fontSize: 11, color: "#16a34a", fontWeight: 600 }}>
+                                🗓 {hijriDate}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {activePeriod && activePeriodConf && (
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -598,7 +612,7 @@ export default function ChaletDetail() {
                             {activePeriod.label}
                             {(activePeriod.ci || activePeriod.co) && (
                               <span style={{ fontWeight: 400, color: "#6b7280", fontSize: 11, marginRight: 6 }}>
-                                ({activePeriod.ci}{activePeriod.ci && activePeriod.co && " – "}{activePeriod.co})
+                                ({toAr(activePeriod.ci)}{activePeriod.ci && activePeriod.co && " – "}{toAr(activePeriod.co)})
                               </span>
                             )}
                           </p>
