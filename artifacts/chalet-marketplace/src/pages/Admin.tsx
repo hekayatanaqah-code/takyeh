@@ -2251,6 +2251,82 @@ function SettingsTab() {
         </div>
       </div>
 
+      {/* ══ 3.6. Service Suggestion Button ══ */}
+      <div className="bg-slate-800 rounded-xl border border-amber-500/30 overflow-hidden">
+        <div className="bg-gradient-to-l from-amber-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+          <span className="text-xl leading-none">🛎️</span>
+          <h3 className="text-slate-100 font-bold text-lg">زر اقتراح الخدمات</h3>
+          <span className="text-xs text-slate-500 mr-auto">يظهر أسفل زر الواتساب في صفحة الشاليه</span>
+          {/* Master toggle */}
+          <button
+            onClick={() => setForm((f) => ({ ...f, svc_btn_enabled: f.svc_btn_enabled === "true" ? "false" : "true" }))}
+            className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${form.svc_btn_enabled === "true" ? "bg-amber-500" : "bg-slate-600"}`}
+          >
+            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.svc_btn_enabled === "true" ? "right-0.5" : "left-0.5"}`} />
+          </button>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Label */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص الزر</label>
+            <Input
+              value={form.svc_btn_label ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, svc_btn_label: e.target.value }))}
+              placeholder="🛎️ تنسيق خدمات إضافية لمناسبتك (ذبائح، ضيافة...)"
+              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+              dir="rtl"
+            />
+            <p className="text-[11px] text-slate-500">اترك الحقل فارغاً لاستخدام النص الافتراضي.</p>
+          </div>
+
+          {/* Color picker */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">لون الزر</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={form.svc_btn_color || "#b45309"}
+                onChange={(e) => setForm((f) => ({ ...f, svc_btn_color: e.target.value }))}
+                className="w-10 h-10 rounded-lg border border-slate-600 cursor-pointer bg-transparent p-0.5"
+              />
+              <div className="flex gap-2 flex-wrap">
+                {["#b45309","#d97706","#0369a1","#7c3aed","#be123c","#15803d"].map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setForm((f) => ({ ...f, svc_btn_color: c }))}
+                    title={c}
+                    style={{ background: c }}
+                    className={`w-7 h-7 rounded-full border-2 transition-all ${form.svc_btn_color === c ? "border-white scale-110" : "border-transparent"}`}
+                  />
+                ))}
+              </div>
+              <span className="text-xs text-slate-400 font-mono">{form.svc_btn_color || "#b45309"}</span>
+            </div>
+          </div>
+
+          {/* Live preview */}
+          {form.svc_btn_enabled === "true" && (
+            <div className="rounded-xl border border-slate-700 p-4 bg-slate-900/40 space-y-2">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">معاينة</p>
+              <div
+                style={{
+                  width: "100%", height: 46, borderRadius: 14,
+                  border: `2px solid ${form.svc_btn_color || "#b45309"}`,
+                  background: "transparent",
+                  color: form.svc_btn_color || "#b45309",
+                  fontWeight: 700, fontSize: 14,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                {form.svc_btn_label?.trim() || "🛎️ تنسيق خدمات إضافية لمناسبتك (ذبائح، ضيافة...)"}
+              </div>
+            </div>
+          )}
+
+          <SaveBtn label="حفظ إعدادات زر الخدمات" />
+        </div>
+      </div>
+
       {/* ══ 4. Social Media ══ */}
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
         <div className="bg-gradient-to-l from-purple-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">

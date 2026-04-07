@@ -156,7 +156,6 @@ export default function ChaletDetail() {
   const [mainPhoto,      setMainPhoto]      = useState(0);
   const [termsOpen,      setTermsOpen]      = useState(false);
   const [termsModalOpen, setTermsModalOpen] = useState(false);
-  const [postBookOpen,   setPostBookOpen]   = useState(false);
 
   const { data: chalet, isLoading, error } = useQuery<DiamondData>({
     queryKey: ["chalet-detail", id],
@@ -325,7 +324,6 @@ export default function ChaletDetail() {
       setTermsModalOpen(true);
     } else {
       window.open(`https://wa.me/${phone}?text=${encodeURIComponent(buildWaMessage())}`, "_blank");
-      setPostBookOpen(true);
     }
   };
 
@@ -333,7 +331,6 @@ export default function ChaletDetail() {
   const confirmBook = () => {
     setTermsModalOpen(false);
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(buildWaMessage())}`, "_blank");
-    setPostBookOpen(true);
   };
 
   /* ════════════════════════════════════════════
@@ -707,6 +704,31 @@ export default function ChaletDetail() {
                   احجز الآن عبر واتساب
                 </button>
 
+                {/* ── Service Suggestion Button (admin-controlled) ── */}
+                {siteSettings?.svc_btn_enabled === "true" && (() => {
+                  const btnLabel = siteSettings?.svc_btn_label?.trim() || "🛎️ تنسيق خدمات إضافية لمناسبتك (ذبائح، ضيافة...)";
+                  const btnColor = siteSettings?.svc_btn_color?.trim() || "#b45309";
+                  return (
+                    <button
+                      onClick={() => setLocation(`/?tab=services${selectedDate ? `&date=${selectedDate}` : ""}`)}
+                      style={{
+                        width: "100%", height: 46, borderRadius: 14,
+                        border: `2px solid ${btnColor}`,
+                        background: "transparent",
+                        color: btnColor,
+                        fontWeight: 700, fontSize: 14,
+                        cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                        transition: "background .2s, color .2s",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = btnColor; e.currentTarget.style.color = "#fff"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = btnColor; }}
+                    >
+                      {btnLabel}
+                    </button>
+                  );
+                })()}
+
                 <p style={{ margin: 0, textAlign: "center", fontSize: 11, color: "#9ca3af", lineHeight: 1.6 }}>
                   ✓ تأكد من الحساب الرسمي قبل أي دفع
                 </p>
@@ -799,99 +821,6 @@ export default function ChaletDetail() {
         </div>
       )}
 
-      {/* ══════════════ POST-BOOKING SERVICES SUGGESTION ══════════════ */}
-      {postBookOpen && (
-        <div
-          style={{
-            position: "fixed", bottom: 24, right: 24, left: 24,
-            maxWidth: 420, margin: "0 auto",
-            zIndex: 9999,
-            animation: "slideUpFade .35s cubic-bezier(.16,1,.3,1)",
-          }}
-          dir="rtl"
-        >
-          <style>{`
-            @keyframes slideUpFade {
-              from { opacity: 0; transform: translateY(32px) scale(.97); }
-              to   { opacity: 1; transform: translateY(0)     scale(1);  }
-            }
-          `}</style>
-          <div style={{
-            background: "#fff",
-            borderRadius: 20,
-            boxShadow: "0 8px 40px rgba(0,0,0,.18)",
-            border: "1.5px solid #e5e7eb",
-            overflow: "hidden",
-          }}>
-            {/* Green top accent */}
-            <div style={{ height: 4, background: "linear-gradient(90deg,#16a34a,#22c55e,#fbbf24)" }} />
-
-            <div style={{ padding: "18px 20px 16px" }}>
-              {/* Header row */}
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
-                <div style={{
-                  width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-                  background: "linear-gradient(135deg,#dcfce7,#d1fae5)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 22,
-                }}>✅</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontWeight: 800, fontSize: 15, color: "#111827", lineHeight: 1.3 }}>
-                    تم تجهيز طلب الحجز!
-                  </p>
-                  <p style={{ margin: "6px 0 0", fontSize: 13.5, color: "#374151", lineHeight: 1.55 }}>
-                    هل ترغب في تنسيق خدمات إضافية
-                    <span style={{ fontWeight: 700, color: "#92400e" }}> (ضيافة، ذبائح، فعاليات) </span>
-                    لمناسبتك في هذا التاريخ؟
-                  </p>
-                </div>
-                <button
-                  onClick={() => setPostBookOpen(false)}
-                  style={{
-                    flexShrink: 0, width: 28, height: 28, borderRadius: 8,
-                    border: "none", background: "#f3f4f6", color: "#9ca3af",
-                    cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                  aria-label="إغلاق"
-                >×</button>
-              </div>
-
-              {/* Action buttons */}
-              <div style={{ display: "flex", gap: 10 }}>
-                <button
-                  onClick={() => {
-                    setPostBookOpen(false);
-                    setLocation(`/?tab=services${selectedDate ? `&date=${selectedDate}` : ""}`);
-                  }}
-                  style={{
-                    flex: 1, height: 44, borderRadius: 12, border: "none",
-                    background: "linear-gradient(135deg,#d97706,#b45309)",
-                    color: "#fff", fontWeight: 800, fontSize: 14,
-                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                    boxShadow: "0 4px 14px rgba(180,83,9,.30)",
-                    transition: "opacity .15s",
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.opacity = ".88")}
-                  onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
-                >
-                  🛎️ استكشف الخدمات
-                </button>
-                <button
-                  onClick={() => setPostBookOpen(false)}
-                  style={{
-                    height: 44, padding: "0 18px", borderRadius: 12,
-                    border: "1.5px solid #e5e7eb", background: "#fafafa",
-                    color: "#6b7280", fontWeight: 600, fontSize: 13,
-                    cursor: "pointer", whiteSpace: "nowrap",
-                  }}
-                >
-                  ربما لاحقاً
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
