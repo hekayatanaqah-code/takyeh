@@ -69,6 +69,10 @@ export default function Home() {
   const [numDays, setNumDays]               = useState<number>(1);
   /* Hero tab — "properties" (default) | "services" */
   const [heroTab, setHeroTab]               = useState<"properties" | "services">("properties");
+  /* Services search state */
+  const [svcCategory, setSvcCategory]       = useState<string>("");
+  const [svcCity, setSvcCity]               = useState<string>("");
+  const [svcDate, setSvcDate]               = useState<string>("");
 
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
@@ -111,6 +115,25 @@ export default function Home() {
     },
     staleTime: 1000 * 60 * 5,
   });
+
+  /* ── Service categories for the services search bar ── */
+  const { data: serviceCategories = [] } = useQuery<{ id: number; key: string; labelAr: string; emoji: string }[]>({
+    queryKey: ["catalog", "service-categories"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/service-categories`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const handleServiceSearch = () => {
+    const params = new URLSearchParams();
+    if (svcCategory && svcCategory !== "all") params.append("category", svcCategory);
+    if (svcCity && svcCity !== "all")         params.append("city", svcCity);
+    if (svcDate)                               params.append("date", svcDate);
+    setLocation(`/services${params.toString() ? `?${params.toString()}` : ""}`);
+  };
 
   const handleSearch = () => {
     const params = new URLSearchParams();
@@ -363,41 +386,85 @@ export default function Home() {
               {/* end of properties tab */}
               </>)}
 
-              {/* ══ SERVICES TAB ══ */}
+              {/* ══ SERVICES TAB — search bar ══ */}
               {heroTab === "services" && (
                 <motion.div
-                  key="services-panel"
+                  key="services-search"
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="mt-2"
+                  transition={{ duration: 0.25 }}
                 >
-                  <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl p-6 md:p-8">
-                    <p className="text-white/70 text-sm mb-6 font-medium">اختر نوع الخدمة المطلوبة</p>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {[
-                        { emoji: "🥩", label: "مطابخ وضيافة",    desc: "وجبات وبوفيه",        link: "/services" },
-                        { emoji: "🎈", label: "تنظيم فعاليات",   desc: "أعياد وحفلات",         link: "/services" },
-                        { emoji: "☕", label: "خدمات استضافة",   desc: "قهوة ومشروبات",        link: "/services" },
-                        { emoji: "🎭", label: "مناسبات خاصة",    desc: "أعراس وتخرج",          link: "/services" },
-                      ].map((s) => (
-                        <button
-                          key={s.label}
-                          type="button"
-                          onClick={() => setLocation(s.link)}
-                          className="flex flex-col items-center gap-3 p-5 rounded-2xl bg-white/10 hover:bg-amber-700/40 border border-white/20 hover:border-amber-500/60 transition-all duration-200 group text-center focus:outline-none"
-                        >
-                          <span className="text-4xl">{s.emoji}</span>
-                          <div>
-                            <p className="text-white font-bold text-sm group-hover:text-amber-200">{s.label}</p>
-                            <p className="text-white/55 text-xs mt-0.5">{s.desc}</p>
-                          </div>
-                        </button>
-                      ))}
+                  <div className="bg-white/10 backdrop-blur-md border border-white/20 p-2 md:p-3 rounded-2xl shadow-2xl flex flex-col md:flex-row flex-wrap gap-3">
+
+                    {/* Service type */}
+                    <div className="flex-1 min-w-[160px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                      <span className="text-xl shrink-0">🛎️</span>
+                      <div className="w-full">
+                        <p className="text-xs font-semibold text-muted-foreground text-right mb-1">نوع الخدمة</p>
+                        <Select value={svcCategory} onValueChange={setSvcCategory}>
+                          <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
+                            <SelectValue placeholder="جميع الخدمات" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">جميع الخدمات</SelectItem>
+                            {serviceCategories.length === 0 && (
+                              <>
+                                <SelectItem value="catering">🥩 مطابخ وضيافة</SelectItem>
+                                <SelectItem value="events">🎈 فعاليات وحفلات</SelectItem>
+                                <SelectItem value="hospitality">☕ خدمات استضافة</SelectItem>
+                                <SelectItem value="occasions">🎭 مناسبات خاصة</SelectItem>
+                              </>
+                            )}
+                            {serviceCategories.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.key}>
+                                {cat.emoji} {cat.labelAr}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <p className="text-white/40 text-xs mt-6 text-center">
-                      سيتم إطلاق خدمات إضافية قريباً · تواصل معنا الآن عبر الواتساب
-                    </p>
+
+                    {/* City */}
+                    <div className="flex-1 min-w-[140px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                      <MapPin className="w-5 h-5 text-muted-foreground shrink-0" />
+                      <div className="w-full">
+                        <p className="text-xs font-semibold text-muted-foreground text-right mb-1">المدينة</p>
+                        <Select value={svcCity} onValueChange={setSvcCity}>
+                          <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
+                            <SelectValue placeholder="جميع المدن" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">جميع المدن</SelectItem>
+                            {cities.map((city) => (
+                              <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Date */}
+                    <div className="flex-1 min-w-[160px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                      <Calendar className="w-5 h-5 text-muted-foreground shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <DualCalendarPicker
+                          value={svcDate}
+                          onChange={setSvcDate}
+                          placeholder="تاريخ الخدمة"
+                          label="التاريخ"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Search button */}
+                    <Button
+                      onClick={handleServiceSearch}
+                      className="h-auto md:h-full py-4 px-8 rounded-xl text-lg font-bold shadow-lg bg-amber-700 hover:bg-amber-800 text-white transition-all shrink-0"
+                    >
+                      <Search className="w-5 h-5 me-2" />
+                      ابحث عن خدمة
+                    </Button>
                   </div>
                 </motion.div>
               )}

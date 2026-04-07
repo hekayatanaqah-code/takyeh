@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { useLocation } from "wouter";
+import { useState, useMemo, useEffect } from "react";
+import { useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Phone, MapPin, Loader2, Plus, Star } from "lucide-react";
@@ -174,9 +174,23 @@ function ProviderCard({ provider, meta }: { provider: ServiceProvider; meta: Cat
 
 /* ── Main Page ──────────────────────────────────── */
 export default function Services() {
-  const [activeCategory, setActiveCategory] = useState<string>("all");
+  const search = useSearch();
+  const urlParams = new URLSearchParams(search);
+  const initCategory = urlParams.get("category") ?? "all";
+  const initCity     = urlParams.get("city")     ?? "all";
+  const initDate     = urlParams.get("date")     ?? "";
+
+  const [activeCategory, setActiveCategory] = useState<string>(initCategory);
+  const [cityFilter, setCityFilter]         = useState<string>(initCity);
   const [, setLocation] = useLocation();
   const { isAuthenticated } = useAuth();
+
+  /* Sync state if URL changes (e.g. user navigates back) */
+  useEffect(() => {
+    const p = new URLSearchParams(search);
+    setActiveCategory(p.get("category") ?? "all");
+    setCityFilter(p.get("city") ?? "all");
+  }, [search]);
 
   /* ── Service categories (active only, sorted by admin) ── */
   const { data: apiCategories = [], isLoading: catsLoading } = useQuery<ServiceCatItem[]>({
@@ -238,8 +252,24 @@ export default function Services() {
     refetchOnWindowFocus: true,
   });
 
+  /* ── Client-side city filter ── */
+  const filteredServices = useMemo(() =>
+    cityFilter && cityFilter !== "all"
+      ? services.filter((s) => s.city === cityFilter)
+      : services,
+    [services, cityFilter]);
+
+  const filteredProviders = useMemo(() =>
+    cityFilter && cityFilter !== "all"
+      ? providers.filter((p) => p.city === cityFilter)
+      : providers,
+    [providers, cityFilter]);
+
   const isLoading = servicesLoading || providersLoading || catsLoading;
-  const isEmpty = services.length === 0 && providers.length === 0;
+  const isEmpty = filteredServices.length === 0 && filteredProviders.length === 0;
+
+  /* Search context chips — shown when URL params were passed */
+  const hasSearchCtx = initCategory !== "all" || initCity !== "all" || !!initDate;
 
   return (
     <div className="min-h-screen flex flex-col bg-background" dir="rtl">
@@ -269,6 +299,33 @@ export default function Services() {
             </motion.div>
           </div>
         </section>
+
+        {/* ── Search context banner (shown when navigated from home search) ── */}
+        {hasSearchCtx && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700/40 px-4 py-3">
+            <div className="container mx-auto flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-amber-700 dark:text-amber-300 font-semibold">🔍 نتائج البحث:</span>
+              {initCategory !== "all" && (
+                <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-700/40 px-3 py-1 rounded-full font-medium">
+                  {catMeta[initCategory]?.emoji} {catMeta[initCategory]?.label ?? initCategory}
+                </span>
+              )}
+              {initCity !== "all" && (
+                <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-700/40 px-3 py-1 rounded-full font-medium flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />{initCity}
+                </span>
+              )}
+              {initDate && (
+                <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-700/40 px-3 py-1 rounded-full font-medium">
+                  📅 {initDate}
+                </span>
+              )}
+              <button onClick={() => setLocation("/services")} className="text-xs text-amber-600 dark:text-amber-400 underline hover:no-underline mr-auto">
+                مسح الفلاتر
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── Category Tabs (dynamic from DB) ─────────────── */}
         <section className="sticky top-16 z-30 bg-background/80 backdrop-blur-xl border-b border-border px-4 py-3">
@@ -325,11 +382,11 @@ export default function Services() {
         ) : (
           <>
             {/* ── Admin-managed services ── */}
-            {services.length > 0 && (
+            {filteredServices.length > 0 && (
               <section className="py-10 px-4">
                 <div className="container mx-auto">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                    {services.map((svc) => (
+                    {filteredServices.map((svc) => (
                       <ServiceCard key={svc.id} service={svc} meta={getMeta(svc.category)} />
                     ))}
                   </div>
@@ -338,18 +395,18 @@ export default function Services() {
             )}
 
             {/* ── Owner-submitted service providers ── */}
-            {providers.length > 0 && (
-              <section className={`py-10 px-4 border-t border-border/40 ${services.length > 0 ? "bg-amber-50/40 dark:bg-amber-900/5" : ""}`}>
+            {filteredProviders.length > 0 && (
+              <section className={`py-10 px-4 border-t border-border/40 ${filteredServices.length > 0 ? "bg-amber-50/40 dark:bg-amber-900/5" : ""}`}>
                 <div className="container mx-auto">
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-1 h-6 bg-amber-500 rounded-full" />
                     <h2 className="text-xl font-bold text-foreground">مزودو الخدمات الموثقون</h2>
                     <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700/40 px-2 py-0.5 rounded-full font-semibold">
-                      {providers.length} مزود
+                      {filteredProviders.length} مزود
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                    {providers.map((p) => (
+                    {filteredProviders.map((p) => (
                       <ProviderCard key={p.id} provider={p} meta={getMeta(p.category)} />
                     ))}
                   </div>
