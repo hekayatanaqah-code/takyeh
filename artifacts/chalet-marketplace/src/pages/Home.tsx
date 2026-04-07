@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { MapPin, Search, Calendar, Plus, Minus, Tag, Shield, Clock, Zap, Globe, Heart, CreditCard, Star, Users, Home as HomeIcon, Phone, CheckCircle, Eye } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
@@ -61,18 +61,27 @@ function FeatIcon({ iconKey }: { iconKey?: string }) {
 
 export default function Home() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
+
+  /* ── Read URL params — used when navigating from post-booking suggestion ── */
+  const _urlParams = new URLSearchParams(search);
+  const _initTab   = _urlParams.get("tab");
+  const _initDate  = _urlParams.get("date") ?? "";
+
   const [searchCity, setSearchCity]         = useState<string>("");
   const [searchDistrict, setSearchDistrict] = useState<string>("");
   const [searchCategory, setSearchCategory] = useState<string>("");
   const [searchPeriod, setSearchPeriod]     = useState<string>("");
   const [bookingDate, setBookingDate]       = useState<string>("");
   const [numDays, setNumDays]               = useState<number>(1);
-  /* Hero tab — "properties" (default) | "services" */
-  const [heroTab, setHeroTab]               = useState<"properties" | "services">("properties");
-  /* Services search state */
+  /* Hero tab — "properties" (default) | "services" — pre-select from URL */
+  const [heroTab, setHeroTab]               = useState<"properties" | "services">(
+    _initTab === "services" ? "services" : "properties"
+  );
+  /* Services search state — pre-fill date from URL */
   const [svcCategory, setSvcCategory]       = useState<string>("");
   const [svcCity, setSvcCity]               = useState<string>("");
-  const [svcDate, setSvcDate]               = useState<string>("");
+  const [svcDate, setSvcDate]               = useState<string>(_initDate);
 
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
