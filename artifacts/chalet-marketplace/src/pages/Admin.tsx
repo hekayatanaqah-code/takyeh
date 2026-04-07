@@ -145,6 +145,149 @@ function apiFetch(path: string, opts?: RequestInit) {
   });
 }
 
+/* ── Arabic number formatter ──────────────────── */
+function fmtAr(v: string | number | null | undefined) {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  if (isNaN(n)) return null;
+  return n.toLocaleString("ar-SA");
+}
+
+/* ── Admin Pricing Grid — Standalone 7-day table ── */
+function AdminPricingGrid({ s }: { s: Submission }) {
+  const DAYS = [
+    { idx: 0, label: "الأحد",    isWeekend: false },
+    { idx: 1, label: "الاثنين",  isWeekend: false },
+    { idx: 2, label: "الثلاثاء", isWeekend: false },
+    { idx: 3, label: "الأربعاء", isWeekend: false },
+    { idx: 4, label: "الخميس",   isWeekend: false },
+    { idx: 5, label: "الجمعة",   isWeekend: true  },
+    { idx: 6, label: "السبت",    isWeekend: true  },
+  ] as const;
+
+  const daily = s.dailyPrices ?? null;
+
+  /* If dailyPrices is set, use it; otherwise fall back to slot booleans + base prices */
+  const getCell = (period: "morning" | "evening" | "fullday", dayIdx: number): string | null => {
+    if (daily) {
+      const val = daily[period]?.[String(dayIdx)];
+      return val != null ? fmtAr(val) : null;
+    }
+    /* Fallback: same price every day if slot is enabled */
+    if (period === "morning"  && s.slotMorning  !== false) return fmtAr(s.priceMorning);
+    if (period === "evening"  && s.slotEvening  !== false) return fmtAr(s.priceEvening);
+    if (period === "fullday"  && s.slotFullDay  !== false) return fmtAr(s.priceFullDay);
+    return null;
+  };
+
+  const hasAnyPricing = daily || s.priceMorning || s.priceEvening || s.priceFullDay || s.priceWeekday;
+
+  return (
+    <div className="mx-6 mb-5 rounded-2xl overflow-hidden border border-amber-800/40 bg-slate-800/60">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 py-3.5 bg-amber-900/25 border-b border-amber-800/30">
+        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-amber-300 font-bold text-sm">جدول الأسعار اليومية — راجع قبل القبول</p>
+          <p className="text-slate-400 text-xs mt-0.5">
+            {daily
+              ? "تسعير يومي مفصّل — الأسعار بالريال السعودي"
+              : "تسعير ثابت بدون تفصيل يومي — الأسعار بالريال السعودي"}
+          </p>
+        </div>
+        {(s.priceWeekday || s.priceWeekend) && (
+          <div className="flex gap-2 text-xs shrink-0">
+            {s.priceWeekday && (
+              <span className="bg-slate-700 border border-slate-600 text-amber-300 font-bold rounded-lg px-2 py-1">
+                وسط الأسبوع: {fmtAr(s.priceWeekday)} ر.س
+              </span>
+            )}
+            {s.priceWeekend && (
+              <span className="bg-amber-900/30 border border-amber-700/40 text-amber-300 font-bold rounded-lg px-2 py-1">
+                نهاية الأسبوع: {fmtAr(s.priceWeekend)} ر.س
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {!hasAnyPricing ? (
+        <div className="px-5 py-6 text-center text-slate-500 text-sm">
+          لم يُدخل المالك أي بيانات تسعير
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 380 }}>
+            <thead>
+              <tr style={{ background: "#1e293b" }}>
+                <th style={{ padding: "10px 16px", textAlign: "right", fontSize: 12, color: "#94a3b8", fontWeight: 600, borderBottom: "1px solid #334155", minWidth: 90 }}>
+                  اليوم
+                </th>
+                <th style={{ padding: "10px 10px", textAlign: "center", fontSize: 12, color: "#92400e", fontWeight: 700, borderBottom: "1px solid #334155" }}>
+                  🌅 صباحي
+                </th>
+                <th style={{ padding: "10px 10px", textAlign: "center", fontSize: 12, color: "#3730a3", fontWeight: 700, borderBottom: "1px solid #334155" }}>
+                  🌙 مسائي
+                </th>
+                <th style={{ padding: "10px 10px", textAlign: "center", fontSize: 12, color: "#065f46", fontWeight: 700, borderBottom: "1px solid #334155" }}>
+                  ☀️ يوم كامل
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {DAYS.map(({ idx, label, isWeekend }) => {
+                const morning = getCell("morning", idx);
+                const evening = getCell("evening", idx);
+                const fullday = getCell("fullday", idx);
+                return (
+                  <tr
+                    key={idx}
+                    style={{
+                      background: isWeekend ? "rgba(251,191,36,0.06)" : "transparent",
+                      borderTop: "1px solid rgba(51,65,85,0.6)",
+                    }}
+                  >
+                    <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: isWeekend ? 700 : 500, color: isWeekend ? "#fcd34d" : "#cbd5e1", whiteSpace: "nowrap" }}>
+                      {label}{isWeekend ? " 🎉" : ""}
+                    </td>
+                    {([morning, evening, fullday] as const).map((val, pIdx) => (
+                      <td key={pIdx} style={{ padding: "10px 10px", textAlign: "center" }}>
+                        {val ? (
+                          <span style={{ color: "#fde68a", fontWeight: 700, fontSize: 14 }}>
+                            {val}
+                            <span style={{ fontSize: 10, color: "#94a3b8", marginRight: 2 }}>ر.س</span>
+                          </span>
+                        ) : (
+                          <span style={{ color: "#475569", fontSize: 12 }}>غير متاح</span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Check-in / Check-out times summary */}
+      {(s.morningCheckIn || s.morningCheckOut || s.eveningCheckIn || s.eveningCheckOut || s.fullDayCheckIn || s.fullDayCheckOut) && (
+        <div className="border-t border-slate-700/60 px-5 py-3 flex flex-wrap gap-3 text-xs text-slate-400">
+          {(s.morningCheckIn || s.morningCheckOut) && (
+            <span>🌅 صباحي: {[s.morningCheckIn && `دخول ${s.morningCheckIn}`, s.morningCheckOut && `خروج ${s.morningCheckOut}`].filter(Boolean).join(" — ")}</span>
+          )}
+          {(s.eveningCheckIn || s.eveningCheckOut) && (
+            <span>🌙 مسائي: {[s.eveningCheckIn && `دخول ${s.eveningCheckIn}`, s.eveningCheckOut && `خروج ${s.eveningCheckOut}`].filter(Boolean).join(" — ")}</span>
+          )}
+          {(s.fullDayCheckIn || s.fullDayCheckOut) && (
+            <span>☀️ يوم كامل: {[s.fullDayCheckIn && `دخول ${s.fullDayCheckIn}`, s.fullDayCheckOut && `خروج ${s.fullDayCheckOut}`].filter(Boolean).join(" — ")}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Status Badge ─────────────────────────────── */
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
@@ -274,6 +417,9 @@ function SubmissionReviewModal({
                 }}
               />
             </div>
+
+            {/* ── Standalone Pricing Grid — critical for admin verification ── */}
+            <AdminPricingGrid s={s} />
 
             {/* Admin-only: previous note + reason input */}
             <div className="px-6 pb-4 space-y-4">
