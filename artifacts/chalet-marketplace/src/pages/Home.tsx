@@ -58,16 +58,6 @@ function FeatIcon({ iconKey }: { iconKey?: string }) {
   return <Icon size={32} />;
 }
 
-/* ─── Service category icons shown in the hero ─── */
-const HERO_SERVICES = [
-  { emoji: "🏠", label: "شاليهات"  },
-  { emoji: "🌴", label: "استراحات" },
-  { emoji: "🥩", label: "مطابخ"    },
-  { emoji: "🎈", label: "فعاليات"  },
-  { emoji: "☕", label: "ضيافة"    },
-  { emoji: "🎭", label: "مناسبات"  },
-  { emoji: "🏕️", label: "مزارع"   },
-];
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -171,26 +161,6 @@ export default function Home() {
                 {siteSettings.hero_subtitle || "احجز استراحتك أو شاليهك القادم بكل سهولة. خيارات متنوعة تناسب جميع العائلات والمناسبات."}
               </p>
 
-              {/* ── Service Icons Row ── */}
-              <div
-                className="flex gap-4 overflow-x-auto pb-1 mb-7 justify-start md:justify-center"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              >
-                {HERO_SERVICES.map((svc) => (
-                  <button
-                    key={svc.label}
-                    type="button"
-                    onClick={() => { setSearchCategory(svc.label); setHeroTab("properties"); }}
-                    className="flex flex-col items-center gap-2 shrink-0 group focus:outline-none"
-                  >
-                    <span className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-sm border border-white/25 group-hover:bg-amber-600/40 group-hover:border-amber-400/60 flex items-center justify-center text-2xl transition-all duration-200 shadow-md">
-                      {svc.emoji}
-                    </span>
-                    <span className="text-xs font-semibold text-white/85 group-hover:text-amber-300 transition-colors">{svc.label}</span>
-                  </button>
-                ))}
-              </div>
-
               {/* ── Feature Badges ── */}
               <div className="flex items-center justify-center flex-wrap gap-3 mb-6">
                 {[
@@ -208,7 +178,7 @@ export default function Home() {
               {/* ── Hero Tabs ── */}
               <div className="flex items-center justify-center gap-2 mb-5">
                 {(["properties", "services"] as const).map((tab) => {
-                  const label   = tab === "properties" ? "عقارات" : "خدمات";
+                  const label   = tab === "properties" ? "أماكن" : "خدمات";
                   const icon    = tab === "properties" ? "🏠" : "🛎️";
                   const active  = heroTab === tab;
                   return (
