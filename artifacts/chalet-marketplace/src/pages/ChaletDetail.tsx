@@ -408,7 +408,7 @@ export default function ChaletDetail() {
                         <p style={{ margin: "0 0 6px", fontWeight: 800, color: c.text, fontSize: 14 }}>{s.label}</p>
                         {s.price && (
                           <>
-                            <p style={{ margin: "0 0 2px", fontSize: 10, color: c.text, opacity: 0.65, fontWeight: 600 }}>يبدأ من</p>
+                            <p style={{ margin: "0 0 2px", fontSize: 12, color: c.text, opacity: 0.9, fontWeight: 700 }}>يبدأ من</p>
                             <p style={{ margin: "0 0 4px", fontWeight: 900, color: c.text, fontSize: 17 }}>{s.price}</p>
                           </>
                         )}
@@ -476,7 +476,9 @@ export default function ChaletDetail() {
 
               {/* Price header */}
               <div style={{ padding: "22px 24px 16px", borderBottom: "1px solid #f3f4f6", background: "#f9feff" }}>
-                <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>تبدأ من</p>
+                <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>
+                  {activePeriod ? "السعر المحدد" : "تبدأ من"}
+                </p>
                 <p style={{ margin: "6px 0 0", fontSize: 30, fontWeight: 900, color: "#111827", lineHeight: 1 }}>
                   {displayPrice ?? "تواصل للسعر"}
                 </p>
