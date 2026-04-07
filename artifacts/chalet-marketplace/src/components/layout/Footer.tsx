@@ -131,7 +131,7 @@ export function Footer() {
         </div>
 
         <div className="border-t border-background/20 mt-12 pt-6 text-center text-sm text-background/50">
-          <p>© {new Date().getFullYear()} {settings.footer_title || settings.site_title || "شاليهات القصيم"}. {settings.copyright_text || "جميع الحقوق محفوظة."}</p>
+          <p>© {new Intl.DateTimeFormat("ar-SA", { year: "numeric" }).format(new Date())} {settings.footer_title || settings.site_title || "شاليهات القصيم"}. {settings.copyright_text || "جميع الحقوق محفوظة."}</p>
         </div>
       </div>
     </footer>

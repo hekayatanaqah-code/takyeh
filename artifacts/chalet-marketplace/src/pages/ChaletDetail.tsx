@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
+import { toAr } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -107,10 +108,10 @@ const DAY_NAMES_AR = ["الأحد", "الاثنين", "الثلاثاء", "ال�
 function toDateWithDay(dateStr: string): string {
   try {
     const d = new Date(dateStr + "T12:00:00");
-    const day  = new Intl.DateTimeFormat("ar", { weekday: "long" }).format(d);
-    const full = new Intl.DateTimeFormat("ar", { day: "numeric", month: "long", year: "numeric" }).format(d);
+    const day  = new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(d);
+    const full = new Intl.DateTimeFormat("ar-SA", { day: "numeric", month: "long", year: "numeric" }).format(d);
     return `${day}، ${full}`;
-  } catch { return dateStr; }
+  } catch { return toAr(dateStr); }
 }
 
 const SLOT_CONF = {
@@ -325,7 +326,7 @@ export default function ChaletDetail() {
             )}
             {photos.length > 1 && (
               <div style={{ position: "absolute", bottom: 12, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.45)", color: "#fff", padding: "3px 12px", borderRadius: 20, fontSize: 12 }}>
-                {mainPhoto + 1} / {photos.length}
+                {toAr(mainPhoto + 1)} / {toAr(photos.length)}
               </div>
             )}
             {photos.length > 1 && <>
@@ -405,8 +406,8 @@ export default function ChaletDetail() {
               {/* Quick stats row */}
               <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
                 {([
-                  chalet.maxGuests    && { icon: "👥", lbl: "الطاقة الاستيعابية", val: `${chalet.maxGuests} ضيف` },
-                  chalet.bedrooms     && { icon: "🛏️", lbl: "غرف النوم",          val: `${chalet.bedrooms} غرفة` },
+                  chalet.maxGuests    && { icon: "👥", lbl: "الطاقة الاستيعابية", val: `${toAr(chalet.maxGuests)} ضيف` },
+                  chalet.bedrooms     && { icon: "🛏️", lbl: "غرف النوم",          val: `${toAr(chalet.bedrooms)} غرفة` },
                   chalet.checkInTime  && { icon: "🕐", lbl: "وقت الدخول",         val: chalet.checkInTime },
                   chalet.checkOutTime && { icon: "🕓", lbl: "وقت الخروج",         val: chalet.checkOutTime },
                 ] as const).filter(Boolean).map((s: any, i) => (
@@ -513,7 +514,7 @@ export default function ChaletDetail() {
                 <button onClick={() => setTermsOpen(v => !v)}
                   style={{ width: "100%", background: "none", border: "none", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", padding: 0 }}>
                   <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#92400e" }}>
-                    📋 شروط الحجز <span style={{ fontWeight: 500, fontSize: 13 }}>({terms.length} شرط)</span>
+                    📋 شروط الحجز <span style={{ fontWeight: 500, fontSize: 13 }}>({toAr(terms.length)} شرط)</span>
                   </h2>
                   <span style={{ fontSize: 16, color: "#d97706" }}>{termsOpen ? "▲" : "▼"}</span>
                 </button>

@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { formatDualDate } from "@/lib/hijri";
+import { toAr } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -235,7 +236,7 @@ function ChaletsTab({ submissions, isLoading }: { submissions: any[] | undefined
               <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
             )}
             <span className={atChaletLimit ? "text-amber-700 dark:text-amber-400 font-medium" : "text-muted-foreground"}>
-              {submissions.length} / {planLimits.chaletLimit === 999 ? "∞" : planLimits.chaletLimit} شاليه
+              {toAr(submissions.length)} / {planLimits.chaletLimit === 999 ? "∞" : toAr(planLimits.chaletLimit)} شاليه
               {atChaletLimit ? " — وصلت الحد الأقصى" : ""}
             </span>
           </div>
@@ -593,7 +594,7 @@ function ProofViewerDialog({
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-                    {i + 1} / {images.length}
+                    {toAr(i + 1)} / {toAr(images.length)}
                   </div>
                 </button>
               ))}
@@ -832,7 +833,7 @@ function ManageInsuranceDialog({
                 {uploading
                   ? "⏳ جاري الرفع..."
                   : proofImages.length > 0
-                    ? `📎 إضافة المزيد من الصور (${proofImages.length} مُرفق)`
+                    ? `📎 إضافة المزيد من الصور (${toAr(proofImages.length)} مُرفق)`
                     : "📎 انقر لرفع صور الإثبات"}
               </button>
             </div>
@@ -1563,7 +1564,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                       <img src={fullU(u)} alt={`إثبات ${i+1}`} className="w-full h-full object-cover" />
                                       {i === 2 && proofImgs.length > 3 && (
                                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white text-xs font-bold">
-                                          +{proofImgs.length - 3}
+                                          +{toAr(proofImgs.length - 3)}
                                         </div>
                                       )}
                                     </button>
@@ -1574,7 +1575,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                   onClick={() => setProofTarget(b)}
                                   className="text-[10px] text-blue-600 underline text-right mt-0.5"
                                 >
-                                  📸 عرض الإثبات ({proofImgs.length} صورة)
+                                  📸 عرض الإثبات ({toAr(proofImgs.length)} صورة)
                                 </button>
                               </div>
                             )}
@@ -2077,7 +2078,7 @@ function RevenueTab() {
                         })}
                       </div>
                       <button type="button" onClick={() => setProofTarget(row.booking)} className="text-xs text-purple-600 underline">
-                        📸 عرض الإثبات ({proofImgs.length})
+                        📸 عرض الإثبات ({toAr(proofImgs.length)})
                       </button>
                     </div>
                   )}

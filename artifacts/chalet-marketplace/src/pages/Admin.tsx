@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { formatDualDate } from "@/lib/hijri";
+import { toAr } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
 import { Badge } from "@/components/ui/badge";
@@ -2361,7 +2362,7 @@ function ChaletsVerifyTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white">التحقق من الشاليهات</h2>
-        <p className="text-slate-400 text-sm">{chalets.filter((c) => c.isVerified).length} موثق من أصل {chalets.length}</p>
+        <p className="text-slate-400 text-sm">{toAr(chalets.filter((c) => c.isVerified).length)} موثق من أصل {toAr(chalets.length)}</p>
       </div>
 
       {/* How-to guide */}
@@ -2530,7 +2531,7 @@ function ProviderReviewModal({
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-white text-xs bg-black/40 px-2 py-0.5 rounded-full">
-                    {photoIdx + 1} / {allPhotos.length}
+                    {toAr(photoIdx + 1)} / {toAr(allPhotos.length)}
                   </div>
                 </>
               )}
@@ -2688,8 +2689,8 @@ function ProviderSubmissionsTab() {
       {/* Filter tabs */}
       <div className="flex gap-2 overflow-x-auto">
         {[
-          { id: "all",            label: `الكل (${submissions.length})` },
-          { id: "pending",        label: `معلق (${submissions.filter(s => s.status === "pending").length})` },
+          { id: "all",            label: `الكل (${toAr(submissions.length)})` },
+          { id: "pending",        label: `معلق (${toAr(submissions.filter(s => s.status === "pending").length)})` },
           { id: "approved",       label: "مقبول" },
           { id: "rejected",       label: "مرفوض" },
           { id: "needs_revision", label: "يحتاج تعديل" },
