@@ -82,12 +82,12 @@ function fmt(v: string | number | null | undefined): string | null {
   return `${Number(v).toLocaleString("ar-SA")} ر.س`;
 }
 
-function toHijri(dateStr: string): string {
+function toDateWithDay(dateStr: string): string {
   try {
-    const d = new Date(dateStr);
-    const h = new Intl.DateTimeFormat("ar-SA-u-ca-islamic", { day: "numeric", month: "long", year: "numeric" }).format(d);
-    const g = new Intl.DateTimeFormat("ar-SA", { day: "numeric", month: "long", year: "numeric" }).format(d);
-    return `${h} / ${g}`;
+    const d = new Date(dateStr + "T12:00:00");
+    const day  = new Intl.DateTimeFormat("ar", { weekday: "long" }).format(d);
+    const full = new Intl.DateTimeFormat("ar", { day: "numeric", month: "long", year: "numeric" }).format(d);
+    return `${day}، ${full}`;
   } catch { return dateStr; }
 }
 
@@ -319,41 +319,34 @@ export default function ChaletDetail() {
                 </div>
               )}
 
-              {/* ── Structured info bar: always visible ── */}
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-                {/* Property type */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 14, background: "#f0fdf4", border: "1.5px solid #bbf7d0", minWidth: 120 }}>
-                  <span style={{ fontSize: 18 }}>🏕️</span>
-                  <div>
-                    <p style={{ margin: 0, fontSize: 10, color: "#6b7280", fontWeight: 600 }}>نوع العقار</p>
-                    <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 800, color: chalet.propertyType ? "#15803d" : "#9ca3af" }}>
-                      {chalet.propertyType ?? "—"}
-                    </p>
+              {/* ── Info pills — shown only when data exists ── */}
+              {(() => {
+                const catLabel = chalet.propertyType || chalet.category;
+                const secLabel = chalet.sections;
+                if (!catLabel && !secLabel) return null;
+                return (
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+                    {catLabel && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 14, background: "#f0fdf4", border: "1.5px solid #bbf7d0" }}>
+                        <span style={{ fontSize: 18 }}>🏷️</span>
+                        <div>
+                          <p style={{ margin: 0, fontSize: 10, color: "#6b7280", fontWeight: 600 }}>الفئة</p>
+                          <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 800, color: "#15803d" }}>{catLabel}</p>
+                        </div>
+                      </div>
+                    )}
+                    {secLabel && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 14, background: "#fefce8", border: "1.5px solid #fde68a" }}>
+                        <span style={{ fontSize: 18 }}>🔑</span>
+                        <div>
+                          <p style={{ margin: 0, fontSize: 10, color: "#6b7280", fontWeight: 600 }}>عدد الأقسام</p>
+                          <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 800, color: "#92400e" }}>{secLabel}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-
-                {/* Category (الفئة) */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 14, background: "#eff6ff", border: "1.5px solid #bfdbfe", minWidth: 120 }}>
-                  <span style={{ fontSize: 18 }}>🏷️</span>
-                  <div>
-                    <p style={{ margin: 0, fontSize: 10, color: "#6b7280", fontWeight: 600 }}>الفئة</p>
-                    <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 800, color: chalet.category ? "#1d4ed8" : "#9ca3af" }}>
-                      {chalet.category ?? "—"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Sections (عدد الأقسام) */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 14, background: "#fefce8", border: "1.5px solid #fde68a", minWidth: 140 }}>
-                  <span style={{ fontSize: 18 }}>🔑</span>
-                  <div>
-                    <p style={{ margin: 0, fontSize: 10, color: "#6b7280", fontWeight: 600 }}>عدد الأقسام</p>
-                    <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 800, color: chalet.sections ? "#92400e" : "#9ca3af" }}>
-                      {chalet.sections ?? "—"}
-                    </p>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               <div style={{ height: 1, background: "#f3f4f6", margin: "18px 0" }} />
 
@@ -526,7 +519,7 @@ export default function ChaletDetail() {
                         <span style={{ fontSize: 18 }}>📅</span>
                         <div>
                           <p style={{ margin: 0, fontSize: 10, color: "#6b7280" }}>تاريخ الحجز</p>
-                          <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#111827", fontSize: 13 }}>{toHijri(selectedDate)}</p>
+                          <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#111827", fontSize: 13 }}>{toDateWithDay(selectedDate)}</p>
                         </div>
                       </div>
                     )}
