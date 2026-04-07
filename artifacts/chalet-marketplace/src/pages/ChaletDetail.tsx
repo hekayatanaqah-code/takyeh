@@ -168,6 +168,17 @@ export default function ChaletDetail() {
     refetchOnMount: true,
   });
 
+  /* ── Site settings (for customisable WA template) ── */
+  const { data: siteSettings } = useQuery<Record<string, string>>({
+    queryKey: ["page-content"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include" });
+      if (!r.ok) return {};
+      return r.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   /* ── Loading ── */
   if (isLoading) return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", display: "flex", flexDirection: "column" }}>
@@ -257,12 +268,53 @@ export default function ChaletDetail() {
 
   /* ── Build the WhatsApp message ── */
   const buildWaMessage = () => {
-    const periodLabel = activePeriod?.label ?? selectedPeriod;
-    const lines = [`مرحباً، أريد حجز ${chalet!.nameAr} عبر المنصة.`];
-    if (selectedDate)  lines.push(`📅 التاريخ: ${toDateWithDay(selectedDate)}`);
-    if (periodLabel)   lines.push(`🕐 الفترة: ${activePeriod?.emoji ?? ""} ${periodLabel}`.trim());
-    if (displayPrice)  lines.push(`💰 السعر: ${displayPrice}`);
-    return lines.join("\n");
+    if (!chalet) return "";
+
+    const DEFAULT_TEMPLATE =
+`السلام عليكم، أريد حجز {chalet_name} عبر منصة شاليهات القصيم 🌴
+تفاصيل الحجز:
+اليوم: {day_name}
+التاريخ الهجري: {hijri_date} هـ
+التاريخ الميلادي: {gregorian_date} م
+الفترة: {period_name}
+الإجمالي: {total_price}
+هل الحجز متاح؟`;
+
+    const template = siteSettings?.wa_message_template?.trim() || DEFAULT_TEMPLATE;
+
+    /* Date variables */
+    let dayName = "", hijriDate = "", gregDate = "";
+    if (selectedDate) {
+      const d = new Date(selectedDate + "T12:00:00");
+      dayName   = new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(d);
+      hijriDate = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric" }).format(d);
+      gregDate  = new Intl.DateTimeFormat("ar-SA-u-nu-arab", { day: "numeric", month: "long", year: "numeric", calendar: "gregory" }).format(d);
+    }
+
+    /* Period variable */
+    let periodLabel = "";
+    if (activePeriod) {
+      const timeRange = (activePeriod.ci && activePeriod.co)
+        ? ` (${toAr(activePeriod.ci)} - ${toAr(activePeriod.co)})`
+        : "";
+      periodLabel = `${activePeriod.emoji ? activePeriod.emoji + " " : ""}${activePeriod.label}${timeRange}`;
+    } else if (selectedPeriod) {
+      periodLabel = selectedPeriod;
+    }
+
+    /* Price variable — already formatted with currency via fmt() */
+    const priceVar = displayPrice ?? "";
+
+    const msg = template
+      .replace(/{chalet_name}/g,     chalet.nameAr ?? "")
+      .replace(/{day_name}/g,        dayName)
+      .replace(/{hijri_date}/g,      hijriDate)
+      .replace(/{gregorian_date}/g,  gregDate)
+      .replace(/{period_name}/g,     periodLabel)
+      .replace(/{total_price}/g,     priceVar);
+
+    /* Final pass — ensure any residual Western digits become Arabic-Indic */
+    return toAr(msg);
   };
 
   /* Step 1 — click button → show terms modal (if terms exist, else open directly) */

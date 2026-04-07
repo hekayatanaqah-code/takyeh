@@ -2202,6 +2202,55 @@ function SettingsTab() {
         </div>
       </div>
 
+      {/* ══ 3.5. WhatsApp Booking Message Template ══ */}
+      <div className="bg-slate-800 rounded-xl border border-green-500/30 overflow-hidden">
+        <div className="bg-gradient-to-l from-green-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+          <span className="text-[#25D366] text-xl leading-none">💬</span>
+          <h3 className="text-slate-100 font-bold text-lg">قالب رسالة حجز الواتساب</h3>
+          <span className="text-xs text-slate-500 mr-auto">تُرسَل عند الضغط على زر «احجز الآن»</span>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص القالب</label>
+            <Textarea
+              value={form.wa_message_template ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, wa_message_template: e.target.value }))}
+              placeholder={`السلام عليكم، أريد حجز {chalet_name} عبر منصة شاليهات القصيم 🌴\nتفاصيل الحجز:\nاليوم: {day_name}\nالتاريخ الهجري: {hijri_date} هـ\nالتاريخ الميلادي: {gregorian_date} م\nالفترة: {period_name}\nالإجمالي: {total_price}\nهل الحجز متاح؟`}
+              rows={9}
+              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-y font-mono text-sm leading-relaxed"
+              dir="rtl"
+            />
+          </div>
+          {/* Variable reference */}
+          <div className="bg-slate-900/60 border border-slate-600 rounded-lg p-4 space-y-2">
+            <p className="text-xs font-bold text-slate-300 mb-2">المتغيرات المتاحة (انسخ والصق في القالب):</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { tag: "{chalet_name}",    desc: "اسم الشاليه" },
+                { tag: "{day_name}",       desc: "اسم اليوم" },
+                { tag: "{hijri_date}",     desc: "التاريخ الهجري" },
+                { tag: "{gregorian_date}", desc: "التاريخ الميلادي" },
+                { tag: "{period_name}",    desc: "الفترة المختارة" },
+                { tag: "{total_price}",    desc: "الإجمالي" },
+              ].map(({ tag, desc }) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, wa_message_template: (f.wa_message_template ?? "") + tag }))}
+                  title={`إدراج: ${desc}`}
+                  className="flex items-center gap-1.5 bg-slate-800 hover:bg-green-900/40 border border-slate-600 hover:border-green-500 text-slate-300 hover:text-green-300 text-xs px-2.5 py-1.5 rounded-lg transition-all font-mono"
+                >
+                  <span className="text-green-400 font-bold">{tag}</span>
+                  <span className="text-slate-500 text-[10px]">← {desc}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-500 pt-1">اضغط على أي متغير لإضافته تلقائياً في نهاية القالب. اترك الحقل فارغاً لاستخدام القالب الافتراضي.</p>
+          </div>
+          <SaveBtn label="حفظ قالب الرسالة" />
+        </div>
+      </div>
+
       {/* ══ 4. Social Media ══ */}
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
         <div className="bg-gradient-to-l from-purple-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
