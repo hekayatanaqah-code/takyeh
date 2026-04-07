@@ -287,7 +287,7 @@ export default function ChaletDetail() {
     if (selectedDate) {
       const d = new Date(selectedDate + "T12:00:00");
       dayName   = new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(d);
-      hijriDate = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric" }).format(d);
+      hijriDate = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric" }).format(d).replace(/\s*هـ$/, "");
       gregDate  = new Intl.DateTimeFormat("ar-SA-u-nu-arab", { day: "numeric", month: "long", year: "numeric", calendar: "gregory" }).format(d);
     }
 
@@ -635,8 +635,8 @@ export default function ChaletDetail() {
                     {selectedDate && (() => {
                       const d = new Date(selectedDate + "T12:00:00");
                       const dayName  = new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(d);
-                      /* Hijri: ar-SA-u-ca-islamic-umalqura already uses Arabic-Indic numerals */
-                      const hijriDate = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric" }).format(d);
+                      /* Hijri: ar-SA-u-ca-islamic-umalqura already appends هـ — strip it; the template re-adds it */
+                      const hijriDate = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric" }).format(d).replace(/\s*هـ$/, "");
                       /* Gregorian: u-nu-arab extension forces Arabic-Indic digits (٢٠٢٦ not 2026) */
                       const gregDate  = new Intl.DateTimeFormat("ar-SA-u-nu-arab", { day: "numeric", month: "long", year: "numeric", calendar: "gregory" }).format(d);
                       return (
