@@ -82,6 +82,28 @@ function fmt(v: string | number | null | undefined): string | null {
   return `${Number(v).toLocaleString("ar-SA")} ر.س`;
 }
 
+/**
+ * Look up the per-day-of-week price for a given period.
+ * Returns null if dailyPrices is not set or the specific day is not configured.
+ * Falls back to the caller using the base priceMorning/priceEvening/priceFullDay.
+ */
+function getDayPrice(
+  daily: Record<string, Record<string, number>> | null | undefined,
+  period: "morning" | "evening" | "fullday",
+  dateStr: string
+): number | null {
+  if (!daily || !dateStr) return null;
+  try {
+    const dayIdx = new Date(dateStr + "T12:00:00").getDay(); // 0=Sun…6=Sat
+    const dayMap = daily[period];
+    if (!dayMap) return null;
+    const price = dayMap[String(dayIdx)];
+    return price != null ? price : null;
+  } catch { return null; }
+}
+
+const DAY_NAMES_AR = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+
 function toDateWithDay(dateStr: string): string {
   try {
     const d = new Date(dateStr + "T12:00:00");
@@ -180,11 +202,35 @@ export default function ChaletDetail() {
   const phone = (chalet.whatsappNumber ?? "").replace(/\D/g, "");
   const terms = (chalet.termsAndConditions ?? "").split("\n").map(t => t.trim()).filter(Boolean);
 
+  /* Resolve per-day price (from dailyPrices JSONB) or fall back to base period price */
+  const dayOfWeek = selectedDate ? new Date(selectedDate + "T12:00:00").getDay() : -1;
+  const dayNameAr = dayOfWeek >= 0 ? DAY_NAMES_AR[dayOfWeek] : null;
+
+  const resolvePeriodPrice = (period: "morning" | "evening" | "fullday", base: string | number | null | undefined) => {
+    const dayPrice = getDayPrice((chalet as any).dailyPrices, period, selectedDate);
+    return dayPrice != null ? fmt(dayPrice) : fmt(base);
+  };
+
   const slots = [
-    chalet.slotMorning && { key: "morning", label: "صباحي",    emoji: "🌅", price: fmt(chalet.priceMorning), ci: chalet.morningCheckIn, co: chalet.morningCheckOut },
-    chalet.slotEvening && { key: "evening", label: "مسائي",    emoji: "🌙", price: fmt(chalet.priceEvening), ci: chalet.eveningCheckIn, co: chalet.eveningCheckOut },
-    chalet.slotFullDay && { key: "fullday", label: "يوم كامل", emoji: "☀️", price: fmt(chalet.priceFullDay), ci: chalet.fullDayCheckIn, co: chalet.fullDayCheckOut },
-  ].filter(Boolean) as { key: string; label: string; emoji: string; price: string | null; ci?: string | null; co?: string | null }[];
+    chalet.slotMorning && {
+      key: "morning", label: "صباحي", emoji: "🌅",
+      price: resolvePeriodPrice("morning", chalet.priceMorning),
+      hasDayPrice: getDayPrice((chalet as any).dailyPrices, "morning", selectedDate) != null,
+      ci: chalet.morningCheckIn, co: chalet.morningCheckOut,
+    },
+    chalet.slotEvening && {
+      key: "evening", label: "مسائي", emoji: "🌙",
+      price: resolvePeriodPrice("evening", chalet.priceEvening),
+      hasDayPrice: getDayPrice((chalet as any).dailyPrices, "evening", selectedDate) != null,
+      ci: chalet.eveningCheckIn, co: chalet.eveningCheckOut,
+    },
+    chalet.slotFullDay && {
+      key: "fullday", label: "يوم كامل", emoji: "☀️",
+      price: resolvePeriodPrice("fullday", chalet.priceFullDay),
+      hasDayPrice: getDayPrice((chalet as any).dailyPrices, "fullday", selectedDate) != null,
+      ci: chalet.fullDayCheckIn, co: chalet.fullDayCheckOut,
+    },
+  ].filter(Boolean) as { key: string; label: string; emoji: string; price: string | null; hasDayPrice: boolean; ci?: string | null; co?: string | null }[];
 
   /* active period = what was selected on the search/listing page */
   const activePeriod = slots.find(s => s.key === selectedPeriod);
@@ -205,7 +251,7 @@ export default function ChaletDetail() {
   const buildWaMessage = () => {
     const periodLabel = activePeriod?.label ?? selectedPeriod;
     const lines = [`مرحباً، أريد حجز ${chalet!.nameAr} عبر المنصة.`];
-    if (selectedDate)  lines.push(`📅 التاريخ: ${toHijri(selectedDate)}`);
+    if (selectedDate)  lines.push(`📅 التاريخ: ${toDateWithDay(selectedDate)}`);
     if (periodLabel)   lines.push(`🕐 الفترة: ${activePeriod?.emoji ?? ""} ${periodLabel}`.trim());
     if (displayPrice)  lines.push(`💰 السعر: ${displayPrice}`);
     return lines.join("\n");
@@ -408,7 +454,9 @@ export default function ChaletDetail() {
                         <p style={{ margin: "0 0 6px", fontWeight: 800, color: c.text, fontSize: 14 }}>{s.label}</p>
                         {s.price && (
                           <>
-                            <p style={{ margin: "0 0 2px", fontSize: 12, color: c.text, opacity: 0.9, fontWeight: 700 }}>يبدأ من</p>
+                            <p style={{ margin: "0 0 2px", fontSize: 12, color: c.text, opacity: 0.9, fontWeight: 700 }}>
+                              {s.hasDayPrice && dayNameAr ? `سعر يوم ${dayNameAr}` : "يبدأ من"}
+                            </p>
                             <p style={{ margin: "0 0 4px", fontWeight: 900, color: c.text, fontSize: 17 }}>{s.price}</p>
                           </>
                         )}
@@ -420,6 +468,14 @@ export default function ChaletDetail() {
                       </div>
                     );
                   })}
+                </div>
+
+                {/* ── Seasonal disclaimer ── */}
+                <div style={{ marginTop: 14, padding: "12px 16px", borderRadius: 12, background: "#fff7ed", border: "1.5px solid #fed7aa", display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+                  <p style={{ margin: 0, fontSize: 13, color: "#c2410c", fontWeight: 700, lineHeight: 1.7 }}>
+                    تنبيه: تختلف الأسعار في أيام المناسبات، الإجازات الرسمية، والأعياد.
+                  </p>
                 </div>
               </div>
             )}
@@ -477,7 +533,7 @@ export default function ChaletDetail() {
               {/* Price header */}
               <div style={{ padding: "22px 24px 16px", borderBottom: "1px solid #f3f4f6", background: "#f9feff" }}>
                 <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>
-                  {activePeriod ? "السعر المحدد" : "تبدأ من"}
+                  {activePeriod ? "الإجمالي" : "تبدأ من"}
                 </p>
                 <p style={{ margin: "6px 0 0", fontSize: 30, fontWeight: 900, color: "#111827", lineHeight: 1 }}>
                   {displayPrice ?? "تواصل للسعر"}

@@ -150,6 +150,9 @@ export interface DiamondData {
   /* category & base price */
   category?: string | null;
   pricePerNight?: string | number | null;
+  /* per-day-of-week pricing: { morning: {"0":200,"5":400,...}, evening:{...}, fullday:{...} } */
+  dailyPrices?: Record<string, Record<string, number>> | null;
+  seasonalDisclaimer?: boolean | null;
 }
 
 /* ─── Lightbox ─── */

@@ -163,6 +163,7 @@ router.get("/:id", async (req, res) => {
     slotFullDay: row.slotFullDay ?? true,
     priceWeekday: row.priceWeekday ?? null,
     priceWeekend: row.priceWeekend ?? null,
+    dailyPrices: (row.dailyPrices as Record<string, Record<string, number>> | null) ?? null,
     seasonalDisclaimer: row.seasonalDisclaimer ?? true,
     termsAndConditions: row.termsAndConditions ?? null,
     socialLink: row.socialLink ?? null,

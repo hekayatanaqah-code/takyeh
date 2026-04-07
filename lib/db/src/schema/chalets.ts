@@ -24,6 +24,11 @@ export const chaletsTable = pgTable("chalets", {
   /* ── Weekday / Weekend pricing ── */
   priceWeekday: numeric("price_weekday", { precision: 10, scale: 2 }),
   priceWeekend: numeric("price_weekend", { precision: 10, scale: 2 }),
+  /* ── Per-day-of-week pricing per period ─────────────────────────────
+     Structure: { morning: {"0":200,"5":400}, evening: {...}, fullday: {...} }
+     Key = JS Date.getDay() (0=Sun 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat)
+     Falls back to priceMorning/priceEvening/priceFullDay when a day key is missing. */
+  dailyPrices: jsonb("daily_prices").$type<Record<string, Record<string, number>>>(),
   seasonalDisclaimer: boolean("seasonal_disclaimer").notNull().default(true),
   maxGuests: integer("max_guests"),
   bedrooms: integer("bedrooms"),
