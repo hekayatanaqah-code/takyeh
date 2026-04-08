@@ -374,6 +374,15 @@ export const reviewsTable = pgTable("reviews", {
   comment: text("comment"),
   photoUrls: text("photo_urls").array().notNull().default([]),
   isVerified: boolean("is_verified").notNull().default(true),
+  /* ── Moderation ── */
+  isHidden: boolean("is_hidden").notNull().default(false),
+  /* ── Owner reply ── */
+  ownerReply: text("owner_reply"),
+  ownerReplyAt: timestamp("owner_reply_at", { withTimezone: true }),
+  /* ── Report system ── */
+  reportedBy: text("reported_by"),
+  reportedAt: timestamp("reported_at", { withTimezone: true }),
+  reportReason: text("report_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type Review = typeof reviewsTable.$inferSelect;

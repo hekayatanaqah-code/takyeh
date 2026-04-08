@@ -180,7 +180,7 @@ export default function ChaletDetail() {
     refetchOnWindowFocus: true,
   });
 
-  interface ChaletReview { id: number; rating: number; comment: string | null; photoUrls: string[]; isVerified: boolean; createdAt: string }
+  interface ChaletReview { id: number; rating: number; comment: string | null; photoUrls: string[]; isVerified: boolean; isHidden: boolean; ownerReply: string | null; ownerReplyAt: string | null; createdAt: string }
   const { data: reviews = [] } = useQuery<ChaletReview[]>({
     queryKey: ["chalet-reviews", id],
     queryFn: async () => {
@@ -657,6 +657,15 @@ export default function ChaletDetail() {
                             onClick={() => window.open(url, "_blank")}
                           />
                         ))}
+                      </div>
+                    )}
+                    {/* Owner reply */}
+                    {rev.ownerReply && (
+                      <div style={{ marginTop: 12, padding: "10px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, borderRightWidth: 3, borderRightColor: "#16a34a" }}>
+                        <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 700, color: "#15803d" }}>
+                          🏡 رد صاحب الشاليه
+                        </p>
+                        <p style={{ margin: 0, fontSize: 13, color: "#374151", lineHeight: 1.7 }}>{rev.ownerReply}</p>
                       </div>
                     )}
                   </div>

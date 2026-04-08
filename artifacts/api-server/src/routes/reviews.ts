@@ -4,8 +4,9 @@ import {
   reviewInvitationsTable,
   reviewsTable,
   chaletsTable,
+  chaletSubmissionsTable,
 } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, inArray } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { z } from "zod/v4";
 import { requireAdmin } from "./admin";
@@ -13,7 +14,7 @@ import { requireAdmin } from "./admin";
 const router = Router();
 
 /* ── POST /admin/chalets/:id/review-invite ─────────────────────
-   Admin or owner generates a one-time review token for a chalet */
+   Admin generates a one-time review token for a chalet */
 router.post("/admin/chalets/:id/review-invite", requireAdmin, async (req, res) => {
   const chaletId = parseInt(req.params.id, 10);
   if (isNaN(chaletId)) return res.status(400).json({ error: "invalid id" });
@@ -27,7 +28,7 @@ router.post("/admin/chalets/:id/review-invite", requireAdmin, async (req, res) =
   if (!chalet) return res.status(404).json({ error: "not found" });
 
   const token = randomBytes(5).toString("hex");
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
   const [inv] = await db
     .insert(reviewInvitationsTable)
@@ -38,7 +39,7 @@ router.post("/admin/chalets/:id/review-invite", requireAdmin, async (req, res) =
 });
 
 /* ── GET /reviews/:token ───────────────────────────────────────
-   Public: resolve token → return chalet name so the review page can display it */
+   Public: resolve token → return chalet info for the review page */
 router.get("/reviews/:token", async (req, res) => {
   const { token } = req.params;
   const [inv] = await db
@@ -64,7 +65,7 @@ router.get("/reviews/:token", async (req, res) => {
 });
 
 /* ── POST /reviews/:token ──────────────────────────────────────
-   Public: submit a review. Invalidates the token on success. */
+   Public: submit a review. Auto-published, invalidates token. */
 router.post("/reviews/:token", async (req, res) => {
   const { token } = req.params;
 
@@ -95,6 +96,7 @@ router.post("/reviews/:token", async (req, res) => {
       comment: body.data.comment ?? null,
       photoUrls: body.data.photoUrls ?? [],
       isVerified: true,
+      isHidden: false,
     });
     await tx
       .update(reviewInvitationsTable)
@@ -106,7 +108,7 @@ router.post("/reviews/:token", async (req, res) => {
 });
 
 /* ── GET /chalets/:id/reviews ──────────────────────────────────
-   Public: return all verified reviews for a chalet, newest first */
+   Public: return visible (non-hidden) reviews newest first */
 router.get("/chalets/:id/reviews", async (req, res) => {
   const chaletId = parseInt(req.params.id, 10);
   if (isNaN(chaletId)) return res.status(400).json({ error: "invalid id" });
@@ -114,14 +116,41 @@ router.get("/chalets/:id/reviews", async (req, res) => {
   const rows = await db
     .select()
     .from(reviewsTable)
-    .where(eq(reviewsTable.chaletId, chaletId))
+    .where(and(eq(reviewsTable.chaletId, chaletId), eq(reviewsTable.isHidden, false)))
+    .orderBy(desc(reviewsTable.createdAt));
+
+  return res.json(rows);
+});
+
+/* ── GET /admin/reviews ────────────────────────────────────────
+   Admin: all reviews across all chalets (including hidden + reported) */
+router.get("/admin/reviews", requireAdmin, async (req, res) => {
+  const rows = await db
+    .select({
+      id: reviewsTable.id,
+      chaletId: reviewsTable.chaletId,
+      chaletName: chaletsTable.nameAr,
+      rating: reviewsTable.rating,
+      comment: reviewsTable.comment,
+      photoUrls: reviewsTable.photoUrls,
+      isVerified: reviewsTable.isVerified,
+      isHidden: reviewsTable.isHidden,
+      ownerReply: reviewsTable.ownerReply,
+      ownerReplyAt: reviewsTable.ownerReplyAt,
+      reportedBy: reviewsTable.reportedBy,
+      reportedAt: reviewsTable.reportedAt,
+      reportReason: reviewsTable.reportReason,
+      createdAt: reviewsTable.createdAt,
+    })
+    .from(reviewsTable)
+    .leftJoin(chaletsTable, eq(reviewsTable.chaletId, chaletsTable.id))
     .orderBy(desc(reviewsTable.createdAt));
 
   return res.json(rows);
 });
 
 /* ── GET /admin/review-invitations ────────────────────────────
-   Admin: list all invitations (with chalet name) */
+   Admin: list all invitations with chalet name */
 router.get("/admin/review-invitations", requireAdmin, async (req, res) => {
   const rows = await db
     .select({
@@ -138,6 +167,40 @@ router.get("/admin/review-invitations", requireAdmin, async (req, res) => {
     .orderBy(desc(reviewInvitationsTable.createdAt));
 
   return res.json(rows);
+});
+
+/* ── PATCH /admin/reviews/:id ──────────────────────────────────
+   Admin: hide or show a review */
+router.patch("/admin/reviews/:id", requireAdmin, async (req, res) => {
+  const reviewId = parseInt(req.params.id, 10);
+  if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
+
+  const body = z.object({ isHidden: z.boolean() }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "validation" });
+
+  const [updated] = await db
+    .update(reviewsTable)
+    .set({ isHidden: body.data.isHidden })
+    .where(eq(reviewsTable.id, reviewId))
+    .returning({ id: reviewsTable.id });
+
+  if (!updated) return res.status(404).json({ error: "not found" });
+  return res.json({ ok: true });
+});
+
+/* ── DELETE /admin/reviews/:id ─────────────────────────────────
+   Admin: permanently delete a review */
+router.delete("/admin/reviews/:id", requireAdmin, async (req, res) => {
+  const reviewId = parseInt(req.params.id, 10);
+  if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
+
+  const [deleted] = await db
+    .delete(reviewsTable)
+    .where(eq(reviewsTable.id, reviewId))
+    .returning({ id: reviewsTable.id });
+
+  if (!deleted) return res.status(404).json({ error: "not found" });
+  return res.json({ ok: true });
 });
 
 export default router;

@@ -3547,7 +3547,22 @@ type TabId = typeof TABS[number]["id"];
    Reviews Tab — generate invitation links, view submitted reviews
    ══════════════════════════════════════════════════════════════ */
 interface ReviewChalet { id: number; nameAr: string; photos: string[] }
-interface ReviewRow { id: number; chaletId: number; rating: number; comment: string | null; photoUrls: string[]; isVerified: boolean; createdAt: string }
+interface AdminReviewRow {
+  id: number;
+  chaletId: number;
+  chaletName: string | null;
+  rating: number;
+  comment: string | null;
+  photoUrls: string[];
+  isVerified: boolean;
+  isHidden: boolean;
+  ownerReply: string | null;
+  ownerReplyAt: string | null;
+  reportedBy: string | null;
+  reportedAt: string | null;
+  reportReason: string | null;
+  createdAt: string;
+}
 
 const DEFAULT_REVIEW_TEMPLATE = "أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: {link}";
 
@@ -3580,6 +3595,15 @@ function ReviewsTab() {
     queryKey: ["admin", "review-invitations"],
     queryFn: async () => {
       const r = await fetch(`${API}/admin/review-invitations`, { credentials: "include" });
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    },
+  });
+
+  const { data: allReviews = [] } = useQuery<AdminReviewRow[]>({
+    queryKey: ["admin", "all-reviews"],
+    queryFn: async () => {
+      const r = await fetch(`${API}/admin/reviews`, { credentials: "include" });
       if (!r.ok) throw new Error("failed");
       return r.json();
     },
@@ -3716,7 +3740,7 @@ function ReviewsTab() {
                 )}
 
                 {/* Reviews list (expandable) */}
-                {isExpanded && <ChaletReviewsList chaletId={c.id} />}
+                {isExpanded && <ChaletReviewsList chaletId={c.id} reviews={allReviews.filter((r) => r.chaletId === c.id)} />}
               </div>
             );
           })}
@@ -3726,21 +3750,32 @@ function ReviewsTab() {
   );
 }
 
-function ChaletReviewsList({ chaletId }: { chaletId: number }) {
-  const { data: reviews = [], isLoading } = useQuery<ReviewRow[]>({
-    queryKey: ["reviews", chaletId],
-    queryFn: async () => {
-      const r = await fetch(`${API}/chalets/${chaletId}/reviews`, { credentials: "include" });
+function ChaletReviewsList({ chaletId, reviews }: { chaletId: number; reviews: AdminReviewRow[] }) {
+  const qc = useQueryClient();
+
+  const hideReview = useMutation({
+    mutationFn: async ({ id, hide }: { id: number; hide: boolean }) => {
+      const r = await fetch(`${API}/admin/reviews/${id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isHidden: hide }),
+      });
       if (!r.ok) throw new Error("failed");
-      return r.json();
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "all-reviews"] }),
   });
 
-  if (isLoading) return (
-    <div className="border-t border-slate-700 px-4 py-4 text-center">
-      <Loader2 className="w-5 h-5 animate-spin mx-auto text-slate-400" />
-    </div>
-  );
+  const deleteReview = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await fetch(`${API}/admin/reviews/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("failed");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "all-reviews"] }),
+  });
 
   return (
     <div className="border-t border-slate-700 px-4 py-4">
@@ -3750,8 +3785,9 @@ function ChaletReviewsList({ chaletId }: { chaletId: number }) {
         <div className="space-y-3">
           <p className="text-slate-300 text-sm font-semibold mb-2">{reviews.length} تقييم</p>
           {reviews.map((rev) => (
-            <div key={rev.id} className="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
-              <div className="flex items-center gap-2 mb-1">
+            <div key={rev.id} className={`rounded-lg p-3 border ${rev.isHidden ? "bg-slate-900/60 border-red-900/50 opacity-70" : "bg-slate-800/60 border-slate-700"}`}>
+              {/* Header row */}
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <div className="flex gap-0.5" dir="ltr">
                   {[1,2,3,4,5].map((s) => (
                     <Star key={s} className="w-4 h-4" fill={s <= rev.rating ? "#f59e0b" : "transparent"} stroke={s <= rev.rating ? "#f59e0b" : "#475569"} strokeWidth={1.5} />
@@ -3759,21 +3795,66 @@ function ChaletReviewsList({ chaletId }: { chaletId: number }) {
                 </div>
                 {rev.isVerified && (
                   <span className="flex items-center gap-1 text-xs text-green-400 font-medium">
-                    <CheckCircle className="w-3.5 h-3.5" /> نزيل مؤكد
+                    <CheckCircle className="w-3.5 h-3.5" /> مؤكد
                   </span>
+                )}
+                {rev.isHidden && (
+                  <span className="text-xs bg-red-900/40 text-red-400 px-2 py-0.5 rounded-full">مخفي</span>
+                )}
+                {rev.reportedAt && (
+                  <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded-full">مُبلَّغ عنه</span>
                 )}
                 <span className="text-slate-500 text-xs mr-auto">
                   {new Date(rev.createdAt).toLocaleDateString("ar-SA")}
                 </span>
               </div>
+
               {rev.comment && <p className="text-slate-300 text-sm leading-relaxed">{rev.comment}</p>}
+
               {rev.photoUrls?.length > 0 && (
                 <div className="flex gap-2 mt-2 flex-wrap">
                   {rev.photoUrls.map((url, i) => (
-                    <img key={i} src={url} alt="" className="w-14 h-14 rounded object-cover border border-slate-600" />
+                    <img key={i} src={url} alt="" className="w-14 h-14 rounded object-cover border border-slate-600 cursor-pointer"
+                      onClick={() => window.open(url, "_blank")}
+                    />
                   ))}
                 </div>
               )}
+
+              {/* Owner reply preview */}
+              {rev.ownerReply && (
+                <div className="mt-2 p-2 bg-green-900/20 border border-green-900/40 rounded-lg">
+                  <p className="text-xs text-green-400 font-medium mb-0.5">رد صاحب الشاليه:</p>
+                  <p className="text-slate-300 text-xs leading-relaxed">{rev.ownerReply}</p>
+                </div>
+              )}
+
+              {/* Admin action buttons */}
+              <div className="flex items-center gap-2 mt-3 pt-2 border-t border-slate-700">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={`text-xs h-7 px-2 gap-1 ${rev.isHidden ? "border-green-700 text-green-400 hover:bg-green-900/30" : "border-slate-600 text-slate-400 hover:bg-slate-700"}`}
+                  disabled={hideReview.isPending}
+                  onClick={() => hideReview.mutate({ id: rev.id, hide: !rev.isHidden })}
+                >
+                  {rev.isHidden ? "إظهار التقييم" : "إخفاء التقييم"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-7 px-2 gap-1 border-red-800 text-red-400 hover:bg-red-900/30"
+                  disabled={deleteReview.isPending}
+                  onClick={() => {
+                    if (window.confirm("هل أنت متأكد من حذف هذا التقييم نهائياً؟")) {
+                      deleteReview.mutate(rev.id);
+                    }
+                  }}
+                >
+                  <Trash2 className="w-3 h-3" />
+                  حذف نهائي
+                </Button>
+              </div>
             </div>
           ))}
         </div>

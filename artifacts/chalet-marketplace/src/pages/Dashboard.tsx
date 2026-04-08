@@ -4398,6 +4398,22 @@ interface OwnerChalet { id: number; nameAr: string; photos: string[]; waReviewTe
 
 const DEFAULT_REVIEW_TEMPLATE = "أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: {link}";
 
+interface OwnerReviewRow {
+  id: number;
+  chaletId: number;
+  chaletName: string | null;
+  rating: number;
+  comment: string | null;
+  photoUrls: string[];
+  isVerified: boolean;
+  isHidden: boolean;
+  ownerReply: string | null;
+  ownerReplyAt: string | null;
+  reportedBy: string | null;
+  reportedAt: string | null;
+  createdAt: string;
+}
+
 function ReviewsTab() {
   const qc = useQueryClient();
   const [selectedChaletId, setSelectedChaletId] = useState<number | null>(null);
@@ -4405,6 +4421,9 @@ function ReviewsTab() {
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [templateDraft, setTemplateDraft] = useState<Record<number, string>>({});
   const [templateSaved, setTemplateSaved] = useState<number | null>(null);
+  const [replyDraft, setReplyDraft] = useState<Record<number, string>>({});
+  const [replyingId, setReplyingId] = useState<number | null>(null);
+  const [reportConfirmId, setReportConfirmId] = useState<number | null>(null);
 
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
@@ -4472,6 +4491,44 @@ function ReviewsTab() {
       qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
       setTemplateSaved(chaletId);
       setTimeout(() => setTemplateSaved(null), 2500);
+    },
+  });
+
+  const { data: ownerReviews = [], isLoading: reviewsLoading } = useQuery<OwnerReviewRow[]>({
+    queryKey: ["owner", "reviews"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/reviews");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const replyMutation = useMutation({
+    mutationFn: async ({ reviewId, reply }: { reviewId: number; reply: string }) => {
+      const r = await apiFetch(`/owner/reviews/${reviewId}/reply`, {
+        method: "POST",
+        body: JSON.stringify({ reply }),
+      });
+      if (!r.ok) throw new Error("failed");
+    },
+    onSuccess: (_, { reviewId }) => {
+      qc.invalidateQueries({ queryKey: ["owner", "reviews"] });
+      setReplyingId(null);
+      setReplyDraft((prev) => { const next = { ...prev }; delete next[reviewId]; return next; });
+    },
+  });
+
+  const reportMutation = useMutation({
+    mutationFn: async (reviewId: number) => {
+      const r = await apiFetch(`/owner/reviews/${reviewId}/report`, {
+        method: "POST",
+        body: JSON.stringify({ reason: "" }),
+      });
+      if (!r.ok) throw new Error("failed");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "reviews"] });
+      setReportConfirmId(null);
     },
   });
 
@@ -4686,6 +4743,142 @@ function ReviewsTab() {
               )}
             </div>
           )}
+
+          {/* ── Submitted Reviews for selected chalet ── */}
+          {selectedChalet && (() => {
+            const chaletReviews = ownerReviews.filter((r) => r.chaletId === selectedChalet.id);
+            if (reviewsLoading) return (
+              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+            );
+            if (chaletReviews.length === 0) return (
+              <div className="bg-card border border-border rounded-2xl p-6 text-center text-muted-foreground text-sm">
+                <Star className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                لا توجد تقييمات مستلمة لهذا الشاليه بعد
+              </div>
+            );
+            return (
+              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
+                <p className="font-bold text-foreground">التقييمات الواردة ({toAr(chaletReviews.length)})</p>
+                {chaletReviews.map((rev) => (
+                  <div key={rev.id} className={`rounded-xl border p-4 space-y-3 ${rev.isHidden ? "border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-800" : "border-border bg-muted/30"}`}>
+                    {/* Header */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex gap-0.5" dir="ltr">
+                        {[1,2,3,4,5].map((s) => (
+                          <Star key={s} className="w-4 h-4" fill={s <= rev.rating ? "#f59e0b" : "transparent"} stroke={s <= rev.rating ? "#f59e0b" : "#9ca3af"} strokeWidth={1.5} />
+                        ))}
+                      </div>
+                      {rev.isVerified && (
+                        <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
+                          <CheckCircle className="w-3.5 h-3.5" /> نزيل مؤكد
+                        </span>
+                      )}
+                      {rev.isHidden && (
+                        <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full font-medium">
+                          مخفي من قبل الإدارة
+                        </span>
+                      )}
+                      {rev.reportedAt && !rev.isHidden && (
+                        <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
+                          تم الإبلاغ
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground mr-auto">
+                        {new Date(rev.createdAt).toLocaleDateString("ar-SA")}
+                      </span>
+                    </div>
+
+                    {/* Comment */}
+                    {rev.comment && <p className="text-sm text-foreground leading-relaxed">{rev.comment}</p>}
+
+                    {/* Photos */}
+                    {rev.photoUrls?.length > 0 && (
+                      <div className="flex gap-2 flex-wrap">
+                        {rev.photoUrls.map((url, i) => (
+                          <img key={i} src={url} alt="" className="w-14 h-14 rounded-lg object-cover border border-border cursor-pointer"
+                            onClick={() => window.open(url, "_blank")}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Owner reply (existing) */}
+                    {rev.ownerReply && replyingId !== rev.id && (
+                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-1">
+                        <p className="text-xs font-semibold text-green-700 dark:text-green-400">ردك على التقييم</p>
+                        <p className="text-sm text-foreground leading-relaxed">{rev.ownerReply}</p>
+                        <button
+                          onClick={() => { setReplyingId(rev.id); setReplyDraft((p) => ({ ...p, [rev.id]: rev.ownerReply ?? "" })); }}
+                          className="text-xs text-muted-foreground hover:text-primary underline-offset-2 hover:underline"
+                        >
+                          تعديل الرد
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Reply form */}
+                    {replyingId === rev.id ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          dir="rtl"
+                          rows={3}
+                          placeholder="اكتب ردك على هذا التقييم..."
+                          value={replyDraft[rev.id] ?? ""}
+                          onChange={(e) => setReplyDraft((p) => ({ ...p, [rev.id]: e.target.value }))}
+                          className="text-sm resize-none"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            className="gap-1.5"
+                            disabled={replyMutation.isPending || !(replyDraft[rev.id] ?? "").trim()}
+                            onClick={() => replyMutation.mutate({ reviewId: rev.id, reply: (replyDraft[rev.id] ?? "").trim() })}
+                          >
+                            {replyMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                            نشر الرد
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setReplyingId(null)}>إلغاء</Button>
+                        </div>
+                      </div>
+                    ) : !rev.ownerReply ? (
+                      <button
+                        onClick={() => setReplyingId(rev.id)}
+                        className="flex items-center gap-1.5 text-sm text-primary hover:underline underline-offset-2 font-medium"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        الرد على هذا التقييم
+                      </button>
+                    ) : null}
+
+                    {/* Report button (only if not already reported and not hidden) */}
+                    {!rev.reportedAt && !rev.isHidden && (
+                      reportConfirmId === rev.id ? (
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-amber-600 dark:text-amber-400">هل أنت متأكد من الإبلاغ عن هذا التقييم؟</span>
+                          <button
+                            onClick={() => reportMutation.mutate(rev.id)}
+                            disabled={reportMutation.isPending}
+                            className="text-red-600 hover:text-red-700 font-semibold"
+                          >
+                            {reportMutation.isPending ? "جاري..." : "نعم، أبلغ"}
+                          </button>
+                          <button onClick={() => setReportConfirmId(null)} className="text-muted-foreground">إلغاء</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setReportConfirmId(rev.id)}
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          الإبلاغ عن هذا التقييم
+                        </button>
+                      )
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Tip card when nothing selected */}
           {!selectedChalet && (
