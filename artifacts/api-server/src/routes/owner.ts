@@ -11,8 +11,10 @@ import {
   salaryLogsTable,
   ownerReportArchiveTable,
   subscriptionPlansTable,
+  reviewInvitationsTable,
 } from "@workspace/db/schema";
-import { eq, and, inArray, gte, lte, sql } from "drizzle-orm";
+import { eq, and, inArray, gte, lte, sql, desc } from "drizzle-orm";
+import { randomBytes } from "crypto";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 
@@ -151,6 +153,68 @@ router.get("/chalets", async (req, res) => {
     .where(inArray(chaletsTable.submissionId, subIds));
 
   return res.json(chalets);
+});
+
+/* ── Review Invitations (owner generates for their own chalets) ── */
+
+router.post("/review-invite", async (req, res) => {
+  const ownerId = req.user!.id;
+  const body = z.object({ chaletId: z.number().int().positive() }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const subs = await db
+    .select({ id: chaletSubmissionsTable.id })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.ownerId, ownerId));
+
+  const subIds = subs.map((s) => s.id);
+  if (subIds.length === 0) return res.status(403).json({ error: "غير مصرح" });
+
+  const [chalet] = await db
+    .select({ id: chaletsTable.id, nameAr: chaletsTable.nameAr })
+    .from(chaletsTable)
+    .where(and(eq(chaletsTable.id, body.data.chaletId), inArray(chaletsTable.submissionId, subIds)))
+    .limit(1);
+
+  if (!chalet) return res.status(403).json({ error: "غير مصرح أو الشاليه غير موجود" });
+
+  const token = randomBytes(24).toString("hex");
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  const [inv] = await db
+    .insert(reviewInvitationsTable)
+    .values({ token, chaletId: chalet.id, expiresAt })
+    .returning();
+
+  return res.json({ token: inv.token, chaletId: chalet.id, chaletName: chalet.nameAr });
+});
+
+router.get("/review-invitations", async (req, res) => {
+  const ownerId = req.user!.id;
+
+  const subs = await db
+    .select({ id: chaletSubmissionsTable.id })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.ownerId, ownerId));
+
+  const subIds = subs.map((s) => s.id);
+  if (subIds.length === 0) return res.json([]);
+
+  const myChalets = await db
+    .select({ id: chaletsTable.id })
+    .from(chaletsTable)
+    .where(inArray(chaletsTable.submissionId, subIds));
+
+  const chaletIds = myChalets.map((c) => c.id);
+  if (chaletIds.length === 0) return res.json([]);
+
+  const rows = await db
+    .select()
+    .from(reviewInvitationsTable)
+    .where(inArray(reviewInvitationsTable.chaletId, chaletIds))
+    .orderBy(desc(reviewInvitationsTable.createdAt));
+
+  return res.json(rows);
 });
 
 /* ── Update chalet check-in/check-out times ────────────────── */

@@ -4392,10 +4392,244 @@ function ReportsTab() {
   );
 }
 
+/* ── Reviews Tab ─────────────────────────────── */
+interface OwnerChalet { id: number; nameAr: string; photos: string[] }
+
+function ReviewsTab() {
+  const qc = useQueryClient();
+  const [selectedChaletId, setSelectedChaletId] = useState<number | null>(null);
+  const [generatedLinks, setGeneratedLinks] = useState<Record<number, string>>({});
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  const { data: chalets = [], isLoading } = useQuery<OwnerChalet[]>({
+    queryKey: ["owner", "chalets"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/chalets");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const { data: invitations = [] } = useQuery<{ id: number; chaletId: number; token: string; used: boolean; createdAt: string }[]>({
+    queryKey: ["owner", "review-invitations"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/review-invitations");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const generateLink = useMutation({
+    mutationFn: async (chaletId: number) => {
+      const r = await apiFetch("/owner/review-invite", {
+        method: "POST",
+        body: JSON.stringify({ chaletId }),
+      });
+      if (!r.ok) throw new Error("failed");
+      return r.json() as Promise<{ token: string; chaletName: string }>;
+    },
+    onSuccess: (data, chaletId) => {
+      const origin = window.location.origin;
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const link = `${origin}${base}/rate/${data.token}`;
+      setGeneratedLinks((prev) => ({ ...prev, [chaletId]: link }));
+      qc.invalidateQueries({ queryKey: ["owner", "review-invitations"] });
+    },
+  });
+
+  function copyLink(chaletId: number) {
+    const link = generatedLinks[chaletId];
+    if (!link) return;
+    navigator.clipboard.writeText(link);
+    setCopiedId(chaletId);
+    setTimeout(() => setCopiedId(null), 2500);
+  }
+
+  function sendWhatsApp(chaletId: number) {
+    const link = generatedLinks[chaletId];
+    if (!link) return;
+    const msg = encodeURIComponent(
+      `أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: ${link}`
+    );
+    window.open(`https://wa.me/?text=${msg}`, "_blank");
+  }
+
+  function inviteStats(chaletId: number) {
+    const all = invitations.filter((i) => i.chaletId === chaletId);
+    return { total: all.length, used: all.filter((i) => i.used).length, pending: all.filter((i) => !i.used).length };
+  }
+
+  const selectedChalet = chalets.find((c) => c.id === selectedChaletId);
+  const currentLink = selectedChaletId ? generatedLinks[selectedChaletId] : null;
+  const stats = selectedChaletId ? inviteStats(selectedChaletId) : null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-6"
+    >
+      {/* Header */}
+      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-9 h-9 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center">
+            <Star className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h2 className="font-bold text-lg text-foreground">إرسال رابط التقييم للضيوف</h2>
+            <p className="text-muted-foreground text-sm">أنشئ رابطاً خاصاً لكل ضيف ليقيّم تجربته</p>
+          </div>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>
+      ) : chalets.length === 0 ? (
+        <div className="bg-card border border-border rounded-2xl p-10 text-center text-muted-foreground">
+          <Building2 className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p>لا توجد شاليهات مرتبطة بحسابك بعد</p>
+        </div>
+      ) : (
+        <>
+          {/* Chalet selector */}
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+            <p className="text-sm font-semibold text-foreground mb-3">اختر الشاليه</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {chalets.map((c) => {
+                const selected = selectedChaletId === c.id;
+                const st = inviteStats(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedChaletId(c.id)}
+                    className={`flex items-center gap-3 p-4 rounded-xl border text-right transition-all ${
+                      selected
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                        : "border-border hover:border-primary/40 hover:bg-muted/30"
+                    }`}
+                  >
+                    {c.photos?.[0] ? (
+                      <img src={c.photos[0]} alt={c.nameAr} className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <Building2 className="w-6 h-6 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-foreground text-sm truncate">{c.nameAr}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {st.total === 0 ? "لا توجد دعوات مرسلة" : `${toAr(st.total)} دعوة — ${toAr(st.used)} مستخدمة`}
+                      </p>
+                    </div>
+                    {selected && <CheckCircle className="w-4 h-4 text-primary shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Generate + Send section */}
+          {selectedChalet && (
+            <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-5">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <p className="font-bold text-foreground">{selectedChalet.nameAr}</p>
+                  {stats && stats.total > 0 && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {toAr(stats.total)} دعوة إجمالاً · {toAr(stats.pending)} معلقة · {toAr(stats.used)} مستخدمة
+                    </p>
+                  )}
+                </div>
+                <Button
+                  onClick={() => generateLink.mutate(selectedChalet.id)}
+                  disabled={generateLink.isPending}
+                  className="gap-2 bg-primary hover:bg-primary/90"
+                >
+                  {generateLink.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Star className="w-4 h-4" />
+                  )}
+                  إنشاء رابط تقييم جديد
+                </Button>
+              </div>
+
+              {currentLink && (
+                <div className="bg-muted/40 rounded-xl border border-border p-4 space-y-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">الرابط الجديد (صالح لمدة 30 يوماً)</p>
+
+                  {/* Link display */}
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 bg-background border border-border text-primary text-xs px-3 py-2.5 rounded-lg font-mono break-all">
+                      {currentLink}
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => copyLink(selectedChalet.id)}
+                      className="shrink-0"
+                    >
+                      {copiedId === selectedChalet.id ? "✓ تم النسخ" : "نسخ"}
+                    </Button>
+                  </div>
+
+                  {/* WhatsApp send button */}
+                  <Button
+                    className="w-full gap-2 bg-[#25D366] hover:bg-[#1ebe5a] text-white font-semibold"
+                    onClick={() => sendWhatsApp(selectedChalet.id)}
+                  >
+                    <Phone className="w-4 h-4" />
+                    إرسال عبر واتساب
+                  </Button>
+
+                  <p className="text-xs text-muted-foreground text-center">
+                    الرسالة ستتضمن: <span className="font-medium">«أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك...»</span>
+                  </p>
+                </div>
+              )}
+
+              {/* Recent invitations */}
+              {stats && stats.total > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-foreground mb-3">آخر الدعوات</p>
+                  <div className="space-y-2">
+                    {invitations
+                      .filter((i) => i.chaletId === selectedChalet.id)
+                      .slice(0, 8)
+                      .map((inv) => (
+                        <div key={inv.id} className="flex items-center gap-3 text-sm py-2 border-b border-border last:border-0">
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${inv.used ? "bg-green-500" : "bg-amber-400"}`} />
+                          <code className="flex-1 text-xs text-muted-foreground font-mono truncate">
+                            {window.location.origin}{import.meta.env.BASE_URL.replace(/\/$/, "")}/rate/{inv.token.slice(0, 12)}...
+                          </code>
+                          <span className={`text-xs font-medium shrink-0 ${inv.used ? "text-green-600" : "text-amber-600"}`}>
+                            {inv.used ? "تم الاستخدام" : "معلق"}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Info card */}
+          {!selectedChalet && (
+            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 text-sm text-amber-800 dark:text-amber-300 flex gap-3">
+              <Star className="w-5 h-5 shrink-0 mt-0.5 text-amber-500" />
+              <p>اختر شاليهاً من الأعلى لإنشاء رابط التقييم وإرساله عبر واتساب للضيف مباشرة</p>
+            </div>
+          )}
+        </>
+      )}
+    </motion.div>
+  );
+}
+
 /* ── Main Dashboard ──────────────────────────── */
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"chalets" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const { data: submissions, isLoading: submissionsLoading } = useGetMySubmissions();
@@ -4440,7 +4674,8 @@ export default function Dashboard() {
 
   const tabs = [
     { id: "chalets",   label: "شاليهاتي",         icon: <Building2 className="w-4 h-4" /> },
-    { id: "services",  label: "خدماتي",            icon: <Star className="w-4 h-4" /> },
+    { id: "reviews",   label: "التقييمات",          icon: <Star className="w-4 h-4" /> },
+    { id: "services",  label: "خدماتي",            icon: <MessageSquare className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات", icon: <Calendar className="w-4 h-4" /> },
     { id: "revenue",   label: "الإيرادات",          icon: <TrendingUp className="w-4 h-4" /> },
     { id: "expenses",  label: "المصروفات",          icon: <Wallet className="w-4 h-4" /> },
@@ -4567,6 +4802,9 @@ export default function Dashboard() {
         {/* Tab Content */}
         {activeTab === "chalets" && (
           <ChaletsTab submissions={submissions as any[]} isLoading={submissionsLoading} />
+        )}
+        {activeTab === "reviews" && (
+          <ReviewsTab />
         )}
         {activeTab === "services" && (
           <ServiceSubmissionsTab />
