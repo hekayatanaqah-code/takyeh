@@ -4425,6 +4425,30 @@ function ReviewsTab() {
   const [replyingId, setReplyingId] = useState<number | null>(null);
   const [reportConfirmId, setReportConfirmId] = useState<number | null>(null);
 
+  interface OwnerNotifRow {
+    id: number; type: string; chaletId: number | null; reviewId: number | null;
+    message: string; isRead: boolean; createdAt: string;
+  }
+  const { data: notifications = [] } = useQuery<OwnerNotifRow[]>({
+    queryKey: ["owner", "notifications"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/notifications");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    refetchInterval: 30_000,
+  });
+
+  const markAllRead = useMutation({
+    mutationFn: async () => {
+      await apiFetch("/owner/notifications/read-all", { method: "PATCH" });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "notifications"] });
+      qc.invalidateQueries({ queryKey: ["owner", "notifications-summary"] });
+    },
+  });
+
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
     queryFn: async () => {
@@ -4567,6 +4591,50 @@ function ReviewsTab() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
+      {/* ── Notifications Inbox ── */}
+      {notifications.length > 0 && (() => {
+        const unread = notifications.filter((n) => !n.isRead);
+        return (
+          <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                </div>
+                <span className="font-semibold text-sm text-foreground">الإشعارات</span>
+                {unread.length > 0 && (
+                  <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 leading-none">
+                    {unread.length} جديد
+                  </span>
+                )}
+              </div>
+              {unread.length > 0 && (
+                <button
+                  onClick={() => markAllRead.mutate()}
+                  disabled={markAllRead.isPending}
+                  className="text-xs text-primary hover:underline underline-offset-2 font-medium"
+                >
+                  تحديد الكل كمقروء
+                </button>
+              )}
+            </div>
+            <div className="divide-y divide-border max-h-64 overflow-y-auto">
+              {notifications.slice(0, 8).map((n) => (
+                <div key={n.id} className={`flex items-start gap-3 px-5 py-3 text-sm ${n.isRead ? "opacity-60" : "bg-amber-50/60 dark:bg-amber-900/10"}`}>
+                  <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${n.isRead ? "bg-transparent" : n.type === "report_dismissed" ? "bg-red-500" : "bg-green-500"}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-foreground leading-relaxed">{n.message}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {new Date(n.createdAt).toLocaleDateString("ar-SA")} · {new Date(n.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Header */}
       <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
         <div className="flex items-center gap-3 mb-1">
@@ -4921,6 +4989,18 @@ export default function Dashboard() {
     enabled: isAuthenticated,
   });
 
+  const { data: notifSummary = [] } = useQuery<{ id: number; isRead: boolean }[]>({
+    queryKey: ["owner", "notifications-summary"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/notifications");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: isAuthenticated,
+    refetchInterval: 30_000,
+  });
+  const unreadNotifCount = notifSummary.filter((n) => !n.isRead).length;
+
   useEffect(() => {
     if (!authLoading && !isAuthenticated) navigate("/");
   }, [authLoading, isAuthenticated, navigate]);
@@ -5054,7 +5134,7 @@ export default function Dashboard() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+              className={`relative flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -5062,6 +5142,11 @@ export default function Dashboard() {
             >
               {tab.icon}
               {tab.label}
+              {tab.id === "reviews" && unreadNotifCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
+                  {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+                </span>
+              )}
             </button>
           ))}
         </div>

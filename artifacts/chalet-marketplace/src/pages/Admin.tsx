@@ -3635,6 +3635,28 @@ function ReviewsTab() {
     setTimeout(() => setCopiedId(null), 2000);
   }
 
+  const dismissReport = useMutation({
+    mutationFn: async (reviewId: number) => {
+      const r = await fetch(`${API}/admin/reviews/${reviewId}/dismiss-report`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("failed");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "all-reviews"] }),
+  });
+
+  const deleteReviewDispute = useMutation({
+    mutationFn: async (reviewId: number) => {
+      const r = await fetch(`${API}/admin/reviews/${reviewId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("failed");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "all-reviews"] }),
+  });
+
   function sendWhatsApp(chaletId: number, chaletName: string) {
     const link = generatedLinks[chaletId];
     if (!link) return;
@@ -3648,6 +3670,8 @@ function ReviewsTab() {
     return { total: all.length, used: all.filter((i) => i.used).length, pending: all.filter((i) => !i.used).length };
   }
 
+  const reportedReviews = allReviews.filter((r) => r.reportedAt);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -3656,6 +3680,66 @@ function ReviewsTab() {
           <p className="text-slate-400 text-sm mt-1">أنشئ روابط تقييم للضيوف وشاهد التقييمات الواردة</p>
         </div>
       </div>
+
+      {/* ══ Dispute Center ══ */}
+      {reportedReviews.length > 0 && (
+        <div className="bg-amber-950/30 border border-amber-800/50 rounded-xl overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-amber-800/40">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="flex-1">
+              <span className="text-white font-semibold text-sm">مركز الشكاوى</span>
+              <span className="text-amber-400 text-xs mr-2">{reportedReviews.length} بلاغ معلق</span>
+            </div>
+          </div>
+          <div className="divide-y divide-amber-900/30">
+            {reportedReviews.map((rev) => (
+              <div key={rev.id} className="px-5 py-4 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-slate-300 text-sm font-semibold">{rev.chaletName ?? `شاليه #${rev.chaletId}`}</span>
+                  <div className="flex gap-0.5" dir="ltr">
+                    {[1,2,3,4,5].map((s) => (
+                      <Star key={s} className="w-3.5 h-3.5" fill={s <= rev.rating ? "#f59e0b" : "transparent"} stroke={s <= rev.rating ? "#f59e0b" : "#475569"} strokeWidth={1.5} />
+                    ))}
+                  </div>
+                  {rev.isVerified && <CheckCircle className="w-3.5 h-3.5 text-green-400" />}
+                  <span className="text-slate-500 text-xs mr-auto">
+                    أُبلغ عنه: {new Date(rev.reportedAt!).toLocaleDateString("ar-SA")}
+                  </span>
+                </div>
+                {rev.comment && <p className="text-slate-400 text-sm leading-relaxed">"{rev.comment}"</p>}
+                {rev.isHidden && <span className="text-xs bg-red-900/40 text-red-400 px-2 py-0.5 rounded-full">مخفي بالفعل</span>}
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-7 px-3 border-green-800 text-green-400 hover:bg-green-900/30"
+                    disabled={dismissReport.isPending}
+                    onClick={() => dismissReport.mutate(rev.id)}
+                  >
+                    رفض البلاغ
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-7 px-3 border-red-800 text-red-400 hover:bg-red-900/30"
+                    disabled={deleteReviewDispute.isPending}
+                    onClick={() => {
+                      if (window.confirm("هل أنت متأكد من حذف هذا التقييم نهائياً؟")) {
+                        deleteReviewDispute.mutate(rev.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" />
+                    حذف التقييم
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="text-center text-slate-400 py-16"><Loader2 className="w-8 h-8 animate-spin mx-auto" /></div>

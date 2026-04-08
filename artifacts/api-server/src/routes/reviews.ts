@@ -4,9 +4,9 @@ import {
   reviewInvitationsTable,
   reviewsTable,
   chaletsTable,
-  chaletSubmissionsTable,
+  ownerNotificationsTable,
 } from "@workspace/db/schema";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { z } from "zod/v4";
 import { requireAdmin } from "./admin";
@@ -65,7 +65,7 @@ router.get("/reviews/:token", async (req, res) => {
 });
 
 /* ── POST /reviews/:token ──────────────────────────────────────
-   Public: submit a review. Auto-published, invalidates token. */
+   Public: submit a review. Auto-publishes and notifies the chalet owner. */
 router.post("/reviews/:token", async (req, res) => {
   const { token } = req.params;
 
@@ -88,8 +88,14 @@ router.post("/reviews/:token", async (req, res) => {
   if (inv.expiresAt && inv.expiresAt < new Date())
     return res.status(410).json({ error: "token_expired" });
 
+  const [chalet] = await db
+    .select({ id: chaletsTable.id, nameAr: chaletsTable.nameAr, ownerId: chaletsTable.ownerId })
+    .from(chaletsTable)
+    .where(eq(chaletsTable.id, inv.chaletId))
+    .limit(1);
+
   await db.transaction(async (tx) => {
-    await tx.insert(reviewsTable).values({
+    const [inserted] = await tx.insert(reviewsTable).values({
       chaletId: inv.chaletId,
       invitationId: inv.id,
       rating: body.data.rating,
@@ -97,11 +103,26 @@ router.post("/reviews/:token", async (req, res) => {
       photoUrls: body.data.photoUrls ?? [],
       isVerified: true,
       isHidden: false,
-    });
+    }).returning({ id: reviewsTable.id });
+
     await tx
       .update(reviewInvitationsTable)
       .set({ used: true })
       .where(eq(reviewInvitationsTable.id, inv.id));
+
+    /* Notify the chalet owner */
+    if (chalet?.ownerId) {
+      const stars = "★".repeat(body.data.rating) + "☆".repeat(5 - body.data.rating);
+      const chaletName = chalet.nameAr ?? "شاليهك";
+      const msg = `تقييم جديد لـ${chaletName} — ${stars}${body.data.comment ? ` — "${body.data.comment.slice(0, 60)}${body.data.comment.length > 60 ? "..." : ""}"` : ""}`;
+      await tx.insert(ownerNotificationsTable).values({
+        ownerId: chalet.ownerId,
+        type: "new_review",
+        chaletId: inv.chaletId,
+        reviewId: inserted.id,
+        message: msg,
+      });
+    }
   });
 
   return res.json({ success: true });
@@ -185,6 +206,52 @@ router.patch("/admin/reviews/:id", requireAdmin, async (req, res) => {
     .returning({ id: reviewsTable.id });
 
   if (!updated) return res.status(404).json({ error: "not found" });
+  return res.json({ ok: true });
+});
+
+/* ── POST /admin/reviews/:id/dismiss-report ────────────────────
+   Admin: dismiss the owner's report without deleting the review.
+   Also sends a "report dismissed" notification to the owner. */
+router.post("/admin/reviews/:id/dismiss-report", requireAdmin, async (req, res) => {
+  const reviewId = parseInt(req.params.id, 10);
+  if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
+
+  const [review] = await db
+    .select({
+      id: reviewsTable.id,
+      chaletId: reviewsTable.chaletId,
+      reportedBy: reviewsTable.reportedBy,
+    })
+    .from(reviewsTable)
+    .where(eq(reviewsTable.id, reviewId))
+    .limit(1);
+
+  if (!review) return res.status(404).json({ error: "not found" });
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(reviewsTable)
+      .set({ reportedBy: null, reportedAt: null, reportReason: null })
+      .where(eq(reviewsTable.id, reviewId));
+
+    /* Notify the owner who submitted the report */
+    if (review.reportedBy) {
+      const [chalet] = await tx
+        .select({ nameAr: chaletsTable.nameAr })
+        .from(chaletsTable)
+        .where(eq(chaletsTable.id, review.chaletId))
+        .limit(1);
+
+      await tx.insert(ownerNotificationsTable).values({
+        ownerId: review.reportedBy,
+        type: "report_dismissed",
+        chaletId: review.chaletId,
+        reviewId: reviewId,
+        message: `تم رفض بلاغك على تقييم شاليه "${chalet?.nameAr ?? ""}" من قبل الإدارة — التقييم سيبقى منشوراً.`,
+      });
+    }
+  });
+
   return res.json({ ok: true });
 });
 

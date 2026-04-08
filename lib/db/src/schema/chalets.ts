@@ -387,6 +387,20 @@ export const reviewsTable = pgTable("reviews", {
 });
 export type Review = typeof reviewsTable.$inferSelect;
 
+/* ── Owner Notifications ────────────────────────────────────── */
+
+export const ownerNotificationsTable = pgTable("owner_notifications", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  type: text("type").notNull(),
+  chaletId: integer("chalet_id").references(() => chaletsTable.id, { onDelete: "cascade" }),
+  reviewId: integer("review_id").references(() => reviewsTable.id, { onDelete: "cascade" }),
+  message: text("message").notNull(),
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OwnerNotification = typeof ownerNotificationsTable.$inferSelect;
+
 /* ── Report Archive ─────────────────────────────────────────── */
 
 export const ownerReportArchiveTable = pgTable("owner_report_archive", {

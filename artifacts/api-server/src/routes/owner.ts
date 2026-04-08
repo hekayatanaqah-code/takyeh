@@ -13,6 +13,7 @@ import {
   subscriptionPlansTable,
   reviewInvitationsTable,
   reviewsTable,
+  ownerNotificationsTable,
 } from "@workspace/db/schema";
 import { eq, and, inArray, gte, lte, sql, desc } from "drizzle-orm";
 import { randomBytes } from "crypto";
@@ -1288,6 +1289,36 @@ router.delete("/reports/archive/:id", async (req, res) => {
   await db
     .delete(ownerReportArchiveTable)
     .where(and(eq(ownerReportArchiveTable.id, id), eq(ownerReportArchiveTable.ownerId, ownerId)));
+  return res.json({ ok: true });
+});
+
+/* ── GET /owner/notifications ──────────────────────────────────
+   Owner: list all notifications, newest first */
+router.get("/owner/notifications", async (req, res) => {
+  const ownerId = (req.user as any)?.id;
+  if (!ownerId) return res.status(401).json({ error: "unauthorized" });
+
+  const rows = await db
+    .select()
+    .from(ownerNotificationsTable)
+    .where(eq(ownerNotificationsTable.ownerId, ownerId))
+    .orderBy(desc(ownerNotificationsTable.createdAt))
+    .limit(50);
+
+  return res.json(rows);
+});
+
+/* ── PATCH /owner/notifications/read-all ───────────────────────
+   Owner: mark all notifications as read */
+router.patch("/owner/notifications/read-all", async (req, res) => {
+  const ownerId = (req.user as any)?.id;
+  if (!ownerId) return res.status(401).json({ error: "unauthorized" });
+
+  await db
+    .update(ownerNotificationsTable)
+    .set({ isRead: true })
+    .where(and(eq(ownerNotificationsTable.ownerId, ownerId), eq(ownerNotificationsTable.isRead, false)));
+
   return res.json({ ok: true });
 });
 
