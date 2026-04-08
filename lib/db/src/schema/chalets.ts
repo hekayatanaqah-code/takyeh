@@ -48,6 +48,7 @@ export const chaletsTable = pgTable("chalets", {
   mapsUrl: text("maps_url"),
   socialLink: text("social_link"),
   termsAndConditions: text("terms_and_conditions"),
+  waReviewTemplate: text("wa_review_template"),
   isVerified: boolean("is_verified").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

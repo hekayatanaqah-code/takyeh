@@ -26,12 +26,51 @@ if (!basePath) {
   );
 }
 
+const OG_HTML = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta property="og:type"        content="website" />
+  <meta property="og:title"       content="تقييم تجربة الإقامة | شاليهات القصيم" />
+  <meta property="og:description" content="شاركنا رأيك وساعدنا في تقديم أفضل تجربة لضيوفنا" />
+  <meta property="og:locale"      content="ar_SA" />
+  <meta name="twitter:card"        content="summary" />
+  <meta name="twitter:title"       content="تقييم تجربة الإقامة | شاليهات القصيم" />
+  <meta name="twitter:description" content="شاركنا رأيك وساعدنا في تقديم أفضل تجربة لضيوفنا" />
+  <title>تقييم تجربة الإقامة | شاليهات القصيم</title>
+</head>
+<body><p>تقييم تجربة الإقامة</p></body>
+</html>`;
+
+const BOT_AGENTS = ["facebookexternalhit", "facebot", "twitterbot", "whatsapp", "linkedinbot", "slackbot", "telegrambot", "discordbot"];
+
 export default defineConfig({
   base: basePath,
   plugins: [
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
+    {
+      name: "spa-fallback-and-og",
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const url = req.url ?? "";
+          if (!url.startsWith("/r/") && url !== "/r") return next();
+
+          const ua = (req.headers["user-agent"] ?? "").toLowerCase();
+          const isCrawler = BOT_AGENTS.some((b) => ua.includes(b));
+
+          if (isCrawler) {
+            res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+            res.end(OG_HTML);
+            return;
+          }
+
+          req.url = "/index.html";
+          next();
+        });
+      },
+    },
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [

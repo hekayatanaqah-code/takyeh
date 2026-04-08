@@ -217,6 +217,64 @@ router.get("/review-invitations", async (req, res) => {
   return res.json(rows);
 });
 
+/* ── Delete a review invitation ─────────────────────────────── */
+
+router.delete("/review-invitations/:id", async (req, res) => {
+  const ownerId = req.user!.id;
+  const invId = Number(req.params.id);
+  if (isNaN(invId)) return res.status(400).json({ error: "معرّف غير صالح" });
+
+  const subs = await db
+    .select({ id: chaletSubmissionsTable.id })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.ownerId, ownerId));
+  const subIds = subs.map((s) => s.id);
+  if (subIds.length === 0) return res.status(403).json({ error: "غير مصرح" });
+
+  const myChalets = await db
+    .select({ id: chaletsTable.id })
+    .from(chaletsTable)
+    .where(inArray(chaletsTable.submissionId, subIds));
+  const chaletIds = myChalets.map((c) => c.id);
+
+  const [inv] = await db
+    .select()
+    .from(reviewInvitationsTable)
+    .where(and(eq(reviewInvitationsTable.id, invId), inArray(reviewInvitationsTable.chaletId, chaletIds)))
+    .limit(1);
+
+  if (!inv) return res.status(404).json({ error: "الدعوة غير موجودة أو غير مصرح" });
+  await db.delete(reviewInvitationsTable).where(eq(reviewInvitationsTable.id, invId));
+  return res.json({ ok: true });
+});
+
+/* ── Save per-chalet WhatsApp review template ────────────────── */
+
+router.patch("/chalets/:id/review-template", async (req, res) => {
+  const ownerId = req.user!.id;
+  const chaletId = Number(req.params.id);
+  if (isNaN(chaletId)) return res.status(400).json({ error: "معرّف غير صالح" });
+
+  const body = z.object({ waReviewTemplate: z.string().max(2000) }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const subs = await db
+    .select({ id: chaletSubmissionsTable.id })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.ownerId, ownerId));
+  const subIds = subs.map((s) => s.id);
+  if (subIds.length === 0) return res.status(403).json({ error: "غير مصرح" });
+
+  const [updated] = await db
+    .update(chaletsTable)
+    .set({ waReviewTemplate: body.data.waReviewTemplate || null })
+    .where(and(eq(chaletsTable.id, chaletId), inArray(chaletsTable.submissionId, subIds)))
+    .returning({ id: chaletsTable.id });
+
+  if (!updated) return res.status(403).json({ error: "غير مصرح أو الشاليه غير موجود" });
+  return res.json({ ok: true });
+});
+
 /* ── Update chalet check-in/check-out times ────────────────── */
 
 router.patch("/chalets/:chaletId/times", async (req, res) => {

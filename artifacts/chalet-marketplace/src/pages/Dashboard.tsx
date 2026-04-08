@@ -9,6 +9,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
@@ -4393,7 +4394,7 @@ function ReportsTab() {
 }
 
 /* ── Reviews Tab ─────────────────────────────── */
-interface OwnerChalet { id: number; nameAr: string; photos: string[] }
+interface OwnerChalet { id: number; nameAr: string; photos: string[]; waReviewTemplate: string | null }
 
 const DEFAULT_REVIEW_TEMPLATE = "أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: {link}";
 
@@ -4402,6 +4403,8 @@ function ReviewsTab() {
   const [selectedChaletId, setSelectedChaletId] = useState<number | null>(null);
   const [generatedLinks, setGeneratedLinks] = useState<Record<number, string>>({});
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [templateDraft, setTemplateDraft] = useState<Record<number, string>>({});
+  const [templateSaved, setTemplateSaved] = useState<number | null>(null);
 
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
@@ -4449,6 +4452,29 @@ function ReviewsTab() {
     },
   });
 
+  const deleteInvitation = useMutation({
+    mutationFn: async (invId: number) => {
+      const r = await apiFetch(`/owner/review-invitations/${invId}`, { method: "DELETE" });
+      if (!r.ok) throw new Error("failed");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "review-invitations"] }),
+  });
+
+  const saveTemplate = useMutation({
+    mutationFn: async ({ chaletId, template }: { chaletId: number; template: string }) => {
+      const r = await apiFetch(`/owner/chalets/${chaletId}/review-template`, {
+        method: "PATCH",
+        body: JSON.stringify({ waReviewTemplate: template }),
+      });
+      if (!r.ok) throw new Error("failed");
+    },
+    onSuccess: (_, { chaletId }) => {
+      qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
+      setTemplateSaved(chaletId);
+      setTimeout(() => setTemplateSaved(null), 2500);
+    },
+  });
+
   function copyLink(chaletId: number) {
     const link = generatedLinks[chaletId];
     if (!link) return;
@@ -4457,10 +4483,14 @@ function ReviewsTab() {
     setTimeout(() => setCopiedId(null), 2500);
   }
 
-  function sendWhatsApp(chaletId: number) {
-    const link = generatedLinks[chaletId];
+  function sendWhatsApp(chalet: OwnerChalet) {
+    const link = generatedLinks[chalet.id];
     if (!link) return;
-    const template = siteSettings.wa_review_template || DEFAULT_REVIEW_TEMPLATE;
+    const template =
+      templateDraft[chalet.id] ??
+      chalet.waReviewTemplate ??
+      siteSettings.wa_review_template ??
+      DEFAULT_REVIEW_TEMPLATE;
     const text = template.replace(/\{link\}/g, link);
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
@@ -4470,7 +4500,7 @@ function ReviewsTab() {
     return { total: all.length, used: all.filter((i) => i.used).length, pending: all.filter((i) => !i.used).length };
   }
 
-  const selectedChalet = chalets.find((c) => c.id === selectedChaletId);
+  const selectedChalet = chalets.find((c) => c.id === selectedChaletId) ?? null;
   const currentLink = selectedChaletId ? generatedLinks[selectedChaletId] : null;
   const stats = selectedChaletId ? inviteStats(selectedChaletId) : null;
 
@@ -4542,6 +4572,7 @@ function ReviewsTab() {
           {/* Generate + Send section */}
           {selectedChalet && (
             <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-5">
+              {/* Title + generate button */}
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <p className="font-bold text-foreground">{selectedChalet.nameAr}</p>
@@ -4556,66 +4587,98 @@ function ReviewsTab() {
                   disabled={generateLink.isPending}
                   className="gap-2 bg-primary hover:bg-primary/90"
                 >
-                  {generateLink.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Star className="w-4 h-4" />
-                  )}
+                  {generateLink.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Star className="w-4 h-4" />}
                   إنشاء رابط تقييم جديد
                 </Button>
               </div>
 
+              {/* Generated link + send */}
               {currentLink && (
                 <div className="bg-muted/40 rounded-xl border border-border p-4 space-y-3">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">الرابط الجديد (صالح لمدة 30 يوماً)</p>
-
-                  {/* Link display */}
                   <div className="flex items-center gap-2">
                     <code className="flex-1 bg-background border border-border text-primary text-xs px-3 py-2.5 rounded-lg font-mono break-all">
                       {currentLink}
                     </code>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => copyLink(selectedChalet.id)}
-                      className="shrink-0"
-                    >
+                    <Button size="sm" variant="outline" onClick={() => copyLink(selectedChalet.id)} className="shrink-0">
                       {copiedId === selectedChalet.id ? "✓ تم النسخ" : "نسخ"}
                     </Button>
                   </div>
-
-                  {/* WhatsApp send button */}
                   <Button
                     className="w-full gap-2 bg-[#25D366] hover:bg-[#1ebe5a] text-white font-semibold"
-                    onClick={() => sendWhatsApp(selectedChalet.id)}
+                    onClick={() => sendWhatsApp(selectedChalet)}
                   >
                     <Phone className="w-4 h-4" />
                     إرسال عبر واتساب
                   </Button>
-
-                  <p className="text-xs text-muted-foreground text-center">
-                    الرسالة ستتضمن: <span className="font-medium">«أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك...»</span>
-                  </p>
                 </div>
               )}
 
-              {/* Recent invitations */}
+              {/* Custom WhatsApp message template per chalet */}
+              <div className="border border-border rounded-xl p-4 space-y-3 bg-muted/20">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-muted-foreground" />
+                  <p className="text-sm font-semibold text-foreground">رسالة واتساب مخصصة</p>
+                  <span className="text-xs text-muted-foreground mr-auto">ضع {"{link}"} حيث تريد الرابط</span>
+                </div>
+                <Textarea
+                  dir="rtl"
+                  rows={4}
+                  placeholder={selectedChalet.waReviewTemplate ?? siteSettings.wa_review_template ?? DEFAULT_REVIEW_TEMPLATE}
+                  value={templateDraft[selectedChalet.id] ?? selectedChalet.waReviewTemplate ?? ""}
+                  onChange={(e) =>
+                    setTemplateDraft((prev) => ({ ...prev, [selectedChalet.id]: e.target.value }))
+                  }
+                  className="text-sm resize-none"
+                />
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">اترك الحقل فارغاً لاستخدام القالب الافتراضي الذي يضبطه الأدمن</p>
+                  <Button
+                    size="sm"
+                    disabled={saveTemplate.isPending}
+                    onClick={() =>
+                      saveTemplate.mutate({
+                        chaletId: selectedChalet.id,
+                        template: templateDraft[selectedChalet.id] ?? selectedChalet.waReviewTemplate ?? "",
+                      })
+                    }
+                    className="gap-1.5 shrink-0"
+                  >
+                    {saveTemplate.isPending ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : templateSaved === selectedChalet.id ? (
+                      "✓ تم الحفظ"
+                    ) : (
+                      "حفظ الرسالة"
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Invitations list with delete */}
               {stats && stats.total > 0 && (
                 <div>
-                  <p className="text-sm font-semibold text-foreground mb-3">آخر الدعوات</p>
-                  <div className="space-y-2">
+                  <p className="text-sm font-semibold text-foreground mb-3">الدعوات المرسلة</p>
+                  <div className="space-y-1.5">
                     {invitations
                       .filter((i) => i.chaletId === selectedChalet.id)
-                      .slice(0, 8)
                       .map((inv) => (
-                        <div key={inv.id} className="flex items-center gap-3 text-sm py-2 border-b border-border last:border-0">
+                        <div key={inv.id} className="flex items-center gap-2 py-2 border-b border-border last:border-0">
                           <span className={`w-2 h-2 rounded-full shrink-0 ${inv.used ? "bg-green-500" : "bg-amber-400"}`} />
                           <code className="flex-1 text-xs text-muted-foreground font-mono truncate">
                             {window.location.origin}{import.meta.env.BASE_URL.replace(/\/$/, "")}/r/{inv.token}
                           </code>
                           <span className={`text-xs font-medium shrink-0 ${inv.used ? "text-green-600" : "text-amber-600"}`}>
-                            {inv.used ? "تم الاستخدام" : "معلق"}
+                            {inv.used ? "مستخدم" : "معلق"}
                           </span>
+                          <button
+                            onClick={() => deleteInvitation.mutate(inv.id)}
+                            disabled={deleteInvitation.isPending}
+                            className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
+                            title="حذف الدعوة"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       ))}
                   </div>
@@ -4624,7 +4687,7 @@ function ReviewsTab() {
             </div>
           )}
 
-          {/* Info card */}
+          {/* Tip card when nothing selected */}
           {!selectedChalet && (
             <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 text-sm text-amber-800 dark:text-amber-300 flex gap-3">
               <Star className="w-5 h-5 shrink-0 mt-0.5 text-amber-500" />
