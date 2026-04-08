@@ -4468,6 +4468,12 @@ function ReviewsTab() {
     },
   });
 
+  useEffect(() => {
+    if (chalets.length > 0 && selectedChaletId === null) {
+      setSelectedChaletId(chalets[0].id);
+    }
+  }, [chalets, selectedChaletId]);
+
   const { data: invitations = [] } = useQuery<{ id: number; chaletId: number; token: string; used: boolean; createdAt: string }[]>({
     queryKey: ["owner", "review-invitations"],
     queryFn: async () => {

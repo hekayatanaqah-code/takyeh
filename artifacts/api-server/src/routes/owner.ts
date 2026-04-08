@@ -1294,7 +1294,7 @@ router.delete("/reports/archive/:id", async (req, res) => {
 
 /* ── GET /owner/notifications ──────────────────────────────────
    Owner: list all notifications, newest first */
-router.get("/owner/notifications", async (req, res) => {
+router.get("/notifications", async (req, res) => {
   const ownerId = (req.user as any)?.id;
   if (!ownerId) return res.status(401).json({ error: "unauthorized" });
 
@@ -1310,7 +1310,7 @@ router.get("/owner/notifications", async (req, res) => {
 
 /* ── PATCH /owner/notifications/read-all ───────────────────────
    Owner: mark all notifications as read */
-router.patch("/owner/notifications/read-all", async (req, res) => {
+router.patch("/notifications/read-all", async (req, res) => {
   const ownerId = (req.user as any)?.id;
   if (!ownerId) return res.status(401).json({ error: "unauthorized" });
 
@@ -1339,7 +1339,7 @@ async function getOwnerChaletIds(ownerId: string): Promise<number[]> {
 
 /* ── GET /owner/reviews ────────────────────────────────────────
    Owner: all reviews for their chalets (including hidden) */
-router.get("/owner/reviews", async (req, res) => {
+router.get("/reviews", async (req, res) => {
   const ownerId = req.user!.id;
 
   const chaletIds = await getOwnerChaletIds(ownerId);
@@ -1372,7 +1372,7 @@ router.get("/owner/reviews", async (req, res) => {
 
 /* ── POST /owner/reviews/:id/reply ────────────────────────────
    Owner: add or update a reply on one of their chalet's reviews */
-router.post("/owner/reviews/:id/reply", async (req, res) => {
+router.post("/reviews/:id/reply", async (req, res) => {
   const ownerId = req.user!.id;
 
   const reviewId = parseInt(req.params.id, 10);
@@ -1402,7 +1402,7 @@ router.post("/owner/reviews/:id/reply", async (req, res) => {
 
 /* ── POST /owner/reviews/:id/report ───────────────────────────
    Owner: flag a review for admin manual review */
-router.post("/owner/reviews/:id/report", async (req, res) => {
+router.post("/reviews/:id/report", async (req, res) => {
   const ownerId = req.user!.id;
 
   const reviewId = parseInt(req.params.id, 10);
