@@ -4,6 +4,7 @@ import {
   reviewInvitationsTable,
   reviewsTable,
   chaletsTable,
+  chaletSubmissionsTable,
   ownerNotificationsTable,
 } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
@@ -88,11 +89,26 @@ router.post("/reviews/:token", async (req, res) => {
   if (inv.expiresAt && inv.expiresAt < new Date())
     return res.status(410).json({ error: "token_expired" });
 
-  const [chalet] = await db
-    .select({ id: chaletsTable.id, nameAr: chaletsTable.nameAr, ownerId: chaletsTable.ownerId })
+  /* Fetch chalet + owner ID via submission (ownerId lives in submissions, not chaletsTable) */
+  const [chaletRow] = await db
+    .select({
+      id: chaletsTable.id,
+      nameAr: chaletsTable.nameAr,
+      submissionId: chaletsTable.submissionId,
+    })
     .from(chaletsTable)
     .where(eq(chaletsTable.id, inv.chaletId))
     .limit(1);
+
+  let chaletOwnerId: string | null = null;
+  if (chaletRow?.submissionId) {
+    const [sub] = await db
+      .select({ ownerId: chaletSubmissionsTable.ownerId })
+      .from(chaletSubmissionsTable)
+      .where(eq(chaletSubmissionsTable.id, chaletRow.submissionId))
+      .limit(1);
+    chaletOwnerId = sub?.ownerId ?? null;
+  }
 
   await db.transaction(async (tx) => {
     const [inserted] = await tx.insert(reviewsTable).values({
@@ -111,12 +127,12 @@ router.post("/reviews/:token", async (req, res) => {
       .where(eq(reviewInvitationsTable.id, inv.id));
 
     /* Notify the chalet owner */
-    if (chalet?.ownerId) {
+    if (chaletOwnerId) {
       const stars = "★".repeat(body.data.rating) + "☆".repeat(5 - body.data.rating);
-      const chaletName = chalet.nameAr ?? "شاليهك";
+      const chaletName = chaletRow?.nameAr ?? "شاليهك";
       const msg = `تقييم جديد لـ${chaletName} — ${stars}${body.data.comment ? ` — "${body.data.comment.slice(0, 60)}${body.data.comment.length > 60 ? "..." : ""}"` : ""}`;
       await tx.insert(ownerNotificationsTable).values({
-        ownerId: chalet.ownerId,
+        ownerId: chaletOwnerId,
         type: "new_review",
         chaletId: inv.chaletId,
         reviewId: inserted.id,

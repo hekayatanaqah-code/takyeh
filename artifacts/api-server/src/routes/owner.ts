@@ -1322,20 +1322,29 @@ router.patch("/owner/notifications/read-all", async (req, res) => {
   return res.json({ ok: true });
 });
 
+/* ── helpers: resolve owner's chalet IDs via submissions ────── */
+async function getOwnerChaletIds(ownerId: string): Promise<number[]> {
+  const subs = await db
+    .select({ id: chaletSubmissionsTable.id })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.ownerId, ownerId));
+  if (subs.length === 0) return [];
+  const subIds = subs.map((s) => s.id);
+  const chalets = await db
+    .select({ id: chaletsTable.id })
+    .from(chaletsTable)
+    .where(inArray(chaletsTable.submissionId, subIds));
+  return chalets.map((c) => c.id);
+}
+
 /* ── GET /owner/reviews ────────────────────────────────────────
    Owner: all reviews for their chalets (including hidden) */
 router.get("/owner/reviews", async (req, res) => {
-  const ownerId = (req.user as any)?.id;
-  if (!ownerId) return res.status(401).json({ error: "unauthorized" });
+  const ownerId = req.user!.id;
 
-  const ownerChalets = await db
-    .select({ id: chaletsTable.id })
-    .from(chaletsTable)
-    .where(eq(chaletsTable.ownerId, ownerId));
+  const chaletIds = await getOwnerChaletIds(ownerId);
+  if (chaletIds.length === 0) return res.json([]);
 
-  if (ownerChalets.length === 0) return res.json([]);
-
-  const ids = ownerChalets.map((c) => c.id);
   const rows = await db
     .select({
       id: reviewsTable.id,
@@ -1355,7 +1364,7 @@ router.get("/owner/reviews", async (req, res) => {
     })
     .from(reviewsTable)
     .leftJoin(chaletsTable, eq(reviewsTable.chaletId, chaletsTable.id))
-    .where(inArray(reviewsTable.chaletId, ids))
+    .where(inArray(reviewsTable.chaletId, chaletIds))
     .orderBy(desc(reviewsTable.createdAt));
 
   return res.json(rows);
@@ -1364,8 +1373,7 @@ router.get("/owner/reviews", async (req, res) => {
 /* ── POST /owner/reviews/:id/reply ────────────────────────────
    Owner: add or update a reply on one of their chalet's reviews */
 router.post("/owner/reviews/:id/reply", async (req, res) => {
-  const ownerId = (req.user as any)?.id;
-  if (!ownerId) return res.status(401).json({ error: "unauthorized" });
+  const ownerId = req.user!.id;
 
   const reviewId = parseInt(req.params.id, 10);
   if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
@@ -1373,21 +1381,16 @@ router.post("/owner/reviews/:id/reply", async (req, res) => {
   const body = z.object({ reply: z.string().min(1).max(2000) }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "validation" });
 
+  const chaletIds = await getOwnerChaletIds(ownerId);
+  if (chaletIds.length === 0) return res.status(403).json({ error: "forbidden" });
+
   const [review] = await db
     .select({ id: reviewsTable.id, chaletId: reviewsTable.chaletId })
     .from(reviewsTable)
-    .where(eq(reviewsTable.id, reviewId))
+    .where(and(eq(reviewsTable.id, reviewId), inArray(reviewsTable.chaletId, chaletIds)))
     .limit(1);
 
-  if (!review) return res.status(404).json({ error: "not found" });
-
-  const [chalet] = await db
-    .select({ ownerId: chaletsTable.ownerId })
-    .from(chaletsTable)
-    .where(eq(chaletsTable.id, review.chaletId))
-    .limit(1);
-
-  if (!chalet || chalet.ownerId !== ownerId) return res.status(403).json({ error: "forbidden" });
+  if (!review) return res.status(404).json({ error: "not found or forbidden" });
 
   await db
     .update(reviewsTable)
@@ -1400,8 +1403,7 @@ router.post("/owner/reviews/:id/reply", async (req, res) => {
 /* ── POST /owner/reviews/:id/report ───────────────────────────
    Owner: flag a review for admin manual review */
 router.post("/owner/reviews/:id/report", async (req, res) => {
-  const ownerId = (req.user as any)?.id;
-  if (!ownerId) return res.status(401).json({ error: "unauthorized" });
+  const ownerId = req.user!.id;
 
   const reviewId = parseInt(req.params.id, 10);
   if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
@@ -1409,21 +1411,16 @@ router.post("/owner/reviews/:id/report", async (req, res) => {
   const body = z.object({ reason: z.string().max(500).optional() }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "validation" });
 
+  const chaletIds = await getOwnerChaletIds(ownerId);
+  if (chaletIds.length === 0) return res.status(403).json({ error: "forbidden" });
+
   const [review] = await db
     .select({ id: reviewsTable.id, chaletId: reviewsTable.chaletId })
     .from(reviewsTable)
-    .where(eq(reviewsTable.id, reviewId))
+    .where(and(eq(reviewsTable.id, reviewId), inArray(reviewsTable.chaletId, chaletIds)))
     .limit(1);
 
-  if (!review) return res.status(404).json({ error: "not found" });
-
-  const [chalet] = await db
-    .select({ ownerId: chaletsTable.ownerId })
-    .from(chaletsTable)
-    .where(eq(chaletsTable.id, review.chaletId))
-    .limit(1);
-
-  if (!chalet || chalet.ownerId !== ownerId) return res.status(403).json({ error: "forbidden" });
+  if (!review) return res.status(404).json({ error: "not found or forbidden" });
 
   await db
     .update(reviewsTable)
