@@ -180,6 +180,18 @@ export default function ChaletDetail() {
     refetchOnWindowFocus: true,
   });
 
+  interface ChaletReview { id: number; rating: number; comment: string | null; photoUrls: string[]; isVerified: boolean; createdAt: string }
+  const { data: reviews = [] } = useQuery<ChaletReview[]>({
+    queryKey: ["chalet-reviews", id],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/chalets/${id}/reviews`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!id,
+    staleTime: 60 * 1000,
+  });
+
   /* ── Loading ── */
   if (isLoading) return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", display: "flex", flexDirection: "column" }}>
@@ -584,6 +596,74 @@ export default function ChaletDetail() {
                 )}
               </div>
             )}
+
+          {/* ── Reviews ── */}
+          {reviews.length > 0 && (
+            <div style={{ ...CARD, marginTop: 0 }}>
+              <h2 style={{ ...SEC, marginBottom: 16 }}>
+                ⭐ آراء النزلاء
+                <span style={{ fontWeight: 500, fontSize: 13, color: "#6b7280", marginRight: 8 }}>
+                  ({toAr(reviews.length)} تقييم)
+                </span>
+              </h2>
+
+              {/* Average stars */}
+              {(() => {
+                const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+                const rounded = Math.round(avg * 10) / 10;
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid #f3f4f6" }}>
+                    <span style={{ fontSize: 32, fontWeight: 900, color: "#111827", lineHeight: 1 }}>{rounded.toFixed(1)}</span>
+                    <div>
+                      <div style={{ display: "flex", gap: 3, direction: "ltr" }}>
+                        {[1,2,3,4,5].map(s => (
+                          <span key={s} style={{ fontSize: 20, color: s <= Math.round(avg) ? "#f59e0b" : "#d1d5db" }}>★</span>
+                        ))}
+                      </div>
+                      <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>من 5 نجوم</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {reviews.map((rev) => (
+                  <div key={rev.id} style={{ padding: "14px 16px", background: "#f9fafb", borderRadius: 12, border: "1px solid #f3f4f6" }}>
+                    {/* Header row */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: 3, direction: "ltr" }}>
+                        {[1,2,3,4,5].map(s => (
+                          <span key={s} style={{ fontSize: 16, color: s <= rev.rating ? "#f59e0b" : "#d1d5db" }}>★</span>
+                        ))}
+                      </div>
+                      {rev.isVerified && (
+                        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#16a34a", fontWeight: 700, background: "#f0fdf4", padding: "2px 8px", borderRadius: 20, border: "1px solid #bbf7d0" }}>
+                          ✅ نزيل مؤكد
+                        </span>
+                      )}
+                      <span style={{ marginRight: "auto", fontSize: 12, color: "#9ca3af" }}>
+                        {new Date(rev.createdAt).toLocaleDateString("ar-SA")}
+                      </span>
+                    </div>
+                    {/* Comment */}
+                    {rev.comment && (
+                      <p style={{ margin: 0, fontSize: 14, color: "#374151", lineHeight: 1.8 }}>{rev.comment}</p>
+                    )}
+                    {/* Photos */}
+                    {rev.photoUrls?.length > 0 && (
+                      <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                        {rev.photoUrls.map((url: string, i: number) => (
+                          <img key={i} src={url} alt="" style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", border: "1px solid #e5e7eb", cursor: "pointer" }}
+                            onClick={() => window.open(url, "_blank")}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           </div>
 

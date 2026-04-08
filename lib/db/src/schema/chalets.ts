@@ -353,6 +353,30 @@ export const salaryLogsTable = pgTable("salary_logs", {
 });
 export type SalaryLog = typeof salaryLogsTable.$inferSelect;
 
+/* ── Review Invitations (one-time tokens) ───────────────────── */
+export const reviewInvitationsTable = pgTable("review_invitations", {
+  id: serial("id").primaryKey(),
+  token: text("token").notNull().unique(),
+  chaletId: integer("chalet_id").notNull().references(() => chaletsTable.id, { onDelete: "cascade" }),
+  used: boolean("used").notNull().default(false),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ReviewInvitation = typeof reviewInvitationsTable.$inferSelect;
+
+/* ── Reviews (submitted by guests via invitation link) ──────── */
+export const reviewsTable = pgTable("reviews", {
+  id: serial("id").primaryKey(),
+  chaletId: integer("chalet_id").notNull().references(() => chaletsTable.id, { onDelete: "cascade" }),
+  invitationId: integer("invitation_id").references(() => reviewInvitationsTable.id, { onDelete: "set null" }),
+  rating: integer("rating").notNull(),
+  comment: text("comment"),
+  photoUrls: text("photo_urls").array().notNull().default([]),
+  isVerified: boolean("is_verified").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type Review = typeof reviewsTable.$inferSelect;
+
 /* ── Report Archive ─────────────────────────────────────────── */
 
 export const ownerReportArchiveTable = pgTable("owner_report_archive", {

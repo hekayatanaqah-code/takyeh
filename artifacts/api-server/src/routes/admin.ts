@@ -21,7 +21,7 @@ import type { Request, Response, NextFunction } from "express";
 
 const router = Router();
 
-function requireAdmin(req: Request, res: Response, next: NextFunction) {
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.isAuthenticated()) {
     res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
     return;

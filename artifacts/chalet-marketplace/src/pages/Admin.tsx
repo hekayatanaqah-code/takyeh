@@ -3498,10 +3498,239 @@ const TABS = [
   { id: "categories",          label: "فئات الشاليهات",        icon: Tag },
   { id: "owners",              label: "الملاك",                 icon: Users },
   { id: "plans",               label: "خطط الاشتراك",          icon: CreditCard },
+  { id: "reviews",             label: "التقييمات",             icon: Star },
   { id: "siteSettings",        label: "إعدادات الموقع",        icon: Settings },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
+
+/* ══════════════════════════════════════════════════════════════
+   Reviews Tab — generate invitation links, view submitted reviews
+   ══════════════════════════════════════════════════════════════ */
+interface ReviewChalet { id: number; nameAr: string; photos: string[] }
+interface ReviewRow { id: number; chaletId: number; rating: number; comment: string | null; photoUrls: string[]; isVerified: boolean; createdAt: string }
+
+function ReviewsTab() {
+  const qc = useQueryClient();
+  const [generatedLinks, setGeneratedLinks] = useState<Record<number, string>>({});
+  const [expandedChalet, setExpandedChalet] = useState<number | null>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  const { data: chalets = [], isLoading } = useQuery<ReviewChalet[]>({
+    queryKey: ["admin", "chalets-list"],
+    queryFn: async () => {
+      const r = await fetch(`${API}/admin/chalets`, { credentials: "include" });
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    },
+  });
+
+  const { data: invitations = [] } = useQuery<{ chaletId: number; used: boolean; token: string }[]>({
+    queryKey: ["admin", "review-invitations"],
+    queryFn: async () => {
+      const r = await fetch(`${API}/admin/review-invitations`, { credentials: "include" });
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    },
+  });
+
+  const generateLink = useMutation({
+    mutationFn: async (chaletId: number) => {
+      const r = await fetch(`${API}/admin/chalets/${chaletId}/review-invite`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("failed");
+      return r.json() as Promise<{ token: string; chaletName: string }>;
+    },
+    onSuccess: (data, chaletId) => {
+      const origin = window.location.origin;
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const link = `${origin}${base}/rate/${data.token}`;
+      setGeneratedLinks((prev) => ({ ...prev, [chaletId]: link }));
+      qc.invalidateQueries({ queryKey: ["admin", "review-invitations"] });
+    },
+  });
+
+  function copyLink(chaletId: number) {
+    const link = generatedLinks[chaletId];
+    if (!link) return;
+    navigator.clipboard.writeText(link);
+    setCopiedId(chaletId);
+    setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  function sendWhatsApp(chaletId: number, chaletName: string) {
+    const link = generatedLinks[chaletId];
+    if (!link) return;
+    const msg = encodeURIComponent(
+      `أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: ${link}`
+    );
+    window.open(`https://wa.me/?text=${msg}`, "_blank");
+  }
+
+  function inviteStats(chaletId: number) {
+    const all = invitations.filter((i) => i.chaletId === chaletId);
+    return { total: all.length, used: all.filter((i) => i.used).length, pending: all.filter((i) => !i.used).length };
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-white">إدارة التقييمات</h2>
+          <p className="text-slate-400 text-sm mt-1">أنشئ روابط تقييم للضيوف وشاهد التقييمات الواردة</p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="text-center text-slate-400 py-16"><Loader2 className="w-8 h-8 animate-spin mx-auto" /></div>
+      ) : chalets.length === 0 ? (
+        <div className="text-center text-slate-400 py-16">لا توجد شاليهات مضافة بعد</div>
+      ) : (
+        <div className="space-y-3">
+          {chalets.map((c) => {
+            const stats = inviteStats(c.id);
+            const link = generatedLinks[c.id];
+            const isExpanded = expandedChalet === c.id;
+
+            return (
+              <div key={c.id} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+                {/* Chalet row */}
+                <div className="flex items-center gap-4 p-4">
+                  {c.photos?.[0] ? (
+                    <img src={c.photos[0]} alt={c.nameAr} className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg bg-slate-700 flex items-center justify-center shrink-0">
+                      <Star className="w-5 h-5 text-slate-500" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-semibold truncate">{c.nameAr}</p>
+                    <p className="text-slate-400 text-xs mt-0.5">
+                      {stats.total === 0 ? "لا توجد دعوات" : `${stats.total} دعوة — ${stats.used} مستخدمة · ${stats.pending} معلقة`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-slate-600 text-slate-300 hover:bg-slate-700 text-xs gap-1.5"
+                      onClick={() => setExpandedChalet(isExpanded ? null : c.id)}
+                    >
+                      <Star className="w-3.5 h-3.5" />
+                      التقييمات
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 text-white text-xs gap-1.5"
+                      disabled={generateLink.isPending && generateLink.variables === c.id}
+                      onClick={() => generateLink.mutate(c.id)}
+                    >
+                      {generateLink.isPending && generateLink.variables === c.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
+                      )}
+                      إنشاء رابط تقييم
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Generated Link Area */}
+                {link && (
+                  <div className="border-t border-slate-700 bg-slate-900/60 px-4 py-3 space-y-2">
+                    <p className="text-slate-400 text-xs font-medium mb-1">رابط التقييم الجديد:</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 bg-slate-800 text-green-400 text-xs px-3 py-2 rounded-lg border border-slate-600 truncate font-mono">
+                        {link}
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-slate-600 text-slate-300 hover:bg-slate-700 text-xs shrink-0"
+                        onClick={() => copyLink(c.id)}
+                      >
+                        {copiedId === c.id ? "✓ تم النسخ" : "نسخ"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="bg-[#25D366] hover:bg-[#1ebe5a] text-white text-xs shrink-0 gap-1.5"
+                        onClick={() => sendWhatsApp(c.id, c.nameAr)}
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        واتساب
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Reviews list (expandable) */}
+                {isExpanded && <ChaletReviewsList chaletId={c.id} />}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChaletReviewsList({ chaletId }: { chaletId: number }) {
+  const { data: reviews = [], isLoading } = useQuery<ReviewRow[]>({
+    queryKey: ["reviews", chaletId],
+    queryFn: async () => {
+      const r = await fetch(`${API}/chalets/${chaletId}/reviews`, { credentials: "include" });
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    },
+  });
+
+  if (isLoading) return (
+    <div className="border-t border-slate-700 px-4 py-4 text-center">
+      <Loader2 className="w-5 h-5 animate-spin mx-auto text-slate-400" />
+    </div>
+  );
+
+  return (
+    <div className="border-t border-slate-700 px-4 py-4">
+      {reviews.length === 0 ? (
+        <p className="text-slate-400 text-sm text-center py-2">لا توجد تقييمات بعد لهذا الشاليه</p>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-slate-300 text-sm font-semibold mb-2">{reviews.length} تقييم</p>
+          {reviews.map((rev) => (
+            <div key={rev.id} className="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="flex gap-0.5" dir="ltr">
+                  {[1,2,3,4,5].map((s) => (
+                    <Star key={s} className="w-4 h-4" fill={s <= rev.rating ? "#f59e0b" : "transparent"} stroke={s <= rev.rating ? "#f59e0b" : "#475569"} strokeWidth={1.5} />
+                  ))}
+                </div>
+                {rev.isVerified && (
+                  <span className="flex items-center gap-1 text-xs text-green-400 font-medium">
+                    <CheckCircle className="w-3.5 h-3.5" /> نزيل مؤكد
+                  </span>
+                )}
+                <span className="text-slate-500 text-xs mr-auto">
+                  {new Date(rev.createdAt).toLocaleDateString("ar-SA")}
+                </span>
+              </div>
+              {rev.comment && <p className="text-slate-300 text-sm leading-relaxed">{rev.comment}</p>}
+              {rev.photoUrls?.length > 0 && (
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {rev.photoUrls.map((url, i) => (
+                    <img key={i} src={url} alt="" className="w-14 h-14 rounded object-cover border border-slate-600" />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Admin() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -3640,6 +3869,7 @@ export default function Admin() {
         {activeTab === "categories"          && <CategoriesTab />}
         {activeTab === "owners"              && <OwnersTab />}
         {activeTab === "plans"               && <PlansTab />}
+        {activeTab === "reviews"             && <ReviewsTab />}
         {activeTab === "siteSettings"        && <SettingsTab />}
       </main>
     </div>

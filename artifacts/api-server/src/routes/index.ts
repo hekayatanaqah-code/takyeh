@@ -9,6 +9,7 @@ import catalogRouter from "./catalog";
 import servicesRouter from "./services";
 import ownerRouter from "./owner";
 import providersRouter from "./providers";
+import reviewsRouter from "./reviews";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(catalogRouter);
 router.use("/services", servicesRouter);
 router.use("/owner", ownerRouter);
 router.use("/providers", providersRouter);
+router.use(reviewsRouter);
 
 export default router;
