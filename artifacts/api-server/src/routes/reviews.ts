@@ -26,7 +26,7 @@ router.post("/admin/chalets/:id/review-invite", requireAdmin, async (req, res) =
 
   if (!chalet) return res.status(404).json({ error: "not found" });
 
-  const token = randomBytes(24).toString("hex");
+  const token = randomBytes(5).toString("hex");
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
   const [inv] = await db
