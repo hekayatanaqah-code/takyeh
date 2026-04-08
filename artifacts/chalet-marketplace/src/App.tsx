@@ -70,7 +70,7 @@ function Router() {
       <Route path="/subscription">
         {() => <ProtectedRoute component={SubscriptionPage} returnTo="/subscription" />}
       </Route>
-      <Route path="/rate/:token" component={RatePage} />
+      <Route path="/r/:token" component={RatePage} />
       <Route path="/about" component={About} />
       <Route path="/faq" component={FAQ} />
       <Route path="/terms" component={Terms} />

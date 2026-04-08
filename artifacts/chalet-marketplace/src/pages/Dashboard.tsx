@@ -4395,11 +4395,23 @@ function ReportsTab() {
 /* ── Reviews Tab ─────────────────────────────── */
 interface OwnerChalet { id: number; nameAr: string; photos: string[] }
 
+const DEFAULT_REVIEW_TEMPLATE = "أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: {link}";
+
 function ReviewsTab() {
   const qc = useQueryClient();
   const [selectedChaletId, setSelectedChaletId] = useState<number | null>(null);
   const [generatedLinks, setGeneratedLinks] = useState<Record<number, string>>({});
   const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  const { data: siteSettings = {} } = useQuery<Record<string, string>>({
+    queryKey: ["siteSettings"],
+    queryFn: async () => {
+      const r = await fetch("/api/page-content");
+      if (!r.ok) return {};
+      return r.json();
+    },
+    staleTime: 60_000,
+  });
 
   const { data: chalets = [], isLoading } = useQuery<OwnerChalet[]>({
     queryKey: ["owner", "chalets"],
@@ -4431,7 +4443,7 @@ function ReviewsTab() {
     onSuccess: (data, chaletId) => {
       const origin = window.location.origin;
       const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-      const link = `${origin}${base}/rate/${data.token}`;
+      const link = `${origin}${base}/r/${data.token}`;
       setGeneratedLinks((prev) => ({ ...prev, [chaletId]: link }));
       qc.invalidateQueries({ queryKey: ["owner", "review-invitations"] });
     },
@@ -4448,10 +4460,9 @@ function ReviewsTab() {
   function sendWhatsApp(chaletId: number) {
     const link = generatedLinks[chaletId];
     if (!link) return;
-    const msg = encodeURIComponent(
-      `أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: ${link}`
-    );
-    window.open(`https://wa.me/?text=${msg}`, "_blank");
+    const template = siteSettings.wa_review_template || DEFAULT_REVIEW_TEMPLATE;
+    const text = template.replace(/\{link\}/g, link);
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 
   function inviteStats(chaletId: number) {
@@ -4600,7 +4611,7 @@ function ReviewsTab() {
                         <div key={inv.id} className="flex items-center gap-3 text-sm py-2 border-b border-border last:border-0">
                           <span className={`w-2 h-2 rounded-full shrink-0 ${inv.used ? "bg-green-500" : "bg-amber-400"}`} />
                           <code className="flex-1 text-xs text-muted-foreground font-mono truncate">
-                            {window.location.origin}{import.meta.env.BASE_URL.replace(/\/$/, "")}/rate/{inv.token.slice(0, 12)}...
+                            {window.location.origin}{import.meta.env.BASE_URL.replace(/\/$/, "")}/r/{inv.token}
                           </code>
                           <span className={`text-xs font-medium shrink-0 ${inv.used ? "text-green-600" : "text-amber-600"}`}>
                             {inv.used ? "تم الاستخدام" : "معلق"}

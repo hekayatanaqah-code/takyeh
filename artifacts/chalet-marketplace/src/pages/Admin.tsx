@@ -2251,7 +2251,46 @@ function SettingsTab() {
         </div>
       </div>
 
-      {/* ══ 3.6. Service Suggestion Button ══ */}
+      {/* ══ 3.6. WhatsApp Review Message Template ══ */}
+      <div className="bg-slate-800 rounded-xl border border-blue-500/30 overflow-hidden">
+        <div className="bg-gradient-to-l from-blue-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+          <span className="text-[#25D366] text-xl leading-none">⭐</span>
+          <h3 className="text-slate-100 font-bold text-lg">قالب رسالة تقييم الواتساب</h3>
+          <span className="text-xs text-slate-500 mr-auto">تُرسَل عند إنشاء رابط التقييم للضيف</span>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص القالب</label>
+            <Textarea
+              value={form.wa_review_template ?? ""}
+              onChange={(e) => setForm((f) => ({ ...f, wa_review_template: e.target.value }))}
+              placeholder="أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: {link}"
+              rows={5}
+              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-y font-mono text-sm leading-relaxed"
+              dir="rtl"
+            />
+          </div>
+          <div className="bg-slate-900/60 border border-slate-600 rounded-lg p-4 space-y-2">
+            <p className="text-xs font-bold text-slate-300 mb-2">المتغيرات المتاحة:</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, wa_review_template: (f.wa_review_template ?? "") + "{link}" }))}
+                className="flex items-center gap-1.5 bg-slate-800 hover:bg-blue-900/40 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 text-xs px-2.5 py-1.5 rounded-lg transition-all font-mono"
+              >
+                <span className="text-blue-400 font-bold">{"{link}"}</span>
+                <span className="text-slate-500 text-[10px]">← رابط التقييم</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500 pt-1">
+              ضع <code className="text-blue-400 bg-slate-800 px-1 rounded">{"{link}"}</code> في أي مكان بالرسالة وسيُستبدل تلقائياً برابط التقييم. اترك الحقل فارغاً لاستخدام الرسالة الافتراضية.
+            </p>
+          </div>
+          <SaveBtn label="حفظ قالب رسالة التقييم" />
+        </div>
+      </div>
+
+      {/* ══ 3.7. Service Suggestion Button ══ */}
       <div className="bg-slate-800 rounded-xl border border-amber-500/30 overflow-hidden">
         <div className="bg-gradient-to-l from-amber-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
           <span className="text-xl leading-none">🛎️</span>
@@ -3510,11 +3549,23 @@ type TabId = typeof TABS[number]["id"];
 interface ReviewChalet { id: number; nameAr: string; photos: string[] }
 interface ReviewRow { id: number; chaletId: number; rating: number; comment: string | null; photoUrls: string[]; isVerified: boolean; createdAt: string }
 
+const DEFAULT_REVIEW_TEMPLATE = "أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: {link}";
+
 function ReviewsTab() {
   const qc = useQueryClient();
   const [generatedLinks, setGeneratedLinks] = useState<Record<number, string>>({});
   const [expandedChalet, setExpandedChalet] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  const { data: siteSettings = {} } = useQuery<Record<string, string>>({
+    queryKey: ["siteSettings"],
+    queryFn: async () => {
+      const r = await fetch(`${API}/api/page-content`);
+      if (!r.ok) return {};
+      return r.json();
+    },
+    staleTime: 60_000,
+  });
 
   const { data: chalets = [], isLoading } = useQuery<ReviewChalet[]>({
     queryKey: ["admin", "chalets-list"],
@@ -3546,7 +3597,7 @@ function ReviewsTab() {
     onSuccess: (data, chaletId) => {
       const origin = window.location.origin;
       const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-      const link = `${origin}${base}/rate/${data.token}`;
+      const link = `${origin}${base}/r/${data.token}`;
       setGeneratedLinks((prev) => ({ ...prev, [chaletId]: link }));
       qc.invalidateQueries({ queryKey: ["admin", "review-invitations"] });
     },
@@ -3563,10 +3614,9 @@ function ReviewsTab() {
   function sendWhatsApp(chaletId: number, chaletName: string) {
     const link = generatedLinks[chaletId];
     if (!link) return;
-    const msg = encodeURIComponent(
-      `أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: ${link}`
-    );
-    window.open(`https://wa.me/?text=${msg}`, "_blank");
+    const template = siteSettings.wa_review_template || DEFAULT_REVIEW_TEMPLATE;
+    const text = template.replace(/\{link\}/g, link);
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 
   function inviteStats(chaletId: number) {
