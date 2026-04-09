@@ -1244,16 +1244,17 @@ function DeleteConfirmDialog({
 
 /* ── Reschedule Dialog ───────────────────────── */
 function RescheduleDialog({
-  open, booking, onClose, onRescheduled,
+  open, booking, existingBookings, onClose, onRescheduled,
 }: {
   open: boolean;
   booking: OwnerBooking | null;
+  existingBookings: OwnerBooking[];
   onClose: () => void;
   onRescheduled: () => void;
 }) {
   const [newDate, setNewDate] = useState("");
   const [newDuration, setNewDuration] = useState(1);
-  const [newPeriod, setNewPeriod] = useState<string>("");
+  const [newPeriod, setNewPeriod] = useState<string>("none");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -1268,11 +1269,58 @@ function RescheduleDialog({
     }
   }, [open, booking]);
 
+  /* ── Conflict detection (mirrors AddBookingDialog, excludes self) ── */
+  const conflictSet = useMemo(() => {
+    const blocked = new Set<string>();
+    if (!newDate || !booking) return blocked;
+    const [sy, sm, sd] = newDate.split("-").map(Number);
+    const dur = Math.max(1, newDuration);
+    const rangeDates = new Set<string>();
+    for (let i = 0; i < dur; i++) {
+      const d = new Date(sy, sm - 1, sd + i);
+      rangeDates.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+    }
+    for (const b of existingBookings) {
+      if (!b.bookingDate || b.id === booking.id) continue; // exclude self
+      if (booking.submissionId && b.submissionId !== booking.submissionId) continue;
+      const bDur = Math.max(1, b.durationDays ?? 1);
+      const [by, bm, bd2] = b.bookingDate.split("-").map(Number);
+      for (let i = 0; i < bDur; i++) {
+        const d = new Date(by, bm - 1, bd2 + i);
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        if (rangeDates.has(ds)) blocked.add(b.period ?? "full_day");
+      }
+    }
+    return blocked;
+  }, [newDate, newDuration, existingBookings, booking]);
+
+  const morningDisabled  = conflictSet.has("morning")  || conflictSet.has("full_day");
+  const eveningDisabled  = conflictSet.has("evening")  || conflictSet.has("full_day");
+  const fullDayDisabled  = conflictSet.has("morning")  || conflictSet.has("evening") || conflictSet.has("full_day");
+  const isFullyBlocked   = conflictSet.has("full_day") || (conflictSet.has("morning") && conflictSet.has("evening"));
+
+  // Auto-clear period if the chosen slot becomes unavailable
+  useEffect(() => {
+    if ((newPeriod === "morning" && morningDisabled) ||
+        (newPeriod === "evening" && eveningDisabled) ||
+        (newPeriod === "full_day" && fullDayDisabled)) {
+      setNewPeriod("none");
+    }
+  }, [morningDisabled, eveningDisabled, fullDayDisabled, newPeriod]);
+
+  // Derive whether the current selection conflicts
+  const selectedPeriodBlocked =
+    (newPeriod === "morning" && morningDisabled) ||
+    (newPeriod === "evening" && eveningDisabled) ||
+    (newPeriod === "full_day" && fullDayDisabled);
+  const hasConflict = isFullyBlocked || selectedPeriodBlocked;
+
   if (!booking) return null;
 
   const handleSave = async () => {
     if (!newDate) { setError("يرجى تحديد تاريخ"); return; }
     if (!reason.trim()) { setError("يرجى كتابة سبب إعادة الجدولة"); return; }
+    if (hasConflict) { setError(isFullyBlocked ? "هذا اليوم محجوز بالكامل" : "هذه الفترة محجوزة — يرجى اختيار فترة أخرى"); return; }
     setSaving(true); setError("");
     try {
       const r = await apiFetch(`/owner/bookings/${booking.id}`, {
@@ -1284,7 +1332,11 @@ function RescheduleDialog({
           rescheduleReason: reason.trim(),
         }),
       });
-      if (!r.ok) { setError("حدث خطأ، يرجى المحاولة"); return; }
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        setError(data?.error ?? "حدث خطأ، يرجى المحاولة");
+        return;
+      }
       onRescheduled();
       onClose();
     } finally {
@@ -1294,34 +1346,79 @@ function RescheduleDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent dir="rtl" className="max-w-sm">
+      <DialogContent dir="rtl" className="max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>إعادة جدولة الحجز</DialogTitle>
           <DialogDescription>تعديل موعد حجز {booking.clientName}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 mt-2">
+          {/* Date */}
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">تاريخ الحجز الجديد</label>
             <div className="rounded-md border bg-background px-3 py-2 flex items-center">
               <DualCalendarPicker value={newDate} onChange={setNewDate} placeholder="اختر التاريخ" />
             </div>
           </div>
+
+          {/* Duration */}
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">عدد الأيام</label>
             <Input type="number" min={1} value={newDuration} onChange={(e) => setNewDuration(Math.max(1, Number(e.target.value)))} />
           </div>
-          <div className="space-y-1.5">
+
+          {/* Period — smart radio buttons with conflict badges */}
+          <div className="space-y-2">
             <label className="text-sm font-semibold">الفترة</label>
-            <Select value={newPeriod} onValueChange={setNewPeriod}>
-              <SelectTrigger><SelectValue placeholder="اختر الفترة" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">— بدون تحديد</SelectItem>
-                <SelectItem value="morning">🌅 صباحي</SelectItem>
-                <SelectItem value="evening">🌙 مسائي</SelectItem>
-                <SelectItem value="full_day">☀️ يوم كامل</SelectItem>
-              </SelectContent>
-            </Select>
+
+            {/* Fully-blocked day warning */}
+            {isFullyBlocked && (
+              <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
+                <span className="text-base">⛔</span>
+                <span className="text-xs font-semibold text-red-700 dark:text-red-300">هذا اليوم محجوز بالكامل — لا تتوفر فترات متاحة</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { value: "none",     label: "—",         sub: "بدون تحديد",     disabled: false,           icon: ""   },
+                { value: "morning",  label: "صباحي",     sub: "الفترة الصباحية", disabled: morningDisabled,  icon: "🌅" },
+                { value: "evening",  label: "مسائي",     sub: "الفترة المسائية", disabled: eveningDisabled,  icon: "🌙" },
+                { value: "full_day", label: "يوم كامل",  sub: "يوم كامل",       disabled: fullDayDisabled,  icon: "☀️" },
+              ] as const).map(({ value, label, sub, disabled, icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => !disabled && setNewPeriod(value)}
+                  className={[
+                    "relative flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-start transition-all",
+                    "focus:outline-none focus:ring-2 focus:ring-primary/40",
+                    disabled
+                      ? "opacity-50 cursor-not-allowed bg-muted/40 border-border"
+                      : newPeriod === value
+                        ? "border-primary bg-primary/10 shadow-sm"
+                        : "border-border hover:border-primary/50 hover:bg-muted/30",
+                  ].join(" ")}
+                >
+                  <span className="text-sm font-semibold flex items-center gap-1">
+                    {icon && <span>{icon}</span>}
+                    {label}
+                    {disabled && (
+                      <span className="text-[10px] font-bold text-red-500 dark:text-red-400 mr-1">(محجوز)</span>
+                    )}
+                  </span>
+                  {value !== "none" && (
+                    <span className="text-[10px] text-muted-foreground leading-none">{sub}</span>
+                  )}
+                  {newPeriod === value && !disabled && (
+                    <span className="absolute top-2 left-2 w-1.5 h-1.5 rounded-full bg-primary" />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Reason */}
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">سبب إعادة الجدولة <span className="text-destructive">*</span></label>
             <Textarea
@@ -1332,11 +1429,21 @@ function RescheduleDialog({
               className="resize-none text-sm"
             />
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
+              <span className="text-base mt-0.5">⛔</span>
+              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            </div>
+          )}
         </div>
         <DialogFooter className="flex gap-2">
           <Button variant="outline" size="sm" onClick={onClose}>إلغاء</Button>
-          <Button size="sm" onClick={handleSave} disabled={saving || !reason.trim()}>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={saving || !reason.trim() || hasConflict || isFullyBlocked}
+          >
             {saving ? "جاري الحفظ..." : "حفظ التعديل"}
           </Button>
         </DialogFooter>
@@ -2483,6 +2590,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       <RescheduleDialog
         open={!!rescheduleBooking}
         booking={rescheduleBooking}
+        existingBookings={bookings}
         onClose={() => setRescheduleBooking(null)}
         onRescheduled={() => {
           qc.invalidateQueries({ queryKey: ["owner", "bookings"] });

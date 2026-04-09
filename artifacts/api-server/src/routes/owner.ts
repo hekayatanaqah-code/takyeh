@@ -16,7 +16,7 @@ import {
   ownerNotificationsTable,
   ownerRescheduleLogsTable,
 } from "@workspace/db/schema";
-import { eq, and, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
@@ -130,6 +130,55 @@ router.patch("/bookings/:id", async (req, res) => {
       .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)));
     oldBooking = existing ?? null;
   }
+
+  // ── Conflict check for reschedule ──────────────────────────────────
+  if (isReschedule && !restore && oldBooking) {
+    const newDate2   = bookingDate  ?? oldBooking.bookingDate;
+    const newDur2    = durationDays ?? oldBooking.durationDays;
+    const newPeriod2 = period !== undefined ? period : oldBooking.period;
+
+    // Build the set of dates the rescheduled booking will occupy
+    const [ny, nm, nd] = newDate2.split("-").map(Number);
+    const newDates = new Set<string>();
+    for (let i = 0; i < newDur2; i++) {
+      const d = new Date(ny, nm - 1, nd + i);
+      newDates.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+    }
+
+    // Load all other active bookings for the same submission (or owner if no submission)
+    const filters = [
+      eq(ownerBookingsTable.ownerId, ownerId),
+      ne(ownerBookingsTable.id, id),
+      isNull(ownerBookingsTable.cancelledAt),
+      ...(oldBooking.submissionId !== null
+        ? [eq(ownerBookingsTable.submissionId, oldBooking.submissionId)]
+        : []),
+    ];
+    const others = await db.select().from(ownerBookingsTable).where(and(...filters as [any, ...any[]]));
+
+    for (const ob of others) {
+      if (!ob.bookingDate) continue;
+      const [oy, om, od] = ob.bookingDate.split("-").map(Number);
+      const oDur = Math.max(1, ob.durationDays ?? 1);
+      for (let i = 0; i < oDur; i++) {
+        const d = new Date(oy, om - 1, od + i);
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        if (newDates.has(ds)) {
+          const obP = ob.period ?? "full_day";
+          const np  = newPeriod2 ?? "full_day";
+          // Conflict: full_day vs anything, or same specific period
+          if (obP === "full_day" || np === "full_day" || obP === np) {
+            const isFullDay = obP === "full_day" || np === "full_day";
+            const msg = isFullDay
+              ? "هذا اليوم محجوز بالكامل"
+              : "هذه الفترة محجوزة";
+            return res.status(409).json({ error: msg });
+          }
+        }
+      }
+    }
+  }
+  // ───────────────────────────────────────────────────────────────────
 
   const [row] = await db
     .update(ownerBookingsTable)
