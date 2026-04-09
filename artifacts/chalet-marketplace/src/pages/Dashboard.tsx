@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef, useCallback, type ReactElement } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
@@ -25,6 +26,7 @@ import {
   TrendingUp, Sunrise, Moon, Sun, Lock, Zap, DollarSign, Users,
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
+  Search, Activity, Banknote,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -1503,6 +1505,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [rescheduleBooking, setRescheduleBooking] = useState<OwnerBooking | null>(null);
   const [showArchive, setShowArchive] = useState(false);
   const [archiveTab, setArchiveTab] = useState<"cancelled" | "rescheduled">("cancelled");
+  const [searchQuery, setSearchQuery] = useState("");
+  const { toast } = useToast();
 
   const { data: ownerChalets = [], isLoading: chaletsLoading } = useQuery<any[]>({
     queryKey: ["owner", "chalets"],
@@ -1537,6 +1541,23 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
   const [insuranceTarget, setInsuranceTarget] = useState<OwnerBooking | null>(null);
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
+
+  /* ── Booking stats (always-enabled for summary cards) ── */
+  const { data: bookingStats } = useQuery<{
+    activeCurrentMonth: number;
+    revenueCurrentMonth: number;
+    totalActive: number;
+    totalCancelled: number;
+    totalRescheduled: number;
+  } | null>({
+    queryKey: ["owner", "bookings", "stats"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/bookings/stats");
+      if (!r.ok) return null;
+      return r.json();
+    },
+    refetchInterval: 60_000,
+  });
 
   const activeChalet = ownerChalets.find((c: any) => c.id === activeChaletId) as any | undefined;
   const [morningCheckIn, setMorningCheckIn] = useState<string>("");
@@ -1611,6 +1632,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
       qc.invalidateQueries({ queryKey: ["owner", "bookings", "cancelled"] });
+      qc.invalidateQueries({ queryKey: ["owner", "bookings", "stats"] });
+      toast({ title: "تم إلغاء الحجز", description: "تم نقل الحجز إلى الأرشيف بنجاح." });
     },
   });
 
@@ -1621,6 +1644,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
       qc.invalidateQueries({ queryKey: ["owner", "bookings", "cancelled"] });
+      qc.invalidateQueries({ queryKey: ["owner", "bookings", "stats"] });
+      toast({ title: "تمت استعادة الحجز", description: "تم إعادة الحجز إلى القائمة النشطة." });
     },
   });
 
@@ -1668,11 +1693,19 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const monthLabelGreg = _calFirstDay.toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" });
   const monthLabel = `${monthLabelHijri} · ${monthLabelGreg}`;
 
-  const filteredBookings = useMemo(() => bookings.filter((b) => {
-    if (filterFrom && b.bookingDate < filterFrom) return false;
-    if (filterTo && b.bookingDate > filterTo) return false;
-    return true;
-  }), [bookings, filterFrom, filterTo]);
+  const filteredBookings = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return bookings.filter((b) => {
+      if (filterFrom && b.bookingDate < filterFrom) return false;
+      if (filterTo && b.bookingDate > filterTo) return false;
+      if (q) {
+        const nameMatch = b.clientName?.toLowerCase().includes(q);
+        const phoneMatch = b.clientPhone?.toLowerCase().includes(q);
+        if (!nameMatch && !phoneMatch) return false;
+      }
+      return true;
+    });
+  }, [bookings, filterFrom, filterTo, searchQuery]);
 
   const prevMonth = () => {
     if (calMonth === 1) { setCalYear(y => y - 1); setCalMonth(12); }
@@ -1693,6 +1726,57 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           <Plus className="w-4 h-4 me-2" />
           إضافة حجز يدوي
         </Button>
+      </div>
+
+      {/* ── Stats Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Card 1: Active bookings this month */}
+        <div className="bg-card border border-border rounded-2xl px-4 py-3.5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <Activity className="w-5 h-5 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-muted-foreground leading-none mb-1">الحجوزات النشطة — الشهر الحالي</p>
+            <p className="text-2xl font-extrabold text-foreground leading-none">
+              {bookingStats != null ? toAr(bookingStats.activeCurrentMonth) : "—"}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              إجمالي {bookingStats != null ? toAr(bookingStats.totalActive) : "—"} حجز نشط
+            </p>
+          </div>
+        </div>
+
+        {/* Card 2: Estimated revenue this month */}
+        <div className="bg-card border border-border rounded-2xl px-4 py-3.5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
+            <Banknote className="w-5 h-5 text-green-600 dark:text-green-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-muted-foreground leading-none mb-1">الإيرادات المتوقعة — الشهر الحالي</p>
+            <p className="text-xl font-extrabold text-green-600 dark:text-green-400 leading-none">
+              {bookingStats != null
+                ? `${bookingStats.revenueCurrentMonth.toLocaleString("ar-SA", { maximumFractionDigits: 0 })} ر.س`
+                : "—"}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">بناءً على إجمالي قيم الحجوزات</p>
+          </div>
+        </div>
+
+        {/* Card 3: Cancelled / Rescheduled ratio */}
+        <div className="bg-card border border-border rounded-2xl px-4 py-3.5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shrink-0">
+            <XCircle className="w-5 h-5 text-orange-500 dark:text-orange-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold text-muted-foreground leading-none mb-1">الملغاة / المعاد جدولتها</p>
+            <p className="text-2xl font-extrabold text-foreground leading-none">
+              {bookingStats != null
+                ? `${toAr(bookingStats.totalCancelled)} / ${toAr(bookingStats.totalRescheduled)}`
+                : "—"}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">ملغاة / إعادة جدولة</p>
+          </div>
+        </div>
       </div>
 
       <AddBookingDialog
@@ -2024,8 +2108,32 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
       {/* Bookings List */}
       <div>
+        {/* Search bar */}
+        <div className="relative mb-3">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="بحث عن عميل بالاسم أو رقم الجوال..."
+            className="pr-9 rounded-xl text-sm"
+            dir="rtl"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
+            >
+              ✕
+            </button>
+          )}
+        </div>
         <div className="flex flex-wrap items-end gap-3 mb-4">
-          <h3 className="font-bold text-foreground flex-1">قائمة الحجوزات</h3>
+          <h3 className="font-bold text-foreground flex-1">قائمة الحجوزات
+            {searchQuery && filteredBookings.length > 0 && (
+              <span className="text-xs font-normal text-muted-foreground mr-2">({toAr(filteredBookings.length)} نتيجة)</span>
+            )}
+          </h3>
           {/* Date range filter */}
           <div className="flex items-end gap-2 flex-wrap">
             <div className="min-w-[130px]">
@@ -2452,9 +2560,19 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
             {/* Cancelled Tab */}
             {archiveTab === "cancelled" && (
               <div className="px-5 pb-5 pt-3 space-y-3">
-                {cancelledBookings.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">لا توجد حجوزات ملغاة</p>
-                ) : cancelledBookings.map((b) => {
+                {(() => {
+                  const q = searchQuery.trim().toLowerCase();
+                  const filtered = q
+                    ? cancelledBookings.filter((b) =>
+                        b.clientName?.toLowerCase().includes(q) || b.clientPhone?.toLowerCase().includes(q)
+                      )
+                    : cancelledBookings;
+                  if (filtered.length === 0) return (
+                    <p className="text-sm text-muted-foreground py-4 text-center">
+                      {q ? "لا توجد نتائج مطابقة" : "لا توجد حجوزات ملغاة"}
+                    </p>
+                  );
+                  return filtered.map((b) => {
                   const dur = b.durationDays ?? 1;
                   const endD = new Date(new Date(b.bookingDate + "T00:00:00").getTime() + (dur - 1) * 86400000);
                   const endStr = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, "0")}-${String(endD.getDate()).padStart(2, "0")}`;
@@ -2514,16 +2632,27 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       </div>
                     </div>
                   );
-                })}
+                  });
+                })()}
               </div>
             )}
 
             {/* Rescheduled Tab */}
             {archiveTab === "rescheduled" && (
               <div className="px-5 pb-5 pt-3 space-y-3">
-                {rescheduleLog.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">لا توجد سجلات إعادة جدولة</p>
-                ) : rescheduleLog.map((log) => {
+                {(() => {
+                  const q = searchQuery.trim().toLowerCase();
+                  const filteredLog = q
+                    ? rescheduleLog.filter((log) =>
+                        log.clientName?.toLowerCase().includes(q) || log.clientPhone?.toLowerCase().includes(q)
+                      )
+                    : rescheduleLog;
+                  if (filteredLog.length === 0) return (
+                    <p className="text-sm text-muted-foreground py-4 text-center">
+                      {q ? "لا توجد نتائج مطابقة" : "لا توجد سجلات إعادة جدولة"}
+                    </p>
+                  );
+                  return filteredLog.map((log) => {
                   const oldHijri = formatDualDate(log.oldDate).hijri.replace(/\s*هـ\s*$/, "");
                   const newHijri = formatDualDate(log.newDate).hijri.replace(/\s*هـ\s*$/, "");
                   const oldGreg  = formatDualDate(log.oldDate).gregorian;
@@ -2588,7 +2717,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       )}
                     </div>
                   );
-                })}
+                  });
+                })()}
               </div>
             )}
           </div>
@@ -2628,6 +2758,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         onRescheduled={() => {
           qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
           qc.invalidateQueries({ queryKey: ["owner", "bookings", "reschedule-log"] });
+          qc.invalidateQueries({ queryKey: ["owner", "bookings", "stats"] });
+          toast({ title: "تمت إعادة الجدولة", description: "تم تحديث موعد الحجز بنجاح." });
         }}
       />
 

@@ -33,7 +33,125 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 router.use(requireAuth);
 
+/* ── Availability sync helper ──────────────────────────────── */
+/**
+ * After any booking mutation (create / cancel / reschedule), call this to keep
+ * chaletAvailabilityTable in sync so the public calendar reflects real bookings.
+ * It reads ALL active bookings for the submission and recomputes each supplied date.
+ */
+async function syncAvailabilityFromBookings(
+  submissionId: number,
+  ownerId: string,
+  dates: string[]
+) {
+  if (!dates.length) return;
+  // Find the approved chalet entry for this submission
+  const [chalet] = await db
+    .select({ id: chaletsTable.id })
+    .from(chaletsTable)
+    .where(eq(chaletsTable.submissionId, submissionId));
+  if (!chalet) return;
+  const chaletId = chalet.id;
+
+  // Load all active bookings for this submission
+  const activeBookings = await db
+    .select({
+      bookingDate: ownerBookingsTable.bookingDate,
+      durationDays: ownerBookingsTable.durationDays,
+      period: ownerBookingsTable.period,
+    })
+    .from(ownerBookingsTable)
+    .where(and(eq(ownerBookingsTable.submissionId, submissionId), isNull(ownerBookingsTable.cancelledAt)));
+
+  for (const dateStr of dates) {
+    // Determine which periods are booked on this date
+    const bookedPeriods = new Set<string>();
+    for (const b of activeBookings) {
+      if (!b.bookingDate) continue;
+      const [by, bm, bd] = b.bookingDate.split("-").map(Number);
+      const dur = Math.max(1, b.durationDays ?? 1);
+      for (let i = 0; i < dur; i++) {
+        const d = new Date(by, bm - 1, bd + i);
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        if (ds === dateStr) { bookedPeriods.add(b.period ?? "full_day"); break; }
+      }
+    }
+
+    const morning = bookedPeriods.has("morning") || bookedPeriods.has("full_day");
+    const evening = bookedPeriods.has("evening") || bookedPeriods.has("full_day");
+    const fullDay  = bookedPeriods.has("full_day");
+
+    // Check if an entry already exists for this date
+    const [existing] = await db
+      .select()
+      .from(chaletAvailabilityTable)
+      .where(and(eq(chaletAvailabilityTable.chaletId, chaletId), eq(chaletAvailabilityTable.dateStr, dateStr)));
+
+    if (bookedPeriods.size === 0) {
+      // No bookings — if the only reason this entry existed was auto-sync, remove it.
+      // We remove entries that have no notes (owner hasn't manually annotated it).
+      if (existing && !existing.notes) {
+        await db.delete(chaletAvailabilityTable).where(eq(chaletAvailabilityTable.id, existing.id));
+      }
+    } else if (existing) {
+      await db
+        .update(chaletAvailabilityTable)
+        .set({ periodMorning: morning, periodEvening: evening, periodFullDay: fullDay })
+        .where(eq(chaletAvailabilityTable.id, existing.id));
+    } else {
+      await db.insert(chaletAvailabilityTable).values({
+        chaletId, ownerId, dateStr, periodMorning: morning, periodEvening: evening, periodFullDay: fullDay,
+      });
+    }
+  }
+}
+
+/** Build the list of YYYY-MM-DD strings that a booking occupies */
+function bookingDates(bookingDate: string, durationDays: number): string[] {
+  const [y, m, d] = bookingDate.split("-").map(Number);
+  const results: string[] = [];
+  for (let i = 0; i < Math.max(1, durationDays); i++) {
+    const dt = new Date(y, m - 1, d + i);
+    results.push(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`);
+  }
+  return results;
+}
+
 /* ── Bookings ──────────────────────────────────────────────── */
+
+router.get("/bookings/stats", async (req, res) => {
+  const ownerId = req.user!.id;
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+  const active = await db
+    .select()
+    .from(ownerBookingsTable)
+    .where(and(eq(ownerBookingsTable.ownerId, ownerId), isNull(ownerBookingsTable.cancelledAt)));
+
+  const cancelled = await db
+    .select({ id: ownerBookingsTable.id })
+    .from(ownerBookingsTable)
+    .where(and(eq(ownerBookingsTable.ownerId, ownerId), isNotNull(ownerBookingsTable.cancelledAt)));
+
+  const rescheduled = await db
+    .select({ id: ownerRescheduleLogsTable.id })
+    .from(ownerRescheduleLogsTable)
+    .where(eq(ownerRescheduleLogsTable.ownerId, ownerId));
+
+  const monthActive = active.filter((b) => b.bookingDate >= monthStart && b.bookingDate <= monthEnd);
+  const revenueCurrentMonth = monthActive.reduce((sum, b) => sum + (b.totalPrice ? Number(b.totalPrice) : 0), 0);
+
+  return res.json({
+    activeCurrentMonth: monthActive.length,
+    revenueCurrentMonth,
+    totalActive: active.length,
+    totalCancelled: cancelled.length,
+    totalRescheduled: rescheduled.length,
+  });
+});
 
 router.get("/bookings", async (req, res) => {
   const ownerId = req.user!.id;
@@ -96,6 +214,15 @@ router.post("/bookings", async (req, res) => {
       insuranceFee: insuranceFee !== undefined ? String(Math.round(insuranceFee)) : null,
     })
     .returning();
+
+  // Auto-sync public calendar availability
+  if (booking.submissionId) {
+    syncAvailabilityFromBookings(
+      booking.submissionId,
+      ownerId,
+      bookingDates(booking.bookingDate, booking.durationDays)
+    ).catch(() => {}); // async, don't block the response
+  }
 
   return res.status(201).json(booking);
 });
@@ -218,7 +345,24 @@ router.patch("/bookings/:id", async (req, res) => {
         newPeriod: newPeriod ?? null,
         reason: rescheduleReason ?? "",
       });
+
+      // Sync old dates (freed) + new dates (now booked)
+      if (row.submissionId) {
+        const oldDates = bookingDates(oldBooking.bookingDate, oldBooking.durationDays);
+        const newDates = bookingDates(newBookingDate, newDurationDays);
+        const allDates = [...new Set([...oldDates, ...newDates])];
+        syncAvailabilityFromBookings(row.submissionId, ownerId, allDates).catch(() => {});
+      }
     }
+  }
+
+  // Sync availability on restore too (booking is active again)
+  if (restore && row.submissionId) {
+    syncAvailabilityFromBookings(
+      row.submissionId,
+      ownerId,
+      bookingDates(row.bookingDate, row.durationDays)
+    ).catch(() => {});
   }
 
   return res.json(row);
@@ -251,10 +395,27 @@ router.delete("/bookings/:id", async (req, res) => {
   const ownerId = req.user!.id;
   const id = Number(req.params.id);
   const { reason } = z.object({ reason: z.string().optional() }).parse(req.body ?? {});
+
+  // Fetch booking before soft-delete so we can sync the freed dates
+  const [target] = await db
+    .select()
+    .from(ownerBookingsTable)
+    .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)));
+
   await db
     .update(ownerBookingsTable)
     .set({ cancelledAt: new Date(), cancelReason: reason ?? null })
     .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)));
+
+  // Sync availability after cancellation (booking no longer blocks these dates)
+  if (target?.submissionId) {
+    syncAvailabilityFromBookings(
+      target.submissionId,
+      ownerId,
+      bookingDates(target.bookingDate, target.durationDays)
+    ).catch(() => {});
+  }
+
   return res.json({ ok: true });
 });
 
