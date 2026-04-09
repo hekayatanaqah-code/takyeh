@@ -1026,6 +1026,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [blockDateStr, setBlockDateStr] = useState<string | null>(null);
   const [reviewSentIds, setReviewSentIds] = useState<Set<number>>(new Set());
   const [reviewPendingId, setReviewPendingId] = useState<number | null>(null);
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo, setFilterTo] = useState("");
 
   const { data: ownerChalets = [], isLoading: chaletsLoading } = useQuery<any[]>({
     queryKey: ["owner", "chalets"],
@@ -1130,7 +1132,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
   const blockEntry = blockDateStr ? availability.find((a) => a.dateStr === blockDateStr) ?? null : null;
 
-  const monthLabel = new Date(calYear, calMonth - 1, 1).toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+  const monthLabelGreg = new Date(calYear, calMonth - 1, 1).toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" });
+  const monthLabelHijri = new Date(calYear, calMonth - 1, 15).toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
+  const monthLabel = `${monthLabelHijri} · ${monthLabelGreg}`;
+
+  const filteredBookings = useMemo(() => bookings.filter((b) => {
+    if (filterFrom && b.bookingDate < filterFrom) return false;
+    if (filterTo && b.bookingDate > filterTo) return false;
+    return true;
+  }), [bookings, filterFrom, filterTo]);
 
   const prevMonth = () => {
     if (calMonth === 1) { setCalYear(y => y - 1); setCalMonth(12); }
@@ -1342,24 +1352,51 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
       {/* Bookings List */}
       <div>
-        <h3 className="font-bold text-foreground mb-4">قائمة الحجوزات</h3>
+        <div className="flex flex-wrap items-end gap-3 mb-4">
+          <h3 className="font-bold text-foreground flex-1">قائمة الحجوزات</h3>
+          {/* Date range filter */}
+          <div className="flex items-end gap-2 flex-wrap">
+            <div className="min-w-[130px]">
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">من تاريخ</label>
+              <div className="rounded-xl border border-border bg-background px-3 py-2 min-h-[2.25rem] flex items-center text-sm">
+                <DualCalendarPicker value={filterFrom} onChange={setFilterFrom} placeholder="أي تاريخ" />
+              </div>
+            </div>
+            <div className="min-w-[130px]">
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">إلى تاريخ</label>
+              <div className="rounded-xl border border-border bg-background px-3 py-2 min-h-[2.25rem] flex items-center text-sm">
+                <DualCalendarPicker value={filterTo} onChange={setFilterTo} placeholder="أي تاريخ" />
+              </div>
+            </div>
+            {(filterFrom || filterTo) && (
+              <button
+                onClick={() => { setFilterFrom(""); setFilterTo(""); }}
+                className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-xl px-3 py-2 min-h-[2.25rem] transition-colors"
+              >
+                مسح
+              </button>
+            )}
+          </div>
+        </div>
         {bookingsLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
           </div>
-        ) : bookings.length === 0 ? (
+        ) : filteredBookings.length === 0 ? (
           <div className="bg-card border border-dashed border-border rounded-2xl p-10 text-center">
             <BookOpen className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
-            <h3 className="text-base font-semibold mb-2">لا توجد حجوزات بعد</h3>
-            <p className="text-sm text-muted-foreground mb-4">سجّل حجوزاتك من واتساب وانستقرام لمتابعة تقويمك</p>
-            <Button size="sm" onClick={() => setAddOpen(true)}>
-              <Plus className="w-4 h-4 me-2" />
-              إضافة أول حجز
-            </Button>
+            <h3 className="text-base font-semibold mb-2">{(filterFrom || filterTo) ? "لا توجد حجوزات في هذا النطاق" : "لا توجد حجوزات بعد"}</h3>
+            <p className="text-sm text-muted-foreground mb-4">{(filterFrom || filterTo) ? "جرّب تغيير نطاق التاريخ" : "سجّل حجوزاتك من واتساب وانستقرام لمتابعة تقويمك"}</p>
+            {!filterFrom && !filterTo && (
+              <Button size="sm" onClick={() => setAddOpen(true)}>
+                <Plus className="w-4 h-4 me-2" />
+                إضافة أول حجز
+              </Button>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
-            {bookings.map((b) => {
+            {filteredBookings.map((b) => {
               const tp = b.totalPrice ? Number(b.totalPrice) : null;
               const dp = b.depositPaid ? Number(b.depositPaid) : null;
               const ins = b.insuranceFee ? Number(b.insuranceFee) : null;
@@ -1848,6 +1885,8 @@ function RevenueTab() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
+  const [reviewSentRevIds, setReviewSentRevIds] = useState<Set<number>>(new Set());
+  const [reviewPendingRevId, setReviewPendingRevId] = useState<number | null>(null);
 
   const monthOptions = useMemo(() => {
     const opts: { val: string; label: string }[] = [];
@@ -1856,11 +1895,23 @@ function RevenueTab() {
       d.setDate(1);
       d.setMonth(d.getMonth() - i);
       const val = d.toISOString().slice(0, 7);
-      const label = d.toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" });
+      const hijriPart = new Date(d.getFullYear(), d.getMonth(), 15).toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
+      const gregPart = d.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" });
+      const label = `${hijriPart} · ${gregPart}`;
       opts.push({ val, label });
     }
     return opts.reverse();
   }, []);
+
+  const { data: revOwnerChalets = [] } = useQuery<{ id: number; submissionId: number | null; nameAr: string }[]>({
+    queryKey: ["owner", "chalets"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/chalets");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 60_000,
+  });
 
   const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
 
@@ -2023,13 +2074,14 @@ function RevenueTab() {
           <div className="text-center text-muted-foreground text-sm py-8">لا توجد إيرادات لهذا الشهر</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[500px]">
+            <table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">العميل</th>
                   <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">التاريخ</th>
                   <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">النوع</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">المبلغ</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">إجراء</th>
                 </tr>
               </thead>
               <tbody>
@@ -2037,6 +2089,9 @@ function RevenueTab() {
                   const { hijri, gregorian } = formatDualDate(row.bookingDate);
                   const meta = TYPE_META[row.type];
                   const hasProof = row.type === "damage" && (() => { try { return JSON.parse(row.proofImages ?? "[]").length > 0; } catch { return false; } })();
+                  const chaletId = revOwnerChalets.find((c) => c.submissionId === row.booking.submissionId)?.id ?? null;
+                  const revSent = reviewSentRevIds.has(row.bookingId);
+                  const revPending = reviewPendingRevId === row.bookingId;
                   return (
                     <tr key={`${row.bookingId}-${row.type}-${i}`} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                       <td className="py-2.5 px-3 font-medium">{row.clientName}</td>
@@ -2063,6 +2118,38 @@ function RevenueTab() {
                         </span>
                         <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
                       </td>
+                      <td className="py-2.5 px-3">
+                        {chaletId && (
+                          <button
+                            disabled={revSent || revPending}
+                            onClick={async () => {
+                              if (!chaletId) return;
+                              setReviewPendingRevId(row.bookingId);
+                              try {
+                                const r = await apiFetch("/owner/review-invite", {
+                                  method: "POST",
+                                  body: JSON.stringify({ chaletId, guestName: row.clientName }),
+                                });
+                                if (r.ok) {
+                                  const data = await r.json();
+                                  const link = data.link as string;
+                                  const msg = encodeURIComponent(`أهلاً ${row.clientName}، يسعدنا تقييمك لتجربتك في شاليهنا 🌟 اضغط هنا: ${link}`);
+                                  const rawPhone = row.booking.clientPhone?.replace(/\D/g, "") ?? "";
+                                  const phone = rawPhone.startsWith("0") ? "966" + rawPhone.slice(1) : rawPhone;
+                                  window.open(`https://wa.me/${phone || ""}?text=${msg}`, "_blank");
+                                  setReviewSentRevIds((prev) => new Set([...prev, row.bookingId]));
+                                }
+                              } finally {
+                                setReviewPendingRevId(null);
+                              }
+                            }}
+                            className="flex items-center gap-1 text-[11px] font-medium text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg px-2 py-1 hover:bg-teal-100 transition-colors disabled:opacity-50 whitespace-nowrap"
+                          >
+                            {revPending ? <Loader2 className="w-3 h-3 animate-spin" /> : revSent ? <CheckCircle className="w-3 h-3" /> : <Star className="w-3 h-3" />}
+                            {revSent ? "تم ✓" : "طلب تقييم"}
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -2073,6 +2160,7 @@ function RevenueTab() {
                   <td className="py-2 px-3 text-left font-extrabold text-base text-primary tabular-nums">
                     {fmtN(filteredRows.reduce((s, r) => s + r.amount, 0))} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
                   </td>
+                  <td />
                 </tr>
               </tfoot>
             </table>
@@ -2394,13 +2482,13 @@ function ExpensesTab() {
           <div className="flex gap-3 flex-wrap">
             <div className="flex-1 min-w-[140px]">
               <label className="text-xs text-muted-foreground font-medium mb-1 block">التاريخ</label>
-              <Input
-                type="date"
-                value={form.dateStr}
-                onChange={(e) => setForm((f) => ({ ...f, dateStr: e.target.value }))}
-                className="h-11"
-                required
-              />
+              <div className="rounded-md border bg-background px-3 py-2 h-11 flex items-center">
+                <DualCalendarPicker
+                  value={form.dateStr}
+                  onChange={(v) => setForm((f) => ({ ...f, dateStr: v }))}
+                  placeholder="اختر التاريخ"
+                />
+              </div>
             </div>
             {mySubmissions.length > 0 && (
               <div className="flex-1 min-w-[140px]">
