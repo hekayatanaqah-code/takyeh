@@ -15,7 +15,7 @@ import {
   reviewsTable,
   ownerNotificationsTable,
 } from "@workspace/db/schema";
-import { eq, and, inArray, gte, lte, sql, desc } from "drizzle-orm";
+import { eq, and, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
@@ -39,8 +39,18 @@ router.get("/bookings", async (req, res) => {
   const rows = await db
     .select()
     .from(ownerBookingsTable)
-    .where(eq(ownerBookingsTable.ownerId, ownerId))
+    .where(and(eq(ownerBookingsTable.ownerId, ownerId), isNull(ownerBookingsTable.cancelledAt)))
     .orderBy(ownerBookingsTable.createdAt);
+  return res.json(rows.reverse());
+});
+
+router.get("/bookings/cancelled", async (req, res) => {
+  const ownerId = req.user!.id;
+  const rows = await db
+    .select()
+    .from(ownerBookingsTable)
+    .where(and(eq(ownerBookingsTable.ownerId, ownerId), isNotNull(ownerBookingsTable.cancelledAt)))
+    .orderBy(ownerBookingsTable.cancelledAt);
   return res.json(rows.reverse());
 });
 
@@ -98,15 +108,25 @@ router.patch("/bookings/:id", async (req, res) => {
     insuranceDeducted: z.number().nonnegative().optional(),
     insuranceDeductReason: z.string().nullable().optional(),
     insuranceProofImages: z.array(z.string()).optional(),
+    // Reschedule fields
+    bookingDate: z.string().min(1).optional(),
+    durationDays: z.number().int().min(1).optional(),
+    period: z.enum(["morning", "evening", "full_day"]).nullable().optional(),
+    // Restore from cancellation
+    restore: z.boolean().optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
-  const { insuranceDeducted, insuranceProofImages, ...rest } = body.data;
+  const { insuranceDeducted, insuranceProofImages, restore, bookingDate, durationDays, period, ...rest } = body.data;
   const [row] = await db
     .update(ownerBookingsTable)
     .set({
       ...rest,
+      ...(bookingDate !== undefined ? { bookingDate } : {}),
+      ...(durationDays !== undefined ? { durationDays } : {}),
+      ...(period !== undefined ? { period } : {}),
       insuranceDeducted: insuranceDeducted !== undefined ? String(Math.round(insuranceDeducted)) : undefined,
       insuranceProofImages: insuranceProofImages !== undefined ? JSON.stringify(insuranceProofImages) : undefined,
+      ...(restore ? { cancelledAt: null, cancelReason: null } : {}),
     })
     .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)))
     .returning();
@@ -130,8 +150,10 @@ router.get("/bookings/lookup", async (req, res) => {
 router.delete("/bookings/:id", async (req, res) => {
   const ownerId = req.user!.id;
   const id = Number(req.params.id);
+  const { reason } = z.object({ reason: z.string().optional() }).parse(req.body ?? {});
   await db
-    .delete(ownerBookingsTable)
+    .update(ownerBookingsTable)
+    .set({ cancelledAt: new Date(), cancelReason: reason ?? null })
     .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)));
   return res.json({ ok: true });
 });

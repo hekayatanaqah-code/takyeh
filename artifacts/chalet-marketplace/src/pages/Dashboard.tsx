@@ -69,6 +69,8 @@ interface OwnerBooking {
   insuranceDeductReason?: string | null;
   insuranceProofImages?: string | null; // JSON-encoded array of URLs
   createdAt: string;
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
 }
 
 interface ChaletAvailability {
@@ -318,13 +320,14 @@ function ChaletsTab({ submissions, isLoading }: { submissions: any[] | undefined
 
 /* ── Add Booking Dialog ──────────────────────── */
 function AddBookingDialog({
-  open, onClose, submissions, onAdded, existingBookings,
+  open, onClose, submissions, onAdded, existingBookings, prefilledDate,
 }: {
   open: boolean;
   onClose: () => void;
   submissions: any[];
   onAdded: () => void;
   existingBookings?: OwnerBooking[];
+  prefilledDate?: string | null;
 }) {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
@@ -383,6 +386,12 @@ function AddBookingDialog({
       setPeriod("");
     }
   }, [morningDisabled, eveningDisabled, fullDayDisabled, period]);
+
+  // Pre-fill date when opened from calendar click
+  useEffect(() => {
+    if (open && prefilledDate) setBookingDate(prefilledDate);
+    if (!open) setBookingDate(""); // clear on close
+  }, [open, prefilledDate]);
 
   const tp = totalPrice ? Math.round(Number(totalPrice)) : null;
   const dp = depositPaid ? Math.round(Number(depositPaid)) : null;
@@ -1170,10 +1179,148 @@ function MiniCalendar({
   );
 }
 
+/* ── Delete Confirm Dialog ───────────────────── */
+function DeleteConfirmDialog({
+  open, booking, onClose, onConfirm,
+}: {
+  open: boolean;
+  booking: OwnerBooking | null;
+  onClose: () => void;
+  onConfirm: (id: number, reason: string) => void;
+}) {
+  const [reason, setReason] = useState("");
+  useEffect(() => { if (!open) setReason(""); }, [open]);
+  if (!booking) return null;
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent dir="rtl" className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>إلغاء الحجز</DialogTitle>
+          <DialogDescription>
+            سيتم إلغاء حجز <strong>{booking.clientName}</strong>. يمكنك استعادته من قسم "الحجوزات الملغاة" في أي وقت.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 mt-1">
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">سبب الإلغاء *</label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="مثال: طلب العميل الإلغاء، تعارض في المواعيد..."
+              rows={3}
+            />
+          </div>
+        </div>
+        <DialogFooter className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onClose}>تراجع</Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={!reason.trim()}
+            onClick={() => { onConfirm(booking.id, reason.trim()); onClose(); }}
+          >
+            تأكيد الإلغاء
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ── Reschedule Dialog ───────────────────────── */
+function RescheduleDialog({
+  open, booking, onClose, onRescheduled,
+}: {
+  open: boolean;
+  booking: OwnerBooking | null;
+  onClose: () => void;
+  onRescheduled: () => void;
+}) {
+  const [newDate, setNewDate] = useState("");
+  const [newDuration, setNewDuration] = useState(1);
+  const [newPeriod, setNewPeriod] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (open && booking) {
+      setNewDate(booking.bookingDate);
+      setNewDuration(Math.max(1, booking.durationDays ?? 1));
+      setNewPeriod(booking.period ?? "none");
+      setError("");
+    }
+  }, [open, booking]);
+
+  if (!booking) return null;
+
+  const handleSave = async () => {
+    if (!newDate) { setError("يرجى تحديد تاريخ"); return; }
+    setSaving(true); setError("");
+    try {
+      const r = await apiFetch(`/owner/bookings/${booking.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          bookingDate: newDate,
+          durationDays: newDuration,
+          period: newPeriod && newPeriod !== "none" ? newPeriod : null,
+        }),
+      });
+      if (!r.ok) { setError("حدث خطأ، يرجى المحاولة"); return; }
+      onRescheduled();
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent dir="rtl" className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>إعادة جدولة الحجز</DialogTitle>
+          <DialogDescription>تعديل موعد حجز {booking.clientName}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 mt-2">
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">تاريخ الحجز الجديد</label>
+            <div className="rounded-md border bg-background px-3 py-2 flex items-center">
+              <DualCalendarPicker value={newDate} onChange={setNewDate} placeholder="اختر التاريخ" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">عدد الأيام</label>
+            <Input type="number" min={1} value={newDuration} onChange={(e) => setNewDuration(Math.max(1, Number(e.target.value)))} />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">الفترة</label>
+            <Select value={newPeriod} onValueChange={setNewPeriod}>
+              <SelectTrigger><SelectValue placeholder="اختر الفترة" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— بدون تحديد</SelectItem>
+                <SelectItem value="morning">🌅 صباحي</SelectItem>
+                <SelectItem value="evening">🌙 مسائي</SelectItem>
+                <SelectItem value="full_day">☀️ يوم كامل</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onClose}>إلغاء</Button>
+          <Button size="sm" onClick={handleSave} disabled={saving}>
+            {saving ? "جاري الحفظ..." : "حفظ التعديل"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ── Booking Calendar Tab ────────────────────── */
 function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
+  const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
   const [selectedChaletId, setSelectedChaletId] = useState<number | null>(null);
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
@@ -1183,6 +1330,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [reviewPendingId, setReviewPendingId] = useState<number | null>(null);
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
+  const [deleteDialogBooking, setDeleteDialogBooking] = useState<OwnerBooking | null>(null);
+  const [rescheduleBooking, setRescheduleBooking] = useState<OwnerBooking | null>(null);
+  const [showCancelledTab, setShowCancelledTab] = useState(false);
 
   const { data: ownerChalets = [], isLoading: chaletsLoading } = useQuery<any[]>({
     queryKey: ["owner", "chalets"],
@@ -1264,11 +1414,34 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     }
   };
 
-  const deleteBooking = useMutation({
-    mutationFn: async (id: number) => {
-      await apiFetch(`/owner/bookings/${id}`, { method: "DELETE" });
+  const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
+    queryKey: ["owner", "bookings", "cancelled"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/bookings/cancelled");
+      if (!r.ok) return [];
+      return r.json();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "bookings"] }),
+    enabled: showCancelledTab,
+  });
+
+  const deleteBooking = useMutation({
+    mutationFn: async ({ id, reason }: { id: number; reason: string }) => {
+      await apiFetch(`/owner/bookings/${id}`, { method: "DELETE", body: JSON.stringify({ reason }) });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
+      qc.invalidateQueries({ queryKey: ["owner", "bookings", "cancelled"] });
+    },
+  });
+
+  const restoreBooking = useMutation({
+    mutationFn: async (id: number) => {
+      await apiFetch(`/owner/bookings/${id}`, { method: "PATCH", body: JSON.stringify({ restore: true }) });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
+      qc.invalidateQueries({ queryKey: ["owner", "bookings", "cancelled"] });
+    },
   });
 
   const patchBookingStatus = useMutation({
@@ -1285,14 +1458,20 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     });
   }, [availability, calYear, calMonth]);
 
-  /* Filter bookings to the active chalet + current calendar month for the mini calendar */
+  /* Filter bookings whose range OVERLAPS with the current calendar month (fixes multi-day cross-month display) */
   const calBookings = useMemo(() => {
     if (!activeChalet) return [];
+    const lastDay = new Date(calYear, calMonth, 0).getDate();
+    const monthStart = `${calYear}-${String(calMonth).padStart(2, "0")}-01`;
+    const monthEnd   = `${calYear}-${String(calMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
     return bookings.filter((b) => {
       if (!b.bookingDate) return false;
-      const [y, m] = b.bookingDate.split("-").map(Number);
-      if (y !== calYear || m !== calMonth) return false;
-      return b.submissionId === activeChalet.submissionId;
+      if (b.submissionId !== activeChalet.submissionId) return false;
+      const [by, bm, bd] = b.bookingDate.split("-").map(Number);
+      const dur = Math.max(1, b.durationDays ?? 1);
+      const bEndDate = new Date(by, bm - 1, bd + dur - 1);
+      const bEnd = `${bEndDate.getFullYear()}-${String(bEndDate.getMonth() + 1).padStart(2, "0")}-${String(bEndDate.getDate()).padStart(2, "0")}`;
+      return b.bookingDate <= monthEnd && bEnd >= monthStart;
     });
   }, [bookings, activeChalet, calYear, calMonth]);
 
@@ -1338,10 +1517,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
       <AddBookingDialog
         open={addOpen}
-        onClose={() => setAddOpen(false)}
+        onClose={() => { setAddOpen(false); setPrefilledDate(null); }}
         submissions={submissions}
         onAdded={() => qc.invalidateQueries({ queryKey: ["owner", "bookings"] })}
         existingBookings={bookings}
+        prefilledDate={prefilledDate}
       />
 
       {/* Day Booking Summary Dialog */}
@@ -1409,6 +1589,23 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <span className="col-span-2 text-foreground/70 italic text-[0.7rem]">{b.notes}</span>
                         </>}
                       </div>
+                      {/* Cancel & Reschedule quick actions */}
+                      <div className="flex gap-2 mt-2 pt-2 border-t border-border/50">
+                        <button
+                          onClick={() => { setSummaryDate(null); setRescheduleBooking(b); }}
+                          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-primary border border-primary/30 rounded-lg py-1.5 hover:bg-primary/10 transition-colors"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          إعادة جدولة
+                        </button>
+                        <button
+                          onClick={() => { setSummaryDate(null); setDeleteDialogBooking(b); }}
+                          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg py-1.5 hover:bg-destructive/10 transition-colors"
+                        >
+                          <XCircle className="w-3 h-3" />
+                          إلغاء الحجز
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -1475,13 +1672,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   if (!activeChaletId) return;
                   const dayBkgs = calBookings.filter((b) => {
                     if (!b.bookingDate) return false;
-                    const end = new Date(b.bookingDate);
-                    end.setDate(end.getDate() + Math.max(1, b.durationDays ?? 1) - 1);
-                    return ds >= b.bookingDate && ds <= end.toISOString().slice(0, 10);
+                    const [by, bm, bd] = b.bookingDate.split("-").map(Number);
+                    const endDate = new Date(by, bm - 1, bd + Math.max(1, b.durationDays ?? 1) - 1);
+                    const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
+                    return ds >= b.bookingDate && ds <= endStr;
                   });
                   if (dayBkgs.length > 0) {
                     setSummaryDate(ds);
                   } else {
+                    setPrefilledDate(ds);
                     setAddOpen(true);
                   }
                 }}
@@ -1811,13 +2010,24 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         )}
                       </div>
                     </div>
-                    <button
-                      onClick={() => deleteBooking.mutate(b.id)}
-                      className="text-muted-foreground hover:text-destructive transition-colors shrink-0 mt-0.5"
-                      aria-label="حذف الحجز"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                      <button
+                        onClick={() => setRescheduleBooking(b)}
+                        className="text-muted-foreground hover:text-primary transition-colors p-1 rounded"
+                        aria-label="إعادة جدولة"
+                        title="إعادة جدولة"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteDialogBooking(b)}
+                        className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded"
+                        aria-label="إلغاء الحجز"
+                        title="إلغاء الحجز"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Financial summary */}
@@ -1993,6 +2203,55 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         )}
       </div>
 
+      {/* Cancelled Bookings Tab */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <button
+          onClick={() => setShowCancelledTab((v) => !v)}
+          className="w-full flex items-center justify-between px-5 py-3.5 text-sm font-semibold text-muted-foreground hover:bg-muted/40 transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <Archive className="w-4 h-4" />
+            الحجوزات الملغاة
+          </span>
+          {showCancelledTab ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+        {showCancelledTab && (
+          <div className="px-5 pb-5 pt-1 space-y-3 border-t border-border">
+            {cancelledBookings.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">لا توجد حجوزات ملغاة</p>
+            ) : cancelledBookings.map((b) => {
+              const [cy, cm, cd] = b.bookingDate.split("-").map(Number);
+              const dateLabel = new Date(cy, cm - 1, cd).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric", calendar: "gregory" });
+              const cancelledDate = b.cancelledAt ? new Date(b.cancelledAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "";
+              return (
+                <div key={b.id} className="bg-muted/30 border border-dashed border-border rounded-xl p-3 space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground line-through decoration-destructive/50">{b.clientName}</p>
+                      <p className="text-xs text-muted-foreground">{dateLabel} · {b.durationDays} {b.durationDays === 1 ? "يوم" : "أيام"}</p>
+                      {b.cancelReason && (
+                        <p className="text-xs text-destructive/80 mt-0.5">السبب: {b.cancelReason}</p>
+                      )}
+                      {cancelledDate && (
+                        <p className="text-[11px] text-muted-foreground/60">أُلغي في {cancelledDate}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => restoreBooking.mutate(b.id)}
+                      disabled={restoreBooking.isPending}
+                      className="flex items-center gap-1 text-xs font-medium text-primary border border-primary/30 rounded-lg px-2.5 py-1.5 hover:bg-primary/10 transition-colors disabled:opacity-50 shrink-0"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      استعادة
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Manage Insurance Dialog */}
       <ManageInsuranceDialog
         booking={insuranceTarget}
@@ -2007,6 +2266,23 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         booking={proofTarget}
         open={!!proofTarget}
         onClose={() => setProofTarget(null)}
+      />
+
+      {/* Delete Confirm Dialog */}
+      <DeleteConfirmDialog
+        open={!!deleteDialogBooking}
+        booking={deleteDialogBooking}
+        onClose={() => setDeleteDialogBooking(null)}
+        onConfirm={(id, reason) => deleteBooking.mutate({ id, reason })}
+      />
+
+      {/* Reschedule Dialog */}
+      <RescheduleDialog
+        open={!!rescheduleBooking}
+        booking={rescheduleBooking}
+        onClose={() => setRescheduleBooking(null)}
+        onRescheduled={() => qc.invalidateQueries({ queryKey: ["owner", "bookings"] })}
+        existingBookings={bookings}
       />
 
       {/* Block Date Dialog */}
