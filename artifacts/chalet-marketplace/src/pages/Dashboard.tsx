@@ -449,6 +449,7 @@ function AddBookingDialog({
     if (!clientName.trim()) { setError("يرجى إدخال اسم العميل"); return; }
     if (!clientPhone.trim()) { setError("يرجى إدخال رقم الجوال"); return; }
     if (!bookingDate) { setError("يرجى اختيار تاريخ الحجز"); return; }
+    if (!period || period === "none") { setError("يرجى اختيار الفترة"); return; }
     if (!totalPrice) { setError("يرجى إدخال إجمالي قيمة الحجز"); return; }
     setSaving(true); setError("");
     try {
@@ -596,18 +597,17 @@ function AddBookingDialog({
             </div>
           </div>
 
-          {/* ── Period ── */}
+          {/* ── Period — required ── */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold">الفترة الزمنية</label>
+            <label className="text-sm font-semibold">الفترة الزمنية <span className="text-destructive">*</span></label>
             {isFullyBlocked && (
               <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
                 <span className="text-base">⛔</span>
                 <span className="text-xs font-semibold text-red-700 dark:text-red-300">هذا اليوم محجوز بالكامل — لا تتوفر فترات متاحة</span>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {([
-                { value: "none",     label: "—",         sub: "بدون تحديد",       disabled: false,           icon: "" },
                 { value: "morning",  label: "صباحي",     sub: "الفترة الصباحية",  disabled: morningDisabled,  icon: "🌅" },
                 { value: "evening",  label: "مسائي",     sub: "الفترة المسائية",  disabled: eveningDisabled,  icon: "🌙" },
                 { value: "full_day", label: "يوم كامل",  sub: "يوم كامل",         disabled: fullDayDisabled,  icon: "☀️" },
