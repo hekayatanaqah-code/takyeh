@@ -953,6 +953,7 @@ function BlockDateDialog({
 
 /* ── Mini Calendar ───────────────────────────── */
 const _hijriFmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric" });
+const _getFirstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
 function MiniCalendar({
   year, month, availability, bookings, onDateClick,
@@ -973,13 +974,14 @@ function MiniCalendar({
     return m;
   }, [availability]);
 
-  /* Map actual DB bookings → periods per date */
+  /* Map actual DB bookings → period → guestName */
   const bookingMap = useMemo(() => {
-    const m = new Map<string, Set<string>>();
+    const m = new Map<string, Map<string, string>>();
     for (const b of bookings) {
       if (!b.bookingDate) continue;
-      if (!m.has(b.bookingDate)) m.set(b.bookingDate, new Set());
-      if (b.period) m.get(b.bookingDate)!.add(b.period);
+      if (!m.has(b.bookingDate)) m.set(b.bookingDate, new Map());
+      const period = b.period ?? "full_day";
+      m.get(b.bookingDate)!.set(period, b.clientName ?? "");
     }
     return m;
   }, [bookings]);
@@ -991,48 +993,92 @@ function MiniCalendar({
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
   return (
-    <div className="select-none">
-      <div className="grid grid-cols-7 gap-px mb-1">
+    <div className="select-none rounded-xl overflow-hidden border border-border">
+      {/* Unified grid: header row + day cells */}
+      <div className="grid grid-cols-7 gap-px bg-border">
+        {/* Day-of-week headers */}
         {arabicDays.map((d) => (
-          <div key={d} className="text-center text-[10px] font-semibold text-muted-foreground py-1">{d}</div>
+          <div key={d} className="bg-muted/60 text-center text-[10px] font-bold text-muted-foreground py-2">{d}</div>
         ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
+
+        {/* Day cells */}
         {cells.map((day, i) => {
-          if (!day) return <div key={`empty-${i}`} />;
+          if (!day) return <div key={`empty-${i}`} className="bg-background/60 min-h-[62px]" />;
+
           const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           const avEntry = availMap.get(dateStr);
-          const bkPeriods = bookingMap.get(dateStr);
+          const bkEntry = bookingMap.get(dateStr); // Map<period, guestName>
 
-          /* Merge manual availability blocks + actual DB bookings */
-          const morningBlocked = !!(avEntry?.periodMorning || bkPeriods?.has("morning"));
-          const eveningBlocked = !!(avEntry?.periodEvening || bkPeriods?.has("evening"));
-          const fullDayBlocked = !!(avEntry?.periodFullDay || bkPeriods?.has("full_day"));
+          /* Resolve per-period blocked state + guest names */
+          const morningGuest = bkEntry?.get("morning") ?? (avEntry?.periodMorning ? null : undefined);
+          const eveningGuest = bkEntry?.get("evening") ?? (avEntry?.periodEvening ? null : undefined);
+          const fullDayGuest = bkEntry?.get("full_day") ?? (avEntry?.periodFullDay ? null : undefined);
+
+          const morningBlocked = morningGuest !== undefined;
+          const eveningBlocked = eveningGuest !== undefined;
+          const fullDayBlocked = fullDayGuest !== undefined;
           const isBlocked = morningBlocked || eveningBlocked || fullDayBlocked;
           const isPartial = isBlocked && !fullDayBlocked && (morningBlocked !== eveningBlocked);
           const isToday = dateStr === today;
 
-          /* Dual-date numbers */
+          /* Hijri day number */
           const hijriDay = _hijriFmt.format(new Date(year, month - 1, day));
+
+          /* Build period label + guest display */
+          let periodLabel = "";
+          let guestDisplay = "";
+          if (fullDayBlocked) {
+            periodLabel = "يوم كامل";
+            guestDisplay = fullDayGuest ? _getFirstName(fullDayGuest) : "";
+          } else if (morningBlocked && eveningBlocked) {
+            periodLabel = "صباحي + مسائي";
+            const names = [morningGuest, eveningGuest].filter(Boolean).map(n => _getFirstName(n!));
+            guestDisplay = [...new Set(names)].join(" · ");
+          } else if (morningBlocked) {
+            periodLabel = "صباحي";
+            guestDisplay = morningGuest ? _getFirstName(morningGuest) : "";
+          } else if (eveningBlocked) {
+            periodLabel = "مسائي";
+            guestDisplay = eveningGuest ? _getFirstName(eveningGuest) : "";
+          }
 
           return (
             <button
               key={dateStr}
               onClick={() => onDateClick(dateStr)}
-              className={`relative flex flex-col items-center justify-center rounded-lg py-1.5 px-0 transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[42px] ${
+              className={[
+                "relative flex flex-col items-center justify-start pt-1.5 pb-1.5 px-0.5 w-full",
+                "transition-colors focus:outline-none focus:z-10 focus:ring-2 focus:ring-inset focus:ring-primary/60",
+                "min-h-[62px]",
                 isBlocked
                   ? isPartial
-                    ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
-                    : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                  : "hover:bg-primary/10 text-foreground"
-              } ${isToday ? "ring-2 ring-primary" : ""}`}
+                    ? "bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100"
+                    : "bg-red-100 dark:bg-red-900/50 text-red-900 dark:text-red-100"
+                  : "bg-background hover:bg-primary/5 text-foreground",
+                isToday ? "ring-2 ring-inset ring-primary" : "",
+              ].join(" ")}
             >
               {/* Hijri day — primary, bold */}
-              <span className="text-[0.78rem] font-bold leading-none">{hijriDay}</span>
+              <span className="text-[0.82rem] font-bold leading-none">{hijriDay}</span>
               {/* Gregorian day — secondary, muted */}
-              <span className={`text-[0.55rem] leading-none mt-0.5 tabular-nums ${isBlocked ? "opacity-60" : "text-muted-foreground"}`}>{day}</span>
-              {isBlocked && (
-                <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${isPartial ? "bg-amber-500" : "bg-red-500"}`} />
+              <span className={`text-[0.52rem] leading-none mt-0.5 tabular-nums ${isBlocked ? "opacity-60" : "text-muted-foreground"}`}>{day}</span>
+
+              {/* Period label */}
+              {isBlocked && periodLabel && (
+                <span className={`text-[0.44rem] font-semibold leading-none mt-1 px-0.5 text-center ${
+                  isPartial ? "text-amber-800 dark:text-amber-200" : "text-red-800 dark:text-red-200"
+                }`}>
+                  {periodLabel}
+                </span>
+              )}
+
+              {/* Guest first name */}
+              {isBlocked && guestDisplay && (
+                <span className={`text-[0.42rem] leading-none mt-0.5 w-full text-center truncate px-0.5 font-medium ${
+                  isPartial ? "text-amber-700 dark:text-amber-300" : "text-red-700 dark:text-red-300"
+                }`}>
+                  {guestDisplay}
+                </span>
               )}
             </button>
           );
@@ -1262,12 +1308,21 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
             )}
 
             {/* Legend */}
-            <div className="flex flex-wrap gap-4 mt-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-200 inline-block" />محجوز بالكامل</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-200 inline-block" />محجوز جزئياً</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-muted inline-block" />متاح</span>
+            <div className="flex flex-wrap gap-3 mt-4">
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="inline-flex items-center justify-center w-14 h-5 rounded bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200 text-[10px] font-semibold">يوم كامل</span>
+                محجوز بالكامل
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="inline-flex items-center justify-center w-14 h-5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 text-[10px] font-semibold">صباحي/مسائي</span>
+                محجوز جزئياً
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="w-4 h-5 rounded bg-muted inline-block" />
+                متاح
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">انقر على أي تاريخ لضبط الفترات المحجوزة.</p>
+            <p className="text-xs text-muted-foreground mt-2">انقر على أي تاريخ لضبط الفترات أو عرض تفاصيل الحجز.</p>
 
             {/* Check-in / Check-out times — per period */}
             {activeChaletId && (
