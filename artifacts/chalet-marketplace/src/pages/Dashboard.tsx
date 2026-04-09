@@ -318,12 +318,13 @@ function ChaletsTab({ submissions, isLoading }: { submissions: any[] | undefined
 
 /* ── Add Booking Dialog ──────────────────────── */
 function AddBookingDialog({
-  open, onClose, submissions, onAdded,
+  open, onClose, submissions, onAdded, existingBookings,
 }: {
   open: boolean;
   onClose: () => void;
   submissions: any[];
   onAdded: () => void;
+  existingBookings?: OwnerBooking[];
 }) {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
@@ -340,6 +341,48 @@ function AddBookingDialog({
   const [insuranceFee, setInsuranceFee] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  /* ── Conflict detection: which periods are already booked across range ── */
+  const conflictSet = useMemo(() => {
+    const blocked = new Set<string>();
+    if (!bookingDate || !existingBookings?.length) return blocked;
+    const [sy, sm, sd] = bookingDate.split("-").map(Number);
+    const duration = Math.max(1, durationDays);
+    // Collect all dates in the selected range
+    const rangeDates = new Set<string>();
+    for (let i = 0; i < duration; i++) {
+      const d = new Date(sy, sm - 1, sd + i);
+      rangeDates.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+    }
+    // Walk existing bookings and expand their dates
+    for (const b of existingBookings) {
+      if (!b.bookingDate) continue;
+      // If a chalet is selected, only check conflicts for that chalet
+      if (submissionId && submissionId !== "none" && b.submissionId !== Number(submissionId)) continue;
+      const bDur = Math.max(1, b.durationDays ?? 1);
+      const [by, bm, bd2] = b.bookingDate.split("-").map(Number);
+      for (let i = 0; i < bDur; i++) {
+        const d = new Date(by, bm - 1, bd2 + i);
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        if (rangeDates.has(ds)) blocked.add(b.period ?? "full_day");
+      }
+    }
+    return blocked;
+  }, [bookingDate, durationDays, existingBookings, submissionId]);
+
+  const morningDisabled  = conflictSet.has("morning")  || conflictSet.has("full_day");
+  const eveningDisabled  = conflictSet.has("evening")  || conflictSet.has("full_day");
+  const fullDayDisabled  = conflictSet.has("morning")  || conflictSet.has("evening") || conflictSet.has("full_day");
+  const isFullyBlocked   = conflictSet.has("full_day") || (conflictSet.has("morning") && conflictSet.has("evening"));
+
+  // Auto-clear period if it becomes disabled
+  useEffect(() => {
+    if ((period === "morning" && morningDisabled) ||
+        (period === "evening" && eveningDisabled) ||
+        (period === "full_day" && fullDayDisabled)) {
+      setPeriod("");
+    }
+  }, [morningDisabled, eveningDisabled, fullDayDisabled, period]);
 
   const tp = totalPrice ? Math.round(Number(totalPrice)) : null;
   const dp = depositPaid ? Math.round(Number(depositPaid)) : null;
@@ -465,17 +508,56 @@ function AddBookingDialog({
             </div>
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-sm font-semibold">الفترة الزمنية</label>
-            <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger><SelectValue placeholder="اختر الفترة" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">—</SelectItem>
-                <SelectItem value="morning">🌅 صباحي</SelectItem>
-                <SelectItem value="evening">🌙 مسائي</SelectItem>
-                <SelectItem value="full_day">☀️ يوم كامل</SelectItem>
-              </SelectContent>
-            </Select>
+
+            {/* Full-block warning */}
+            {isFullyBlocked && (
+              <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
+                <span className="text-base">⛔</span>
+                <span className="text-xs font-semibold text-red-700 dark:text-red-300">هذا اليوم محجوز بالكامل — لا تتوفر فترات متاحة</span>
+              </div>
+            )}
+
+            {/* Period radio buttons */}
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { value: "none",      label: "—",          sub: "بدون تحديد", disabled: false,          icon: "" },
+                { value: "morning",   label: "صباحي",      sub: "الفترة الصباحية", disabled: morningDisabled,  icon: "🌅" },
+                { value: "evening",   label: "مسائي",      sub: "الفترة المسائية", disabled: eveningDisabled,  icon: "🌙" },
+                { value: "full_day",  label: "يوم كامل",   sub: "يوم كامل",   disabled: fullDayDisabled, icon: "☀️" },
+              ] as const).map(({ value, label, sub, disabled, icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setPeriod(value)}
+                  className={[
+                    "relative flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-start transition-all",
+                    "focus:outline-none focus:ring-2 focus:ring-primary/40",
+                    disabled
+                      ? "opacity-50 cursor-not-allowed bg-muted/40 border-border"
+                      : period === value
+                        ? "border-primary bg-primary/10 shadow-sm"
+                        : "border-border hover:border-primary/50 hover:bg-muted/30",
+                  ].join(" ")}
+                >
+                  <span className="text-sm font-semibold flex items-center gap-1">
+                    {icon && <span>{icon}</span>}
+                    {label}
+                    {disabled && (
+                      <span className="text-[10px] font-bold text-red-500 dark:text-red-400 mr-1">(محجوز)</span>
+                    )}
+                  </span>
+                  {value !== "none" && (
+                    <span className="text-[10px] text-muted-foreground leading-none">{sub}</span>
+                  )}
+                  {period === value && !disabled && (
+                    <span className="absolute top-2 left-2 w-1.5 h-1.5 rounded-full bg-primary" />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* ── Financial Fields ── */}
@@ -1259,6 +1341,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         onClose={() => setAddOpen(false)}
         submissions={submissions}
         onAdded={() => qc.invalidateQueries({ queryKey: ["owner", "bookings"] })}
+        existingBookings={bookings}
       />
 
       {/* Day Booking Summary Dialog */}
