@@ -952,7 +952,9 @@ function BlockDateDialog({
 }
 
 /* ── Mini Calendar ───────────────────────────── */
-const _hijriFmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric" });
+const _hijriFmt     = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric" });
+const _hijriMFmt    = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long" });
+const _hijriYFmt    = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { year: "numeric" });
 const _getFirstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
 function MiniCalendar({
@@ -1024,22 +1026,14 @@ function MiniCalendar({
           /* Hijri day number */
           const hijriDay = _hijriFmt.format(new Date(year, month - 1, day));
 
-          /* Build period label + guest display */
-          let periodLabel = "";
-          let guestDisplay = "";
+          /* Build per-period rows for display */
+          type PRow = { label: string; guest: string; amber: boolean };
+          const pRows: PRow[] = [];
           if (fullDayBlocked) {
-            periodLabel = "يوم كامل";
-            guestDisplay = fullDayGuest ? _getFirstName(fullDayGuest) : "";
-          } else if (morningBlocked && eveningBlocked) {
-            periodLabel = "صباحي + مسائي";
-            const names = [morningGuest, eveningGuest].filter(Boolean).map(n => _getFirstName(n!));
-            guestDisplay = [...new Set(names)].join(" · ");
-          } else if (morningBlocked) {
-            periodLabel = "صباحي";
-            guestDisplay = morningGuest ? _getFirstName(morningGuest) : "";
-          } else if (eveningBlocked) {
-            periodLabel = "مسائي";
-            guestDisplay = eveningGuest ? _getFirstName(eveningGuest) : "";
+            pRows.push({ label: "يوم كامل", guest: fullDayGuest ? _getFirstName(fullDayGuest) : "", amber: false });
+          } else {
+            if (morningBlocked) pRows.push({ label: "صباحي", guest: morningGuest ? _getFirstName(morningGuest) : "", amber: true });
+            if (eveningBlocked) pRows.push({ label: "مسائي", guest: eveningGuest ? _getFirstName(eveningGuest) : "", amber: true });
           }
 
           return (
@@ -1047,9 +1041,9 @@ function MiniCalendar({
               key={dateStr}
               onClick={() => onDateClick(dateStr)}
               className={[
-                "relative flex flex-col items-center justify-start pt-1.5 pb-1.5 px-0.5 w-full",
+                "flex flex-col items-center justify-start pt-1.5 pb-1.5 px-0.5 w-full",
                 "transition-colors focus:outline-none focus:z-10 focus:ring-2 focus:ring-inset focus:ring-primary/60",
-                "min-h-[62px]",
+                "min-h-[66px]",
                 isBlocked
                   ? isPartial
                     ? "bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100"
@@ -1058,27 +1052,27 @@ function MiniCalendar({
                 isToday ? "ring-2 ring-inset ring-primary" : "",
               ].join(" ")}
             >
-              {/* Hijri day — primary, bold */}
+              {/* Hijri day */}
               <span className="text-[0.82rem] font-bold leading-none">{hijriDay}</span>
-              {/* Gregorian day — secondary, muted */}
+              {/* Gregorian day */}
               <span className={`text-[0.52rem] leading-none mt-0.5 tabular-nums ${isBlocked ? "opacity-60" : "text-muted-foreground"}`}>{day}</span>
 
-              {/* Period label */}
-              {isBlocked && periodLabel && (
-                <span className={`text-[0.44rem] font-semibold leading-none mt-1 px-0.5 text-center ${
-                  isPartial ? "text-amber-800 dark:text-amber-200" : "text-red-800 dark:text-red-200"
-                }`}>
-                  {periodLabel}
-                </span>
-              )}
-
-              {/* Guest first name */}
-              {isBlocked && guestDisplay && (
-                <span className={`text-[0.42rem] leading-none mt-0.5 w-full text-center truncate px-0.5 font-medium ${
-                  isPartial ? "text-amber-700 dark:text-amber-300" : "text-red-700 dark:text-red-300"
-                }`}>
-                  {guestDisplay}
-                </span>
+              {/* Per-period rows — shown independently */}
+              {pRows.length > 0 && (
+                <div className="mt-1 w-full flex flex-col items-center gap-[2px]">
+                  {pRows.map((row, ri) => (
+                    <div key={ri} className="w-full flex flex-col items-center">
+                      <span className={`text-[0.44rem] font-bold leading-none text-center ${
+                        row.amber ? "text-amber-800 dark:text-amber-200" : "text-red-800 dark:text-red-200"
+                      }`}>{row.label}</span>
+                      {row.guest && (
+                        <span className={`text-[0.42rem] leading-none truncate w-full text-center font-medium ${
+                          row.amber ? "text-amber-700 dark:text-amber-300" : "text-red-700 dark:text-red-300"
+                        }`}>{row.guest}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </button>
           );
@@ -1096,6 +1090,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
   const [blockDateStr, setBlockDateStr] = useState<string | null>(null);
+  const [summaryDate, setSummaryDate] = useState<string | null>(null);
   const [reviewSentIds, setReviewSentIds] = useState<Set<number>>(new Set());
   const [reviewPendingId, setReviewPendingId] = useState<number | null>(null);
   const [filterFrom, setFilterFrom] = useState("");
@@ -1215,8 +1210,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
   const blockEntry = blockDateStr ? availability.find((a) => a.dateStr === blockDateStr) ?? null : null;
 
-  const monthLabelGreg = new Date(calYear, calMonth - 1, 1).toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" });
-  const monthLabelHijri = new Date(calYear, calMonth - 1, 15).toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
+  const _calFirstDay = new Date(calYear, calMonth - 1, 1);
+  const _calLastDay  = new Date(calYear, calMonth, 0);
+  const _hmFirst     = _hijriMFmt.format(_calFirstDay);
+  const _hmLast      = _hijriMFmt.format(_calLastDay);
+  const _hyLast      = _hijriYFmt.format(_calLastDay);
+  const monthLabelHijri = _hmFirst === _hmLast
+    ? `${_hmFirst} ${_hyLast}`
+    : `${_hmFirst} - ${_hmLast} ${_hyLast}`;
+  const monthLabelGreg = _calFirstDay.toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" });
   const monthLabel = `${monthLabelHijri} · ${monthLabelGreg}`;
 
   const filteredBookings = useMemo(() => bookings.filter((b) => {
@@ -1252,6 +1254,77 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         submissions={submissions}
         onAdded={() => qc.invalidateQueries({ queryKey: ["owner", "bookings"] })}
       />
+
+      {/* Day Booking Summary Dialog */}
+      {summaryDate && (() => {
+        const sumBkgs = calBookings.filter((b) => b.bookingDate === summaryDate);
+        const [sy, sm, sd] = summaryDate.split("-").map(Number);
+        const sumGreg = new Date(sy, sm - 1, sd).toLocaleDateString("ar-SA", { weekday: "long", day: "numeric", month: "long", year: "numeric", calendar: "gregory" });
+        const sumHijri = new Date(sy, sm - 1, sd).toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric" });
+        const periodName = (p?: string | null) =>
+          p === "morning" ? "🌅 الفترة الصباحية" :
+          p === "evening" ? "🌙 الفترة المسائية" :
+          "☀️ يوم كامل";
+        return (
+          <Dialog open onOpenChange={() => setSummaryDate(null)}>
+            <DialogContent className="max-w-sm" dir="rtl">
+              <DialogHeader>
+                <DialogTitle className="text-base font-bold leading-snug">
+                  حجوزات {sumGreg}
+                  <span className="block text-xs font-normal text-muted-foreground mt-0.5">{sumHijri} هـ</span>
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 mt-1">
+                {sumBkgs.map((b, bi) => {
+                  const total = b.totalPrice ? Math.round(Number(b.totalPrice)) : null;
+                  const dep   = b.depositPaid ? Math.round(Number(b.depositPaid)) : null;
+                  const bal   = total && dep ? total - dep : null;
+                  return (
+                    <div key={b.id} className={`rounded-xl border p-3 space-y-1.5 ${bi > 0 ? "mt-2" : ""} ${
+                      b.period === "morning" ? "border-amber-200 bg-amber-50 dark:bg-amber-900/20" :
+                      b.period === "evening" ? "border-blue-200 bg-blue-50 dark:bg-blue-900/20" :
+                      "border-red-200 bg-red-50 dark:bg-red-900/20"
+                    }`}>
+                      <p className="text-sm font-bold">{periodName(b.period)}</p>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>الضيف</span>
+                        <span className="font-semibold text-foreground text-left">{b.clientName}</span>
+                        {total !== null && <>
+                          <span>الإجمالي</span>
+                          <span className="font-semibold text-foreground text-left">{total.toLocaleString("ar-SA")} ر.س</span>
+                        </>}
+                        {dep !== null && dep > 0 && <>
+                          <span>العربون</span>
+                          <span className="font-semibold text-foreground text-left">{dep.toLocaleString("ar-SA")} ر.س</span>
+                        </>}
+                        {bal !== null && bal > 0 && <>
+                          <span>المتبقي</span>
+                          <span className={`font-semibold text-left ${b.balanceCollected ? "text-green-600" : "text-orange-500"}`}>
+                            {bal.toLocaleString("ar-SA")} ر.س {b.balanceCollected ? "✓" : ""}
+                          </span>
+                        </>}
+                        {b.source === "external" && <>
+                          <span>المصدر</span>
+                          <span className="font-semibold text-foreground text-left">خارجي</span>
+                        </>}
+                        {b.notes && <>
+                          <span className="col-span-2 text-foreground/70 italic text-[0.7rem]">{b.notes}</span>
+                        </>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <DialogFooter className="flex flex-row gap-2 justify-start mt-1">
+                <Button variant="outline" size="sm" onClick={() => setSummaryDate(null)}>إغلاق</Button>
+                <Button variant="ghost" size="sm" onClick={() => { setSummaryDate(null); setBlockDateStr(summaryDate); }}>
+                  ضبط الإتاحة
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* Calendar Section */}
       <div className="bg-card border border-border rounded-2xl p-5">
@@ -1302,7 +1375,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 bookings={calBookings}
                 onDateClick={(ds) => {
                   if (!activeChaletId) return;
-                  setBlockDateStr(ds);
+                  const dayBkgs = calBookings.filter((b) => b.bookingDate === ds);
+                  if (dayBkgs.length > 0) {
+                    setSummaryDate(ds);
+                  } else {
+                    setBlockDateStr(ds);
+                  }
                 }}
               />
             )}
