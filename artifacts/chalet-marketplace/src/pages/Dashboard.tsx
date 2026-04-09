@@ -1613,7 +1613,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <p>يوم واحد · {popStartH} هـ <span className="text-muted-foreground/70">({popStartG})</span></p>
                         ) : (
                           <>
-                            <p className="font-semibold">لمدة {popDur} أيام</p>
+                            <p className="font-semibold">لمدة {toAr(popDur)} أيام</p>
                             <p>من: {popStartH} هـ <span className="text-muted-foreground/70">({popStartG})</span></p>
                             <p>إلى: {popEndH} هـ <span className="text-muted-foreground/70">({popEndG})</span></p>
                           </>
@@ -1624,7 +1624,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         <span className="font-semibold text-foreground text-left">{b.clientName}</span>
                         {b.clientPhone && <>
                           <span>الجوال</span>
-                          <span className="font-semibold text-foreground text-left" dir="ltr">{b.clientPhone}</span>
+                          <span className="font-semibold text-foreground text-left" dir="ltr">{toAr(b.clientPhone)}</span>
                         </>}
                         {total !== null && <>
                           <span>الإجمالي</span>
@@ -2039,7 +2039,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       <div className="flex items-start justify-between gap-2 flex-wrap">
                         <div>
                           <p className="font-semibold text-foreground leading-tight">{b.clientName}</p>
-                          {b.clientPhone && <p className="text-xs text-muted-foreground" dir="ltr">{b.clientPhone}</p>}
+                          {b.clientPhone && <p className="text-xs text-muted-foreground" dir="ltr">{toAr(b.clientPhone)}</p>}
                         </div>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${b.source === "platform" ? "bg-primary/10 text-primary" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
@@ -2061,7 +2061,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDualDate(b.bookingDate).hijri} [{formatDualDate(b.bookingDate).gregorian}]</span>
-                        <span>{b.durationDays} {b.durationDays === 1 ? "يوم" : "أيام"}</span>
+                        <span>{toAr(b.durationDays)} {b.durationDays === 1 ? "يوم" : "أيام"}</span>
                         {b.period && (
                           <span className="font-medium text-primary">
                             {{ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[b.period as string] ?? b.period}
@@ -2099,7 +2099,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     const endGreg    = formatDualDate(endStr).gregorian;
                     return (
                       <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 text-xs text-primary font-medium leading-relaxed space-y-0.5">
-                        <p>لمدة {b.durationDays} أيام</p>
+                        <p>لمدة {toAr(b.durationDays)} أيام</p>
                         <p className="text-primary/80">من: {startHijri} هـ <span className="text-primary/50 font-normal">({startGreg})</span></p>
                         <p className="text-primary/80">إلى: {endHijri} هـ <span className="text-primary/50 font-normal">({endGreg})</span></p>
                       </div>
@@ -2340,7 +2340,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <p className="text-sm font-semibold text-foreground line-through decoration-destructive/50">{b.clientName}</p>
                           {b.clientPhone && (
                             <p className="text-xs text-muted-foreground flex items-center gap-1" dir="ltr">
-                              <span className="not-italic">📞</span> {b.clientPhone}
+                              <span className="not-italic">📞</span> {toAr(b.clientPhone)}
                             </p>
                           )}
                           {dur === 1 ? (
@@ -2349,7 +2349,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             </p>
                           ) : (
                             <div className="text-xs text-muted-foreground space-y-0.5">
-                              <p className="font-medium">لمدة {dur} أيام{periodLabel ? ` · ${periodLabel}` : ""}</p>
+                              <p className="font-medium">لمدة {toAr(dur)} أيام{periodLabel ? ` · ${periodLabel}` : ""}</p>
                               <p>من: {startHijri} هـ <span className="opacity-60">({startGreg})</span></p>
                               <p>إلى: {endHijri} هـ <span className="opacity-60">({endGreg})</span></p>
                             </div>
@@ -2406,7 +2406,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <p className="text-sm font-semibold text-foreground">{log.clientName}</p>
                         </div>
                         {log.clientPhone && (
-                          <p className="text-xs text-muted-foreground" dir="ltr">📞 {log.clientPhone}</p>
+                          <p className="text-xs text-muted-foreground" dir="ltr">📞 {toAr(log.clientPhone)}</p>
                         )}
                         <p className="text-[11px] text-muted-foreground/70">
                           <span className="font-semibold">تاريخ إعادة الجدولة:</span> {logHijri} هـ <span className="opacity-70">({logGreg})</span>
@@ -2424,7 +2424,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               <p className="text-muted-foreground/60">{formatDualDate(oldEndStr).gregorian}</p>
                             </>
                           )}
-                          <p className="text-muted-foreground">{log.oldDuration} {log.oldDuration === 1 ? "يوم" : "أيام"}{pLabel(log.oldPeriod) ? ` · ${pLabel(log.oldPeriod)}` : ""}</p>
+                          <p className="text-muted-foreground">{toAr(log.oldDuration)} {log.oldDuration === 1 ? "يوم" : "أيام"}{pLabel(log.oldPeriod) ? ` · ${pLabel(log.oldPeriod)}` : ""}</p>
                         </div>
                         <div className="bg-primary/10 rounded-lg p-2.5 space-y-1">
                           <p className="text-[10px] font-bold text-primary uppercase tracking-wide">التاريخ الجديد</p>
@@ -2436,7 +2436,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               <p className="text-muted-foreground/60">{formatDualDate(newEndStr).gregorian}</p>
                             </>
                           )}
-                          <p className="text-muted-foreground">{log.newDuration} {log.newDuration === 1 ? "يوم" : "أيام"}{pLabel(log.newPeriod) ? ` · ${pLabel(log.newPeriod)}` : ""}</p>
+                          <p className="text-muted-foreground">{toAr(log.newDuration)} {log.newDuration === 1 ? "يوم" : "أيام"}{pLabel(log.newPeriod) ? ` · ${pLabel(log.newPeriod)}` : ""}</p>
                         </div>
                       </div>
                       {/* Reason — fully visible, no truncation */}
