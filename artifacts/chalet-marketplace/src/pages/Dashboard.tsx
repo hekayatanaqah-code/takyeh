@@ -2113,8 +2113,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
             type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={toAr(searchQuery)}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+              setSearchQuery(raw);
+            }}
             placeholder="بحث عن عميل بالاسم أو رقم الجوال..."
             className="pr-9 rounded-xl text-sm"
             dir="rtl"
