@@ -196,6 +196,23 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
 });
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;
 
+/* ── Owner Reschedule Logs ─────────────────────────────────── */
+export const ownerRescheduleLogsTable = pgTable("owner_reschedule_logs", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  bookingId: integer("booking_id").notNull(),
+  clientName: text("client_name").notNull().default(""),
+  oldDate: text("old_date").notNull(),
+  newDate: text("new_date").notNull(),
+  oldDuration: integer("old_duration").notNull().default(1),
+  newDuration: integer("new_duration").notNull().default(1),
+  oldPeriod: text("old_period"),
+  newPeriod: text("new_period"),
+  reason: text("reason").notNull().default(""),
+  rescheduledAt: timestamp("rescheduled_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OwnerRescheduleLog = typeof ownerRescheduleLogsTable.$inferSelect;
+
 /* ── Site Settings ─────────────────────────────────────────── */
 export const siteSettingsTable = pgTable("site_settings", {
   key: text("key").primaryKey(),

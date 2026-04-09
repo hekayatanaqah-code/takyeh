@@ -73,6 +73,20 @@ interface OwnerBooking {
   cancelReason?: string | null;
 }
 
+interface RescheduleLogItem {
+  id: number;
+  bookingId: number;
+  clientName: string;
+  oldDate: string;
+  newDate: string;
+  oldDuration: number;
+  newDuration: number;
+  oldPeriod?: string | null;
+  newPeriod?: string | null;
+  reason: string;
+  rescheduledAt: string;
+}
+
 interface ChaletAvailability {
   id: number;
   chaletId: number;
@@ -1239,6 +1253,7 @@ function RescheduleDialog({
   const [newDate, setNewDate] = useState("");
   const [newDuration, setNewDuration] = useState(1);
   const [newPeriod, setNewPeriod] = useState<string>("");
+  const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -1247,6 +1262,7 @@ function RescheduleDialog({
       setNewDate(booking.bookingDate);
       setNewDuration(Math.max(1, booking.durationDays ?? 1));
       setNewPeriod(booking.period ?? "none");
+      setReason("");
       setError("");
     }
   }, [open, booking]);
@@ -1255,6 +1271,7 @@ function RescheduleDialog({
 
   const handleSave = async () => {
     if (!newDate) { setError("يرجى تحديد تاريخ"); return; }
+    if (!reason.trim()) { setError("يرجى كتابة سبب إعادة الجدولة"); return; }
     setSaving(true); setError("");
     try {
       const r = await apiFetch(`/owner/bookings/${booking.id}`, {
@@ -1263,6 +1280,7 @@ function RescheduleDialog({
           bookingDate: newDate,
           durationDays: newDuration,
           period: newPeriod && newPeriod !== "none" ? newPeriod : null,
+          rescheduleReason: reason.trim(),
         }),
       });
       if (!r.ok) { setError("حدث خطأ، يرجى المحاولة"); return; }
@@ -1303,11 +1321,21 @@ function RescheduleDialog({
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">سبب إعادة الجدولة <span className="text-destructive">*</span></label>
+            <Textarea
+              placeholder="مثال: طلب العميل تأجيل الموعد بسبب..."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              className="resize-none text-sm"
+            />
+          </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter className="flex gap-2">
           <Button variant="outline" size="sm" onClick={onClose}>إلغاء</Button>
-          <Button size="sm" onClick={handleSave} disabled={saving}>
+          <Button size="sm" onClick={handleSave} disabled={saving || !reason.trim()}>
             {saving ? "جاري الحفظ..." : "حفظ التعديل"}
           </Button>
         </DialogFooter>
@@ -1332,7 +1360,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [filterTo, setFilterTo] = useState("");
   const [deleteDialogBooking, setDeleteDialogBooking] = useState<OwnerBooking | null>(null);
   const [rescheduleBooking, setRescheduleBooking] = useState<OwnerBooking | null>(null);
-  const [showCancelledTab, setShowCancelledTab] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
+  const [archiveTab, setArchiveTab] = useState<"cancelled" | "rescheduled">("cancelled");
 
   const { data: ownerChalets = [], isLoading: chaletsLoading } = useQuery<any[]>({
     queryKey: ["owner", "chalets"],
@@ -1421,7 +1450,17 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       if (!r.ok) return [];
       return r.json();
     },
-    enabled: showCancelledTab,
+    enabled: showArchive && archiveTab === "cancelled",
+  });
+
+  const { data: rescheduleLog = [] } = useQuery<RescheduleLogItem[]>({
+    queryKey: ["owner", "bookings", "reschedule-log"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/bookings/reschedule-log");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: showArchive && archiveTab === "rescheduled",
   });
 
   const deleteBooking = useMutation({
@@ -1545,7 +1584,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               <DialogHeader>
                 <DialogTitle className="text-base font-bold leading-snug">
                   حجوزات {sumGreg}
-                  <span className="block text-xs font-normal text-muted-foreground mt-0.5">{sumHijri} هـ</span>
+                  <span className="block text-xs font-normal text-muted-foreground mt-0.5">{sumHijri.replace(/\s*هـ\s*$/, "")} هـ</span>
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-3 mt-1">
@@ -2030,6 +2069,19 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     </div>
                   </div>
 
+                  {/* Multi-day duration summary */}
+                  {(b.durationDays ?? 1) > 1 && (() => {
+                    const endD = new Date(new Date(b.bookingDate + "T00:00:00").getTime() + ((b.durationDays ?? 1) - 1) * 86400000);
+                    const endStr = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, "0")}-${String(endD.getDate()).padStart(2, "0")}`;
+                    const startHijri = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
+                    const endHijri = formatDualDate(endStr).hijri.replace(/\s*هـ\s*$/, "");
+                    return (
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 text-xs text-primary font-medium leading-relaxed">
+                        لمدة {b.durationDays} أيام &nbsp;·&nbsp; من {startHijri} إلى {endHijri} هـ
+                      </div>
+                    );
+                  })()}
+
                   {/* Financial summary */}
                   {tp !== null && (
                     <div className="grid grid-cols-3 gap-2 bg-muted/40 rounded-lg p-2.5 text-center">
@@ -2203,51 +2255,114 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         )}
       </div>
 
-      {/* Cancelled Bookings Tab */}
+      {/* Archive Section */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <button
-          onClick={() => setShowCancelledTab((v) => !v)}
+          onClick={() => setShowArchive((v) => !v)}
           className="w-full flex items-center justify-between px-5 py-3.5 text-sm font-semibold text-muted-foreground hover:bg-muted/40 transition-colors"
         >
           <span className="flex items-center gap-2">
             <Archive className="w-4 h-4" />
-            الحجوزات الملغاة
+            الأرشيف
           </span>
-          {showCancelledTab ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          {showArchive ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
-        {showCancelledTab && (
-          <div className="px-5 pb-5 pt-1 space-y-3 border-t border-border">
-            {cancelledBookings.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">لا توجد حجوزات ملغاة</p>
-            ) : cancelledBookings.map((b) => {
-              const [cy, cm, cd] = b.bookingDate.split("-").map(Number);
-              const dateLabel = new Date(cy, cm - 1, cd).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric", calendar: "gregory" });
-              const cancelledDate = b.cancelledAt ? new Date(b.cancelledAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "";
-              return (
-                <div key={b.id} className="bg-muted/30 border border-dashed border-border rounded-xl p-3 space-y-1.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground line-through decoration-destructive/50">{b.clientName}</p>
-                      <p className="text-xs text-muted-foreground">{dateLabel} · {b.durationDays} {b.durationDays === 1 ? "يوم" : "أيام"}</p>
-                      {b.cancelReason && (
-                        <p className="text-xs text-destructive/80 mt-0.5">السبب: {b.cancelReason}</p>
-                      )}
-                      {cancelledDate && (
-                        <p className="text-[11px] text-muted-foreground/60">أُلغي في {cancelledDate}</p>
+        {showArchive && (
+          <div className="border-t border-border">
+            {/* Archive Tab Switcher */}
+            <div className="flex gap-1 px-5 pt-4 pb-0">
+              <button
+                onClick={() => setArchiveTab("cancelled")}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${archiveTab === "cancelled" ? "bg-destructive/10 text-destructive" : "text-muted-foreground hover:bg-muted/40"}`}
+              >
+                الملغاة
+              </button>
+              <button
+                onClick={() => setArchiveTab("rescheduled")}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${archiveTab === "rescheduled" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/40"}`}
+              >
+                إعادة الجدولة
+              </button>
+            </div>
+
+            {/* Cancelled Tab */}
+            {archiveTab === "cancelled" && (
+              <div className="px-5 pb-5 pt-3 space-y-3">
+                {cancelledBookings.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">لا توجد حجوزات ملغاة</p>
+                ) : cancelledBookings.map((b) => {
+                  const startHijri = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
+                  const startGreg = formatDualDate(b.bookingDate).gregorian;
+                  const cancelledDate = b.cancelledAt ? new Date(b.cancelledAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "";
+                  return (
+                    <div key={b.id} className="bg-muted/30 border border-dashed border-destructive/30 rounded-xl p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground line-through decoration-destructive/50">{b.clientName}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{startHijri} هـ <span className="opacity-60">| {startGreg}</span></p>
+                          <p className="text-xs text-muted-foreground">{b.durationDays} {b.durationDays === 1 ? "يوم" : "أيام"}{b.period ? ` · ${{ morning: "صباحي", evening: "مسائي", full_day: "يوم كامل" }[b.period] ?? b.period}` : ""}</p>
+                          {b.cancelReason && (
+                            <p className="text-xs text-destructive/80 mt-1 bg-destructive/5 rounded px-2 py-1">سبب الإلغاء: {b.cancelReason}</p>
+                          )}
+                          {cancelledDate && (
+                            <p className="text-[11px] text-muted-foreground/60 mt-0.5">أُلغي في {cancelledDate}</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => restoreBooking.mutate(b.id)}
+                          disabled={restoreBooking.isPending}
+                          className="flex items-center gap-1 text-xs font-medium text-primary border border-primary/30 rounded-lg px-2.5 py-1.5 hover:bg-primary/10 transition-colors disabled:opacity-50 shrink-0"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          استعادة
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Rescheduled Tab */}
+            {archiveTab === "rescheduled" && (
+              <div className="px-5 pb-5 pt-3 space-y-3">
+                {rescheduleLog.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">لا توجد سجلات إعادة جدولة</p>
+                ) : rescheduleLog.map((log) => {
+                  const oldHijri = formatDualDate(log.oldDate).hijri.replace(/\s*هـ\s*$/, "");
+                  const newHijri = formatDualDate(log.newDate).hijri.replace(/\s*هـ\s*$/, "");
+                  const oldGreg  = formatDualDate(log.oldDate).gregorian;
+                  const newGreg  = formatDualDate(log.newDate).gregorian;
+                  const periodLabel = (p?: string | null) => p ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[p] ?? p) : "";
+                  const logDate = new Date(log.rescheduledAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" });
+                  return (
+                    <div key={log.id} className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground">{log.clientName}</p>
+                        <p className="text-[11px] text-muted-foreground/60 shrink-0">{logDate}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-muted/50 rounded-lg p-2 space-y-0.5">
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">التاريخ القديم</p>
+                          <p className="font-medium text-foreground">{oldHijri} هـ</p>
+                          <p className="text-muted-foreground/70">{oldGreg}</p>
+                          <p className="text-muted-foreground">{log.oldDuration} {log.oldDuration === 1 ? "يوم" : "أيام"}{periodLabel(log.oldPeriod) ? ` · ${periodLabel(log.oldPeriod)}` : ""}</p>
+                        </div>
+                        <div className="bg-primary/10 rounded-lg p-2 space-y-0.5">
+                          <p className="text-[10px] font-semibold text-primary uppercase tracking-wide">التاريخ الجديد</p>
+                          <p className="font-medium text-foreground">{newHijri} هـ</p>
+                          <p className="text-muted-foreground/70">{newGreg}</p>
+                          <p className="text-muted-foreground">{log.newDuration} {log.newDuration === 1 ? "يوم" : "أيام"}{periodLabel(log.newPeriod) ? ` · ${periodLabel(log.newPeriod)}` : ""}</p>
+                        </div>
+                      </div>
+                      {log.reason && (
+                        <p className="text-xs text-primary/80 bg-primary/5 rounded px-2 py-1">سبب التعديل: {log.reason}</p>
                       )}
                     </div>
-                    <button
-                      onClick={() => restoreBooking.mutate(b.id)}
-                      disabled={restoreBooking.isPending}
-                      className="flex items-center gap-1 text-xs font-medium text-primary border border-primary/30 rounded-lg px-2.5 py-1.5 hover:bg-primary/10 transition-colors disabled:opacity-50 shrink-0"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      استعادة
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -2281,8 +2396,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         open={!!rescheduleBooking}
         booking={rescheduleBooking}
         onClose={() => setRescheduleBooking(null)}
-        onRescheduled={() => qc.invalidateQueries({ queryKey: ["owner", "bookings"] })}
-        existingBookings={bookings}
+        onRescheduled={() => {
+          qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
+          qc.invalidateQueries({ queryKey: ["owner", "bookings", "reschedule-log"] });
+        }}
       />
 
       {/* Block Date Dialog */}

@@ -14,6 +14,7 @@ import {
   reviewInvitationsTable,
   reviewsTable,
   ownerNotificationsTable,
+  ownerRescheduleLogsTable,
 } from "@workspace/db/schema";
 import { eq, and, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
 import { randomBytes } from "crypto";
@@ -112,11 +113,24 @@ router.patch("/bookings/:id", async (req, res) => {
     bookingDate: z.string().min(1).optional(),
     durationDays: z.number().int().min(1).optional(),
     period: z.enum(["morning", "evening", "full_day"]).nullable().optional(),
+    rescheduleReason: z.string().optional(),
     // Restore from cancellation
     restore: z.boolean().optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
-  const { insuranceDeducted, insuranceProofImages, restore, bookingDate, durationDays, period, ...rest } = body.data;
+  const { insuranceDeducted, insuranceProofImages, restore, bookingDate, durationDays, period, rescheduleReason, ...rest } = body.data;
+
+  // If rescheduling, fetch the old booking first to record a log entry
+  const isReschedule = bookingDate !== undefined || durationDays !== undefined || period !== undefined;
+  let oldBooking: typeof ownerBookingsTable.$inferSelect | null = null;
+  if (isReschedule && !restore) {
+    const [existing] = await db
+      .select()
+      .from(ownerBookingsTable)
+      .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)));
+    oldBooking = existing ?? null;
+  }
+
   const [row] = await db
     .update(ownerBookingsTable)
     .set({
@@ -131,7 +145,43 @@ router.patch("/bookings/:id", async (req, res) => {
     .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)))
     .returning();
   if (!row) return res.status(404).json({ error: "not found" });
+
+  // Insert reschedule log if date/duration/period changed
+  if (oldBooking && isReschedule) {
+    const newBookingDate = bookingDate ?? oldBooking.bookingDate;
+    const newDurationDays = durationDays ?? oldBooking.durationDays;
+    const newPeriod = period !== undefined ? period : oldBooking.period;
+    const changed =
+      newBookingDate !== oldBooking.bookingDate ||
+      newDurationDays !== oldBooking.durationDays ||
+      newPeriod !== oldBooking.period;
+    if (changed) {
+      await db.insert(ownerRescheduleLogsTable).values({
+        ownerId,
+        bookingId: id,
+        clientName: oldBooking.clientName,
+        oldDate: oldBooking.bookingDate,
+        newDate: newBookingDate,
+        oldDuration: oldBooking.durationDays,
+        newDuration: newDurationDays,
+        oldPeriod: oldBooking.period,
+        newPeriod: newPeriod ?? null,
+        reason: rescheduleReason ?? "",
+      });
+    }
+  }
+
   return res.json(row);
+});
+
+router.get("/bookings/reschedule-log", async (req, res) => {
+  const ownerId = req.user!.id;
+  const rows = await db
+    .select()
+    .from(ownerRescheduleLogsTable)
+    .where(eq(ownerRescheduleLogsTable.ownerId, ownerId))
+    .orderBy(desc(ownerRescheduleLogsTable.rescheduledAt));
+  return res.json(rows);
 });
 
 /* Phone lookup — auto-fill client name from previous bookings */
