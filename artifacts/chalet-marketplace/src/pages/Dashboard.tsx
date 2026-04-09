@@ -590,11 +590,33 @@ function AddBookingDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">إجمالي قيمة الحجز (ر.س)</label>
-                <Input type="number" min={0} step={1} inputMode="numeric" value={totalPrice} onChange={(e) => setTotalPrice(e.target.value)} placeholder="0" />
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={toAr(totalPrice)}
+                  onChange={(e) => setTotalPrice(
+                    e.target.value
+                      .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+                      .replace(/\D/g, "")
+                  )}
+                  placeholder="٠"
+                  className="text-right"
+                />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">العربون المدفوع (ر.س)</label>
-                <Input type="number" min={0} step={1} inputMode="numeric" value={depositPaid} onChange={(e) => setDepositPaid(e.target.value)} placeholder="0" />
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={toAr(depositPaid)}
+                  onChange={(e) => setDepositPaid(
+                    e.target.value
+                      .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+                      .replace(/\D/g, "")
+                  )}
+                  placeholder="٠"
+                  className="text-right"
+                />
               </div>
             </div>
             {remainingBalance !== null && (
@@ -605,7 +627,18 @@ function AddBookingDialog({
             )}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold">مبلغ التأمين (ر.س) — قابل للإعادة</label>
-              <Input type="number" min={0} step={1} inputMode="numeric" value={insuranceFee} onChange={(e) => setInsuranceFee(e.target.value)} placeholder="0" />
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={toAr(insuranceFee)}
+                onChange={(e) => setInsuranceFee(
+                  e.target.value
+                    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+                    .replace(/\D/g, "")
+                )}
+                placeholder="٠"
+                className="text-right"
+              />
             </div>
           </div>
 
