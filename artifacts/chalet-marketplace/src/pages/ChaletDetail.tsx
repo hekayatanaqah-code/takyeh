@@ -180,7 +180,7 @@ export default function ChaletDetail() {
     refetchOnWindowFocus: true,
   });
 
-  interface ChaletReview { id: number; rating: number; comment: string | null; photoUrls: string[]; isVerified: boolean; isHidden: boolean; ownerReply: string | null; ownerReplyAt: string | null; createdAt: string }
+  interface ChaletReview { id: number; rating: number; comment: string | null; photoUrls: string[]; guestName: string | null; isAnonymous: boolean; isVerified: boolean; isHidden: boolean; ownerReply: string | null; ownerReplyAt: string | null; createdAt: string }
   const { data: reviews = [] } = useQuery<ChaletReview[]>({
     queryKey: ["chalet-reviews", id],
     queryFn: async () => {
@@ -636,10 +636,22 @@ export default function ChaletDetail() {
                           <span key={s} style={{ fontSize: 16, color: s <= rev.rating ? "#f59e0b" : "#d1d5db" }}>★</span>
                         ))}
                       </div>
+                      {/* Reviewer name / anonymous badge */}
                       {rev.isVerified && (
-                        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#16a34a", fontWeight: 700, background: "#f0fdf4", padding: "2px 8px", borderRadius: 20, border: "1px solid #bbf7d0" }}>
-                          ✅ نزيل مؤكد
-                        </span>
+                        rev.isAnonymous || !rev.guestName ? (
+                          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#16a34a", fontWeight: 700, background: "#f0fdf4", padding: "2px 8px", borderRadius: 20, border: "1px solid #bbf7d0" }}>
+                            نزيل مؤكد ✅
+                          </span>
+                        ) : (
+                          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#16a34a", fontWeight: 700, background: "#f0fdf4", padding: "2px 8px", borderRadius: 20, border: "1px solid #bbf7d0" }}>
+                            {(() => {
+                              const parts = rev.guestName!.trim().split(/\s+/);
+                              const first = parts[0] ?? "";
+                              const lastInitial = parts.length > 1 ? ` ${parts[parts.length - 1][0]}.` : "";
+                              return `${first}${lastInitial}`;
+                            })()} ✅
+                          </span>
+                        )
                       )}
                       <span style={{ marginRight: "auto", fontSize: 12, color: "#9ca3af" }}>
                         {new Date(rev.createdAt).toLocaleDateString("ar-SA")}

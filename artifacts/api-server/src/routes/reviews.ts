@@ -62,7 +62,7 @@ router.get("/reviews/:token", async (req, res) => {
 
   if (!chalet) return res.status(404).json({ error: "chalet_not_found" });
 
-  return res.json({ chaletId: chalet.id, chaletName: chalet.nameAr, chaletPhoto: chalet.photos[0] ?? null });
+  return res.json({ chaletId: chalet.id, chaletName: chalet.nameAr, chaletPhoto: chalet.photos[0] ?? null, guestName: inv.guestName ?? null });
 });
 
 /* ── POST /reviews/:token ──────────────────────────────────────
@@ -74,6 +74,7 @@ router.post("/reviews/:token", async (req, res) => {
     rating: z.number().int().min(1).max(5),
     comment: z.string().max(2000).optional(),
     photoUrls: z.array(z.string()).max(5).optional(),
+    isAnonymous: z.boolean().optional().default(false),
   });
   const body = bodySchema.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "validation", issues: body.error.issues });
@@ -117,6 +118,8 @@ router.post("/reviews/:token", async (req, res) => {
       rating: body.data.rating,
       comment: body.data.comment ?? null,
       photoUrls: body.data.photoUrls ?? [],
+      guestName: inv.guestName ?? null,
+      isAnonymous: body.data.isAnonymous ?? false,
       isVerified: true,
       isHidden: false,
     }).returning({ id: reviewsTable.id });
@@ -170,6 +173,8 @@ router.get("/admin/reviews", requireAdmin, async (req, res) => {
       rating: reviewsTable.rating,
       comment: reviewsTable.comment,
       photoUrls: reviewsTable.photoUrls,
+      guestName: reviewsTable.guestName,
+      isAnonymous: reviewsTable.isAnonymous,
       isVerified: reviewsTable.isVerified,
       isHidden: reviewsTable.isHidden,
       ownerReply: reviewsTable.ownerReply,

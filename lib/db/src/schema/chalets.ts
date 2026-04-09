@@ -359,6 +359,7 @@ export const reviewInvitationsTable = pgTable("review_invitations", {
   id: serial("id").primaryKey(),
   token: text("token").notNull().unique(),
   chaletId: integer("chalet_id").notNull().references(() => chaletsTable.id, { onDelete: "cascade" }),
+  guestName: text("guest_name"),
   used: boolean("used").notNull().default(false),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -373,6 +374,8 @@ export const reviewsTable = pgTable("reviews", {
   rating: integer("rating").notNull(),
   comment: text("comment"),
   photoUrls: text("photo_urls").array().notNull().default([]),
+  guestName: text("guest_name"),
+  isAnonymous: boolean("is_anonymous").notNull().default(false),
   isVerified: boolean("is_verified").notNull().default(true),
   /* ── Moderation ── */
   isHidden: boolean("is_hidden").notNull().default(false),

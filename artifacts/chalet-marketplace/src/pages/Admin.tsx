@@ -3709,6 +3709,12 @@ function ReviewsTab() {
                   </span>
                 </div>
                 {rev.comment && <p className="text-slate-400 text-sm leading-relaxed">"{rev.comment}"</p>}
+                {rev.reportReason && (
+                  <div className="flex items-start gap-1.5 bg-amber-900/20 border border-amber-800/40 rounded-lg px-3 py-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
+                    <p className="text-amber-300 text-xs leading-relaxed"><span className="font-semibold">سبب البلاغ:</span> {rev.reportReason}</p>
+                  </div>
+                )}
                 {rev.isHidden && <span className="text-xs bg-red-900/40 text-red-400 px-2 py-0.5 rounded-full">مخفي بالفعل</span>}
                 <div className="flex items-center gap-2 pt-1">
                   <Button

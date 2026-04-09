@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Star, Upload, CheckCircle, X, Loader2, AlertCircle } from "lucide-react";
+import { Star, Upload, CheckCircle, X, Loader2, AlertCircle, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -11,6 +11,7 @@ interface InvitationInfo {
   chaletId: number;
   chaletName: string;
   chaletPhoto: string | null;
+  guestName: string | null;
 }
 
 async function uploadFile(file: File): Promise<string | null> {
@@ -69,6 +70,7 @@ export default function RatePage() {
   const [previews, setPreviews] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: info, isLoading, error } = useQuery<InvitationInfo>({
@@ -99,7 +101,7 @@ export default function RatePage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, comment: comment.trim() || undefined, photoUrls }),
+        body: JSON.stringify({ rating, comment: comment.trim() || undefined, photoUrls, isAnonymous }),
       });
       if (!r.ok) {
         const body = await r.json().catch(() => ({}));
@@ -202,6 +204,9 @@ export default function RatePage() {
         <div className="p-7">
           {/* Header */}
           <div className="text-center mb-6">
+            {info?.guestName && (
+              <p className="text-green-600 font-semibold text-sm mb-1">أهلاً، {info.guestName}!</p>
+            )}
             <p className="text-gray-500 text-sm mb-1">تقييم تجربتك في</p>
             <h1 className="text-xl font-bold text-gray-800">{info?.chaletName}</h1>
           </div>
@@ -232,7 +237,7 @@ export default function RatePage() {
           </div>
 
           {/* Photo Upload */}
-          <div className="mb-6">
+          <div className="mb-5">
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               صور (اختياري — حتى 5 صور)
             </label>
@@ -272,6 +277,27 @@ export default function RatePage() {
               className="hidden"
               onChange={(e) => handlePhotos(e.target.files)}
             />
+          </div>
+
+          {/* Anonymous Toggle */}
+          <div className="mb-6">
+            <label className="flex items-center gap-3 cursor-pointer select-none group">
+              <div
+                className={`relative w-10 h-6 rounded-full transition-colors duration-200 ${isAnonymous ? "bg-green-500" : "bg-gray-200"}`}
+                onClick={() => setIsAnonymous((v) => !v)}
+              >
+                <span
+                  className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${isAnonymous ? "translate-x-4 right-0.5" : "right-4"}`}
+                />
+              </div>
+              <span className="flex items-center gap-1.5 text-sm text-gray-700">
+                <EyeOff className="w-3.5 h-3.5 text-gray-400" />
+                نشر كتقييم مجهول
+              </span>
+            </label>
+            <p className="text-xs text-gray-400 mt-1 pr-13">
+              {isAnonymous ? "سيظهر تقييمك باسم «نزيل مؤكد»" : "سيظهر اسمك الأول مع الحرف الأول من اللقب"}
+            </p>
           </div>
 
           {/* Submit */}

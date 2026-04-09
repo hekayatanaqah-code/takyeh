@@ -1024,6 +1024,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
   const [blockDateStr, setBlockDateStr] = useState<string | null>(null);
+  const [reviewSentIds, setReviewSentIds] = useState<Set<number>>(new Set());
+  const [reviewPendingId, setReviewPendingId] = useState<number | null>(null);
 
   const { data: ownerChalets = [], isLoading: chaletsLoading } = useQuery<any[]>({
     queryKey: ["owner", "chalets"],
@@ -1489,7 +1491,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{b.bookingDate}</span>
+                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDualDate(b.bookingDate).hijri} [{formatDualDate(b.bookingDate).gregorian}]</span>
                         <span>{b.durationDays} {b.durationDays === 1 ? "يوم" : "أيام"}</span>
                         {b.period && (
                           <span className="font-medium text-primary">
@@ -1598,6 +1600,42 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       <MessageSquare className="w-3.5 h-3.5" />
                       إيصال واتساب
                     </button>
+                    {/* Request Review */}
+                    {activeChaletId && (
+                      <button
+                        disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                        onClick={async () => {
+                          if (!activeChaletId) return;
+                          setReviewPendingId(b.id);
+                          try {
+                            const r = await apiFetch("/owner/review-invite", {
+                              method: "POST",
+                              body: JSON.stringify({ chaletId: activeChaletId, guestName: b.clientName }),
+                            });
+                            if (r.ok) {
+                              const data = await r.json();
+                              const link = data.link as string;
+                              const msg = encodeURIComponent(`أهلاً ${b.clientName}، يسعدنا تقييمك لتجربتك في شاليهنا 🌟 اضغط هنا: ${link}`);
+                              const phone = b.clientPhone ? b.clientPhone.replace(/\D/g, "") : "";
+                              window.open(`https://wa.me/${phone ? phone : ""}?text=${msg}`, "_blank");
+                              setReviewSentIds((prev) => new Set([...prev, b.id]));
+                            }
+                          } finally {
+                            setReviewPendingId(null);
+                          }
+                        }}
+                        className="flex items-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg px-2.5 py-1 hover:bg-teal-100 dark:hover:bg-teal-900/30 transition-colors disabled:opacity-50"
+                      >
+                        {reviewPendingId === b.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : reviewSentIds.has(b.id) ? (
+                          <CheckCircle className="w-3.5 h-3.5" />
+                        ) : (
+                          <Star className="w-3.5 h-3.5" />
+                        )}
+                        {reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "طلب تقييم"}
+                      </button>
+                    )}
                     {/* Collect balance */}
                     {remaining !== null && remaining > 0 && !b.balanceCollected && (
                       <button
@@ -4424,6 +4462,7 @@ function ReviewsTab() {
   const [replyDraft, setReplyDraft] = useState<Record<number, string>>({});
   const [replyingId, setReplyingId] = useState<number | null>(null);
   const [reportConfirmId, setReportConfirmId] = useState<number | null>(null);
+  const [reportReasonDraft, setReportReasonDraft] = useState("");
 
   interface OwnerNotifRow {
     id: number; type: string; chaletId: number | null; reviewId: number | null;
@@ -4549,16 +4588,17 @@ function ReviewsTab() {
   });
 
   const reportMutation = useMutation({
-    mutationFn: async (reviewId: number) => {
+    mutationFn: async ({ reviewId, reason }: { reviewId: number; reason: string }) => {
       const r = await apiFetch(`/owner/reviews/${reviewId}/report`, {
         method: "POST",
-        body: JSON.stringify({ reason: "" }),
+        body: JSON.stringify({ reason }),
       });
       if (!r.ok) throw new Error("failed");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "reviews"] });
       setReportConfirmId(null);
+      setReportReasonDraft("");
     },
   });
 
@@ -4927,20 +4967,32 @@ function ReviewsTab() {
                     {/* Report button (only if not already reported and not hidden) */}
                     {!rev.reportedAt && !rev.isHidden && (
                       reportConfirmId === rev.id ? (
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="text-amber-600 dark:text-amber-400">هل أنت متأكد من الإبلاغ عن هذا التقييم؟</span>
-                          <button
-                            onClick={() => reportMutation.mutate(rev.id)}
-                            disabled={reportMutation.isPending}
-                            className="text-red-600 hover:text-red-700 font-semibold"
-                          >
-                            {reportMutation.isPending ? "جاري..." : "نعم، أبلغ"}
-                          </button>
-                          <button onClick={() => setReportConfirmId(null)} className="text-muted-foreground">إلغاء</button>
+                        <div className="flex flex-col gap-2 text-sm border border-amber-200 dark:border-amber-700 rounded-lg p-3 bg-amber-50 dark:bg-amber-900/10">
+                          <span className="text-amber-700 dark:text-amber-400 font-medium">سبب الإبلاغ عن هذا التقييم:</span>
+                          <Textarea
+                            value={reportReasonDraft}
+                            onChange={(e) => setReportReasonDraft(e.target.value)}
+                            placeholder="اذكر سبب الإبلاغ بوضوح..."
+                            rows={2}
+                            className="text-sm resize-none"
+                          />
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                if (!reportReasonDraft.trim()) return;
+                                reportMutation.mutate({ reviewId: rev.id, reason: reportReasonDraft.trim() });
+                              }}
+                              disabled={reportMutation.isPending || !reportReasonDraft.trim()}
+                              className="text-red-600 hover:text-red-700 font-semibold disabled:opacity-40"
+                            >
+                              {reportMutation.isPending ? "جاري..." : "إرسال البلاغ"}
+                            </button>
+                            <button onClick={() => { setReportConfirmId(null); setReportReasonDraft(""); }} className="text-muted-foreground">إلغاء</button>
+                          </div>
                         </div>
                       ) : (
                         <button
-                          onClick={() => setReportConfirmId(rev.id)}
+                          onClick={() => { setReportConfirmId(rev.id); setReportReasonDraft(""); }}
                           className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
                         >
                           <AlertTriangle className="w-3.5 h-3.5" />

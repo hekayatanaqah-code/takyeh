@@ -161,7 +161,10 @@ router.get("/chalets", async (req, res) => {
 
 router.post("/review-invite", async (req, res) => {
   const ownerId = req.user!.id;
-  const body = z.object({ chaletId: z.number().int().positive() }).safeParse(req.body);
+  const body = z.object({
+    chaletId: z.number().int().positive(),
+    guestName: z.string().max(200).optional(),
+  }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
   const subs = await db
@@ -185,7 +188,7 @@ router.post("/review-invite", async (req, res) => {
 
   const [inv] = await db
     .insert(reviewInvitationsTable)
-    .values({ token, chaletId: chalet.id, expiresAt })
+    .values({ token, chaletId: chalet.id, expiresAt, guestName: body.data.guestName ?? null })
     .returning();
 
   return res.json({ token: inv.token, chaletId: chalet.id, chaletName: chalet.nameAr });
@@ -1353,6 +1356,8 @@ router.get("/reviews", async (req, res) => {
       rating: reviewsTable.rating,
       comment: reviewsTable.comment,
       photoUrls: reviewsTable.photoUrls,
+      guestName: reviewsTable.guestName,
+      isAnonymous: reviewsTable.isAnonymous,
       isVerified: reviewsTable.isVerified,
       isHidden: reviewsTable.isHidden,
       ownerReply: reviewsTable.ownerReply,
