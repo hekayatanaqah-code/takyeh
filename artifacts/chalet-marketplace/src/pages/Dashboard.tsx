@@ -337,7 +337,7 @@ function ChaletsTab({ submissions, isLoading }: { submissions: any[] | undefined
 
 /* ── Add Booking Dialog ──────────────────────── */
 function AddBookingDialog({
-  open, onClose, submissions, onAdded, existingBookings, prefilledDate,
+  open, onClose, submissions, onAdded, existingBookings, prefilledDate, prefilledChaletId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -345,6 +345,7 @@ function AddBookingDialog({
   onAdded: () => void;
   existingBookings?: OwnerBooking[];
   prefilledDate?: string | null;
+  prefilledChaletId?: string | null;
 }) {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
@@ -404,11 +405,12 @@ function AddBookingDialog({
     }
   }, [morningDisabled, eveningDisabled, fullDayDisabled, period]);
 
-  // Pre-fill date when opened from calendar click
+  // Pre-fill date and chalet when opened from calendar click
   useEffect(() => {
     if (open && prefilledDate) setBookingDate(prefilledDate);
-    if (!open) setBookingDate(""); // clear on close
-  }, [open, prefilledDate]);
+    if (open && prefilledChaletId) setSubmissionId(prefilledChaletId);
+    if (!open) { setBookingDate(""); }
+  }, [open, prefilledDate, prefilledChaletId]);
 
   const tp = totalPrice ? Math.round(Number(totalPrice)) : null;
   const dp = depositPaid ? Math.round(Number(depositPaid)) : null;
@@ -444,7 +446,10 @@ function AddBookingDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientName || !bookingDate) { setError("يرجى ملء الحقول المطلوبة"); return; }
+    if (!clientName.trim()) { setError("يرجى إدخال اسم العميل"); return; }
+    if (!clientPhone.trim()) { setError("يرجى إدخال رقم الجوال"); return; }
+    if (!bookingDate) { setError("يرجى اختيار تاريخ الحجز"); return; }
+    if (!totalPrice) { setError("يرجى إدخال إجمالي قيمة الحجز"); return; }
     setSaving(true); setError("");
     try {
       const r = await apiFetch("/owner/bookings", {
@@ -472,19 +477,59 @@ function AddBookingDialog({
     }
   };
 
+  /* ── Derived display values ── */
+  const selectedChalet = submissions.find((s: any) => String(s.id) === submissionId) ?? null;
+  const bookingHijri = bookingDate ? formatDualDate(bookingDate).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : null;
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); reset(); } }}>
       <DialogContent dir="rtl" className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-right">إضافة حجز يدوي</DialogTitle>
+          <DialogTitle className="text-right text-base">إضافة حجز يدوي</DialogTitle>
         </DialogHeader>
-        <p className="text-xs text-muted-foreground -mt-2">لتسجيل حجوزات قادمة من واتساب أو انستقرام أو أي مصدر خارج المنصة</p>
-        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
 
-          {/* Phone — first so auto-fill works */}
+        {/* ── Chalet + Date header banner ── */}
+        <div className="rounded-xl bg-primary/8 border border-primary/20 px-4 py-3 -mt-1 space-y-0.5">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🏡</span>
+            <span className="text-sm font-bold text-primary">
+              {selectedChalet ? selectedChalet.nameAr : <span className="text-muted-foreground font-normal">لم يُحدَّد الشاليه بعد</span>}
+            </span>
+          </div>
+          {bookingHijri && (
+            <p className="text-xs text-muted-foreground font-medium pr-7">
+              📅 {bookingHijri}
+              {bookingDate && <span className="text-muted-foreground/60 mr-2">({formatDualDate(bookingDate).gregorian})</span>}
+            </p>
+          )}
+          {!bookingHijri && (
+            <p className="text-xs text-muted-foreground pr-7">اختر التاريخ أدناه لعرض التاريخ الهجري</p>
+          )}
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 mt-1">
+
+          {/* ── Chalet selector — REQUIRED, at top ── */}
+          {submissions.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">اسم الشاليه <span className="text-destructive">*</span></label>
+              <Select value={submissionId} onValueChange={setSubmissionId}>
+                <SelectTrigger><SelectValue placeholder="اختر الشاليه..." /></SelectTrigger>
+                <SelectContent>
+                  {submissions.map((s: any) => (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.nameAr}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* ── Phone — required, Arabic numerals ── */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-sm font-semibold">رقم الجوال (للتعرف التلقائي)</label>
+              <label className="text-sm font-semibold">
+                رقم الجوال <span className="text-destructive">*</span>
+              </label>
               {isReturningCustomer === true && (
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                   🔄 زبون سابق
@@ -498,27 +543,34 @@ function AddBookingDialog({
             </div>
             <div className="relative">
               <Input
-                type="tel"
-                value={clientPhone}
-                onChange={(e) => { setClientPhone(e.target.value); setIsReturningCustomer(null); }}
-                onBlur={handlePhoneBlur}
-                placeholder="05xxxxxxxx"
-                dir="ltr"
-                className="text-left"
+                type="text"
                 inputMode="numeric"
+                value={toAr(clientPhone)}
+                onChange={(e) => {
+                  const raw = e.target.value
+                    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+                    .replace(/\D/g, "");
+                  setClientPhone(raw);
+                  setIsReturningCustomer(null);
+                }}
+                onBlur={handlePhoneBlur}
+                placeholder="٠٥xxxxxxxx"
+                className="text-right"
               />
               {phoneLoading && <span className="absolute left-3 top-2.5 text-xs text-muted-foreground animate-pulse">جاري البحث…</span>}
             </div>
           </div>
 
+          {/* ── Client name — required ── */}
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold">اسم العميل *</label>
-            <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="اسم العميل" />
+            <label className="text-sm font-semibold">اسم العميل <span className="text-destructive">*</span></label>
+            <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="اسم العميل الكريم" />
           </div>
 
+          {/* ── Date + Duration ── */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">تاريخ الحجز *</label>
+              <label className="text-sm font-semibold">تاريخ الحجز <span className="text-destructive">*</span></label>
               <div className="rounded-md border bg-background px-3 py-2 text-sm min-h-[2.5rem] flex items-center">
                 <DualCalendarPicker
                   value={bookingDate}
@@ -530,28 +582,35 @@ function AddBookingDialog({
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">عدد الأيام</label>
-              <Input type="number" min={1} value={durationDays} onChange={(e) => setDurationDays(Number(e.target.value))} />
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={toAr(String(durationDays))}
+                onChange={(e) => {
+                  const raw = e.target.value
+                    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+                    .replace(/\D/g, "");
+                  setDurationDays(Math.max(1, Number(raw) || 1));
+                }}
+              />
             </div>
           </div>
 
+          {/* ── Period ── */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">الفترة الزمنية</label>
-
-            {/* Full-block warning */}
             {isFullyBlocked && (
               <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
                 <span className="text-base">⛔</span>
                 <span className="text-xs font-semibold text-red-700 dark:text-red-300">هذا اليوم محجوز بالكامل — لا تتوفر فترات متاحة</span>
               </div>
             )}
-
-            {/* Period radio buttons */}
             <div className="grid grid-cols-2 gap-2">
               {([
-                { value: "none",      label: "—",          sub: "بدون تحديد", disabled: false,          icon: "" },
-                { value: "morning",   label: "صباحي",      sub: "الفترة الصباحية", disabled: morningDisabled,  icon: "🌅" },
-                { value: "evening",   label: "مسائي",      sub: "الفترة المسائية", disabled: eveningDisabled,  icon: "🌙" },
-                { value: "full_day",  label: "يوم كامل",   sub: "يوم كامل",   disabled: fullDayDisabled, icon: "☀️" },
+                { value: "none",     label: "—",         sub: "بدون تحديد",       disabled: false,           icon: "" },
+                { value: "morning",  label: "صباحي",     sub: "الفترة الصباحية",  disabled: morningDisabled,  icon: "🌅" },
+                { value: "evening",  label: "مسائي",     sub: "الفترة المسائية",  disabled: eveningDisabled,  icon: "🌙" },
+                { value: "full_day", label: "يوم كامل",  sub: "يوم كامل",         disabled: fullDayDisabled,  icon: "☀️" },
               ] as const).map(({ value, label, sub, disabled, icon }) => (
                 <button
                   key={value}
@@ -571,9 +630,7 @@ function AddBookingDialog({
                   <span className="text-sm font-semibold flex items-center gap-1">
                     {icon && <span>{icon}</span>}
                     {label}
-                    {disabled && (
-                      <span className="text-[10px] font-bold text-red-500 dark:text-red-400 mr-1">(محجوز)</span>
-                    )}
+                    {disabled && <span className="text-[10px] font-bold text-red-500 dark:text-red-400 mr-1">(محجوز)</span>}
                   </span>
                   {value !== "none" && (
                     <span className="text-[10px] text-muted-foreground leading-none">{sub}</span>
@@ -586,12 +643,14 @@ function AddBookingDialog({
             </div>
           </div>
 
-          {/* ── Financial Fields ── */}
+          {/* ── Financial Fields — إجمالي required ── */}
           <div className="bg-muted/40 rounded-xl p-3 space-y-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">تفاصيل المبالغ</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold">إجمالي قيمة الحجز (ر.س)</label>
+                <label className="text-xs font-semibold">
+                  إجمالي قيمة الحجز (ر.س) <span className="text-destructive">*</span>
+                </label>
                 <Input
                   type="text"
                   inputMode="numeric"
@@ -644,6 +703,7 @@ function AddBookingDialog({
             </div>
           </div>
 
+          {/* ── Source ── */}
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">مصدر الحجز</label>
             <Select value={source} onValueChange={(v) => setSource(v as "platform" | "external")}>
@@ -655,27 +715,13 @@ function AddBookingDialog({
             </Select>
           </div>
 
-          {submissions.length > 0 && (
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold">الشاليه (اختياري)</label>
-              <Select value={submissionId} onValueChange={setSubmissionId}>
-                <SelectTrigger><SelectValue placeholder="اختر الشاليه" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">—</SelectItem>
-                  {submissions.map((s: any) => (
-                    <SelectItem key={s.id} value={String(s.id)}>{s.nameAr}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
+          {/* ── Notes — optional ── */}
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold">ملاحظات (اختياري)</label>
+            <label className="text-sm font-semibold">ملاحظات <span className="text-xs font-normal text-muted-foreground">(اختياري)</span></label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="أي ملاحظات إضافية..." />
           </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <p className="text-sm text-destructive font-medium">{error}</p>}
           <div className="flex gap-3 pt-2">
             <Button type="submit" className="flex-1" disabled={saving}>
               {saving ? "جاري الحفظ..." : "حفظ الحجز"}
@@ -1786,6 +1832,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         onAdded={() => qc.invalidateQueries({ queryKey: ["owner", "bookings"] })}
         existingBookings={bookings}
         prefilledDate={prefilledDate}
+        prefilledChaletId={activeChaletId ? String(activeChaletId) : undefined}
       />
 
       {/* Day Booking Summary Dialog */}
