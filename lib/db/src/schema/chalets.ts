@@ -202,6 +202,7 @@ export const ownerRescheduleLogsTable = pgTable("owner_reschedule_logs", {
   ownerId: text("owner_id").notNull(),
   bookingId: integer("booking_id").notNull(),
   clientName: text("client_name").notNull().default(""),
+  clientPhone: text("client_phone"),
   oldDate: text("old_date").notNull(),
   newDate: text("new_date").notNull(),
   oldDuration: integer("old_duration").notNull().default(1),

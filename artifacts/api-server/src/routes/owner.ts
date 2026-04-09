@@ -160,6 +160,7 @@ router.patch("/bookings/:id", async (req, res) => {
         ownerId,
         bookingId: id,
         clientName: oldBooking.clientName,
+        clientPhone: oldBooking.clientPhone ?? null,
         oldDate: oldBooking.bookingDate,
         newDate: newBookingDate,
         oldDuration: oldBooking.durationDays,

@@ -77,6 +77,7 @@ interface RescheduleLogItem {
   id: number;
   bookingId: number;
   clientName: string;
+  clientPhone?: string | null;
   oldDate: string;
   newDate: string;
   oldDuration: number;
@@ -2074,10 +2075,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     const endD = new Date(new Date(b.bookingDate + "T00:00:00").getTime() + ((b.durationDays ?? 1) - 1) * 86400000);
                     const endStr = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, "0")}-${String(endD.getDate()).padStart(2, "0")}`;
                     const startHijri = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
-                    const endHijri = formatDualDate(endStr).hijri.replace(/\s*هـ\s*$/, "");
+                    const startGreg  = formatDualDate(b.bookingDate).gregorian;
+                    const endHijri   = formatDualDate(endStr).hijri.replace(/\s*هـ\s*$/, "");
+                    const endGreg    = formatDualDate(endStr).gregorian;
                     return (
-                      <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 text-xs text-primary font-medium leading-relaxed">
-                        لمدة {b.durationDays} أيام &nbsp;·&nbsp; من {startHijri} إلى {endHijri} هـ
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 text-xs text-primary font-medium leading-relaxed space-y-0.5">
+                        <p>لمدة {b.durationDays} أيام</p>
+                        <p className="text-primary/80">من: {startHijri} هـ <span className="text-primary/50 font-normal">({startGreg})</span></p>
+                        <p className="text-primary/80">إلى: {endHijri} هـ <span className="text-primary/50 font-normal">({endGreg})</span></p>
                       </div>
                     );
                   })()}
@@ -2291,21 +2296,43 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 {cancelledBookings.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-4 text-center">لا توجد حجوزات ملغاة</p>
                 ) : cancelledBookings.map((b) => {
+                  const dur = b.durationDays ?? 1;
+                  const endD = new Date(new Date(b.bookingDate + "T00:00:00").getTime() + (dur - 1) * 86400000);
+                  const endStr = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, "0")}-${String(endD.getDate()).padStart(2, "0")}`;
                   const startHijri = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
-                  const startGreg = formatDualDate(b.bookingDate).gregorian;
+                  const startGreg  = formatDualDate(b.bookingDate).gregorian;
+                  const endHijri   = dur > 1 ? formatDualDate(endStr).hijri.replace(/\s*هـ\s*$/, "") : null;
+                  const endGreg    = dur > 1 ? formatDualDate(endStr).gregorian : null;
                   const cancelledDate = b.cancelledAt ? new Date(b.cancelledAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "";
+                  const periodLabel = b.period ? ({ morning: "صباحي", evening: "مسائي", full_day: "يوم كامل" }[b.period] ?? b.period) : "";
                   return (
                     <div key={b.id} className="bg-muted/30 border border-dashed border-destructive/30 rounded-xl p-3 space-y-2">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 space-y-1">
                           <p className="text-sm font-semibold text-foreground line-through decoration-destructive/50">{b.clientName}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{startHijri} هـ <span className="opacity-60">| {startGreg}</span></p>
-                          <p className="text-xs text-muted-foreground">{b.durationDays} {b.durationDays === 1 ? "يوم" : "أيام"}{b.period ? ` · ${{ morning: "صباحي", evening: "مسائي", full_day: "يوم كامل" }[b.period] ?? b.period}` : ""}</p>
+                          {b.clientPhone && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1" dir="ltr">
+                              <span className="not-italic">📞</span> {b.clientPhone}
+                            </p>
+                          )}
+                          {dur === 1 ? (
+                            <p className="text-xs text-muted-foreground">
+                              {startHijri} هـ <span className="opacity-60">({startGreg})</span>{periodLabel ? ` · ${periodLabel}` : ""}
+                            </p>
+                          ) : (
+                            <div className="text-xs text-muted-foreground space-y-0.5">
+                              <p className="font-medium">لمدة {dur} أيام{periodLabel ? ` · ${periodLabel}` : ""}</p>
+                              <p>من: {startHijri} هـ <span className="opacity-60">({startGreg})</span></p>
+                              <p>إلى: {endHijri} هـ <span className="opacity-60">({endGreg})</span></p>
+                            </div>
+                          )}
                           {b.cancelReason && (
-                            <p className="text-xs text-destructive/80 mt-1 bg-destructive/5 rounded px-2 py-1">سبب الإلغاء: {b.cancelReason}</p>
+                            <p className="text-xs text-destructive/90 bg-destructive/5 border border-destructive/15 rounded px-2 py-1.5 leading-relaxed break-words">
+                              <span className="font-semibold">سبب الإلغاء:</span> {b.cancelReason}
+                            </p>
                           )}
                           {cancelledDate && (
-                            <p className="text-[11px] text-muted-foreground/60 mt-0.5">أُلغي في {cancelledDate}</p>
+                            <p className="text-[11px] text-muted-foreground/60">أُلغي في {cancelledDate}</p>
                           )}
                         </div>
                         <button
@@ -2333,30 +2360,58 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const newHijri = formatDualDate(log.newDate).hijri.replace(/\s*هـ\s*$/, "");
                   const oldGreg  = formatDualDate(log.oldDate).gregorian;
                   const newGreg  = formatDualDate(log.newDate).gregorian;
-                  const periodLabel = (p?: string | null) => p ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[p] ?? p) : "";
-                  const logDate = new Date(log.rescheduledAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" });
+                  const pLabel   = (p?: string | null) => p ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[p] ?? p) : "";
+                  const logDate  = new Date(log.rescheduledAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" });
+                  // Compute end dates for multi-day ranges
+                  const oldEndD = new Date(new Date(log.oldDate + "T00:00:00").getTime() + (log.oldDuration - 1) * 86400000);
+                  const oldEndStr = `${oldEndD.getFullYear()}-${String(oldEndD.getMonth() + 1).padStart(2, "0")}-${String(oldEndD.getDate()).padStart(2, "0")}`;
+                  const newEndD = new Date(new Date(log.newDate + "T00:00:00").getTime() + (log.newDuration - 1) * 86400000);
+                  const newEndStr = `${newEndD.getFullYear()}-${String(newEndD.getMonth() + 1).padStart(2, "0")}-${String(newEndD.getDate()).padStart(2, "0")}`;
                   return (
-                    <div key={log.id} className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-semibold text-foreground">{log.clientName}</p>
-                        <p className="text-[11px] text-muted-foreground/60 shrink-0">{logDate}</p>
+                    <div key={log.id} className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2.5">
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{log.clientName}</p>
+                          {log.clientPhone && (
+                            <p className="text-xs text-muted-foreground" dir="ltr">📞 {log.clientPhone}</p>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground/60 shrink-0 mt-0.5">{logDate}</p>
                       </div>
+                      {/* Old → New date cards */}
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="bg-muted/50 rounded-lg p-2 space-y-0.5">
-                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">التاريخ القديم</p>
-                          <p className="font-medium text-foreground">{oldHijri} هـ</p>
+                        <div className="bg-muted/50 rounded-lg p-2.5 space-y-1">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">التاريخ القديم</p>
+                          <p className="font-semibold text-foreground">{oldHijri} هـ</p>
                           <p className="text-muted-foreground/70">{oldGreg}</p>
-                          <p className="text-muted-foreground">{log.oldDuration} {log.oldDuration === 1 ? "يوم" : "أيام"}{periodLabel(log.oldPeriod) ? ` · ${periodLabel(log.oldPeriod)}` : ""}</p>
+                          {log.oldDuration > 1 && (
+                            <>
+                              <p className="text-muted-foreground">إلى: {formatDualDate(oldEndStr).hijri.replace(/\s*هـ\s*$/, "")} هـ</p>
+                              <p className="text-muted-foreground/60">{formatDualDate(oldEndStr).gregorian}</p>
+                            </>
+                          )}
+                          <p className="text-muted-foreground">{log.oldDuration} {log.oldDuration === 1 ? "يوم" : "أيام"}{pLabel(log.oldPeriod) ? ` · ${pLabel(log.oldPeriod)}` : ""}</p>
                         </div>
-                        <div className="bg-primary/10 rounded-lg p-2 space-y-0.5">
-                          <p className="text-[10px] font-semibold text-primary uppercase tracking-wide">التاريخ الجديد</p>
-                          <p className="font-medium text-foreground">{newHijri} هـ</p>
+                        <div className="bg-primary/10 rounded-lg p-2.5 space-y-1">
+                          <p className="text-[10px] font-bold text-primary uppercase tracking-wide">التاريخ الجديد</p>
+                          <p className="font-semibold text-foreground">{newHijri} هـ</p>
                           <p className="text-muted-foreground/70">{newGreg}</p>
-                          <p className="text-muted-foreground">{log.newDuration} {log.newDuration === 1 ? "يوم" : "أيام"}{periodLabel(log.newPeriod) ? ` · ${periodLabel(log.newPeriod)}` : ""}</p>
+                          {log.newDuration > 1 && (
+                            <>
+                              <p className="text-muted-foreground">إلى: {formatDualDate(newEndStr).hijri.replace(/\s*هـ\s*$/, "")} هـ</p>
+                              <p className="text-muted-foreground/60">{formatDualDate(newEndStr).gregorian}</p>
+                            </>
+                          )}
+                          <p className="text-muted-foreground">{log.newDuration} {log.newDuration === 1 ? "يوم" : "أيام"}{pLabel(log.newPeriod) ? ` · ${pLabel(log.newPeriod)}` : ""}</p>
                         </div>
                       </div>
+                      {/* Reason — fully visible, no truncation */}
                       {log.reason && (
-                        <p className="text-xs text-primary/80 bg-primary/5 rounded px-2 py-1">سبب التعديل: {log.reason}</p>
+                        <div className="bg-background border border-primary/15 rounded-lg px-3 py-2">
+                          <p className="text-[10px] font-bold text-primary uppercase tracking-wide mb-1">سبب التعديل</p>
+                          <p className="text-xs text-foreground leading-relaxed break-words">{log.reason}</p>
+                        </div>
                       )}
                     </div>
                   );
