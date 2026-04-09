@@ -1584,8 +1584,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
             <DialogContent className="max-w-sm" dir="rtl">
               <DialogHeader>
                 <DialogTitle className="text-base font-bold leading-snug">
-                  حجوزات {sumGreg}
-                  <span className="block text-xs font-normal text-muted-foreground mt-0.5">{sumHijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                  حجوزات {sumHijri.replace(/\s*هـ\s*$/, "")} هـ
+                  <span className="block text-xs font-normal text-muted-foreground mt-0.5">{sumGreg}</span>
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-3 mt-1">
@@ -1593,6 +1593,13 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const total = b.totalPrice ? Math.round(Number(b.totalPrice)) : null;
                   const dep   = b.depositPaid ? Math.round(Number(b.depositPaid)) : null;
                   const bal   = total && dep ? total - dep : null;
+                  const popDur = Math.max(1, b.durationDays ?? 1);
+                  const popEndD = new Date(new Date(b.bookingDate + "T00:00:00").getTime() + (popDur - 1) * 86400000);
+                  const popEndStr = `${popEndD.getFullYear()}-${String(popEndD.getMonth() + 1).padStart(2, "0")}-${String(popEndD.getDate()).padStart(2, "0")}`;
+                  const popStartH = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
+                  const popStartG = formatDualDate(b.bookingDate).gregorian;
+                  const popEndH   = formatDualDate(popEndStr).hijri.replace(/\s*هـ\s*$/, "");
+                  const popEndG   = formatDualDate(popEndStr).gregorian;
                   return (
                     <div key={b.id} className={`rounded-xl border p-3 space-y-1.5 ${bi > 0 ? "mt-2" : ""} ${
                       b.period === "morning" ? "border-amber-200 bg-amber-50 dark:bg-amber-900/20" :
@@ -1600,6 +1607,18 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       "border-red-200 bg-red-50 dark:bg-red-900/20"
                     }`}>
                       <p className="text-sm font-bold">{periodName(b.period)}</p>
+                      {/* Duration info row — always shown */}
+                      <div className="text-xs text-primary/80 bg-primary/5 rounded-lg px-2.5 py-1.5 leading-relaxed space-y-0.5">
+                        {popDur === 1 ? (
+                          <p>يوم واحد · {popStartH} هـ <span className="text-muted-foreground/70">({popStartG})</span></p>
+                        ) : (
+                          <>
+                            <p className="font-semibold">لمدة {popDur} أيام</p>
+                            <p>من: {popStartH} هـ <span className="text-muted-foreground/70">({popStartG})</span></p>
+                            <p>إلى: {popEndH} هـ <span className="text-muted-foreground/70">({popEndG})</span></p>
+                          </>
+                        )}
+                      </div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span>الضيف</span>
                         <span className="font-semibold text-foreground text-left">{b.clientName}</span>
@@ -2303,7 +2322,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const startGreg  = formatDualDate(b.bookingDate).gregorian;
                   const endHijri   = dur > 1 ? formatDualDate(endStr).hijri.replace(/\s*هـ\s*$/, "") : null;
                   const endGreg    = dur > 1 ? formatDualDate(endStr).gregorian : null;
-                  const cancelledDate = b.cancelledAt ? new Date(b.cancelledAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "";
+                  const cancelledDateRaw = b.cancelledAt ? new Date(b.cancelledAt) : null;
+                  const cancelledDateStr = cancelledDateRaw ? (() => {
+                    const y = cancelledDateRaw.getFullYear();
+                    const m = cancelledDateRaw.getMonth() + 1;
+                    const d = cancelledDateRaw.getDate();
+                    const iso = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                    const h = formatDualDate(iso).hijri.replace(/\s*هـ\s*$/, "");
+                    const g = formatDualDate(iso).gregorian;
+                    return `${h} هـ (${g})`;
+                  })() : "";
                   const periodLabel = b.period ? ({ morning: "صباحي", evening: "مسائي", full_day: "يوم كامل" }[b.period] ?? b.period) : "";
                   return (
                     <div key={b.id} className="bg-muted/30 border border-dashed border-destructive/30 rounded-xl p-3 space-y-2">
@@ -2331,8 +2359,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               <span className="font-semibold">سبب الإلغاء:</span> {b.cancelReason}
                             </p>
                           )}
-                          {cancelledDate && (
-                            <p className="text-[11px] text-muted-foreground/60">أُلغي في {cancelledDate}</p>
+                          {cancelledDateStr && (
+                            <p className="text-[11px] text-muted-foreground/60">أُلغي في {cancelledDateStr}</p>
                           )}
                         </div>
                         <button
@@ -2361,7 +2389,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const oldGreg  = formatDualDate(log.oldDate).gregorian;
                   const newGreg  = formatDualDate(log.newDate).gregorian;
                   const pLabel   = (p?: string | null) => p ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[p] ?? p) : "";
-                  const logDate  = new Date(log.rescheduledAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" });
+                  const logDateRaw = new Date(log.rescheduledAt);
+                  const logIso = `${logDateRaw.getFullYear()}-${String(logDateRaw.getMonth() + 1).padStart(2, "0")}-${String(logDateRaw.getDate()).padStart(2, "0")}`;
+                  const logHijri = formatDualDate(logIso).hijri.replace(/\s*هـ\s*$/, "");
+                  const logGreg  = formatDualDate(logIso).gregorian;
                   // Compute end dates for multi-day ranges
                   const oldEndD = new Date(new Date(log.oldDate + "T00:00:00").getTime() + (log.oldDuration - 1) * 86400000);
                   const oldEndStr = `${oldEndD.getFullYear()}-${String(oldEndD.getMonth() + 1).padStart(2, "0")}-${String(oldEndD.getDate()).padStart(2, "0")}`;
@@ -2370,14 +2401,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   return (
                     <div key={log.id} className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2.5">
                       {/* Header */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
+                      <div className="space-y-0.5">
+                        <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-semibold text-foreground">{log.clientName}</p>
-                          {log.clientPhone && (
-                            <p className="text-xs text-muted-foreground" dir="ltr">📞 {log.clientPhone}</p>
-                          )}
                         </div>
-                        <p className="text-[11px] text-muted-foreground/60 shrink-0 mt-0.5">{logDate}</p>
+                        {log.clientPhone && (
+                          <p className="text-xs text-muted-foreground" dir="ltr">📞 {log.clientPhone}</p>
+                        )}
+                        <p className="text-[11px] text-muted-foreground/70">
+                          <span className="font-semibold">تاريخ إعادة الجدولة:</span> {logHijri} هـ <span className="opacity-70">({logGreg})</span>
+                        </p>
                       </div>
                       {/* Old → New date cards */}
                       <div className="grid grid-cols-2 gap-2 text-xs">
