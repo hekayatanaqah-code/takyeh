@@ -16,7 +16,7 @@ import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { formatDualDate } from "@/lib/hijri";
 import { toAr } from "@/lib/utils";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import {
   User, LogOut, Plus, MapPin, Calendar, Clock, CheckCircle,
@@ -976,14 +976,20 @@ function MiniCalendar({
     return m;
   }, [availability]);
 
-  /* Map actual DB bookings → period → guestName */
+  /* Map actual DB bookings → period → guestName, expanded across durationDays */
   const bookingMap = useMemo(() => {
     const m = new Map<string, Map<string, string>>();
     for (const b of bookings) {
       if (!b.bookingDate) continue;
-      if (!m.has(b.bookingDate)) m.set(b.bookingDate, new Map());
+      const duration = Math.max(1, b.durationDays ?? 1);
       const period = b.period ?? "full_day";
-      m.get(b.bookingDate)!.set(period, b.clientName ?? "");
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      for (let i = 0; i < duration; i++) {
+        const d = new Date(sy, sm - 1, sd + i);
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        if (!m.has(ds)) m.set(ds, new Map());
+        m.get(ds)!.set(period, b.clientName ?? "");
+      }
     }
     return m;
   }, [bookings]);
@@ -1257,7 +1263,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
       {/* Day Booking Summary Dialog */}
       {summaryDate && (() => {
-        const sumBkgs = calBookings.filter((b) => b.bookingDate === summaryDate);
+        const sumBkgs = calBookings.filter((b) => {
+          if (!b.bookingDate) return false;
+          const end = new Date(b.bookingDate);
+          end.setDate(end.getDate() + Math.max(1, b.durationDays ?? 1) - 1);
+          return summaryDate >= b.bookingDate && summaryDate <= end.toISOString().slice(0, 10);
+        });
         const [sy, sm, sd] = summaryDate.split("-").map(Number);
         const sumGreg = new Date(sy, sm - 1, sd).toLocaleDateString("ar-SA", { weekday: "long", day: "numeric", month: "long", year: "numeric", calendar: "gregory" });
         const sumHijri = new Date(sy, sm - 1, sd).toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric" });
@@ -1289,6 +1300,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
                         <span>الضيف</span>
                         <span className="font-semibold text-foreground text-left">{b.clientName}</span>
+                        {b.clientPhone && <>
+                          <span>الجوال</span>
+                          <span className="font-semibold text-foreground text-left" dir="ltr">{b.clientPhone}</span>
+                        </>}
                         {total !== null && <>
                           <span>الإجمالي</span>
                           <span className="font-semibold text-foreground text-left">{total.toLocaleString("ar-SA")} ر.س</span>
@@ -1375,11 +1390,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 bookings={calBookings}
                 onDateClick={(ds) => {
                   if (!activeChaletId) return;
-                  const dayBkgs = calBookings.filter((b) => b.bookingDate === ds);
+                  const dayBkgs = calBookings.filter((b) => {
+                    if (!b.bookingDate) return false;
+                    const end = new Date(b.bookingDate);
+                    end.setDate(end.getDate() + Math.max(1, b.durationDays ?? 1) - 1);
+                    return ds >= b.bookingDate && ds <= end.toISOString().slice(0, 10);
+                  });
                   if (dayBkgs.length > 0) {
                     setSummaryDate(ds);
                   } else {
-                    setBlockDateStr(ds);
+                    setAddOpen(true);
                   }
                 }}
               />
