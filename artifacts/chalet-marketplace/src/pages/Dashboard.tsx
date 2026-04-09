@@ -1563,7 +1563,62 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     },
   });
 
+  const { data: siteSettings = {} } = useQuery<Record<string, string>>({
+    queryKey: ["siteSettings"],
+    queryFn: async () => {
+      const r = await fetch(`${import.meta.env.BASE_URL}api/page-content`);
+      if (!r.ok) return {};
+      const rows: { key: string; value: string }[] = await r.json();
+      return Object.fromEntries(rows.map((x) => [x.key, x.value]));
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   const activeChaletId = selectedChaletId ?? ownerChalets[0]?.id ?? null;
+
+  /* ── Build WhatsApp review message from template ── */
+  const DEFAULT_WA_REVIEW = "أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} 🌟\nاضغط هنا لتقييمك: {link}";
+  function buildReviewMessage(guestName: string, chaletName: string, link: string): string {
+    const chalet = ownerChalets.find((c: any) => c.id === activeChaletId);
+    const tpl =
+      (chalet?.waReviewTemplate as string | null | undefined) ??
+      siteSettings.wa_review_template ??
+      DEFAULT_WA_REVIEW;
+    return tpl
+      .replace(/\{link\}/g, link)
+      .replace(/\{guest_name\}/g, guestName)
+      .replace(/\{chalet_name\}/g, chaletName);
+  }
+
+  /* ── Send review invite via WhatsApp ── */
+  async function sendReviewRequest(b: OwnerBooking) {
+    if (!activeChaletId) return;
+    setReviewPendingId(b.id);
+    try {
+      const r = await apiFetch("/owner/review-invite", {
+        method: "POST",
+        body: JSON.stringify({ chaletId: activeChaletId, guestName: b.clientName }),
+      });
+      if (!r.ok) return;
+      const data = await r.json();
+      const link = data.link as string;
+      const chaletName = ownerChalets.find((c: any) => c.submissionId === b.submissionId)?.nameAr
+        ?? ownerChalets.find((c: any) => c.id === activeChaletId)?.nameAr
+        ?? "شاليهنا";
+      const msg = buildReviewMessage(b.clientName ?? "", chaletName, link);
+      let rawPhone = b.clientPhone?.replace(/\D/g, "") ?? "";
+      if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
+      if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
+      const a = document.createElement("a");
+      a.href = `https://wa.me/${rawPhone || ""}?text=${encodeURIComponent(msg)}`;
+      a.target = "_blank"; a.rel = "noopener noreferrer";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setReviewSentIds((prev) => new Set([...prev, b.id]));
+      toast({ title: "تم إرسال طلب التقييم ✓", description: `تم فتح واتساب لإرسال رابط التقييم إلى ${b.clientName}` });
+    } finally {
+      setReviewPendingId(null);
+    }
+  }
 
   const { data: availability = [], isLoading: availLoading } = useQuery<ChaletAvailability[]>({
     queryKey: ["owner", "availability", activeChaletId],
@@ -1919,8 +1974,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <span className="col-span-2 text-foreground/70 italic text-[0.7rem]">{b.notes}</span>
                         </>}
                       </div>
-                      {/* Cancel & Reschedule quick actions */}
-                      <div className="flex gap-2 mt-2 pt-2 border-t border-border/50">
+                      {/* Cancel / Reschedule / Review quick actions */}
+                      <div className="flex gap-2 mt-2 pt-2 border-t border-border/50 flex-wrap">
                         <button
                           onClick={() => { setSummaryDate(null); setRescheduleBooking(b); }}
                           className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-primary border border-primary/30 rounded-lg py-1.5 hover:bg-primary/10 transition-colors"
@@ -1933,7 +1988,21 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg py-1.5 hover:bg-destructive/10 transition-colors"
                         >
                           <XCircle className="w-3 h-3" />
-                          إلغاء الحجز
+                          إلغاء
+                        </button>
+                        <button
+                          disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                          onClick={() => sendReviewRequest(b)}
+                          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 border border-teal-300 dark:border-teal-800 rounded-lg py-1.5 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-50"
+                        >
+                          {reviewPendingId === b.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : reviewSentIds.has(b.id) ? (
+                            <CheckCircle className="w-3 h-3" />
+                          ) : (
+                            <Star className="w-3 h-3" />
+                          )}
+                          {reviewSentIds.has(b.id) ? "تم ✓" : "تقييم"}
                         </button>
                       </div>
                     </div>
@@ -2499,32 +2568,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     {activeChaletId && (
                       <button
                         disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
-                        onClick={async () => {
-                          if (!activeChaletId) return;
-                          setReviewPendingId(b.id);
-                          try {
-                            const r = await apiFetch("/owner/review-invite", {
-                              method: "POST",
-                              body: JSON.stringify({ chaletId: activeChaletId, guestName: b.clientName }),
-                            });
-                            if (r.ok) {
-                              const data = await r.json();
-                              const link = data.link as string;
-                              const chaletName = ownerChalets.find((c: any) => c.submissionId === b.submissionId)?.nameAr ?? activeChalet?.nameAr ?? "شاليهنا";
-                              const msg = encodeURIComponent(`أهلاً ${b.clientName}، يسعدنا تقييمك لتجربتك في ${chaletName} 🌟\nاضغط هنا لتقييمك: ${link}`);
-                              let rawPhone = b.clientPhone?.replace(/\D/g, "") ?? "";
-                              if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
-                              if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
-                              const a = document.createElement("a");
-                              a.href = `https://wa.me/${rawPhone || ""}?text=${msg}`;
-                              a.target = "_blank"; a.rel = "noopener noreferrer";
-                              document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                              setReviewSentIds((prev) => new Set([...prev, b.id]));
-                            }
-                          } finally {
-                            setReviewPendingId(null);
-                          }
-                        }}
+                        onClick={() => sendReviewRequest(b)}
                         className="flex items-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg px-2.5 py-1 hover:bg-teal-100 dark:hover:bg-teal-900/30 transition-colors disabled:opacity-50"
                       >
                         {reviewPendingId === b.id ? (
@@ -2971,6 +3015,7 @@ function RevenueTab() {
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
   const [reviewSentRevIds, setReviewSentRevIds] = useState<Set<number>>(new Set());
   const [reviewPendingRevId, setReviewPendingRevId] = useState<number | null>(null);
+  const { toast } = useToast();
 
   const monthOptions = useMemo(() => {
     const opts: { val: string; label: string }[] = [];
@@ -2987,7 +3032,7 @@ function RevenueTab() {
     return opts.reverse();
   }, []);
 
-  const { data: revOwnerChalets = [] } = useQuery<{ id: number; submissionId: number | null; nameAr: string }[]>({
+  const { data: revOwnerChalets = [] } = useQuery<{ id: number; submissionId: number | null; nameAr: string; waReviewTemplate?: string | null }[]>({
     queryKey: ["owner", "chalets"],
     queryFn: async () => {
       const r = await apiFetch("/owner/chalets");
@@ -2995,6 +3040,17 @@ function RevenueTab() {
       return r.json();
     },
     staleTime: 60_000,
+  });
+
+  const { data: siteSettingsCache = {} } = useQuery<Record<string, string>>({
+    queryKey: ["siteSettings"],
+    queryFn: async () => {
+      const r = await fetch(`${import.meta.env.BASE_URL}api/page-content`);
+      if (!r.ok) return {};
+      const rows: { key: string; value: string }[] = await r.json();
+      return Object.fromEntries(rows.map((x) => [x.key, x.value]));
+    },
+    staleTime: 5 * 60 * 1000,
   });
 
   const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
@@ -3217,16 +3273,24 @@ function RevenueTab() {
                                 if (r.ok) {
                                   const data = await r.json();
                                   const link = data.link as string;
-                                  const chaletName = revOwnerChalets.find((c) => c.id === chaletId)?.nameAr ?? "شاليهنا";
-                                  const msg = encodeURIComponent(`أهلاً ${row.clientName}، يسعدنا تقييمك لتجربتك في ${chaletName} 🌟\nاضغط هنا لتقييمك: ${link}`);
+                                  const revChalet = revOwnerChalets.find((c) => c.id === chaletId);
+                                  const chaletName = revChalet?.nameAr ?? "شاليهنا";
+                                  const revSiteSettings = siteSettingsCache;
+                                  const DEFAULT_WA_REV = "أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} 🌟\nاضغط هنا لتقييمك: {link}";
+                                  const tpl = (revChalet as any)?.waReviewTemplate ?? revSiteSettings?.wa_review_template ?? DEFAULT_WA_REV;
+                                  const msg = tpl
+                                    .replace(/\{link\}/g, link)
+                                    .replace(/\{guest_name\}/g, row.clientName ?? "")
+                                    .replace(/\{chalet_name\}/g, chaletName);
                                   let rawPhone = row.booking.clientPhone?.replace(/\D/g, "") ?? "";
                                   if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
                                   if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
                                   const a = document.createElement("a");
-                                  a.href = `https://wa.me/${rawPhone || ""}?text=${msg}`;
+                                  a.href = `https://wa.me/${rawPhone || ""}?text=${encodeURIComponent(msg)}`;
                                   a.target = "_blank"; a.rel = "noopener noreferrer";
                                   document.body.appendChild(a); a.click(); document.body.removeChild(a);
                                   setReviewSentRevIds((prev) => new Set([...prev, row.bookingId]));
+                                  toast({ title: "تم إرسال طلب التقييم ✓", description: `تم فتح واتساب لإرسال رابط التقييم إلى ${row.clientName}` });
                                 }
                               } finally {
                                 setReviewPendingRevId(null);
@@ -5611,7 +5675,7 @@ function ReportsTab() {
 /* ── Reviews Tab ─────────────────────────────── */
 interface OwnerChalet { id: number; nameAr: string; photos: string[]; waReviewTemplate: string | null }
 
-const DEFAULT_REVIEW_TEMPLATE = "أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: {link}";
+const DEFAULT_REVIEW_TEMPLATE = "أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} 🌟\nاضغط هنا لتقييمك: {link}";
 
 interface OwnerReviewRow {
   id: number;
@@ -5795,7 +5859,10 @@ function ReviewsTab() {
       chalet.waReviewTemplate ??
       siteSettings.wa_review_template ??
       DEFAULT_REVIEW_TEMPLATE;
-    const text = template.replace(/\{link\}/g, link);
+    const text = template
+      .replace(/\{link\}/g, link)
+      .replace(/\{chalet_name\}/g, chalet.nameAr ?? "شاليهنا")
+      .replace(/\{guest_name\}/g, "");
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 

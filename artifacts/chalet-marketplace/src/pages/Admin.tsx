@@ -2264,14 +2264,14 @@ function SettingsTab() {
             <Textarea
               value={form.wa_review_template ?? ""}
               onChange={(e) => setForm((f) => ({ ...f, wa_review_template: e.target.value }))}
-              placeholder="أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: {link}"
+              placeholder="أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} 🌟&#10;اضغط هنا لتقييمك: {link}"
               rows={5}
               className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-y font-mono text-sm leading-relaxed"
               dir="rtl"
             />
           </div>
           <div className="bg-slate-900/60 border border-slate-600 rounded-lg p-4 space-y-2">
-            <p className="text-xs font-bold text-slate-300 mb-2">المتغيرات المتاحة:</p>
+            <p className="text-xs font-bold text-slate-300 mb-2">المتغيرات المتاحة — اضغط للإدراج:</p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -2281,9 +2281,25 @@ function SettingsTab() {
                 <span className="text-blue-400 font-bold">{"{link}"}</span>
                 <span className="text-slate-500 text-[10px]">← رابط التقييم</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, wa_review_template: (f.wa_review_template ?? "") + "{guest_name}" }))}
+                className="flex items-center gap-1.5 bg-slate-800 hover:bg-teal-900/40 border border-slate-600 hover:border-teal-500 text-slate-300 hover:text-teal-300 text-xs px-2.5 py-1.5 rounded-lg transition-all font-mono"
+              >
+                <span className="text-teal-400 font-bold">{"{guest_name}"}</span>
+                <span className="text-slate-500 text-[10px]">← اسم الضيف</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, wa_review_template: (f.wa_review_template ?? "") + "{chalet_name}" }))}
+                className="flex items-center gap-1.5 bg-slate-800 hover:bg-amber-900/40 border border-slate-600 hover:border-amber-500 text-slate-300 hover:text-amber-300 text-xs px-2.5 py-1.5 rounded-lg transition-all font-mono"
+              >
+                <span className="text-amber-400 font-bold">{"{chalet_name}"}</span>
+                <span className="text-slate-500 text-[10px]">← اسم الشاليه</span>
+              </button>
             </div>
             <p className="text-[11px] text-slate-500 pt-1">
-              ضع <code className="text-blue-400 bg-slate-800 px-1 rounded">{"{link}"}</code> في أي مكان بالرسالة وسيُستبدل تلقائياً برابط التقييم. اترك الحقل فارغاً لاستخدام الرسالة الافتراضية.
+              استخدم هذه المتغيرات في أي مكان بالرسالة وستُستبدل تلقائياً. اترك الحقل فارغاً لاستخدام الرسالة الافتراضية.
             </p>
           </div>
           <SaveBtn label="حفظ قالب رسالة التقييم" />
@@ -3564,7 +3580,7 @@ interface AdminReviewRow {
   createdAt: string;
 }
 
-const DEFAULT_REVIEW_TEMPLATE = "أهلاً بك.. سعدنا باستضافتكم في شاليهنا، يسعدنا جداً تقييم تجربتك عبر هذا الرابط لضمان تقديم أفضل خدمة: {link}";
+const DEFAULT_REVIEW_TEMPLATE = "أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} 🌟\nاضغط هنا لتقييمك: {link}";
 
 function ReviewsTab() {
   const qc = useQueryClient();
@@ -3661,7 +3677,10 @@ function ReviewsTab() {
     const link = generatedLinks[chaletId];
     if (!link) return;
     const template = siteSettings.wa_review_template || DEFAULT_REVIEW_TEMPLATE;
-    const text = template.replace(/\{link\}/g, link);
+    const text = template
+      .replace(/\{link\}/g, link)
+      .replace(/\{chalet_name\}/g, chaletName ?? "شاليهنا")
+      .replace(/\{guest_name\}/g, "");
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 
