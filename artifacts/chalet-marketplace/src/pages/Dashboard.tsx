@@ -952,12 +952,15 @@ function BlockDateDialog({
 }
 
 /* ── Mini Calendar ───────────────────────────── */
+const _hijriFmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric" });
+
 function MiniCalendar({
-  year, month, availability, onDateClick,
+  year, month, availability, bookings, onDateClick,
 }: {
   year: number;
   month: number;
   availability: ChaletAvailability[];
+  bookings: OwnerBooking[];
   onDateClick: (dateStr: string) => void;
 }) {
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -970,6 +973,17 @@ function MiniCalendar({
     return m;
   }, [availability]);
 
+  /* Map actual DB bookings → periods per date */
+  const bookingMap = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const b of bookings) {
+      if (!b.bookingDate) continue;
+      if (!m.has(b.bookingDate)) m.set(b.bookingDate, new Set());
+      if (b.period) m.get(b.bookingDate)!.add(b.period);
+    }
+    return m;
+  }, [bookings]);
+
   const today = new Date().toISOString().slice(0, 10);
 
   const cells: (number | null)[] = [];
@@ -980,31 +994,43 @@ function MiniCalendar({
     <div className="select-none">
       <div className="grid grid-cols-7 gap-px mb-1">
         {arabicDays.map((d) => (
-          <div key={d} className="text-center text-xs font-semibold text-muted-foreground py-1">{d}</div>
+          <div key={d} className="text-center text-[10px] font-semibold text-muted-foreground py-1">{d}</div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
         {cells.map((day, i) => {
           if (!day) return <div key={`empty-${i}`} />;
           const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const entry = availMap.get(dateStr);
-          const isBlocked = entry && (entry.periodMorning || entry.periodEvening || entry.periodFullDay);
-          const isPartial = entry && !entry.periodFullDay && (entry.periodMorning || entry.periodEvening);
+          const avEntry = availMap.get(dateStr);
+          const bkPeriods = bookingMap.get(dateStr);
+
+          /* Merge manual availability blocks + actual DB bookings */
+          const morningBlocked = !!(avEntry?.periodMorning || bkPeriods?.has("morning"));
+          const eveningBlocked = !!(avEntry?.periodEvening || bkPeriods?.has("evening"));
+          const fullDayBlocked = !!(avEntry?.periodFullDay || bkPeriods?.has("full_day"));
+          const isBlocked = morningBlocked || eveningBlocked || fullDayBlocked;
+          const isPartial = isBlocked && !fullDayBlocked && (morningBlocked !== eveningBlocked);
           const isToday = dateStr === today;
+
+          /* Dual-date numbers */
+          const hijriDay = _hijriFmt.format(new Date(year, month - 1, day));
 
           return (
             <button
               key={dateStr}
               onClick={() => onDateClick(dateStr)}
-              className={`relative aspect-square rounded-lg text-xs font-medium transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+              className={`relative flex flex-col items-center justify-center rounded-lg py-1.5 px-0 transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[42px] ${
                 isBlocked
                   ? isPartial
                     ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
                     : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
                   : "hover:bg-primary/10 text-foreground"
-              } ${isToday ? "ring-2 ring-primary font-bold" : ""}`}
+              } ${isToday ? "ring-2 ring-primary" : ""}`}
             >
-              {day}
+              {/* Hijri day — primary, bold */}
+              <span className="text-[0.78rem] font-bold leading-none">{hijriDay}</span>
+              {/* Gregorian day — secondary, muted */}
+              <span className={`text-[0.55rem] leading-none mt-0.5 tabular-nums ${isBlocked ? "opacity-60" : "text-muted-foreground"}`}>{day}</span>
               {isBlocked && (
                 <span className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${isPartial ? "bg-amber-500" : "bg-red-500"}`} />
               )}
@@ -1130,6 +1156,17 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     });
   }, [availability, calYear, calMonth]);
 
+  /* Filter bookings to the active chalet + current calendar month for the mini calendar */
+  const calBookings = useMemo(() => {
+    if (!activeChalet) return [];
+    return bookings.filter((b) => {
+      if (!b.bookingDate) return false;
+      const [y, m] = b.bookingDate.split("-").map(Number);
+      if (y !== calYear || m !== calMonth) return false;
+      return b.submissionId === activeChalet.submissionId;
+    });
+  }, [bookings, activeChalet, calYear, calMonth]);
+
   const blockEntry = blockDateStr ? availability.find((a) => a.dateStr === blockDateStr) ?? null : null;
 
   const monthLabelGreg = new Date(calYear, calMonth - 1, 1).toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" });
@@ -1216,6 +1253,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 year={calYear}
                 month={calMonth}
                 availability={calAvailability}
+                bookings={calBookings}
                 onDateClick={(ds) => {
                   if (!activeChaletId) return;
                   setBlockDateStr(ds);
@@ -1652,9 +1690,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             if (r.ok) {
                               const data = await r.json();
                               const link = data.link as string;
-                              const msg = encodeURIComponent(`أهلاً ${b.clientName}، يسعدنا تقييمك لتجربتك في شاليهنا 🌟 اضغط هنا: ${link}`);
-                              const phone = b.clientPhone ? b.clientPhone.replace(/\D/g, "") : "";
-                              window.open(`https://wa.me/${phone ? phone : ""}?text=${msg}`, "_blank");
+                              const chaletName = ownerChalets.find((c: any) => c.submissionId === b.submissionId)?.nameAr ?? activeChalet?.nameAr ?? "شاليهنا";
+                              const msg = encodeURIComponent(`أهلاً ${b.clientName}، يسعدنا تقييمك لتجربتك في ${chaletName} 🌟\nاضغط هنا لتقييمك: ${link}`);
+                              let rawPhone = b.clientPhone?.replace(/\D/g, "") ?? "";
+                              if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
+                              if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
+                              const a = document.createElement("a");
+                              a.href = `https://wa.me/${rawPhone || ""}?text=${msg}`;
+                              a.target = "_blank"; a.rel = "noopener noreferrer";
+                              document.body.appendChild(a); a.click(); document.body.removeChild(a);
                               setReviewSentIds((prev) => new Set([...prev, b.id]));
                             }
                           } finally {
@@ -2133,10 +2177,15 @@ function RevenueTab() {
                                 if (r.ok) {
                                   const data = await r.json();
                                   const link = data.link as string;
-                                  const msg = encodeURIComponent(`أهلاً ${row.clientName}، يسعدنا تقييمك لتجربتك في شاليهنا 🌟 اضغط هنا: ${link}`);
-                                  const rawPhone = row.booking.clientPhone?.replace(/\D/g, "") ?? "";
-                                  const phone = rawPhone.startsWith("0") ? "966" + rawPhone.slice(1) : rawPhone;
-                                  window.open(`https://wa.me/${phone || ""}?text=${msg}`, "_blank");
+                                  const chaletName = revOwnerChalets.find((c) => c.id === chaletId)?.nameAr ?? "شاليهنا";
+                                  const msg = encodeURIComponent(`أهلاً ${row.clientName}، يسعدنا تقييمك لتجربتك في ${chaletName} 🌟\nاضغط هنا لتقييمك: ${link}`);
+                                  let rawPhone = row.booking.clientPhone?.replace(/\D/g, "") ?? "";
+                                  if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
+                                  if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
+                                  const a = document.createElement("a");
+                                  a.href = `https://wa.me/${rawPhone || ""}?text=${msg}`;
+                                  a.target = "_blank"; a.rel = "noopener noreferrer";
+                                  document.body.appendChild(a); a.click(); document.body.removeChild(a);
                                   setReviewSentRevIds((prev) => new Set([...prev, row.bookingId]));
                                 }
                               } finally {
