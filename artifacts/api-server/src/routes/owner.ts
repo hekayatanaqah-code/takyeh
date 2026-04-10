@@ -178,10 +178,10 @@ router.post("/bookings", async (req, res) => {
   const body = z.object({
     submissionId: z.number().int().positive().optional(),
     clientName: z.string().min(1),
-    clientPhone: z.string().optional(),
+    clientPhone: z.string().min(1, "رقم الجوال مطلوب"),
     bookingDate: z.string().min(1),
     durationDays: z.number().int().min(1).default(1),
-    period: z.enum(["morning", "evening", "full_day"]).optional(),
+    period: z.enum(["morning", "evening", "full_day"]),
     source: z.enum(["platform", "external"]).default("platform"),
     notes: z.string().optional(),
     revenueAmount: z.number().nonnegative().optional(),
@@ -190,7 +190,7 @@ router.post("/bookings", async (req, res) => {
     insuranceFee: z.number().nonnegative().optional(),
   }).safeParse(req.body);
 
-  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة — رقم الجوال والفترة مطلوبان" });
 
   if (body.data.submissionId) {
     const [sub] = await db
@@ -447,6 +447,7 @@ router.post("/review-invite", async (req, res) => {
   const body = z.object({
     chaletId: z.number().int().positive(),
     guestName: z.string().max(200).optional(),
+    bookingId: z.number().int().positive().optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
@@ -471,7 +472,7 @@ router.post("/review-invite", async (req, res) => {
 
   const [inv] = await db
     .insert(reviewInvitationsTable)
-    .values({ token, chaletId: chalet.id, expiresAt, guestName: body.data.guestName ?? null })
+    .values({ token, chaletId: chalet.id, expiresAt, guestName: body.data.guestName ?? null, bookingId: body.data.bookingId ?? null })
     .returning();
 
   return res.json({ token: inv.token, chaletId: chalet.id, chaletName: chalet.nameAr });

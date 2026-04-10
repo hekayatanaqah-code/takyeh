@@ -1597,7 +1597,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     try {
       const r = await apiFetch("/owner/review-invite", {
         method: "POST",
-        body: JSON.stringify({ chaletId: activeChaletId, guestName: b.clientName }),
+        body: JSON.stringify({ chaletId: activeChaletId, guestName: b.clientName, bookingId: b.id }),
       });
       if (!r.ok) return;
       const data = await r.json();
@@ -1991,20 +1991,27 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <XCircle className="w-3 h-3" />
                           إلغاء
                         </button>
-                        <button
-                          disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
-                          onClick={() => sendReviewRequest(b)}
-                          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 border border-teal-300 dark:border-teal-800 rounded-lg py-1.5 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-50"
-                        >
-                          {reviewPendingId === b.id ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : reviewSentIds.has(b.id) ? (
+                        {b.ratedAt ? (
+                          <span className="flex-1 flex items-center justify-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-lg py-1.5 bg-green-50 dark:bg-green-900/10">
                             <CheckCircle className="w-3 h-3" />
-                          ) : (
-                            <Star className="w-3 h-3" />
-                          )}
-                          {reviewSentIds.has(b.id) ? "تم ✓" : "تقييم"}
-                        </button>
+                            تم التقييم ✅
+                          </span>
+                        ) : (
+                          <button
+                            disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                            onClick={() => sendReviewRequest(b)}
+                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 border border-teal-300 dark:border-teal-800 rounded-lg py-1.5 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-50"
+                          >
+                            {reviewPendingId === b.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : reviewSentIds.has(b.id) ? (
+                              <CheckCircle className="w-3 h-3" />
+                            ) : (
+                              <Star className="w-3 h-3" />
+                            )}
+                            {reviewSentIds.has(b.id) ? "تم ✓" : "تقييم"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -2567,20 +2574,27 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     </button>
                     {/* Request Review */}
                     {activeChaletId && (
-                      <button
-                        disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
-                        onClick={() => sendReviewRequest(b)}
-                        className="flex items-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg px-2.5 py-1 hover:bg-teal-100 dark:hover:bg-teal-900/30 transition-colors disabled:opacity-50"
-                      >
-                        {reviewPendingId === b.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : reviewSentIds.has(b.id) ? (
+                      b.ratedAt ? (
+                        <span className="flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-2.5 py-1">
                           <CheckCircle className="w-3.5 h-3.5" />
-                        ) : (
-                          <Star className="w-3.5 h-3.5" />
-                        )}
-                        {reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "طلب تقييم"}
-                      </button>
+                          تم التقييم ✅
+                        </span>
+                      ) : (
+                        <button
+                          disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                          onClick={() => sendReviewRequest(b)}
+                          className="flex items-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg px-2.5 py-1 hover:bg-teal-100 dark:hover:bg-teal-900/30 transition-colors disabled:opacity-50"
+                        >
+                          {reviewPendingId === b.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : reviewSentIds.has(b.id) ? (
+                            <CheckCircle className="w-3.5 h-3.5" />
+                          ) : (
+                            <Star className="w-3.5 h-3.5" />
+                          )}
+                          {reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "طلب تقييم"}
+                        </button>
+                      )
                     )}
                     {/* Collect balance */}
                     {remaining !== null && remaining > 0 && !b.balanceCollected && (

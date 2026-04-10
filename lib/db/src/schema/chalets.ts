@@ -193,6 +193,7 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   cancelReason: text("cancel_reason"),
+  ratedAt: timestamp("rated_at", { withTimezone: true }),
 });
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;
 
@@ -379,6 +380,7 @@ export const reviewInvitationsTable = pgTable("review_invitations", {
   id: serial("id").primaryKey(),
   token: text("token").notNull().unique(),
   chaletId: integer("chalet_id").notNull().references(() => chaletsTable.id, { onDelete: "cascade" }),
+  bookingId: integer("booking_id").references(() => ownerBookingsTable.id, { onDelete: "set null" }),
   guestName: text("guest_name"),
   used: boolean("used").notNull().default(false),
   expiresAt: timestamp("expires_at", { withTimezone: true }),

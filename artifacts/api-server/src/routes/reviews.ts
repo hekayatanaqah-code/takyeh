@@ -6,6 +6,7 @@ import {
   chaletsTable,
   chaletSubmissionsTable,
   ownerNotificationsTable,
+  ownerBookingsTable,
 } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
@@ -128,6 +129,14 @@ router.post("/reviews/:token", async (req, res) => {
       .update(reviewInvitationsTable)
       .set({ used: true })
       .where(eq(reviewInvitationsTable.id, inv.id));
+
+    /* Mark the linked booking as rated */
+    if (inv.bookingId) {
+      await tx
+        .update(ownerBookingsTable)
+        .set({ ratedAt: new Date() })
+        .where(eq(ownerBookingsTable.id, inv.bookingId));
+    }
 
     /* Notify the chalet owner */
     if (chaletOwnerId) {

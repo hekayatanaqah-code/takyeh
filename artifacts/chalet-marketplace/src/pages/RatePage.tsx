@@ -146,17 +146,28 @@ export default function RatePage() {
     return (
       <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center px-4" dir="rtl">
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full text-center">
-          <AlertCircle className="w-14 h-14 text-red-400 mx-auto mb-4" />
+          {isUsed ? (
+            <CheckCircle className="w-14 h-14 text-green-500 mx-auto mb-4" />
+          ) : (
+            <AlertCircle className="w-14 h-14 text-red-400 mx-auto mb-4" />
+          )}
           <h2 className="text-xl font-bold text-gray-800 mb-2">
-            {isUsed ? "تم استخدام هذا الرابط" : isExpired ? "انتهت صلاحية الرابط" : "رابط غير صالح"}
+            {isUsed ? "شكراً لك! 🌟" : isExpired ? "انتهت صلاحية الرابط" : "رابط غير صالح"}
           </h2>
-          <p className="text-gray-500 text-sm">
+          <p className="text-gray-500 text-sm leading-relaxed">
             {isUsed
-              ? "لقد تم تقديم تقييم باستخدام هذا الرابط من قبل."
+              ? "لقد تم استلام تقييمك مسبقاً بنجاح. نقدّر وقتك وآراءك التي تساعدنا على تحسين خدماتنا."
               : isExpired
               ? "هذا الرابط لم يعد صالحاً، يرجى طلب رابط جديد."
               : "الرابط غير صحيح أو لم يعد متاحاً."}
           </p>
+          {isUsed && (
+            <div className="flex justify-center gap-1 mt-5">
+              {[1,2,3,4,5].map((s) => (
+                <Star key={s} className="w-6 h-6" fill="#f59e0b" stroke="#f59e0b" strokeWidth={1.5} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
