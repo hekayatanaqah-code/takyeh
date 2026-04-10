@@ -101,6 +101,7 @@ interface ChaletAvailability {
   notes: string | null;
 }
 
+interface DayPrice { morning?: number; evening?: number; fullDay?: number; }
 interface ChaletSeason {
   id: number;
   submissionId: number;
@@ -111,6 +112,7 @@ interface ChaletSeason {
   priceMorning: string | null;
   priceEvening: string | null;
   priceFullDay: string | null;
+  dailyPrices: Record<string, DayPrice> | null;
   period: string | null;
   createdAt: string;
 }
@@ -971,21 +973,28 @@ function AddBookingDialog({
           <div className="bg-muted/40 rounded-xl p-3 space-y-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">تفاصيل المبالغ</p>
             {activeSeason && (() => {
+              /* Per-day price takes priority over season-level price */
+              const dayDP = activeSeason.dailyPrices?.[bookingDate ?? ""] ?? null;
+              const morningP = dayDP?.morning ?? (activeSeason.priceMorning ? Number(activeSeason.priceMorning) : null);
+              const eveningP = dayDP?.evening ?? (activeSeason.priceEvening ? Number(activeSeason.priceEvening) : null);
+              const fullDayP = dayDP?.fullDay ?? (activeSeason.priceFullDay ? Number(activeSeason.priceFullDay) : null);
               const seasonPrice =
-                period === "morning" && activeSeason.priceMorning ? Number(activeSeason.priceMorning) :
-                period === "evening" && activeSeason.priceEvening ? Number(activeSeason.priceEvening) :
-                (period === "full_day" || period === "all") && activeSeason.priceFullDay ? Number(activeSeason.priceFullDay) :
+                period === "morning" && morningP != null ? morningP :
+                period === "evening" && eveningP != null ? eveningP :
+                (period === "full_day" || period === "all") && fullDayP != null ? fullDayP :
                 null;
+              const hasDailyOverride = !!dayDP && Object.keys(dayDP).length > 0;
               return (
                 <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-3 py-2.5 space-y-1.5">
                   <div className="flex items-center gap-2">
                     <Sun className="w-4 h-4 text-amber-500 shrink-0" />
                     <p className="text-xs font-bold text-amber-800 dark:text-amber-300 flex-1">موسم: {activeSeason.nameAr}</p>
+                    {hasDailyOverride && <span className="text-[10px] bg-amber-200 dark:bg-amber-800/50 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded-full">سعر هذا اليوم</span>}
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-amber-700 dark:text-amber-400">
-                    {activeSeason.priceMorning && <span>☀️ صباحي: <span className="font-semibold">{toAr(Number(activeSeason.priceMorning))} ر.س</span></span>}
-                    {activeSeason.priceEvening && <span>🌙 مسائي: <span className="font-semibold">{toAr(Number(activeSeason.priceEvening))} ر.س</span></span>}
-                    {activeSeason.priceFullDay && <span>📅 يوم كامل: <span className="font-semibold">{toAr(Number(activeSeason.priceFullDay))} ر.س</span></span>}
+                    {morningP != null && <span>☀️ صباحي: <span className="font-semibold">{toAr(morningP)} ر.س</span></span>}
+                    {eveningP != null && <span>🌙 مسائي: <span className="font-semibold">{toAr(eveningP)} ر.س</span></span>}
+                    {fullDayP != null && <span>📅 يوم كامل: <span className="font-semibold">{toAr(fullDayP)} ر.س</span></span>}
                   </div>
                   {seasonPrice != null && (
                     <Button
@@ -7284,9 +7293,40 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
   const [priceMorning, setPriceMorning] = useState("");
   const [priceEvening, setPriceEvening] = useState("");
   const [priceFullDay, setPriceFullDay] = useState("");
+  const [dailyPricesState, setDailyPricesState] = useState<Record<string, { morning: string; evening: string; fullDay: string }>>({});
   const [saving, setSaving] = useState(false);
 
   const activeSubId = selectedSubId ?? ownerChalets[0]?.submissionId ?? null;
+
+  /* Generate ordered list of dates in range */
+  const dayList = useMemo<string[]>(() => {
+    if (!startDate || !endDate || endDate < startDate) return [];
+    const days: string[] = [];
+    const cur = new Date(startDate + "T12:00:00");
+    const end = new Date(endDate + "T12:00:00");
+    while (cur <= end) {
+      days.push(cur.toISOString().split("T")[0]);
+      cur.setDate(cur.getDate() + 1);
+    }
+    return days;
+  }, [startDate, endDate]);
+
+  const AR_DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+  const AR_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  const toWest = (v: string) => v.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/\D/g, "");
+
+  function setDayField(ds: string, field: "morning" | "evening" | "fullDay", raw: string) {
+    const val = toWest(raw);
+    setDailyPricesState(prev => ({ ...prev, [ds]: { ...(prev[ds] ?? { morning: "", evening: "", fullDay: "" }), [field]: val } }));
+  }
+
+  function applyToAll() {
+    if (!dayList.length) return;
+    const entry = { morning: priceMorning, evening: priceEvening, fullDay: priceFullDay };
+    const next: Record<string, { morning: string; evening: string; fullDay: string }> = {};
+    dayList.forEach(ds => { next[ds] = { ...entry }; });
+    setDailyPricesState(next);
+  }
 
   const { data: seasons = [], isLoading } = useQuery<ChaletSeason[]>({
     queryKey: ["owner", "seasons", activeSubId],
@@ -7314,10 +7354,22 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
   const normPrice = (v: string) => v ? Number(v) : undefined;
 
   async function handleAdd() {
-    const hasPrice = !!(priceMorning || priceEvening || priceFullDay);
-    if (!activeSubId || !nameAr.trim() || !startDate || !endDate || !hasPrice) return;
+    const hasSeasonPrice = !!(priceMorning || priceEvening || priceFullDay);
+    const hasDailyPrice = Object.values(dailyPricesState).some(dp => dp.morning || dp.evening || dp.fullDay);
+    if (!activeSubId || !nameAr.trim() || !startDate || !endDate || (!hasSeasonPrice && !hasDailyPrice)) return;
     setSaving(true);
     try {
+      /* Build dailyPrices payload — only include days in range with at least one price */
+      const dpPayload: Record<string, DayPrice> = {};
+      dayList.forEach(ds => {
+        const dp = dailyPricesState[ds];
+        if (!dp) return;
+        const entry: DayPrice = {};
+        if (dp.morning) entry.morning = Number(dp.morning);
+        if (dp.evening) entry.evening = Number(dp.evening);
+        if (dp.fullDay) entry.fullDay = Number(dp.fullDay);
+        if (Object.keys(entry).length > 0) dpPayload[ds] = entry;
+      });
       const r = await apiFetch("/owner/seasons", {
         method: "POST",
         body: JSON.stringify({
@@ -7328,6 +7380,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
           priceMorning: normPrice(priceMorning),
           priceEvening: normPrice(priceEvening),
           priceFullDay: normPrice(priceFullDay),
+          dailyPrices: Object.keys(dpPayload).length > 0 ? dpPayload : undefined,
         }),
       });
       if (!r.ok) { const e = await r.json(); toast({ title: e.error ?? "خطأ", variant: "destructive" }); return; }
@@ -7336,6 +7389,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
       setAddOpen(false);
       setNameAr(""); setStartDate(""); setEndDate("");
       setPriceMorning(""); setPriceEvening(""); setPriceFullDay("");
+      setDailyPricesState({});
     } finally { setSaving(false); }
   }
 
@@ -7405,14 +7459,42 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
                     <span>{s.startDate.split("-").reverse().join("/")} → {s.endDate.split("-").reverse().join("/")}</span>
                     <span>({toAr(days)} يوم)</span>
                   </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-xs">
-                    {s.priceMorning && <span className="text-sky-700 dark:text-sky-400">☀️ {toAr(Number(s.priceMorning))} ر.س</span>}
-                    {s.priceEvening && <span className="text-indigo-700 dark:text-indigo-400">🌙 {toAr(Number(s.priceEvening))} ر.س</span>}
-                    {s.priceFullDay && <span className="text-emerald-700 dark:text-emerald-400">📅 {toAr(Number(s.priceFullDay))} ر.س</span>}
-                    {!s.priceMorning && !s.priceEvening && !s.priceFullDay && (
-                      <span className="text-primary font-semibold">{toAr(Number(s.price))} ر.س</span>
-                    )}
-                  </div>
+                  {/* Price display — variable daily pricing or fixed */}
+                  {(() => {
+                    const dp = s.dailyPrices;
+                    const dpEntries = dp ? Object.values(dp) : [];
+                    const hasDaily = dpEntries.length > 0;
+                    if (hasDaily) {
+                      const allPrices = dpEntries.flatMap(e => [e.morning, e.evening, e.fullDay].filter(Boolean) as number[]);
+                      const minP = Math.min(...allPrices);
+                      const maxP = Math.max(...allPrices);
+                      const isVariable = minP !== maxP;
+                      return (
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-xs">
+                          {isVariable ? (
+                            <span className="text-amber-600 dark:text-amber-400 font-medium">
+                              أسعار متغيرة (تبدأ من {toAr(minP)} ر.س)
+                            </span>
+                          ) : (
+                            <span className="text-primary font-medium">
+                              {toAr(minP)} ر.س / يوم
+                            </span>
+                          )}
+                          <span className="text-muted-foreground/60">· {toAr(dpEntries.length)} يوم بأسعار مفصّلة</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-xs">
+                        {s.priceMorning && <span className="text-sky-700 dark:text-sky-400">☀️ {toAr(Number(s.priceMorning))} ر.س</span>}
+                        {s.priceEvening && <span className="text-indigo-700 dark:text-indigo-400">🌙 {toAr(Number(s.priceEvening))} ر.س</span>}
+                        {s.priceFullDay && <span className="text-emerald-700 dark:text-emerald-400">📅 {toAr(Number(s.priceFullDay))} ر.س</span>}
+                        {!s.priceMorning && !s.priceEvening && !s.priceFullDay && (
+                          <span className="text-primary font-semibold">{toAr(Number(s.price))} ر.س</span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Button
@@ -7441,16 +7523,18 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
       </div>
 
       {/* Add Season Dialog */}
-      <Dialog open={addOpen} onOpenChange={(v) => { if (!v) setAddOpen(false); }}>
-        <DialogContent dir="rtl" className="max-w-md">
-          <DialogHeader>
+      <Dialog open={addOpen} onOpenChange={(v) => { if (!v) { setAddOpen(false); setDailyPricesState({}); } }}>
+        <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Sun className="w-4 h-4 text-amber-500" />
               إضافة موسم جديد
             </DialogTitle>
-            <DialogDescription>حدد اسم الموسم، نطاق التواريخ، والسعر الخاص</DialogDescription>
+            <DialogDescription>حدد اسم الموسم ونطاق التواريخ وأسعار كل يوم</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+
+          <div className="overflow-y-auto flex-1 space-y-4 py-2 pl-1">
+            {/* Name */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium">اسم الموسم</label>
               <div className="flex gap-2 flex-wrap">
@@ -7463,54 +7547,116 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
               </div>
               <Input className="mt-2" placeholder="اسم الموسم..." value={nameAr} onChange={(e) => setNameAr(e.target.value)} />
             </div>
+
+            {/* Date range */}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
-                <DualCalendarPicker
-                  value={startDate}
-                  onChange={setStartDate}
-                  placeholder="من تاريخ"
-                  label="من تاريخ"
-                />
+                <DualCalendarPicker value={startDate} onChange={setStartDate} placeholder="من تاريخ" label="من تاريخ" />
               </div>
               <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
-                <DualCalendarPicker
-                  value={endDate}
-                  onChange={setEndDate}
-                  placeholder="إلى تاريخ"
-                  label="إلى تاريخ"
-                  minDate={startDate || undefined}
-                />
+                <DualCalendarPicker value={endDate} onChange={setEndDate} placeholder="إلى تاريخ" label="إلى تاريخ" minDate={startDate || undefined} />
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">الأسعار الموسمية (ر.س) — أدخل واحداً أو أكثر</label>
-              {([
-                { label: "☀️ صباحي", val: priceMorning, set: setPriceMorning, ph: "سعر الفترة الصباحية" },
-                { label: "🌙 مسائي", val: priceEvening, set: setPriceEvening, ph: "سعر الفترة المسائية" },
-                { label: "📅 يوم كامل", val: priceFullDay, set: setPriceFullDay, ph: "سعر اليوم الكامل" },
-              ] as const).map(({ label, val, set, ph }) => (
-                <div key={label} className="flex items-center gap-2">
-                  <span className="text-sm w-24 shrink-0 text-muted-foreground">{label}</span>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder={ph}
-                    value={val ? toAr(val) : ""}
-                    onChange={(e) => (set as (v: string) => void)(
-                      e.target.value
-                        .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
-                        .replace(/\D/g, "")
-                    )}
-                    className="text-right"
-                  />
-                </div>
-              ))}
+
+            {/* Default (apply-to-all) prices */}
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-sm font-semibold text-amber-800 dark:text-amber-300">الأسعار الافتراضية (ر.س)</label>
+                {dayList.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={applyToAll}
+                    disabled={!priceMorning && !priceEvening && !priceFullDay}
+                    className="text-xs font-medium px-3 py-1 rounded-full bg-amber-600 text-white disabled:opacity-40 hover:bg-amber-700 transition-colors"
+                  >
+                    تطبيق على كل الأيام ({toAr(dayList.length)})
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { label: "☀️ صباحي", val: priceMorning, set: setPriceMorning },
+                  { label: "🌙 مسائي", val: priceEvening, set: setPriceEvening },
+                  { label: "📅 يوم كامل", val: priceFullDay, set: setPriceFullDay },
+                ] as const).map(({ label, val, set }) => (
+                  <div key={label} className="space-y-1">
+                    <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">{label}</span>
+                    <Input
+                      type="text" inputMode="numeric" placeholder="٠"
+                      value={val ? toAr(val) : ""}
+                      onChange={(e) => (set as (v: string) => void)(toWest(e.target.value))}
+                      className="h-8 text-right text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-amber-600 dark:text-amber-500">أدخل الأسعار ثم اضغط "تطبيق على كل الأيام"، أو عدّل كل يوم بشكل منفرد أدناه</p>
             </div>
+
+            {/* Daily price rows */}
+            {dayList.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-semibold">التسعير اليومي التفصيلي</label>
+                  <span className="text-xs text-muted-foreground">{toAr(dayList.length)} يوم</span>
+                </div>
+                {/* Column headers */}
+                <div className="grid grid-cols-[1fr_90px_90px_90px] gap-1.5 px-1 text-xs text-muted-foreground font-medium">
+                  <span>اليوم والتاريخ</span>
+                  <span className="text-center">☀️ صباحي</span>
+                  <span className="text-center">🌙 مسائي</span>
+                  <span className="text-center">📅 كامل</span>
+                </div>
+                <div className="space-y-1 max-h-64 overflow-y-auto rounded-xl border border-border bg-muted/20 p-2">
+                  {dayList.map((ds) => {
+                    const d = new Date(ds + "T12:00:00");
+                    const dp = dailyPricesState[ds] ?? { morning: "", evening: "", fullDay: "" };
+                    const dayName = AR_DAYS[d.getDay()];
+                    const dayNum = toAr(d.getDate());
+                    const monthName = AR_MONTHS[d.getMonth()];
+                    const isFriday = d.getDay() === 5;
+                    const isSaturday = d.getDay() === 6;
+                    return (
+                      <div
+                        key={ds}
+                        className={`grid grid-cols-[1fr_90px_90px_90px] items-center gap-1.5 py-1.5 px-1 rounded-lg border-b border-border/30 last:border-0 ${isFriday || isSaturday ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}`}
+                      >
+                        <div className="text-xs leading-tight">
+                          <span className={`font-semibold ${isFriday ? "text-emerald-600" : isSaturday ? "text-sky-600" : "text-foreground"}`}>{dayName}</span>
+                          <span className="text-muted-foreground mr-1">{dayNum} {monthName}</span>
+                        </div>
+                        {(["morning", "evening", "fullDay"] as const).map((field) => (
+                          <Input
+                            key={field}
+                            type="text" inputMode="numeric" placeholder="—"
+                            value={dp[field] ? toAr(dp[field]) : ""}
+                            onChange={(e) => setDayField(ds, field, e.target.value)}
+                            className="h-7 text-center text-xs px-1"
+                          />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* No dates selected hint */}
+            {!startDate || !endDate ? (
+              <div className="text-center py-3 text-xs text-muted-foreground">
+                اختر نطاق التواريخ أعلاه لتظهر الأيام التفصيلية
+              </div>
+            ) : null}
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setAddOpen(false)}>إلغاء</Button>
+
+          <DialogFooter className="gap-2 shrink-0 pt-2 border-t border-border">
+            <Button variant="outline" onClick={() => { setAddOpen(false); setDailyPricesState({}); }}>إلغاء</Button>
             <Button
-              disabled={!nameAr.trim() || !startDate || !endDate || !(priceMorning || priceEvening || priceFullDay) || saving || startDate > endDate}
+              disabled={
+                !nameAr.trim() || !startDate || !endDate || startDate > endDate ||
+                !(priceMorning || priceEvening || priceFullDay || Object.values(dailyPricesState).some(dp => dp.morning || dp.evening || dp.fullDay)) ||
+                saving
+              }
               onClick={handleAdd}
               className="gap-1.5"
             >

@@ -453,6 +453,7 @@ export const chaletSeasonsTable = pgTable("chalet_seasons", {
   priceMorning: numeric("price_morning", { precision: 10, scale: 2 }),
   priceEvening: numeric("price_evening", { precision: 10, scale: 2 }),
   priceFullDay: numeric("price_full_day", { precision: 10, scale: 2 }),
+  dailyPrices: jsonb("daily_prices"),
   period: text("period"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
