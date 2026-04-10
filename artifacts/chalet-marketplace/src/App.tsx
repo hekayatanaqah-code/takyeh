@@ -78,7 +78,8 @@ function Router() {
       </Route>
       <Route path="/login" component={Login} />
       <Route path="/staff-login" component={Login} />
-      <Route path="/admin-login" component={Login} />
+      <Route path="/admin-login" component={AdminPortal} />
+      <Route path="/management/portal" component={AdminPortal} />
       <Route path="/admin/internal/access" component={AdminPortal} />
       <Route path="/r/:token" component={RatePage} />
       <Route path="/about" component={About} />

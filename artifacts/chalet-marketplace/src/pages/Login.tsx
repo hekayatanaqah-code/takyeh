@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, LogIn, Building2, Info, ShieldAlert } from "lucide-react";
+import { Eye, EyeOff, LogIn, Info, ShieldAlert } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -11,10 +11,10 @@ export default function Login() {
   const [, navigate]      = useLocation();
   const qc                = useQueryClient();
   const [input, setInput] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPw, setShowPw]     = useState(false);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [password, setPassword]     = useState("");
+  const [showPw, setShowPw]         = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
   const [isAdminBlock, setIsAdminBlock] = useState(false);
 
   async function handleLogin(e: React.FormEvent) {
@@ -24,8 +24,14 @@ export default function Login() {
 
     setError(null);
     setIsAdminBlock(false);
-    setLoading(true);
 
+    /* ── Auto-detect: email → OIDC, username → staff login ── */
+    if (trimmed.includes("@")) {
+      window.location.href = `${BASE}/api/auth/login`;
+      return;
+    }
+
+    setLoading(true);
     try {
       const r = await fetch(`${BASE}/api/unified-login`, {
         method: "POST",
@@ -76,105 +82,85 @@ export default function Login() {
       </div>
 
       {/* ── Login card ── */}
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl shadow-gray-100 border border-gray-100 overflow-hidden">
-        <div className="p-7">
-          <h2 className="font-bold text-gray-800 text-base mb-5">تسجيل الدخول</h2>
+      <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl shadow-gray-100 border border-gray-100 p-7">
+        <h2 className="font-bold text-gray-800 text-base mb-1">تسجيل الدخول</h2>
+        <p className="text-gray-400 text-xs mb-5">أدخل بريدك الإلكتروني (للملاك) أو اسم المستخدم (للموظفين)</p>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">
-                البريد الإلكتروني أو اسم المستخدم
-              </label>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-gray-700">
+              البريد الإلكتروني أو اسم المستخدم
+            </label>
+            <Input
+              type="text"
+              placeholder="اسم_المستخدم أو example@email.com"
+              value={input}
+              onChange={(e) => { setInput(e.target.value); setError(null); setIsAdminBlock(false); }}
+              autoComplete="username"
+              dir="ltr"
+              className="h-11 text-left placeholder:text-gray-300 border-gray-200 focus:border-green-500"
+              required
+              autoFocus
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-gray-700">كلمة المرور</label>
+            <div className="relative">
               <Input
-                type="text"
-                placeholder="اسم_المستخدم"
-                value={input}
-                onChange={(e) => { setInput(e.target.value); setError(null); setIsAdminBlock(false); }}
-                autoComplete="username"
+                type={showPw ? "text" : "password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(null); setIsAdminBlock(false); }}
+                autoComplete="current-password"
                 dir="ltr"
-                className="h-11 text-left placeholder:text-gray-300 border-gray-200 focus:border-green-500"
+                className="h-11 text-left pr-10 placeholder:text-gray-300 border-gray-200 focus:border-green-500"
                 required
-                autoFocus
               />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowPw((v) => !v)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition-colors"
+              >
+                {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
+          </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">كلمة المرور</label>
-              <div className="relative">
-                <Input
-                  type={showPw ? "text" : "password"}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); setError(null); setIsAdminBlock(false); }}
-                  autoComplete="current-password"
-                  dir="ltr"
-                  className="h-11 text-left pr-10 placeholder:text-gray-300 border-gray-200 focus:border-green-500"
-                  required
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowPw((v) => !v)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition-colors"
-                >
-                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+          {/* Admin cross-block */}
+          {isAdminBlock && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 flex gap-2 items-start">
+              <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+              <div>
+                <p className="font-semibold mb-0.5">يرجى استخدام بوابة الإدارة المخصصة</p>
+                <p className="text-xs text-amber-700">هذا الحساب مخصص للإدارة العامة فقط.</p>
               </div>
             </div>
+          )}
 
-            {/* Admin cross-block message */}
-            {isAdminBlock && (
-              <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 flex gap-2 items-start">
-                <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
-                <div>
-                  <p className="font-semibold mb-0.5">يرجى استخدام بوابة الإدارة المخصصة</p>
-                  <p className="text-xs text-amber-700">هذا الحساب مخصص للإدارة العامة. الرجاء استخدام البوابة الإدارية.</p>
-                </div>
-              </div>
-            )}
+          {error && (
+            <div className="rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3">
+              {error}
+            </div>
+          )}
 
-            {/* Standard error */}
-            {error && (
-              <div className="rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3">
-                {error}
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl gap-2"
-            >
-              {loading ? (
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                </svg>
-              ) : (
-                <LogIn className="w-4 h-4" />
-              )}
-              {loading ? "جاري الدخول…" : "دخول"}
-            </Button>
-          </form>
-        </div>
-
-        {/* Divider */}
-        <div className="flex items-center gap-3 px-7">
-          <div className="flex-1 h-px bg-gray-100" />
-          <span className="text-[11px] text-gray-300 font-medium">للملاك فقط</span>
-          <div className="flex-1 h-px bg-gray-100" />
-        </div>
-
-        {/* Owner OIDC */}
-        <div className="px-7 py-5 bg-gray-50/50">
-          <a
-            href={`${BASE}/api/auth/login`}
-            className="flex items-center justify-center gap-2 w-full h-11 bg-white border border-gray-200 hover:border-green-400 hover:bg-green-50 rounded-xl text-sm font-semibold text-gray-600 hover:text-green-700 transition-all shadow-sm"
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl gap-2"
           >
-            <Building2 className="w-4 h-4" />
-            <span>دخول الملاك</span>
-          </a>
-        </div>
+            {loading ? (
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+            ) : (
+              <LogIn className="w-4 h-4" />
+            )}
+            {loading ? "جاري الدخول…" : "دخول"}
+          </Button>
+        </form>
       </div>
 
       <p className="text-center text-xs text-gray-400 mt-6">
