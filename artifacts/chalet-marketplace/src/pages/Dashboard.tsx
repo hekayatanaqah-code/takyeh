@@ -24,7 +24,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  User, LogOut, Plus, MapPin, Calendar, Clock, CheckCircle,
+  User, LogOut, LogIn, Plus, MapPin, Calendar, Clock, CheckCircle,
   XCircle, Home, BookOpen, Trash2, Building2, Globe, Phone, AlertTriangle,
   RotateCcw, Star, ChevronLeft, ChevronRight, BarChart2, CreditCard,
   TrendingUp, Sunrise, Moon, Sun, Lock, Zap, DollarSign, Users,
@@ -4843,7 +4843,21 @@ function StaffTab() {
                         </div>
                       ) : (
                         <>
-                          <p className="font-bold text-foreground">{member.name}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-foreground">{member.name}</p>
+                            {!member.username && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
+                                <Lock className="w-2.5 h-2.5" />
+                                لا يمكنه الدخول — أضف بيانات تسجيل الدخول
+                              </span>
+                            )}
+                            {member.username && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-green-50 text-green-700 border border-green-100 rounded-full px-2 py-0.5">
+                                <LogIn className="w-2.5 h-2.5" />
+                                @{member.username}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground mt-0.5">الراتب الأساسي: <span className="font-semibold text-foreground">{formatAmount(Number(member.baseSalary))}</span></p>
                         </>
                       )}

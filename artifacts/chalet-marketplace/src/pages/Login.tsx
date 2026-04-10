@@ -3,15 +3,14 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, LogIn, User, ShieldCheck, ChevronLeft } from "lucide-react";
+import { Eye, EyeOff, LogIn, Users, Building2, AlertCircle } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function Login() {
-  const [, navigate] = useLocation();
-  const qc = useQueryClient();
-
-  const [username, setUsername]     = useState("");
+  const [, navigate]                = useLocation();
+  const qc                          = useQueryClient();
+  const [input, setInput]           = useState("");
   const [password, setPassword]     = useState("");
   const [showPw, setShowPw]         = useState(false);
   const [loading, setLoading]       = useState(false);
@@ -22,14 +21,22 @@ export default function Login() {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
-    if (!username.trim() || !password) return;
+    const trimmed = input.trim();
+    if (!trimmed || !password) return;
+
+    /* If input looks like an email, owners must use the OIDC button */
+    if (trimmed.includes("@")) {
+      setError("الملاك يسجّلون دخولهم عبر زر «دخول الملاك» بالأسفل — اسم المستخدم لا يحتوي على @");
+      return;
+    }
+
     setLoading(true);
     try {
       const r = await fetch(`${BASE}/api/unified-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username: username.trim(), password }),
+        body: JSON.stringify({ username: trimmed, password }),
       });
       const data = await r.json();
       if (!r.ok) {
@@ -37,12 +44,10 @@ export default function Login() {
         return;
       }
 
-      /* Show role-specific success message then navigate */
       const roleLabel =
         data.role === "adminStaff" ? "موظف الإدارة العامة" : "موظف";
       setSuccessMsg(`مرحباً! جاري توجيهك كـ${roleLabel}…`);
 
-      /* Invalidate cached auth queries so the destination page re-checks */
       qc.invalidateQueries({ queryKey: ["staff", "me"] });
       qc.invalidateQueries({ queryKey: ["admin-staff", "me"] });
 
@@ -56,11 +61,11 @@ export default function Login() {
 
   return (
     <div
-      className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex flex-col items-center justify-center px-4"
+      className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex flex-col items-center justify-center px-4 py-10"
       dir="rtl"
     >
       {/* ── Brand ── */}
-      <div className="flex flex-col items-center mb-8 select-none">
+      <div className="flex flex-col items-center mb-7 select-none">
         <div className="w-16 h-16 rounded-2xl bg-green-600 shadow-lg shadow-green-200 flex items-center justify-center mb-3">
           <span className="text-white text-2xl font-extrabold">ت</span>
         </div>
@@ -68,38 +73,43 @@ export default function Login() {
         <p className="text-gray-500 text-sm mt-0.5">منصة إدارة الشاليهات — القصيم</p>
       </div>
 
-      {/* ── Login card ── */}
+      {/* ── Single unified card ── */}
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl shadow-gray-100 border border-gray-100 overflow-hidden">
 
-        {/* Staff / Admin login */}
-        <div className="p-7">
-          <div className="flex items-center gap-2 mb-1">
-            <User className="w-4 h-4 text-green-600" />
-            <h2 className="font-bold text-gray-800 text-base">دخول الموظفين</h2>
+        {/* ── Staff / Admin section (primary) ── */}
+        <div className="p-7 pb-5">
+          <div className="flex items-center gap-2 mb-0.5">
+            <Users className="w-4 h-4 text-green-600" />
+            <h2 className="font-bold text-gray-800 text-base">تسجيل الدخول</h2>
           </div>
           <p className="text-gray-400 text-xs mb-5">
-            موظفو شاليهات أو موظفو الإدارة العامة
+            موظفو الشاليهات وموظفو الإدارة يدخلون باسم المستخدم
           </p>
 
           <form onSubmit={handleLogin} className="space-y-3">
-            {/* Username */}
+            {/* Combined input */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">اسم المستخدم</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                البريد الإلكتروني أو اسم المستخدم
+              </label>
               <Input
                 type="text"
-                placeholder="أدخل اسم المستخدم"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                placeholder="اسم_المستخدم"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
                 autoComplete="username"
                 dir="ltr"
                 className="h-11 text-left placeholder:text-gray-300 border-gray-200 focus:border-green-500 focus:ring-green-200"
                 required
               />
+              <p className="text-[11px] text-gray-400 mt-1 me-0.5">
+                الموظفون يستخدمون اسم المستخدم الذي أنشأه المدير
+              </p>
             </div>
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">كلمة المرور</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">كلمة المرور</label>
               <div className="relative">
                 <Input
                   type={showPw ? "text" : "password"}
@@ -122,12 +132,15 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Error / Success */}
+            {/* Error */}
             {error && (
-              <div className="rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-2.5">
-                {error}
+              <div className="rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 flex gap-2 items-start">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
+
+            {/* Success */}
             {successMsg && (
               <div className="rounded-xl bg-green-50 border border-green-100 text-green-700 text-sm px-4 py-2.5">
                 {successMsg}
@@ -153,28 +166,24 @@ export default function Login() {
         </div>
 
         {/* Divider */}
-        <div className="flex items-center gap-3 px-7">
+        <div className="flex items-center gap-3 px-7 py-1">
           <div className="flex-1 h-px bg-gray-100" />
-          <span className="text-xs text-gray-300 font-medium">أو</span>
+          <span className="text-[11px] text-gray-300 font-medium tracking-wide">للملاك فقط</span>
           <div className="flex-1 h-px bg-gray-100" />
         </div>
 
-        {/* Owner OIDC login */}
-        <div className="p-7 pt-5 bg-gray-50/60">
-          <div className="flex items-center gap-2 mb-1">
-            <ShieldCheck className="w-4 h-4 text-gray-500" />
-            <h3 className="font-semibold text-gray-700 text-sm">دخول الملاك</h3>
-          </div>
-          <p className="text-gray-400 text-xs mb-4">
-            إذا كنت مالك شاليه، سجّل دخولك بحسابك الخاص
-          </p>
+        {/* ── Owner OIDC login (secondary) ── */}
+        <div className="px-7 py-5 bg-gray-50/60">
           <a
             href={`${BASE}/api/auth/login`}
-            className="flex items-center justify-center gap-2 w-full h-10 bg-white border border-gray-200 hover:border-green-400 hover:bg-green-50 rounded-xl text-sm font-semibold text-gray-700 hover:text-green-700 transition-all shadow-sm"
+            className="flex items-center justify-center gap-2 w-full h-11 bg-white border border-gray-200 hover:border-green-400 hover:bg-green-50 rounded-xl text-sm font-semibold text-gray-600 hover:text-green-700 transition-all shadow-sm"
           >
-            <span>تسجيل الدخول كمالك</span>
-            <ChevronLeft className="w-4 h-4" />
+            <Building2 className="w-4 h-4" />
+            <span>دخول الملاك</span>
           </a>
+          <p className="text-[11px] text-gray-400 text-center mt-2">
+            إذا كنت مالك شاليه مسجّلاً في المنصة
+          </p>
         </div>
       </div>
 
