@@ -27,7 +27,7 @@ export default function Login() {
 
     /* ── Auto-detect: email → OIDC, username → staff login ── */
     if (trimmed.includes("@")) {
-      window.location.href = `${BASE}/api/auth/login`;
+      window.location.href = `${BASE}/api/login`;
       return;
     }
 

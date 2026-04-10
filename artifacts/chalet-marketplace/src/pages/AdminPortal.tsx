@@ -142,7 +142,7 @@ export default function AdminPortal() {
         {/* Super Admin OIDC */}
         <div className="px-6 py-5">
           <a
-            href={`${BASE}/api/auth/login?returnTo=/admin`}
+            href={`${BASE}/api/login?returnTo=/admin`}
             className="flex items-center justify-center gap-2 w-full h-10 bg-slate-800 border border-slate-700 hover:border-amber-500/40 hover:bg-slate-700 rounded-xl text-xs font-semibold text-slate-400 hover:text-amber-300 transition-all"
           >
             <ShieldCheck className="w-3.5 h-3.5" />
