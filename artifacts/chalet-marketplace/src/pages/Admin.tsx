@@ -1,8 +1,16 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { formatDualDate } from "@/lib/hijri";
 import { toAr } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
+import { useAdminStaffAuth } from "@/lib/useAdminStaffAuth";
+import {
+  ALL_ADMIN_PERM_KEYS,
+  ADMIN_PERM_LABELS,
+  ADMIN_TAB_PERMISSION,
+  type AdminPermKey,
+  type AdminStaffPermissions,
+} from "@/lib/adminPermissions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -3541,7 +3549,7 @@ function PlansTab() {
   );
 }
 
-const TABS = [
+const ALL_TABS = [
   { id: "submissions",         label: "الطلبات",               icon: Settings },
   { id: "chaletVerify",        label: "التوثيق",                icon: ShieldCheck },
   { id: "services",            label: "خدمات المناسبات",       icon: Wrench },
@@ -3555,9 +3563,10 @@ const TABS = [
   { id: "plans",               label: "خطط الاشتراك",          icon: CreditCard },
   { id: "reviews",             label: "التقييمات",             icon: Star },
   { id: "siteSettings",        label: "إعدادات الموقع",        icon: Settings },
+  { id: "adminStaff",          label: "موظفو الإدارة",         icon: Shield },
 ] as const;
 
-type TabId = typeof TABS[number]["id"];
+type TabId = typeof ALL_TABS[number]["id"];
 
 /* ══════════════════════════════════════════════════════════════
    Reviews Tab — generate invitation links, view submitted reviews
@@ -3972,22 +3981,421 @@ function ChaletReviewsList({ chaletId, reviews }: { chaletId: number; reviews: A
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   AdminStaffTab — Platform admin staff management (super admin only)
+   ══════════════════════════════════════════════════════════════ */
+interface AdminStaffRow {
+  id: number;
+  name: string;
+  username: string;
+  permissions: AdminStaffPermissions;
+  isActive: boolean;
+  createdAt: string;
+}
+
+function AdminStaffTab() {
+  const qc = useQueryClient();
+  const [showAdd, setShowAdd] = useState(false);
+  const [permEditId, setPermEditId] = useState<number | null>(null);
+  const [credEditId, setCredEditId] = useState<number | null>(null);
+
+  const [newName, setNewName] = useState("");
+  const [newUsername, setNewUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newPerms, setNewPerms] = useState<AdminStaffPermissions>({});
+
+  const [editCredUsername, setEditCredUsername] = useState("");
+  const [editCredPassword, setEditCredPassword] = useState("");
+  const [editPerms, setEditPerms] = useState<AdminStaffPermissions>({});
+
+  const { data: staffList = [], isLoading } = useQuery<AdminStaffRow[]>({
+    queryKey: ["admin", "staff"],
+    queryFn: async () => {
+      const r = await fetch(`${API}/admin/staff`, { credentials: "include" });
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    },
+  });
+
+  const addMutation = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${API}/admin/staff`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: newName, username: newUsername, password: newPassword, permissions: newPerms }),
+      });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "فشل الحفظ"); }
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "staff"] });
+      setShowAdd(false);
+      setNewName(""); setNewUsername(""); setNewPassword(""); setNewPerms({});
+    },
+  });
+
+  const permMutation = useMutation({
+    mutationFn: async ({ id, permissions }: { id: number; permissions: AdminStaffPermissions }) => {
+      const r = await fetch(`${API}/admin/staff/${id}/permissions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ permissions }),
+      });
+      if (!r.ok) throw new Error("فشل");
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "staff"] }); setPermEditId(null); },
+  });
+
+  const credMutation = useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const r = await fetch(`${API}/admin/staff/${id}/credentials`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username: editCredUsername || undefined, password: editCredPassword || undefined }),
+      });
+      if (!r.ok) throw new Error("فشل");
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "staff"] }); setCredEditId(null); setEditCredUsername(""); setEditCredPassword(""); },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
+      const r = await fetch(`${API}/admin/staff/${id}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ isActive }),
+      });
+      if (!r.ok) throw new Error("فشل");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "staff"] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await fetch(`${API}/admin/staff/${id}`, { method: "DELETE", credentials: "include" });
+      if (!r.ok) throw new Error("فشل");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "staff"] }),
+  });
+
+  return (
+    <div dir="rtl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-bold text-white">موظفو الإدارة العامة</h2>
+          <p className="text-slate-400 text-sm mt-1">
+            إدارة حسابات موظفي المنصة وصلاحياتهم — {toAr(staffList.length)} موظف
+          </p>
+        </div>
+        <Button
+          onClick={() => setShowAdd(true)}
+          className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          إضافة موظف
+        </Button>
+      </div>
+
+      {/* Add Form */}
+      {showAdd && (
+        <div className="bg-slate-800 border border-slate-600 rounded-xl p-6 mb-6">
+          <h3 className="text-white font-bold mb-4">إضافة موظف إدارة جديد</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">الاسم الكامل</label>
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="اسم الموظف"
+                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">اسم المستخدم</label>
+              <Input
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                placeholder="username"
+                dir="ltr"
+                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">كلمة المرور</label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="••••••••"
+                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
+              />
+            </div>
+          </div>
+
+          {/* Permission toggles */}
+          <div className="mb-4">
+            <p className="text-sm text-slate-400 mb-3">الصلاحيات الممنوحة:</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {ALL_ADMIN_PERM_KEYS.map((key) => {
+                const info = ADMIN_PERM_LABELS[key];
+                const enabled = !!newPerms[key];
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setNewPerms((p) => ({ ...p, [key]: !enabled }))}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-right transition-colors border ${
+                      enabled
+                        ? "bg-amber-900/30 border-amber-600 text-amber-300"
+                        : "bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600"
+                    }`}
+                  >
+                    <span className="text-base shrink-0">{info.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium">{info.label}</div>
+                      <div className="text-xs text-slate-400 truncate">{info.description}</div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                      enabled ? "bg-amber-500 border-amber-500" : "border-slate-500"
+                    }`}>
+                      {enabled && <CheckCircle className="w-3 h-3 text-white" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" onClick={() => setShowAdd(false)} className="text-slate-400 hover:text-white">
+              إلغاء
+            </Button>
+            <Button
+              onClick={() => addMutation.mutate()}
+              disabled={!newName || !newUsername || !newPassword || addMutation.isPending}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "حفظ الموظف"}
+            </Button>
+          </div>
+          {addMutation.isError && (
+            <p className="text-red-400 text-sm mt-2 text-right">{(addMutation.error as Error)?.message}</p>
+          )}
+        </div>
+      )}
+
+      {/* Staff List */}
+      {isLoading ? (
+        <div className="text-center py-12 text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
+      ) : staffList.length === 0 ? (
+        <div className="text-center py-12 bg-slate-800 rounded-xl border border-slate-700">
+          <Shield className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+          <p className="text-slate-400">لا يوجد موظفو إدارة حتى الآن</p>
+          <p className="text-slate-500 text-sm mt-1">أضف موظفاً للبدء في تفويض الصلاحيات</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {staffList.map((member) => {
+            const activePerms = ALL_ADMIN_PERM_KEYS.filter((k) => member.permissions?.[k]);
+            const isPermOpen = permEditId === member.id;
+            const isCredOpen = credEditId === member.id;
+
+            return (
+              <div key={member.id} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+                {/* Card header */}
+                <div className="flex items-center gap-4 p-4">
+                  <div className="w-10 h-10 rounded-xl bg-amber-900/40 border border-amber-700/30 flex items-center justify-center shrink-0">
+                    <Shield className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-white font-semibold">{member.name}</span>
+                      <span className="text-slate-500 text-xs font-mono">@{member.username}</span>
+                      {!member.isActive && (
+                        <span className="bg-red-900/40 text-red-400 text-xs px-2 py-0.5 rounded-full border border-red-800">موقوف</span>
+                      )}
+                    </div>
+                    {activePerms.length === 0 ? (
+                      <p className="text-slate-500 text-xs mt-1">لا توجد صلاحيات ممنوحة</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {activePerms.map((k) => (
+                          <span key={k} className="inline-flex items-center gap-1 bg-amber-900/30 text-amber-400 text-xs px-2 py-0.5 rounded-full">
+                            {ADMIN_PERM_LABELS[k].icon} {ADMIN_PERM_LABELS[k].label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => { setCredEditId(isCredOpen ? null : member.id); setPermEditId(null); setEditCredUsername(member.username); setEditCredPassword(""); }}
+                      className="text-xs text-slate-400 hover:text-amber-400 px-2 py-1 rounded border border-slate-600 hover:border-amber-600 transition-colors"
+                    >
+                      بيانات الدخول
+                    </button>
+                    <button
+                      onClick={() => { setPermEditId(isPermOpen ? null : member.id); setCredEditId(null); setEditPerms({ ...member.permissions }); }}
+                      className="text-xs text-slate-400 hover:text-amber-400 px-2 py-1 rounded border border-slate-600 hover:border-amber-600 transition-colors"
+                    >
+                      الصلاحيات
+                    </button>
+                    <button
+                      onClick={() => statusMutation.mutate({ id: member.id, isActive: !member.isActive })}
+                      className={`text-xs px-2 py-1 rounded border transition-colors ${
+                        member.isActive
+                          ? "text-slate-400 hover:text-yellow-400 border-slate-600 hover:border-yellow-600"
+                          : "text-green-400 hover:text-green-300 border-green-700 hover:border-green-500"
+                      }`}
+                    >
+                      {member.isActive ? "تعطيل" : "تفعيل"}
+                    </button>
+                    <button
+                      onClick={() => { if (confirm("هل تريد حذف هذا الموظف نهائياً؟")) deleteMutation.mutate(member.id); }}
+                      className="text-slate-500 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Credential Editor */}
+                {isCredOpen && (
+                  <div className="border-t border-slate-700 bg-slate-900/40 p-4">
+                    <p className="text-slate-300 text-sm font-medium mb-3">تعديل بيانات الدخول</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">اسم المستخدم الجديد</label>
+                        <Input
+                          value={editCredUsername}
+                          onChange={(e) => setEditCredUsername(e.target.value)}
+                          placeholder={member.username}
+                          dir="ltr"
+                          className="bg-slate-700 border-slate-600 text-white text-sm h-8"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">كلمة مرور جديدة (اتركها فارغة لعدم التغيير)</label>
+                        <Input
+                          type="password"
+                          value={editCredPassword}
+                          onChange={(e) => setEditCredPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="bg-slate-700 border-slate-600 text-white text-sm h-8"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="ghost" size="sm" onClick={() => setCredEditId(null)} className="text-slate-400 hover:text-white text-xs h-7">إلغاء</Button>
+                      <Button
+                        size="sm"
+                        onClick={() => credMutation.mutate({ id: member.id })}
+                        disabled={credMutation.isPending}
+                        className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-7"
+                      >
+                        {credMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "حفظ"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Permission Editor */}
+                {isPermOpen && (
+                  <div className="border-t border-slate-700 bg-slate-900/40 p-4">
+                    <p className="text-slate-300 text-sm font-medium mb-3">تعديل الصلاحيات</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                      {ALL_ADMIN_PERM_KEYS.map((key) => {
+                        const info = ADMIN_PERM_LABELS[key];
+                        const enabled = !!editPerms[key];
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setEditPerms((p) => ({ ...p, [key]: !enabled }))}
+                            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-right transition-colors border ${
+                              enabled
+                                ? "bg-amber-900/30 border-amber-600 text-amber-300"
+                                : "bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600"
+                            }`}
+                          >
+                            <span className="text-base shrink-0">{info.icon}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium">{info.label}</div>
+                              <div className="text-xs text-slate-400 truncate">{info.description}</div>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                              enabled ? "bg-amber-500 border-amber-500" : "border-slate-500"
+                            }`}>
+                              {enabled && <CheckCircle className="w-3 h-3 text-white" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="ghost" size="sm" onClick={() => setPermEditId(null)} className="text-slate-400 hover:text-white text-xs h-7">إلغاء</Button>
+                      <Button
+                        size="sm"
+                        onClick={() => permMutation.mutate({ id: member.id, permissions: editPerms })}
+                        disabled={permMutation.isPending}
+                        className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-7"
+                      >
+                        {permMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "حفظ الصلاحيات"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Admin() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { adminStaffUser, isAdminStaff, permissions: adminPerms, isLoading: staffLoading, logout: adminStaffLogout } = useAdminStaffAuth();
   const [activeTab, setActiveTab] = useState<TabId>("submissions");
 
   const { data: accessCheck, isLoading: checkLoading, error: checkError } = useQuery({
-    queryKey: ["admin", "check"],
+    queryKey: ["admin", "access-check"],
     queryFn: async () => {
-      const r = await apiFetch("/admin/submissions");
+      const r = await fetch(`${API}/admin/access-check`, { credentials: "include" });
       if (r.status === 401) throw new Error("401");
       if (r.status === 403) throw new Error("403");
-      return r.json();
+      return r.json() as Promise<{ role: "superAdmin" | "adminStaff"; permissions: Record<string, boolean> }>;
     },
     retry: false,
+    enabled: isAuthenticated || isAdminStaff,
   });
 
-  if (isLoading || checkLoading) {
+  const isSuperAdmin = accessCheck?.role === "superAdmin";
+
+  const tabs = useMemo(() => {
+    if (isSuperAdmin) return ALL_TABS;
+    return ALL_TABS.filter((tab) => {
+      const permKey = ADMIN_TAB_PERMISSION[tab.id];
+      if (!permKey || permKey === "__superadmin__") return false;
+      return adminPerms[permKey as AdminPermKey] === true;
+    });
+  }, [isSuperAdmin, adminPerms]);
+
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.find((t) => t.id === activeTab)) {
+      setActiveTab(tabs[0].id as TabId);
+    }
+  }, [tabs, activeTab]);
+
+  const isLoading = authLoading || staffLoading || checkLoading;
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <Loader2 className="animate-spin text-amber-400 w-10 h-10" />
@@ -3995,93 +4403,116 @@ export default function Admin() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !isAdminStaff) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white">
-        <h1 className="text-2xl font-bold mb-2">يجب تسجيل الدخول</h1>
-        <a href={`${BASE}/api/auth/login`} className="mt-4 px-6 py-2 bg-amber-600 rounded-lg font-semibold hover:bg-amber-700">
-          تسجيل الدخول
-        </a>
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4" dir="rtl">
+        <ShieldCheck className="w-12 h-12 text-amber-400" />
+        <h1 className="text-2xl font-bold">بوابة الإدارة</h1>
+        <p className="text-slate-400 text-sm">يجب تسجيل الدخول للوصول إلى لوحة التحكم</p>
+        <div className="flex gap-3 mt-2">
+          <a href={`${BASE}/api/auth/login`} className="px-5 py-2 bg-amber-600 rounded-lg font-semibold hover:bg-amber-700 text-white text-sm">
+            دخول المشرف العام (OIDC)
+          </a>
+          <a href={`${BASE}/admin-login`} className="px-5 py-2 bg-slate-700 rounded-lg font-semibold hover:bg-slate-600 text-white text-sm">
+            دخول موظف الإدارة
+          </a>
+        </div>
       </div>
     );
   }
 
   if (checkError?.message === "403" || checkError?.message === "401") {
-    return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white px-4" dir="rtl">
-        <div className="text-6xl mb-6">🔐</div>
-        <h1 className="text-2xl font-bold mb-2">إعداد حساب الإدارة</h1>
-        <p className="text-slate-400 mb-8 text-center max-w-md">
-          لتفعيل صلاحيات الإدارة، انسخ معرّفك أدناه وأضفه كمتغير بيئة باسم{" "}
-          <code className="bg-slate-700 text-amber-400 px-1.5 py-0.5 rounded font-mono text-sm">ADMIN_USER_ID</code>
-        </p>
-
-        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 w-full max-w-sm mb-6">
-          <p className="text-slate-400 text-xs mb-2 font-semibold uppercase tracking-wider">معرّف حسابك</p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 bg-slate-900 text-amber-300 text-sm font-mono px-3 py-2.5 rounded-lg border border-slate-600 break-all select-all">
-              {user?.id ?? "—"}
-            </code>
-            <button
-              onClick={() => {
-                if (user?.id) navigator.clipboard.writeText(user.id);
-              }}
-              className="shrink-0 px-3 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-colors"
-            >
-              نسخ
-            </button>
+    if (isAuthenticated && !isAdminStaff) {
+      return (
+        <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white px-4" dir="rtl">
+          <div className="text-6xl mb-6">🔐</div>
+          <h1 className="text-2xl font-bold mb-2">إعداد حساب الإدارة</h1>
+          <p className="text-slate-400 mb-8 text-center max-w-md">
+            لتفعيل صلاحيات الإدارة، انسخ معرّفك أدناه وأضفه كمتغير بيئة باسم{" "}
+            <code className="bg-slate-700 text-amber-400 px-1.5 py-0.5 rounded font-mono text-sm">ADMIN_USER_ID</code>
+          </p>
+          <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 w-full max-w-sm mb-6">
+            <p className="text-slate-400 text-xs mb-2 font-semibold uppercase tracking-wider">معرّف حسابك</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-slate-900 text-amber-300 text-sm font-mono px-3 py-2.5 rounded-lg border border-slate-600 break-all select-all">
+                {user?.id ?? "—"}
+              </code>
+              <button
+                onClick={() => { if (user?.id) navigator.clipboard.writeText(user.id); }}
+                className="shrink-0 px-3 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-colors"
+              >
+                نسخ
+              </button>
+            </div>
           </div>
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 w-full max-w-sm text-sm mb-8">
+            <p className="text-slate-300 font-semibold mb-3">خطوات الإعداد:</p>
+            <ol className="text-slate-400 space-y-2 list-decimal list-inside">
+              <li>انسخ المعرّف أعلاه</li>
+              <li>افتح إعدادات المشروع في Replit</li>
+              <li>أضف متغير بيئة: <code className="text-amber-400 bg-slate-700 px-1 rounded">ADMIN_USER_ID</code></li>
+              <li>الصق المعرّف كقيمة للمتغير</li>
+              <li>أعد تشغيل السيرفر وحدّث الصفحة</li>
+            </ol>
+          </div>
+          <a href={BASE || "/"} className="text-slate-400 hover:text-white transition-colors text-sm">
+            ← العودة إلى الرئيسية
+          </a>
         </div>
-
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 w-full max-w-sm text-sm mb-8">
-          <p className="text-slate-300 font-semibold mb-3">خطوات الإعداد:</p>
-          <ol className="text-slate-400 space-y-2 list-decimal list-inside">
-            <li>انسخ المعرّف أعلاه</li>
-            <li>افتح إعدادات المشروع في Replit</li>
-            <li>أضف متغير بيئة: <code className="text-amber-400 bg-slate-700 px-1 rounded">ADMIN_USER_ID</code></li>
-            <li>الصق المعرّف كقيمة للمتغير</li>
-            <li>أعد تشغيل السيرفر وحدّث الصفحة</li>
-          </ol>
-        </div>
-
-        <a href={BASE || "/"} className="text-slate-400 hover:text-white transition-colors text-sm">
-          ← العودة إلى الرئيسية
-        </a>
-      </div>
-    );
+      );
+    }
   }
+
+  const displayName = isAdminStaff
+    ? adminStaffUser?.name
+    : [user?.firstName, user?.lastName].filter(Boolean).join(" ");
 
   return (
     <div className="min-h-screen bg-slate-900 text-white" dir="rtl">
       {/* Header */}
       <header className="bg-slate-950 border-b border-slate-700 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
-            <Settings className="w-5 h-5 text-white" />
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSuperAdmin ? "bg-amber-500" : "bg-slate-600"}`}>
+            {isSuperAdmin ? <Settings className="w-5 h-5 text-white" /> : <Shield className="w-5 h-5 text-amber-400" />}
           </div>
           <div>
             <h1 className="text-white font-bold text-lg leading-none">لوحة التحكم</h1>
-            <p className="text-slate-400 text-xs mt-0.5">شاليهات القصيم</p>
+            <p className="text-slate-400 text-xs mt-0.5">
+              {isSuperAdmin ? "المشرف العام — شاليهات القصيم" : `موظف إدارة — ${adminStaffUser?.name ?? ""}`}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-slate-400 text-sm hidden sm:block">{[user?.firstName, user?.lastName].filter(Boolean).join(" ")}</span>
-          <a
-            href={BASE || "/"}
-            className="text-slate-400 hover:text-white text-sm transition-colors"
-          >
+          <span className="text-slate-400 text-sm hidden sm:block">{displayName}</span>
+          {isAdminStaff && (
+            <button
+              onClick={() => adminStaffLogout()}
+              className="text-slate-400 hover:text-red-400 text-sm transition-colors"
+            >
+              تسجيل الخروج
+            </button>
+          )}
+          <a href={BASE || "/"} className="text-slate-400 hover:text-white text-sm transition-colors">
             العودة للموقع ←
           </a>
         </div>
       </header>
 
+      {/* Admin Staff info banner */}
+      {isAdminStaff && (
+        <div className="bg-slate-800 border-b border-slate-700 px-6 py-2 flex items-center gap-2 text-xs text-slate-400">
+          <Shield className="w-3.5 h-3.5 text-amber-400" />
+          <span>أنت مسجل دخولك كموظف إدارة — الصلاحيات المتاحة لك فقط هي المحددة من قبل المشرف العام</span>
+        </div>
+      )}
+
       {/* Tab Navigation */}
       <nav className="bg-slate-900 border-b border-slate-700 px-6">
         <div className="flex gap-1 overflow-x-auto">
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => setActiveTab(id)}
+              onClick={() => setActiveTab(id as TabId)}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === id
                   ? "border-amber-500 text-amber-400"
@@ -4097,7 +4528,6 @@ export default function Admin() {
 
       {/* Content */}
       <main className="p-6 max-w-7xl mx-auto">
-        {/* Stats row */}
         {activeTab === "submissions"         && <SubmissionsTab />}
         {activeTab === "chaletVerify"        && <ChaletsVerifyTab />}
         {activeTab === "services"            && <ServicesTab />}
@@ -4111,6 +4541,7 @@ export default function Admin() {
         {activeTab === "plans"               && <PlansTab />}
         {activeTab === "reviews"             && <ReviewsTab />}
         {activeTab === "siteSettings"        && <SettingsTab />}
+        {activeTab === "adminStaff"          && <AdminStaffTab />}
       </main>
     </div>
   );

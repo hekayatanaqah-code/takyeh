@@ -14,10 +14,22 @@ import {
   serviceProviderSubmissionsTable,
   serviceProvidersTable,
   subscriptionPlansTable,
+  adminStaffTable,
+  adminSessionsTable,
 } from "@workspace/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and, gt } from "drizzle-orm";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
+import bcrypt from "bcryptjs";
+
+declare global {
+  namespace Express {
+    interface Request {
+      isSuperAdmin?: boolean;
+      adminStaff?: typeof adminStaffTable.$inferSelect;
+    }
+  }
+}
 
 const router = Router();
 
@@ -34,7 +46,97 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-router.use(requireAdmin);
+async function requireAdminOrAdminStaff(req: Request, res: Response, next: NextFunction) {
+  const adminId = process.env.ADMIN_USER_ID;
+  if (req.isAuthenticated() && adminId && req.user?.id === adminId) {
+    req.isSuperAdmin = true;
+    return next();
+  }
+  const sid = req.cookies?.admin_staff_sid;
+  if (sid) {
+    const [session] = await db.select().from(adminSessionsTable)
+      .where(and(eq(adminSessionsTable.sid, sid), gt(adminSessionsTable.expire, new Date())));
+    if (session) {
+      const [member] = await db.select().from(adminStaffTable)
+        .where(eq(adminStaffTable.id, session.adminStaffId));
+      if (member?.isActive) {
+        req.adminStaff = member;
+        return next();
+      }
+    }
+  }
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
+    return;
+  }
+  res.status(403).json({ error: "غير مصرح لك بالدخول" });
+}
+
+router.use(requireAdminOrAdminStaff);
+
+/* ── Access Check ─────────────────────────────────────────── */
+router.get("/access-check", (req, res) => {
+  if (req.isSuperAdmin) {
+    return res.json({ ok: true, role: "superAdmin", permissions: {} });
+  }
+  return res.json({ ok: true, role: "adminStaff", permissions: req.adminStaff?.permissions ?? {} });
+});
+
+/* ── Admin Staff CRUD (super admin only) ──────────────────── */
+router.get("/staff", requireAdmin, async (_req, res) => {
+  const rows = await db.select({
+    id: adminStaffTable.id,
+    name: adminStaffTable.name,
+    username: adminStaffTable.username,
+    permissions: adminStaffTable.permissions,
+    isActive: adminStaffTable.isActive,
+    createdAt: adminStaffTable.createdAt,
+  }).from(adminStaffTable).orderBy(adminStaffTable.createdAt);
+  return res.json(rows);
+});
+
+router.post("/staff", requireAdmin, async (req, res) => {
+  const { name, username, password, permissions } = req.body ?? {};
+  if (!name || !username || !password) {
+    return res.status(400).json({ error: "يرجى تعبئة الاسم واسم المستخدم وكلمة المرور" });
+  }
+  const passwordHash = await bcrypt.hash(String(password), 10);
+  const [staff] = await db.insert(adminStaffTable)
+    .values({ name: String(name), username: String(username).trim(), passwordHash, permissions: permissions ?? {} })
+    .returning({ id: adminStaffTable.id, name: adminStaffTable.name, username: adminStaffTable.username, permissions: adminStaffTable.permissions, isActive: adminStaffTable.isActive, createdAt: adminStaffTable.createdAt });
+  return res.json(staff);
+});
+
+router.put("/staff/:id/permissions", requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const { permissions } = req.body ?? {};
+  await db.update(adminStaffTable).set({ permissions: permissions ?? {} }).where(eq(adminStaffTable.id, id));
+  return res.json({ ok: true });
+});
+
+router.put("/staff/:id/credentials", requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const { username, password } = req.body ?? {};
+  const updates: Record<string, unknown> = {};
+  if (username) updates.username = String(username).trim();
+  if (password) updates.passwordHash = await bcrypt.hash(String(password), 10);
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: "لا توجد بيانات للتحديث" });
+  await db.update(adminStaffTable).set(updates).where(eq(adminStaffTable.id, id));
+  return res.json({ ok: true });
+});
+
+router.put("/staff/:id/status", requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const { isActive } = req.body ?? {};
+  await db.update(adminStaffTable).set({ isActive: Boolean(isActive) }).where(eq(adminStaffTable.id, id));
+  return res.json({ ok: true });
+});
+
+router.delete("/staff/:id", requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  await db.delete(adminStaffTable).where(eq(adminStaffTable.id, id));
+  return res.json({ ok: true });
+});
 
 /* ── Submissions ─────────────────────────────────────────── */
 

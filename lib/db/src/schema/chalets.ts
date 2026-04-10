@@ -480,3 +480,33 @@ export const chaletSeasonsTable = pgTable("chalet_seasons", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ChaletSeason = typeof chaletSeasonsTable.$inferSelect;
+
+/* ── Admin Staff (Platform Admins) ──────────────────────────── */
+
+export type AdminPermKey =
+  | "chaletApprovals"
+  | "globalFinancials"
+  | "userManagement"
+  | "platformSettings"
+  | "supportDisputes";
+
+export type AdminStaffPermissions = Partial<Record<AdminPermKey, boolean>>;
+
+export const adminStaffTable = pgTable("admin_staff", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  permissions: jsonb("permissions").$type<AdminStaffPermissions>().notNull().default({}),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type AdminStaff = typeof adminStaffTable.$inferSelect;
+
+export const adminSessionsTable = pgTable("admin_sessions", {
+  id: serial("id").primaryKey(),
+  sid: text("sid").notNull().unique(),
+  adminStaffId: integer("admin_staff_id").notNull().references(() => adminStaffTable.id, { onDelete: "cascade" }),
+  expire: timestamp("expire", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
