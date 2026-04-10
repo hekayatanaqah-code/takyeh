@@ -1896,4 +1896,37 @@ router.get("/deposits", requireAuth, async (req: Request, res: Response) => {
   return res.json(bookings);
 });
 
+/* ── PATCH /owner/submissions/:id — owner edits basic chalet data ── */
+router.patch("/submissions/:id", requireAuth, async (req, res) => {
+  const submissionId = Number(req.params.id);
+  if (isNaN(submissionId)) return res.status(400).json({ error: "معرّف غير صالح" });
+
+  const [sub] = await db
+    .select({ ownerId: chaletSubmissionsTable.ownerId })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.id, submissionId));
+
+  if (!sub || sub.ownerId !== (req.user as any)?.id) {
+    return res.status(403).json({ error: "غير مصرح" });
+  }
+
+  const { nameAr, descriptionAr, priceMorning, priceEvening, priceFullDay } = req.body as Record<string, any>;
+
+  const updateData: Record<string, any> = {};
+  if (nameAr !== undefined) updateData.nameAr = String(nameAr).trim();
+  if (descriptionAr !== undefined) updateData.descriptionAr = String(descriptionAr).trim();
+  if (priceMorning !== undefined) updateData.priceMorning = priceMorning !== "" ? String(Number(priceMorning)) : null;
+  if (priceEvening !== undefined) updateData.priceEvening = priceEvening !== "" ? String(Number(priceEvening)) : null;
+  if (priceFullDay !== undefined) updateData.priceFullDay = priceFullDay !== "" ? String(Number(priceFullDay)) : null;
+
+  if (Object.keys(updateData).length === 0) return res.json({ ok: true });
+
+  await db
+    .update(chaletSubmissionsTable)
+    .set(updateData)
+    .where(eq(chaletSubmissionsTable.id, submissionId));
+
+  return res.json({ ok: true });
+});
+
 export default router;

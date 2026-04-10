@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
-import { formatDualDate } from "@/lib/hijri";
+import { formatDualDate, toHijri } from "@/lib/hijri";
 import { toAr } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -212,6 +212,120 @@ function UpgradePlanDialog({ open, onClose, context }: { open: boolean; onClose:
   );
 }
 
+/* ── Edit Chalet Basic Data Dialog ─────────────── */
+function EditChaletDialog({
+  open, sub, onClose, onSaved,
+}: {
+  open: boolean;
+  sub: { id: number; nameAr: string; descriptionAr?: string; priceMorning?: string | null; priceEvening?: string | null; priceFullDay?: string | null } | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [nameAr, setNameAr] = useState("");
+  const [descriptionAr, setDescriptionAr] = useState("");
+  const [priceMorning, setPriceMorning] = useState("");
+  const [priceEvening, setPriceEvening] = useState("");
+  const [priceFullDay, setPriceFullDay] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (sub && open) {
+      setNameAr(sub.nameAr ?? "");
+      setDescriptionAr(sub.descriptionAr ?? "");
+      setPriceMorning(sub.priceMorning ? String(Number(sub.priceMorning)) : "");
+      setPriceEvening(sub.priceEvening ? String(Number(sub.priceEvening)) : "");
+      setPriceFullDay(sub.priceFullDay ? String(Number(sub.priceFullDay)) : "");
+    }
+  }, [sub, open]);
+
+  function normNum(v: string) {
+    return v.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/\D/g, "");
+  }
+
+  async function handleSave() {
+    if (!sub || !nameAr.trim()) return;
+    setSaving(true);
+    try {
+      const r = await apiFetch(`/owner/submissions/${sub.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          nameAr: nameAr.trim(),
+          descriptionAr: descriptionAr.trim(),
+          priceMorning: priceMorning || "",
+          priceEvening: priceEvening || "",
+          priceFullDay: priceFullDay || "",
+        }),
+      });
+      if (!r.ok) { toast({ title: "حدث خطأ أثناء الحفظ", variant: "destructive" }); return; }
+      toast({ title: "تم تحديث بيانات الشاليه بنجاح" });
+      qc.invalidateQueries({ queryKey: ["submissions"] });
+      onSaved();
+      onClose();
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent dir="rtl" className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Edit2 className="w-4 h-4 text-primary" />
+            تعديل بيانات الشاليه
+          </DialogTitle>
+          <DialogDescription>تعديل الاسم والأسعار والوصف — تظهر فوراً على صفحة الشاليه</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">اسم الشاليه <span className="text-destructive">*</span></label>
+            <Input value={nameAr} onChange={(e) => setNameAr(e.target.value)} placeholder="اسم الشاليه" className="text-right" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">الوصف</label>
+            <textarea
+              value={descriptionAr}
+              onChange={(e) => setDescriptionAr(e.target.value)}
+              placeholder="وصف مختصر للشاليه..."
+              rows={3}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">الأسعار (ر.س)</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { label: "☀️ صباحي", val: priceMorning, set: setPriceMorning },
+                { label: "🌙 مسائي", val: priceEvening, set: setPriceEvening },
+                { label: "📅 يوم كامل", val: priceFullDay, set: setPriceFullDay },
+              ] as const).map(({ label, val, set }) => (
+                <div key={label} className="space-y-1">
+                  <label className="text-[11px] font-medium text-muted-foreground">{label}</label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={toAr(val)}
+                    onChange={(e) => set(normNum(e.target.value))}
+                    placeholder="٠"
+                    className="text-right text-sm h-9"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button disabled={!nameAr.trim() || saving} onClick={handleSave} className="gap-1.5">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            حفظ التعديلات
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function BlockDatesDialog({
   open, chalet, onClose, onBlocked,
 }: {
@@ -260,10 +374,16 @@ function BlockDatesDialog({
             <div className="space-y-1.5">
               <label className="text-sm font-medium">من تاريخ</label>
               <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              {startDate && (
+                <p className="text-xs text-muted-foreground text-right">{toHijri(startDate)} هـ</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium">إلى تاريخ</label>
               <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+              {endDate && (
+                <p className="text-xs text-muted-foreground text-right">{toHijri(endDate)} هـ</p>
+              )}
             </div>
           </div>
           <div className="space-y-1.5">
@@ -304,6 +424,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
   const qc = useQueryClient();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [blockTarget, setBlockTarget] = useState<{ id: number; nameAr: string } | null>(null);
+  const [editTarget, setEditTarget] = useState<any | null>(null);
 
   const { data: planLimits } = useQuery<{ plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number }>({
     queryKey: ["owner", "plan-limits"],
@@ -377,6 +498,12 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
         onClose={() => setBlockTarget(null)}
         onBlocked={() => qc.invalidateQueries({ queryKey: ["owner", "availability"] })}
       />
+      <EditChaletDialog
+        open={!!editTarget}
+        sub={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={() => qc.invalidateQueries({ queryKey: ["submissions"] })}
+      />
       {submissions.map((sub: any, idx: number) => {
         const status = statusConfig[sub.status as keyof typeof statusConfig] ?? statusConfig.pending;
         const approvedChalet = ownerChalets.find((c: any) => c.submissionId === sub.id);
@@ -447,7 +574,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                 <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
                   {isApproved && (
                     <>
-                      <Link href={`/chalet/${approvedChalet.id}`} target="_blank">
+                      <Link href={`/chalets/${approvedChalet.id}`} target="_blank">
                         <Button size="sm" variant="outline" className="gap-1.5 rounded-xl text-xs h-8">
                           <ExternalLink className="w-3.5 h-3.5" />
                           عرض التفاصيل
@@ -464,12 +591,15 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                       </Button>
                     </>
                   )}
-                  <Link href="/add-chalet">
-                    <Button size="sm" variant="ghost" className="gap-1.5 rounded-xl text-xs h-8 text-muted-foreground">
-                      <Edit2 className="w-3.5 h-3.5" />
-                      تعديل الطلب
-                    </Button>
-                  </Link>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1.5 rounded-xl text-xs h-8 text-muted-foreground"
+                    onClick={() => setEditTarget(sub)}
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    تعديل بيانات الشاليه
+                  </Button>
                 </div>
               </div>
             </div>
@@ -523,7 +653,7 @@ function AddBookingDialog({
     if (!bookingDate || !dialogSeasons.length) return null;
     return dialogSeasons.find((s) =>
       bookingDate >= s.startDate && bookingDate <= s.endDate &&
-      (!s.period || !period || s.period === period)
+      (!s.period || !period || s.period === "all" || s.period === period)
     ) ?? null;
   }, [bookingDate, period, dialogSeasons]);
 
@@ -7098,7 +7228,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [price, setPrice] = useState("");
-  const [period, setPeriod] = useState<"" | "morning" | "evening" | "full_day">("");
+  const [period, setPeriod] = useState<"all" | "morning" | "evening" | "full_day">("all");
   const [saving, setSaving] = useState(false);
 
   const activeSubId = selectedSubId ?? ownerChalets[0]?.submissionId ?? null;
@@ -7138,14 +7268,14 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
           startDate,
           endDate,
           price: Number(price),
-          period: period || undefined,
+          period: period !== "all" ? period : undefined,
         }),
       });
       if (!r.ok) { const e = await r.json(); toast({ title: e.error ?? "خطأ", variant: "destructive" }); return; }
       qc.invalidateQueries({ queryKey: ["owner", "seasons"] });
       toast({ title: "تم إضافة الموسم بنجاح" });
       setAddOpen(false);
-      setNameAr(""); setStartDate(""); setEndDate(""); setPrice(""); setPeriod("");
+      setNameAr(""); setStartDate(""); setEndDate(""); setPrice(""); setPeriod("all");
     } finally { setSaving(false); }
   }
 
@@ -7274,20 +7404,31 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">من تاريخ</label>
                 <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                {startDate && (
+                  <p className="text-xs text-muted-foreground text-right">{toHijri(startDate)} هـ</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">إلى تاريخ</label>
                 <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+                {endDate && (
+                  <p className="text-xs text-muted-foreground text-right">{toHijri(endDate)} هـ</p>
+                )}
               </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium">السعر الموسمي (ر.س)</label>
               <Input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 placeholder="٠"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                min="0"
+                value={toAr(price)}
+                onChange={(e) => setPrice(
+                  e.target.value
+                    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+                    .replace(/\D/g, "")
+                )}
+                className="text-right"
               />
             </div>
             <div className="space-y-1.5">
@@ -7297,7 +7438,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
                   <SelectValue placeholder="جميع الفترات" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">جميع الفترات</SelectItem>
+                  <SelectItem value="all">جميع الفترات</SelectItem>
                   <SelectItem value="morning">صباحي فقط</SelectItem>
                   <SelectItem value="evening">مسائي فقط</SelectItem>
                   <SelectItem value="full_day">يوم كامل فقط</SelectItem>
