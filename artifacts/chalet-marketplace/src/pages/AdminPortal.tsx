@@ -37,7 +37,7 @@ export default function AdminPortal() {
         return;
       }
 
-      qc.invalidateQueries({ queryKey: ["admin-staff", "me"] });
+      qc.invalidateQueries({ queryKey: ["admin", "access-check"] });
       navigate(data.redirect ?? "/admin");
     } catch {
       setError("تعذّر الاتصال بالخادم");
@@ -63,10 +63,11 @@ export default function AdminPortal() {
       {/* ── Login card ── */}
       <div className="w-full max-w-xs bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl shadow-black/40">
         <div className="p-6">
-          <div className="flex items-center gap-2 mb-5">
+          <div className="flex items-center gap-2 mb-1">
             <KeyRound className="w-4 h-4 text-amber-400" />
             <h2 className="font-semibold text-slate-200 text-sm tracking-wide">بوابة الإدارة</h2>
           </div>
+          <p className="text-slate-500 text-xs mb-5">أدخل بيانات حسابك الإداري</p>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
@@ -130,24 +131,6 @@ export default function AdminPortal() {
               {loading ? "جاري التحقق…" : "دخول الإدارة"}
             </Button>
           </form>
-        </div>
-
-        {/* Divider */}
-        <div className="flex items-center gap-3 px-6">
-          <div className="flex-1 h-px bg-slate-800" />
-          <span className="text-[10px] text-slate-600 font-medium tracking-widest">OR</span>
-          <div className="flex-1 h-px bg-slate-800" />
-        </div>
-
-        {/* Super Admin OIDC */}
-        <div className="px-6 py-5">
-          <a
-            href={`${BASE}/api/login?returnTo=/admin`}
-            className="flex items-center justify-center gap-2 w-full h-10 bg-slate-800 border border-slate-700 hover:border-amber-500/40 hover:bg-slate-700 rounded-xl text-xs font-semibold text-slate-400 hover:text-amber-300 transition-all"
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>دخول المشرف العام</span>
-          </a>
         </div>
       </div>
 

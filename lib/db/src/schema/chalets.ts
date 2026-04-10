@@ -499,6 +499,7 @@ export const adminStaffTable = pgTable("admin_staff", {
   passwordHash: text("password_hash").notNull(),
   permissions: jsonb("permissions").$type<AdminStaffPermissions>().notNull().default({}),
   isActive: boolean("is_active").notNull().default(true),
+  isSuperAdmin: boolean("is_super_admin").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type AdminStaff = typeof adminStaffTable.$inferSelect;

@@ -47,11 +47,14 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 async function requireAdminOrAdminStaff(req: Request, res: Response, next: NextFunction) {
+  /* ── 1. OIDC super admin (legacy / Replit-hosted) ── */
   const adminId = process.env.ADMIN_USER_ID;
   if (req.isAuthenticated() && adminId && req.user?.id === adminId) {
     req.isSuperAdmin = true;
     return next();
   }
+
+  /* ── 2. DB-based admin staff (username/password portal) ── */
   const sid = req.cookies?.admin_staff_sid;
   if (sid) {
     const [session] = await db.select().from(adminSessionsTable)
@@ -61,15 +64,14 @@ async function requireAdminOrAdminStaff(req: Request, res: Response, next: NextF
         .where(eq(adminStaffTable.id, session.adminStaffId));
       if (member?.isActive) {
         req.adminStaff = member;
+        /* If flagged as super admin in the DB, grant full privileges */
+        if ((member as any).isSuperAdmin) req.isSuperAdmin = true;
         return next();
       }
     }
   }
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
-    return;
-  }
-  res.status(403).json({ error: "غير مصرح لك بالدخول" });
+
+  res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
 }
 
 router.use(requireAdminOrAdminStaff);

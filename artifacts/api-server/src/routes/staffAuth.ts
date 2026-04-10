@@ -113,7 +113,8 @@ router.post("/admin-portal-login", async (req, res) => {
   const expire = new Date(Date.now() + SESSION_TTL_MS);
   await db.insert(adminSessionsTable).values({ sid, adminStaffId: adminStaff.id, expire });
   res.cookie(ADMIN_STAFF_COOKIE, sid, cookieOpts(SESSION_TTL_MS));
-  return res.json({ role: "adminStaff", redirect: "/admin" });
+  const isSuperAdmin = !!(adminStaff as any).isSuperAdmin;
+  return res.json({ role: isSuperAdmin ? "superAdmin" : "adminStaff", redirect: "/admin" });
 });
 
 /* ════════════════════════════════════════════════
