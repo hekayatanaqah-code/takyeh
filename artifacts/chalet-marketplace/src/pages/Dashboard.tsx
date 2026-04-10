@@ -6,6 +6,10 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useGetMySubmissions } from "@workspace/api-client-react";
+import { useStaffAuth } from "@/lib/useStaffAuth";
+import { TAB_PERMISSION, ALL_PERM_KEYS, PERM_LABELS } from "@/lib/staffPermissions";
+import type { PermKey, StaffPermissions } from "@/lib/staffPermissions";
+import { Switch } from "@/components/ui/switch";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
@@ -4396,7 +4400,7 @@ function printSalaryVoucher(v: VoucherData) {
 }
 
 /* ── Staff & Salaries Tab ────────────────────────── */
-interface StaffMember { id: number; name: string; baseSalary: string; isActive: boolean; }
+interface StaffMember { id: number; name: string; username: string | null; baseSalary: string; isActive: boolean; permissions: StaffPermissions; createdAt: string; }
 interface SalaryLog {
   id: number;
   staffId: number;
@@ -4569,9 +4573,16 @@ function StaffTab() {
   const { user } = useAuth();
   const currentMonth = new Date().toISOString().slice(0, 7);
   /* ── state ── */
-  const [addForm, setAddForm] = useState({ name: "", baseSalary: "" });
+  const [addForm, setAddForm] = useState({ name: "", baseSalary: "", username: "", password: "" });
+  const [addPerms, setAddPerms] = useState<StaffPermissions>({});
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ name: "", baseSalary: "" });
+  /* Permission panel state */
+  const [permEditId, setPermEditId] = useState<number | null>(null);
+  const [permState, setPermState] = useState<StaffPermissions>({});
+  /* Credential edit state */
+  const [credEditId, setCredEditId] = useState<number | null>(null);
+  const [credForm, setCredForm] = useState({ username: "", password: "" });
   /* Pay dialog */
   const [payTarget, setPayTarget] = useState<StaffMember | null>(null);
   const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", notes: "" });
@@ -4609,7 +4620,27 @@ function StaffTab() {
       const r = await apiFetch("/owner/staff", { method: "POST", body: JSON.stringify(data) });
       if (!r.ok) throw new Error();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["owner", "staff"] }); setAddForm({ name: "", baseSalary: "" }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "staff"] });
+      setAddForm({ name: "", baseSalary: "", username: "", password: "" });
+      setAddPerms({});
+    },
+  });
+
+  const updatePermissions = useMutation({
+    mutationFn: async ({ id, permissions }: { id: number; permissions: StaffPermissions }) => {
+      const r = await apiFetch(`/owner/staff/${id}/permissions`, { method: "PUT", body: JSON.stringify({ permissions }) });
+      if (!r.ok) throw new Error();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["owner", "staff"] }); setPermEditId(null); },
+  });
+
+  const updateCredentials = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: { username?: string; password?: string } }) => {
+      const r = await apiFetch(`/owner/staff/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+      if (!r.ok) throw new Error();
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["owner", "staff"] }); setCredEditId(null); },
   });
 
   const editStaff = useMutation({
@@ -4699,15 +4730,74 @@ function StaffTab() {
             e.preventDefault();
             const s = parseFloat(addForm.baseSalary);
             if (!addForm.name || isNaN(s)) return;
-            addStaff.mutate({ name: addForm.name, baseSalary: s });
+            addStaff.mutate({
+              name: addForm.name,
+              baseSalary: s,
+              username: addForm.username || undefined,
+              password: addForm.password || undefined,
+              permissions: addPerms,
+            });
           }}
-          className="flex gap-3 flex-wrap"
+          className="space-y-4"
         >
-          <Input placeholder="اسم الموظف" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-[140px] h-11" required />
-          <Input type="number" min="0" step="1" placeholder="الراتب الأساسي (ر.س)" value={addForm.baseSalary} onChange={(e) => setAddForm((f) => ({ ...f, baseSalary: e.target.value }))} className="flex-1 min-w-[160px] h-11" required />
-          <Button type="submit" className="h-11 px-5 font-bold" disabled={addStaff.isPending}>
+          {/* Basic Info */}
+          <div className="flex gap-3 flex-wrap">
+            <Input placeholder="الاسم الكامل" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-[140px] h-11" required />
+            <Input type="number" min="0" step="1" placeholder="الراتب الأساسي (ر.س)" value={addForm.baseSalary} onChange={(e) => setAddForm((f) => ({ ...f, baseSalary: e.target.value }))} className="flex-1 min-w-[160px] h-11" required />
+          </div>
+
+          {/* Login Credentials */}
+          <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
+            <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5" /> بيانات دخول الموظف (اختياري)
+            </p>
+            <div className="flex gap-3 flex-wrap">
+              <Input
+                placeholder="اسم المستخدم (لتسجيل الدخول)"
+                value={addForm.username}
+                onChange={(e) => setAddForm((f) => ({ ...f, username: e.target.value }))}
+                className="flex-1 min-w-[150px] h-10 text-sm"
+                dir="ltr"
+              />
+              <Input
+                type="password"
+                placeholder="كلمة المرور (٦ أحرف أو أكثر)"
+                value={addForm.password}
+                onChange={(e) => setAddForm((f) => ({ ...f, password: e.target.value }))}
+                className="flex-1 min-w-[150px] h-10 text-sm"
+                dir="ltr"
+              />
+            </div>
+          </div>
+
+          {/* Permissions */}
+          <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
+            <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+              <Settings className="w-3.5 h-3.5" /> صلاحيات الموظف
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {ALL_PERM_KEYS.map((key) => {
+                const info = PERM_LABELS[key];
+                return (
+                  <label key={key} className="flex items-start gap-3 cursor-pointer group">
+                    <Switch
+                      checked={!!addPerms[key]}
+                      onCheckedChange={(v) => setAddPerms((p) => ({ ...p, [key]: v }))}
+                      className="mt-0.5 shrink-0"
+                    />
+                    <span className="text-xs">
+                      <span className="font-semibold text-foreground">{info.icon} {info.label}</span>
+                      <span className="block text-muted-foreground mt-0.5">{info.description}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <Button type="submit" className="h-11 px-5 font-bold w-full sm:w-auto" disabled={addStaff.isPending}>
             <Plus className="w-4 h-4 me-1.5" />
-            إضافة
+            إضافة الموظف
           </Button>
         </form>
       </div>
@@ -4799,6 +4889,147 @@ function StaffTab() {
                         صرف راتب
                       </Button>
                     </div>
+                  </div>
+
+                  {/* ── Permission Summary Row ── */}
+                  <div className="border-t border-border/50 px-4 pb-3 pt-2.5 bg-muted/10">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                        <Settings className="w-3 h-3" /> الصلاحيات
+                      </p>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => {
+                            if (permEditId === member.id) { setPermEditId(null); }
+                            else {
+                              setPermEditId(member.id);
+                              setPermState(member.permissions ?? {});
+                              setCredEditId(null);
+                            }
+                          }}
+                          className="text-[11px] text-primary hover:underline flex items-center gap-0.5"
+                        >
+                          <Edit2 className="w-2.5 h-2.5" />
+                          {permEditId === member.id ? "إغلاق" : "تعديل"}
+                        </button>
+                        <span className="text-muted-foreground/40">|</span>
+                        <button
+                          onClick={() => {
+                            if (credEditId === member.id) { setCredEditId(null); }
+                            else {
+                              setCredEditId(member.id);
+                              setCredForm({ username: member.username ?? "", password: "" });
+                              setPermEditId(null);
+                            }
+                          }}
+                          className="text-[11px] text-blue-600 hover:underline flex items-center gap-0.5"
+                        >
+                          <Lock className="w-2.5 h-2.5" />
+                          {credEditId === member.id ? "إغلاق" : "بيانات الدخول"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Permission badges */}
+                    {permEditId !== member.id && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {ALL_PERM_KEYS.filter((k) => member.permissions?.[k]).length === 0 ? (
+                          <span className="text-[11px] text-muted-foreground italic">لا توجد صلاحيات ممنوحة</span>
+                        ) : (
+                          ALL_PERM_KEYS.filter((k) => member.permissions?.[k]).map((k) => (
+                            <span key={k} className="inline-flex items-center gap-0.5 text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">
+                              {PERM_LABELS[k].icon} {PERM_LABELS[k].label}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    )}
+
+                    {/* Expandable Permission Editor */}
+                    {permEditId === member.id && (
+                      <div className="mt-2 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {ALL_PERM_KEYS.map((key) => {
+                            const info = PERM_LABELS[key];
+                            return (
+                              <label key={key} className="flex items-start gap-2.5 cursor-pointer">
+                                <Switch
+                                  checked={!!permState[key]}
+                                  onCheckedChange={(v) => setPermState((p) => ({ ...p, [key]: v }))}
+                                  className="mt-0.5 shrink-0"
+                                />
+                                <span className="text-xs">
+                                  <span className="font-semibold text-foreground">{info.icon} {info.label}</span>
+                                  <span className="block text-muted-foreground mt-0.5 text-[10px]">{info.description}</span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            className="h-8 text-xs px-4"
+                            disabled={updatePermissions.isPending}
+                            onClick={() => updatePermissions.mutate({ id: member.id, permissions: permState })}
+                          >
+                            حفظ الصلاحيات
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setPermEditId(null)}>إلغاء</Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Expandable Credentials Editor */}
+                    {credEditId === member.id && (
+                      <div className="mt-2 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <p className="text-[10px] text-muted-foreground mb-1">اسم المستخدم</p>
+                            <Input
+                              value={credForm.username}
+                              onChange={(e) => setCredForm((f) => ({ ...f, username: e.target.value }))}
+                              placeholder="username"
+                              dir="ltr"
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground mb-1">كلمة مرور جديدة (اتركها فارغة للإبقاء)</p>
+                            <Input
+                              type="password"
+                              value={credForm.password}
+                              onChange={(e) => setCredForm((f) => ({ ...f, password: e.target.value }))}
+                              placeholder="••••••"
+                              dir="ltr"
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                        </div>
+                        {member.username && (
+                          <p className="text-[10px] text-muted-foreground">
+                            رابط الدخول الحالي: <span className="font-mono text-primary">/staff-login</span>
+                            {" "}← اسم المستخدم: <span className="font-mono">{member.username}</span>
+                          </p>
+                        )}
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            size="sm"
+                            className="h-8 text-xs px-4"
+                            disabled={updateCredentials.isPending}
+                            onClick={() => {
+                              const data: Record<string, string> = {};
+                              if (credForm.username) data.username = credForm.username;
+                              if (credForm.password) data.password = credForm.password;
+                              updateCredentials.mutate({ id: member.id, data });
+                            }}
+                          >
+                            حفظ بيانات الدخول
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setCredEditId(null)}>إلغاء</Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -7679,6 +7910,8 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits" | "seasons">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
+  const { isStaff, staffUser, permissions, isLoading: staffLoading, logout: staffLogout } = useStaffAuth();
+
   const { data: submissions, isLoading: submissionsLoading } = useGetMySubmissions();
 
   const { data: ownerChalets = [] } = useQuery<any[]>({
@@ -7687,7 +7920,7 @@ export default function Dashboard() {
       const r = await apiFetch("/owner/chalets");
       return r.ok ? r.json() : [];
     },
-    enabled: isAuthenticated,
+    enabled: isAuthenticated || isStaff,
   });
 
   const { data: planLimits } = useQuery<{ plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number }>({
@@ -7717,30 +7950,12 @@ export default function Dashboard() {
       if (!r.ok) return [];
       return r.json();
     },
-    enabled: isAuthenticated,
+    enabled: isAuthenticated || isStaff,
     refetchInterval: 30_000,
   });
   const unreadNotifCount = notifSummary.filter((n) => !n.isRead).length;
 
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) navigate("/");
-  }, [authLoading, isAuthenticated, navigate]);
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background" dir="rtl">
-        <Navbar />
-        <div className="container mx-auto px-4 py-12 max-w-4xl space-y-6">
-          <Skeleton className="h-24 w-full rounded-2xl" />
-          <Skeleton className="h-48 w-full rounded-2xl" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) return null;
-
-  const tabs = [
+  const allTabs = [
     { id: "chalets",   label: "شاليهاتي",         icon: <Building2 className="w-4 h-4" /> },
     { id: "seasons",   label: "المواسم",            icon: <Sun className="w-4 h-4" /> },
     { id: "reviews",   label: "التقييمات",          icon: <Star className="w-4 h-4" /> },
@@ -7753,51 +7968,111 @@ export default function Dashboard() {
     { id: "deposits",  label: "التأمينات",           icon: <Lock className="w-4 h-4" /> },
   ] as const;
 
+  const tabs = useMemo(() => {
+    if (!isStaff) return allTabs;
+    return allTabs.filter((tab) => {
+      const permKey = TAB_PERMISSION[tab.id];
+      if (!permKey || permKey === "__owner__") return false;
+      return permissions[permKey as PermKey] === true;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStaff, permissions]);
+
+  useEffect(() => {
+    if (tabs.length > 0 && !tabs.find((t) => t.id === activeTab)) {
+      setActiveTab(tabs[0].id);
+    }
+  }, [tabs, activeTab]);
+
+  const isLoadingAuth = authLoading || staffLoading;
+
+  useEffect(() => {
+    if (!isLoadingAuth && !isAuthenticated && !isStaff) navigate("/staff-login");
+  }, [isLoadingAuth, isAuthenticated, isStaff, navigate]);
+
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen bg-background" dir="rtl">
+        <Navbar />
+        <div className="container mx-auto px-4 py-12 max-w-4xl space-y-6">
+          <Skeleton className="h-24 w-full rounded-2xl" />
+          <Skeleton className="h-48 w-full rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated && !isStaff) return null;
+
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       <Navbar />
 
       <div className="container mx-auto px-4 py-10 max-w-4xl">
-        {/* Owner Profile Card */}
+        {/* Profile Card — adapts for owner vs staff */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-card border border-border rounded-3xl p-6 md:p-8 mb-8 flex flex-col sm:flex-row items-start sm:items-center gap-5 shadow-sm"
+          className={`border border-border rounded-3xl p-6 md:p-8 mb-8 flex flex-col sm:flex-row items-start sm:items-center gap-5 shadow-sm ${isStaff ? "bg-blue-50/60 dark:bg-blue-950/20" : "bg-card"}`}
         >
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-            {user?.profileImageUrl ? (
+          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 ${isStaff ? "bg-blue-100 dark:bg-blue-900/40" : "bg-primary/10"}`}>
+            {!isStaff && user?.profileImageUrl ? (
               <img src={user.profileImageUrl} alt={user.firstName ?? ""} className="w-16 h-16 rounded-2xl object-cover" />
+            ) : isStaff ? (
+              <UserCheck className="w-8 h-8 text-blue-600" />
             ) : (
               <User className="w-8 h-8 text-primary" />
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold text-foreground">
-              أهلاً، {user?.firstName ?? "عزيزنا"} 👋
-            </h1>
-            <p className="text-muted-foreground mt-1">لوحة تحكمك الموحدة — الشاليهات والخدمات في مكان واحد</p>
+            {isStaff ? (
+              <>
+                <h1 className="text-2xl font-bold text-foreground">أهلاً، {staffUser?.name ?? "عزيزنا"} 👋</h1>
+                <p className="text-muted-foreground mt-1">أنت مسجّل دخول كموظف — صلاحياتك محددة من قبل صاحب العمل</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {ALL_PERM_KEYS.filter((k) => permissions[k]).map((k) => (
+                    <span key={k} className="inline-flex items-center gap-1 text-[11px] bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full px-2 py-0.5 font-medium">
+                      {PERM_LABELS[k].icon} {PERM_LABELS[k].label}
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <h1 className="text-2xl font-bold text-foreground">أهلاً، {user?.firstName ?? "عزيزنا"} 👋</h1>
+                <p className="text-muted-foreground mt-1">لوحة تحكمك الموحدة — الشاليهات والخدمات في مكان واحد</p>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            {planLimits && (submissions?.length ?? 0) >= planLimits.chaletLimit ? (
-              <Button variant="outline" className="rounded-xl font-semibold text-sm" onClick={() => setShowHeaderUpgrade("chalet")}>
-                <Lock className="w-4 h-4 me-1.5 text-amber-500" />
-                إضافة شاليه
-              </Button>
-            ) : (
-              <Link href="/add-chalet">
-                <Button variant="outline" className="rounded-xl font-semibold text-sm">
-                  <Plus className="w-4 h-4 me-1.5" />
-                  إضافة شاليه
-                </Button>
-              </Link>
+            {!isStaff && (
+              <>
+                {planLimits && (submissions?.length ?? 0) >= planLimits.chaletLimit ? (
+                  <Button variant="outline" className="rounded-xl font-semibold text-sm" onClick={() => setShowHeaderUpgrade("chalet")}>
+                    <Lock className="w-4 h-4 me-1.5 text-amber-500" />
+                    إضافة شاليه
+                  </Button>
+                ) : (
+                  <Link href="/add-chalet">
+                    <Button variant="outline" className="rounded-xl font-semibold text-sm">
+                      <Plus className="w-4 h-4 me-1.5" />
+                      إضافة شاليه
+                    </Button>
+                  </Link>
+                )}
+                <Link href="/add-service-provider">
+                  <Button className="rounded-xl font-semibold text-sm">
+                    <Plus className="w-4 h-4 me-1.5" />
+                    إضافة خدمة
+                  </Button>
+                </Link>
+              </>
             )}
-            <Link href="/add-service-provider">
-              <Button className="rounded-xl font-semibold text-sm">
-                <Plus className="w-4 h-4 me-1.5" />
-                إضافة خدمة
-              </Button>
-            </Link>
-            <Button variant="ghost" onClick={logout} className="rounded-xl text-muted-foreground hover:text-destructive hover:border-destructive text-sm px-3">
+            <Button
+              variant="ghost"
+              onClick={() => isStaff ? staffLogout() : logout()}
+              className="rounded-xl text-muted-foreground hover:text-destructive hover:border-destructive text-sm px-3"
+            >
               <LogOut className="w-4 h-4 me-1.5" />
               خروج
             </Button>

@@ -351,15 +351,37 @@ export type OwnerExpense = typeof ownerExpensesTable.$inferSelect;
 
 /* ── Staff & Salary ─────────────────────────────────────────── */
 
+export type StaffPermissions = {
+  dashboardAccess?: boolean;
+  bookingsControl?: boolean;
+  financialAccess?: boolean;
+  insuranceManagement?: boolean;
+  chaletManagement?: boolean;
+  pricingControl?: boolean;
+  availabilityControl?: boolean;
+  customerData?: boolean;
+  accountSettings?: boolean;
+};
+
 export const ownerStaffTable = pgTable("owner_staff", {
   id: serial("id").primaryKey(),
   ownerId: text("owner_id").notNull(),
   name: text("name").notNull(),
+  username: text("username").unique(),
+  passwordHash: text("password_hash"),
+  permissions: jsonb("permissions").$type<StaffPermissions>().notNull().default({}),
   baseSalary: numeric("base_salary", { precision: 10, scale: 2 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type OwnerStaff = typeof ownerStaffTable.$inferSelect;
+
+export const staffSessionsTable = pgTable("staff_sessions", {
+  sid: text("sid").primaryKey(),
+  staffId: integer("staff_id").references(() => ownerStaffTable.id, { onDelete: "cascade" }).notNull(),
+  ownerId: text("owner_id").notNull(),
+  expire: timestamp("expire", { withTimezone: true }).notNull(),
+});
 
 export const salaryLogsTable = pgTable("salary_logs", {
   id: serial("id").primaryKey(),

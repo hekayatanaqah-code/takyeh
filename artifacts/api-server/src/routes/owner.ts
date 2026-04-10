@@ -8,6 +8,7 @@ import {
   ownerSubscriptionsTable,
   ownerExpensesTable,
   ownerStaffTable,
+  staffSessionsTable,
   salaryLogsTable,
   ownerReportArchiveTable,
   subscriptionPlansTable,
@@ -17,6 +18,7 @@ import {
   ownerRescheduleLogsTable,
   chaletSeasonsTable,
 } from "@workspace/db/schema";
+import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { z } from "zod";
@@ -1252,21 +1254,45 @@ router.get("/staff", async (req, res) => {
     .from(ownerStaffTable)
     .where(eq(ownerStaffTable.ownerId, ownerId))
     .orderBy(ownerStaffTable.createdAt);
-  return res.json(rows);
+  return res.json(rows.map(({ passwordHash: _ph, ...r }) => r));
 });
+
+const PERM_KEYS = [
+  "dashboardAccess","bookingsControl","financialAccess","insuranceManagement",
+  "chaletManagement","pricingControl","availabilityControl","customerData","accountSettings",
+] as const;
 
 router.post("/staff", async (req, res) => {
   const ownerId = req.user!.id;
   const body = z.object({
     name: z.string().min(1),
     baseSalary: z.number().nonnegative(),
+    username: z.string().min(3).optional(),
+    password: z.string().min(6).optional(),
+    permissions: z.record(z.boolean()).optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const values: Record<string, unknown> = {
+    ownerId,
+    name: body.data.name,
+    baseSalary: String(body.data.baseSalary),
+    permissions: body.data.permissions ?? {},
+  };
+
+  if (body.data.username) {
+    values.username = body.data.username.trim();
+    if (body.data.password) {
+      values.passwordHash = await bcrypt.hash(body.data.password, 10);
+    }
+  }
+
   const [row] = await db
     .insert(ownerStaffTable)
-    .values({ ownerId, name: body.data.name, baseSalary: String(body.data.baseSalary) })
+    .values(values as any)
     .returning();
-  return res.status(201).json(row);
+  const { passwordHash: _ph, ...safe } = row;
+  return res.status(201).json(safe);
 });
 
 router.patch("/staff/:id", async (req, res) => {
@@ -1276,24 +1302,49 @@ router.patch("/staff/:id", async (req, res) => {
     name: z.string().min(1).optional(),
     baseSalary: z.number().nonnegative().optional(),
     isActive: z.boolean().optional(),
+    username: z.string().min(3).optional(),
+    password: z.string().min(6).optional(),
+    permissions: z.record(z.boolean()).optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
   const staffPatch: Record<string, unknown> = {};
   if (body.data.name !== undefined) staffPatch.name = body.data.name;
   if (body.data.isActive !== undefined) staffPatch.isActive = body.data.isActive;
   if (body.data.baseSalary !== undefined) staffPatch.baseSalary = String(body.data.baseSalary);
+  if (body.data.username !== undefined) staffPatch.username = body.data.username.trim() || null;
+  if (body.data.password) staffPatch.passwordHash = await bcrypt.hash(body.data.password, 10);
+  if (body.data.permissions !== undefined) staffPatch.permissions = body.data.permissions;
+
   const [row] = await db
     .update(ownerStaffTable)
     .set(staffPatch as any)
     .where(and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)))
     .returning();
   if (!row) return res.status(404).json({ error: "لم يُعثر على الموظف" });
-  return res.json(row);
+  const { passwordHash: _ph, ...safe } = row;
+  return res.json(safe);
+});
+
+/* Dedicated permissions update endpoint */
+router.put("/staff/:id/permissions", async (req, res) => {
+  const ownerId = req.user!.id;
+  const id = Number(req.params.id);
+  const body = z.object({ permissions: z.record(z.boolean()) }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const [row] = await db
+    .update(ownerStaffTable)
+    .set({ permissions: body.data.permissions } as any)
+    .where(and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)))
+    .returning();
+  if (!row) return res.status(404).json({ error: "لم يُعثر على الموظف" });
+  return res.json({ ok: true, permissions: row.permissions });
 });
 
 router.delete("/staff/:id", async (req, res) => {
   const ownerId = req.user!.id;
   const id = Number(req.params.id);
+  await db.delete(staffSessionsTable).where(eq(staffSessionsTable.staffId, id));
   await db.delete(ownerStaffTable).where(and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)));
   return res.json({ ok: true });
 });

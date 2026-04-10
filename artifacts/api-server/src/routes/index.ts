@@ -3,6 +3,7 @@ import healthRouter from "./health";
 import chaletsRouter from "./chalets";
 import submissionsRouter from "./submissions";
 import authRouter from "./auth";
+import staffAuthRouter from "./staffAuth";
 import storageRouter from "./storage";
 import adminRouter from "./admin";
 import catalogRouter from "./catalog";
@@ -15,6 +16,7 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(staffAuthRouter);
 router.use(storageRouter);
 router.use("/chalets", chaletsRouter);
 router.use("/submissions", submissionsRouter);
