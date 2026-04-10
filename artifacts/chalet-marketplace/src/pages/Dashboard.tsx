@@ -108,6 +108,9 @@ interface ChaletSeason {
   startDate: string;
   endDate: string;
   price: string;
+  priceMorning: string | null;
+  priceEvening: string | null;
+  priceFullDay: string | null;
   period: string | null;
   createdAt: string;
 }
@@ -967,24 +970,37 @@ function AddBookingDialog({
           {/* ── Financial Fields — إجمالي required ── */}
           <div className="bg-muted/40 rounded-xl p-3 space-y-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">تفاصيل المبالغ</p>
-            {activeSeason && (
-              <div className="flex items-center gap-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-3 py-2.5">
-                <Sun className="w-4 h-4 text-amber-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-amber-800 dark:text-amber-300">موسم: {activeSeason.nameAr}</p>
-                  <p className="text-xs text-amber-700 dark:text-amber-400">السعر الموسمي: {toAr(Number(activeSeason.price))} ر.س</p>
+            {activeSeason && (() => {
+              const seasonPrice =
+                period === "morning" && activeSeason.priceMorning ? Number(activeSeason.priceMorning) :
+                period === "evening" && activeSeason.priceEvening ? Number(activeSeason.priceEvening) :
+                (period === "full_day" || period === "all") && activeSeason.priceFullDay ? Number(activeSeason.priceFullDay) :
+                null;
+              return (
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-3 py-2.5 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Sun className="w-4 h-4 text-amber-500 shrink-0" />
+                    <p className="text-xs font-bold text-amber-800 dark:text-amber-300 flex-1">موسم: {activeSeason.nameAr}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-amber-700 dark:text-amber-400">
+                    {activeSeason.priceMorning && <span>☀️ صباحي: <span className="font-semibold">{toAr(Number(activeSeason.priceMorning))} ر.س</span></span>}
+                    {activeSeason.priceEvening && <span>🌙 مسائي: <span className="font-semibold">{toAr(Number(activeSeason.priceEvening))} ر.س</span></span>}
+                    {activeSeason.priceFullDay && <span>📅 يوم كامل: <span className="font-semibold">{toAr(Number(activeSeason.priceFullDay))} ر.س</span></span>}
+                  </div>
+                  {seasonPrice != null && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-400 w-full"
+                      onClick={() => setTotalPrice(String(seasonPrice))}
+                    >
+                      تطبيق السعر الموسمي للفترة المحددة
+                    </Button>
+                  )}
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-400 shrink-0"
-                  onClick={() => setTotalPrice(String(Number(activeSeason.price)))}
-                >
-                  تطبيق
-                </Button>
-              </div>
-            )}
+              );
+            })()}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">
@@ -7265,8 +7281,9 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
   const [nameAr, setNameAr] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [price, setPrice] = useState("");
-  const [period, setPeriod] = useState<"all" | "morning" | "evening" | "full_day">("all");
+  const [priceMorning, setPriceMorning] = useState("");
+  const [priceEvening, setPriceEvening] = useState("");
+  const [priceFullDay, setPriceFullDay] = useState("");
   const [saving, setSaving] = useState(false);
 
   const activeSubId = selectedSubId ?? ownerChalets[0]?.submissionId ?? null;
@@ -7294,8 +7311,11 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
     return "يوم كامل";
   };
 
+  const normPrice = (v: string) => v ? Number(v) : undefined;
+
   async function handleAdd() {
-    if (!activeSubId || !nameAr.trim() || !startDate || !endDate || !price) return;
+    const hasPrice = !!(priceMorning || priceEvening || priceFullDay);
+    if (!activeSubId || !nameAr.trim() || !startDate || !endDate || !hasPrice) return;
     setSaving(true);
     try {
       const r = await apiFetch("/owner/seasons", {
@@ -7305,15 +7325,17 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
           nameAr: nameAr.trim(),
           startDate,
           endDate,
-          price: Number(price),
-          period: period !== "all" ? period : undefined,
+          priceMorning: normPrice(priceMorning),
+          priceEvening: normPrice(priceEvening),
+          priceFullDay: normPrice(priceFullDay),
         }),
       });
       if (!r.ok) { const e = await r.json(); toast({ title: e.error ?? "خطأ", variant: "destructive" }); return; }
       qc.invalidateQueries({ queryKey: ["owner", "seasons"] });
       toast({ title: "تم إضافة الموسم بنجاح" });
       setAddOpen(false);
-      setNameAr(""); setStartDate(""); setEndDate(""); setPrice(""); setPeriod("all");
+      setNameAr(""); setStartDate(""); setEndDate("");
+      setPriceMorning(""); setPriceEvening(""); setPriceFullDay("");
     } finally { setSaving(false); }
   }
 
@@ -7379,17 +7401,20 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-foreground">{s.nameAr}</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
                     <span>{s.startDate.split("-").reverse().join("/")} → {s.endDate.split("-").reverse().join("/")}</span>
                     <span>({toAr(days)} يوم)</span>
-                    <span className="text-muted-foreground/60">{periodLabel(s.period)}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-xs">
+                    {s.priceMorning && <span className="text-sky-700 dark:text-sky-400">☀️ {toAr(Number(s.priceMorning))} ر.س</span>}
+                    {s.priceEvening && <span className="text-indigo-700 dark:text-indigo-400">🌙 {toAr(Number(s.priceEvening))} ر.س</span>}
+                    {s.priceFullDay && <span className="text-emerald-700 dark:text-emerald-400">📅 {toAr(Number(s.priceFullDay))} ر.س</span>}
+                    {!s.priceMorning && !s.priceEvening && !s.priceFullDay && (
+                      <span className="text-primary font-semibold">{toAr(Number(s.price))} ر.س</span>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="text-end">
-                    <p className="text-lg font-bold text-primary">{toAr(Number(s.price))}</p>
-                    <p className="text-xs text-muted-foreground">ر.س</p>
-                  </div>
+                <div className="flex items-center gap-2 shrink-0">
                   <Button
                     size="icon"
                     variant="ghost"
@@ -7457,40 +7482,35 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
                 />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">السعر الموسمي (ر.س)</label>
-              <Input
-                type="text"
-                inputMode="numeric"
-                placeholder="٠"
-                value={toAr(price)}
-                onChange={(e) => setPrice(
-                  e.target.value
-                    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
-                    .replace(/\D/g, "")
-                )}
-                className="text-right"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">الفترة (اختياري)</label>
-              <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="جميع الفترات" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">جميع الفترات</SelectItem>
-                  <SelectItem value="morning">صباحي فقط</SelectItem>
-                  <SelectItem value="evening">مسائي فقط</SelectItem>
-                  <SelectItem value="full_day">يوم كامل فقط</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">الأسعار الموسمية (ر.س) — أدخل واحداً أو أكثر</label>
+              {([
+                { label: "☀️ صباحي", val: priceMorning, set: setPriceMorning, ph: "سعر الفترة الصباحية" },
+                { label: "🌙 مسائي", val: priceEvening, set: setPriceEvening, ph: "سعر الفترة المسائية" },
+                { label: "📅 يوم كامل", val: priceFullDay, set: setPriceFullDay, ph: "سعر اليوم الكامل" },
+              ] as const).map(({ label, val, set, ph }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <span className="text-sm w-24 shrink-0 text-muted-foreground">{label}</span>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder={ph}
+                    value={val ? toAr(val) : ""}
+                    onChange={(e) => (set as (v: string) => void)(
+                      e.target.value
+                        .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+                        .replace(/\D/g, "")
+                    )}
+                    className="text-right"
+                  />
+                </div>
+              ))}
             </div>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setAddOpen(false)}>إلغاء</Button>
             <Button
-              disabled={!nameAr.trim() || !startDate || !endDate || !price || saving || startDate > endDate}
+              disabled={!nameAr.trim() || !startDate || !endDate || !(priceMorning || priceEvening || priceFullDay) || saving || startDate > endDate}
               onClick={handleAdd}
               className="gap-1.5"
             >

@@ -799,12 +799,18 @@ router.post("/seasons", async (req, res) => {
     nameAr: z.string().min(1),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    price: z.number().positive(),
+    priceMorning: z.number().nonnegative().optional(),
+    priceEvening: z.number().nonnegative().optional(),
+    priceFullDay: z.number().nonnegative().optional(),
     period: z.enum(["morning", "evening", "full_day"]).optional(),
   }).safeParse(req.body);
 
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: body.error.flatten() });
   if (body.data.endDate < body.data.startDate) return res.status(400).json({ error: "تاريخ النهاية قبل البداية" });
+  const { priceMorning, priceEvening, priceFullDay } = body.data;
+  if (!priceMorning && !priceEvening && !priceFullDay) {
+    return res.status(400).json({ error: "يجب تحديد سعر واحد على الأقل" });
+  }
 
   // Verify ownership via submission
   const [sub] = await db.select({ ownerId: chaletSubmissionsTable.ownerId })
@@ -812,8 +818,22 @@ router.post("/seasons", async (req, res) => {
     .where(eq(chaletSubmissionsTable.id, body.data.submissionId));
   if (!sub || sub.ownerId !== ownerId) return res.status(403).json({ error: "غير مصرح" });
 
+  // Derive a primary price for backward compat (prefer full_day, then morning, then evening)
+  const primaryPrice = priceFullDay ?? priceMorning ?? priceEvening ?? 0;
+
   const [row] = await db.insert(chaletSeasonsTable)
-    .values({ ...body.data, price: String(body.data.price), ownerId })
+    .values({
+      submissionId: body.data.submissionId,
+      nameAr: body.data.nameAr,
+      startDate: body.data.startDate,
+      endDate: body.data.endDate,
+      price: String(primaryPrice),
+      priceMorning: priceMorning != null ? String(priceMorning) : null,
+      priceEvening: priceEvening != null ? String(priceEvening) : null,
+      priceFullDay: priceFullDay != null ? String(priceFullDay) : null,
+      period: body.data.period,
+      ownerId,
+    })
     .returning();
 
   return res.status(201).json(row);
