@@ -73,6 +73,7 @@ interface OwnerBooking {
   createdAt: string;
   cancelledAt?: string | null;
   cancelReason?: string | null;
+  ratedAt?: string | null;
 }
 
 interface RescheduleLogItem {
@@ -1975,6 +1976,67 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <span className="col-span-2 text-foreground/70 italic text-[0.7rem]">{b.notes}</span>
                         </>}
                       </div>
+                      {/* Insurance / Deposit block */}
+                      {b.insuranceFee && Number(b.insuranceFee) > 0 && (() => {
+                        const insAmt = Number(b.insuranceFee);
+                        const deducted = Number(b.insuranceDeducted ?? 0);
+                        const refundable = Math.max(0, insAmt - deducted);
+                        const proofImgsC: string[] = (() => { try { return JSON.parse(b.insuranceProofImages ?? "[]"); } catch { return []; } })();
+                        return (
+                          <div className={`rounded-lg border px-3 py-2 text-xs mt-1 space-y-1 ${
+                            b.insuranceRefunded
+                              ? "bg-slate-50 dark:bg-slate-900/20 border-slate-200 dark:border-slate-700"
+                              : "bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-700"
+                          }`}>
+                            {/* Header row */}
+                            <div className="flex items-center justify-between">
+                              <span className={`font-bold ${b.insuranceRefunded ? "text-slate-500" : "text-orange-700 dark:text-orange-400"}`}>
+                                🔒 مبلغ التأمين
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`font-bold text-sm ${b.insuranceRefunded ? "text-slate-400" : "text-orange-700 dark:text-orange-400"}`}>
+                                  {insAmt.toLocaleString("ar-SA")} ر.س
+                                </span>
+                                {!b.insuranceRefunded && (
+                                  <span className="bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">معلّق</span>
+                                )}
+                                {b.insuranceRefunded && deducted === 0 && (
+                                  <span className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">↩ مُعاد</span>
+                                )}
+                                {b.insuranceRefunded && deducted > 0 && (
+                                  <span className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">✂️ مخصوم</span>
+                                )}
+                              </div>
+                            </div>
+                            {/* Settlement formula — only if settled */}
+                            {b.insuranceRefunded && deducted > 0 && (
+                              <div className="pt-1 border-t border-slate-200 dark:border-slate-700 space-y-0.5">
+                                <div className="flex justify-between text-[11px]">
+                                  <span className="text-red-600">✂️ خصم تلفيات</span>
+                                  <span className="font-bold text-red-700">{deducted.toLocaleString("ar-SA")} ر.س</span>
+                                </div>
+                                {b.insuranceDeductReason && (
+                                  <div className="text-[10px] text-muted-foreground">السبب: {b.insuranceDeductReason}</div>
+                                )}
+                                <div className="flex justify-between text-[11px]">
+                                  <span className="text-green-600">↩ مُرجَع للعميل</span>
+                                  <span className="font-bold text-green-700">{refundable.toLocaleString("ar-SA")} ر.س</span>
+                                </div>
+                                {proofImgsC.length > 0 && (
+                                  <div className="flex gap-1 pt-0.5 flex-wrap">
+                                    {proofImgsC.slice(0, 4).map((u, i) => {
+                                      const fullU2 = u.startsWith("http") ? u : `${window.location.origin}${BASE}/api/storage${u}`;
+                                      return (
+                                        <img key={i} src={fullU2} alt="توثيق" className="w-10 h-10 rounded object-cover border border-border" />
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {/* Cancel / Reschedule / Review quick actions */}
                       <div className="flex gap-2 mt-2 pt-2 border-t border-border/50 flex-wrap">
                         <button
@@ -6294,6 +6356,7 @@ interface DepositEntry {
   insuranceProofImages?: string | null;
   submissionId?: number | null;
   chaletTitle?: string | null;
+  cancelledAt?: string | null;
 }
 
 function DepositsTab() {
@@ -6523,6 +6586,7 @@ function DepositsTab() {
       {/* Cards */}
       {!isLoading && filtered.map((d) => {
         const status = getStatus(d);
+        const isCancelled = !!d.cancelledAt;
         const ins = Number(d.insuranceFee);
         const deducted = Number(d.insuranceDeducted ?? 0);
         const refundable = Math.max(0, ins - deducted);
@@ -6532,7 +6596,9 @@ function DepositsTab() {
           <div
             key={d.id}
             className={`rounded-2xl border p-4 space-y-3 transition-all ${
-              status === "pending"
+              isCancelled
+                ? "border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/5 opacity-75"
+                : status === "pending"
                 ? "border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/5"
                 : status === "deducted"
                 ? "border-red-200 dark:border-red-800 bg-red-50/30 dark:bg-red-900/5"
@@ -6555,8 +6621,11 @@ function DepositsTab() {
                   {d.period && ` · ${periodLabel(d.period)}`}
                 </div>
               </div>
-              <div className="shrink-0">
-                {status === "pending" && (
+              <div className="shrink-0 flex flex-col items-end gap-1">
+                {isCancelled && (
+                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300">✕ ملغى</span>
+                )}
+                {!isCancelled && status === "pending" && (
                   <span className="text-xs font-semibold px-2 py-1 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">🔒 معلّق</span>
                 )}
                 {status === "refunded" && (
@@ -6618,8 +6687,8 @@ function DepositsTab() {
               </div>
             )}
 
-            {/* Action buttons */}
-            {status === "pending" && (
+            {/* Action buttons — hidden for cancelled bookings */}
+            {status === "pending" && !isCancelled && (
               <div className="flex gap-2 pt-1">
                 <Button
                   size="sm"
