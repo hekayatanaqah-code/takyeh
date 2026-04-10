@@ -15,6 +15,7 @@ import {
   reviewsTable,
   ownerNotificationsTable,
   ownerRescheduleLogsTable,
+  chaletSeasonsTable,
 } from "@workspace/db/schema";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
 import { randomBytes } from "crypto";
@@ -687,6 +688,142 @@ router.delete("/availability/:id", async (req, res) => {
   await db
     .delete(chaletAvailabilityTable)
     .where(and(eq(chaletAvailabilityTable.id, id), eq(chaletAvailabilityTable.ownerId, ownerId)));
+  return res.json({ ok: true });
+});
+
+/* ── Availability: Bulk Range Block (owner maintenance) ─────── */
+router.post("/availability/bulk", async (req, res) => {
+  const ownerId = req.user!.id;
+  const body = z.object({
+    chaletId: z.number().int().positive(),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    notes: z.string().optional(),
+  }).safeParse(req.body);
+
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const { chaletId, startDate, endDate, notes } = body.data;
+
+  // Verify ownership
+  const chalet = await db.select({ submissionId: chaletsTable.submissionId })
+    .from(chaletsTable)
+    .where(eq(chaletsTable.id, chaletId))
+    .limit(1);
+  if (!chalet.length) return res.status(404).json({ error: "الشاليه غير موجود" });
+
+  // Build list of YYYY-MM-DD strings in the range
+  const dates: string[] = [];
+  const [sy, sm, sd] = startDate.split("-").map(Number);
+  const [ey, em, ed] = endDate.split("-").map(Number);
+  const start = new Date(sy, sm - 1, sd);
+  const end = new Date(ey, em - 1, ed);
+  if (end < start) return res.status(400).json({ error: "تاريخ النهاية قبل البداية" });
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+  }
+
+  const blockNote = notes?.trim() || "إغلاق صيانة";
+
+  const created: number[] = [];
+  for (const dateStr of dates) {
+    const [existing] = await db.select({ id: chaletAvailabilityTable.id })
+      .from(chaletAvailabilityTable)
+      .where(and(eq(chaletAvailabilityTable.chaletId, chaletId), eq(chaletAvailabilityTable.dateStr, dateStr), eq(chaletAvailabilityTable.ownerId, ownerId)));
+
+    if (existing) {
+      await db.update(chaletAvailabilityTable)
+        .set({ periodMorning: true, periodEvening: true, periodFullDay: true, notes: blockNote })
+        .where(eq(chaletAvailabilityTable.id, existing.id));
+      created.push(existing.id);
+    } else {
+      const [row] = await db.insert(chaletAvailabilityTable)
+        .values({ chaletId, ownerId, dateStr, periodMorning: true, periodEvening: true, periodFullDay: true, notes: blockNote })
+        .returning({ id: chaletAvailabilityTable.id });
+      created.push(row.id);
+    }
+  }
+
+  return res.status(201).json({ blocked: created.length, dates });
+});
+
+/* ── Availability: Delete Range (unblock dates) ─────────────── */
+router.delete("/availability/range", async (req, res) => {
+  const ownerId = req.user!.id;
+  const body = z.object({
+    chaletId: z.number().int().positive(),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  }).safeParse(req.body);
+
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const { chaletId, startDate, endDate } = body.data;
+
+  await db.delete(chaletAvailabilityTable)
+    .where(
+      and(
+        eq(chaletAvailabilityTable.ownerId, ownerId),
+        eq(chaletAvailabilityTable.chaletId, chaletId),
+        gte(chaletAvailabilityTable.dateStr, startDate),
+        lte(chaletAvailabilityTable.dateStr, endDate),
+        isNotNull(chaletAvailabilityTable.notes),
+      )
+    );
+
+  return res.json({ ok: true });
+});
+
+/* ── Chalet Seasons ─────────────────────────────────────────── */
+
+router.get("/seasons", async (req, res) => {
+  const ownerId = req.user!.id;
+  const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
+
+  const conditions = [eq(chaletSeasonsTable.ownerId, ownerId)];
+  if (submissionId) conditions.push(eq(chaletSeasonsTable.submissionId, submissionId));
+
+  const rows = await db
+    .select()
+    .from(chaletSeasonsTable)
+    .where(and(...conditions))
+    .orderBy(chaletSeasonsTable.startDate);
+
+  return res.json(rows);
+});
+
+router.post("/seasons", async (req, res) => {
+  const ownerId = req.user!.id;
+  const body = z.object({
+    submissionId: z.number().int().positive(),
+    nameAr: z.string().min(1),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    price: z.number().positive(),
+    period: z.enum(["morning", "evening", "full_day"]).optional(),
+  }).safeParse(req.body);
+
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: body.error.flatten() });
+  if (body.data.endDate < body.data.startDate) return res.status(400).json({ error: "تاريخ النهاية قبل البداية" });
+
+  // Verify ownership via submission
+  const [sub] = await db.select({ ownerId: chaletSubmissionsTable.ownerId })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.id, body.data.submissionId));
+  if (!sub || sub.ownerId !== ownerId) return res.status(403).json({ error: "غير مصرح" });
+
+  const [row] = await db.insert(chaletSeasonsTable)
+    .values({ ...body.data, price: String(body.data.price), ownerId })
+    .returning();
+
+  return res.status(201).json(row);
+});
+
+router.delete("/seasons/:id", async (req, res) => {
+  const ownerId = req.user!.id;
+  const id = Number(req.params.id);
+  await db.delete(chaletSeasonsTable)
+    .where(and(eq(chaletSeasonsTable.id, id), eq(chaletSeasonsTable.ownerId, ownerId)));
   return res.json({ ok: true });
 });
 

@@ -101,6 +101,17 @@ interface ChaletAvailability {
   notes: string | null;
 }
 
+interface ChaletSeason {
+  id: number;
+  submissionId: number;
+  nameAr: string;
+  startDate: string;
+  endDate: string;
+  price: string;
+  period: string | null;
+  createdAt: string;
+}
+
 /* ── Upgrade Popup + Chalets Tab ─────────────── */
 const TIER_PLANS = [
   {
@@ -201,8 +212,98 @@ function UpgradePlanDialog({ open, onClose, context }: { open: boolean; onClose:
   );
 }
 
-function ChaletsTab({ submissions, isLoading }: { submissions: any[] | undefined; isLoading: boolean }) {
+function BlockDatesDialog({
+  open, chalet, onClose, onBlocked,
+}: {
+  open: boolean;
+  chalet: { id: number; nameAr: string } | null;
+  onClose: () => void;
+  onBlocked: () => void;
+}) {
+  const { toast } = useToast();
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [reason, setReason] = useState("صيانة");
+  const [loading, setLoading] = useState(false);
+
+  function reset() { setStartDate(""); setEndDate(""); setReason("صيانة"); }
+
+  async function handleBlock() {
+    if (!chalet || !startDate || !endDate) return;
+    setLoading(true);
+    try {
+      const r = await apiFetch("/owner/availability/bulk", {
+        method: "POST",
+        body: JSON.stringify({ chaletId: chalet.id, startDate, endDate, notes: reason }),
+      });
+      if (!r.ok) { toast({ title: "حدث خطأ", variant: "destructive" }); return; }
+      const data = await r.json();
+      toast({ title: `تم إغلاق ${toAr(data.blocked)} يوم بنجاح`, description: `${chalet.nameAr} — ${reason}` });
+      onBlocked();
+      onClose();
+      reset();
+    } finally { setLoading(false); }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); reset(); } }}>
+      <DialogContent dir="rtl" className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Lock className="w-4 h-4 text-gray-500" />
+            إغلاق أيام — {chalet?.nameAr}
+          </DialogTitle>
+          <DialogDescription>حدد نطاق التاريخ لمنع حجوزات الضيوف (صيانة، فعالية خاصة، إلخ)</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">من تاريخ</label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">إلى تاريخ</label>
+              <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">سبب الإغلاق</label>
+            <div className="flex gap-2 flex-wrap">
+              {["صيانة", "فعالية خاصة", "إجازة", "تجديد"].map((r) => (
+                <button key={r} onClick={() => setReason(r)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${reason === r ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-foreground"}`}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <Input className="mt-2" placeholder="أو اكتب سبباً آخر..." value={reason} onChange={(e) => setReason(e.target.value)} />
+          </div>
+          {startDate && endDate && startDate <= endDate && (
+            <div className="rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+              سيتم إغلاق {toAr(Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1)} يوم من {startDate.split("-").reverse().join("/")} إلى {endDate.split("-").reverse().join("/")}
+            </div>
+          )}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => { onClose(); reset(); }}>إلغاء</Button>
+          <Button
+            disabled={!startDate || !endDate || !reason.trim() || loading || startDate > endDate}
+            onClick={handleBlock}
+            className="bg-gray-700 hover:bg-gray-800 text-white gap-1.5"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+            إغلاق الأيام
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any[] | undefined; isLoading: boolean; ownerChalets: any[] }) {
+  const qc = useQueryClient();
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [blockTarget, setBlockTarget] = useState<{ id: number; nameAr: string } | null>(null);
 
   const { data: planLimits } = useQuery<{ plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number }>({
     queryKey: ["owner", "plan-limits"],
@@ -270,8 +371,16 @@ function ChaletsTab({ submissions, isLoading }: { submissions: any[] | undefined
         </div>
       )}
       <UpgradePlanDialog open={showUpgrade} onClose={() => setShowUpgrade(false)} context="chalet" />
+      <BlockDatesDialog
+        open={!!blockTarget}
+        chalet={blockTarget}
+        onClose={() => setBlockTarget(null)}
+        onBlocked={() => qc.invalidateQueries({ queryKey: ["owner", "availability"] })}
+      />
       {submissions.map((sub: any, idx: number) => {
         const status = statusConfig[sub.status as keyof typeof statusConfig] ?? statusConfig.pending;
+        const approvedChalet = ownerChalets.find((c: any) => c.submissionId === sub.id);
+        const isApproved = sub.status === "approved" && !!approvedChalet;
         return (
           <motion.div
             key={sub.id}
@@ -301,6 +410,12 @@ function ChaletsTab({ submissions, isLoading }: { submissions: any[] | undefined
                     <MapPin className="w-3.5 h-3.5" />
                     {sub.location}{sub.district ? ` - ${sub.district}` : ""}
                   </span>
+                  {sub.pricePerNight && (
+                    <span className="flex items-center gap-1.5">
+                      <DollarSign className="w-3.5 h-3.5" />
+                      {toAr(Number(sub.pricePerNight))} ر.س
+                    </span>
+                  )}
                   {sub.createdAt && (
                     <span className="flex items-center gap-1.5">
                       <Calendar className="w-3.5 h-3.5" />
@@ -327,6 +442,35 @@ function ChaletsTab({ submissions, isLoading }: { submissions: any[] | undefined
                     </div>
                   </div>
                 )}
+
+                {/* Action buttons */}
+                <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
+                  {isApproved && (
+                    <>
+                      <Link href={`/chalet/${approvedChalet.id}`} target="_blank">
+                        <Button size="sm" variant="outline" className="gap-1.5 rounded-xl text-xs h-8">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          عرض التفاصيل
+                        </Button>
+                      </Link>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 rounded-xl text-xs h-8 border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                        onClick={() => setBlockTarget({ id: approvedChalet.id, nameAr: sub.nameAr })}
+                      >
+                        <Lock className="w-3.5 h-3.5" />
+                        إغلاق أيام
+                      </Button>
+                    </>
+                  )}
+                  <Link href="/add-chalet">
+                    <Button size="sm" variant="ghost" className="gap-1.5 rounded-xl text-xs h-8 text-muted-foreground">
+                      <Edit2 className="w-3.5 h-3.5" />
+                      تعديل الطلب
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -363,6 +507,25 @@ function AddBookingDialog({
   const [insuranceFee, setInsuranceFee] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  /* ── Seasonal pricing hint ── */
+  const activeSubNum = submissionId && submissionId !== "none" ? Number(submissionId) : submissions[0]?.id ?? null;
+  const { data: dialogSeasons = [] } = useQuery<ChaletSeason[]>({
+    queryKey: ["owner", "seasons", activeSubNum],
+    queryFn: async () => {
+      if (!activeSubNum) return [];
+      const r = await apiFetch(`/owner/seasons?submissionId=${activeSubNum}`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: !!activeSubNum,
+  });
+  const activeSeason = useMemo<ChaletSeason | null>(() => {
+    if (!bookingDate || !dialogSeasons.length) return null;
+    return dialogSeasons.find((s) =>
+      bookingDate >= s.startDate && bookingDate <= s.endDate &&
+      (!s.period || !period || s.period === period)
+    ) ?? null;
+  }, [bookingDate, period, dialogSeasons]);
 
   /* ── Conflict detection: which periods are already booked across range ── */
   const conflictSet = useMemo(() => {
@@ -647,6 +810,24 @@ function AddBookingDialog({
           {/* ── Financial Fields — إجمالي required ── */}
           <div className="bg-muted/40 rounded-xl p-3 space-y-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">تفاصيل المبالغ</p>
+            {activeSeason && (
+              <div className="flex items-center gap-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-3 py-2.5">
+                <Sun className="w-4 h-4 text-amber-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-amber-800 dark:text-amber-300">موسم: {activeSeason.nameAr}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400">السعر الموسمي: {toAr(Number(activeSeason.price))} ر.س</p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-400 shrink-0"
+                  onClick={() => setTotalPrice(String(Number(activeSeason.price)))}
+                >
+                  تطبيق
+                </Button>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">
@@ -1216,6 +1397,8 @@ function MiniCalendar({
           const isBlocked = morningBlocked || eveningBlocked || fullDayBlocked;
           const isPartial = isBlocked && !fullDayBlocked && (morningBlocked !== eveningBlocked);
           const isToday = dateStr === today;
+          /* Manual maintenance block: avEntry has notes and NO real booking on this day */
+          const isManualBlock = !!avEntry?.notes && (!bkEntry || bkEntry.size === 0);
 
           /* Hijri day number */
           const hijriDay = _hijriFmt.format(new Date(year, month - 1, day));
@@ -1223,11 +1406,13 @@ function MiniCalendar({
           /* Build per-period rows for display */
           type PRow = { label: string; guest: string; amber: boolean };
           const pRows: PRow[] = [];
-          if (fullDayBlocked) {
-            pRows.push({ label: "يوم كامل", guest: fullDayGuest ? _getFirstName(fullDayGuest) : "", amber: false });
-          } else {
-            if (morningBlocked) pRows.push({ label: "صباحي", guest: morningGuest ? _getFirstName(morningGuest) : "", amber: true });
-            if (eveningBlocked) pRows.push({ label: "مسائي", guest: eveningGuest ? _getFirstName(eveningGuest) : "", amber: true });
+          if (!isManualBlock) {
+            if (fullDayBlocked) {
+              pRows.push({ label: "يوم كامل", guest: fullDayGuest ? _getFirstName(fullDayGuest) : "", amber: false });
+            } else {
+              if (morningBlocked) pRows.push({ label: "صباحي", guest: morningGuest ? _getFirstName(morningGuest) : "", amber: true });
+              if (eveningBlocked) pRows.push({ label: "مسائي", guest: eveningGuest ? _getFirstName(eveningGuest) : "", amber: true });
+            }
           }
 
           return (
@@ -1238,18 +1423,27 @@ function MiniCalendar({
                 "flex flex-col items-center justify-start pt-1.5 pb-1.5 px-0.5 w-full",
                 "transition-colors focus:outline-none focus:z-10 focus:ring-2 focus:ring-inset focus:ring-primary/60",
                 "min-h-[66px]",
-                isBlocked
-                  ? isPartial
-                    ? "bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100"
-                    : "bg-red-100 dark:bg-red-900/50 text-red-900 dark:text-red-100"
-                  : "bg-background hover:bg-primary/5 text-foreground",
+                isManualBlock
+                  ? "bg-gray-200 dark:bg-gray-700/60 text-gray-600 dark:text-gray-300"
+                  : isBlocked
+                    ? isPartial
+                      ? "bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100"
+                      : "bg-red-100 dark:bg-red-900/50 text-red-900 dark:text-red-100"
+                    : "bg-background hover:bg-primary/5 text-foreground",
                 isToday ? "ring-2 ring-inset ring-primary" : "",
               ].join(" ")}
             >
               {/* Hijri day */}
               <span className="text-[0.82rem] font-bold leading-none">{hijriDay}</span>
               {/* Gregorian day */}
-              <span className={`text-[0.52rem] leading-none mt-0.5 tabular-nums ${isBlocked ? "opacity-60" : "text-muted-foreground"}`}>{day}</span>
+              <span className={`text-[0.52rem] leading-none mt-0.5 tabular-nums ${isBlocked || isManualBlock ? "opacity-60" : "text-muted-foreground"}`}>{day}</span>
+
+              {/* Manual block label */}
+              {isManualBlock && (
+                <span className="mt-0.5 text-[0.42rem] font-bold leading-none text-gray-500 dark:text-gray-400 text-center">
+                  🔧 {avEntry!.notes!.length > 8 ? avEntry!.notes!.slice(0, 7) + "…" : avEntry!.notes}
+                </span>
+              )}
 
               {/* Per-period rows — shown independently */}
               {pRows.length > 0 && (
@@ -6894,13 +7088,256 @@ function DepositsTab() {
   );
 }
 
+/* ── Seasons Tab ─────────────────────────────── */
+function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [selectedSubId, setSelectedSubId] = useState<number | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [nameAr, setNameAr] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [price, setPrice] = useState("");
+  const [period, setPeriod] = useState<"" | "morning" | "evening" | "full_day">("");
+  const [saving, setSaving] = useState(false);
+
+  const activeSubId = selectedSubId ?? ownerChalets[0]?.submissionId ?? null;
+
+  const { data: seasons = [], isLoading } = useQuery<ChaletSeason[]>({
+    queryKey: ["owner", "seasons", activeSubId],
+    queryFn: async () => {
+      if (!activeSubId) return [];
+      const r = await apiFetch(`/owner/seasons?submissionId=${activeSubId}`);
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!activeSubId,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiFetch(`/owner/seasons/${id}`, { method: "DELETE" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["owner", "seasons"] }); toast({ title: "تم حذف الموسم" }); },
+  });
+
+  const periodLabel = (p: string | null) => {
+    if (!p) return "جميع الفترات";
+    if (p === "morning") return "صباحي";
+    if (p === "evening") return "مسائي";
+    return "يوم كامل";
+  };
+
+  async function handleAdd() {
+    if (!activeSubId || !nameAr.trim() || !startDate || !endDate || !price) return;
+    setSaving(true);
+    try {
+      const r = await apiFetch("/owner/seasons", {
+        method: "POST",
+        body: JSON.stringify({
+          submissionId: activeSubId,
+          nameAr: nameAr.trim(),
+          startDate,
+          endDate,
+          price: Number(price),
+          period: period || undefined,
+        }),
+      });
+      if (!r.ok) { const e = await r.json(); toast({ title: e.error ?? "خطأ", variant: "destructive" }); return; }
+      qc.invalidateQueries({ queryKey: ["owner", "seasons"] });
+      toast({ title: "تم إضافة الموسم بنجاح" });
+      setAddOpen(false);
+      setNameAr(""); setStartDate(""); setEndDate(""); setPrice(""); setPeriod("");
+    } finally { setSaving(false); }
+  }
+
+  if (ownerChalets.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <Building2 className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
+        <p className="text-sm text-muted-foreground">لا يوجد شاليه معتمد بعد. بعد موافقة الإدارة يمكنك إضافة المواسم.</p>
+      </div>
+    );
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="font-bold text-foreground text-lg">المواسم والأعياد</h3>
+          <p className="text-sm text-muted-foreground">حدد فترات بأسعار خاصة تُطبَّق تلقائياً على الحجوزات</p>
+        </div>
+        <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5 rounded-xl">
+          <Plus className="w-4 h-4" />
+          إضافة موسم
+        </Button>
+      </div>
+
+      {/* Chalet selector if multiple */}
+      {ownerChalets.length > 1 && (
+        <Select value={String(activeSubId ?? "")} onValueChange={(v) => setSelectedSubId(Number(v))}>
+          <SelectTrigger className="w-56">
+            <SelectValue placeholder="اختر الشاليه" />
+          </SelectTrigger>
+          <SelectContent>
+            {ownerChalets.map((c: any) => (
+              <SelectItem key={c.id} value={String(c.submissionId)}>{c.nameAr}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
+      {/* Seasons list */}
+      {isLoading ? (
+        <div className="space-y-3">{[1,2].map(i => <Skeleton key={i} className="h-20 rounded-2xl" />)}</div>
+      ) : seasons.length === 0 ? (
+        <div className="bg-card border border-dashed border-border rounded-2xl py-10 text-center">
+          <Sun className="w-9 h-9 text-muted-foreground/40 mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">لا توجد مواسم مضافة بعد</p>
+          <p className="text-xs text-muted-foreground/60 mt-1">أضف موسماً كالإجازات والأعياد بأسعار خاصة</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {seasons.map((s) => {
+            const days = Math.round((new Date(s.endDate).getTime() - new Date(s.startDate).getTime()) / 86400000) + 1;
+            return (
+              <motion.div
+                key={s.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4"
+              >
+                <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                  <Sun className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-foreground">{s.nameAr}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
+                    <span>{s.startDate.split("-").reverse().join("/")} → {s.endDate.split("-").reverse().join("/")}</span>
+                    <span>({toAr(days)} يوم)</span>
+                    <span className="text-muted-foreground/60">{periodLabel(s.period)}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-end">
+                    <p className="text-lg font-bold text-primary">{toAr(Number(s.price))}</p>
+                    <p className="text-xs text-muted-foreground">ر.س</p>
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 w-8 h-8"
+                    onClick={() => deleteMutation.mutate(s.id)}
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Info box */}
+      <div className="rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/40 px-4 py-3 flex items-start gap-3">
+        <Activity className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+          عند إضافة حجز في نطاق تاريخ موسم، يظهر تنبيه بالسعر الموسمي تلقائياً في نافذة الحجز.
+          يمكنك استخدامه لتطبيق أسعار الأعياد والإجازات والمواسم دون الحاجة لتغيير السعر الأساسي.
+        </p>
+      </div>
+
+      {/* Add Season Dialog */}
+      <Dialog open={addOpen} onOpenChange={(v) => { if (!v) setAddOpen(false); }}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sun className="w-4 h-4 text-amber-500" />
+              إضافة موسم جديد
+            </DialogTitle>
+            <DialogDescription>حدد اسم الموسم، نطاق التواريخ، والسعر الخاص</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">اسم الموسم</label>
+              <div className="flex gap-2 flex-wrap">
+                {["عيد الأضحى", "عيد الفطر", "رمضان", "الإجازة الصيفية", "نهاية السنة", "الإجازة الشتوية"].map((n) => (
+                  <button key={n} onClick={() => setNameAr(n)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${nameAr === n ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-foreground"}`}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <Input className="mt-2" placeholder="اسم الموسم..." value={nameAr} onChange={(e) => setNameAr(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">من تاريخ</label>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">إلى تاريخ</label>
+                <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">السعر الموسمي (ر.س)</label>
+              <Input
+                type="number"
+                placeholder="٠"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                min="0"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">الفترة (اختياري)</label>
+              <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="جميع الفترات" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">جميع الفترات</SelectItem>
+                  <SelectItem value="morning">صباحي فقط</SelectItem>
+                  <SelectItem value="evening">مسائي فقط</SelectItem>
+                  <SelectItem value="full_day">يوم كامل فقط</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setAddOpen(false)}>إلغاء</Button>
+            <Button
+              disabled={!nameAr.trim() || !startDate || !endDate || !price || saving || startDate > endDate}
+              onClick={handleAdd}
+              className="gap-1.5"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              حفظ الموسم
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </motion.div>
+  );
+}
+
 /* ── Main Dashboard ──────────────────────────── */
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits" | "seasons">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const { data: submissions, isLoading: submissionsLoading } = useGetMySubmissions();
+
+  const { data: ownerChalets = [] } = useQuery<any[]>({
+    queryKey: ["owner", "chalets"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/chalets");
+      return r.ok ? r.json() : [];
+    },
+    enabled: isAuthenticated,
+  });
 
   const { data: planLimits } = useQuery<{ plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number }>({
     queryKey: ["owner", "plan-limits"],
@@ -6954,6 +7391,7 @@ export default function Dashboard() {
 
   const tabs = [
     { id: "chalets",   label: "شاليهاتي",         icon: <Building2 className="w-4 h-4" /> },
+    { id: "seasons",   label: "المواسم",            icon: <Sun className="w-4 h-4" /> },
     { id: "reviews",   label: "التقييمات",          icon: <Star className="w-4 h-4" /> },
     { id: "services",  label: "خدماتي",            icon: <MessageSquare className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات", icon: <Calendar className="w-4 h-4" /> },
@@ -7087,7 +7525,10 @@ export default function Dashboard() {
 
         {/* Tab Content */}
         {activeTab === "chalets" && (
-          <ChaletsTab submissions={submissions as any[]} isLoading={submissionsLoading} />
+          <ChaletsTab submissions={submissions as any[]} isLoading={submissionsLoading} ownerChalets={ownerChalets} />
+        )}
+        {activeTab === "seasons" && (
+          <SeasonsTab ownerChalets={ownerChalets} />
         )}
         {activeTab === "reviews" && (
           <ReviewsTab />

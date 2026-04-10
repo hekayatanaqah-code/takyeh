@@ -440,3 +440,17 @@ export const ownerReportArchiveTable = pgTable("owner_report_archive", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type OwnerReportArchive = typeof ownerReportArchiveTable.$inferSelect;
+
+/* ── Chalet Seasons & Special Pricing ──────────────────────── */
+export const chaletSeasonsTable = pgTable("chalet_seasons", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  submissionId: integer("submission_id").references(() => chaletSubmissionsTable.id, { onDelete: "cascade" }).notNull(),
+  nameAr: text("name_ar").notNull(),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  price: numeric("price", { precision: 10, scale: 2 }).notNull(),
+  period: text("period"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ChaletSeason = typeof chaletSeasonsTable.$inferSelect;
