@@ -24,6 +24,7 @@ import SubscriptionPage from "./pages/SubscriptionPage";
 import RatePage from "./pages/RatePage";
 import OwnerChaletDetail from "./pages/OwnerChaletDetail";
 import Login from "./pages/Login";
+import AdminPortal from "./pages/AdminPortal";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,6 +79,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/staff-login" component={Login} />
       <Route path="/admin-login" component={Login} />
+      <Route path="/admin/internal/access" component={AdminPortal} />
       <Route path="/r/:token" component={RatePage} />
       <Route path="/about" component={About} />
       <Route path="/faq" component={FAQ} />

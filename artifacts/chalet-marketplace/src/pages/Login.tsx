@@ -3,18 +3,19 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, LogIn, Building2 } from "lucide-react";
+import { Eye, EyeOff, LogIn, Building2, Info, ShieldAlert } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function Login() {
-  const [, navigate]                = useLocation();
-  const qc                          = useQueryClient();
-  const [input, setInput]           = useState("");
-  const [password, setPassword]     = useState("");
-  const [showPw, setShowPw]         = useState(false);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+  const [, navigate]      = useLocation();
+  const qc                = useQueryClient();
+  const [input, setInput] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw]     = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+  const [isAdminBlock, setIsAdminBlock] = useState(false);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -22,6 +23,7 @@ export default function Login() {
     if (!trimmed || !password) return;
 
     setError(null);
+    setIsAdminBlock(false);
     setLoading(true);
 
     try {
@@ -34,13 +36,15 @@ export default function Login() {
       const data = await r.json();
 
       if (!r.ok) {
-        setError(data.error ?? "بيانات الدخول غير صحيحة");
+        if (data.adminPortal) {
+          setIsAdminBlock(true);
+        } else {
+          setError(data.error ?? "بيانات الدخول غير صحيحة");
+        }
         return;
       }
 
       qc.invalidateQueries({ queryKey: ["staff", "me"] });
-      qc.invalidateQueries({ queryKey: ["admin-staff", "me"] });
-
       navigate(data.redirect ?? "/dashboard");
     } catch {
       setError("تعذّر الاتصال بالخادم. يرجى المحاولة مرة أخرى");
@@ -55,7 +59,7 @@ export default function Login() {
       dir="rtl"
     >
       {/* ── Brand ── */}
-      <div className="flex flex-col items-center mb-8 select-none">
+      <div className="flex flex-col items-center mb-7 select-none">
         <div className="w-16 h-16 rounded-2xl bg-green-600 shadow-lg shadow-green-200 flex items-center justify-center mb-3">
           <span className="text-white text-2xl font-extrabold">ت</span>
         </div>
@@ -63,16 +67,20 @@ export default function Login() {
         <p className="text-gray-500 text-sm mt-0.5">منصة إدارة الشاليهات — القصيم</p>
       </div>
 
+      {/* ── Guidance banner ── */}
+      <div className="w-full max-w-sm mb-4 flex items-start gap-2.5 bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
+        <Info className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
+        <p className="text-sm text-green-800 leading-relaxed">
+          عزيزي العميل، هذا القسم مخصص لملاك الشاليهات فقط
+        </p>
+      </div>
+
       {/* ── Login card ── */}
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl shadow-gray-100 border border-gray-100 overflow-hidden">
-
-        {/* Staff / Admin form */}
         <div className="p-7">
           <h2 className="font-bold text-gray-800 text-base mb-5">تسجيل الدخول</h2>
 
           <form onSubmit={handleLogin} className="space-y-4">
-
-            {/* Username / Email field */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-gray-700">
                 البريد الإلكتروني أو اسم المستخدم
@@ -81,7 +89,7 @@ export default function Login() {
                 type="text"
                 placeholder="اسم_المستخدم"
                 value={input}
-                onChange={(e) => { setInput(e.target.value); setError(null); }}
+                onChange={(e) => { setInput(e.target.value); setError(null); setIsAdminBlock(false); }}
                 autoComplete="username"
                 dir="ltr"
                 className="h-11 text-left placeholder:text-gray-300 border-gray-200 focus:border-green-500"
@@ -90,7 +98,6 @@ export default function Login() {
               />
             </div>
 
-            {/* Password field */}
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-gray-700">كلمة المرور</label>
               <div className="relative">
@@ -98,7 +105,7 @@ export default function Login() {
                   type={showPw ? "text" : "password"}
                   placeholder="••••••••"
                   value={password}
-                  onChange={(e) => { setPassword(e.target.value); setError(null); }}
+                  onChange={(e) => { setPassword(e.target.value); setError(null); setIsAdminBlock(false); }}
                   autoComplete="current-password"
                   dir="ltr"
                   className="h-11 text-left pr-10 placeholder:text-gray-300 border-gray-200 focus:border-green-500"
@@ -115,7 +122,18 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Error message — only shows after a failed attempt */}
+            {/* Admin cross-block message */}
+            {isAdminBlock && (
+              <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 flex gap-2 items-start">
+                <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+                <div>
+                  <p className="font-semibold mb-0.5">يرجى استخدام بوابة الإدارة المخصصة</p>
+                  <p className="text-xs text-amber-700">هذا الحساب مخصص للإدارة العامة. الرجاء استخدام البوابة الإدارية.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Standard error */}
             {error && (
               <div className="rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3">
                 {error}
@@ -159,7 +177,6 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Back link */}
       <p className="text-center text-xs text-gray-400 mt-6">
         <a href={`${BASE}/`} className="text-green-600 hover:text-green-700 transition-colors">
           ← العودة للرئيسية

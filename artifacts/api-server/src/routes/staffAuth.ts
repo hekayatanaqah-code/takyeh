@@ -62,34 +62,58 @@ router.post("/unified-login", async (req, res) => {
     return res.json({ role: "staff", redirect: "/dashboard" });
   }
 
-  /* ── 2. Check admin_staff ── */
+  /* ── 2. Cross-block: if this username belongs to admin_staff → deny, redirect to admin portal ── */
   const [adminStaff] = await db
     .select()
     .from(adminStaffTable)
     .where(eq(adminStaffTable.username, user));
 
   if (adminStaff) {
-    if (!adminStaff.passwordHash) {
-      return res.status(401).json({
-        error: "هذا الحساب الإداري لا يملك كلمة مرور — تواصل مع المشرف العام",
-      });
-    }
-    if (!adminStaff.isActive) {
-      return res.status(403).json({ error: "هذا الحساب موقوف. تواصل مع المشرف العام" });
-    }
-    const valid = await bcrypt.compare(String(password), adminStaff.passwordHash);
-    if (!valid) {
-      return res.status(401).json({ error: "كلمة المرور غير صحيحة" });
-    }
-    const sid    = crypto.randomBytes(32).toString("hex");
-    const expire = new Date(Date.now() + SESSION_TTL_MS);
-    await db.insert(adminSessionsTable).values({ sid, adminStaffId: adminStaff.id, expire });
-    res.cookie(ADMIN_STAFF_COOKIE, sid, cookieOpts(SESSION_TTL_MS));
-    return res.json({ role: "adminStaff", redirect: "/admin" });
+    return res.status(403).json({
+      error: "يرجى استخدام بوابة الإدارة المخصصة",
+      adminPortal: true,
+    });
   }
 
   /* Username not found in either table */
   return res.status(401).json({ error: "لم يُعثر على حساب بهذا الاسم. تحقق من اسم المستخدم" });
+});
+
+/* ════════════════════════════════════════════════
+   POST /admin-portal-login
+   Private portal — admin_staff ONLY.
+   Called from /admin/internal/access.
+   ════════════════════════════════════════════════ */
+router.post("/admin-portal-login", async (req, res) => {
+  const { username, password } = req.body ?? {};
+  if (!username || !password) {
+    return res.status(400).json({ error: "يرجى إدخال اسم المستخدم وكلمة المرور" });
+  }
+  const user = String(username).trim();
+
+  const [adminStaff] = await db
+    .select()
+    .from(adminStaffTable)
+    .where(eq(adminStaffTable.username, user));
+
+  if (!adminStaff) {
+    return res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
+  }
+  if (!adminStaff.passwordHash) {
+    return res.status(401).json({ error: "هذا الحساب لا يملك كلمة مرور — تواصل مع المشرف العام" });
+  }
+  if (!adminStaff.isActive) {
+    return res.status(403).json({ error: "هذا الحساب موقوف" });
+  }
+  const valid = await bcrypt.compare(String(password), adminStaff.passwordHash);
+  if (!valid) {
+    return res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
+  }
+  const sid    = crypto.randomBytes(32).toString("hex");
+  const expire = new Date(Date.now() + SESSION_TTL_MS);
+  await db.insert(adminSessionsTable).values({ sid, adminStaffId: adminStaff.id, expire });
+  res.cookie(ADMIN_STAFF_COOKIE, sid, cookieOpts(SESSION_TTL_MS));
+  return res.json({ role: "adminStaff", redirect: "/admin" });
 });
 
 /* ════════════════════════════════════════════════
