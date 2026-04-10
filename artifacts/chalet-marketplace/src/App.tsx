@@ -23,8 +23,7 @@ import Terms from "./pages/Terms";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import RatePage from "./pages/RatePage";
 import OwnerChaletDetail from "./pages/OwnerChaletDetail";
-import StaffLogin from "./pages/StaffLogin";
-import AdminLogin from "./pages/AdminLogin";
+import Login from "./pages/Login";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,8 +75,9 @@ function Router() {
       <Route path="/subscription">
         {() => <ProtectedRoute component={SubscriptionPage} returnTo="/subscription" />}
       </Route>
-      <Route path="/staff-login" component={StaffLogin} />
-      <Route path="/admin-login" component={AdminLogin} />
+      <Route path="/login" component={Login} />
+      <Route path="/staff-login" component={Login} />
+      <Route path="/admin-login" component={Login} />
       <Route path="/r/:token" component={RatePage} />
       <Route path="/about" component={About} />
       <Route path="/faq" component={FAQ} />
