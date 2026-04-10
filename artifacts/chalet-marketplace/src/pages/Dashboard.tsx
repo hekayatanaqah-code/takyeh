@@ -2025,7 +2025,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 {proofImgsC.length > 0 && (
                                   <div className="flex gap-1 pt-0.5 flex-wrap">
                                     {proofImgsC.slice(0, 4).map((u, i) => {
-                                      const fullU2 = u.startsWith("http") ? u : `${window.location.origin}${BASE}/api/storage${u}`;
+                                      const fullU2 = u.startsWith("http") ? u : `${window.location.origin}${BASE}${u}`;
                                       return (
                                         <img key={i} src={fullU2} alt="توثيق" className="w-10 h-10 rounded object-cover border border-border" />
                                       );
@@ -6677,7 +6677,7 @@ function DepositsTab() {
                       className="w-16 h-16 rounded-lg overflow-hidden border border-border hover:border-primary transition-colors shrink-0"
                     >
                       <img
-                        src={`${BASE}/api/storage${url}`}
+                        src={url.startsWith("http") ? url : `${BASE}${url}`}
                         alt={`توثيق ${toAr(i + 1)}`}
                         className="w-full h-full object-cover"
                       />
@@ -6834,7 +6834,7 @@ function DepositsTab() {
                   {proofUrls.map((url, i) => (
                     <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border group">
                       <img
-                        src={`${BASE}/api/storage${url}`}
+                        src={url.startsWith("http") ? url : `${BASE}${url}`}
                         alt={`صورة ${toAr(i + 1)}`}
                         className="w-full h-full object-cover"
                       />
@@ -6877,7 +6877,7 @@ function DepositsTab() {
           onClick={() => setLightboxImg(null)}
         >
           <img
-            src={`${BASE}/api/storage${lightboxImg}`}
+            src={lightboxImg.startsWith("http") ? lightboxImg : `${BASE}${lightboxImg}`}
             alt="صورة التوثيق"
             className="max-w-full max-h-full rounded-xl object-contain"
             onClick={(e) => e.stopPropagation()}
