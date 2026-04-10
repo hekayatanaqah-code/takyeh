@@ -612,7 +612,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
 
 /* ── Add Booking Dialog ──────────────────────── */
 function AddBookingDialog({
-  open, onClose, submissions, onAdded, existingBookings, prefilledDate, prefilledChaletId,
+  open, onClose, submissions, onAdded, existingBookings, prefilledDate, prefilledChaletId, availabilityBlocks,
 }: {
   open: boolean;
   onClose: () => void;
@@ -621,6 +621,7 @@ function AddBookingDialog({
   existingBookings?: OwnerBooking[];
   prefilledDate?: string | null;
   prefilledChaletId?: string | null;
+  availabilityBlocks?: ChaletAvailability[];
 }) {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
@@ -690,6 +691,20 @@ function AddBookingDialog({
   const fullDayDisabled  = conflictSet.has("morning")  || conflictSet.has("evening") || conflictSet.has("full_day");
   const isFullyBlocked   = conflictSet.has("full_day") || (conflictSet.has("morning") && conflictSet.has("evening"));
 
+  /* ── Maintenance block detection: any day in the booking range manually blocked ── */
+  const maintenanceBlockNote = useMemo(() => {
+    if (!bookingDate || !availabilityBlocks?.length) return null;
+    const [sy, sm, sd] = bookingDate.split("-").map(Number);
+    const duration = Math.max(1, durationDays);
+    for (let i = 0; i < duration; i++) {
+      const d = new Date(sy, sm - 1, sd + i);
+      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const av = availabilityBlocks.find((a) => a.dateStr === ds);
+      if (av?.notes) return av.notes;
+    }
+    return null;
+  }, [bookingDate, durationDays, availabilityBlocks]);
+
   // Auto-clear period if it becomes disabled
   useEffect(() => {
     if ((period === "morning" && morningDisabled) ||
@@ -743,6 +758,7 @@ function AddBookingDialog({
     if (!clientName.trim()) { setError("يرجى إدخال اسم العميل"); return; }
     if (!clientPhone.trim()) { setError("يرجى إدخال رقم الجوال"); return; }
     if (!bookingDate) { setError("يرجى اختيار تاريخ الحجز"); return; }
+    if (maintenanceBlockNote) { setError(`هذا اليوم غير متاح للحجز (صيانة/إغلاق مؤقت) — ${maintenanceBlockNote}`); return; }
     if (!period || period === "none") { setError("يرجى اختيار الفترة"); return; }
     if (!totalPrice) { setError("يرجى إدخال إجمالي قيمة الحجز"); return; }
     setSaving(true); setError("");
@@ -891,10 +907,21 @@ function AddBookingDialog({
             </div>
           </div>
 
+          {/* ── Maintenance block warning ── */}
+          {maintenanceBlockNote && (
+            <div className="flex items-start gap-2 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 px-3 py-2.5">
+              <span className="text-base mt-0.5">🔧</span>
+              <div>
+                <p className="text-xs font-bold text-orange-800 dark:text-orange-300">هذا اليوم غير متاح للحجز (صيانة/إغلاق مؤقت)</p>
+                <p className="text-xs text-orange-700 dark:text-orange-400 mt-0.5">{maintenanceBlockNote}</p>
+              </div>
+            </div>
+          )}
+
           {/* ── Period — required ── */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">الفترة الزمنية <span className="text-destructive">*</span></label>
-            {isFullyBlocked && (
+            {isFullyBlocked && !maintenanceBlockNote && (
               <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
                 <span className="text-base">⛔</span>
                 <span className="text-xs font-semibold text-red-700 dark:text-red-300">هذا اليوم محجوز بالكامل — لا تتوفر فترات متاحة</span>
@@ -2214,6 +2241,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         existingBookings={bookings}
         prefilledDate={prefilledDate}
         prefilledChaletId={activeChaletId ? String(activeChaletId) : undefined}
+        availabilityBlocks={availability}
       />
 
       {/* Day Booking Summary Dialog */}
@@ -2470,6 +2498,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
                     return ds >= b.bookingDate && ds <= endStr;
                   });
+                  // Hard-block: maintenance/صيانة dates cannot be booked
+                  const avEntry = availability.find((a) => a.dateStr === ds);
+                  if (avEntry?.notes && dayBkgs.length === 0) {
+                    toast({
+                      title: "هذا اليوم غير متاح للحجز",
+                      description: `صيانة/إغلاق مؤقت — ${avEntry.notes}`,
+                      variant: "destructive",
+                    });
+                    return;
+                  }
                   if (dayBkgs.length > 0) {
                     setSummaryDate(ds);
                   } else {

@@ -196,7 +196,7 @@ export default function OwnerChaletDetail() {
     enabled: !!submissionId,
   });
 
-  const storageBase = `${BASE}/api`;
+  const storageBase = BASE;
 
   if (isLoading) {
     return (
