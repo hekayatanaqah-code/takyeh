@@ -6279,10 +6279,556 @@ function ReviewsTab() {
   );
 }
 
+/* ── DepositsTab ─────────────────────────────── */
+interface DepositEntry {
+  id: number;
+  clientName: string;
+  clientPhone?: string | null;
+  bookingDate: string;
+  durationDays: number;
+  period?: string | null;
+  insuranceFee: string;
+  insuranceRefunded: boolean;
+  insuranceDeducted?: string | null;
+  insuranceDeductReason?: string | null;
+  insuranceProofImages?: string | null;
+  submissionId?: number | null;
+  chaletTitle?: string | null;
+}
+
+function DepositsTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const [refundConfirm, setRefundConfirm] = useState<DepositEntry | null>(null);
+  const [deductDialog, setDeductDialog] = useState<DepositEntry | null>(null);
+  const [deductAmount, setDeductAmount] = useState("");
+  const [deductReason, setDeductReason] = useState("");
+  const [proofUrls, setProofUrls] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "resolved">("all");
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
+
+  const { data: deposits = [], isLoading } = useQuery<DepositEntry[]>({
+    queryKey: ["owner", "deposits"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/deposits");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const patchMutation = useMutation({
+    mutationFn: async ({ id, patch }: { id: number; patch: Record<string, unknown> }) => {
+      const r = await apiFetch(`/owner/bookings/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
+      if (!r.ok) throw new Error("فشل");
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["owner", "deposits"] });
+      queryClient.invalidateQueries({ queryKey: ["owner", "bookings"] });
+    },
+  });
+
+  const handleRefund = async () => {
+    if (!refundConfirm) return;
+    try {
+      await patchMutation.mutateAsync({
+        id: refundConfirm.id,
+        patch: { insuranceRefunded: true, insuranceDeducted: 0, insuranceDeductReason: null },
+      });
+      toast({ title: "✅ تم تسجيل إعادة التأمين بنجاح" });
+      setRefundConfirm(null);
+    } catch {
+      toast({ title: "حدث خطأ أثناء التحديث", variant: "destructive" });
+    }
+  };
+
+  const handlePhotoUpload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploading(true);
+    const newUrls: string[] = [];
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const r = await fetch(`${BASE}/api/storage/uploads/process`, {
+          credentials: "include",
+          method: "POST",
+          body: fd,
+        });
+        if (!r.ok) throw new Error("upload failed");
+        const data = await r.json();
+        newUrls.push(data.url as string);
+      }
+      setProofUrls((prev) => [...prev, ...newUrls]);
+      toast({ title: `✅ تم رفع ${toAr(newUrls.length)} صورة بنجاح` });
+    } catch {
+      toast({ title: "فشل رفع الصورة", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeduct = async () => {
+    if (!deductDialog) return;
+    const amount = Number(deductAmount);
+    if (!amount || amount <= 0) {
+      toast({ title: "أدخل مبلغ الخصم بشكل صحيح", variant: "destructive" });
+      return;
+    }
+    if (!deductReason.trim()) {
+      toast({ title: "أدخل سبب الخصم", variant: "destructive" });
+      return;
+    }
+    const maxDeduct = Number(deductDialog.insuranceFee);
+    if (amount > maxDeduct) {
+      toast({ title: `لا يمكن الخصم أكثر من مبلغ التأمين (${toAr(maxDeduct)} ر.س)`, variant: "destructive" });
+      return;
+    }
+    try {
+      await patchMutation.mutateAsync({
+        id: deductDialog.id,
+        patch: {
+          insuranceRefunded: true,
+          insuranceDeducted: amount,
+          insuranceDeductReason: deductReason,
+          insuranceProofImages: proofUrls,
+        },
+      });
+      toast({ title: "✅ تم توثيق الخصم بنجاح" });
+      setDeductDialog(null);
+      setDeductAmount("");
+      setDeductReason("");
+      setProofUrls([]);
+    } catch {
+      toast({ title: "حدث خطأ أثناء الحفظ", variant: "destructive" });
+    }
+  };
+
+  const filtered = useMemo(() => {
+    if (filterStatus === "pending") return deposits.filter((d) => !d.insuranceRefunded);
+    if (filterStatus === "resolved") return deposits.filter((d) => d.insuranceRefunded);
+    return deposits;
+  }, [deposits, filterStatus]);
+
+  const pendingCount = deposits.filter((d) => !d.insuranceRefunded).length;
+
+  const periodLabel = (p?: string | null) => {
+    if (p === "morning") return "🌅 صباحي";
+    if (p === "evening") return "🌙 مسائي";
+    if (p === "full_day") return "☀️ كامل";
+    return "";
+  };
+
+  const getStatus = (d: DepositEntry): "pending" | "refunded" | "deducted" => {
+    if (!d.insuranceRefunded) return "pending";
+    if (d.insuranceDeducted && Number(d.insuranceDeducted) > 0) return "deducted";
+    return "refunded";
+  };
+
+  const fmtMoney = (n: number | string) =>
+    Number(n).toLocaleString("ar-SA", { maximumFractionDigits: 0 });
+
+  const parseProofImgs = (raw?: string | null): string[] => {
+    try { return JSON.parse(raw ?? "[]"); } catch { return []; }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-5"
+    >
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">إدارة التأمينات</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            جميع الحجوزات التي تحتوي على مبلغ تأمين
+          </p>
+        </div>
+        {pendingCount > 0 && (
+          <span className="self-start sm:self-auto bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-sm font-semibold px-3 py-1.5 rounded-full">
+            🔒 {toAr(pendingCount)} بانتظار القرار
+          </span>
+        )}
+      </div>
+
+      {/* Summary Cards */}
+      {deposits.length > 0 && (() => {
+        const totalDeposits = deposits.reduce((s, d) => s + Number(d.insuranceFee), 0);
+        const totalDeducted = deposits.reduce((s, d) => s + Number(d.insuranceDeducted ?? 0), 0);
+        const totalRefundable = deposits
+          .filter((d) => !d.insuranceRefunded)
+          .reduce((s, d) => s + Number(d.insuranceFee), 0);
+        return (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-xl p-3 text-center">
+              <div className="text-xs text-orange-600 dark:text-orange-400 font-medium mb-1">إجمالي التأمينات</div>
+              <div className="text-lg font-bold text-orange-700 dark:text-orange-300">{fmtMoney(totalDeposits)}</div>
+              <div className="text-xs text-muted-foreground">ر.س</div>
+            </div>
+            <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl p-3 text-center">
+              <div className="text-xs text-red-600 dark:text-red-400 font-medium mb-1">إجمالي التلفيات</div>
+              <div className="text-lg font-bold text-red-700 dark:text-red-300">{fmtMoney(totalDeducted)}</div>
+              <div className="text-xs text-muted-foreground">ر.س</div>
+            </div>
+            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-center">
+              <div className="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">محتجز (معلّق)</div>
+              <div className="text-lg font-bold text-amber-700 dark:text-amber-300">{fmtMoney(totalRefundable)}</div>
+              <div className="text-xs text-muted-foreground">ر.س</div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Filter */}
+      <div className="flex gap-2 flex-wrap">
+        {(["all", "pending", "resolved"] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setFilterStatus(s)}
+            className={`text-sm px-3 py-1.5 rounded-full font-medium transition-colors ${
+              filterStatus === s
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            {s === "all" ? "الكل" : s === "pending" ? "🔒 معلّق" : "✅ مُنتهٍ"}
+          </button>
+        ))}
+      </div>
+
+      {/* Loading */}
+      {isLoading && (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 w-full rounded-xl" />)}
+        </div>
+      )}
+
+      {/* Empty */}
+      {!isLoading && filtered.length === 0 && (
+        <div className="text-center py-16 text-muted-foreground">
+          <Lock className="w-12 h-12 mx-auto mb-3 opacity-20" />
+          <p className="font-medium">لا توجد تأمينات {filterStatus !== "all" ? "في هذه الفئة" : ""}</p>
+          <p className="text-sm mt-1">ستظهر هنا الحجوزات التي تحتوي على مبلغ تأمين</p>
+        </div>
+      )}
+
+      {/* Cards */}
+      {!isLoading && filtered.map((d) => {
+        const status = getStatus(d);
+        const ins = Number(d.insuranceFee);
+        const deducted = Number(d.insuranceDeducted ?? 0);
+        const refundable = Math.max(0, ins - deducted);
+        const proofImgs = parseProofImgs(d.insuranceProofImages);
+
+        return (
+          <div
+            key={d.id}
+            className={`rounded-2xl border p-4 space-y-3 transition-all ${
+              status === "pending"
+                ? "border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/5"
+                : status === "deducted"
+                ? "border-red-200 dark:border-red-800 bg-red-50/30 dark:bg-red-900/5"
+                : "border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-900/5"
+            }`}
+          >
+            {/* Row 1: Client + status badge */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="font-semibold text-foreground truncate">{d.clientName}</div>
+                {d.clientPhone && (
+                  <div className="text-xs text-muted-foreground mt-0.5" dir="ltr">{toAr(d.clientPhone)}</div>
+                )}
+                {d.chaletTitle && (
+                  <div className="text-xs text-muted-foreground mt-0.5">🏡 {d.chaletTitle}</div>
+                )}
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  📅 {d.bookingDate}
+                  {d.durationDays > 1 && ` · ${toAr(d.durationDays)} أيام`}
+                  {d.period && ` · ${periodLabel(d.period)}`}
+                </div>
+              </div>
+              <div className="shrink-0">
+                {status === "pending" && (
+                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">🔒 معلّق</span>
+                )}
+                {status === "refunded" && (
+                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">✅ مُعاد</span>
+                )}
+                {status === "deducted" && (
+                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">✂️ مخصوم</span>
+                )}
+              </div>
+            </div>
+
+            {/* Row 2: Finance formula */}
+            <div className="bg-background/60 rounded-xl border border-border/50 px-4 py-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">مبلغ التأمين الأصلي</span>
+                <span className="font-bold text-orange-600 dark:text-orange-400">{fmtMoney(ins)} ر.س</span>
+              </div>
+              {deducted > 0 && (
+                <div className="flex items-center justify-between text-sm mt-1.5">
+                  <span className="text-muted-foreground">المبلغ المخصوم (تلفيات)</span>
+                  <span className="font-bold text-red-600 dark:text-red-400">− {fmtMoney(deducted)} ر.س</span>
+                </div>
+              )}
+              <div className="border-t border-border/50 mt-2 pt-2 flex items-center justify-between text-sm">
+                <span className="font-semibold text-foreground">المبلغ المُستردّ</span>
+                <span className={`font-bold text-lg ${refundable > 0 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}>
+                  {fmtMoney(refundable)} ر.س
+                </span>
+              </div>
+            </div>
+
+            {/* Deduction reason */}
+            {d.insuranceDeductReason && (
+              <div className="text-sm bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800/50 rounded-lg px-3 py-2">
+                <span className="font-semibold text-red-700 dark:text-red-400">سبب الخصم: </span>
+                <span className="text-red-800 dark:text-red-300">{d.insuranceDeductReason}</span>
+              </div>
+            )}
+
+            {/* Proof image thumbnails */}
+            {proofImgs.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-muted-foreground">📸 صور التوثيق ({toAr(proofImgs.length)})</p>
+                <div className="flex gap-2 flex-wrap">
+                  {proofImgs.map((url, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setLightboxImg(url)}
+                      className="w-16 h-16 rounded-lg overflow-hidden border border-border hover:border-primary transition-colors shrink-0"
+                    >
+                      <img
+                        src={`${BASE}/api/storage${url}`}
+                        alt={`توثيق ${toAr(i + 1)}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            {status === "pending" && (
+              <div className="flex gap-2 pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/20 gap-1.5"
+                  onClick={() => setRefundConfirm(d)}
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  إعادة التأمين
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20 gap-1.5"
+                  onClick={() => {
+                    setDeductDialog(d);
+                    setDeductAmount("");
+                    setDeductReason("");
+                    setProofUrls([]);
+                  }}
+                >
+                  <Camera className="w-4 h-4" />
+                  خصم مع توثيق
+                </Button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Refund Confirm Dialog */}
+      <Dialog open={!!refundConfirm} onOpenChange={(o) => !o && setRefundConfirm(null)}>
+        <DialogContent dir="rtl" className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>تأكيد إعادة التأمين</DialogTitle>
+            <DialogDescription>
+              هل تؤكد إعادة مبلغ التأمين كاملاً (
+              <strong>{refundConfirm ? fmtMoney(Number(refundConfirm.insuranceFee)) : 0} ر.س</strong>)
+              للعميل <strong>{refundConfirm?.clientName}</strong>؟
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 pt-2">
+            <Button variant="outline" onClick={() => setRefundConfirm(null)}>إلغاء</Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={handleRefund}
+              disabled={patchMutation.isPending}
+            >
+              {patchMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "✅ تأكيد الإعادة"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deduct Dialog */}
+      <Dialog open={!!deductDialog} onOpenChange={(o) => !o && setDeductDialog(null)}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>خصم مع توثيق الضرر</DialogTitle>
+            <DialogDescription>
+              تأمين <strong>{deductDialog?.clientName}</strong> — الأصلي:{" "}
+              <strong className="text-orange-600">{deductDialog ? fmtMoney(Number(deductDialog.insuranceFee)) : 0} ر.س</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Amount */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">مبلغ الخصم (ر.س) *</label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                placeholder={`أقصى مبلغ: ${deductDialog ? fmtMoney(Number(deductDialog.insuranceFee)) : 0}`}
+                value={toAr(deductAmount)}
+                onChange={(e) => {
+                  const raw = e.target.value
+                    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+                    .replace(/[^\d.]/g, "");
+                  setDeductAmount(raw);
+                }}
+                className="text-right"
+              />
+              {/* Live formula preview */}
+              {deductAmount && deductDialog && Number(deductAmount) > 0 && (
+                <div className="bg-muted/50 rounded-lg px-3 py-2 text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">الأصلي</span>
+                    <span className="font-medium">{fmtMoney(Number(deductDialog.insuranceFee))} ر.س</span>
+                  </div>
+                  <div className="flex justify-between text-red-600">
+                    <span>الخصم</span>
+                    <span className="font-medium">− {fmtMoney(Number(deductAmount))} ر.س</span>
+                  </div>
+                  <div className="flex justify-between border-t border-border pt-1 font-bold">
+                    <span>المستردّ</span>
+                    <span className={Math.max(0, Number(deductDialog.insuranceFee) - Number(deductAmount)) > 0 ? "text-green-600" : "text-muted-foreground"}>
+                      {fmtMoney(Math.max(0, Number(deductDialog.insuranceFee) - Number(deductAmount)))} ر.س
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Reason */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">سبب الخصم *</label>
+              <Textarea
+                placeholder="مثال: كسر في المرآة، بقع على السجادة..."
+                value={deductReason}
+                onChange={(e) => setDeductReason(e.target.value)}
+                rows={2}
+                className="text-right resize-none"
+              />
+            </div>
+
+            {/* Photo Upload */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">صور التوثيق (اختياري)</label>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                multiple
+                className="hidden"
+                onChange={(e) => handlePhotoUpload(e.target.files)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2 border-dashed"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ الرفع...</>
+                ) : (
+                  <><Camera className="w-4 h-4" /> التقاط صورة أو اختيار من المعرض</>
+                )}
+              </Button>
+              {proofUrls.length > 0 && (
+                <div className="flex gap-2 flex-wrap mt-2">
+                  {proofUrls.map((url, i) => (
+                    <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-border group">
+                      <img
+                        src={`${BASE}/api/storage${url}`}
+                        alt={`صورة ${toAr(i + 1)}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        onClick={() => setProofUrls((prev) => prev.filter((_, j) => j !== i))}
+                        className="absolute inset-0 bg-black/50 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                      >
+                        حذف
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                يمكنك رفع صور متعددة للتأكد من توثيق الضرر. تعمل مع كاميرا الجوال مباشرة.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="flex gap-2 pt-1">
+            <Button variant="outline" onClick={() => setDeductDialog(null)}>إلغاء</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+              onClick={handleDeduct}
+              disabled={patchMutation.isPending || uploading}
+            >
+              {patchMutation.isPending
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <><Archive className="w-4 h-4" /> حفظ الخصم والتوثيق</>
+              }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox */}
+      {lightboxImg && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightboxImg(null)}
+        >
+          <img
+            src={`${BASE}/api/storage${lightboxImg}`}
+            alt="صورة التوثيق"
+            className="max-w-full max-h-full rounded-xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            className="absolute top-4 left-4 text-white bg-black/50 rounded-full p-2"
+            onClick={() => setLightboxImg(null)}
+          >
+            <XCircle className="w-6 h-6" />
+          </button>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 /* ── Main Dashboard ──────────────────────────── */
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const { data: submissions, isLoading: submissionsLoading } = useGetMySubmissions();
@@ -6346,6 +6892,7 @@ export default function Dashboard() {
     { id: "expenses",  label: "المصروفات",          icon: <Wallet className="w-4 h-4" /> },
     { id: "staff",     label: "الموظفون",           icon: <Users className="w-4 h-4" /> },
     { id: "reports",   label: "التقارير",           icon: <BarChart2 className="w-4 h-4" /> },
+    { id: "deposits",  label: "التأمينات",           icon: <Lock className="w-4 h-4" /> },
   ] as const;
 
   return (
@@ -6493,6 +7040,9 @@ export default function Dashboard() {
         )}
         {activeTab === "reports" && (
           <ReportsTab />
+        )}
+        {activeTab === "deposits" && (
+          <DepositsTab />
         )}
       </div>
     </div>

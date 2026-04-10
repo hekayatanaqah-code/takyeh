@@ -1723,4 +1723,40 @@ router.post("/reviews/:id/report", async (req, res) => {
   return res.json({ ok: true });
 });
 
+/* ── GET /owner/deposits ─────────────────────────────────── */
+router.get("/deposits", requireAuth, async (req: Request, res: Response) => {
+  const ownerId = req.user!.id;
+
+  const bookings = await db
+    .select({
+      id: ownerBookingsTable.id,
+      clientName: ownerBookingsTable.clientName,
+      clientPhone: ownerBookingsTable.clientPhone,
+      bookingDate: ownerBookingsTable.bookingDate,
+      durationDays: ownerBookingsTable.durationDays,
+      period: ownerBookingsTable.period,
+      insuranceFee: ownerBookingsTable.insuranceFee,
+      insuranceRefunded: ownerBookingsTable.insuranceRefunded,
+      insuranceDeducted: ownerBookingsTable.insuranceDeducted,
+      insuranceDeductReason: ownerBookingsTable.insuranceDeductReason,
+      insuranceProofImages: ownerBookingsTable.insuranceProofImages,
+      submissionId: ownerBookingsTable.submissionId,
+      chaletTitle: chaletSubmissionsTable.title,
+      createdAt: ownerBookingsTable.createdAt,
+    })
+    .from(ownerBookingsTable)
+    .leftJoin(chaletSubmissionsTable, eq(ownerBookingsTable.submissionId, chaletSubmissionsTable.id))
+    .where(
+      and(
+        eq(ownerBookingsTable.ownerId, ownerId),
+        isNotNull(ownerBookingsTable.insuranceFee),
+        sql`${ownerBookingsTable.insuranceFee}::numeric > 0`,
+        isNull(ownerBookingsTable.cancelledAt),
+      )
+    )
+    .orderBy(desc(ownerBookingsTable.bookingDate));
+
+  return res.json(bookings);
+});
+
 export default router;
