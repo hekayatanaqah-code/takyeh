@@ -241,11 +241,13 @@ export default function AddChalet() {
     setLegalAccepted(true);
     /* Photos */
     if (Array.isArray(editSub.photos) && editSub.photos.length > 0) {
-      setPhotos(editSub.photos.map((url: string) => ({ url, name: url.split("/").pop() ?? "photo", preview: url.startsWith("http") ? url : `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api${url}` })));
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      setPhotos(editSub.photos.map((url: string) => ({ url, name: url.split("/").pop() ?? "photo", preview: url.startsWith("http") ? url : `${base}${url}` })));
     }
     /* Video */
     if (editSub.videoUrl) {
-      setVideo({ url: editSub.videoUrl, name: "video", preview: editSub.videoUrl.startsWith("http") ? editSub.videoUrl : `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api${editSub.videoUrl}` });
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      setVideo({ url: editSub.videoUrl, name: "video", preview: editSub.videoUrl.startsWith("http") ? editSub.videoUrl : `${base}${editSub.videoUrl}` });
     }
     /* Amenities */
     if (Array.isArray(editSub.amenities)) {
