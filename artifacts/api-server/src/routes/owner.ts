@@ -1741,7 +1741,7 @@ router.get("/deposits", requireAuth, async (req: Request, res: Response) => {
       insuranceDeductReason: ownerBookingsTable.insuranceDeductReason,
       insuranceProofImages: ownerBookingsTable.insuranceProofImages,
       submissionId: ownerBookingsTable.submissionId,
-      chaletTitle: chaletSubmissionsTable.title,
+      chaletTitle: chaletSubmissionsTable.nameAr,
       cancelledAt: ownerBookingsTable.cancelledAt,
       createdAt: ownerBookingsTable.createdAt,
     })
@@ -1751,7 +1751,7 @@ router.get("/deposits", requireAuth, async (req: Request, res: Response) => {
       and(
         eq(ownerBookingsTable.ownerId, ownerId),
         isNotNull(ownerBookingsTable.insuranceFee),
-        sql`${ownerBookingsTable.insuranceFee}::numeric > 0`,
+        ne(ownerBookingsTable.insuranceFee, "0"),
       )
     )
     .orderBy(desc(ownerBookingsTable.bookingDate));
