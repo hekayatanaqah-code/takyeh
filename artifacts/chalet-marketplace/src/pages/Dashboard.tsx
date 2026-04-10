@@ -1601,7 +1601,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       });
       if (!r.ok) return;
       const data = await r.json();
-      const link = data.link as string;
+      const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const link = `${window.location.origin}${base}/r/${data.token}`;
       const chaletName = ownerChalets.find((c: any) => c.submissionId === b.submissionId)?.nameAr
         ?? ownerChalets.find((c: any) => c.id === activeChaletId)?.nameAr
         ?? "شاليهنا";
@@ -3272,7 +3273,8 @@ function RevenueTab() {
                                 });
                                 if (r.ok) {
                                   const data = await r.json();
-                                  const link = data.link as string;
+                                  const revBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+                                  const link = `${window.location.origin}${revBase}/r/${data.token}`;
                                   const revChalet = revOwnerChalets.find((c) => c.id === chaletId);
                                   const chaletName = revChalet?.nameAr ?? "شاليهنا";
                                   const revSiteSettings = siteSettingsCache;
