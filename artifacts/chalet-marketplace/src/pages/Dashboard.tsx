@@ -26,7 +26,7 @@ import {
   TrendingUp, Sunrise, Moon, Sun, Lock, Zap, DollarSign, Users,
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
-  Search, Activity, Banknote,
+  Search, Activity, Banknote, Eye,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -371,19 +371,22 @@ function BlockDatesDialog({
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">من تاريخ</label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              {startDate && (
-                <p className="text-xs text-muted-foreground text-right">{toHijri(startDate)} هـ</p>
-              )}
+            <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
+              <DualCalendarPicker
+                value={startDate}
+                onChange={setStartDate}
+                placeholder="من تاريخ"
+                label="من تاريخ"
+              />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">إلى تاريخ</label>
-              <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
-              {endDate && (
-                <p className="text-xs text-muted-foreground text-right">{toHijri(endDate)} هـ</p>
-              )}
+            <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
+              <DualCalendarPicker
+                value={endDate}
+                onChange={setEndDate}
+                placeholder="إلى تاريخ"
+                label="إلى تاريخ"
+                minDate={startDate || undefined}
+              />
             </div>
           </div>
           <div className="space-y-1.5">
@@ -572,12 +575,18 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
 
                 {/* Action buttons */}
                 <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
+                  <Link href={`/my-chalet/${sub.id}`}>
+                    <Button size="sm" variant="outline" className="gap-1.5 rounded-xl text-xs h-8">
+                      <Eye className="w-3.5 h-3.5" />
+                      تفاصيل الشاليه
+                    </Button>
+                  </Link>
                   {isApproved && (
                     <>
                       <Link href={`/chalets/${approvedChalet.id}`} target="_blank">
                         <Button size="sm" variant="outline" className="gap-1.5 rounded-xl text-xs h-8">
                           <ExternalLink className="w-3.5 h-3.5" />
-                          عرض التفاصيل
+                          الصفحة العامة
                         </Button>
                       </Link>
                       <Button
@@ -591,15 +600,16 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                       </Button>
                     </>
                   )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="gap-1.5 rounded-xl text-xs h-8 text-muted-foreground"
-                    onClick={() => setEditTarget(sub)}
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    تعديل بيانات الشاليه
-                  </Button>
+                  <Link href={`/add-chalet?editId=${sub.id}`}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1.5 rounded-xl text-xs h-8 text-muted-foreground"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      تعديل بيانات الشاليه
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -7401,19 +7411,22 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
               <Input className="mt-2" placeholder="اسم الموسم..." value={nameAr} onChange={(e) => setNameAr(e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">من تاريخ</label>
-                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                {startDate && (
-                  <p className="text-xs text-muted-foreground text-right">{toHijri(startDate)} هـ</p>
-                )}
+              <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
+                <DualCalendarPicker
+                  value={startDate}
+                  onChange={setStartDate}
+                  placeholder="من تاريخ"
+                  label="من تاريخ"
+                />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">إلى تاريخ</label>
-                <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
-                {endDate && (
-                  <p className="text-xs text-muted-foreground text-right">{toHijri(endDate)} هـ</p>
-                )}
+              <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
+                <DualCalendarPicker
+                  value={endDate}
+                  onChange={setEndDate}
+                  placeholder="إلى تاريخ"
+                  label="إلى تاريخ"
+                  minDate={startDate || undefined}
+                />
               </div>
             </div>
             <div className="space-y-1.5">

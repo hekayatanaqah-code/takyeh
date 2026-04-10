@@ -22,6 +22,7 @@ import FAQ from "./pages/FAQ";
 import Terms from "./pages/Terms";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import RatePage from "./pages/RatePage";
+import OwnerChaletDetail from "./pages/OwnerChaletDetail";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,6 +60,9 @@ function Router() {
       <Route path="/add-chalet" component={AddChalet} />
       <Route path="/dashboard">
         {() => <ProtectedRoute component={Dashboard} />}
+      </Route>
+      <Route path="/my-chalet/:id">
+        {() => <ProtectedRoute component={OwnerChaletDetail} />}
       </Route>
       <Route path="/admin" component={Admin} />
       <Route path="/services" component={Services} />

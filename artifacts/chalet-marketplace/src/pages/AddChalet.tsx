@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearch, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { useCreateSubmission } from "@workspace/api-client-react";
@@ -31,6 +32,7 @@ import {
   Info,
   Instagram,
   ShieldCheck,
+  ArrowRight,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -191,6 +193,90 @@ export default function AddChalet() {
 
   const mutation = useCreateSubmission();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [editSaved, setEditSaved] = useState(false);
+
+  /* ── Edit mode ── */
+  const search = useSearch();
+  const [, navigate] = useLocation();
+  const editIdParam = new URLSearchParams(search).get("editId");
+  const editId = editIdParam ? Number(editIdParam) : null;
+  const isEditMode = !!editId;
+
+  const { data: editSub } = useQuery({
+    queryKey: ["owner", "submission", editId],
+    queryFn: async () => {
+      const r = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/owner/submissions/${editId}`, { credentials: "include" });
+      if (!r.ok) throw new Error("Not found");
+      return r.json();
+    },
+    enabled: !!editId,
+  });
+
+  /* ── Pre-fill form when edit data arrives ── */
+  useEffect(() => {
+    if (!editSub) return;
+    setForm({
+      nameAr: editSub.nameAr ?? "",
+      whatsappNumber: editSub.whatsappNumber ?? "",
+      location: editSub.location ?? "",
+      mapsUrl: editSub.mapsUrl ?? editSub.websiteUrl ?? "",
+      socialLink: editSub.socialLink ?? "",
+      descriptionAr: editSub.descriptionAr ?? "",
+      termsAndConditions: editSub.termsAndConditions ?? "",
+    });
+    if (editSub.propertyType) setPropertyType(editSub.propertyType);
+    if (editSub.sections) setSections(editSub.sections);
+    if (editSub.district) setSelectedDistrict(editSub.district);
+    setHasBedrooms(editSub.bedrooms != null);
+    setBedroomCount(editSub.bedrooms != null ? String(editSub.bedrooms) : "");
+    setMaxGuestsInput(editSub.maxGuests != null ? String(editSub.maxGuests) : "");
+    setMorningCheckIn(editSub.morningCheckIn ?? "");
+    setMorningCheckOut(editSub.morningCheckOut ?? "");
+    setEveningCheckIn(editSub.eveningCheckIn ?? "");
+    setEveningCheckOut(editSub.eveningCheckOut ?? "");
+    setFullDayCheckIn(editSub.fullDayCheckIn ?? "");
+    setFullDayCheckOut(editSub.fullDayCheckOut ?? "");
+    setSeasonalDisclaimer(editSub.seasonalDisclaimer ?? true);
+    setLegalAccepted(true);
+    /* Photos */
+    if (Array.isArray(editSub.photos) && editSub.photos.length > 0) {
+      setPhotos(editSub.photos.map((url: string) => ({ url, name: url.split("/").pop() ?? "photo", preview: url.startsWith("http") ? url : `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api${url}` })));
+    }
+    /* Video */
+    if (editSub.videoUrl) {
+      setVideo({ url: editSub.videoUrl, name: "video", preview: editSub.videoUrl.startsWith("http") ? editSub.videoUrl : `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api${editSub.videoUrl}` });
+    }
+    /* Amenities */
+    if (Array.isArray(editSub.amenities)) {
+      const knownKeys = new Set<string>();
+      const customTags: string[] = [];
+      (editSub.amenities as string[]).forEach((a: string) => {
+        if (a.startsWith("other:")) {
+          customTags.push(a.slice(6));
+        } else {
+          knownKeys.add(a);
+        }
+      });
+      setSelectedAmenities(knownKeys);
+      setCustomAmenityTags(customTags);
+    }
+    /* Daily price grid */
+    if (editSub.dailyPrices && typeof editSub.dailyPrices === "object") {
+      const dp = editSub.dailyPrices as Record<string, Record<string, number>>;
+      const grid = initGrid();
+      (["morning","evening","fullday"] as const).forEach(p => {
+        const periods = dp[p];
+        if (!periods) return;
+        [0,1,2,3,4,5,6].forEach(d => {
+          const v = periods[String(d)];
+          if (v != null) grid[d][p] = String(v);
+        });
+      });
+      setDailyPriceGrid(grid);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editSub]);
 
   const handleChange = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -325,66 +411,87 @@ export default function AddChalet() {
     setVideoError(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setFieldErrors({});
-    mutation.reset();
-
+  const buildPayload = () => {
     const successfulPhotos = photos.filter((p) => p.url && p.url !== "error").map((p) => p.url);
     const successfulVideo = video && video.url && video.url !== "error" ? video.url : undefined;
-
     const finalDistrict = selectedDistrict === "__other__"
       ? customDistrict.trim() || undefined
       : selectedDistrict || undefined;
-
     const amenitiesList = Array.from(selectedAmenities).filter(k => k !== "__other__");
     for (const tag of customAmenityTags) {
       if (tag.trim()) amenitiesList.push(`other:${tag.trim()}`);
     }
+    return {
+      nameAr: form.nameAr,
+      whatsappNumber: form.whatsappNumber,
+      location: form.location,
+      district: finalDistrict,
+      propertyType: propertyType || undefined,
+      sections: sections || undefined,
+      mapsUrl: form.mapsUrl || undefined,
+      socialLink: form.socialLink,
+      descriptionAr: form.descriptionAr,
+      termsAndConditions: form.termsAndConditions || null,
+      pricePerNight: 0,
+      maxGuests: maxGuestsInput ? Number(maxGuestsInput) : null,
+      bedrooms: hasBedrooms && bedroomCount ? Number(bedroomCount) : null,
+      priceMorning: minPeriodPrice("morning"),
+      priceEvening: minPeriodPrice("evening"),
+      priceFullDay: minPeriodPrice("fullday"),
+      slotMorning: [0,1,2,3,4,5,6].some(d => !!dailyPriceGrid[d].morning.trim()),
+      slotEvening: [0,1,2,3,4,5,6].some(d => !!dailyPriceGrid[d].evening.trim()),
+      slotFullDay: [0,1,2,3,4,5,6].some(d => !!dailyPriceGrid[d].fullday.trim()),
+      dailyPrices: buildDailyPricesPayload(),
+      morningCheckIn: morningCheckIn || null,
+      morningCheckOut: morningCheckOut || null,
+      eveningCheckIn: eveningCheckIn || null,
+      eveningCheckOut: eveningCheckOut || null,
+      fullDayCheckIn: fullDayCheckIn || null,
+      fullDayCheckOut: fullDayCheckOut || null,
+      priceWeekday: (() => {
+        const vals = [1,2,3,4].flatMap(d => (["morning","evening","fullday"] as const).map(p => dailyPriceGrid[d][p])).filter(v=>v.trim()).map(Number).filter(n=>!isNaN(n));
+        return vals.length > 0 ? Math.min(...vals) : null;
+      })(),
+      priceWeekend: (() => {
+        const vals = [5,6].flatMap(d => (["morning","evening","fullday"] as const).map(p => dailyPriceGrid[d][p])).filter(v=>v.trim()).map(Number).filter(n=>!isNaN(n));
+        return vals.length > 0 ? Math.min(...vals) : null;
+      })(),
+      seasonalDisclaimer,
+      amenities: amenitiesList,
+      photos: successfulPhotos,
+      videoUrl: successfulVideo,
+    };
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFieldErrors({});
+    mutation.reset();
+
+    if (isEditMode && editId) {
+      setEditSaving(true);
+      try {
+        const payload = buildPayload();
+        const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+        const r = await fetch(`${base}/api/owner/submissions/${editId}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!r.ok) throw new Error("فشل الحفظ");
+        setEditSaved(true);
+        setTimeout(() => navigate(`/my-chalet/${editId}`), 1200);
+      } catch {
+        setFieldErrors({ general: ["حدث خطأ أثناء الحفظ، يرجى المحاولة مرة أخرى"] });
+      } finally {
+        setEditSaving(false);
+      }
+      return;
+    }
 
     mutation.mutate(
-      {
-        data: {
-          nameAr: form.nameAr,
-          whatsappNumber: form.whatsappNumber,
-          location: form.location,
-          district: finalDistrict,
-          propertyType: propertyType || undefined,
-          sections: sections || undefined,
-          mapsUrl: form.mapsUrl || undefined,
-          socialLink: form.socialLink,
-          descriptionAr: form.descriptionAr,
-          termsAndConditions: form.termsAndConditions || null,
-          pricePerNight: 0,
-          maxGuests: maxGuestsInput ? Number(maxGuestsInput) : null,
-          bedrooms: hasBedrooms && bedroomCount ? Number(bedroomCount) : null,
-          priceMorning: minPeriodPrice("morning"),
-          priceEvening: minPeriodPrice("evening"),
-          priceFullDay: minPeriodPrice("fullday"),
-          slotMorning: [0,1,2,3,4,5,6].some(d => !!dailyPriceGrid[d].morning.trim()),
-          slotEvening: [0,1,2,3,4,5,6].some(d => !!dailyPriceGrid[d].evening.trim()),
-          slotFullDay: [0,1,2,3,4,5,6].some(d => !!dailyPriceGrid[d].fullday.trim()),
-          dailyPrices: buildDailyPricesPayload(),
-          morningCheckIn: morningCheckIn || null,
-          morningCheckOut: morningCheckOut || null,
-          eveningCheckIn: eveningCheckIn || null,
-          eveningCheckOut: eveningCheckOut || null,
-          fullDayCheckIn: fullDayCheckIn || null,
-          fullDayCheckOut: fullDayCheckOut || null,
-          priceWeekday: (() => {
-            const vals = [1,2,3,4].flatMap(d => (["morning","evening","fullday"] as const).map(p => dailyPriceGrid[d][p])).filter(v=>v.trim()).map(Number).filter(n=>!isNaN(n));
-            return vals.length > 0 ? Math.min(...vals) : null;
-          })(),
-          priceWeekend: (() => {
-            const vals = [5,6].flatMap(d => (["morning","evening","fullday"] as const).map(p => dailyPriceGrid[d][p])).filter(v=>v.trim()).map(Number).filter(n=>!isNaN(n));
-            return vals.length > 0 ? Math.min(...vals) : null;
-          })(),
-          seasonalDisclaimer,
-          amenities: amenitiesList,
-          photos: successfulPhotos,
-          videoUrl: successfulVideo,
-        },
-      },
+      { data: buildPayload() as any },
       {
         onSuccess: () => setSubmitted(true),
         onError: (err: unknown) => {
@@ -393,8 +500,7 @@ export default function AddChalet() {
             if (apiErr?.data?.details && typeof apiErr.data.details === "object") {
               setFieldErrors(apiErr.data.details);
             }
-          } catch {
-          }
+          } catch {}
         },
       }
     );
@@ -431,7 +537,7 @@ export default function AddChalet() {
       <Navbar />
 
       <AnimatePresence mode="wait">
-        {submitted ? (
+        {(submitted || editSaved) ? (
           <motion.div
             key="success"
             initial={{ opacity: 0, scale: 0.9 }}
@@ -442,16 +548,28 @@ export default function AddChalet() {
             <div className="w-24 h-24 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-6 mx-auto">
               <CheckCircle className="w-14 h-14 text-green-600 dark:text-green-400" />
             </div>
-            <h1 className="text-3xl font-bold text-foreground mb-4">تم الاستلام بنجاح!</h1>
-            <p className="text-xl text-muted-foreground max-w-md leading-relaxed">
-              تم استلام بياناتك بنجاح، سيتم مراجعة الشاليه ونشره قريباً
-            </p>
-            <p className="text-sm text-muted-foreground mt-4">
-              سيتم التواصل معك عبر واتساب بعد المراجعة
-            </p>
-            <Button className="mt-8" onClick={resetForm}>
-              إضافة شاليه آخر
-            </Button>
+            {isEditMode ? (
+              <>
+                <h1 className="text-3xl font-bold text-foreground mb-4">تم الحفظ بنجاح!</h1>
+                <p className="text-xl text-muted-foreground max-w-md leading-relaxed">
+                  تم تحديث بيانات الشاليه بنجاح
+                </p>
+                <p className="text-sm text-muted-foreground mt-4">جاري العودة لصفحة الشاليه...</p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-3xl font-bold text-foreground mb-4">تم الاستلام بنجاح!</h1>
+                <p className="text-xl text-muted-foreground max-w-md leading-relaxed">
+                  تم استلام بياناتك بنجاح، سيتم مراجعة الشاليه ونشره قريباً
+                </p>
+                <p className="text-sm text-muted-foreground mt-4">
+                  سيتم التواصل معك عبر واتساب بعد المراجعة
+                </p>
+                <Button className="mt-8" onClick={resetForm}>
+                  إضافة شاليه آخر
+                </Button>
+              </>
+            )}
           </motion.div>
         ) : (
           <motion.div
@@ -461,17 +579,33 @@ export default function AddChalet() {
             exit={{ opacity: 0 }}
             className="container mx-auto px-4 py-12 max-w-3xl"
           >
-            <div className="text-center mb-10">
-              <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary/20">
-                <Building2 className="w-9 h-9 text-primary-foreground" />
+            {isEditMode ? (
+              <div className="flex items-center gap-3 mb-8 p-4 rounded-2xl bg-primary/5 border border-primary/15">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/my-chalet/${editId}`)}
+                  className="w-9 h-9 rounded-full flex items-center justify-center bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <div>
+                  <p className="font-bold text-base text-foreground">تعديل بيانات الشاليه</p>
+                  <p className="text-xs text-muted-foreground">التعديلات تُحفظ فوراً وتنعكس على صفحة الشاليه</p>
+                </div>
               </div>
-              <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
-                انضم إلينا كمالك
-              </h1>
-              <p className="text-muted-foreground text-lg max-w-md mx-auto leading-relaxed">
-                أضف شاليهك وابدأ في استقبال الحجوزات من عملاء في منطقة القصيم
-              </p>
-            </div>
+            ) : (
+              <div className="text-center mb-10">
+                <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary/20">
+                  <Building2 className="w-9 h-9 text-primary-foreground" />
+                </div>
+                <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
+                  انضم إلينا كمالك
+                </h1>
+                <p className="text-muted-foreground text-lg max-w-md mx-auto leading-relaxed">
+                  أضف شاليهك وابدأ في استقبال الحجوزات من عملاء في منطقة القصيم
+                </p>
+              </div>
+            )}
 
             <div className="bg-card border border-border rounded-3xl p-6 md:p-10 shadow-sm">
               <form onSubmit={handleSubmit} className="space-y-8">
@@ -1245,26 +1379,30 @@ export default function AddChalet() {
                   type="submit"
                   size="lg"
                   className="w-full h-14 text-lg font-bold rounded-2xl shadow-lg shadow-primary/20"
-                  disabled={mutation.isPending || isUploading || isUploadingVideo || !allUploaded || !legalAccepted || !propertyType || !sections || !form.mapsUrl}
+                  disabled={(isEditMode ? editSaving : mutation.isPending) || isUploading || isUploadingVideo || !allUploaded || !legalAccepted || !propertyType || !sections || (!form.mapsUrl && !isEditMode)}
                 >
-                  {mutation.isPending ? (
+                  {(isEditMode ? editSaving : mutation.isPending) ? (
                     <span className="flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      جاري الإرسال...
+                      {isEditMode ? "جاري الحفظ..." : "جاري الإرسال..."}
                     </span>
                   ) : isUploading ? (
                     <span className="flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       انتظر اكتمال رفع الصور...
                     </span>
+                  ) : isEditMode ? (
+                    "حفظ التعديلات"
                   ) : (
                     "إرسال طلب التسجيل"
                   )}
                 </Button>
 
-                <p className="text-center text-sm text-muted-foreground">
-                  بالضغط على إرسال، أنت توافق على مراجعة بياناتك من قِبل فريقنا
-                </p>
+                {!isEditMode && (
+                  <p className="text-center text-sm text-muted-foreground">
+                    بالضغط على إرسال، أنت توافق على مراجعة بياناتك من قِبل فريقنا
+                  </p>
+                )}
               </form>
             </div>
           </motion.div>

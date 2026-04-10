@@ -1896,7 +1896,24 @@ router.get("/deposits", requireAuth, async (req: Request, res: Response) => {
   return res.json(bookings);
 });
 
-/* ── PATCH /owner/submissions/:id — owner edits basic chalet data ── */
+/* ── GET /owner/submissions/:id — fetch one submission (owner only) ── */
+router.get("/submissions/:id", requireAuth, async (req, res) => {
+  const submissionId = Number(req.params.id);
+  if (isNaN(submissionId)) return res.status(400).json({ error: "معرّف غير صالح" });
+
+  const [sub] = await db
+    .select()
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.id, submissionId));
+
+  if (!sub || sub.ownerId !== (req.user as any)?.id) {
+    return res.status(403).json({ error: "غير مصرح" });
+  }
+
+  return res.json(sub);
+});
+
+/* ── PATCH /owner/submissions/:id — owner edits all chalet data ── */
 router.patch("/submissions/:id", requireAuth, async (req, res) => {
   const submissionId = Number(req.params.id);
   if (isNaN(submissionId)) return res.status(400).json({ error: "معرّف غير صالح" });
@@ -1910,14 +1927,42 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
     return res.status(403).json({ error: "غير مصرح" });
   }
 
-  const { nameAr, descriptionAr, priceMorning, priceEvening, priceFullDay } = req.body as Record<string, any>;
-
+  const body = req.body as Record<string, any>;
   const updateData: Record<string, any> = {};
-  if (nameAr !== undefined) updateData.nameAr = String(nameAr).trim();
-  if (descriptionAr !== undefined) updateData.descriptionAr = String(descriptionAr).trim();
-  if (priceMorning !== undefined) updateData.priceMorning = priceMorning !== "" ? String(Number(priceMorning)) : null;
-  if (priceEvening !== undefined) updateData.priceEvening = priceEvening !== "" ? String(Number(priceEvening)) : null;
-  if (priceFullDay !== undefined) updateData.priceFullDay = priceFullDay !== "" ? String(Number(priceFullDay)) : null;
+
+  const str = (v: any) => (v !== undefined && v !== null ? String(v).trim() : undefined);
+  const num = (v: any) => (v !== undefined && v !== null && v !== "" ? String(Number(v)) : null);
+
+  if (body.nameAr !== undefined) updateData.nameAr = String(body.nameAr).trim();
+  if (body.descriptionAr !== undefined) updateData.descriptionAr = String(body.descriptionAr).trim();
+  if (body.whatsappNumber !== undefined) updateData.whatsappNumber = String(body.whatsappNumber).trim();
+  if (body.location !== undefined) updateData.location = String(body.location).trim();
+  if (body.district !== undefined) updateData.district = body.district || null;
+  if (body.mapsUrl !== undefined) { updateData.mapsUrl = body.mapsUrl || null; updateData.websiteUrl = body.mapsUrl || null; }
+  if (body.socialLink !== undefined) updateData.socialLink = body.socialLink || null;
+  if (body.propertyType !== undefined) updateData.propertyType = body.propertyType || null;
+  if (body.sections !== undefined) updateData.sections = body.sections || null;
+  if (body.termsAndConditions !== undefined) updateData.termsAndConditions = body.termsAndConditions || null;
+  if (body.maxGuests !== undefined) updateData.maxGuests = body.maxGuests ? Number(body.maxGuests) : null;
+  if (body.bedrooms !== undefined) updateData.bedrooms = body.bedrooms != null ? Number(body.bedrooms) : null;
+  if (body.photos !== undefined) updateData.photos = Array.isArray(body.photos) ? body.photos : [];
+  if (body.videoUrl !== undefined) updateData.videoUrl = body.videoUrl || null;
+  if (body.amenities !== undefined) updateData.amenities = Array.isArray(body.amenities) ? body.amenities : [];
+  if (body.priceMorning !== undefined) updateData.priceMorning = num(body.priceMorning);
+  if (body.priceEvening !== undefined) updateData.priceEvening = num(body.priceEvening);
+  if (body.priceFullDay !== undefined) updateData.priceFullDay = num(body.priceFullDay);
+  if (body.priceWeekday !== undefined) updateData.priceWeekday = num(body.priceWeekday);
+  if (body.priceWeekend !== undefined) updateData.priceWeekend = num(body.priceWeekend);
+  if (body.slotMorning !== undefined) updateData.slotMorning = !!body.slotMorning;
+  if (body.slotEvening !== undefined) updateData.slotEvening = !!body.slotEvening;
+  if (body.slotFullDay !== undefined) updateData.slotFullDay = !!body.slotFullDay;
+  if (body.dailyPrices !== undefined) updateData.dailyPrices = body.dailyPrices;
+  if (body.morningCheckIn !== undefined) updateData.morningCheckIn = body.morningCheckIn || null;
+  if (body.morningCheckOut !== undefined) updateData.morningCheckOut = body.morningCheckOut || null;
+  if (body.eveningCheckIn !== undefined) updateData.eveningCheckIn = body.eveningCheckIn || null;
+  if (body.eveningCheckOut !== undefined) updateData.eveningCheckOut = body.eveningCheckOut || null;
+  if (body.fullDayCheckIn !== undefined) updateData.fullDayCheckIn = body.fullDayCheckIn || null;
+  if (body.fullDayCheckOut !== undefined) updateData.fullDayCheckOut = body.fullDayCheckOut || null;
 
   if (Object.keys(updateData).length === 0) return res.json({ ok: true });
 
