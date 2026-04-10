@@ -2,16 +2,14 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { MapPin, Menu, Home, Compass, LogIn, LayoutDashboard, Settings } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@workspace/replit-auth-web";
 
 export function Navbar() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
-  const [loginNoticeOpen, setLoginNoticeOpen] = useState(false);
-  const { isAuthenticated, login, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
 
   const navLinks = [
     { href: "/", label: "الرئيسية", icon: <Home className="w-4 h-4 me-2" /> },
@@ -19,14 +17,9 @@ export function Navbar() {
     { href: "/services", label: "خدمات المناسبات", icon: <span className="me-2 text-base">🎪</span> },
   ];
 
-  const handleLoginClick = () => {
-    setLoginNoticeOpen(true);
-  };
-
-  const proceedToLogin = () => {
-    setLoginNoticeOpen(false);
+  const goToLogin = () => {
     setIsOpen(false);
-    login("/dashboard");
+    navigate("/login");
   };
 
   return (
@@ -79,11 +72,11 @@ export function Navbar() {
               ) : (
                 <Button
                   size="sm"
-                  onClick={handleLoginClick}
+                  onClick={goToLogin}
                   className="ms-2 rounded-full font-semibold"
                 >
                   <LogIn className="w-4 h-4 me-1.5" />
-                  تسجيل الدخول / إنشاء حساب
+                  تسجيل الدخول
                 </Button>
               )
             )}
@@ -131,11 +124,11 @@ export function Navbar() {
                       </Link>
                     ) : (
                       <button
-                        onClick={handleLoginClick}
+                        onClick={goToLogin}
                         className="flex items-center px-4 py-3 rounded-xl text-base font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                       >
                         <LogIn className="w-4 h-4 me-2" />
-                        تسجيل الدخول / إنشاء حساب
+                        تسجيل الدخول
                       </button>
                     )
                   )}
@@ -145,38 +138,6 @@ export function Navbar() {
           </div>
         </div>
       </header>
-
-      {/* Unified Login Dialog */}
-      <Dialog open={loginNoticeOpen} onOpenChange={setLoginNoticeOpen}>
-        <DialogContent dir="rtl" className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-right text-lg font-bold">تسجيل الدخول / إنشاء حساب</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-5 mt-1">
-            <div className="flex flex-col items-center gap-3 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-                <LogIn className="w-8 h-8 text-primary" />
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                سجّل دخولك لإدارة شاليهاتك وخدماتك من لوحة تحكم موحدة.
-              </p>
-            </div>
-
-            <Button onClick={proceedToLogin} className="w-full rounded-xl py-5 text-base font-bold">
-              <LogIn className="w-4 h-4 me-2" />
-              متابعة وتسجيل الدخول
-            </Button>
-
-            <p className="text-xs text-center text-muted-foreground/70 pt-1 border-t border-border">
-              هذا الدخول مخصص للملاك ومزودي الخدمات
-            </p>
-
-            <Button variant="ghost" onClick={() => setLoginNoticeOpen(false)} className="w-full text-muted-foreground -mt-2">
-              إلغاء
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
