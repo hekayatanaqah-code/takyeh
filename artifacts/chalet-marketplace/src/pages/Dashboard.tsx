@@ -7616,14 +7616,17 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
                     const monthName = AR_MONTHS[d.getMonth()];
                     const isFriday = d.getDay() === 5;
                     const isSaturday = d.getDay() === 6;
+                    const { hijri } = formatDualDate(ds);
+                    const hijriClean = hijri.replace(/\s*هـ\s*$/, "");
                     return (
                       <div
                         key={ds}
                         className={`grid grid-cols-[1fr_90px_90px_90px] items-center gap-1.5 py-1.5 px-1 rounded-lg border-b border-border/30 last:border-0 ${isFriday || isSaturday ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}`}
                       >
-                        <div className="text-xs leading-tight">
-                          <span className={`font-semibold ${isFriday ? "text-emerald-600" : isSaturday ? "text-sky-600" : "text-foreground"}`}>{dayName}</span>
-                          <span className="text-muted-foreground mr-1">{dayNum} {monthName}</span>
+                        <div className="text-xs leading-tight min-w-0">
+                          <p className={`text-[10px] font-semibold ${isFriday ? "text-emerald-600" : isSaturday ? "text-sky-600" : "text-muted-foreground"}`}>{dayName}</p>
+                          <p className="font-bold text-foreground truncate">{hijriClean} هـ</p>
+                          <p className="text-[10px] text-muted-foreground/70">{dayNum} {monthName}</p>
                         </div>
                         {(["morning", "evening", "fullDay"] as const).map((field) => (
                           <Input
