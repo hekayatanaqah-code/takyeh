@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useLocation } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
@@ -182,8 +182,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /* ── Main page ── */
 export default function OwnerChaletDetail() {
-  const params = useParams<{ id: string }>();
-  const submissionId = params?.id;
+  const [, routeParams] = useRoute<{ id: string }>("/my-chalet/:id");
+  const submissionId = routeParams?.id;
   const [, navigate] = useLocation();
 
   const { data: sub, isLoading, error } = useQuery({

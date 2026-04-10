@@ -576,7 +576,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                 {/* Action buttons */}
                 <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
                   <Link href={`/my-chalet/${sub.id}`}>
-                    <Button size="sm" variant="outline" className="gap-1.5 rounded-xl text-xs h-8">
+                    <Button size="sm" className="gap-1.5 rounded-xl text-xs h-8">
                       <Eye className="w-3.5 h-3.5" />
                       تفاصيل الشاليه
                     </Button>
@@ -586,7 +586,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                       <Link href={`/chalets/${approvedChalet.id}`} target="_blank">
                         <Button size="sm" variant="outline" className="gap-1.5 rounded-xl text-xs h-8">
                           <ExternalLink className="w-3.5 h-3.5" />
-                          الصفحة العامة
+                          معاينة للزبون
                         </Button>
                       </Link>
                       <Button
@@ -600,16 +600,6 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                       </Button>
                     </>
                   )}
-                  <Link href={`/add-chalet?editId=${sub.id}`}>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="gap-1.5 rounded-xl text-xs h-8 text-muted-foreground"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      تعديل بيانات الشاليه
-                    </Button>
-                  </Link>
                 </div>
               </div>
             </div>
@@ -936,7 +926,7 @@ function AddBookingDialog({
                     {label}
                     {disabled && <span className="text-[10px] font-bold text-red-500 dark:text-red-400 mr-1">(محجوز)</span>}
                   </span>
-                  {value !== "none" && (
+                  {(value as string) !== "none" && (
                     <span className="text-[10px] text-muted-foreground leading-none">{sub}</span>
                   )}
                   {period === value && !disabled && (
@@ -1823,7 +1813,7 @@ function RescheduleDialog({
                       <span className="text-[10px] font-bold text-red-500 dark:text-red-400 mr-1">(محجوز)</span>
                     )}
                   </span>
-                  {value !== "none" && (
+                  {(value as string) !== "none" && (
                     <span className="text-[10px] text-muted-foreground leading-none">{sub}</span>
                   )}
                   {newPeriod === value && !disabled && (
@@ -7313,8 +7303,8 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
       </div>
 
       {/* Chalet selector if multiple */}
-      {ownerChalets.length > 1 && (
-        <Select value={String(activeSubId ?? "")} onValueChange={(v) => setSelectedSubId(Number(v))}>
+      {ownerChalets.length > 1 && activeSubId && (
+        <Select value={String(activeSubId)} onValueChange={(v) => setSelectedSubId(Number(v))}>
           <SelectTrigger className="w-56">
             <SelectValue placeholder="اختر الشاليه" />
           </SelectTrigger>
