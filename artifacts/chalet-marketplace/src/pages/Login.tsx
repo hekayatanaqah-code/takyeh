@@ -145,6 +145,15 @@ export default function Login() {
             </div>
           )}
 
+          <div className="flex justify-end">
+            <a
+              href={`${BASE}/forgot-password`}
+              className="text-xs text-green-600 hover:text-green-700"
+            >
+              نسيت كلمة المرور؟
+            </a>
+          </div>
+
           <Button
             type="submit"
             disabled={loading}
@@ -163,11 +172,17 @@ export default function Login() {
         </form>
       </div>
 
-      <p className="text-center text-xs text-gray-400 mt-6">
-        <a href={`${BASE}/`} className="text-green-600 hover:text-green-700 transition-colors">
+      <div className="flex flex-col items-center gap-2 mt-5">
+        <p className="text-sm text-gray-500">
+          مالك جديد؟{" "}
+          <a href={`${BASE}/register`} className="text-green-600 hover:text-green-700 font-medium">
+            سجّل شاليهك الآن
+          </a>
+        </p>
+        <a href={`${BASE}/`} className="text-xs text-gray-400 hover:text-green-600 transition-colors">
           ← العودة للرئيسية
         </a>
-      </p>
+      </div>
     </div>
   );
 }

@@ -115,6 +115,15 @@ export default function AdminPortal() {
               </div>
             )}
 
+            <div className="flex justify-end">
+              <a
+                href={`${BASE}/forgot-password/admin`}
+                className="text-xs text-amber-500/70 hover:text-amber-400 transition-colors"
+              >
+                نسيت كلمة المرور؟
+              </a>
+            </div>
+
             <Button
               type="submit"
               disabled={loading}

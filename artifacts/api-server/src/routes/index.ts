@@ -12,6 +12,8 @@ import servicesRouter from "./services";
 import ownerRouter from "./owner";
 import providersRouter from "./providers";
 import reviewsRouter from "./reviews";
+import passwordResetRouter from "./passwordReset";
+import registrationRouter from "./registration";
 
 const router: IRouter = Router();
 
@@ -19,6 +21,8 @@ router.use(healthRouter);
 router.use(authRouter);
 router.use(staffAuthRouter);
 router.use(adminStaffAuthRouter);
+router.use(passwordResetRouter);
+router.use(registrationRouter);
 router.use(storageRouter);
 router.use("/chalets", chaletsRouter);
 router.use("/submissions", submissionsRouter);

@@ -25,6 +25,9 @@ import RatePage from "./pages/RatePage";
 import OwnerChaletDetail from "./pages/OwnerChaletDetail";
 import Login from "./pages/Login";
 import AdminPortal from "./pages/AdminPortal";
+import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,6 +81,10 @@ function Router() {
       </Route>
       <Route path="/login" component={Login} />
       <Route path="/staff-login" component={Login} />
+      <Route path="/register" component={Register} />
+      <Route path="/forgot-password">{() => <ForgotPassword portalType="public" />}</Route>
+      <Route path="/forgot-password/admin">{() => <ForgotPassword portalType="admin" />}</Route>
+      <Route path="/reset-password" component={ResetPassword} />
       <Route path="/admin-login" component={AdminPortal} />
       <Route path="/management/portal" component={AdminPortal} />
       <Route path="/admin/internal/access" component={AdminPortal} />
