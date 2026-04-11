@@ -91,10 +91,17 @@ router.get("/impersonation-status", async (req, res) => {
   const row = rows[0];
   if (!row || !row.impersonated_owner_id) return res.json({ impersonating: false });
 
+  /* Fetch the owner's chalet name for display */
+  const ownerRows = await db.execute<{ name_ar: string }>(
+    sql`SELECT name_ar FROM chalet_submissions WHERE owner_id = ${row.impersonated_owner_id} ORDER BY created_at ASC LIMIT 1`
+  );
+  const ownerName = ownerRows[0]?.name_ar ?? null;
+
   return res.json({
     impersonating: true,
     ownerId: row.impersonated_owner_id,
     adminName: row.name,
+    ownerName,
   });
 });
 

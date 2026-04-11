@@ -8283,7 +8283,7 @@ export default function Dashboard() {
 
   /* ── Admin impersonation detection ── */
   const [impersonation, setImpersonation] = useState<{
-    impersonating: boolean; adminName?: string;
+    impersonating: boolean; adminName?: string; ownerName?: string;
   }>({ impersonating: false });
   const [impersonationLoading, setImpersonationLoading] = useState(true);
 
@@ -8328,11 +8328,13 @@ export default function Dashboard() {
         <div className="sticky top-0 z-50 w-full bg-amber-500 text-amber-950 px-4 py-2.5 flex items-center justify-between gap-3" dir="rtl">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
-            أنت تتصفح كمدير
-            {impersonation.adminName && <span className="font-normal opacity-80">({impersonation.adminName})</span>}
-            — تعمل بصلاحيات المالك الآن
+            وضع المراجعة — تتصفح لوحة:
+            <span className="font-bold">
+              {impersonation.ownerName ?? "مالك"}
+            </span>
+            {impersonation.adminName && <span className="font-normal opacity-70 text-xs">(المشرف: {impersonation.adminName})</span>}
           </div>
           <button
             onClick={endImpersonation}

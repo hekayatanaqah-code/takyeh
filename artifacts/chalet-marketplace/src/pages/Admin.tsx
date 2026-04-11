@@ -75,6 +75,7 @@ interface Submission {
   sections?: string | null;
   adminNote?: string | null;
   category?: string | null;
+  ownerId?: string | null;
   /* extended pricing + terms fields (returned by API if submitted) */
   termsAndConditions?: string | null;
   maxGuests?: number | null;
@@ -526,10 +527,26 @@ function SubmissionReviewModal({
 }
 
 /* ── Submissions Tab ──────────────────────────── */
-function SubmissionsTab() {
+function SubmissionsTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const qc = useQueryClient();
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [reviewSubmission, setReviewSubmission] = useState<Submission | null>(null);
+  const [impersonating, setImpersonating] = useState<string | null>(null);
+
+  async function handleImpersonate(ownerId: string) {
+    setImpersonating(ownerId);
+    const r = await apiFetch("/admin/impersonate", {
+      method: "POST",
+      body: JSON.stringify({ ownerId }),
+    });
+    if (r.ok) {
+      window.location.href = `${BASE}/dashboard`;
+    } else {
+      const err = await r.json().catch(() => ({}));
+      alert(err.error ?? "حدث خطأ");
+      setImpersonating(null);
+    }
+  }
 
   const { data: submissions = [], isLoading } = useQuery({
     queryKey: ["admin", "submissions"],
@@ -665,6 +682,19 @@ function SubmissionsTab() {
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
+                    {isSuperAdmin && s.ownerId && (
+                      <button
+                        onClick={() => handleImpersonate(s.ownerId!)}
+                        disabled={impersonating === s.ownerId}
+                        title="دخول بصلاحية المالك"
+                        className="flex items-center gap-1 text-xs font-semibold text-amber-400 border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {impersonating === s.ownerId
+                          ? <Loader2 className="w-3 h-3 animate-spin" />
+                          : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+                        دخول
+                      </button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -1064,7 +1094,17 @@ function OwnersTab() {
   }
 
   return (
-    <div className="rounded-lg border border-slate-700 overflow-hidden">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-white">إدارة الملاك</h2>
+          <p className="text-slate-400 text-sm mt-1">انقر زر الدخول بصلاحية المالك لمراجعة لوحة تحكمه — هذا الخيار متاح للمشرف العام فقط.</p>
+        </div>
+        <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-full font-semibold">
+          مشرف عام فقط
+        </span>
+      </div>
+      <div className="rounded-lg border border-slate-700 overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow className="border-slate-700 bg-slate-800">
@@ -1078,7 +1118,7 @@ function OwnersTab() {
         <TableBody>
           {owners.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-slate-400 py-12">لا يوجد ملاك بعد</TableCell>
+              <TableCell colSpan={5} className="text-center text-slate-400 py-12">لا يوجد ملاك مسجلون بعد — ستظهر هنا عند تسجيل الملاك للدخول</TableCell>
             </TableRow>
           )}
           {owners.map((owner: Owner) => (
@@ -1103,6 +1143,7 @@ function OwnersTab() {
           ))}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }
@@ -4718,7 +4759,7 @@ export default function Admin() {
 
       {/* Content */}
       <main className="p-6 max-w-7xl mx-auto">
-        {activeTab === "submissions"          && <SubmissionsTab />}
+        {activeTab === "submissions"          && <SubmissionsTab isSuperAdmin={isSuperAdmin} />}
         {activeTab === "chaletVerify"         && <ChaletsVerifyTab />}
         {activeTab === "partnerApplications"  && <PartnerApplicationsTab />}
         {activeTab === "services"             && <ServicesTab />}
