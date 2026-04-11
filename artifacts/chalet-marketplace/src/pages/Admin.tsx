@@ -1062,7 +1062,7 @@ function AmenitiesTab() {
 }
 
 /* ── Owners Tab ───────────────────────────────── */
-function OwnersTab() {
+function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [impersonating, setImpersonating] = useState<string | null>(null);
 
   const { data: owners = [], isLoading } = useQuery({
@@ -1112,13 +1112,13 @@ function OwnersTab() {
             <TableHead className="text-slate-300 text-right">اسم الشاليه الأول</TableHead>
             <TableHead className="text-slate-300 text-right">واتساب</TableHead>
             <TableHead className="text-slate-300 text-right">تاريخ الانضمام</TableHead>
-            <TableHead className="text-slate-300 text-right">إجراءات</TableHead>
+            {isSuperAdmin && <TableHead className="text-slate-300 text-right">إجراءات</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {owners.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-slate-400 py-12">لا يوجد ملاك مسجلون بعد — ستظهر هنا عند تسجيل الملاك للدخول</TableCell>
+              <TableCell colSpan={isSuperAdmin ? 5 : 4} className="text-center text-slate-400 py-12">لا يوجد ملاك مسجلون بعد — ستظهر هنا عند تسجيل الملاك للدخول</TableCell>
             </TableRow>
           )}
           {owners.map((owner: Owner) => (
@@ -1127,6 +1127,7 @@ function OwnersTab() {
               <TableCell className="text-white font-medium">{owner.nameAr}</TableCell>
               <TableCell className="text-slate-300 font-mono text-sm" dir="ltr">{owner.whatsappNumber}</TableCell>
               <TableCell className="text-slate-400 text-sm">{new Date(owner.createdAt).toLocaleDateString("ar-SA")}</TableCell>
+              {isSuperAdmin && (
               <TableCell>
                 <button
                   onClick={() => handleImpersonate(owner.ownerId)}
@@ -1139,6 +1140,7 @@ function OwnersTab() {
                   دخول بصلاحية المالك
                 </button>
               </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>
@@ -4213,7 +4215,7 @@ interface AdminStaffRow {
   createdAt: string;
 }
 
-function AdminStaffTab() {
+function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuperAdmin?: boolean; currentUserName?: string }) {
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [permEditId, setPermEditId] = useState<number | null>(null);
@@ -4320,6 +4322,30 @@ function AdminStaffTab() {
           إضافة موظف
         </Button>
       </div>
+
+      {/* Super Admin Identity Card */}
+      {isSuperAdmin && (
+        <div className="mb-6 bg-gradient-to-l from-amber-900/20 to-amber-800/10 border border-amber-600/30 rounded-xl p-5 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-6 h-6 text-amber-400" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="text-white font-bold text-base">{currentUserName}</span>
+              <span className="bg-amber-500/20 text-amber-400 text-xs px-2.5 py-0.5 rounded-full border border-amber-500/30 font-semibold">
+                مشرف عام
+              </span>
+            </div>
+            <p className="text-slate-400 text-sm">حسابك هو حساب المشرف العام — يمتلك صلاحيات كاملة وغير محدودة على جميع أقسام المنصة. لا يمكن تقييد هذا الحساب.</p>
+          </div>
+          <div className="shrink-0">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-green-400 bg-green-900/20 border border-green-700/30 px-3 py-1.5 rounded-lg">
+              <CheckCircle className="w-3.5 h-3.5" />
+              مفعّل
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Add Form */}
       {showAdd && (
@@ -4769,11 +4795,11 @@ export default function Admin() {
         {activeTab === "locations"           && <LocationsTab />}
         {activeTab === "amenities"           && <AmenitiesTab />}
         {activeTab === "categories"          && <CategoriesTab />}
-        {activeTab === "owners"              && <OwnersTab />}
+        {activeTab === "owners"              && <OwnersTab isSuperAdmin={isSuperAdmin} />}
         {activeTab === "plans"               && <PlansTab />}
         {activeTab === "reviews"             && <ReviewsTab />}
         {activeTab === "siteSettings"        && <SettingsTab />}
-        {activeTab === "adminStaff"          && <AdminStaffTab />}
+        {activeTab === "adminStaff"          && <AdminStaffTab isSuperAdmin={isSuperAdmin} currentUserName={displayName ?? ""} />}
       </main>
     </div>
   );

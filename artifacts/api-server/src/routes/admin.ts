@@ -133,8 +133,11 @@ router.get("/staff", requireSuperAdmin, async (_req, res) => {
     username: adminStaffTable.username,
     permissions: adminStaffTable.permissions,
     isActive: adminStaffTable.isActive,
+    isSuperAdmin: adminStaffTable.isSuperAdmin,
     createdAt: adminStaffTable.createdAt,
-  }).from(adminStaffTable).orderBy(adminStaffTable.createdAt);
+  }).from(adminStaffTable)
+    .where(eq(adminStaffTable.isSuperAdmin, false))
+    .orderBy(adminStaffTable.createdAt);
   return res.json(rows);
 });
 
