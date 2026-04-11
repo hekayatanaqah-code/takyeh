@@ -63,9 +63,7 @@ function Router() {
       <Route path="/chalets/:id/book" component={ChaletBooking} />
       <Route path="/chalets/:id" component={ChaletDetail} />
       <Route path="/add-chalet" component={AddChalet} />
-      <Route path="/dashboard">
-        {() => <ProtectedRoute component={Dashboard} />}
-      </Route>
+      <Route path="/dashboard" component={Dashboard} />
       <Route path="/my-chalet/:id">
         {() => <ProtectedRoute component={OwnerChaletDetail} />}
       </Route>
