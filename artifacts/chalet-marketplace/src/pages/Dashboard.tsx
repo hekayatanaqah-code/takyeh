@@ -8206,6 +8206,26 @@ export default function Dashboard() {
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const { isStaff, staffUser, permissions, isLoading: staffLoading, logout: staffLogout } = useStaffAuth();
 
+  /* ── Admin impersonation detection (must be before queries) ── */
+  const [impersonation, setImpersonation] = useState<{
+    impersonating: boolean; adminName?: string; ownerName?: string; ownerId?: string;
+  }>({ impersonating: false });
+  const [impersonationLoading, setImpersonationLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch("/admin/impersonation-status")
+      .then((r) => r.ok ? r.json() : { impersonating: false })
+      .then(setImpersonation)
+      .finally(() => setImpersonationLoading(false));
+  }, []);
+
+  async function endImpersonation() {
+    await apiFetch("/admin/impersonate/end", { method: "POST" });
+    window.location.href = `${BASE}/admin`;
+  }
+
+  const isImpersonating = impersonation.impersonating;
+
   const { data: submissions, isLoading: submissionsLoading } = useGetMySubmissions();
 
   const { data: ownerChalets = [] } = useQuery<any[]>({
@@ -8214,7 +8234,7 @@ export default function Dashboard() {
       const r = await apiFetch("/owner/chalets");
       return r.ok ? r.json() : [];
     },
-    enabled: isAuthenticated || isStaff,
+    enabled: isAuthenticated || isStaff || isImpersonating,
   });
 
   const { data: planLimits } = useQuery<{ plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number }>({
@@ -8224,7 +8244,7 @@ export default function Dashboard() {
       if (!r.ok) return { plan: "trial", chaletLimit: 1, chaletCount: 0, serviceLimit: 1 };
       return r.json();
     },
-    enabled: isAuthenticated,
+    enabled: isAuthenticated || isImpersonating,
   });
 
   const { data: subscription } = useQuery<{ plan: string; status: string; expiresAt: string | null; paymentStatus: string } | null>({
@@ -8234,7 +8254,7 @@ export default function Dashboard() {
       if (!r.ok) return null;
       return r.json();
     },
-    enabled: isAuthenticated,
+    enabled: isAuthenticated || isImpersonating,
   });
 
   const { data: notifSummary = [] } = useQuery<{ id: number; isRead: boolean }[]>({
@@ -8244,7 +8264,7 @@ export default function Dashboard() {
       if (!r.ok) return [];
       return r.json();
     },
-    enabled: isAuthenticated || isStaff,
+    enabled: isAuthenticated || isStaff || isImpersonating,
     refetchInterval: 30_000,
   });
   const unreadNotifCount = notifSummary.filter((n) => !n.isRead).length;
@@ -8281,25 +8301,6 @@ export default function Dashboard() {
 
   const isLoadingAuth = authLoading || staffLoading;
 
-  /* ── Admin impersonation detection ── */
-  const [impersonation, setImpersonation] = useState<{
-    impersonating: boolean; adminName?: string; ownerName?: string;
-  }>({ impersonating: false });
-  const [impersonationLoading, setImpersonationLoading] = useState(true);
-
-  useEffect(() => {
-    apiFetch("/admin/impersonation-status")
-      .then((r) => r.ok ? r.json() : { impersonating: false })
-      .then(setImpersonation)
-      .finally(() => setImpersonationLoading(false));
-  }, []);
-
-  async function endImpersonation() {
-    await apiFetch("/admin/impersonate/end", { method: "POST" });
-    window.location.href = `${BASE}/admin`;
-  }
-
-  const isImpersonating = impersonation.impersonating;
   const isFullyLoading  = isLoadingAuth || impersonationLoading;
   const canAccess       = isAuthenticated || isStaff || isImpersonating;
 

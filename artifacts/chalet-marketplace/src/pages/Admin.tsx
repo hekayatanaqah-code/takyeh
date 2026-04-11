@@ -4230,6 +4230,31 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
   const [editCredPassword, setEditCredPassword] = useState("");
   const [editPerms, setEditPerms] = useState<AdminStaffPermissions>({});
 
+  /* Change own password */
+  const [showChangePwd, setShowChangePwd] = useState(false);
+  const [pwdCurrent, setPwdCurrent] = useState("");
+  const [pwdNew, setPwdNew] = useState("");
+  const [pwdConfirm, setPwdConfirm] = useState("");
+  const [pwdError, setPwdError] = useState("");
+  const [pwdSuccess, setPwdSuccess] = useState(false);
+
+  const changePwdMutation = useMutation({
+    mutationFn: async () => {
+      if (pwdNew !== pwdConfirm) throw new Error("كلمة المرور الجديدة وتأكيدها غير متطابقين");
+      if (pwdNew.length < 8) throw new Error("كلمة المرور يجب أن تكون 8 أحرف على الأقل");
+      const r = await fetch(`${API}/admin/change-password`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ currentPassword: pwdCurrent, newPassword: pwdNew }),
+      });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "فشل تغيير كلمة المرور"); }
+      return r.json();
+    },
+    onSuccess: () => { setPwdSuccess(true); setPwdCurrent(""); setPwdNew(""); setPwdConfirm(""); setPwdError(""); },
+    onError: (e: Error) => setPwdError(e.message),
+  });
+
   const { data: staffList = [], isLoading } = useQuery<AdminStaffRow[]>({
     queryKey: ["admin", "staff"],
     queryFn: async () => {
@@ -4324,7 +4349,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
       </div>
 
       {/* Super Admin Identity Card */}
-      {isSuperAdmin && (
+      {isSuperAdmin && (<>
         <div className="mb-6 bg-gradient-to-l from-amber-900/20 to-amber-800/10 border border-amber-600/30 rounded-xl p-5 flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
             <ShieldCheck className="w-6 h-6 text-amber-400" />
@@ -4338,14 +4363,59 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
             </div>
             <p className="text-slate-400 text-sm">حسابك هو حساب المشرف العام — يمتلك صلاحيات كاملة وغير محدودة على جميع أقسام المنصة. لا يمكن تقييد هذا الحساب.</p>
           </div>
-          <div className="shrink-0">
+          <div className="shrink-0 flex flex-col items-end gap-2">
             <span className="flex items-center gap-1.5 text-xs font-semibold text-green-400 bg-green-900/20 border border-green-700/30 px-3 py-1.5 rounded-lg">
               <CheckCircle className="w-3.5 h-3.5" />
               مفعّل
             </span>
+            <button
+              onClick={() => { setShowChangePwd(true); setPwdSuccess(false); setPwdError(""); }}
+              className="text-xs font-medium text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+              تغيير كلمة المرور
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Change Password Panel */}
+        {showChangePwd && (
+          <div className="mt-4 border-t border-amber-600/20 pt-4">
+            {pwdSuccess ? (
+              <div className="flex items-center gap-2 text-green-400 text-sm">
+                <CheckCircle className="w-4 h-4" />
+                تم تغيير كلمة المرور بنجاح!
+                <button onClick={() => { setShowChangePwd(false); setPwdSuccess(false); }} className="mr-auto text-slate-400 hover:text-white text-xs">إغلاق</button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-slate-300 text-sm font-medium">تغيير كلمة المرور</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">كلمة المرور الحالية</label>
+                    <Input type="password" value={pwdCurrent} onChange={(e) => setPwdCurrent(e.target.value)} placeholder="••••••••" className="bg-slate-700 border-slate-600 text-white h-8 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">كلمة المرور الجديدة</label>
+                    <Input type="password" value={pwdNew} onChange={(e) => setPwdNew(e.target.value)} placeholder="••••••••" className="bg-slate-700 border-slate-600 text-white h-8 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">تأكيد كلمة المرور</label>
+                    <Input type="password" value={pwdConfirm} onChange={(e) => setPwdConfirm(e.target.value)} placeholder="••••••••" className="bg-slate-700 border-slate-600 text-white h-8 text-sm" />
+                  </div>
+                </div>
+                {pwdError && <p className="text-red-400 text-xs">{pwdError}</p>}
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setShowChangePwd(false)} className="text-slate-400 hover:text-white text-xs h-7">إلغاء</Button>
+                  <Button size="sm" onClick={() => changePwdMutation.mutate()} disabled={!pwdCurrent || !pwdNew || !pwdConfirm || changePwdMutation.isPending} className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-7">
+                    {changePwdMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "حفظ كلمة المرور"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </> )}
 
       {/* Add Form */}
       {showAdd && (

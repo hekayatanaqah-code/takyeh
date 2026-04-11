@@ -184,6 +184,35 @@ router.delete("/staff/:id", requireSuperAdmin, async (req, res) => {
   return res.json({ ok: true });
 });
 
+/* ── Change own password (any logged-in admin/staff) ──────── */
+router.put("/change-password", async (req, res) => {
+  const sid = req.cookies?.admin_staff_sid;
+  if (!sid) return res.status(401).json({ error: "جلسة غير موجودة" });
+
+  const [session] = await db.select().from(adminSessionsTable)
+    .where(and(eq(adminSessionsTable.sid, sid), gt(adminSessionsTable.expire, new Date())));
+  if (!session) return res.status(401).json({ error: "انتهت الجلسة" });
+
+  const [member] = await db.select().from(adminStaffTable)
+    .where(eq(adminStaffTable.id, session.adminStaffId));
+  if (!member) return res.status(404).json({ error: "الحساب غير موجود" });
+
+  const { currentPassword, newPassword } = req.body ?? {};
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: "يرجى إدخال كلمة المرور الحالية والجديدة" });
+  }
+  if (String(newPassword).length < 8) {
+    return res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل" });
+  }
+
+  const valid = await bcrypt.compare(String(currentPassword), member.passwordHash);
+  if (!valid) return res.status(400).json({ error: "كلمة المرور الحالية غير صحيحة" });
+
+  const newHash = await bcrypt.hash(String(newPassword), 10);
+  await db.update(adminStaffTable).set({ passwordHash: newHash }).where(eq(adminStaffTable.id, member.id));
+  return res.json({ ok: true });
+});
+
 /* ── Submissions ─────────────────────────────────────────── */
 
 router.get("/submissions", async (_req, res) => {
