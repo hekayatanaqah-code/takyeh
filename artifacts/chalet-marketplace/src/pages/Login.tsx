@@ -84,7 +84,7 @@ export default function Login() {
       {/* ── Login card ── */}
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl shadow-gray-100 border border-gray-100 p-7">
         <h2 className="font-bold text-gray-800 text-base mb-1">تسجيل الدخول</h2>
-        <p className="text-gray-400 text-xs mb-5">أدخل بريدك الإلكتروني (للملاك) أو اسم المستخدم (للموظفين)</p>
+        <p className="text-gray-400 text-xs mb-5">مرحباً بك مجدداً في منصة تكيّة</p>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-1.5">

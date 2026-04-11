@@ -107,7 +107,7 @@ export default function Register() {
           <Building2 className="w-7 h-7 text-white" />
         </div>
         <h1 className="text-2xl font-bold text-gray-900">تكيّة</h1>
-        <p className="text-gray-500 text-sm mt-0.5">انضم إلى تكيّة كشريك</p>
+        <p className="text-gray-500 text-sm mt-0.5">انضم إلى شركاء تكيّة وابدأ إدارة أعمالك</p>
       </div>
 
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-gray-100 p-7">
