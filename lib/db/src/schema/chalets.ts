@@ -492,6 +492,15 @@ export type AdminPermKey =
 
 export type AdminStaffPermissions = Partial<Record<AdminPermKey, boolean>>;
 
+/* ── CRM: owner-private notes about recurring customers ─────── */
+export const customerNotesTable = pgTable("customer_notes", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  clientPhone: text("client_phone").notNull(),
+  notes: text("notes").notNull().default(""),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const adminStaffTable = pgTable("admin_staff", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),

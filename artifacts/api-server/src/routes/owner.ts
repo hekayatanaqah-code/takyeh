@@ -17,6 +17,7 @@ import {
   ownerNotificationsTable,
   ownerRescheduleLogsTable,
   chaletSeasonsTable,
+  customerNotesTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
@@ -2054,6 +2055,105 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
     .set(updateData)
     .where(eq(chaletSubmissionsTable.id, submissionId));
 
+  return res.json({ ok: true });
+});
+
+/* ════════════════════════════════════════════════════════════════
+   CRM — Customer List, Profile & Private Notes
+   ════════════════════════════════════════════════════════════════ */
+
+/* GET /owner/customers — unique customers aggregated from bookings */
+router.get("/customers", async (req, res) => {
+  const ownerId = req.user!.id;
+  const rows = await db.execute<{
+    client_name: string; client_phone: string;
+    total_bookings: string; total_revenue: string; last_booking_date: string;
+  }>(
+    sql`
+      SELECT
+        client_name,
+        client_phone,
+        COUNT(*)::text                             AS total_bookings,
+        COALESCE(SUM(total_price), 0)::text        AS total_revenue,
+        MAX(booking_date)                          AS last_booking_date
+      FROM owner_bookings
+      WHERE owner_id = ${ownerId}
+        AND cancelled_at IS NULL
+      GROUP BY client_name, client_phone
+      ORDER BY last_booking_date DESC
+    `
+  );
+  return res.json(rows);
+});
+
+/* GET /owner/customers/:phone — full profile + booking history */
+router.get("/customers/:phone", async (req, res) => {
+  const ownerId  = req.user!.id;
+  const phone    = req.params.phone;
+
+  const [agg] = await db.execute<{
+    client_name: string; total_bookings: string; total_revenue: string; last_booking_date: string;
+  }>(
+    sql`
+      SELECT
+        client_name,
+        COUNT(*)::text                       AS total_bookings,
+        COALESCE(SUM(total_price), 0)::text  AS total_revenue,
+        MAX(booking_date)                    AS last_booking_date
+      FROM owner_bookings
+      WHERE owner_id = ${ownerId} AND client_phone = ${phone}
+      GROUP BY client_name
+      LIMIT 1
+    `
+  );
+
+  if (!agg) return res.status(404).json({ error: "العميل غير موجود" });
+
+  const bookings = await db.execute<{
+    id: number; booking_date: string; duration_days: number;
+    period: string; total_price: string; submission_id: number; cancelled_at: string | null;
+    chalet_name: string | null;
+  }>(
+    sql`
+      SELECT
+        ob.id, ob.booking_date, ob.duration_days, ob.period,
+        ob.total_price::text, ob.submission_id, ob.cancelled_at,
+        cs.name_ar AS chalet_name
+      FROM owner_bookings ob
+      LEFT JOIN chalet_submissions cs ON cs.id = ob.submission_id
+      WHERE ob.owner_id = ${ownerId} AND ob.client_phone = ${phone}
+      ORDER BY ob.booking_date DESC
+    `
+  );
+
+  const [noteRow] = await db.execute<{ notes: string }>(
+    sql`SELECT notes FROM customer_notes WHERE owner_id = ${ownerId} AND client_phone = ${phone}`
+  );
+
+  return res.json({
+    clientName: agg.client_name,
+    clientPhone: phone,
+    totalBookings: Number(agg.total_bookings),
+    totalRevenue: Number(agg.total_revenue),
+    lastBookingDate: agg.last_booking_date,
+    bookings,
+    note: noteRow?.notes ?? "",
+  });
+});
+
+/* PUT /owner/customers/:phone/note — upsert private note */
+router.put("/customers/:phone/note", async (req, res) => {
+  const ownerId = req.user!.id;
+  const phone   = req.params.phone;
+  const notes   = String(req.body?.notes ?? "");
+
+  await db.execute(
+    sql`
+      INSERT INTO customer_notes (owner_id, client_phone, notes, updated_at)
+      VALUES (${ownerId}, ${phone}, ${notes}, now())
+      ON CONFLICT (owner_id, client_phone) DO UPDATE SET notes = ${notes}, updated_at = now()
+    `
+  );
   return res.json({ ok: true });
 });
 

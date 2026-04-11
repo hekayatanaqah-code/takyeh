@@ -7918,10 +7918,290 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
   );
 }
 
+/* ════════════════════════════════════════════════════════════════
+   CRM — Customers Tab
+   ════════════════════════════════════════════════════════════════ */
+interface CustomerRow {
+  client_name: string;
+  client_phone: string;
+  total_bookings: string;
+  total_revenue: string;
+  last_booking_date: string;
+}
+
+interface BookingRow {
+  id: number;
+  booking_date: string;
+  duration_days: number;
+  period: string;
+  total_price: string;
+  chalet_name: string | null;
+  cancelled_at: string | null;
+}
+
+interface CustomerProfile {
+  clientName: string;
+  clientPhone: string;
+  totalBookings: number;
+  totalRevenue: number;
+  lastBookingDate: string;
+  bookings: BookingRow[];
+  note: string;
+}
+
+const PERIOD_LABEL: Record<string, string> = {
+  morning:  "صباحي",
+  evening:  "مسائي",
+  full_day: "يومي كامل",
+  fullday:  "يومي كامل",
+};
+
+function CustomersTab() {
+  const { toast } = useToast();
+  const [search, setSearch]           = useState("");
+  const [selected, setSelected]       = useState<string | null>(null);
+  const [profile, setProfile]         = useState<CustomerProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [note, setNote]               = useState("");
+  const [savingNote, setSavingNote]   = useState(false);
+
+  const { data: customers = [], isLoading } = useQuery<CustomerRow[]>({
+    queryKey: ["owner", "customers"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/customers");
+      return r.ok ? r.json() : [];
+    },
+  });
+
+  const filtered = customers.filter(
+    (c) =>
+      c.client_name.includes(search) ||
+      c.client_phone.includes(search)
+  );
+
+  async function loadProfile(phone: string) {
+    setSelected(phone);
+    setProfile(null);
+    setProfileLoading(true);
+    const r = await apiFetch(`/owner/customers/${encodeURIComponent(phone)}`);
+    if (r.ok) {
+      const data: CustomerProfile = await r.json();
+      setProfile(data);
+      setNote(data.note ?? "");
+    }
+    setProfileLoading(false);
+  }
+
+  async function handleSaveNote() {
+    if (!selected) return;
+    setSavingNote(true);
+    await apiFetch(`/owner/customers/${encodeURIComponent(selected)}/note`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: note }),
+    });
+    setSavingNote(false);
+    toast({ title: "تم حفظ الملاحظة" });
+  }
+
+  const statCard = (label: string, value: string) => (
+    <div className="bg-muted/40 rounded-xl p-4 flex flex-col gap-1">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-xl font-bold text-foreground">{value}</p>
+    </div>
+  );
+
+  return (
+    <div className="flex gap-4 min-h-[520px]" dir="rtl">
+      {/* ── Left panel: customer list ── */}
+      <div className={`flex flex-col gap-3 ${selected ? "hidden lg:flex lg:w-72 shrink-0" : "w-full"}`}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-foreground">عملائي</h2>
+          <span className="text-xs text-muted-foreground">{toAr(customers.length)} عميل</span>
+        </div>
+
+        <div className="relative">
+          <Search className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="ابحث بالاسم أو الجوال…"
+            className="pe-9 text-sm"
+            dir="rtl"
+          />
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center py-16"><Loader2 className="animate-spin text-primary w-6 h-6" /></div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground text-sm">
+            {search ? "لا توجد نتائج" : "لا يوجد عملاء بعد — أضف أول حجز لعميلك"}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {filtered.map((c) => (
+              <button
+                key={c.client_phone}
+                onClick={() => loadProfile(c.client_phone)}
+                className={`w-full text-start rounded-xl border px-4 py-3 transition-colors hover:border-primary/50 hover:bg-accent/30 ${
+                  selected === c.client_phone
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-card"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-semibold text-sm text-foreground truncate">{c.client_name}</p>
+                  <span className="shrink-0 text-xs font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                    {toAr(Number(c.total_bookings))} حجز
+                  </span>
+                </div>
+                <p dir="ltr" className="text-xs text-muted-foreground mt-0.5 text-right">{c.client_phone}</p>
+                {c.last_booking_date && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    آخر حجز: {c.last_booking_date}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Right panel: profile ── */}
+      {selected && (
+        <div className="flex-1 min-w-0 flex flex-col gap-5">
+          {/* Back button (mobile) */}
+          <button
+            onClick={() => { setSelected(null); setProfile(null); }}
+            className="lg:hidden flex items-center gap-1.5 text-sm text-primary font-medium"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            العودة للقائمة
+          </button>
+
+          {profileLoading || !profile ? (
+            <div className="flex justify-center py-16"><Loader2 className="animate-spin text-primary w-6 h-6" /></div>
+          ) : (
+            <>
+              {/* Basic info */}
+              <div className="bg-card border border-border rounded-2xl p-5">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <User className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-foreground">{profile.clientName}</p>
+                    <p dir="ltr" className="text-sm text-muted-foreground">{profile.clientPhone}</p>
+                  </div>
+                </div>
+
+                {/* Stat cards */}
+                <div className="grid grid-cols-3 gap-3">
+                  {statCard(
+                    "إجمالي الحجوزات",
+                    `${toAr(profile.totalBookings)} حجز`
+                  )}
+                  {statCard(
+                    "إجمالي الإيراد",
+                    `${toAr(Math.round(profile.totalRevenue))} ر.س`
+                  )}
+                  {statCard(
+                    "آخر حجز",
+                    profile.lastBookingDate || "—"
+                  )}
+                </div>
+              </div>
+
+              {/* Booking history */}
+              <div className="bg-card border border-border rounded-2xl p-5">
+                <h3 className="font-bold text-sm text-foreground mb-3 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-primary" />
+                  سجل الحجوزات ({toAr(profile.bookings.length)})
+                </h3>
+                {profile.bookings.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">لا توجد حجوزات</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-muted-foreground text-xs">
+                          <th className="pb-2 text-right font-medium">التاريخ</th>
+                          <th className="pb-2 text-right font-medium">الشاليه</th>
+                          <th className="pb-2 text-right font-medium">الفترة</th>
+                          <th className="pb-2 text-right font-medium">المبلغ</th>
+                          <th className="pb-2 text-right font-medium">الحالة</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {profile.bookings.map((b) => (
+                          <tr key={b.id} className="hover:bg-muted/30 transition-colors">
+                            <td className="py-2.5 text-foreground">{b.booking_date}</td>
+                            <td className="py-2.5 text-muted-foreground truncate max-w-[120px]">
+                              {b.chalet_name ?? "—"}
+                            </td>
+                            <td className="py-2.5 text-muted-foreground">
+                              {PERIOD_LABEL[b.period] ?? b.period}
+                              {b.duration_days > 1 && ` (${toAr(b.duration_days)} أيام)`}
+                            </td>
+                            <td className="py-2.5 font-semibold text-foreground">
+                              {toAr(Math.round(Number(b.total_price)))} ر.س
+                            </td>
+                            <td className="py-2.5">
+                              {b.cancelled_at ? (
+                                <span className="text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-950/30 px-2 py-0.5 rounded-full">ملغي</span>
+                              ) : (
+                                <span className="text-xs font-semibold text-green-600 bg-green-50 dark:bg-green-950/30 px-2 py-0.5 rounded-full">مؤكد</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Private notes */}
+              <div className="bg-card border border-border rounded-2xl p-5">
+                <h3 className="font-bold text-sm text-foreground mb-1 flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-primary" />
+                  ملاحظات خاصة
+                </h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  هذه الملاحظات مخفية تماماً عن العميل — تُستخدم للتذكير والملاحظات الداخلية فقط
+                </p>
+                <Textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="مثال: عميل VIP، يفضّل الفترة الصباحية، التواصل عبر الجوال…"
+                  rows={4}
+                  className="text-sm resize-none"
+                  dir="rtl"
+                />
+                <div className="flex justify-end mt-3">
+                  <Button
+                    size="sm"
+                    onClick={handleSaveNote}
+                    disabled={savingNote}
+                    className="gap-2"
+                  >
+                    {savingNote ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
+                    حفظ الملاحظة
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Main Dashboard ──────────────────────────── */
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits" | "seasons">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "customers" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits" | "seasons">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth();
   const { isStaff, staffUser, permissions, isLoading: staffLoading, logout: staffLogout } = useStaffAuth();
@@ -7970,16 +8250,17 @@ export default function Dashboard() {
   const unreadNotifCount = notifSummary.filter((n) => !n.isRead).length;
 
   const allTabs = [
-    { id: "chalets",   label: "شاليهاتي",         icon: <Building2 className="w-4 h-4" /> },
-    { id: "seasons",   label: "المواسم",            icon: <Sun className="w-4 h-4" /> },
-    { id: "reviews",   label: "التقييمات",          icon: <Star className="w-4 h-4" /> },
-    { id: "services",  label: "خدماتي",            icon: <MessageSquare className="w-4 h-4" /> },
-    { id: "calendar",  label: "التقويم والحجوزات", icon: <Calendar className="w-4 h-4" /> },
-    { id: "revenue",   label: "الإيرادات",          icon: <TrendingUp className="w-4 h-4" /> },
-    { id: "expenses",  label: "المصروفات",          icon: <Wallet className="w-4 h-4" /> },
-    { id: "staff",     label: "الموظفون",           icon: <Users className="w-4 h-4" /> },
-    { id: "reports",   label: "التقارير",           icon: <BarChart2 className="w-4 h-4" /> },
-    { id: "deposits",  label: "التأمينات",           icon: <Lock className="w-4 h-4" /> },
+    { id: "chalets",   label: "شاليهاتي",          icon: <Building2 className="w-4 h-4" /> },
+    { id: "seasons",   label: "المواسم",             icon: <Sun className="w-4 h-4" /> },
+    { id: "reviews",   label: "التقييمات",           icon: <Star className="w-4 h-4" /> },
+    { id: "customers", label: "عملائي",              icon: <Users className="w-4 h-4" /> },
+    { id: "services",  label: "خدماتي",             icon: <MessageSquare className="w-4 h-4" /> },
+    { id: "calendar",  label: "التقويم والحجوزات",  icon: <Calendar className="w-4 h-4" /> },
+    { id: "revenue",   label: "الإيرادات",           icon: <TrendingUp className="w-4 h-4" /> },
+    { id: "expenses",  label: "المصروفات",           icon: <Wallet className="w-4 h-4" /> },
+    { id: "staff",     label: "الموظفون",            icon: <Users className="w-4 h-4" /> },
+    { id: "reports",   label: "التقارير",            icon: <BarChart2 className="w-4 h-4" /> },
+    { id: "deposits",  label: "التأمينات",            icon: <Lock className="w-4 h-4" /> },
   ] as const;
 
   const tabs = useMemo(() => {
@@ -8172,6 +8453,9 @@ export default function Dashboard() {
         )}
         {activeTab === "reviews" && (
           <ReviewsTab />
+        )}
+        {activeTab === "customers" && (
+          <CustomersTab />
         )}
         {activeTab === "services" && (
           <ServiceSubmissionsTab />
