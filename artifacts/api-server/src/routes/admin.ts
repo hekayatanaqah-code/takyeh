@@ -46,7 +46,17 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-async function requireAdminOrAdminStaff(req: Request, res: Response, next: NextFunction) {
+/* ── requireSuperAdmin — allows OIDC admin OR DB-based super admin ── */
+export function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  /* Already verified by requireAdminOrAdminStaff global middleware */
+  if ((req as any).isSuperAdmin) return next();
+  /* Legacy OIDC path (fallback) */
+  const adminId = process.env.ADMIN_USER_ID;
+  if (req.isAuthenticated() && adminId && req.user?.id === adminId) return next();
+  res.status(403).json({ error: "المشرف العام فقط يملك هذه الصلاحية" });
+}
+
+export async function requireAdminOrAdminStaff(req: Request, res: Response, next: NextFunction) {
   /* ── 1. OIDC super admin (legacy / Replit-hosted) ── */
   const adminId = process.env.ADMIN_USER_ID;
   if (req.isAuthenticated() && adminId && req.user?.id === adminId) {
@@ -116,7 +126,7 @@ router.get("/access-check", (req, res) => {
 });
 
 /* ── Admin Staff CRUD (super admin only) ──────────────────── */
-router.get("/staff", requireAdmin, async (_req, res) => {
+router.get("/staff", requireSuperAdmin, async (_req, res) => {
   const rows = await db.select({
     id: adminStaffTable.id,
     name: adminStaffTable.name,
@@ -128,7 +138,7 @@ router.get("/staff", requireAdmin, async (_req, res) => {
   return res.json(rows);
 });
 
-router.post("/staff", requireAdmin, async (req, res) => {
+router.post("/staff", requireSuperAdmin, async (req, res) => {
   const { name, username, password, permissions } = req.body ?? {};
   if (!name || !username || !password) {
     return res.status(400).json({ error: "يرجى تعبئة الاسم واسم المستخدم وكلمة المرور" });
@@ -140,14 +150,14 @@ router.post("/staff", requireAdmin, async (req, res) => {
   return res.json(staff);
 });
 
-router.put("/staff/:id/permissions", requireAdmin, async (req, res) => {
+router.put("/staff/:id/permissions", requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const { permissions } = req.body ?? {};
   await db.update(adminStaffTable).set({ permissions: permissions ?? {} }).where(eq(adminStaffTable.id, id));
   return res.json({ ok: true });
 });
 
-router.put("/staff/:id/credentials", requireAdmin, async (req, res) => {
+router.put("/staff/:id/credentials", requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const { username, password } = req.body ?? {};
   const updates: Record<string, unknown> = {};
@@ -158,14 +168,14 @@ router.put("/staff/:id/credentials", requireAdmin, async (req, res) => {
   return res.json({ ok: true });
 });
 
-router.put("/staff/:id/status", requireAdmin, async (req, res) => {
+router.put("/staff/:id/status", requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const { isActive } = req.body ?? {};
   await db.update(adminStaffTable).set({ isActive: Boolean(isActive) }).where(eq(adminStaffTable.id, id));
   return res.json({ ok: true });
 });
 
-router.delete("/staff/:id", requireAdmin, async (req, res) => {
+router.delete("/staff/:id", requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
   await db.delete(adminStaffTable).where(eq(adminStaffTable.id, id));
   return res.json({ ok: true });
