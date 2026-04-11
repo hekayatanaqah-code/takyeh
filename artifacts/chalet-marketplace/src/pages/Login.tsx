@@ -65,13 +65,13 @@ export default function Login() {
       dir="rtl"
     >
       {/* ── Brand ── */}
-      <div className="flex flex-col items-center mb-7 select-none">
-        <div className="w-16 h-16 rounded-2xl bg-green-600 shadow-lg shadow-green-200 flex items-center justify-center mb-3">
+      <a href={`${BASE}/`} className="flex flex-col items-center mb-7 select-none group">
+        <div className="w-16 h-16 rounded-2xl bg-green-600 shadow-lg shadow-green-200 flex items-center justify-center mb-3 group-hover:shadow-green-300 transition-shadow">
           <span className="text-white text-2xl font-extrabold">ت</span>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900">تكيّة</h1>
+        <h1 className="text-2xl font-bold text-gray-900 group-hover:text-green-700 transition-colors">تكيّة</h1>
         <p className="text-gray-500 text-sm mt-0.5">منصة إدارة الشاليهات — القصيم</p>
-      </div>
+      </a>
 
       {/* ── Guidance banner ── */}
       <div className="w-full max-w-sm mb-4 flex items-start gap-2.5 bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
@@ -179,8 +179,8 @@ export default function Login() {
             انضم إلينا الآن
           </a>
         </p>
-        <a href={`${BASE}/`} className="text-xs text-gray-400 hover:text-green-600 transition-colors">
-          ← العودة للرئيسية
+        <a href={`${BASE}/`} className="text-xs text-gray-400 underline underline-offset-2 hover:text-green-600 transition-colors">
+          العودة لتصفح منصة تكيّة
         </a>
       </div>
     </div>
