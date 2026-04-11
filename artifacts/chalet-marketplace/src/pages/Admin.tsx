@@ -1033,6 +1033,8 @@ function AmenitiesTab() {
 
 /* ── Owners Tab ───────────────────────────────── */
 function OwnersTab() {
+  const [impersonating, setImpersonating] = useState<string | null>(null);
+
   const { data: owners = [], isLoading } = useQuery({
     queryKey: ["admin", "owners"],
     queryFn: async () => {
@@ -1041,6 +1043,21 @@ function OwnersTab() {
       return r.json();
     },
   });
+
+  async function handleImpersonate(ownerId: string) {
+    setImpersonating(ownerId);
+    const r = await apiFetch("/admin/impersonate", {
+      method: "POST",
+      body: JSON.stringify({ ownerId }),
+    });
+    if (r.ok) {
+      window.location.href = `${BASE}/dashboard`;
+    } else {
+      const err = await r.json().catch(() => ({}));
+      alert(err.error ?? "حدث خطأ");
+      setImpersonating(null);
+    }
+  }
 
   if (isLoading) {
     return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-slate-400 w-8 h-8" /></div>;
@@ -1055,12 +1072,13 @@ function OwnersTab() {
             <TableHead className="text-slate-300 text-right">اسم الشاليه الأول</TableHead>
             <TableHead className="text-slate-300 text-right">واتساب</TableHead>
             <TableHead className="text-slate-300 text-right">تاريخ الانضمام</TableHead>
+            <TableHead className="text-slate-300 text-right">إجراءات</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {owners.length === 0 && (
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-slate-400 py-12">لا يوجد ملاك بعد</TableCell>
+              <TableCell colSpan={5} className="text-center text-slate-400 py-12">لا يوجد ملاك بعد</TableCell>
             </TableRow>
           )}
           {owners.map((owner: Owner) => (
@@ -1069,6 +1087,18 @@ function OwnersTab() {
               <TableCell className="text-white font-medium">{owner.nameAr}</TableCell>
               <TableCell className="text-slate-300 font-mono text-sm" dir="ltr">{owner.whatsappNumber}</TableCell>
               <TableCell className="text-slate-400 text-sm">{new Date(owner.createdAt).toLocaleDateString("ar-SA")}</TableCell>
+              <TableCell>
+                <button
+                  onClick={() => handleImpersonate(owner.ownerId)}
+                  disabled={impersonating === owner.ownerId}
+                  className="flex items-center gap-1.5 text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
+                >
+                  {impersonating === owner.ownerId
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+                  دخول بصلاحية المالك
+                </button>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -4641,8 +4671,19 @@ export default function Admin() {
               تسجيل الخروج
             </button>
           )}
+          <a
+            href={`${BASE}/`}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1.5 text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            معاينة المنصة العامة
+          </a>
           <a href={BASE || "/"} className="text-slate-400 hover:text-white text-sm transition-colors">
-            العودة للموقع ←
+            العودة ←
           </a>
         </div>
       </header>

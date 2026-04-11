@@ -27,12 +27,23 @@ import type { Request, Response, NextFunction } from "express";
 
 const router = Router();
 
-function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
-    return;
+async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (req.isAuthenticated()) { next(); return; }
+
+  /* ── Admin impersonation fallback ── */
+  const adminSid = (req.cookies as Record<string, string>)?.admin_staff_sid;
+  if (adminSid) {
+    const rows = await db.execute<{ impersonated_owner_id: string | null }>(
+      sql`SELECT impersonated_owner_id FROM admin_sessions WHERE sid = ${adminSid} AND expire > now() LIMIT 1`
+    );
+    const ownerId = rows[0]?.impersonated_owner_id;
+    if (ownerId) {
+      (req as any).user = { id: ownerId, claims: { sub: ownerId } };
+      next(); return;
+    }
   }
-  next();
+
+  res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
 }
 
 router.use(requireAuth);

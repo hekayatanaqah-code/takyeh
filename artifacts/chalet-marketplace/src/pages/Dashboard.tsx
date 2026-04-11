@@ -8281,11 +8281,33 @@ export default function Dashboard() {
 
   const isLoadingAuth = authLoading || staffLoading;
 
-  useEffect(() => {
-    if (!isLoadingAuth && !isAuthenticated && !isStaff) navigate("/staff-login");
-  }, [isLoadingAuth, isAuthenticated, isStaff, navigate]);
+  /* ── Admin impersonation detection ── */
+  const [impersonation, setImpersonation] = useState<{
+    impersonating: boolean; adminName?: string;
+  }>({ impersonating: false });
+  const [impersonationLoading, setImpersonationLoading] = useState(true);
 
-  if (isLoadingAuth) {
+  useEffect(() => {
+    apiFetch("/admin/impersonation-status")
+      .then((r) => r.ok ? r.json() : { impersonating: false })
+      .then(setImpersonation)
+      .finally(() => setImpersonationLoading(false));
+  }, []);
+
+  async function endImpersonation() {
+    await apiFetch("/admin/impersonate/end", { method: "POST" });
+    window.location.href = `${BASE}/admin`;
+  }
+
+  const isImpersonating = impersonation.impersonating;
+  const isFullyLoading  = isLoadingAuth || impersonationLoading;
+  const canAccess       = isAuthenticated || isStaff || isImpersonating;
+
+  useEffect(() => {
+    if (!isFullyLoading && !canAccess) navigate("/staff-login");
+  }, [isFullyLoading, canAccess, navigate]);
+
+  if (isFullyLoading) {
     return (
       <div className="min-h-screen bg-background" dir="rtl">
         <Navbar />
@@ -8297,10 +8319,32 @@ export default function Dashboard() {
     );
   }
 
-  if (!isAuthenticated && !isStaff) return null;
+  if (!canAccess) return null;
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
+      {/* ── Impersonation Banner ── */}
+      {isImpersonating && (
+        <div className="sticky top-0 z-50 w-full bg-amber-500 text-amber-950 px-4 py-2.5 flex items-center justify-between gap-3" dir="rtl">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+            أنت تتصفح كمدير
+            {impersonation.adminName && <span className="font-normal opacity-80">({impersonation.adminName})</span>}
+            — تعمل بصلاحيات المالك الآن
+          </div>
+          <button
+            onClick={endImpersonation}
+            className="shrink-0 flex items-center gap-1.5 bg-amber-950/15 hover:bg-amber-950/25 text-amber-950 font-bold text-xs px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            العودة للوحة الإدارة العامة
+          </button>
+        </div>
+      )}
       <Navbar />
 
       <div className="container mx-auto px-4 py-10 max-w-4xl">

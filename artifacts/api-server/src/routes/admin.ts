@@ -74,6 +74,30 @@ async function requireAdminOrAdminStaff(req: Request, res: Response, next: NextF
   res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
 }
 
+/* ── Impersonation status — no auth required (reads admin cookie only) ── */
+router.get("/impersonation-status", async (req, res) => {
+  const sid = req.cookies?.admin_staff_sid;
+  if (!sid) return res.json({ impersonating: false });
+
+  const rows = await db.execute<{ impersonated_owner_id: string | null; name: string }>(
+    sql`
+      SELECT s.impersonated_owner_id, a.name
+      FROM admin_sessions s
+      JOIN admin_staff a ON a.id = s.admin_staff_id
+      WHERE s.sid = ${sid} AND s.expire > now()
+      LIMIT 1
+    `
+  );
+  const row = rows[0];
+  if (!row || !row.impersonated_owner_id) return res.json({ impersonating: false });
+
+  return res.json({
+    impersonating: true,
+    ownerId: row.impersonated_owner_id,
+    adminName: row.name,
+  });
+});
+
 router.use(requireAdminOrAdminStaff);
 
 /* ── Access Check ─────────────────────────────────────────── */
@@ -744,6 +768,35 @@ router.get("/applications", async (_req, res) => {
         FROM owner_applications ORDER BY created_at DESC`
   );
   return res.json(rows);
+});
+
+/* ══════════════════════════════════════════════════════
+   Owner Impersonation  (Super-Admin only)
+   ══════════════════════════════════════════════════════ */
+router.post("/impersonate", async (req, res) => {
+  if (!(req as any).isSuperAdmin) {
+    return res.status(403).json({ error: "المشرف العام فقط يملك هذه الصلاحية" });
+  }
+  const ownerId = String(req.body?.ownerId ?? "").trim();
+  if (!ownerId) return res.status(400).json({ error: "ownerId مطلوب" });
+
+  const sid = req.cookies?.admin_staff_sid;
+  if (!sid) return res.status(401).json({ error: "جلسة الإدارة غير موجودة" });
+
+  await db.execute(
+    sql`UPDATE admin_sessions SET impersonated_owner_id = ${ownerId} WHERE sid = ${sid}`
+  );
+  return res.json({ ok: true });
+});
+
+router.post("/impersonate/end", async (_req, res) => {
+  const sid = (_req as any).cookies?.admin_staff_sid;
+  if (sid) {
+    await db.execute(
+      sql`UPDATE admin_sessions SET impersonated_owner_id = NULL WHERE sid = ${sid}`
+    );
+  }
+  return res.json({ ok: true });
 });
 
 router.patch("/applications/:id", async (req, res) => {
