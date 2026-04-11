@@ -3549,12 +3549,161 @@ function PlansTab() {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Partner Applications Tab
+   ══════════════════════════════════════════════════════════════ */
+interface PartnerApp {
+  id: number;
+  full_name: string;
+  business_name: string;
+  business_type: "chalet" | "service" | "both";
+  phone: string;
+  email: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+}
+
+const BUSINESS_TYPE_BADGE: Record<string, { label: string; className: string }> = {
+  chalet:  { label: "مالك شاليه",        className: "bg-green-900/40 text-green-300 border border-green-700/40" },
+  service: { label: "مزود خدمة",         className: "bg-blue-900/40 text-blue-300 border border-blue-700/40" },
+  both:    { label: "شاليه + خدمة",      className: "bg-purple-900/40 text-purple-300 border border-purple-700/40" },
+};
+
+const APP_STATUS_BADGE: Record<string, { label: string; className: string }> = {
+  pending:  { label: "قيد الانتظار", className: "bg-amber-900/40 text-amber-300 border border-amber-700/40" },
+  approved: { label: "مقبول",        className: "bg-green-900/40 text-green-300 border border-green-700/40" },
+  rejected: { label: "مرفوض",       className: "bg-red-900/40 text-red-300 border border-red-700/40" },
+};
+
+function PartnerApplicationsTab() {
+  const [apps, setApps]         = useState<PartnerApp[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [updating, setUpdating] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch(`${API}/admin/applications`, { credentials: "include" })
+      .then((r) => r.json())
+      .then(setApps)
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function setStatus(id: number, status: "approved" | "rejected" | "pending") {
+    setUpdating(id);
+    await fetch(`${API}/admin/applications/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ status }),
+    });
+    setApps((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+    setUpdating(null);
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="animate-spin text-amber-400 w-8 h-8" />
+    </div>
+  );
+
+  const pending  = apps.filter((a) => a.status === "pending");
+  const reviewed = apps.filter((a) => a.status !== "pending");
+
+  function AppCard({ app }: { app: PartnerApp }) {
+    const typeBadge   = BUSINESS_TYPE_BADGE[app.business_type] ?? BUSINESS_TYPE_BADGE.chalet;
+    const statusBadge = APP_STATUS_BADGE[app.status]           ?? APP_STATUS_BADGE.pending;
+    return (
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-semibold text-slate-100 text-sm">{app.full_name}</p>
+            <p className="text-slate-400 text-xs mt-0.5">{app.business_name}</p>
+          </div>
+          <div className="flex flex-col items-end gap-1.5">
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${typeBadge.className}`}>
+              {typeBadge.label}
+            </span>
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusBadge.className}`}>
+              {statusBadge.label}
+            </span>
+          </div>
+        </div>
+        <div className="text-xs text-slate-400 space-y-0.5">
+          <p dir="ltr" className="text-left">{app.email}</p>
+          <p dir="ltr" className="text-left">{app.phone}</p>
+          <p>{new Date(app.created_at).toLocaleDateString("ar-SA-u-ca-gregory")}</p>
+        </div>
+        {app.status === "pending" && (
+          <div className="flex gap-2 pt-1">
+            <button
+              disabled={updating === app.id}
+              onClick={() => setStatus(app.id, "approved")}
+              className="flex-1 h-8 rounded-lg bg-green-700/60 hover:bg-green-700 text-green-200 text-xs font-semibold transition-colors disabled:opacity-50"
+            >
+              {updating === app.id ? "…" : "قبول"}
+            </button>
+            <button
+              disabled={updating === app.id}
+              onClick={() => setStatus(app.id, "rejected")}
+              className="flex-1 h-8 rounded-lg bg-red-800/50 hover:bg-red-700/70 text-red-300 text-xs font-semibold transition-colors disabled:opacity-50"
+            >
+              رفض
+            </button>
+          </div>
+        )}
+        {app.status !== "pending" && (
+          <button
+            onClick={() => setStatus(app.id, "pending")}
+            className="w-full h-7 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-400 text-xs transition-colors"
+          >
+            إعادة للانتظار
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6" dir="rtl">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-slate-100">طلبات الانضمام كشريك</h2>
+        <span className="text-xs text-slate-500">{apps.length} طلب إجمالاً</span>
+      </div>
+
+      {apps.length === 0 && (
+        <div className="text-center py-16 text-slate-500 text-sm">لا توجد طلبات بعد</div>
+      )}
+
+      {pending.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            قيد الانتظار ({pending.length})
+          </h3>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {pending.map((a) => <AppCard key={a.id} app={a} />)}
+          </div>
+        </div>
+      )}
+
+      {reviewed.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-slate-400 mb-3">تمت المراجعة ({reviewed.length})</h3>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {reviewed.map((a) => <AppCard key={a.id} app={a} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const ALL_TABS = [
-  { id: "submissions",         label: "الطلبات",               icon: Settings },
-  { id: "chaletVerify",        label: "التوثيق",                icon: ShieldCheck },
-  { id: "services",            label: "خدمات المناسبات",       icon: Wrench },
-  { id: "providerSubmissions", label: "طلبات مزودي الخدمات",  icon: Star },
-  { id: "serviceCategories",   label: "فئات الخدمات",          icon: Tag },
+  { id: "submissions",          label: "الطلبات",               icon: Settings },
+  { id: "chaletVerify",         label: "التوثيق",                icon: ShieldCheck },
+  { id: "partnerApplications",  label: "طلبات الشركاء",         icon: Users },
+  { id: "services",             label: "خدمات المناسبات",       icon: Wrench },
+  { id: "providerSubmissions",  label: "طلبات مزودي الخدمات",  icon: Star },
+  { id: "serviceCategories",    label: "فئات الخدمات",          icon: Tag },
   { id: "expenseCategories",   label: "فئات المصروفات",        icon: Tag },
   { id: "locations",           label: "المدن والأحياء",        icon: Building2 },
   { id: "amenities",           label: "المرافق",                icon: Tag },
@@ -4528,10 +4677,11 @@ export default function Admin() {
 
       {/* Content */}
       <main className="p-6 max-w-7xl mx-auto">
-        {activeTab === "submissions"         && <SubmissionsTab />}
-        {activeTab === "chaletVerify"        && <ChaletsVerifyTab />}
-        {activeTab === "services"            && <ServicesTab />}
-        {activeTab === "providerSubmissions" && <ProviderSubmissionsTab />}
+        {activeTab === "submissions"          && <SubmissionsTab />}
+        {activeTab === "chaletVerify"         && <ChaletsVerifyTab />}
+        {activeTab === "partnerApplications"  && <PartnerApplicationsTab />}
+        {activeTab === "services"             && <ServicesTab />}
+        {activeTab === "providerSubmissions"  && <ProviderSubmissionsTab />}
         {activeTab === "serviceCategories"   && <ServiceCategoriesTab />}
         {activeTab === "expenseCategories"   && <ExpenseCategoriesTab />}
         {activeTab === "locations"           && <LocationsTab />}

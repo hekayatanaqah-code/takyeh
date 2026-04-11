@@ -77,7 +77,7 @@ export default function Login() {
       <div className="w-full max-w-sm mb-4 flex items-start gap-2.5 bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
         <Info className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
         <p className="text-sm text-green-800 leading-relaxed">
-          عزيزي العميل، هذا القسم مخصص لملاك الشاليهات فقط
+          عزيزي العميل، هذا القسم مخصص لشركاء تكيّة فقط
         </p>
       </div>
 
@@ -174,9 +174,9 @@ export default function Login() {
 
       <div className="flex flex-col items-center gap-2 mt-5">
         <p className="text-sm text-gray-500">
-          مالك جديد؟{" "}
+          شريك جديد؟{" "}
           <a href={`${BASE}/register`} className="text-green-600 hover:text-green-700 font-medium">
-            سجّل شاليهك الآن
+            انضم إلينا الآن
           </a>
         </p>
         <a href={`${BASE}/`} className="text-xs text-gray-400 hover:text-green-600 transition-colors">

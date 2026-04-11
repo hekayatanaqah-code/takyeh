@@ -17,7 +17,7 @@ import {
   adminStaffTable,
   adminSessionsTable,
 } from "@workspace/db/schema";
-import { eq, inArray, and, gt } from "drizzle-orm";
+import { eq, inArray, and, gt, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
@@ -729,6 +729,31 @@ router.put("/plans/:id", async (req, res) => {
 router.delete("/plans/:id", async (req, res) => {
   const id = Number(req.params.id);
   await db.delete(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id));
+  return res.json({ ok: true });
+});
+
+/* ══════════════════════════════════════════════════════
+   Partner Applications (owner / service provider signups)
+   ══════════════════════════════════════════════════════ */
+router.get("/applications", async (_req, res) => {
+  const rows = await db.execute<{
+    id: number; full_name: string; business_name: string; business_type: string;
+    phone: string; email: string; status: string; created_at: string;
+  }>(
+    sql`SELECT id, full_name, business_name, business_type, phone, email, status, created_at
+        FROM owner_applications ORDER BY created_at DESC`
+  );
+  return res.json(rows);
+});
+
+router.patch("/applications/:id", async (req, res) => {
+  const { status } = req.body ?? {};
+  if (!["approved", "rejected", "pending"].includes(String(status))) {
+    return res.status(400).json({ error: "الحالة غير صحيحة" });
+  }
+  await db.execute(
+    sql`UPDATE owner_applications SET status = ${String(status)} WHERE id = ${Number(req.params.id)}`
+  );
   return res.json({ ok: true });
 });
 

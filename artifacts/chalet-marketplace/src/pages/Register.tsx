@@ -10,7 +10,8 @@ export default function Register() {
   const [, navigate] = useLocation();
   const [form, setForm] = useState({
     fullName: "",
-    chaletName: "",
+    businessName: "",
+    businessType: "chalet" as "chalet" | "service" | "both",
     phone: "",
     email: "",
     password: "",
@@ -29,8 +30,8 @@ export default function Register() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const { fullName, chaletName, phone, email, password, confirmPassword } = form;
-    if (!fullName || !chaletName || !phone || !email || !password) {
+    const { fullName, businessName, businessType, phone, email, password, confirmPassword } = form;
+    if (!fullName || !businessName || !phone || !email || !password) {
       setError("يرجى تعبئة جميع الحقول المطلوبة");
       return;
     }
@@ -53,7 +54,7 @@ export default function Register() {
       const r = await fetch(`${BASE}/api/register-owner`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName, chaletName, phone, email, password }),
+        body: JSON.stringify({ fullName, businessName, businessType, phone, email, password }),
       });
       const data = await r.json();
       if (!r.ok) {
@@ -106,7 +107,7 @@ export default function Register() {
           <Building2 className="w-7 h-7 text-white" />
         </div>
         <h1 className="text-2xl font-bold text-gray-900">تكيّة</h1>
-        <p className="text-gray-500 text-sm mt-0.5">تسجيل مالك شاليه جديد</p>
+        <p className="text-gray-500 text-sm mt-0.5">انضم إلى تكيّة كشريك</p>
       </div>
 
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-gray-100 p-7">
@@ -132,16 +133,33 @@ export default function Register() {
             />
           </div>
 
-          {/* Chalet Name */}
+          {/* Business Type */}
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-gray-700">
-              اسم الشاليه <span className="text-red-500">*</span>
+              نوع النشاط <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={form.businessType}
+              onChange={(e) => update("businessType", e.target.value as typeof form.businessType)}
+              className="w-full h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+              required
+            >
+              <option value="chalet">🏡  مالك شاليه</option>
+              <option value="service">🔧  مزود خدمة</option>
+              <option value="both">🏡🔧  كلاهما</option>
+            </select>
+          </div>
+
+          {/* Business Name */}
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-gray-700">
+              اسم النشاط التجاري <span className="text-red-500">*</span>
             </label>
             <Input
               type="text"
-              placeholder="شاليه النخيل"
-              value={form.chaletName}
-              onChange={(e) => update("chaletName", e.target.value)}
+              placeholder={form.businessType === "service" ? "شركة الخدمات المتميزة" : "شاليه النخيل"}
+              value={form.businessName}
+              onChange={(e) => update("businessName", e.target.value)}
               className="h-11 border-gray-200 focus:border-green-500"
               required
             />
