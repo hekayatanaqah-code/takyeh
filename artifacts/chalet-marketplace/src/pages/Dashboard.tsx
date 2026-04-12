@@ -7982,6 +7982,7 @@ function CustomersTab() {
   const [selected, setSelected]       = useState<string | null>(null);
   const [profile, setProfile]         = useState<CustomerProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError]     = useState(false);
   const [note, setNote]               = useState("");
   const [savingNote, setSavingNote]   = useState(false);
 
@@ -8004,12 +8005,19 @@ function CustomersTab() {
   async function loadProfile(phone: string) {
     setSelected(phone);
     setProfile(null);
+    setProfileError(false);
     setProfileLoading(true);
-    const r = await apiFetch(`/owner/customers/${encodeURIComponent(phone)}`);
-    if (r.ok) {
-      const data: CustomerProfile = await r.json();
-      setProfile(data);
-      setNote(data.note ?? "");
+    try {
+      const r = await apiFetch(`/owner/customers/${encodeURIComponent(phone)}`);
+      if (r.ok) {
+        const data: CustomerProfile = await r.json();
+        setProfile(data);
+        setNote(data.note ?? "");
+      } else {
+        setProfileError(true);
+      }
+    } catch {
+      setProfileError(true);
     }
     setProfileLoading(false);
   }
@@ -8101,9 +8109,22 @@ function CustomersTab() {
             العودة للقائمة
           </button>
 
-          {profileLoading || !profile ? (
+          {profileLoading ? (
             <div className="flex justify-center py-16"><Loader2 className="animate-spin text-primary w-6 h-6" /></div>
-          ) : (
+          ) : profileError ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+              <svg className="w-8 h-8 text-destructive/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              <p className="text-sm font-medium">تعذّر تحميل بيانات العميل</p>
+              <button
+                onClick={() => selected && loadProfile(selected)}
+                className="text-xs text-primary hover:underline"
+              >
+                إعادة المحاولة
+              </button>
+            </div>
+          ) : !profile ? null : (
             <>
               {/* Basic info */}
               <div className="bg-card border border-border rounded-2xl p-5">
@@ -8129,7 +8150,7 @@ function CustomersTab() {
                   )}
                   {statCard(
                     "آخر حجز",
-                    profile.lastBookingDate || "—"
+                    profile.lastBookingDate ? formatDualDate(profile.lastBookingDate).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"
                   )}
                 </div>
               </div>
@@ -8157,7 +8178,16 @@ function CustomersTab() {
                       <tbody className="divide-y divide-border">
                         {profile.bookings.map((b) => (
                           <tr key={b.id} className="hover:bg-muted/30 transition-colors">
-                            <td className="py-2.5 text-foreground">{b.booking_date}</td>
+                            <td className="py-2.5">
+                              <span className="text-foreground font-medium block">
+                                {b.booking_date ? formatDualDate(b.booking_date).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"}
+                              </span>
+                              {b.booking_date && (
+                                <span className="text-xs text-muted-foreground">
+                                  {formatDualDate(b.booking_date).gregorian}
+                                </span>
+                              )}
+                            </td>
                             <td className="py-2.5 text-muted-foreground truncate max-w-[120px]">
                               {b.chalet_name ?? "—"}
                             </td>

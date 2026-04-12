@@ -2127,52 +2127,66 @@ router.get("/customers/:phone", async (req, res) => {
   const ownerId  = req.user!.id;
   const phone    = req.params.phone;
 
-  const [agg] = await db.execute<{
-    client_name: string; total_bookings: string; total_revenue: string; last_booking_date: string;
-  }>(
-    sql`
-      SELECT
-        client_name,
-        COUNT(*)::text                       AS total_bookings,
-        COALESCE(SUM(total_price), 0)::text  AS total_revenue,
-        MAX(booking_date)                    AS last_booking_date
-      FROM owner_bookings
-      WHERE owner_id = ${ownerId} AND client_phone = ${phone}
-      GROUP BY client_name
-      LIMIT 1
-    `
-  );
+  /* ── Fetch all bookings for this customer (with chalet name via join) ── */
+  const bookingRows = await db
+    .select({
+      id:           ownerBookingsTable.id,
+      clientName:   ownerBookingsTable.clientName,
+      bookingDate:  ownerBookingsTable.bookingDate,
+      durationDays: ownerBookingsTable.durationDays,
+      period:       ownerBookingsTable.period,
+      totalPrice:   ownerBookingsTable.totalPrice,
+      submissionId: ownerBookingsTable.submissionId,
+      cancelledAt:  ownerBookingsTable.cancelledAt,
+      chaletName:   chaletSubmissionsTable.nameAr,
+    })
+    .from(ownerBookingsTable)
+    .leftJoin(chaletSubmissionsTable, eq(ownerBookingsTable.submissionId, chaletSubmissionsTable.id))
+    .where(
+      and(
+        eq(ownerBookingsTable.ownerId, ownerId),
+        eq(ownerBookingsTable.clientPhone, phone),
+      )
+    )
+    .orderBy(desc(ownerBookingsTable.bookingDate));
 
-  if (!agg) return res.status(404).json({ error: "العميل غير موجود" });
+  if (bookingRows.length === 0) return res.status(404).json({ error: "العميل غير موجود" });
 
-  const bookings = await db.execute<{
-    id: number; booking_date: string; duration_days: number;
-    period: string; total_price: string; submission_id: number; cancelled_at: string | null;
-    chalet_name: string | null;
-  }>(
-    sql`
-      SELECT
-        ob.id, ob.booking_date, ob.duration_days, ob.period,
-        ob.total_price::text, ob.submission_id, ob.cancelled_at,
-        cs.name_ar AS chalet_name
-      FROM owner_bookings ob
-      LEFT JOIN chalet_submissions cs ON cs.id = ob.submission_id
-      WHERE ob.owner_id = ${ownerId} AND ob.client_phone = ${phone}
-      ORDER BY ob.booking_date DESC
-    `
-  );
+  /* ── Compute aggregate stats in JS ── */
+  const clientName      = bookingRows[0].clientName;
+  const lastBookingDate = bookingRows[0].bookingDate;
+  const totalBookings   = bookingRows.length;
+  const totalRevenue    = bookingRows.reduce((sum, r) => sum + Number(r.totalPrice ?? 0), 0);
 
-  const [noteRow] = await db.execute<{ notes: string }>(
-    sql`SELECT notes FROM customer_notes WHERE owner_id = ${ownerId} AND client_phone = ${phone}`
-  );
+  /* ── Fetch private note ── */
+  const noteRows = await db
+    .select({ notes: customerNotesTable.notes })
+    .from(customerNotesTable)
+    .where(
+      and(
+        eq(customerNotesTable.ownerId, ownerId),
+        eq(customerNotesTable.clientPhone, phone),
+      )
+    )
+    .limit(1);
+  const noteRow = noteRows[0];
 
   return res.json({
-    clientName: agg.client_name,
-    clientPhone: phone,
-    totalBookings: Number(agg.total_bookings),
-    totalRevenue: Number(agg.total_revenue),
-    lastBookingDate: agg.last_booking_date,
-    bookings,
+    clientName:      clientName,
+    clientPhone:     phone,
+    totalBookings:   totalBookings,
+    totalRevenue:    totalRevenue,
+    lastBookingDate: lastBookingDate,
+    bookings: bookingRows.map((b) => ({
+      id:           b.id,
+      booking_date: b.bookingDate,
+      duration_days: b.durationDays,
+      period:       b.period,
+      total_price:  String(b.totalPrice ?? "0"),
+      submission_id: b.submissionId,
+      cancelled_at: b.cancelledAt,
+      chalet_name:  b.chaletName ?? null,
+    })),
     note: noteRow?.notes ?? "",
   });
 });
