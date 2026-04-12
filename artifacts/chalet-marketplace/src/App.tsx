@@ -84,8 +84,6 @@ function Router() {
       <Route path="/forgot-password/admin">{() => <ForgotPassword portalType="admin" />}</Route>
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/admin-login" component={AdminPortal} />
-      <Route path="/management/portal" component={AdminPortal} />
-      <Route path="/admin/internal/access" component={AdminPortal} />
       <Route path="/r/:token" component={RatePage} />
       <Route path="/about" component={About} />
       <Route path="/faq" component={FAQ} />

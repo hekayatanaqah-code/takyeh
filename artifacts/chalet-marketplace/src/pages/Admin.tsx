@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useLocation } from "wouter";
 import { formatDualDate } from "@/lib/hijri";
 import { toAr } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -4676,6 +4677,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
 }
 
 export default function Admin() {
+  const [, setLocation]         = useLocation();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { adminStaffUser, isAdminStaff, permissions: adminPerms, isLoading: staffLoading, logout: adminStaffLogout } = useAdminStaffAuth();
   const [activeTab, setActiveTab] = useState<TabId>("submissions");
@@ -4711,28 +4713,17 @@ export default function Admin() {
 
   const isLoading = authLoading || staffLoading || checkLoading;
 
-  if (isLoading) {
+  /* ── Redirect to /admin-login if not authenticated as admin staff ── */
+  useEffect(() => {
+    if (!authLoading && !staffLoading && !isAuthenticated && !isAdminStaff) {
+      setLocation("/admin-login");
+    }
+  }, [authLoading, staffLoading, isAuthenticated, isAdminStaff, setLocation]);
+
+  if (isLoading || (!isAuthenticated && !isAdminStaff)) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <Loader2 className="animate-spin text-amber-400 w-10 h-10" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated && !isAdminStaff) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4" dir="rtl">
-        <ShieldCheck className="w-12 h-12 text-amber-400" />
-        <h1 className="text-2xl font-bold">بوابة الإدارة</h1>
-        <p className="text-slate-400 text-sm">يجب تسجيل الدخول للوصول إلى لوحة التحكم</p>
-        <div className="flex gap-3 mt-2">
-          <a href={`${BASE}/api/auth/login`} className="px-5 py-2 bg-amber-600 rounded-lg font-semibold hover:bg-amber-700 text-white text-sm">
-            دخول المشرف العام (OIDC)
-          </a>
-          <a href={`${BASE}/admin-login`} className="px-5 py-2 bg-slate-700 rounded-lg font-semibold hover:bg-slate-600 text-white text-sm">
-            دخول موظف الإدارة
-          </a>
-        </div>
       </div>
     );
   }
