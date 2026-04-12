@@ -18,6 +18,7 @@ import {
   ownerRescheduleLogsTable,
   chaletSeasonsTable,
   customerNotesTable,
+  chaletServicesTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
@@ -2254,6 +2255,80 @@ router.delete("/customers/:phone", async (req, res) => {
     and(eq(customerNotesTable.ownerId, ownerId), eq(customerNotesTable.clientPhone, phone))
   );
 
+  return res.json({ ok: true });
+});
+
+/* ── Chalet Add-on Services ──────────────────────────────── */
+
+async function verifyOwnerChalet(ownerId: string, chaletId: number) {
+  const subs = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.ownerId, ownerId));
+  const subIds = subs.map((s) => s.id);
+  if (subIds.length === 0) return false;
+  const rows = await db.select({ id: chaletsTable.id }).from(chaletsTable).where(and(eq(chaletsTable.id, chaletId), inArray(chaletsTable.submissionId, subIds)));
+  return rows.length > 0;
+}
+
+/* GET /owner/chalets/:chaletId/services */
+router.get("/chalets/:chaletId/services", async (req, res) => {
+  const ownerId = req.user!.id;
+  const chaletId = Number(req.params.chaletId);
+  if (!(await verifyOwnerChalet(ownerId, chaletId))) return res.status(403).json({ error: "forbidden" });
+  const services = await db.select().from(chaletServicesTable).where(eq(chaletServicesTable.chaletId, chaletId)).orderBy(chaletServicesTable.createdAt);
+  return res.json(services);
+});
+
+/* POST /owner/chalets/:chaletId/services */
+router.post("/chalets/:chaletId/services", async (req, res) => {
+  const ownerId = req.user!.id;
+  const chaletId = Number(req.params.chaletId);
+  if (!(await verifyOwnerChalet(ownerId, chaletId))) return res.status(403).json({ error: "forbidden" });
+  const body = z.object({
+    name: z.string().min(1).max(200),
+    description: z.string().max(500).optional(),
+    price: z.number().positive(),
+    unit: z.string().max(100).optional(),
+  }).parse(req.body);
+  const [service] = await db.insert(chaletServicesTable).values({
+    chaletId,
+    name: body.name,
+    description: body.description ?? null,
+    price: String(body.price),
+    unit: body.unit ?? "مرة واحدة",
+  }).returning();
+  return res.status(201).json(service);
+});
+
+/* PATCH /owner/chalets/:chaletId/services/:serviceId */
+router.patch("/chalets/:chaletId/services/:serviceId", async (req, res) => {
+  const ownerId = req.user!.id;
+  const chaletId = Number(req.params.chaletId);
+  const serviceId = Number(req.params.serviceId);
+  if (!(await verifyOwnerChalet(ownerId, chaletId))) return res.status(403).json({ error: "forbidden" });
+  const body = z.object({
+    name: z.string().min(1).max(200).optional(),
+    description: z.string().max(500).nullable().optional(),
+    price: z.number().positive().optional(),
+    unit: z.string().max(100).optional(),
+    isActive: z.boolean().optional(),
+  }).parse(req.body);
+  const patch: Record<string, unknown> = {};
+  if (body.name !== undefined) patch.name = body.name;
+  if (body.description !== undefined) patch.description = body.description;
+  if (body.price !== undefined) patch.price = String(body.price);
+  if (body.unit !== undefined) patch.unit = body.unit;
+  if (body.isActive !== undefined) patch.isActive = body.isActive;
+  const [updated] = await db.update(chaletServicesTable).set(patch).where(and(eq(chaletServicesTable.id, serviceId), eq(chaletServicesTable.chaletId, chaletId))).returning();
+  if (!updated) return res.status(404).json({ error: "not found" });
+  return res.json(updated);
+});
+
+/* DELETE /owner/chalets/:chaletId/services/:serviceId */
+router.delete("/chalets/:chaletId/services/:serviceId", async (req, res) => {
+  const ownerId = req.user!.id;
+  const chaletId = Number(req.params.chaletId);
+  const serviceId = Number(req.params.serviceId);
+  if (!(await verifyOwnerChalet(ownerId, chaletId))) return res.status(403).json({ error: "forbidden" });
+  await db.delete(chaletServicesTable).where(and(eq(chaletServicesTable.id, serviceId), eq(chaletServicesTable.chaletId, chaletId)));
   return res.json({ ok: true });
 });
 

@@ -3374,6 +3374,266 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   );
 }
 
+/* ── Chalet Services Tab ──────────────────────── */
+interface ChaletServiceRow {
+  id: number;
+  chaletId: number;
+  name: string;
+  description: string | null;
+  price: string;
+  unit: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+const SERVICE_UNIT_OPTIONS = [
+  { value: "مرة واحدة",  label: "مرة واحدة (ثابت)" },
+  { value: "لكل شخص",   label: "لكل شخص" },
+  { value: "في الليلة",  label: "في الليلة" },
+  { value: "يومياً",     label: "يومياً" },
+  { value: "لكل جلسة",  label: "لكل جلسة" },
+];
+
+function ChaletServicesTab() {
+  const qc = useQueryClient();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [showForm, setShowForm] = useState(false);
+
+  const [fName,  setFName]  = useState("");
+  const [fDesc,  setFDesc]  = useState("");
+  const [fPrice, setFPrice] = useState("");
+  const [fUnit,  setFUnit]  = useState("مرة واحدة");
+
+  const { data: chalets = [], isLoading: chaletsLoading } = useQuery<OwnerChalet[]>({
+    queryKey: ["owner", "chalets"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/chalets");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  useEffect(() => {
+    if (chalets.length > 0 && selectedId === null) setSelectedId(chalets[0].id);
+  }, [chalets, selectedId]);
+
+  const { data: services = [], isLoading: servicesLoading } = useQuery<ChaletServiceRow[]>({
+    queryKey: ["owner", "chalet-services", selectedId],
+    queryFn: async () => {
+      if (!selectedId) return [];
+      const r = await apiFetch(`/owner/chalets/${selectedId}/services`);
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: selectedId !== null,
+  });
+
+  const addService = useMutation({
+    mutationFn: async () => {
+      if (!selectedId) throw new Error("no chalet");
+      const r = await apiFetch(`/owner/chalets/${selectedId}/services`, {
+        method: "POST",
+        body: JSON.stringify({ name: fName.trim(), description: fDesc.trim() || undefined, price: Number(fPrice), unit: fUnit }),
+      });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "error"); }
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "chalet-services", selectedId] });
+      setShowForm(false); setFName(""); setFDesc(""); setFPrice(""); setFUnit("مرة واحدة");
+    },
+  });
+
+  const deleteService = useMutation({
+    mutationFn: async (serviceId: number) => {
+      if (!selectedId) throw new Error("no chalet");
+      await apiFetch(`/owner/chalets/${selectedId}/services/${serviceId}`, { method: "DELETE" });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "chalet-services", selectedId] }),
+  });
+
+  const toggleActive = useMutation({
+    mutationFn: async ({ serviceId, isActive }: { serviceId: number; isActive: boolean }) => {
+      if (!selectedId) throw new Error("no chalet");
+      await apiFetch(`/owner/chalets/${selectedId}/services/${serviceId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive }),
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "chalet-services", selectedId] }),
+  });
+
+  const selectedChalet = chalets.find((c) => c.id === selectedId) ?? null;
+
+  if (chaletsLoading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>;
+
+  if (chalets.length === 0) return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card border border-dashed border-border rounded-2xl p-12 text-center">
+      <Building2 className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
+      <p className="text-muted-foreground">لا توجد شاليهات مرتبطة بحسابك بعد</p>
+    </motion.div>
+  );
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+      {/* Header */}
+      <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center">
+            <MessageSquare className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-bold text-lg text-foreground">الخدمات الإضافية</h2>
+            <p className="text-muted-foreground text-sm">أضف خدمات ومرافق إضافية مدفوعة لكل شاليه</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Chalet selector */}
+      {chalets.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {chalets.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setSelectedId(c.id)}
+              className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                selectedId === c.id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {c.nameAr}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Services list */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div>
+            <p className="font-semibold text-foreground">{selectedChalet?.nameAr ?? "—"}</p>
+            <p className="text-xs text-muted-foreground">{services.length} خدمة مضافة</p>
+          </div>
+          <button
+            onClick={() => { setShowForm((v) => !v); setEditingId(null); }}
+            className="flex items-center gap-1.5 text-sm font-medium text-primary border border-primary/30 rounded-xl px-3 py-1.5 hover:bg-primary/10 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            إضافة خدمة
+          </button>
+        </div>
+
+        {/* Add form */}
+        {showForm && (
+          <div className="px-5 py-4 border-b border-border bg-muted/20 space-y-3">
+            <p className="text-sm font-semibold text-foreground">خدمة جديدة</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">اسم الخدمة *</label>
+                <input
+                  type="text"
+                  placeholder="مثال: ضيافة، تنظيف، أثاث إضافي"
+                  value={fName}
+                  onChange={(e) => setFName(e.target.value)}
+                  className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">السعر (ر.س) *</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  min="0"
+                  value={fPrice}
+                  onChange={(e) => setFPrice(e.target.value)}
+                  className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  dir="ltr"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">وحدة الاحتساب</label>
+                <select
+                  value={fUnit}
+                  onChange={(e) => setFUnit(e.target.value)}
+                  className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {SERVICE_UNIT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">وصف (اختياري)</label>
+                <input
+                  type="text"
+                  placeholder="تفاصيل إضافية..."
+                  value={fDesc}
+                  onChange={(e) => setFDesc(e.target.value)}
+                  className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowForm(false)} className="text-sm text-muted-foreground px-3 py-1.5 rounded-lg hover:bg-muted transition-colors">إلغاء</button>
+              <button
+                onClick={() => addService.mutate()}
+                disabled={!fName.trim() || !fPrice || Number(fPrice) <= 0 || addService.isPending}
+                className="flex items-center gap-1.5 text-sm font-medium bg-primary text-primary-foreground px-4 py-1.5 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {addService.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                حفظ الخدمة
+              </button>
+            </div>
+            {addService.isError && <p className="text-xs text-destructive">{(addService.error as Error).message}</p>}
+          </div>
+        )}
+
+        {/* Services */}
+        {servicesLoading ? (
+          <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+        ) : services.length === 0 ? (
+          <div className="flex flex-col items-center py-12 gap-3 text-muted-foreground">
+            <MessageSquare className="w-10 h-10 opacity-20" />
+            <p className="text-sm">لم تُضف أي خدمات لهذا الشاليه بعد</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {services.map((svc) => (
+              <div key={svc.id} className={`flex items-center gap-4 px-5 py-4 transition-colors ${svc.isActive ? "" : "opacity-50 bg-muted/10"}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-foreground text-sm">{svc.name}</p>
+                    {!svc.isActive && <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">معطّل</span>}
+                  </div>
+                  {svc.description && <p className="text-xs text-muted-foreground mt-0.5">{svc.description}</p>}
+                  <p className="text-sm font-bold text-primary mt-1">
+                    {Number(svc.price).toLocaleString("ar-SA")} ر.س
+                    <span className="text-xs text-muted-foreground font-normal"> / {svc.unit}</span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => toggleActive.mutate({ serviceId: svc.id, isActive: !svc.isActive })}
+                    disabled={toggleActive.isPending}
+                    title={svc.isActive ? "تعطيل" : "تفعيل"}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${svc.isActive ? "text-green-600 bg-green-50 dark:bg-green-900/20 hover:bg-green-100" : "text-muted-foreground bg-muted hover:bg-muted/70"}`}
+                  >
+                    {svc.isActive ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={() => deleteService.mutate(svc.id)}
+                    disabled={deleteService.isPending}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-destructive bg-red-50 dark:bg-red-900/20 hover:bg-red-100 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 /* ── Service Submissions Tab ─────────────────── */
 interface ServiceSubmission {
   id: number;
@@ -8537,7 +8797,7 @@ export default function Dashboard() {
     { id: "reviews",       label: "التقييمات",           icon: <Star className="w-4 h-4" /> },
     { id: "notifications", label: "الإشعارات",           icon: <Bell className="w-4 h-4" /> },
     { id: "customers",     label: "عملائي",              icon: <Users className="w-4 h-4" /> },
-    { id: "services",  label: "خدماتي",             icon: <MessageSquare className="w-4 h-4" /> },
+    { id: "services",  label: "الخدمات الإضافية",    icon: <MessageSquare className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات",  icon: <Calendar className="w-4 h-4" /> },
     { id: "revenue",   label: "الإيرادات",           icon: <TrendingUp className="w-4 h-4" /> },
     { id: "expenses",  label: "المصروفات",           icon: <Wallet className="w-4 h-4" /> },
@@ -8846,7 +9106,7 @@ export default function Dashboard() {
           <CustomersTab />
         )}
         {activeTab === "services" && (
-          <ServiceSubmissionsTab />
+          <ChaletServicesTab />
         )}
         {activeTab === "calendar" && (
           <BookingCalendarTab submissions={submissions as any[] ?? []} />

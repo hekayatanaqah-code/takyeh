@@ -522,3 +522,17 @@ export const adminSessionsTable = pgTable("admin_sessions", {
   expire: timestamp("expire", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/* ── Chalet Add-on Services ───────────────────────────────── */
+export const chaletServicesTable = pgTable("chalet_services", {
+  id: serial("id").primaryKey(),
+  chaletId: integer("chalet_id").notNull().references(() => chaletsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  price: numeric("price", { precision: 10, scale: 2 }).notNull(),
+  unit: text("unit").notNull().default("مرة واحدة"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ChaletService = typeof chaletServicesTable.$inferSelect;
+export type NewChaletService = typeof chaletServicesTable.$inferInsert;
