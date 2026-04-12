@@ -8086,11 +8086,19 @@ function CustomersTab() {
                   </span>
                 </div>
                 <p dir="ltr" className="text-xs text-muted-foreground mt-0.5 text-right">{c.client_phone}</p>
-                {c.last_booking_date && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    آخر حجز: {c.last_booking_date}
-                  </p>
-                )}
+                {c.last_booking_date && (() => {
+                  const { hijri, gregorian } = formatDualDate(c.last_booking_date);
+                  return (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      آخر حجز:{" "}
+                      <span className="text-foreground/80">
+                        {hijri.replace(/\s*هـ\s*$/, "")} هـ
+                      </span>
+                      <span className="mx-1 opacity-40">/</span>
+                      <span>{gregorian}</span>
+                    </p>
+                  );
+                })()}
               </button>
             ))}
           </div>
