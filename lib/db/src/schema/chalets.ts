@@ -538,9 +538,12 @@ export const chaletServicesTable = pgTable("chalet_services", {
   id: serial("id").primaryKey(),
   chaletId: integer("chalet_id").notNull().references(() => chaletsTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  category: text("category"),
   description: text("description"),
   price: numeric("price", { precision: 10, scale: 2 }).notNull(),
   unit: text("unit").notNull().default("مرة واحدة"),
+  imageUrl: text("image_url"),
+  galleryPhotos: jsonb("gallery_photos").$type<Array<{ url: string; caption: string }>>(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

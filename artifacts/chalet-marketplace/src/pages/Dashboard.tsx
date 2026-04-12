@@ -30,7 +30,7 @@ import {
   TrendingUp, Sunrise, Moon, Sun, Lock, Zap, DollarSign, Users,
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
-  Search, Activity, Banknote, Eye, Bell,
+  Search, Activity, Banknote, Eye, Bell, Image as ImageIcon, Pencil,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -3379,12 +3379,27 @@ interface ChaletServiceRow {
   id: number;
   chaletId: number;
   name: string;
+  category: string | null;
   description: string | null;
   price: string;
   unit: string;
+  imageUrl: string | null;
+  galleryPhotos: Array<{ url: string; caption: string }> | null;
   isActive: boolean;
   createdAt: string;
 }
+
+const SERVICE_CATEGORY_OPTIONS = [
+  { value: "ضيافة",         label: "☕ ضيافة" },
+  { value: "تنظيف",         label: "🧹 تنظيف" },
+  { value: "أثاث إضافي",   label: "🪑 أثاث إضافي" },
+  { value: "تزيين",         label: "🎊 تزيين" },
+  { value: "نقل",           label: "🚐 نقل" },
+  { value: "أمن وحراسة",   label: "🛡️ أمن وحراسة" },
+  { value: "تصوير",         label: "📸 تصوير" },
+  { value: "طعام",          label: "🍽️ طعام" },
+  { value: "أخرى",          label: "✨ أخرى" },
+];
 
 const SERVICE_UNIT_OPTIONS = [
   { value: "مرة واحدة",  label: "مرة واحدة (ثابت)" },
@@ -3394,15 +3409,21 @@ const SERVICE_UNIT_OPTIONS = [
   { value: "لكل جلسة",  label: "لكل جلسة" },
 ];
 
+const BLANK_SVC_FORM = {
+  name: "", category: "", categoryCustom: "", description: "",
+  price: "", unit: "مرة واحدة", imageUrl: "",
+  gallery: [] as Array<{ url: string; caption: string; uploading?: boolean }>,
+};
+
 function ChaletServicesTab() {
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
-
-  const [fName,  setFName]  = useState("");
-  const [fDesc,  setFDesc]  = useState("");
-  const [fPrice, setFPrice] = useState("");
-  const [fUnit,  setFUnit]  = useState("مرة واحدة");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({ ...BLANK_SVC_FORM });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [mainImgUploading, setMainImgUploading] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const { data: chalets = [], isLoading: chaletsLoading } = useQuery<OwnerChalet[]>({
     queryKey: ["owner", "chalets"],
@@ -3428,19 +3449,74 @@ function ChaletServicesTab() {
     enabled: selectedId !== null,
   });
 
-  const addService = useMutation({
+  function resetForm() {
+    setForm({ ...BLANK_SVC_FORM });
+    setFieldErrors({});
+    setEditingId(null);
+    setShowForm(false);
+    setMainImgUploading(false);
+  }
+
+  function openEdit(svc: ChaletServiceRow) {
+    const isCustom = svc.category ? !SERVICE_CATEGORY_OPTIONS.some((o) => o.value === svc.category && o.value !== "أخرى") && svc.category !== "أخرى" : false;
+    setForm({
+      name: svc.name,
+      category: isCustom ? "أخرى" : (svc.category ?? ""),
+      categoryCustom: isCustom ? (svc.category ?? "") : "",
+      description: svc.description ?? "",
+      price: svc.price,
+      unit: svc.unit,
+      imageUrl: svc.imageUrl ?? "",
+      gallery: svc.galleryPhotos ?? [],
+    });
+    setFieldErrors({});
+    setEditingId(svc.id);
+    setShowForm(true);
+  }
+
+  function buildPayload() {
+    const finalCategory = form.category === "أخرى"
+      ? form.categoryCustom.trim() || "أخرى"
+      : form.category || undefined;
+    return {
+      name: form.name.trim(),
+      category: finalCategory,
+      description: form.description.trim() || undefined,
+      price: Number(form.price),
+      unit: form.unit,
+      imageUrl: form.imageUrl || undefined,
+      galleryPhotos: form.gallery.filter((g) => g.url).map(({ url, caption }) => ({ url, caption })),
+    };
+  }
+
+  const saveService = useMutation({
     mutationFn: async () => {
       if (!selectedId) throw new Error("no chalet");
-      const r = await apiFetch(`/owner/chalets/${selectedId}/services`, {
-        method: "POST",
-        body: JSON.stringify({ name: fName.trim(), description: fDesc.trim() || undefined, price: Number(fPrice), unit: fUnit }),
+      setFieldErrors({});
+      // Client-side validation
+      const errs: Record<string, string> = {};
+      if (!form.name.trim()) errs.name = "اسم الخدمة مطلوب";
+      if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0) errs.price = "أدخل سعرًا صحيحًا أكبر من صفر";
+      if (form.category === "أخرى" && !form.categoryCustom.trim()) errs.categoryCustom = "يرجى كتابة اسم الفئة";
+      if (Object.keys(errs).length > 0) { setFieldErrors(errs); throw new Error("validation"); }
+
+      const url = editingId
+        ? `/owner/chalets/${selectedId}/services/${editingId}`
+        : `/owner/chalets/${selectedId}/services`;
+      const r = await apiFetch(url, {
+        method: editingId ? "PATCH" : "POST",
+        body: JSON.stringify(buildPayload()),
       });
-      if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "error"); }
+      if (!r.ok) {
+        const d = await r.json();
+        if (d.fieldErrors) setFieldErrors(d.fieldErrors);
+        throw new Error(d.error ?? "خطأ في الحفظ");
+      }
       return r.json();
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "chalet-services", selectedId] });
-      setShowForm(false); setFName(""); setFDesc(""); setFPrice(""); setFUnit("مرة واحدة");
+      resetForm();
     },
   });
 
@@ -3449,7 +3525,10 @@ function ChaletServicesTab() {
       if (!selectedId) throw new Error("no chalet");
       await apiFetch(`/owner/chalets/${selectedId}/services/${serviceId}`, { method: "DELETE" });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "chalet-services", selectedId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "chalet-services", selectedId] });
+      setConfirmDeleteId(null);
+    },
   });
 
   const toggleActive = useMutation({
@@ -3463,7 +3542,43 @@ function ChaletServicesTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "chalet-services", selectedId] }),
   });
 
+  async function handleMainImageUpload(file: File) {
+    setMainImgUploading(true);
+    try {
+      const url = await uploadFile(file);
+      if (url) setForm((f) => ({ ...f, imageUrl: url }));
+    } finally {
+      setMainImgUploading(false);
+    }
+  }
+
+  async function handleGalleryAdd(file: File) {
+    const idx = form.gallery.length;
+    setForm((f) => ({ ...f, gallery: [...f.gallery, { url: "", caption: "", uploading: true }] }));
+    const url = await uploadFile(file);
+    setForm((f) => {
+      const g = [...f.gallery];
+      if (url) g[idx] = { url, caption: g[idx]?.caption ?? "", uploading: false };
+      else g.splice(idx, 1);
+      return { ...f, gallery: g };
+    });
+  }
+
+  function removeGalleryItem(idx: number) {
+    setForm((f) => ({ ...f, gallery: f.gallery.filter((_, i) => i !== idx) }));
+  }
+
+  function updateGalleryCaption(idx: number, caption: string) {
+    setForm((f) => {
+      const g = [...f.gallery];
+      g[idx] = { ...g[idx], caption };
+      return { ...f, gallery: g };
+    });
+  }
+
   const selectedChalet = chalets.find((c) => c.id === selectedId) ?? null;
+  const inputCls = (field: string) =>
+    `w-full h-9 px-3 rounded-lg border ${fieldErrors[field] ? "border-destructive ring-1 ring-destructive" : "border-border"} bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary`;
 
   if (chaletsLoading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>;
 
@@ -3495,7 +3610,7 @@ function ChaletServicesTab() {
           {chalets.map((c) => (
             <button
               key={c.id}
-              onClick={() => setSelectedId(c.id)}
+              onClick={() => { setSelectedId(c.id); resetForm(); }}
               className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${
                 selectedId === c.id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground hover:text-foreground"
               }`}
@@ -3506,86 +3621,195 @@ function ChaletServicesTab() {
         </div>
       )}
 
-      {/* Services list */}
+      {/* Services list + form */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div>
             <p className="font-semibold text-foreground">{selectedChalet?.nameAr ?? "—"}</p>
             <p className="text-xs text-muted-foreground">{services.length} خدمة مضافة</p>
           </div>
-          <button
-            onClick={() => { setShowForm((v) => !v); setEditingId(null); }}
-            className="flex items-center gap-1.5 text-sm font-medium text-primary border border-primary/30 rounded-xl px-3 py-1.5 hover:bg-primary/10 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            إضافة خدمة
-          </button>
+          {!showForm && (
+            <button
+              onClick={() => { resetForm(); setShowForm(true); }}
+              className="flex items-center gap-1.5 text-sm font-medium text-primary border border-primary/30 rounded-xl px-3 py-1.5 hover:bg-primary/10 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              إضافة خدمة
+            </button>
+          )}
         </div>
 
-        {/* Add form */}
+        {/* Add / Edit form */}
         {showForm && (
-          <div className="px-5 py-4 border-b border-border bg-muted/20 space-y-3">
-            <p className="text-sm font-semibold text-foreground">خدمة جديدة</p>
+          <div className="px-5 py-5 border-b border-border bg-muted/20 space-y-4">
+            <p className="text-sm font-semibold text-foreground">{editingId ? "تعديل الخدمة" : "خدمة جديدة"}</p>
+
+            {/* Row 1: name + category */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">اسم الخدمة *</label>
+                <label className="text-xs font-medium text-muted-foreground">اسم الخدمة <span className="text-destructive">*</span></label>
                 <input
                   type="text"
                   placeholder="مثال: ضيافة، تنظيف، أثاث إضافي"
-                  value={fName}
-                  onChange={(e) => setFName(e.target.value)}
-                  className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  className={inputCls("name")}
                 />
+                {fieldErrors.name && <p className="text-[11px] text-destructive">{fieldErrors.name}</p>}
               </div>
+
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">السعر (ر.س) *</label>
+                <label className="text-xs font-medium text-muted-foreground">الفئة</label>
+                <select
+                  value={form.category}
+                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value, categoryCustom: "" }))}
+                  className={inputCls("category")}
+                >
+                  <option value="">— اختر فئة —</option>
+                  {SERVICE_CATEGORY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+
+              {/* Custom category input — only when "أخرى" is selected */}
+              {form.category === "أخرى" && (
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-xs font-medium text-muted-foreground">اسم الفئة المخصصة <span className="text-destructive">*</span></label>
+                  <input
+                    type="text"
+                    placeholder="اكتب اسم الفئة..."
+                    value={form.categoryCustom}
+                    onChange={(e) => setForm((f) => ({ ...f, categoryCustom: e.target.value }))}
+                    className={inputCls("categoryCustom")}
+                    autoFocus
+                  />
+                  {fieldErrors.categoryCustom && <p className="text-[11px] text-destructive">{fieldErrors.categoryCustom}</p>}
+                </div>
+              )}
+            </div>
+
+            {/* Row 2: price + unit */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">السعر (ر.س) <span className="text-destructive">*</span></label>
                 <input
                   type="number"
                   placeholder="0"
                   min="0"
-                  value={fPrice}
-                  onChange={(e) => setFPrice(e.target.value)}
-                  className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  step="0.01"
+                  value={form.price}
+                  onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                  className={inputCls("price")}
                   dir="ltr"
                 />
+                {fieldErrors.price && <p className="text-[11px] text-destructive">{fieldErrors.price}</p>}
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">وحدة الاحتساب</label>
+                <label className="text-xs font-medium text-muted-foreground">وحدة الاحتساب</label>
                 <select
-                  value={fUnit}
-                  onChange={(e) => setFUnit(e.target.value)}
-                  className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  value={form.unit}
+                  onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
+                  className={inputCls("unit")}
                 >
                   {SERVICE_UNIT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">وصف (اختياري)</label>
-                <input
-                  type="text"
-                  placeholder="تفاصيل إضافية..."
-                  value={fDesc}
-                  onChange={(e) => setFDesc(e.target.value)}
-                  className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+            </div>
+
+            {/* Row 3: description */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">وصف الخدمة (اختياري)</label>
+              <input
+                type="text"
+                placeholder="تفاصيل إضافية أو شروط الخدمة..."
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                className={inputCls("description")}
+              />
+            </div>
+
+            {/* Row 4: Main image */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <ImageIcon className="w-3.5 h-3.5" />
+                الصورة الرئيسية للخدمة
+              </label>
+              {form.imageUrl ? (
+                <div className="relative inline-block">
+                  <img src={form.imageUrl} alt="صورة الخدمة" className="w-28 h-20 object-cover rounded-lg border border-border" />
+                  <button
+                    onClick={() => setForm((f) => ({ ...f, imageUrl: "" }))}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-destructive text-white rounded-full text-xs flex items-center justify-center shadow"
+                  >×</button>
+                </div>
+              ) : (
+                <label className={`flex flex-col items-center justify-center w-full h-24 border-2 border-dashed ${mainImgUploading ? "border-primary/40" : "border-border hover:border-primary/50"} rounded-xl cursor-pointer transition-colors bg-background`}>
+                  {mainImgUploading
+                    ? <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    : <><ImageIcon className="w-5 h-5 text-muted-foreground/50 mb-1" /><span className="text-xs text-muted-foreground">اضغط لرفع صورة</span></>
+                  }
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleMainImageUpload(f); e.target.value = ""; }} disabled={mainImgUploading} />
+                </label>
+              )}
+            </div>
+
+            {/* Row 5: Gallery images with captions */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <ImageIcon className="w-3.5 h-3.5" />
+                صور إضافية مع وصف (اختياري)
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {form.gallery.map((item, idx) => (
+                  <div key={idx} className="border border-border rounded-lg overflow-hidden bg-background">
+                    {item.uploading ? (
+                      <div className="h-20 flex items-center justify-center bg-muted/30"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
+                    ) : (
+                      <div className="relative">
+                        <img src={item.url} alt="" className="w-full h-20 object-cover" />
+                        <button
+                          onClick={() => removeGalleryItem(idx)}
+                          className="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full text-xs flex items-center justify-center hover:bg-destructive transition-colors"
+                        >×</button>
+                      </div>
+                    )}
+                    <input
+                      type="text"
+                      placeholder="وصف الصورة..."
+                      value={item.caption}
+                      onChange={(e) => updateGalleryCaption(idx, e.target.value)}
+                      className="w-full px-2 py-1.5 text-xs border-t border-border bg-transparent focus:outline-none focus:bg-muted/20"
+                    />
+                  </div>
+                ))}
+                {form.gallery.length < 5 && (
+                  <label className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-primary/50 transition-colors bg-background">
+                    <Plus className="w-4 h-4 text-muted-foreground/50 mb-1" />
+                    <span className="text-xs text-muted-foreground">إضافة صورة</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleGalleryAdd(f); e.target.value = ""; }} />
+                  </label>
+                )}
               </div>
             </div>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setShowForm(false)} className="text-sm text-muted-foreground px-3 py-1.5 rounded-lg hover:bg-muted transition-colors">إلغاء</button>
+
+            {/* Actions */}
+            <div className="flex gap-2 justify-end pt-1">
+              <button onClick={resetForm} className="text-sm text-muted-foreground px-3 py-1.5 rounded-lg hover:bg-muted transition-colors">إلغاء</button>
               <button
-                onClick={() => addService.mutate()}
-                disabled={!fName.trim() || !fPrice || Number(fPrice) <= 0 || addService.isPending}
+                onClick={() => saveService.mutate()}
+                disabled={saveService.isPending}
                 className="flex items-center gap-1.5 text-sm font-medium bg-primary text-primary-foreground px-4 py-1.5 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
-                {addService.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                حفظ الخدمة
+                {saveService.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                {editingId ? "حفظ التعديلات" : "إضافة الخدمة"}
               </button>
             </div>
-            {addService.isError && <p className="text-xs text-destructive">{(addService.error as Error).message}</p>}
+            {saveService.isError && (saveService.error as Error).message !== "validation" && (
+              <p className="text-xs text-destructive text-center">{(saveService.error as Error).message}</p>
+            )}
           </div>
         )}
 
-        {/* Services */}
+        {/* Services list */}
         {servicesLoading ? (
           <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
         ) : services.length === 0 ? (
@@ -3596,19 +3820,39 @@ function ChaletServicesTab() {
         ) : (
           <div className="divide-y divide-border">
             {services.map((svc) => (
-              <div key={svc.id} className={`flex items-center gap-4 px-5 py-4 transition-colors ${svc.isActive ? "" : "opacity-50 bg-muted/10"}`}>
+              <div key={svc.id} className={`flex items-start gap-3 px-5 py-4 transition-colors ${!svc.isActive ? "opacity-60 bg-muted/10" : ""}`}>
+                {/* Thumbnail */}
+                {svc.imageUrl
+                  ? <img src={svc.imageUrl} alt={svc.name} className="w-14 h-14 rounded-xl object-cover shrink-0 border border-border" />
+                  : <div className="w-14 h-14 rounded-xl bg-muted/40 shrink-0 flex items-center justify-center"><ImageIcon className="w-5 h-5 text-muted-foreground/30" /></div>
+                }
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-foreground text-sm">{svc.name}</p>
+                    {svc.category && (
+                      <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{svc.category}</span>
+                    )}
                     {!svc.isActive && <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">معطّل</span>}
+                    {(svc.galleryPhotos?.length ?? 0) > 0 && (
+                      <span className="text-[10px] text-muted-foreground">{toAr(svc.galleryPhotos!.length)} صور</span>
+                    )}
                   </div>
-                  {svc.description && <p className="text-xs text-muted-foreground mt-0.5">{svc.description}</p>}
+                  {svc.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{svc.description}</p>}
                   <p className="text-sm font-bold text-primary mt-1">
                     {Number(svc.price).toLocaleString("ar-SA")} ر.س
                     <span className="text-xs text-muted-foreground font-normal"> / {svc.unit}</span>
                   </p>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* Edit */}
+                  <button
+                    onClick={() => openEdit(svc)}
+                    title="تعديل"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground bg-muted/60 hover:bg-primary/10 hover:text-primary transition-colors"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  {/* Toggle active */}
                   <button
                     onClick={() => toggleActive.mutate({ serviceId: svc.id, isActive: !svc.isActive })}
                     disabled={toggleActive.isPending}
@@ -3617,13 +3861,27 @@ function ChaletServicesTab() {
                   >
                     {svc.isActive ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                   </button>
-                  <button
-                    onClick={() => deleteService.mutate(svc.id)}
-                    disabled={deleteService.isPending}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-destructive bg-red-50 dark:bg-red-900/20 hover:bg-red-100 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {/* Delete */}
+                  {confirmDeleteId === svc.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => deleteService.mutate(svc.id)}
+                        disabled={deleteService.isPending}
+                        className="text-[11px] bg-destructive text-white px-2 py-1 rounded-lg hover:bg-destructive/90 transition-colors"
+                      >
+                        {deleteService.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "تأكيد"}
+                      </button>
+                      <button onClick={() => setConfirmDeleteId(null)} className="text-[11px] px-2 py-1 rounded-lg bg-muted hover:bg-muted/70 transition-colors">لا</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteId(svc.id)}
+                      title="حذف"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-destructive bg-red-50 dark:bg-red-900/20 hover:bg-red-100 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

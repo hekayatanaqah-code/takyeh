@@ -2341,23 +2341,40 @@ router.get("/chalets/:chaletId/services", async (req, res) => {
   return res.json(services);
 });
 
+const galleryPhotoSchema = z.array(z.object({ url: z.string().url(), caption: z.string().max(200) })).max(10).optional();
+
 /* POST /owner/chalets/:chaletId/services */
 router.post("/chalets/:chaletId/services", async (req, res) => {
   const ownerId = req.user!.id;
   const chaletId = Number(req.params.chaletId);
   if (!(await verifyOwnerChalet(ownerId, chaletId))) return res.status(403).json({ error: "forbidden" });
-  const body = z.object({
-    name: z.string().min(1).max(200),
+  const schema = z.object({
+    name: z.string().min(1, "اسم الخدمة مطلوب").max(200),
+    category: z.string().max(100).optional(),
     description: z.string().max(500).optional(),
-    price: z.number().positive(),
+    price: z.number({ invalid_type_error: "السعر يجب أن يكون رقمًا" }).positive("السعر يجب أن يكون أكبر من صفر"),
     unit: z.string().max(100).optional(),
-  }).parse(req.body);
+    imageUrl: z.string().url().optional().or(z.literal("")),
+    galleryPhotos: galleryPhotoSchema,
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const [field, msgs] of Object.entries(parsed.error.flatten().fieldErrors)) {
+      fieldErrors[field] = (msgs as string[])[0] ?? "خطأ";
+    }
+    return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors });
+  }
+  const body = parsed.data;
   const [service] = await db.insert(chaletServicesTable).values({
     chaletId,
     name: body.name,
+    category: body.category ?? null,
     description: body.description ?? null,
     price: String(body.price),
     unit: body.unit ?? "مرة واحدة",
+    imageUrl: body.imageUrl || null,
+    galleryPhotos: body.galleryPhotos ?? null,
   }).returning();
   return res.status(201).json(service);
 });
@@ -2368,18 +2385,33 @@ router.patch("/chalets/:chaletId/services/:serviceId", async (req, res) => {
   const chaletId = Number(req.params.chaletId);
   const serviceId = Number(req.params.serviceId);
   if (!(await verifyOwnerChalet(ownerId, chaletId))) return res.status(403).json({ error: "forbidden" });
-  const body = z.object({
+  const schema = z.object({
     name: z.string().min(1).max(200).optional(),
+    category: z.string().max(100).nullable().optional(),
     description: z.string().max(500).nullable().optional(),
     price: z.number().positive().optional(),
     unit: z.string().max(100).optional(),
+    imageUrl: z.string().url().nullable().optional().or(z.literal("")),
+    galleryPhotos: galleryPhotoSchema.or(z.null()).optional(),
     isActive: z.boolean().optional(),
-  }).parse(req.body);
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const [field, msgs] of Object.entries(parsed.error.flatten().fieldErrors)) {
+      fieldErrors[field] = (msgs as string[])[0] ?? "خطأ";
+    }
+    return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors });
+  }
+  const body = parsed.data;
   const patch: Record<string, unknown> = {};
   if (body.name !== undefined) patch.name = body.name;
+  if (body.category !== undefined) patch.category = body.category;
   if (body.description !== undefined) patch.description = body.description;
   if (body.price !== undefined) patch.price = String(body.price);
   if (body.unit !== undefined) patch.unit = body.unit;
+  if (body.imageUrl !== undefined) patch.imageUrl = body.imageUrl || null;
+  if (body.galleryPhotos !== undefined) patch.galleryPhotos = body.galleryPhotos;
   if (body.isActive !== undefined) patch.isActive = body.isActive;
   const [updated] = await db.update(chaletServicesTable).set(patch).where(and(eq(chaletServicesTable.id, serviceId), eq(chaletServicesTable.chaletId, chaletId))).returning();
   if (!updated) return res.status(404).json({ error: "not found" });
