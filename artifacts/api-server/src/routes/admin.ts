@@ -715,6 +715,7 @@ router.patch("/service-submissions/:id/status", async (req, res) => {
 
     if (submission) {
       await db.insert(serviceProvidersTable).values({
+        ownerId: submission.ownerId ?? null,
         businessName: submission.businessName,
         category: submission.category,
         city: submission.city,

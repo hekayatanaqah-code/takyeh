@@ -86,7 +86,10 @@ export default function AddServiceProvider() {
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [coverageTags, setCoverageTags] = useState<string[]>([]);
-  const [coverageInput, setCoverageInput] = useState("");
+  const [coverageAll, setCoverageAll] = useState(false);
+  const [showCityRequest, setShowCityRequest] = useState(false);
+  const [cityRequestInput, setCityRequestInput] = useState("");
+  const [cityRequestSent, setCityRequestSent] = useState(false);
 
   const [customFeatureTags, setCustomFeatureTags] = useState<string[]>([]);
   const [customFeatureInput, setCustomFeatureInput] = useState("");
@@ -118,15 +121,40 @@ export default function AddServiceProvider() {
     }
   };
 
-  const addCoverageTag = () => {
-    const tag = coverageInput.trim();
-    if (!tag || coverageTags.includes(tag)) { setCoverageInput(""); return; }
-    setCoverageTags((prev) => [...prev, tag]);
-    setCoverageInput("");
+  const toggleCityTag = (city: string, checked: boolean) => {
+    setCoverageTags((prev) => {
+      const next = checked ? [...prev.filter((t) => t !== city), city] : prev.filter((t) => t !== city);
+      setCoverageAll(CITIES.every((c) => next.includes(c)));
+      return next;
+    });
   };
 
-  const removeCoverageTag = (tag: string) =>
-    setCoverageTags((prev) => prev.filter((t) => t !== tag));
+  const toggleAllCities = (checked: boolean) => {
+    setCoverageAll(checked);
+    setCoverageTags(checked ? [...CITIES] : (form.city ? [form.city] : []));
+  };
+
+  const submitCityRequest = async () => {
+    const city = cityRequestInput.trim();
+    if (!city) return;
+    try {
+      await fetch(`${BASE}/api/providers/city-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ city }),
+        credentials: "include",
+      });
+      setCityRequestSent(true);
+      setCityRequestInput("");
+      setShowCityRequest(false);
+    } catch {
+      // silent
+    }
+  };
+
+  const removeCoverageTag = (tag: string) => {
+    setCoverageTags((prev) => { const next = prev.filter((t) => t !== tag); setCoverageAll(false); return next; });
+  };
 
   const addCustomFeature = () => {
     const tag = customFeatureInput.trim();
@@ -519,44 +547,84 @@ export default function AddServiceProvider() {
                   <X className="w-4 h-4 shrink-0" />{fieldErrors.coverageTags}
                 </p>
               )}
-              <p className="text-sm text-muted-foreground">المدينة الرئيسية تُضاف تلقائياً. يمكنك إضافة مناطق أخرى.</p>
 
-              {coverageTags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {coverageTags.map((tag) => (
-                    <span key={tag} className="inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full px-3 py-1 text-sm font-medium">
-                      <MapPin className="w-3.5 h-3.5" />
-                      {tag}
-                      <button
-                        type="button"
-                        onClick={() => removeCoverageTag(tag)}
-                        className="text-primary/60 hover:text-destructive transition-colors"
-                        aria-label={`حذف ${tag}`}
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex gap-2">
-                <Input
-                  type="text"
-                  placeholder="مثال: المذنب، الرس، جميع القصيم..."
-                  value={coverageInput}
-                  onChange={(e) => setCoverageInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCoverageTag(); } }}
-                  className="h-10 text-sm flex-1"
+              {/* Serve all Al-Qassim checkbox */}
+              <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 hover:bg-primary/10 transition-colors">
+                <Checkbox
+                  checked={coverageAll}
+                  onCheckedChange={(v) => toggleAllCities(!!v)}
                 />
-                <button
-                  type="button"
-                  onClick={addCoverageTag}
-                  disabled={!coverageInput.trim()}
-                  className="h-10 w-10 rounded-xl border border-primary bg-primary text-primary-foreground font-bold text-lg flex items-center justify-center hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
-                >
-                  +
-                </button>
+                <span className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-primary" />
+                  نخدمك في <strong>جميع مدن القصيم</strong>
+                </span>
+              </label>
+
+              {/* City checkboxes grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {CITIES.map((city) => (
+                  <label
+                    key={city}
+                    className={`flex items-center gap-2.5 cursor-pointer rounded-xl border px-3 py-2.5 text-sm transition-all ${
+                      coverageTags.includes(city)
+                        ? "border-primary bg-primary/10 text-primary font-semibold"
+                        : "border-border bg-card hover:border-primary/40 hover:bg-muted text-foreground"
+                    }`}
+                  >
+                    <Checkbox
+                      checked={coverageTags.includes(city)}
+                      onCheckedChange={(v) => toggleCityTag(city, !!v)}
+                    />
+                    <MapPin className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                    {city}
+                  </label>
+                ))}
+              </div>
+
+              {/* Request new city */}
+              <div className="pt-1 border-t border-border">
+                {!showCityRequest && !cityRequestSent && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCityRequest(true)}
+                    className="text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
+                  >
+                    + طلب إضافة مدينة غير مدرجة
+                  </button>
+                )}
+                {cityRequestSent && (
+                  <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                    ✓ تم إرسال طلبك للإدارة وسيتم مراجعته
+                  </p>
+                )}
+                {showCityRequest && (
+                  <div className="flex gap-2 items-center mt-2">
+                    <Input
+                      type="text"
+                      placeholder="اسم المدينة المطلوبة"
+                      value={cityRequestInput}
+                      onChange={(e) => setCityRequestInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitCityRequest(); } }}
+                      className="h-9 text-sm flex-1"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={submitCityRequest}
+                      disabled={!cityRequestInput.trim()}
+                      className="h-9 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
+                    >
+                      إرسال
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowCityRequest(false); setCityRequestInput(""); }}
+                      className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors shrink-0"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
 

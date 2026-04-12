@@ -109,4 +109,68 @@ router.get("/my/submissions", requireAuth, async (req: any, res) => {
   return res.json(rows.reverse());
 });
 
+/* ── Owner: delete own pending submission ─────────── */
+router.delete("/my/submissions/:id", requireAuth, async (req: any, res) => {
+  const id = Number(req.params.id);
+  const [sub] = await db
+    .select()
+    .from(serviceProviderSubmissionsTable)
+    .where(eq(serviceProviderSubmissionsTable.id, id))
+    .limit(1);
+  if (!sub || sub.ownerId !== req.user.id) {
+    return res.status(404).json({ error: "الطلب غير موجود" });
+  }
+  if (sub.status === "approved") {
+    return res.status(400).json({ error: "لا يمكن حذف طلب معتمد. تواصل مع الدعم." });
+  }
+  await db.delete(serviceProviderSubmissionsTable).where(eq(serviceProviderSubmissionsTable.id, id));
+  return res.json({ ok: true });
+});
+
+/* ── Owner: my approved provider listings ─────────── */
+router.get("/my/approved", requireAuth, async (req: any, res) => {
+  const rows = await db
+    .select()
+    .from(serviceProvidersTable)
+    .where(eq(serviceProvidersTable.ownerId, req.user.id))
+    .orderBy(serviceProvidersTable.createdAt);
+  return res.json(rows.reverse());
+});
+
+/* ── Owner: toggle active for approved provider ───── */
+router.patch("/my/approved/:id/toggle", requireAuth, async (req: any, res) => {
+  const id = Number(req.params.id);
+  const [provider] = await db
+    .select()
+    .from(serviceProvidersTable)
+    .where(eq(serviceProvidersTable.id, id))
+    .limit(1);
+  if (!provider || provider.ownerId !== req.user.id) {
+    return res.status(404).json({ error: "المزود غير موجود" });
+  }
+  const [updated] = await db
+    .update(serviceProvidersTable)
+    .set({ isActive: !provider.isActive })
+    .where(eq(serviceProvidersTable.id, id))
+    .returning();
+  return res.json({ isActive: updated.isActive });
+});
+
+/* ── Public: request new city from admin ──────────── */
+router.post("/city-request", requireAuth, async (req: any, res) => {
+  const city = typeof req.body.city === "string" ? req.body.city.trim() : "";
+  if (!city || city.length < 2) {
+    return res.status(400).json({ error: "اسم المدينة مطلوب" });
+  }
+  // Store as an admin site setting so admin can see it
+  try {
+    const { siteSettingsTable } = await import("@workspace/db/schema");
+    const key = `city_request_${Date.now()}`;
+    await db.insert(siteSettingsTable).values({ key, value: `${city} (طلب من: ${req.user.id})` });
+  } catch {
+    // non-critical — just acknowledge
+  }
+  return res.json({ ok: true, message: `تم إرسال طلب إضافة مدينة "${city}" للإدارة` });
+});
+
 export default router;
