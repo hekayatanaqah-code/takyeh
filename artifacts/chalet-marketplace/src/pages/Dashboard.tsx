@@ -8958,7 +8958,8 @@ export default function Dashboard() {
     enabled: isAuthenticated || isImpersonating,
   });
 
-  const { data: notifSummary = [] } = useQuery<{ id: number; isRead: boolean }[]>({
+  interface NotifSummaryRow { id: number; isRead: boolean; type: string; message: string; }
+  const { data: notifSummary = [] } = useQuery<NotifSummaryRow[]>({
     queryKey: ["owner", "notifications-summary"],
     queryFn: async () => {
       const r = await apiFetch("/owner/notifications");
@@ -8971,7 +8972,7 @@ export default function Dashboard() {
   const unreadNotifCount = notifSummary.filter((n) => !n.isRead).length;
 
   /* ── Audio ping helper (Web Audio API — no external file needed) ── */
-  const playPing = useCallback(() => {
+  const playPing = useCallback((type: "booking" | "review" | "cancel") => {
     try {
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const osc = ctx.createOscillator();
@@ -8979,9 +8980,20 @@ export default function Dashboard() {
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.type = "sine";
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
-      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      if (type === "cancel") {
+        // Lower, shorter descending tone for cancellations
+        osc.frequency.setValueAtTime(440, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.4);
+      } else if (type === "review") {
+        // Brighter tone for reviews
+        osc.frequency.setValueAtTime(1046, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(523, ctx.currentTime + 0.3);
+      } else {
+        // Standard booking ping
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
+      }
+      gain.gain.setValueAtTime(0.22, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.5);
@@ -8989,18 +9001,66 @@ export default function Dashboard() {
     } catch (_) {}
   }, []);
 
-  /* ── Real-time popup: toast + sound when unread count grows ── */
-  const prevUnreadRef = useRef<number | null>(null);
+  /* ── Helper: extract chalet name from notification message ── */
+  function parseNotifToast(type: string, message: string): { title: string; description: string; cls: string } {
+    const displayMsg = message.includes(" | wa.me/") ? message.slice(0, message.lastIndexOf(" | wa.me/")).trim() : message;
+    if (type === "new_booking") {
+      // "حجز جديد في [chalet] — [client] — [date] (period)"
+      const m = displayMsg.match(/في (.+?) —/);
+      const chaletName = m ? m[1] : "";
+      return {
+        title: "📅 حجز جديد",
+        description: chaletName ? `حجز جديد — ${chaletName}` : displayMsg.slice(0, 80),
+        cls: "border-r-4 border-r-blue-500 dark:border-r-blue-400",
+      };
+    }
+    if (type === "new_review") {
+      // "تقييم جديد لـ[chalet] — ★★★★☆ — ..."
+      const chaletM = displayMsg.match(/لـ(.+?) —/);
+      const starsM  = displayMsg.match(/(★+)/);
+      const chaletName = chaletM ? chaletM[1] : "";
+      const starCount  = starsM ? starsM[1].length : 0;
+      return {
+        title: "⭐ تقييم جديد",
+        description: `تقييم جديد (${toAr(starCount)} نجوم)${chaletName ? ` — ${chaletName}` : ""}`,
+        cls: "border-r-4 border-r-amber-400 dark:border-r-amber-300",
+      };
+    }
+    if (type === "cancellation") {
+      // "إلغاء حجز في [chalet] — ..."
+      const m = displayMsg.match(/في (.+?) —/);
+      const chaletName = m ? m[1] : "";
+      return {
+        title: "🚫 إلغاء حجز",
+        description: chaletName ? `إلغاء حجز في ${chaletName}` : displayMsg.slice(0, 80),
+        cls: "border-r-4 border-r-red-500 dark:border-r-red-400",
+      };
+    }
+    return { title: "🔔 إشعار جديد", description: displayMsg.slice(0, 80), cls: "" };
+  }
+
+  /* ── Real-time popup: toast + sound when new notifications arrive ── */
+  const prevNotifIdsRef = useRef<Set<number> | null>(null);
   useEffect(() => {
     if (!isAuthenticated && !isImpersonating) return;
-    if (prevUnreadRef.current === null) { prevUnreadRef.current = unreadNotifCount; return; }
-    if (unreadNotifCount > prevUnreadRef.current) {
-      playPing();
-      toast({ title: "إشعار جديد 🔔", description: "لديك إشعار جديد — اضغط على تبويب الإشعارات" });
+    const currentIds = new Set(notifSummary.map((n) => n.id));
+    if (prevNotifIdsRef.current === null) { prevNotifIdsRef.current = currentIds; return; }
+    // Find genuinely new notification IDs
+    const newOnes = notifSummary.filter((n) => !prevNotifIdsRef.current!.has(n.id));
+    if (newOnes.length > 0) {
+      // Pick the most recent one for the sound type
+      const first = newOnes[0];
+      const soundType = first.type === "cancellation" ? "cancel" : first.type === "new_review" ? "review" : "booking";
+      playPing(soundType);
+      // Show a toast for each new notification (max 3 to avoid spam)
+      newOnes.slice(0, 3).forEach(({ type, message }) => {
+        const { title, description, cls } = parseNotifToast(type, message);
+        toast({ title, description, className: cls });
+      });
     }
-    prevUnreadRef.current = unreadNotifCount;
+    prevNotifIdsRef.current = currentIds;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unreadNotifCount]);
+  }, [notifSummary]);
 
   const allTabs = [
     { id: "chalets",       label: "شاليهاتي",          icon: <Building2 className="w-4 h-4" /> },

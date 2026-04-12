@@ -469,6 +469,33 @@ router.delete("/bookings/:id", async (req, res) => {
     ).catch(() => {});
   }
 
+  // Cancellation notification (async, non-blocking)
+  if (target) {
+    ;(async () => {
+      try {
+        let chaletName = "شاليهك";
+        let chaletId: number | null = null;
+        if (target.submissionId) {
+          const [chalet] = await db
+            .select({ id: chaletsTable.id, nameAr: chaletsTable.nameAr })
+            .from(chaletsTable)
+            .where(eq(chaletsTable.submissionId, target.submissionId))
+            .limit(1);
+          if (chalet) { chaletName = chalet.nameAr; chaletId = chalet.id; }
+        }
+        const periodLabel = target.period === "morning" ? "صباحي" : target.period === "evening" ? "مسائي" : "يوم كامل";
+        const msg = `إلغاء حجز في ${chaletName} — ${target.clientName} — ${target.bookingDate} (${periodLabel})${reason ? ` — السبب: ${reason}` : ""}`;
+        await db.insert(ownerNotificationsTable).values({
+          ownerId,
+          type: "cancellation",
+          chaletId: chaletId ?? undefined,
+          message: msg,
+          isRead: false,
+        });
+      } catch (_) {}
+    })();
+  }
+
   return res.json({ ok: true });
 });
 
