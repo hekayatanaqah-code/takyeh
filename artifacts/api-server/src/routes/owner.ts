@@ -19,6 +19,7 @@ import {
   chaletSeasonsTable,
   customerNotesTable,
   chaletServicesTable,
+  ownerNotificationSettingsTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
@@ -2329,6 +2330,33 @@ router.delete("/chalets/:chaletId/services/:serviceId", async (req, res) => {
   const serviceId = Number(req.params.serviceId);
   if (!(await verifyOwnerChalet(ownerId, chaletId))) return res.status(403).json({ error: "forbidden" });
   await db.delete(chaletServicesTable).where(and(eq(chaletServicesTable.id, serviceId), eq(chaletServicesTable.chaletId, chaletId)));
+  return res.json({ ok: true });
+});
+
+/* ── GET /owner/notification-settings ─────────────────────────
+   Returns the owner's notification preferences */
+router.get("/notification-settings", async (req, res) => {
+  const ownerId = (req.user as any)?.id;
+  if (!ownerId) return res.status(401).json({ error: "unauthorized" });
+  const [row] = await db.select().from(ownerNotificationSettingsTable).where(eq(ownerNotificationSettingsTable.ownerId, ownerId));
+  return res.json(row ?? { ownerId, waEnabled: false, waPhone: null });
+});
+
+/* ── PATCH /owner/notification-settings ───────────────────────
+   Update WhatsApp notification preferences */
+router.patch("/notification-settings", async (req, res) => {
+  const ownerId = (req.user as any)?.id;
+  if (!ownerId) return res.status(401).json({ error: "unauthorized" });
+  const { waEnabled, waPhone } = z.object({
+    waEnabled: z.boolean().optional(),
+    waPhone: z.string().max(20).nullable().optional(),
+  }).parse(req.body);
+  const patch: Record<string, unknown> = { updatedAt: new Date() };
+  if (waEnabled !== undefined) patch.waEnabled = waEnabled;
+  if (waPhone !== undefined) patch.waPhone = waPhone;
+  await db.insert(ownerNotificationSettingsTable)
+    .values({ ownerId, waEnabled: waEnabled ?? false, waPhone: waPhone ?? null })
+    .onConflictDoUpdate({ target: ownerNotificationSettingsTable.ownerId, set: patch });
   return res.json({ ok: true });
 });
 

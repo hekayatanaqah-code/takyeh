@@ -523,6 +523,16 @@ export const adminSessionsTable = pgTable("admin_sessions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/* ── Owner Notification Settings ─────────────────────────── */
+export const ownerNotificationSettingsTable = pgTable("owner_notification_settings", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull().unique(),
+  waEnabled: boolean("wa_enabled").notNull().default(false),
+  waPhone: text("wa_phone"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OwnerNotificationSettings = typeof ownerNotificationSettingsTable.$inferSelect;
+
 /* ── Chalet Add-on Services ───────────────────────────────── */
 export const chaletServicesTable = pgTable("chalet_services", {
   id: serial("id").primaryKey(),

@@ -6784,6 +6784,91 @@ interface OwnerReviewRow {
   createdAt: string;
 }
 
+/* ── InvitationsTable: compact collapsible table for sent invitations ── */
+interface InvItem {
+  id: number;
+  token: string;
+  used: boolean;
+  guestName: string | null;
+  createdAt: string;
+}
+function InvitationsTable({ invitations, onDelete, deleteIsPending }: { invitations: InvItem[]; onDelete: (id: number) => void; deleteIsPending: boolean }) {
+  const [open, setOpen] = useState(false);
+  const { toast } = useToast();
+  const copyLink = (token: string) => {
+    const url = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/r/${token}`;
+    navigator.clipboard.writeText(url).then(() => toast({ title: "تم النسخ", description: "رابط الدعوة في الحافظة" }));
+  };
+  const pending = invitations.filter((i) => !i.used).length;
+  const used    = invitations.filter((i) => i.used).length;
+  return (
+    <div className="border border-border rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/60 transition-colors text-sm"
+      >
+        <div className="flex items-center gap-3">
+          <Mail className="w-4 h-4 text-muted-foreground" />
+          <span className="font-semibold text-foreground">الدعوات المرسلة</span>
+          <span className="text-xs text-muted-foreground">({invitations.length})</span>
+          {pending > 0 && <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{pending} معلق</span>}
+          {used > 0   && <span className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{used} مستخدم</span>}
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+      </button>
+      {open && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/20 text-muted-foreground text-xs border-b border-border">
+                <th className="text-right px-4 py-2 font-medium">الاسم</th>
+                <th className="text-right px-4 py-2 font-medium">الحالة</th>
+                <th className="text-right px-4 py-2 font-medium">التاريخ</th>
+                <th className="text-right px-4 py-2 font-medium">إجراء</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {invitations.map((inv) => (
+                <tr key={inv.id} className="hover:bg-muted/20 transition-colors">
+                  <td className="px-4 py-2.5 text-foreground">{inv.guestName || <span className="text-muted-foreground italic text-xs">ضيف</span>}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${inv.used ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${inv.used ? "bg-green-500" : "bg-amber-400"}`} />
+                      {inv.used ? "مستخدم" : "معلق"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-muted-foreground text-xs">
+                    {new Date(inv.createdAt).toLocaleDateString("ar-SA", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => copyLink(inv.token)}
+                        title="نسخ الرابط"
+                        className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => onDelete(inv.id)}
+                        disabled={deleteIsPending}
+                        title="حذف الدعوة"
+                        className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ReviewsTab() {
   const qc = useQueryClient();
   const [selectedChaletId, setSelectedChaletId] = useState<number | null>(null);
@@ -6821,7 +6906,7 @@ function ReviewsTab() {
     }
   }, [chalets, selectedChaletId]);
 
-  const { data: invitations = [] } = useQuery<{ id: number; chaletId: number; token: string; used: boolean; createdAt: string }[]>({
+  const { data: invitations = [] } = useQuery<{ id: number; chaletId: number; token: string; used: boolean; guestName: string | null; createdAt: string }[]>({
     queryKey: ["owner", "review-invitations"],
     queryFn: async () => {
       const r = await apiFetch("/owner/review-invitations");
@@ -7093,34 +7178,13 @@ function ReviewsTab() {
                 </div>
               </div>
 
-              {/* Invitations list with delete */}
+              {/* Invitations list — collapsible compact table */}
               {stats && stats.total > 0 && (
-                <div>
-                  <p className="text-sm font-semibold text-foreground mb-3">الدعوات المرسلة</p>
-                  <div className="space-y-1.5">
-                    {invitations
-                      .filter((i) => i.chaletId === selectedChalet.id)
-                      .map((inv) => (
-                        <div key={inv.id} className="flex items-center gap-2 py-2 border-b border-border last:border-0">
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${inv.used ? "bg-green-500" : "bg-amber-400"}`} />
-                          <code className="flex-1 text-xs text-muted-foreground font-mono truncate">
-                            {window.location.origin}{import.meta.env.BASE_URL.replace(/\/$/, "")}/r/{inv.token}
-                          </code>
-                          <span className={`text-xs font-medium shrink-0 ${inv.used ? "text-green-600" : "text-amber-600"}`}>
-                            {inv.used ? "مستخدم" : "معلق"}
-                          </span>
-                          <button
-                            onClick={() => deleteInvitation.mutate(inv.id)}
-                            disabled={deleteInvitation.isPending}
-                            className="p-1.5 rounded-md text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
-                            title="حذف الدعوة"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                  </div>
-                </div>
+                <InvitationsTable
+                  invitations={invitations.filter((i) => i.chaletId === selectedChalet.id)}
+                  onDelete={(id) => deleteInvitation.mutate(id)}
+                  deleteIsPending={deleteInvitation.isPending}
+                />
               )}
             </div>
           )}
@@ -8702,13 +8766,109 @@ function CustomersTab() {
   );
 }
 
-/* ── Main Dashboard ──────────────────────────── */
+/* ── NotificationSettingsSection ────────────────────────────── */
+function NotificationSettingsSection() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [waEnabled, setWaEnabled] = useState(false);
+  const [waPhone, setWaPhone] = useState("");
+
+  const { data, isLoading } = useQuery<{ waEnabled: boolean; waPhone: string | null }>({
+    queryKey: ["owner", "notification-settings"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/notification-settings");
+      return r.ok ? r.json() : { waEnabled: false, waPhone: null };
+    },
+  });
+
+  useEffect(() => {
+    if (data) {
+      setWaEnabled(data.waEnabled);
+      setWaPhone(data.waPhone ?? "");
+    }
+  }, [data]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const r = await apiFetch("/owner/notification-settings", {
+        method: "PATCH",
+        body: JSON.stringify({ waEnabled, waPhone: waPhone.trim() || null }),
+      });
+      if (!r.ok) throw new Error("error");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "notification-settings"] });
+      toast({ title: "تم الحفظ", description: "تم تحديث إعدادات الإشعارات" });
+    },
+  });
+
+  return (
+    <div className="mb-4 border border-border rounded-2xl overflow-hidden bg-card">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-accent/30 transition-colors text-sm"
+      >
+        <Bell className="w-4 h-4 text-muted-foreground" />
+        <span className="font-semibold text-foreground flex-1 text-right">إعدادات الإشعارات</span>
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+      </button>
+      {open && (
+        <div className="border-t border-border px-5 py-4 space-y-4">
+          {isLoading ? (
+            <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+          ) : (
+            <>
+              {/* WhatsApp toggle */}
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">إشعارات الواتساب</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">تلقّي إشعار على الواتساب عند كل حجز أو تقييم جديد</p>
+                </div>
+                <Switch checked={waEnabled} onCheckedChange={setWaEnabled} />
+              </div>
+
+              {/* Phone number field (only when enabled) */}
+              {waEnabled && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">رقم الواتساب (بصيغة دولية)</label>
+                  <input
+                    type="tel"
+                    placeholder="مثال: 966501234567"
+                    value={waPhone}
+                    onChange={(e) => setWaPhone(e.target.value)}
+                    dir="ltr"
+                    className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <p className="text-[11px] text-muted-foreground">سيصلك رابط الإشعار على هذا الرقم عبر wa.me</p>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => save.mutate()}
+                  disabled={save.isPending}
+                  className="flex items-center gap-1.5 text-sm font-medium bg-primary text-primary-foreground px-4 py-1.5 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {save.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  حفظ الإعدادات
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "notifications" | "customers" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits" | "seasons">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const { user, isLoading: authLoading, isAuthenticated, logout, login } = useAuth();
   const { isStaff, staffUser, permissions, isLoading: staffLoading, logout: staffLogout } = useStaffAuth();
+  const { toast } = useToast();
 
   /* ── Admin impersonation detection (must be before queries) ── */
   const [impersonation, setImpersonation] = useState<{
@@ -8790,6 +8950,18 @@ export default function Dashboard() {
     refetchInterval: 30_000,
   });
   const unreadNotifCount = notifSummary.filter((n) => !n.isRead).length;
+
+  /* ── Real-time popup: toast when unread count grows ── */
+  const prevUnreadRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isAuthenticated && !isImpersonating) return;
+    if (prevUnreadRef.current === null) { prevUnreadRef.current = unreadNotifCount; return; }
+    if (unreadNotifCount > prevUnreadRef.current) {
+      toast({ title: "إشعار جديد 🔔", description: "لديك إشعار جديد في لوحة التحكم" });
+    }
+    prevUnreadRef.current = unreadNotifCount;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unreadNotifCount]);
 
   const allTabs = [
     { id: "chalets",       label: "شاليهاتي",          icon: <Building2 className="w-4 h-4" /> },
@@ -9065,6 +9237,11 @@ export default function Dashboard() {
             </button>
           );
         })()}
+
+        {/* Notification Settings — owner only */}
+        {!isStaff && !isImpersonating && (
+          <NotificationSettingsSection />
+        )}
 
         {/* Tabs */}
         <div className="flex gap-1 mb-8 border-b border-border overflow-x-auto pb-0 -mx-1 px-1">
