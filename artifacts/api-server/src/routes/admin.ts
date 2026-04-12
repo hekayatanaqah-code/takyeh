@@ -848,6 +848,31 @@ router.post("/impersonate/end", async (_req, res) => {
   return res.json({ ok: true });
 });
 
+/* ── Audit Log (edit-mode activation) ──────────────── */
+router.post("/audit-log", async (req, res) => {
+  const { action, targetOwnerId } = req.body ?? {};
+  const adminName = (req as any).adminStaff?.name ?? (req as any).user?.name ?? "مجهول";
+  const adminId   = (req as any).adminStaff?.id   ?? (req as any).user?.id  ?? null;
+
+  /* Persist in DB so it survives restarts */
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS admin_audit_logs (
+      id         SERIAL PRIMARY KEY,
+      admin_id   TEXT,
+      admin_name TEXT,
+      action     TEXT NOT NULL,
+      target_owner_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  await db.execute(sql`
+    INSERT INTO admin_audit_logs (admin_id, admin_name, action, target_owner_id)
+    VALUES (${String(adminId)}, ${adminName}, ${String(action ?? "")}, ${String(targetOwnerId ?? "")})
+  `);
+
+  return res.json({ ok: true, logged: true });
+});
+
 router.patch("/applications/:id", async (req, res) => {
   const { status } = req.body ?? {};
   if (!["approved", "rejected", "pending"].includes(String(status))) {

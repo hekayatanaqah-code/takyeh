@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useCallback, type ReactElement } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback, createContext, useContext, type ReactElement } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
@@ -47,6 +47,14 @@ function apiFetch(path: string, opts?: RequestInit) {
     ...opts,
   });
 }
+
+/* ─── Read-Only mode context (admin impersonation) ──────── */
+const ImpersonationCtx = createContext<{
+  isReadOnly: boolean;
+  onBlockedEdit: () => void;
+}>({ isReadOnly: false, onBlockedEdit: () => {} });
+
+function useReadOnly() { return useContext(ImpersonationCtx); }
 
 const statusConfig = {
   pending:        { label: "قيد المراجعة",  icon: <Clock className="w-3.5 h-3.5" />,       className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
@@ -1916,6 +1924,7 @@ function RescheduleDialog({
 
 /* ── Booking Calendar Tab ────────────────────── */
 function BookingCalendarTab({ submissions }: { submissions: any[] }) {
+  const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
@@ -2205,7 +2214,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-foreground">سجل وتقويم الحجوزات</h2>
-        <Button onClick={() => setAddOpen(true)} size="sm">
+        <Button onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } setAddOpen(true); }} size="sm" disabled={isReadOnly}>
           <Plus className="w-4 h-4 me-2" />
           إضافة حجز يدوي
         </Button>
@@ -2540,6 +2549,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   if (dayBkgs.length > 0) {
                     setSummaryDate(ds);
                   } else {
+                    if (isReadOnly) { onBlockedEdit(); return; }
                     setPrefilledDate(ds);
                     setAddOpen(true);
                   }
@@ -2748,7 +2758,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
             <h3 className="text-base font-semibold mb-2">{(filterFrom || filterTo) ? "لا توجد حجوزات في هذا النطاق" : "لا توجد حجوزات بعد"}</h3>
             <p className="text-sm text-muted-foreground mb-4">{(filterFrom || filterTo) ? "جرّب تغيير نطاق التاريخ" : "سجّل حجوزاتك من واتساب وانستقرام لمتابعة تقويمك"}</p>
             {!filterFrom && !filterTo && (
-              <Button size="sm" onClick={() => setAddOpen(true)}>
+              <Button size="sm" disabled={isReadOnly} onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } setAddOpen(true); }}>
                 <Plus className="w-4 h-4 me-2" />
                 إضافة أول حجز
               </Button>
@@ -3308,7 +3318,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         open={!!deleteDialogBooking}
         booking={deleteDialogBooking}
         onClose={() => setDeleteDialogBooking(null)}
-        onConfirm={(id, reason) => deleteBooking.mutate({ id, reason })}
+        onConfirm={(id, reason) => { if (isReadOnly) { onBlockedEdit(); return; } deleteBooking.mutate({ id, reason }); }}
       />
 
       {/* Reschedule Dialog */}
@@ -3927,6 +3937,7 @@ function catColorClass(color: string) {
 }
 
 function ExpensesTab() {
+  const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [month, setMonth] = useState(currentMonth);
@@ -4030,6 +4041,7 @@ function ExpensesTab() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isReadOnly) { onBlockedEdit(); return; }
     const amt = parseFloat(form.amount);
     if (!amt || isNaN(amt)) return;
     if (isOtherSelected && !form.customCategory.trim()) return;
@@ -4209,7 +4221,7 @@ function ExpensesTab() {
                     </a>
                   )}
                   <button
-                    onClick={() => { if (confirm("حذف هذا المصروف؟")) deleteMutation.mutate(exp.id); }}
+                    onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } if (confirm("حذف هذا المصروف؟")) deleteMutation.mutate(exp.id); }}
                     className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -4569,6 +4581,7 @@ tfoot { background:#fff9ed; font-weight:700; }
 
 /* ──────────────────────────────────────────────── */
 function StaffTab() {
+  const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
   const { user } = useAuth();
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -4728,6 +4741,7 @@ function StaffTab() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            if (isReadOnly) { onBlockedEdit(); return; }
             const s = parseFloat(addForm.baseSalary);
             if (!addForm.name || isNaN(s)) return;
             addStaff.mutate({
@@ -4838,7 +4852,7 @@ function StaffTab() {
                         <div className="flex gap-2 flex-wrap">
                           <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-[120px] h-8 text-sm" placeholder="الاسم" />
                           <Input type="number" value={editForm.baseSalary} onChange={(e) => setEditForm((f) => ({ ...f, baseSalary: e.target.value }))} className="w-32 h-8 text-sm" placeholder="الراتب" />
-                          <Button size="sm" onClick={() => editStaff.mutate({ id: member.id, data: { name: editForm.name, baseSalary: parseFloat(editForm.baseSalary) } })}>حفظ</Button>
+                          <Button size="sm" disabled={isReadOnly} onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } editStaff.mutate({ id: member.id, data: { name: editForm.name, baseSalary: parseFloat(editForm.baseSalary) } }); }}>حفظ</Button>
                           <Button size="sm" variant="ghost" onClick={() => setEditId(null)}>إلغاء</Button>
                         </div>
                       ) : (
@@ -4887,7 +4901,7 @@ function StaffTab() {
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        <button onClick={() => { if (confirm(`حذف ${member.name}؟`)) deleteStaff.mutate(member.id); }} className="p-2 text-muted-foreground hover:text-destructive transition-colors">
+                        <button onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } if (confirm(`حذف ${member.name}؟`)) deleteStaff.mutate(member.id); }} className="p-2 text-muted-foreground hover:text-destructive transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -4984,8 +4998,8 @@ function StaffTab() {
                           <Button
                             size="sm"
                             className="h-8 text-xs px-4"
-                            disabled={updatePermissions.isPending}
-                            onClick={() => updatePermissions.mutate({ id: member.id, permissions: permState })}
+                            disabled={updatePermissions.isPending || isReadOnly}
+                            onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } updatePermissions.mutate({ id: member.id, permissions: permState }); }}
                           >
                             حفظ الصلاحيات
                           </Button>
@@ -5030,8 +5044,9 @@ function StaffTab() {
                           <Button
                             size="sm"
                             className="h-8 text-xs px-4"
-                            disabled={updateCredentials.isPending}
+                            disabled={updateCredentials.isPending || isReadOnly}
                             onClick={() => {
+                              if (isReadOnly) { onBlockedEdit(); return; }
                               const data: Record<string, string> = {};
                               if (credForm.username) data.username = credForm.username;
                               if (credForm.password) data.password = credForm.password;
@@ -5325,8 +5340,9 @@ function StaffTab() {
                 )}
                 <Button
                   className="w-full h-11 font-bold"
-                  disabled={paySalary.isPending}
+                  disabled={paySalary.isPending || isReadOnly}
                   onClick={() => {
+                    if (isReadOnly) { onBlockedEdit(); return; }
                     if (!payTarget) return;
                     paySalary.mutate({
                       staffId: payTarget.id,
@@ -5605,6 +5621,7 @@ async function generateAndUploadReportPdf(
 }
 
 function ReportsTab() {
+  const { isReadOnly, onBlockedEdit } = useReadOnly();
   const currentMonth = new Date().toISOString().slice(0, 7);
   const currentYear = new Date().getFullYear().toString();
 
@@ -6071,8 +6088,8 @@ function ReportsTab() {
                 <Button
                   variant={archiveSavedId ? "default" : "outline"}
                   size="sm"
-                  onClick={handleSaveToArchive}
-                  disabled={archiveSaving || archiveMutation.isPending}
+                  onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } handleSaveToArchive(); }}
+                  disabled={archiveSaving || archiveMutation.isPending || isReadOnly}
                   className="gap-2"
                 >
                   {archiveSaving
@@ -6271,8 +6288,8 @@ function ReportsTab() {
                 <Button
                   variant={archiveSavedId ? "default" : "outline"}
                   size="sm"
-                  onClick={handleSaveToArchive}
-                  disabled={archiveSaving || archiveMutation.isPending}
+                  onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } handleSaveToArchive(); }}
+                  disabled={archiveSaving || archiveMutation.isPending || isReadOnly}
                   className="gap-2"
                 >
                   {archiveSaving
@@ -6363,7 +6380,7 @@ function ReportsTab() {
                         <span className="text-xs text-muted-foreground/50 px-1">بدون PDF</span>
                       )}
                       <button
-                        onClick={() => { if (confirm("حذف هذا التقرير من الأرشيف؟")) deleteArchiveMutation.mutate(a.id); }}
+                        onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } if (confirm("حذف هذا التقرير من الأرشيف؟")) deleteArchiveMutation.mutate(a.id); }}
                         className="text-muted-foreground hover:text-destructive transition-colors p-1"
                         title="حذف من الأرشيف"
                       >
@@ -8211,6 +8228,7 @@ export default function Dashboard() {
     impersonating: boolean; adminName?: string; ownerName?: string; ownerId?: string;
   }>({ impersonating: false });
   const [impersonationLoading, setImpersonationLoading] = useState(true);
+  const [editEnabled, setEditEnabled] = useState(false);
 
   useEffect(() => {
     apiFetch("/admin/impersonation-status")
@@ -8224,7 +8242,23 @@ export default function Dashboard() {
     window.location.href = `${BASE}/admin`;
   }
 
+  async function handleEnableEdit() {
+    await apiFetch("/admin/audit-log", {
+      method: "POST",
+      body: JSON.stringify({
+        action: editEnabled ? "DISABLE_EDIT_MODE" : "ENABLE_EDIT_MODE",
+        targetOwnerId: impersonation.ownerId ?? "",
+      }),
+    }).catch(() => {});
+    setEditEnabled((prev) => !prev);
+  }
+
   const isImpersonating = impersonation.impersonating;
+  const isReadOnly = isImpersonating && !editEnabled;
+
+  function onBlockedEdit() {
+    toast({ title: "وضع القراءة فقط", description: "فعّل وضع التعديل من الشريط العلوي أولاً", variant: "destructive" });
+  }
 
   const { data: submissions, isLoading: submissionsLoading } = useGetMySubmissions();
 
@@ -8329,29 +8363,73 @@ export default function Dashboard() {
   if (!canAccess) return null;
 
   return (
+    <ImpersonationCtx.Provider value={{ isReadOnly, onBlockedEdit }}>
     <div className="min-h-screen bg-background" dir="rtl">
       {/* ── Impersonation Banner ── */}
       {isImpersonating && (
-        <div className="sticky top-0 z-50 w-full bg-amber-500 text-amber-950 px-4 py-2.5 flex items-center justify-between gap-3" dir="rtl">
-          <div className="flex items-center gap-2 text-sm font-semibold">
+        <div
+          className={`sticky top-0 z-50 w-full px-4 py-2 flex items-center justify-between gap-3 flex-wrap ${editEnabled ? "bg-red-600 text-white" : "bg-amber-500 text-amber-950"}`}
+          dir="rtl"
+        >
+          {/* Left: status label */}
+          <div className="flex items-center gap-2 text-sm font-semibold min-w-0">
             <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
-            أنت تتصفح كمدير — لوحة تحكم:
-            <span className="font-bold">
-              {impersonation.ownerName ?? "مالك"}
+            <span>
+              معاينة كمدير
+              {editEnabled
+                ? <span className="mr-1 font-bold">(وضع التعديل نشط — مسجّل)</span>
+                : <span className="mr-1 opacity-80">(وضع القراءة فقط)</span>
+              }
+              —&nbsp;
+              <span className="font-bold">{impersonation.ownerName ?? "مالك"}</span>
             </span>
-            {impersonation.adminName && <span className="font-normal opacity-70 text-xs">(المشرف: {impersonation.adminName})</span>}
+            {impersonation.adminName && (
+              <span className="font-normal opacity-60 text-xs hidden sm:inline">
+                ({impersonation.adminName})
+              </span>
+            )}
           </div>
-          <button
-            onClick={endImpersonation}
-            className="shrink-0 flex items-center gap-1.5 bg-amber-950/15 hover:bg-amber-950/25 text-amber-950 font-bold text-xs px-3 py-1.5 rounded-lg transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            العودة للوحة الإدارة العامة
-          </button>
+          {/* Right: actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Enable / Disable Edit toggle */}
+            <button
+              onClick={handleEnableEdit}
+              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
+                editEnabled
+                  ? "bg-white/20 hover:bg-white/30 border-white/30 text-white"
+                  : "bg-amber-950/10 hover:bg-amber-950/20 border-amber-950/20 text-amber-950"
+              }`}
+            >
+              {editEnabled ? (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                  إيقاف التعديل
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                  تفعيل التعديل
+                </>
+              )}
+            </button>
+            {/* Return to admin */}
+            <button
+              onClick={endImpersonation}
+              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+                editEnabled
+                  ? "bg-white/20 hover:bg-white/30 text-white border border-white/30"
+                  : "bg-amber-950/15 hover:bg-amber-950/25 text-amber-950"
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              العودة للوحة المشرف العام
+            </button>
+          </div>
         </div>
       )}
       <Navbar />
@@ -8533,5 +8611,6 @@ export default function Dashboard() {
         )}
       </div>
     </div>
+    </ImpersonationCtx.Provider>
   );
 }
