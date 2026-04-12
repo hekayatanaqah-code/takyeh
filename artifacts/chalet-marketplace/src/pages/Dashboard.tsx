@@ -7978,6 +7978,7 @@ const PERIOD_LABEL: Record<string, string> = {
 
 function CustomersTab() {
   const { toast } = useToast();
+  const qc = useQueryClient();
   const [search, setSearch]           = useState("");
   const [selected, setSelected]       = useState<string | null>(null);
   const [profile, setProfile]         = useState<CustomerProfile | null>(null);
@@ -7985,6 +7986,51 @@ function CustomersTab() {
   const [profileError, setProfileError]     = useState(false);
   const [note, setNote]               = useState("");
   const [savingNote, setSavingNote]   = useState(false);
+
+  /* ── Edit modal state ── */
+  const [editOpen, setEditOpen]   = useState(false);
+  const [editName, setEditName]   = useState("");
+  const [editPhone, setEditPhone] = useState("");
+
+  /* ── Delete confirmation state ── */
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  /* ── Edit mutation ── */
+  const editMutation = useMutation({
+    mutationFn: async ({ oldPhone, name, phone }: { oldPhone: string; name: string; phone: string }) => {
+      const r = await apiFetch(`/owner/customers/${encodeURIComponent(oldPhone)}`, {
+        method: "PUT",
+        body: JSON.stringify({ name, phone }),
+      });
+      if (!r.ok) throw new Error("فشل تحديث بيانات العميل");
+      return r.json() as Promise<{ ok: boolean; newPhone: string }>;
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["owner", "customers"] });
+      const newPhone = data.newPhone ?? selected!;
+      setSelected(newPhone);
+      loadProfile(newPhone);
+      setEditOpen(false);
+      toast({ title: "تم تحديث بيانات العميل بنجاح" });
+    },
+    onError: () => toast({ title: "حدث خطأ أثناء التحديث", variant: "destructive" }),
+  });
+
+  /* ── Delete mutation ── */
+  const deleteMutation = useMutation({
+    mutationFn: async (phone: string) => {
+      const r = await apiFetch(`/owner/customers/${encodeURIComponent(phone)}`, { method: "DELETE" });
+      if (!r.ok) throw new Error("فشل حذف العميل");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "customers"] });
+      setSelected(null);
+      setProfile(null);
+      setDeleteOpen(false);
+      toast({ title: "تم حذف العميل وسجلّ حجوزاته" });
+    },
+    onError: () => toast({ title: "حدث خطأ أثناء الحذف", variant: "destructive" }),
+  });
 
   const { data: customers = [], isLoading } = useQuery<CustomerRow[]>({
     queryKey: ["owner", "customers"],
@@ -8140,9 +8186,30 @@ function CustomersTab() {
                   <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <User className="w-6 h-6 text-primary" />
                   </div>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="text-lg font-bold text-foreground">{profile.clientName}</p>
                     <p dir="ltr" className="text-sm text-muted-foreground">{profile.clientPhone}</p>
+                  </div>
+                  {/* Edit & Delete actions */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => {
+                        setEditName(profile.clientName);
+                        setEditPhone(profile.clientPhone);
+                        setEditOpen(true);
+                      }}
+                      className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                      title="تعديل بيانات العميل"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteOpen(true)}
+                      className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      title="حذف العميل"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
@@ -8254,6 +8321,87 @@ function CustomersTab() {
           )}
         </div>
       )}
+
+      {/* ── Edit Customer Modal ── */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent dir="rtl" className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>تعديل بيانات العميل</DialogTitle>
+            <DialogDescription>يمكنك تحديث الاسم أو رقم الجوال. سيُطبَّق التغيير على جميع حجوزات هذا العميل.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1 block">الاسم</label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="اسم العميل"
+                dir="rtl"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1 block">رقم الجوال</label>
+              <Input
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+                placeholder="05xxxxxxxx"
+                dir="ltr"
+                className="text-left"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 flex-row-reverse sm:flex-row-reverse">
+            <Button
+              onClick={() =>
+                editMutation.mutate({ oldPhone: selected!, name: editName.trim(), phone: editPhone.trim() })
+              }
+              disabled={editMutation.isPending || !editName.trim() || !editPhone.trim()}
+              className="flex-1"
+            >
+              {editMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : null}
+              حفظ التغييرات
+            </Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)} className="flex-1">
+              إلغاء
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Confirmation Dialog ── */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent dir="rtl" className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              تأكيد الحذف
+            </DialogTitle>
+            <DialogDescription className="text-base leading-relaxed pt-1">
+              هل أنت متأكد من حذف العميل وسجل حجوزاته؟
+              <br />
+              <span className="font-semibold text-foreground">{profile?.clientName}</span>
+              {" — "}
+              <span dir="ltr">{profile?.clientPhone}</span>
+              <br />
+              <span className="text-destructive/80 text-sm">لا يمكن التراجع عن هذه العملية.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 flex-row-reverse sm:flex-row-reverse">
+            <Button
+              variant="destructive"
+              onClick={() => deleteMutation.mutate(selected!)}
+              disabled={deleteMutation.isPending}
+              className="flex-1"
+            >
+              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : null}
+              نعم، احذف العميل
+            </Button>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} className="flex-1">
+              إلغاء
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

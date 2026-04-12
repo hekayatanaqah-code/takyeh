@@ -2207,4 +2207,53 @@ router.put("/customers/:phone/note", async (req, res) => {
   return res.json({ ok: true });
 });
 
+/* PUT /owner/customers/:phone — rename and/or re-phone a customer */
+router.put("/customers/:phone", async (req, res) => {
+  const ownerId  = req.user!.id;
+  const oldPhone = req.params.phone;
+  const newName  = req.body?.name  ? String(req.body.name).trim()  : null;
+  const newPhone = req.body?.phone ? String(req.body.phone).trim() : null;
+
+  if (!newName && !newPhone) {
+    return res.status(400).json({ error: "يرجى تقديم اسم أو رقم جوال جديد" });
+  }
+
+  /* Update name across all bookings */
+  if (newName) {
+    await db
+      .update(ownerBookingsTable)
+      .set({ clientName: newName })
+      .where(and(eq(ownerBookingsTable.ownerId, ownerId), eq(ownerBookingsTable.clientPhone, oldPhone)));
+  }
+
+  /* Update phone across bookings + notes */
+  if (newPhone && newPhone !== oldPhone) {
+    await db
+      .update(ownerBookingsTable)
+      .set({ clientPhone: newPhone })
+      .where(and(eq(ownerBookingsTable.ownerId, ownerId), eq(ownerBookingsTable.clientPhone, oldPhone)));
+    await db
+      .update(customerNotesTable)
+      .set({ clientPhone: newPhone })
+      .where(and(eq(customerNotesTable.ownerId, ownerId), eq(customerNotesTable.clientPhone, oldPhone)));
+  }
+
+  return res.json({ ok: true, newPhone: newPhone ?? oldPhone });
+});
+
+/* DELETE /owner/customers/:phone — delete all bookings + notes for this customer */
+router.delete("/customers/:phone", async (req, res) => {
+  const ownerId = req.user!.id;
+  const phone   = req.params.phone;
+
+  await db.delete(ownerBookingsTable).where(
+    and(eq(ownerBookingsTable.ownerId, ownerId), eq(ownerBookingsTable.clientPhone, phone))
+  );
+  await db.delete(customerNotesTable).where(
+    and(eq(customerNotesTable.ownerId, ownerId), eq(customerNotesTable.clientPhone, phone))
+  );
+
+  return res.json({ ok: true });
+});
+
 export default router;
