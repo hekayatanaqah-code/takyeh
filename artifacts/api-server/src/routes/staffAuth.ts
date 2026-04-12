@@ -14,13 +14,15 @@ const router = Router();
 
 const STAFF_SESSION_COOKIE   = "staff_sid";
 const ADMIN_STAFF_COOKIE     = "admin_staff_sid";
-const SESSION_TTL_MS         = 7 * 24 * 60 * 60 * 1000;
+const SESSION_TTL_MS         = 7  * 24 * 60 * 60 * 1000;  // 7 days (default)
+const REMEMBER_TTL_MS        = 30 * 24 * 60 * 60 * 1000;  // 30 days (remember me)
+const SHORT_TTL_MS           =      24 * 60 * 60 * 1000;  // 1 day (no remember me → still need DB expiry)
 
-const cookieOpts = (maxAge: number) => ({
+const cookieOpts = (maxAge?: number) => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax" as const,
-  maxAge,
+  ...(maxAge !== undefined ? { maxAge } : {}),
 });
 
 /* ════════════════════════════════════════════════
@@ -29,11 +31,13 @@ const cookieOpts = (maxAge: number) => ({
    Returns { role, redirect } on success.
    ════════════════════════════════════════════════ */
 router.post("/unified-login", async (req, res) => {
-  const { username, password } = req.body ?? {};
+  const { username, password, rememberMe } = req.body ?? {};
   if (!username || !password) {
     return res.status(400).json({ error: "يرجى إدخال اسم المستخدم وكلمة المرور" });
   }
-  const user = String(username).trim();
+  const user   = String(username).trim();
+  const cookieTtl = rememberMe ? REMEMBER_TTL_MS : undefined; // undefined = session cookie
+  const dbTtl     = rememberMe ? REMEMBER_TTL_MS : SHORT_TTL_MS;
 
   /* ── 1. Check owner_staff ── */
   const [ownerStaff] = await db
@@ -56,9 +60,9 @@ router.post("/unified-login", async (req, res) => {
       return res.status(401).json({ error: "كلمة المرور غير صحيحة" });
     }
     const sid    = crypto.randomBytes(32).toString("hex");
-    const expire = new Date(Date.now() + SESSION_TTL_MS);
+    const expire = new Date(Date.now() + dbTtl);
     await db.insert(staffSessionsTable).values({ sid, staffId: ownerStaff.id, ownerId: ownerStaff.ownerId, expire });
-    res.cookie(STAFF_SESSION_COOKIE, sid, cookieOpts(SESSION_TTL_MS));
+    res.cookie(STAFF_SESSION_COOKIE, sid, cookieOpts(cookieTtl));
     return res.json({ role: "staff", redirect: "/dashboard" });
   }
 
@@ -85,11 +89,13 @@ router.post("/unified-login", async (req, res) => {
    Called from /admin/internal/access.
    ════════════════════════════════════════════════ */
 router.post("/admin-portal-login", async (req, res) => {
-  const { username, password } = req.body ?? {};
+  const { username, password, rememberMe } = req.body ?? {};
   if (!username || !password) {
     return res.status(400).json({ error: "يرجى إدخال اسم المستخدم وكلمة المرور" });
   }
-  const user = String(username).trim();
+  const user      = String(username).trim();
+  const cookieTtl = rememberMe ? REMEMBER_TTL_MS : undefined;
+  const dbTtl     = rememberMe ? REMEMBER_TTL_MS : SHORT_TTL_MS;
 
   const [adminStaff] = await db
     .select()
@@ -110,9 +116,9 @@ router.post("/admin-portal-login", async (req, res) => {
     return res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
   }
   const sid    = crypto.randomBytes(32).toString("hex");
-  const expire = new Date(Date.now() + SESSION_TTL_MS);
+  const expire = new Date(Date.now() + dbTtl);
   await db.insert(adminSessionsTable).values({ sid, adminStaffId: adminStaff.id, expire });
-  res.cookie(ADMIN_STAFF_COOKIE, sid, cookieOpts(SESSION_TTL_MS));
+  res.cookie(ADMIN_STAFF_COOKIE, sid, cookieOpts(cookieTtl));
   const isSuperAdmin = !!(adminStaff as any).isSuperAdmin;
   return res.json({ role: isSuperAdmin ? "superAdmin" : "adminStaff", redirect: "/admin" });
 });

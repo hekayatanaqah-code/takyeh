@@ -13,6 +13,7 @@ export default function AdminPortal() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw]     = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
 
@@ -28,7 +29,7 @@ export default function AdminPortal() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username: username.trim(), password }),
+        body: JSON.stringify({ username: username.trim(), password, rememberMe }),
       });
       const data = await r.json();
 
@@ -115,7 +116,16 @@ export default function AdminPortal() {
               </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer select-none group">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 accent-amber-500 cursor-pointer"
+                />
+                <span className="text-xs text-slate-400 group-hover:text-slate-300 transition-colors">تذكرني لـ ٣٠ يوم</span>
+              </label>
               <a
                 href={`${BASE}/forgot-password/admin`}
                 className="text-xs text-amber-500/70 hover:text-amber-400 transition-colors"

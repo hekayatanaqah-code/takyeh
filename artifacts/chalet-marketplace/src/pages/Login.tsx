@@ -16,6 +16,7 @@ export default function Login() {
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [isAdminBlock, setIsAdminBlock] = useState(false);
+  const [rememberMe, setRememberMe]     = useState(false);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -37,7 +38,7 @@ export default function Login() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username: trimmed, password }),
+        body: JSON.stringify({ username: trimmed, password, rememberMe }),
       });
       const data = await r.json();
 
@@ -145,7 +146,16 @@ export default function Login() {
             </div>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 cursor-pointer select-none group">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-gray-300 accent-green-600 cursor-pointer"
+              />
+              <span className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors">تذكرني لـ ٣٠ يوم</span>
+            </label>
             <a
               href={`${BASE}/forgot-password`}
               className="text-xs text-green-600 hover:text-green-700"

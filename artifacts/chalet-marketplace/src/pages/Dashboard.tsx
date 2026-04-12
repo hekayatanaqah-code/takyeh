@@ -30,7 +30,7 @@ import {
   TrendingUp, Sunrise, Moon, Sun, Lock, Zap, DollarSign, Users,
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
-  Search, Activity, Banknote, Eye,
+  Search, Activity, Banknote, Eye, Bell,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -2446,6 +2446,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <XCircle className="w-3 h-3" />
                           إلغاء
                         </button>
+                        {b.insuranceFee && Number(b.insuranceFee) > 0 && !b.insuranceRefunded && (
+                          <button
+                            onClick={() => patchBookingStatus.mutate({ id: b.id, patch: { insuranceRefunded: true } })}
+                            disabled={patchBookingStatus.isPending}
+                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-800 rounded-lg py-1.5 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors disabled:opacity-50"
+                          >
+                            <Lock className="w-3 h-3" />
+                            إعادة التأمين
+                          </button>
+                        )}
                         {b.ratedAt ? (
                           <span className="flex-1 flex items-center justify-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-lg py-1.5 bg-green-50 dark:bg-green-900/10">
                             <CheckCircle className="w-3 h-3" />
@@ -2476,6 +2486,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 <Button variant="outline" size="sm" onClick={() => setSummaryDate(null)}>إغلاق</Button>
                 <Button variant="ghost" size="sm" onClick={() => { setSummaryDate(null); setBlockDateStr(summaryDate); }}>
                   ضبط الإتاحة
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
+                  onClick={() => { setPrefilledDate(summaryDate); setSummaryDate(null); setAddOpen(true); }}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  إضافة حجز
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -6402,6 +6420,88 @@ function ReportsTab() {
   );
 }
 
+/* ── Notifications Tab ────────────────────────── */
+interface OwnerNotifRow {
+  id: number; type: string; chaletId: number | null; reviewId: number | null;
+  message: string; isRead: boolean; createdAt: string;
+}
+
+function NotificationsTab() {
+  const qc = useQueryClient();
+  const { data: notifications = [], isLoading } = useQuery<OwnerNotifRow[]>({
+    queryKey: ["owner", "notifications"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/notifications");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    refetchInterval: 30_000,
+  });
+
+  const markAllRead = useMutation({
+    mutationFn: async () => {
+      await apiFetch("/owner/notifications/read-all", { method: "PATCH" });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "notifications"] });
+      qc.invalidateQueries({ queryKey: ["owner", "notifications-summary"] });
+    },
+  });
+
+  const unread = notifications.filter((n) => !n.isRead);
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <Bell className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <h2 className="font-bold text-base text-foreground">الإشعارات</h2>
+              {unread.length > 0 && (
+                <p className="text-xs text-muted-foreground">{unread.length} إشعار غير مقروء</p>
+              )}
+            </div>
+          </div>
+          {unread.length > 0 && (
+            <button
+              onClick={() => markAllRead.mutate()}
+              disabled={markAllRead.isPending}
+              className="text-xs text-primary hover:underline underline-offset-2 font-medium"
+            >
+              تحديد الكل كمقروء
+            </button>
+          )}
+        </div>
+        {isLoading ? (
+          <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 animate-spin text-muted-foreground" /></div>
+        ) : notifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-14 text-muted-foreground gap-3">
+            <Bell className="w-10 h-10 opacity-20" />
+            <p className="text-sm">لا توجد إشعارات حتى الآن</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {notifications.map((n) => (
+              <div key={n.id} className={`flex items-start gap-3 px-5 py-4 text-sm transition-colors ${n.isRead ? "opacity-60" : "bg-amber-50/60 dark:bg-amber-900/10"}`}>
+                <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${n.isRead ? "bg-transparent" : n.type === "report_dismissed" ? "bg-red-500" : "bg-green-500"}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-foreground leading-relaxed">{n.message}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {new Date(n.createdAt).toLocaleDateString("ar-SA")} · {new Date(n.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 /* ── Reviews Tab ─────────────────────────────── */
 interface OwnerChalet { id: number; nameAr: string; photos: string[]; waReviewTemplate: string | null }
 
@@ -6411,6 +6511,7 @@ interface OwnerReviewRow {
   id: number;
   chaletId: number;
   chaletName: string | null;
+  guestName: string | null;
   rating: number;
   comment: string | null;
   photoUrls: string[];
@@ -6434,30 +6535,6 @@ function ReviewsTab() {
   const [replyingId, setReplyingId] = useState<number | null>(null);
   const [reportConfirmId, setReportConfirmId] = useState<number | null>(null);
   const [reportReasonDraft, setReportReasonDraft] = useState("");
-
-  interface OwnerNotifRow {
-    id: number; type: string; chaletId: number | null; reviewId: number | null;
-    message: string; isRead: boolean; createdAt: string;
-  }
-  const { data: notifications = [] } = useQuery<OwnerNotifRow[]>({
-    queryKey: ["owner", "notifications"],
-    queryFn: async () => {
-      const r = await apiFetch("/owner/notifications");
-      if (!r.ok) return [];
-      return r.json();
-    },
-    refetchInterval: 30_000,
-  });
-
-  const markAllRead = useMutation({
-    mutationFn: async () => {
-      await apiFetch("/owner/notifications/read-all", { method: "PATCH" });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["owner", "notifications"] });
-      qc.invalidateQueries({ queryKey: ["owner", "notifications-summary"] });
-    },
-  });
 
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
@@ -6611,50 +6688,6 @@ function ReviewsTab() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* ── Notifications Inbox ── */}
-      {notifications.length > 0 && (() => {
-        const unread = notifications.filter((n) => !n.isRead);
-        return (
-          <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/30">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                  <AlertTriangle className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-                </div>
-                <span className="font-semibold text-sm text-foreground">الإشعارات</span>
-                {unread.length > 0 && (
-                  <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 leading-none">
-                    {unread.length} جديد
-                  </span>
-                )}
-              </div>
-              {unread.length > 0 && (
-                <button
-                  onClick={() => markAllRead.mutate()}
-                  disabled={markAllRead.isPending}
-                  className="text-xs text-primary hover:underline underline-offset-2 font-medium"
-                >
-                  تحديد الكل كمقروء
-                </button>
-              )}
-            </div>
-            <div className="divide-y divide-border max-h-64 overflow-y-auto">
-              {notifications.slice(0, 8).map((n) => (
-                <div key={n.id} className={`flex items-start gap-3 px-5 py-3 text-sm ${n.isRead ? "opacity-60" : "bg-amber-50/60 dark:bg-amber-900/10"}`}>
-                  <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${n.isRead ? "bg-transparent" : n.type === "report_dismissed" ? "bg-red-500" : "bg-green-500"}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-foreground leading-relaxed">{n.message}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {new Date(n.createdAt).toLocaleDateString("ar-SA")} · {new Date(n.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
       {/* Header */}
       <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
         <div className="flex items-center gap-3 mb-1">
@@ -6856,6 +6889,9 @@ function ReviewsTab() {
                           <Star key={s} className="w-4 h-4" fill={s <= rev.rating ? "#f59e0b" : "transparent"} stroke={s <= rev.rating ? "#f59e0b" : "#9ca3af"} strokeWidth={1.5} />
                         ))}
                       </div>
+                      {rev.guestName && (
+                        <span className="text-xs font-medium text-foreground bg-muted/50 px-2 py-0.5 rounded-full">{rev.guestName}</span>
+                      )}
                       {rev.isVerified && (
                         <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
                           <CheckCircle className="w-3.5 h-3.5" /> نزيل مؤكد
@@ -8409,7 +8445,7 @@ function CustomersTab() {
 /* ── Main Dashboard ──────────────────────────── */
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "customers" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits" | "seasons">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "notifications" | "customers" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits" | "seasons">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const { user, isLoading: authLoading, isAuthenticated, logout, login } = useAuth();
   const { isStaff, staffUser, permissions, isLoading: staffLoading, logout: staffLogout } = useStaffAuth();
@@ -8496,10 +8532,11 @@ export default function Dashboard() {
   const unreadNotifCount = notifSummary.filter((n) => !n.isRead).length;
 
   const allTabs = [
-    { id: "chalets",   label: "شاليهاتي",          icon: <Building2 className="w-4 h-4" /> },
-    { id: "seasons",   label: "المواسم",             icon: <Sun className="w-4 h-4" /> },
-    { id: "reviews",   label: "التقييمات",           icon: <Star className="w-4 h-4" /> },
-    { id: "customers", label: "عملائي",              icon: <Users className="w-4 h-4" /> },
+    { id: "chalets",       label: "شاليهاتي",          icon: <Building2 className="w-4 h-4" /> },
+    { id: "seasons",       label: "المواسم",             icon: <Sun className="w-4 h-4" /> },
+    { id: "reviews",       label: "التقييمات",           icon: <Star className="w-4 h-4" /> },
+    { id: "notifications", label: "الإشعارات",           icon: <Bell className="w-4 h-4" /> },
+    { id: "customers",     label: "عملائي",              icon: <Users className="w-4 h-4" /> },
     { id: "services",  label: "خدماتي",             icon: <MessageSquare className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات",  icon: <Calendar className="w-4 h-4" /> },
     { id: "revenue",   label: "الإيرادات",           icon: <TrendingUp className="w-4 h-4" /> },
@@ -8783,7 +8820,7 @@ export default function Dashboard() {
             >
               {tab.icon}
               {tab.label}
-              {tab.id === "reviews" && unreadNotifCount > 0 && (
+              {tab.id === "notifications" && unreadNotifCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
                   {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
                 </span>
@@ -8801,6 +8838,9 @@ export default function Dashboard() {
         )}
         {activeTab === "reviews" && (
           <ReviewsTab />
+        )}
+        {activeTab === "notifications" && (
+          <NotificationsTab />
         )}
         {activeTab === "customers" && (
           <CustomersTab />

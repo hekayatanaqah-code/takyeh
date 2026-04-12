@@ -2041,6 +2041,7 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
   if (body.maxGuests !== undefined) updateData.maxGuests = body.maxGuests ? Number(body.maxGuests) : null;
   if (body.bedrooms !== undefined) updateData.bedrooms = body.bedrooms != null ? Number(body.bedrooms) : null;
   if (body.photos !== undefined) updateData.photos = Array.isArray(body.photos) ? body.photos : [];
+  if (body.photoCaptions !== undefined) updateData.photoCaptions = Array.isArray(body.photoCaptions) ? body.photoCaptions : [];
   if (body.videoUrl !== undefined) updateData.videoUrl = body.videoUrl || null;
   if (body.amenities !== undefined) updateData.amenities = Array.isArray(body.amenities) ? body.amenities : [];
   if (body.priceMorning !== undefined) updateData.priceMorning = num(body.priceMorning);

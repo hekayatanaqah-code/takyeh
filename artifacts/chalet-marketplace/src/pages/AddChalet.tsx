@@ -85,6 +85,7 @@ interface UploadedPhoto {
   url: string;
   name: string;
   preview: string;
+  caption?: string;
 }
 
 interface UploadedVideo {
@@ -242,7 +243,7 @@ export default function AddChalet() {
     /* Photos */
     if (Array.isArray(editSub.photos) && editSub.photos.length > 0) {
       const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-      setPhotos(editSub.photos.map((url: string) => ({ url, name: url.split("/").pop() ?? "photo", preview: url.startsWith("http") ? url : `${base}${url}` })));
+      setPhotos(editSub.photos.map((url: string, i: number) => ({ url, name: url.split("/").pop() ?? "photo", preview: url.startsWith("http") ? url : `${base}${url}`, caption: editSub.photoCaptions?.[i] ?? "" })));
     }
     /* Video */
     if (editSub.videoUrl) {
@@ -414,7 +415,9 @@ export default function AddChalet() {
   };
 
   const buildPayload = () => {
-    const successfulPhotos = photos.filter((p) => p.url && p.url !== "error").map((p) => p.url);
+    const successfulPhotoObjs = photos.filter((p) => p.url && p.url !== "error");
+    const successfulPhotos = successfulPhotoObjs.map((p) => p.url);
+    const photoCaptions = successfulPhotoObjs.map((p) => p.caption ?? "");
     const successfulVideo = video && video.url && video.url !== "error" ? video.url : undefined;
     const finalDistrict = selectedDistrict === "__other__"
       ? customDistrict.trim() || undefined
@@ -461,6 +464,7 @@ export default function AddChalet() {
       seasonalDisclaimer,
       amenities: amenitiesList,
       photos: successfulPhotos,
+      photoCaptions,
       videoUrl: successfulVideo,
     };
   };
@@ -1148,54 +1152,65 @@ export default function AddChalet() {
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.8 }}
-                            className="relative aspect-square rounded-xl overflow-hidden border group"
-                            style={{ borderColor: idx === 0 ? "#16a34a" : undefined, borderWidth: idx === 0 ? 2 : 1 }}
+                            className="flex flex-col gap-1"
                           >
-                            <img
-                              src={photo.preview}
-                              alt={photo.name}
-                              className="w-full h-full object-cover"
-                            />
-                            {/* Main image badge */}
-                            {idx === 0 && (
-                              <>
-                                <div className="absolute top-1 right-1 bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center shadow-md">
-                                  <span style={{ fontSize: 11 }}>★</span>
+                            <div
+                              className="relative aspect-square rounded-xl overflow-hidden border group"
+                              style={{ borderColor: idx === 0 ? "#16a34a" : undefined, borderWidth: idx === 0 ? 2 : 1 }}
+                            >
+                              <img
+                                src={photo.preview}
+                                alt={photo.name}
+                                className="w-full h-full object-cover"
+                              />
+                              {/* Main image badge */}
+                              {idx === 0 && (
+                                <>
+                                  <div className="absolute top-1 right-1 bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center shadow-md">
+                                    <span style={{ fontSize: 11 }}>★</span>
+                                  </div>
+                                  <div className="absolute bottom-0 inset-x-0 bg-primary/80 text-white text-[10px] font-bold text-center py-0.5">
+                                    الرئيسية
+                                  </div>
+                                </>
+                              )}
+                              {/* Upload state overlay */}
+                              {photo.url === "" && (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                  <Loader2 className="w-5 h-5 text-white animate-spin" />
                                 </div>
-                                <div className="absolute bottom-0 inset-x-0 bg-primary/80 text-white text-[10px] font-bold text-center py-0.5">
-                                  الرئيسية
+                              )}
+                              {photo.url === "error" && (
+                                <div className="absolute inset-0 bg-destructive/60 flex items-center justify-center">
+                                  <X className="w-6 h-6 text-white" />
                                 </div>
-                              </>
-                            )}
-                            {/* Upload state overlay */}
-                            {photo.url === "" && (
-                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                <Loader2 className="w-5 h-5 text-white animate-spin" />
-                              </div>
-                            )}
-                            {photo.url === "error" && (
-                              <div className="absolute inset-0 bg-destructive/60 flex items-center justify-center">
-                                <X className="w-6 h-6 text-white" />
-                              </div>
-                            )}
-                            {/* Set as main button (non-main photos only) */}
-                            {idx > 0 && photo.url && photo.url !== "error" && (
+                              )}
+                              {/* Set as main button (non-main photos only) */}
+                              {idx > 0 && photo.url && photo.url !== "error" && (
+                                <button
+                                  type="button"
+                                  onClick={() => setMainPhoto(idx)}
+                                  className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-bold py-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/80 text-center"
+                                >
+                                  تعيين كرئيسية
+                                </button>
+                              )}
+                              {/* Remove button */}
                               <button
                                 type="button"
-                                onClick={() => setMainPhoto(idx)}
-                                className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[9px] font-bold py-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/80 text-center"
+                                onClick={() => removePhoto(idx)}
+                                className="absolute top-1 left-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive"
                               >
-                                تعيين كرئيسية
+                                <X className="w-3.5 h-3.5" />
                               </button>
-                            )}
-                            {/* Remove button */}
-                            <button
-                              type="button"
-                              onClick={() => removePhoto(idx)}
-                              className="absolute top-1 left-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="وصف الصورة (اختياري)"
+                              value={photo.caption ?? ""}
+                              onChange={(e) => setPhotos(prev => prev.map((p, i) => i === idx ? { ...p, caption: e.target.value } : p))}
+                              className="w-full text-[10px] px-1.5 py-1 rounded border border-border bg-muted/30 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary leading-tight"
+                            />
                           </motion.div>
                         ))}
                       </AnimatePresence>
