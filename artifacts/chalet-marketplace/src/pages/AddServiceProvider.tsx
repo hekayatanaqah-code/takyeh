@@ -49,8 +49,8 @@ async function uploadCompressed(file: File, type: "image" | "video"): Promise<st
       credentials: "include",
     });
     if (!res.ok) return null;
-    const { url } = await res.json() as { url: string };
-    return url;
+    const data = await res.json() as { url?: string; originalUrl?: string };
+    return data.url ?? data.originalUrl ?? null;
   } catch {
     return null;
   }
@@ -62,6 +62,8 @@ export default function AddServiceProvider() {
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [customCategory, setCustomCategory] = useState("");
 
   const [form, setForm] = useState({
     businessName: "",
@@ -223,40 +225,43 @@ export default function AddServiceProvider() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
+    setFieldErrors({});
 
-    if (!form.businessName || !form.category || !form.city || !form.whatsappNumber) {
-      setSubmitError("يرجى تعبئة جميع الحقول المطلوبة.");
-      return;
-    }
-    if (!form.yearsOfExperience) {
-      setSubmitError("يرجى إدخال سنوات الخبرة.");
-      return;
-    }
-    if (coverageTags.length === 0) {
-      setSubmitError("يرجى إضافة نطاق الخدمة (المناطق التي تخدمها).");
-      return;
-    }
+    // Client-side field validation with specific messages
+    const errs: Record<string, string> = {};
+    if (!form.businessName.trim()) errs.businessName = "اسم النشاط مطلوب";
+    if (!form.category) errs.category = "يرجى اختيار فئة الخدمة";
+    if (form.category === "other" && !customCategory.trim()) errs.customCategory = "يرجى كتابة اسم الفئة المخصصة";
+    if (!form.city) errs.city = "يرجى اختيار المدينة";
+    if (!form.whatsappNumber) errs.whatsappNumber = "رقم الواتساب مطلوب";
+    else if (form.whatsappNumber.length < 9) errs.whatsappNumber = "رقم الواتساب يجب أن يكون 9 أرقام على الأقل";
+    if (!form.yearsOfExperience) errs.yearsOfExperience = "يرجى إدخال سنوات الخبرة";
+    if (coverageTags.length === 0) errs.coverageTags = "يرجى إضافة نطاق الخدمة (المناطق التي تخدمها)";
+
     const validGallery = gallery.filter((p) => p.url && p.url !== "error").map((p) => p.url);
-    if (validGallery.length < 3) {
-      setSubmitError("يجب رفع 3 صور على الأقل للمعرض.");
-      return;
-    }
-    if (logo && !logo.url) {
-      setSubmitError("انتظر انتهاء تحميل الشعار.");
-      return;
-    }
-    if (!legalAccepted) {
-      setSubmitError("يجب الموافقة على الإقرار القانوني لإتمام التسجيل.");
+    if (validGallery.length < 3) errs.galleryPhotos = `يجب رفع 3 صور على الأقل (لديك ${validGallery.length} حالياً)`;
+
+    if (logo && !logo.url) errs.logoUrl = "انتظر انتهاء تحميل الشعار";
+    if (!legalAccepted) errs.legalAccepted = "يجب الموافقة على الإقرار القانوني";
+
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      // Show summary of first error as the main message
+      setSubmitError(Object.values(errs)[0]);
       return;
     }
 
     setIsSubmitting(true);
     try {
+      const finalCategory = form.category === "other" && customCategory.trim()
+        ? customCategory.trim()
+        : form.category;
+
       const payload = {
-        businessName: form.businessName,
-        category: form.category,
+        businessName: form.businessName.trim(),
+        category: finalCategory,
         city: form.city,
-        descriptionAr: form.descriptionAr || undefined,
+        descriptionAr: form.descriptionAr.trim() || undefined,
         whatsappNumber: form.whatsappNumber,
         yearsOfExperience: Number(form.yearsOfExperience),
         logoUrl: logo?.url || undefined,
@@ -272,8 +277,15 @@ export default function AddServiceProvider() {
         credentials: "include",
       });
       if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error((err as any)?.error || "فشل إرسال الطلب");
+        const err = await r.json().catch(() => ({})) as any;
+        // Display field-specific errors from the API if available
+        if (err.fieldErrors && typeof err.fieldErrors === "object") {
+          setFieldErrors(err.fieldErrors);
+          setSubmitError(Object.values(err.fieldErrors as Record<string, string>)[0] ?? err.error ?? "فشل إرسال الطلب");
+        } else {
+          throw new Error(err.error || "فشل إرسال الطلب");
+        }
+        return;
       }
       setSubmitted(true);
     } catch (err: unknown) {
@@ -372,15 +384,23 @@ export default function AddServiceProvider() {
                   onChange={(e) => handleChange("businessName", e.target.value)}
                   placeholder="مثال: نطيطات الفرح - بريدة"
                   required
+                  className={fieldErrors.businessName ? "border-red-500 ring-1 ring-red-500" : ""}
                 />
+                {fieldErrors.businessName && (
+                  <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.businessName}</p>
+                )}
               </div>
 
               {/* Category + City */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label>فئة الخدمة <span className="text-red-500">*</span></Label>
-                  <Select value={form.category} onValueChange={(v) => handleChange("category", v)} required>
-                    <SelectTrigger>
+                  <Select
+                    value={form.category}
+                    onValueChange={(v) => { handleChange("category", v); setCustomCategory(""); }}
+                    required
+                  >
+                    <SelectTrigger className={fieldErrors.category ? "border-red-500 ring-1 ring-red-500" : ""}>
                       <SelectValue placeholder="اختر الفئة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -389,12 +409,31 @@ export default function AddServiceProvider() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {fieldErrors.category && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.category}</p>
+                  )}
+                  {/* Custom category input — shown only when "other" is selected */}
+                  {form.category === "other" && (
+                    <div className="mt-2 space-y-1">
+                      <Label className="text-xs text-muted-foreground">اسم الفئة المخصصة <span className="text-red-500">*</span></Label>
+                      <Input
+                        value={customCategory}
+                        onChange={(e) => setCustomCategory(e.target.value)}
+                        placeholder="مثال: حلويات، ديكورات، نقليات..."
+                        autoFocus
+                        className={fieldErrors.customCategory ? "border-red-500 ring-1 ring-red-500" : ""}
+                      />
+                      {fieldErrors.customCategory && (
+                        <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.customCategory}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
                   <Label>المدينة الرئيسية <span className="text-red-500">*</span></Label>
                   <Select value={form.city} onValueChange={handleCityChange} required>
-                    <SelectTrigger>
+                    <SelectTrigger className={fieldErrors.city ? "border-red-500 ring-1 ring-red-500" : ""}>
                       <SelectValue placeholder="اختر المدينة" />
                     </SelectTrigger>
                     <SelectContent>
@@ -403,6 +442,9 @@ export default function AddServiceProvider() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {fieldErrors.city && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.city}</p>
+                  )}
                 </div>
               </div>
 
@@ -422,10 +464,13 @@ export default function AddServiceProvider() {
                   value={form.yearsOfExperience}
                   onChange={(e) => handleChange("yearsOfExperience", e.target.value)}
                   placeholder="مثال: 5"
-                  className="w-40"
+                  className={`w-40 ${fieldErrors.yearsOfExperience ? "border-red-500 ring-1 ring-red-500" : ""}`}
                   required
                 />
-                <p className="text-xs text-muted-foreground">تُعرض للعملاء لبناء الثقة</p>
+                {fieldErrors.yearsOfExperience
+                  ? <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.yearsOfExperience}</p>
+                  : <p className="text-xs text-muted-foreground">تُعرض للعملاء لبناء الثقة</p>
+                }
               </div>
 
               {/* WhatsApp */}
@@ -438,11 +483,14 @@ export default function AddServiceProvider() {
                     value={form.whatsappNumber}
                     onChange={(e) => handleChange("whatsappNumber", e.target.value.replace(/\D/g, ""))}
                     placeholder="05xxxxxxxx"
-                    className="pr-10"
+                    className={`pr-10 ${fieldErrors.whatsappNumber ? "border-red-500 ring-1 ring-red-500" : ""}`}
                     dir="ltr"
                     required
                   />
                 </div>
+                {fieldErrors.whatsappNumber && (
+                  <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.whatsappNumber}</p>
+                )}
               </div>
 
               {/* Description */}
@@ -461,11 +509,16 @@ export default function AddServiceProvider() {
 
             {/* ── Section 2: Coverage Tags ─────────────────────────── */}
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
-              className="bg-card border border-border rounded-2xl p-6 space-y-4">
+              className={`bg-card border rounded-2xl p-6 space-y-4 ${fieldErrors.coverageTags ? "border-red-400 dark:border-red-700" : "border-border"}`}>
               <h2 className="text-lg font-bold text-foreground pb-3 border-b border-border flex items-center gap-2">
                 <Globe className="w-5 h-5 text-primary" />
                 نطاق الخدمة — نخدمك في <span className="text-red-500 text-sm font-normal">(إلزامي)</span>
               </h2>
+              {fieldErrors.coverageTags && (
+                <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                  <X className="w-4 h-4 shrink-0" />{fieldErrors.coverageTags}
+                </p>
+              )}
               <p className="text-sm text-muted-foreground">المدينة الرئيسية تُضاف تلقائياً. يمكنك إضافة مناطق أخرى.</p>
 
               {coverageTags.length > 0 && (
@@ -628,6 +681,11 @@ export default function AddServiceProvider() {
                   </p>
                   <span className="text-xs text-muted-foreground">{gallery.length} / {MAX_GALLERY}</span>
                 </div>
+                {fieldErrors.galleryPhotos && (
+                  <p className="text-sm text-red-600 dark:text-red-400 mb-2 flex items-center gap-1.5">
+                    <X className="w-4 h-4 shrink-0" />{fieldErrors.galleryPhotos}
+                  </p>
+                )}
 
                 <input ref={galleryInputRef} type="file" accept="image/*" multiple onChange={handleGalleryInput} className="hidden" />
 
