@@ -2076,25 +2076,50 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
 /* GET /owner/customers — unique customers aggregated from bookings */
 router.get("/customers", async (req, res) => {
   const ownerId = req.user!.id;
-  const rows = await db.execute<{
-    client_name: string; client_phone: string;
-    total_bookings: string; total_revenue: string; last_booking_date: string;
-  }>(
-    sql`
-      SELECT
-        client_name,
-        client_phone,
-        COUNT(*)::text                             AS total_bookings,
-        COALESCE(SUM(total_price), 0)::text        AS total_revenue,
-        MAX(booking_date)                          AS last_booking_date
-      FROM owner_bookings
-      WHERE owner_id = ${ownerId}
-        AND cancelled_at IS NULL
-      GROUP BY client_name, client_phone
-      ORDER BY last_booking_date DESC
-    `
-  );
-  return res.json(rows);
+
+  /* Aggregate in JS — avoids raw sql execute array type ambiguity */
+  const map = new Map<string, { client_name: string; client_phone: string; total_bookings: number; total_revenue: number; last_booking_date: string }>();
+  const fullRows = await db
+    .select({
+      clientName: ownerBookingsTable.clientName,
+      clientPhone: ownerBookingsTable.clientPhone,
+      totalPrice: ownerBookingsTable.totalPrice,
+      bookingDate: ownerBookingsTable.bookingDate,
+    })
+    .from(ownerBookingsTable)
+    .where(and(eq(ownerBookingsTable.ownerId, ownerId), isNull(ownerBookingsTable.cancelledAt)))
+    .orderBy(desc(ownerBookingsTable.bookingDate));
+
+  for (const row of fullRows) {
+    const phone = row.clientPhone ?? "";
+    const existing = map.get(phone);
+    const revenue = parseFloat(row.totalPrice ?? "0") || 0;
+    if (existing) {
+      existing.total_bookings++;
+      existing.total_revenue += revenue;
+      if (row.bookingDate > existing.last_booking_date) existing.last_booking_date = row.bookingDate;
+    } else {
+      map.set(phone, {
+        client_name: row.clientName,
+        client_phone: phone,
+        total_bookings: 1,
+        total_revenue: revenue,
+        last_booking_date: row.bookingDate,
+      });
+    }
+  }
+
+  const result = Array.from(map.values())
+    .sort((a, b) => b.last_booking_date.localeCompare(a.last_booking_date))
+    .map((r) => ({
+      client_name: r.client_name,
+      client_phone: r.client_phone,
+      total_bookings: String(r.total_bookings),
+      total_revenue: String(r.total_revenue),
+      last_booking_date: r.last_booking_date,
+    }));
+
+  return res.json(result);
 });
 
 /* GET /owner/customers/:phone — full profile + booking history */

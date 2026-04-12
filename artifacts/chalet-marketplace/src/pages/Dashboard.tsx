@@ -2275,7 +2275,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         open={addOpen}
         onClose={() => { setAddOpen(false); setPrefilledDate(null); }}
         submissions={submissions}
-        onAdded={() => qc.invalidateQueries({ queryKey: ["owner", "bookings"] })}
+        onAdded={() => {
+          qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
+          qc.invalidateQueries({ queryKey: ["owner", "customers"] });
+        }}
         existingBookings={bookings}
         prefilledDate={prefilledDate}
         prefilledChaletId={activeChaletId ? String(activeChaletId) : undefined}
@@ -7986,7 +7989,9 @@ function CustomersTab() {
     queryKey: ["owner", "customers"],
     queryFn: async () => {
       const r = await apiFetch("/owner/customers");
-      return r.ok ? r.json() : [];
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
     },
   });
 

@@ -19,6 +19,7 @@ import {
   ownerBookingsTable,
   ownerStaffTable,
   ownerExpensesTable,
+  customerNotesTable,
 } from "@workspace/db/schema";
 import { eq, inArray, and, gt, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -842,13 +843,14 @@ router.post("/demo-preview", async (req, res) => {
 
   const today = new Date();
 
-  /* Check if demo data already seeded */
-  const [existing] = await db
-    .select({ id: chaletSubmissionsTable.id })
-    .from(chaletSubmissionsTable)
-    .where(eq(chaletSubmissionsTable.ownerId, DEMO_OWNER_ID));
+  /* Always reset demo data so the sandbox is fresh on every click */
+  await db.delete(ownerBookingsTable).where(eq(ownerBookingsTable.ownerId, DEMO_OWNER_ID));
+  await db.delete(ownerStaffTable).where(eq(ownerStaffTable.ownerId, DEMO_OWNER_ID));
+  await db.delete(ownerExpensesTable).where(eq(ownerExpensesTable.ownerId, DEMO_OWNER_ID));
+  await db.execute(sql`DELETE FROM customer_notes WHERE owner_id = ${DEMO_OWNER_ID}`);
+  await db.delete(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.ownerId, DEMO_OWNER_ID));
 
-  if (!existing) {
+  {
     /* ── 1. Demo chalet submission ── */
     const [newSub] = await db.insert(chaletSubmissionsTable).values({
       ownerId: DEMO_OWNER_ID,
@@ -871,14 +873,23 @@ router.post("/demo-preview", async (req, res) => {
     }).returning({ id: chaletSubmissionsTable.id });
     const subId = newSub.id;
 
-    /* ── 2. Demo bookings (spread across current month) ── */
+    /* ── 2. Demo bookings — 5 repeat customers with history ── */
     const demoBookings = [
-      { offset: -12, name: "أحمد العتيبي",   phone: "0501111222", period: "full_day", amount: "600" },
-      { offset: -8,  name: "فيصل الحربي",    phone: "0552223333", period: "evening",  amount: "350" },
-      { offset: -3,  name: "سلطان الزهراني", phone: "0533334444", period: "morning",  amount: "300" },
-      { offset: 4,   name: "خالد المطيري",   phone: "0544445555", period: "full_day", amount: "600" },
-      { offset: 9,   name: "محمد القحطاني",  phone: "0555556666", period: "evening",  amount: "350" },
-      { offset: 15,  name: "عبدالله الشمري", phone: "0566667777", period: "morning",  amount: "300" },
+      /* أحمد العتيبي — 3 bookings (VIP repeat customer) */
+      { offset: -45, name: "أحمد العتيبي",   phone: "0501111222", period: "full_day", amount: "600", deposit: "200" },
+      { offset: -20, name: "أحمد العتيبي",   phone: "0501111222", period: "full_day", amount: "600", deposit: "200" },
+      { offset: -3,  name: "أحمد العتيبي",   phone: "0501111222", period: "evening",  amount: "350", deposit: "100" },
+      /* فيصل الحربي — 2 bookings */
+      { offset: -30, name: "فيصل الحربي",    phone: "0552223333", period: "morning",  amount: "300", deposit: "100" },
+      { offset: -8,  name: "فيصل الحربي",    phone: "0552223333", period: "full_day", amount: "600", deposit: "200" },
+      /* سلطان الزهراني — 2 bookings */
+      { offset: -25, name: "سلطان الزهراني", phone: "0533334444", period: "evening",  amount: "350", deposit: "150" },
+      { offset: 4,   name: "سلطان الزهراني", phone: "0533334444", period: "full_day", amount: "600", deposit: "200" },
+      /* خالد المطيري — 1 booking */
+      { offset: 9,   name: "خالد المطيري",   phone: "0544445555", period: "evening",  amount: "350", deposit: "100" },
+      /* نورة القحطاني — 2 bookings */
+      { offset: -15, name: "نورة القحطاني",  phone: "0555556666", period: "morning",  amount: "300", deposit: "100" },
+      { offset: 15,  name: "نورة القحطاني",  phone: "0555556666", period: "full_day", amount: "600", deposit: "200" },
     ];
     for (const b of demoBookings) {
       await db.insert(ownerBookingsTable).values({
@@ -889,10 +900,10 @@ router.post("/demo-preview", async (req, res) => {
         bookingDate: demoDateStr(today, b.offset),
         durationDays: 1,
         period: b.period,
-        source: "whatsapp",
+        source: "external",
         revenueAmount: b.amount,
         totalPrice: b.amount,
-        depositPaid: "150",
+        depositPaid: b.deposit,
       });
     }
 
@@ -919,6 +930,15 @@ router.post("/demo-preview", async (req, res) => {
       { ownerId: DEMO_OWNER_ID, submissionId: subId, category: "كهرباء", dateStr: demoDateStr(today, -4),  amount: "620",  notes: "فاتورة الكهرباء الشهرية" },
     ]);
   }
+
+  /* ── 5. Customer notes (fresh insert — old notes deleted above) ── */
+  await db.insert(customerNotesTable).values([
+    { ownerId: DEMO_OWNER_ID, clientPhone: "0501111222", notes: "عميل VIP — يفضل الدفع نقداً، يحجز دائماً ليلة الخميس والجمعة. أرسل هدية ترحيبية في آخر زيارة." },
+    { ownerId: DEMO_OWNER_ID, clientPhone: "0552223333", notes: "عائلة كبيرة (8 أفراد)، يحتاج غرفة إضافية. تواصل سابق لاستفسار عن خصم الحجز المتكرر." },
+    { ownerId: DEMO_OWNER_ID, clientPhone: "0533334444", notes: "يحب الهدوء — لا يريد جيران بجانبه. طلب مرة صواني فطور. يفضل التواصل على واتساب." },
+    { ownerId: DEMO_OWNER_ID, clientPhone: "0544445555", notes: "جديد — حجز أول مرة. تابع ما إذا أعجبه الشاليه وابعث له رابط تقييم." },
+    { ownerId: DEMO_OWNER_ID, clientPhone: "0555556666", notes: "تحب الديكور الأبيض والنظافة العالية. دائماً تنسّق مسبقاً لترتيب الورود عند الوصول." },
+  ]);
 
   /* ── Set impersonation to demo owner ── */
   await db.execute(
