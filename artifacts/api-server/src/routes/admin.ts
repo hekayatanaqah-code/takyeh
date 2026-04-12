@@ -16,6 +16,9 @@ import {
   subscriptionPlansTable,
   adminStaffTable,
   adminSessionsTable,
+  ownerBookingsTable,
+  ownerStaffTable,
+  ownerExpensesTable,
 } from "@workspace/db/schema";
 import { eq, inArray, and, gt, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -817,6 +820,112 @@ router.get("/applications", async (_req, res) => {
         FROM owner_applications ORDER BY created_at DESC`
   );
   return res.json(rows);
+});
+
+/* ══════════════════════════════════════════════════════
+   Demo Preview  (Super-Admin only — sandbox with fake data)
+   ══════════════════════════════════════════════════════ */
+const DEMO_OWNER_ID = "__demo_preview__";
+
+function demoDateStr(today: Date, offsetDays: number): string {
+  const d = new Date(today);
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+router.post("/demo-preview", async (req, res) => {
+  if (!(req as any).isSuperAdmin) {
+    return res.status(403).json({ error: "المشرف العام فقط" });
+  }
+  const sid = req.cookies?.admin_staff_sid;
+  if (!sid) return res.status(401).json({ error: "جلسة الإدارة غير موجودة" });
+
+  const today = new Date();
+
+  /* Check if demo data already seeded */
+  const [existing] = await db
+    .select({ id: chaletSubmissionsTable.id })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.ownerId, DEMO_OWNER_ID));
+
+  if (!existing) {
+    /* ── 1. Demo chalet submission ── */
+    const [newSub] = await db.insert(chaletSubmissionsTable).values({
+      ownerId: DEMO_OWNER_ID,
+      nameAr: "شاليه النخيل التجريبي",
+      whatsappNumber: "0501234567",
+      location: "القصيم - بريدة",
+      district: "حي الروضة",
+      category: "شاليه",
+      descriptionAr: "شاليه تجريبي لاختبار ميزات منصة تكية — البيانات افتراضية ولا تؤثر على أي مستخدم حقيقي",
+      pricePerNight: "500",
+      priceMorning: "300",
+      priceEvening: "350",
+      priceFullDay: "600",
+      priceWeekday: "450",
+      priceWeekend: "600",
+      maxGuests: 20,
+      bedrooms: 4,
+      status: "approved",
+      trialEndsAt: new Date(today.getFullYear() + 2, today.getMonth(), today.getDate()),
+    }).returning({ id: chaletSubmissionsTable.id });
+    const subId = newSub.id;
+
+    /* ── 2. Demo bookings (spread across current month) ── */
+    const demoBookings = [
+      { offset: -12, name: "أحمد العتيبي",   phone: "0501111222", period: "full_day", amount: "600" },
+      { offset: -8,  name: "فيصل الحربي",    phone: "0552223333", period: "evening",  amount: "350" },
+      { offset: -3,  name: "سلطان الزهراني", phone: "0533334444", period: "morning",  amount: "300" },
+      { offset: 4,   name: "خالد المطيري",   phone: "0544445555", period: "full_day", amount: "600" },
+      { offset: 9,   name: "محمد القحطاني",  phone: "0555556666", period: "evening",  amount: "350" },
+      { offset: 15,  name: "عبدالله الشمري", phone: "0566667777", period: "morning",  amount: "300" },
+    ];
+    for (const b of demoBookings) {
+      await db.insert(ownerBookingsTable).values({
+        ownerId: DEMO_OWNER_ID,
+        submissionId: subId,
+        clientName: b.name,
+        clientPhone: b.phone,
+        bookingDate: demoDateStr(today, b.offset),
+        durationDays: 1,
+        period: b.period,
+        source: "whatsapp",
+        revenueAmount: b.amount,
+        totalPrice: b.amount,
+        depositPaid: "150",
+      });
+    }
+
+    /* ── 3. Demo staff ── */
+    await db.insert(ownerStaffTable).values([
+      {
+        ownerId: DEMO_OWNER_ID,
+        name: "محمد العمري",
+        baseSalary: "3000",
+        permissions: { dashboardAccess: true, bookingsControl: true, financialAccess: true },
+      },
+      {
+        ownerId: DEMO_OWNER_ID,
+        name: "سعد الدوسري",
+        baseSalary: "2500",
+        permissions: { dashboardAccess: true, bookingsControl: true },
+      },
+    ]);
+
+    /* ── 4. Demo expenses ── */
+    await db.insert(ownerExpensesTable).values([
+      { ownerId: DEMO_OWNER_ID, submissionId: subId, category: "صيانة",  dateStr: demoDateStr(today, -18), amount: "850",  notes: "إصلاح مكيف الغرفة الرئيسية" },
+      { ownerId: DEMO_OWNER_ID, submissionId: subId, category: "نظافة",  dateStr: demoDateStr(today, -9),  amount: "400",  notes: "تنظيف شامل بعد حجز" },
+      { ownerId: DEMO_OWNER_ID, submissionId: subId, category: "كهرباء", dateStr: demoDateStr(today, -4),  amount: "620",  notes: "فاتورة الكهرباء الشهرية" },
+    ]);
+  }
+
+  /* ── Set impersonation to demo owner ── */
+  await db.execute(
+    sql`UPDATE admin_sessions SET impersonated_owner_id = ${DEMO_OWNER_ID} WHERE sid = ${sid}`
+  );
+
+  return res.json({ ok: true });
 });
 
 /* ══════════════════════════════════════════════════════

@@ -8254,7 +8254,8 @@ export default function Dashboard() {
   }
 
   const isImpersonating = impersonation.impersonating;
-  const isReadOnly = isImpersonating && !editEnabled;
+  const isDemo = impersonation.ownerId === "__demo_preview__";
+  const isReadOnly = isImpersonating && !editEnabled && !isDemo;
 
   function onBlockedEdit() {
     toast({ title: "وضع القراءة فقط", description: "فعّل وضع التعديل من الشريط العلوي أولاً", variant: "destructive" });
@@ -8365,8 +8366,33 @@ export default function Dashboard() {
   return (
     <ImpersonationCtx.Provider value={{ isReadOnly, onBlockedEdit }}>
     <div className="min-h-screen bg-background" dir="rtl">
-      {/* ── Impersonation Banner ── */}
-      {isImpersonating && (
+      {/* ── Demo Preview Banner ── */}
+      {isDemo && (
+        <div className="sticky top-0 z-50 w-full px-4 py-2 flex items-center justify-between gap-3 flex-wrap bg-emerald-600 text-white" dir="rtl">
+          <div className="flex items-center gap-2 text-sm font-semibold min-w-0">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span>
+              <span className="font-bold">وضع العرض التجريبي</span>
+              <span className="mx-2 opacity-70">—</span>
+              <span className="opacity-90 font-normal">البيانات افتراضية لا تؤثر على أي مستخدم حقيقي</span>
+            </span>
+          </div>
+          <button
+            onClick={endImpersonation}
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 border border-white/30 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
+            العودة للإدارة
+          </button>
+        </div>
+      )}
+
+      {/* ── Impersonation Banner (real owner, not demo) ── */}
+      {isImpersonating && !isDemo && (
         <div
           className={`sticky top-0 z-50 w-full px-4 py-2 flex items-center justify-between gap-3 flex-wrap ${editEnabled ? "bg-red-600 text-white" : "bg-amber-500 text-amber-950"}`}
           dir="rtl"
