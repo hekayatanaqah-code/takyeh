@@ -7,6 +7,7 @@ import {
   chaletSubmissionsTable,
   ownerNotificationsTable,
   ownerBookingsTable,
+  ownerNotificationSettingsTable,
 } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
@@ -112,6 +113,17 @@ router.post("/reviews/:token", async (req, res) => {
     chaletOwnerId = sub?.ownerId ?? null;
   }
 
+  // Pre-fetch WA settings for the owner (outside the transaction)
+  let waSetting: { waEnabled: boolean; waPhone: string | null } | null = null;
+  if (chaletOwnerId) {
+    const [ws] = await db
+      .select({ waEnabled: ownerNotificationSettingsTable.waEnabled, waPhone: ownerNotificationSettingsTable.waPhone })
+      .from(ownerNotificationSettingsTable)
+      .where(eq(ownerNotificationSettingsTable.ownerId, chaletOwnerId))
+      .limit(1);
+    waSetting = ws ?? null;
+  }
+
   await db.transaction(async (tx) => {
     const [inserted] = await tx.insert(reviewsTable).values({
       chaletId: inv.chaletId,
@@ -142,7 +154,11 @@ router.post("/reviews/:token", async (req, res) => {
     if (chaletOwnerId) {
       const stars = "★".repeat(body.data.rating) + "☆".repeat(5 - body.data.rating);
       const chaletName = chaletRow?.nameAr ?? "شاليهك";
-      const msg = `تقييم جديد لـ${chaletName} — ${stars}${body.data.comment ? ` — "${body.data.comment.slice(0, 60)}${body.data.comment.length > 60 ? "..." : ""}"` : ""}`;
+      let msg = `تقييم جديد لـ${chaletName} — ${stars}${body.data.comment ? ` — "${body.data.comment.slice(0, 60)}${body.data.comment.length > 60 ? "..." : ""}"` : ""}`;
+      if (waSetting?.waEnabled && waSetting.waPhone) {
+        const waText = encodeURIComponent(`تقييم جديد في ${chaletName}:\nالتقييم: ${stars}\n${body.data.comment ? `التعليق: ${body.data.comment.slice(0, 100)}` : ""}`);
+        msg += ` | wa.me/${waSetting.waPhone}?text=${waText}`;
+      }
       await tx.insert(ownerNotificationsTable).values({
         ownerId: chaletOwnerId,
         type: "new_review",

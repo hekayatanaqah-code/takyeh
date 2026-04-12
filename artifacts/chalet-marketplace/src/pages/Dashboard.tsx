@@ -6695,7 +6695,7 @@ function NotificationsTab() {
       if (!r.ok) return [];
       return r.json();
     },
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
   });
 
   const markAllRead = useMutation({
@@ -6744,17 +6744,36 @@ function NotificationsTab() {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {notifications.map((n) => (
-              <div key={n.id} className={`flex items-start gap-3 px-5 py-4 text-sm transition-colors ${n.isRead ? "opacity-60" : "bg-amber-50/60 dark:bg-amber-900/10"}`}>
-                <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${n.isRead ? "bg-transparent" : n.type === "report_dismissed" ? "bg-red-500" : "bg-green-500"}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-foreground leading-relaxed">{n.message}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {new Date(n.createdAt).toLocaleDateString("ar-SA")} · {new Date(n.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
-                  </p>
+            {notifications.map((n) => {
+              // Extract optional wa.me link from message: format "text | wa.me/..."
+              const waMatch = n.message.match(/\|\s*(wa\.me\/\S+)/);
+              const displayMsg = waMatch ? n.message.slice(0, n.message.lastIndexOf("|")).trim() : n.message;
+              const waHref = waMatch ? `https://${waMatch[1]}` : null;
+              const typeIcon = n.type === "new_booking" ? "📅" : n.type === "new_review" ? "⭐" : n.type === "report_dismissed" ? "🚩" : "🔔";
+              return (
+                <div key={n.id} className={`flex items-start gap-3 px-5 py-4 text-sm transition-colors ${n.isRead ? "opacity-60" : n.type === "new_booking" ? "bg-green-50/60 dark:bg-green-900/10" : "bg-amber-50/60 dark:bg-amber-900/10"}`}>
+                  <div className="text-base shrink-0 mt-0.5">{typeIcon}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-foreground leading-relaxed">{displayMsg}</p>
+                    {waHref && (
+                      <a
+                        href={waHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg transition-colors"
+                      >
+                        <Phone className="w-3 h-3" />
+                        إرسال على واتساب
+                      </a>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      {new Date(n.createdAt).toLocaleDateString("ar-SA")} · {new Date(n.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+                  {!n.isRead && <span className="w-2 h-2 rounded-full bg-green-500 shrink-0 mt-1.5" />}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -8947,17 +8966,37 @@ export default function Dashboard() {
       return r.json();
     },
     enabled: isAuthenticated || isStaff || isImpersonating,
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
   });
   const unreadNotifCount = notifSummary.filter((n) => !n.isRead).length;
 
-  /* ── Real-time popup: toast when unread count grows ── */
+  /* ── Audio ping helper (Web Audio API — no external file needed) ── */
+  const playPing = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.5);
+      osc.onended = () => ctx.close();
+    } catch (_) {}
+  }, []);
+
+  /* ── Real-time popup: toast + sound when unread count grows ── */
   const prevUnreadRef = useRef<number | null>(null);
   useEffect(() => {
     if (!isAuthenticated && !isImpersonating) return;
     if (prevUnreadRef.current === null) { prevUnreadRef.current = unreadNotifCount; return; }
     if (unreadNotifCount > prevUnreadRef.current) {
-      toast({ title: "إشعار جديد 🔔", description: "لديك إشعار جديد في لوحة التحكم" });
+      playPing();
+      toast({ title: "إشعار جديد 🔔", description: "لديك إشعار جديد — اضغط على تبويب الإشعارات" });
     }
     prevUnreadRef.current = unreadNotifCount;
   // eslint-disable-next-line react-hooks/exhaustive-deps

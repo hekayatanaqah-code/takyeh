@@ -238,8 +238,44 @@ router.post("/bookings", async (req, res) => {
       booking.submissionId,
       ownerId,
       bookingDates(booking.bookingDate, booking.durationDays)
-    ).catch(() => {}); // async, don't block the response
+    ).catch(() => {});
   }
+
+  // Create booking notification (async, don't block response)
+  ;(async () => {
+    try {
+      // Find chalet name via submission
+      let chaletName = "شاليهك";
+      let chaletId: number | null = null;
+      if (booking.submissionId) {
+        const [chalet] = await db
+          .select({ id: chaletsTable.id, nameAr: chaletsTable.nameAr })
+          .from(chaletsTable)
+          .where(eq(chaletsTable.submissionId, booking.submissionId))
+          .limit(1);
+        if (chalet) { chaletName = chalet.nameAr; chaletId = chalet.id; }
+      }
+      const periodLabel = booking.period === "morning" ? "صباحي" : booking.period === "evening" ? "مسائي" : "يوم كامل";
+      let msg = `حجز جديد في ${chaletName} — ${booking.clientName} — ${booking.bookingDate} (${periodLabel})`;
+      // Append WhatsApp link if owner has WA notifications enabled
+      const [waSetting] = await db
+        .select()
+        .from(ownerNotificationSettingsTable)
+        .where(eq(ownerNotificationSettingsTable.ownerId, ownerId))
+        .limit(1);
+      if (waSetting?.waEnabled && waSetting.waPhone) {
+        const waText = encodeURIComponent(`حجز جديد في ${chaletName}:\nالعميل: ${booking.clientName}\nالتاريخ: ${booking.bookingDate}\nالفترة: ${periodLabel}`);
+        msg += ` | wa.me/${waSetting.waPhone}?text=${waText}`;
+      }
+      await db.insert(ownerNotificationsTable).values({
+        ownerId,
+        type: "new_booking",
+        chaletId: chaletId ?? undefined,
+        message: msg,
+        isRead: false,
+      });
+    } catch (_) {}
+  })();
 
   return res.status(201).json(booking);
 });
