@@ -31,6 +31,7 @@ import {
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
+  X, Shield,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -55,6 +56,10 @@ const ImpersonationCtx = createContext<{
 }>({ isReadOnly: false, onBlockedEdit: () => {} });
 
 function useReadOnly() { return useContext(ImpersonationCtx); }
+
+/* ─── Service ERP context — carries selected provider ID ─── */
+const ServiceErpCtx = createContext<{ providerId: number | null }>({ providerId: null });
+function useServiceErp() { return useContext(ServiceErpCtx); }
 
 const statusConfig = {
   pending:        { label: "قيد المراجعة",  icon: <Clock className="w-3.5 h-3.5" />,       className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
@@ -4180,6 +4185,648 @@ function ServiceSubmissionsTab() {
           </Button>
         </Link>
       </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════
+   SERVICE ERP TAB COMPONENTS
+   All use ServiceErpCtx to obtain the current providerId.
+   ════════════════════════════════════════════════════════════════ */
+
+const AL_QASSIM_CITIES = ["بريدة","عنيزة","الرس","المذنب","الشماسية","البكيرية","رياض الخبراء","البدائع","عيون الجواء"];
+
+/* ── Service Integration Banner (shared modules indicator) ── */
+function ServiceIntegrationBanner({ isCrossOwner }: { isCrossOwner: boolean }) {
+  if (!isCrossOwner) return null;
+  return (
+    <div className="mb-4 flex items-start gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-3 text-sm">
+      <Zap className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+      <span className="text-foreground">
+        <span className="font-bold text-primary">نظام مُدمج:</span> هذا القسم مشترك مع شاليهاتك — يُدار فريق عمل واحد وميزانية موحدة لجميع نشاطاتك.
+      </span>
+    </div>
+  );
+}
+
+/* ── Service Details Tab ──────────────────────────────────── */
+function ServiceDetailsTab() {
+  const { providerId } = useServiceErp();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { isReadOnly, onBlockedEdit } = useReadOnly();
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<Record<string, any> | null>(null);
+  const [coverageTags, setCoverageTags] = useState<string[]>([]);
+  const [featureTags, setFeatureTags] = useState<string[]>([]);
+  const [newFeature, setNewFeature] = useState("");
+
+  const { data: provider, isLoading } = useQuery({
+    queryKey: ["service-provider-detail", providerId],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/${providerId}`);
+      if (!r.ok) return null;
+      return r.json();
+    },
+    enabled: !!providerId,
+  });
+
+  useEffect(() => {
+    if (provider && !form) {
+      setForm({
+        businessName: provider.businessName ?? "",
+        descriptionAr: provider.descriptionAr ?? "",
+        whatsappNumber: provider.whatsappNumber ?? "",
+        city: provider.city ?? "",
+        yearsOfExperience: provider.yearsOfExperience ?? "",
+      });
+      setCoverageTags(provider.coverageTags ?? []);
+      setFeatureTags(provider.customFeatureTags ?? []);
+    }
+  }, [provider]);
+
+  if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+  if (!provider || !form) return <div className="py-12 text-center text-muted-foreground">تعذر تحميل البيانات</div>;
+
+  async function handleSave() {
+    if (isReadOnly) return onBlockedEdit();
+    setSaving(true);
+    try {
+      const r = await apiFetch(`/providers/my/approved/${providerId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ ...form, coverageTags, customFeatureTags: featureTags, yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : null }),
+      });
+      if (!r.ok) throw new Error();
+      queryClient.invalidateQueries({ queryKey: ["service-provider-detail", providerId] });
+      queryClient.invalidateQueries({ queryKey: ["my-approved-providers"] });
+      toast({ title: "تم الحفظ", description: "تم تحديث بيانات الخدمة" });
+    } catch {
+      toast({ title: "خطأ", description: "فشل الحفظ، حاول مجدداً", variant: "destructive" });
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Business Name */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">اسم النشاط</label>
+          <Input value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} className="rounded-xl" />
+        </div>
+        {/* WhatsApp */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">رقم الواتساب</label>
+          <Input value={form.whatsappNumber} onChange={e => setForm({ ...form, whatsappNumber: e.target.value })} className="rounded-xl" dir="ltr" />
+        </div>
+        {/* City */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">المدينة الرئيسية</label>
+          <Select value={form.city} onValueChange={v => setForm({ ...form, city: v })}>
+            <SelectTrigger className="rounded-xl"><SelectValue placeholder="اختر المدينة" /></SelectTrigger>
+            <SelectContent>
+              {AL_QASSIM_CITIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        {/* Years of Experience */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-foreground">سنوات الخبرة</label>
+          <Input type="number" min={0} value={form.yearsOfExperience} onChange={e => setForm({ ...form, yearsOfExperience: e.target.value })} className="rounded-xl" />
+        </div>
+      </div>
+      {/* Description */}
+      <div className="space-y-1.5">
+        <label className="text-sm font-semibold text-foreground">وصف الخدمة</label>
+        <Textarea value={form.descriptionAr} onChange={e => setForm({ ...form, descriptionAr: e.target.value })} rows={4} className="rounded-xl resize-none" />
+      </div>
+      {/* Coverage Tags */}
+      <div className="space-y-2">
+        <label className="text-sm font-semibold text-foreground">نطاق التغطية</label>
+        <div className="flex flex-wrap gap-2 p-3 bg-muted rounded-xl min-h-[60px]">
+          {AL_QASSIM_CITIES.map(city => (
+            <button key={city} type="button"
+              onClick={() => setCoverageTags(prev => prev.includes(city) ? prev.filter(c => c !== city) : [...prev, city])}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${coverageTags.includes(city) ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground border border-border hover:border-primary"}`}>
+              {city}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* Feature Tags */}
+      <div className="space-y-2">
+        <label className="text-sm font-semibold text-foreground">مميزات الخدمة</label>
+        <div className="flex flex-wrap gap-2 p-3 bg-muted rounded-xl min-h-[48px]">
+          {featureTags.map(tag => (
+            <span key={tag} className="flex items-center gap-1.5 bg-background border border-border rounded-full px-3 py-1 text-xs font-semibold">
+              {tag}
+              <button type="button" onClick={() => setFeatureTags(prev => prev.filter(t => t !== tag))} className="text-muted-foreground hover:text-red-500 transition-colors">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+          {featureTags.length === 0 && <span className="text-xs text-muted-foreground">لا توجد مميزات</span>}
+        </div>
+        <div className="flex gap-2">
+          <Input value={newFeature} onChange={e => setNewFeature(e.target.value)} placeholder="أضف ميزة جديدة..." className="rounded-xl flex-1"
+            onKeyDown={e => { if (e.key === "Enter" && newFeature.trim()) { setFeatureTags(p => [...p, newFeature.trim()]); setNewFeature(""); } }} />
+          <Button type="button" variant="outline" className="rounded-xl"
+            onClick={() => { if (newFeature.trim()) { setFeatureTags(p => [...p, newFeature.trim()]); setNewFeature(""); } }}>
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+      {/* Save */}
+      <div className="flex justify-end pt-2">
+        <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2 min-w-[120px]">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+          حفظ التعديلات
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Service Calendar Tab (Block Dates) ──────────────────── */
+function ServiceCalendarTab() {
+  const { providerId } = useServiceErp();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const now = new Date();
+  const [viewYear, setViewYear] = useState(now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(now.getMonth());
+  const [togglingDate, setTogglingDate] = useState<string | null>(null);
+
+  const { data: blockedDates = [] } = useQuery<{ id: number; dateStr: string; reason?: string }[]>({
+    queryKey: ["service-blocked-dates", providerId],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/blocked-dates`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: !!providerId,
+  });
+  const blockedSet = new Set(blockedDates.map(d => d.dateStr));
+
+  function toDateStr(y: number, m: number, d: number) {
+    return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  async function toggleDate(dateStr: string) {
+    if (togglingDate) return;
+    setTogglingDate(dateStr);
+    try {
+      if (blockedSet.has(dateStr)) {
+        const found = blockedDates.find(d => d.dateStr === dateStr);
+        if (!found) return;
+        await apiFetch(`/providers/my/approved/${providerId}/blocked-dates/${found.id}`, { method: "DELETE" });
+      } else {
+        await apiFetch(`/providers/my/approved/${providerId}/blocked-dates`, { method: "POST", body: JSON.stringify({ dateStr }) });
+      }
+      queryClient.invalidateQueries({ queryKey: ["service-blocked-dates", providerId] });
+    } catch {
+      toast({ title: "خطأ", description: "تعذرت العملية", variant: "destructive" });
+    } finally { setTogglingDate(null); }
+  }
+
+  function prevMonth() { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); }
+  function nextMonth() { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); }
+
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const firstDow = new Date(viewYear, viewMonth, 1).getDay();
+  const monthNames = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  const dayNames = ["أحد","اثن","ثلا","أرب","خمي","جمع","سبت"];
+  const todayStr = toDateStr(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  return (
+    <div className="space-y-4">
+      {/* Month nav */}
+      <div className="flex items-center justify-between bg-card border border-border rounded-2xl px-4 py-3">
+        <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><ChevronRight className="w-4 h-4" /></button>
+        <span className="font-bold text-base">{monthNames[viewMonth]} {viewYear}</span>
+        <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+      </div>
+
+      {/* Legend */}
+      <div className="flex gap-4 text-xs text-muted-foreground px-1">
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-500 inline-block"></span> محجوب</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-card border border-border inline-block"></span> متاح</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-primary/20 inline-block"></span> اليوم</span>
+      </div>
+
+      {/* Day headers */}
+      <div className="grid grid-cols-7 gap-1">
+        {dayNames.map(d => <div key={d} className="text-center text-xs font-bold text-muted-foreground py-1">{d}</div>)}
+        {cells.map((day, i) => {
+          if (!day) return <div key={`e-${i}`} />;
+          const ds = toDateStr(viewYear, viewMonth, day);
+          const blocked = blockedSet.has(ds);
+          const isToday = ds === todayStr;
+          const isPast = ds < todayStr;
+          return (
+            <button key={ds} type="button" onClick={() => !isPast && toggleDate(ds)} disabled={isPast || togglingDate === ds}
+              className={`aspect-square flex items-center justify-center rounded-xl text-sm font-semibold transition-all ${
+                isPast ? "text-muted-foreground/40 cursor-default" :
+                blocked ? "bg-red-500 text-white hover:bg-red-600" :
+                isToday ? "bg-primary/20 text-primary border-2 border-primary hover:bg-primary/30" :
+                "bg-card border border-border hover:border-primary hover:bg-primary/5 text-foreground"
+              } ${togglingDate === ds ? "opacity-60" : ""}`}>
+              {day}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Summary */}
+      <div className="bg-muted rounded-xl px-4 py-3 text-sm text-muted-foreground">
+        <span className="font-semibold text-foreground">{blockedDates.length}</span> يوم محجوب في السجل — انقر على أي يوم لإضافة/إزالة الحجب
+      </div>
+    </div>
+  );
+}
+
+/* ── Service Seasons Tab ──────────────────────────────────── */
+function ServiceSeasonsTab() {
+  const { providerId } = useServiceErp();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const emptyForm = { name: "", startDate: "", endDate: "", priceLabel: "", multiplier: "1.00", isActive: true };
+  const [form, setForm] = useState({ ...emptyForm });
+
+  const { data: seasons = [], isLoading } = useQuery<any[]>({
+    queryKey: ["service-seasons", providerId],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/seasons`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: !!providerId,
+  });
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const method = editId ? "PATCH" : "POST";
+      const url = editId ? `/providers/my/approved/${providerId}/seasons/${editId}` : `/providers/my/approved/${providerId}/seasons`;
+      const r = await apiFetch(url, { method, body: JSON.stringify(form) });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "خطأ"); }
+      queryClient.invalidateQueries({ queryKey: ["service-seasons", providerId] });
+      toast({ title: editId ? "تم التعديل" : "تم الإضافة" });
+      setForm({ ...emptyForm }); setEditId(null); setShowForm(false);
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  }
+
+  async function handleDelete(id: number) {
+    setDeletingId(id);
+    try {
+      await apiFetch(`/providers/my/approved/${providerId}/seasons/${id}`, { method: "DELETE" });
+      queryClient.invalidateQueries({ queryKey: ["service-seasons", providerId] });
+      toast({ title: "تم الحذف" });
+    } catch { toast({ title: "خطأ", description: "فشل الحذف", variant: "destructive" }); }
+    finally { setDeletingId(null); }
+  }
+
+  function startEdit(s: any) { setForm({ name: s.name, startDate: s.startDate, endDate: s.endDate, priceLabel: s.priceLabel ?? "", multiplier: s.multiplier ?? "1.00", isActive: s.isActive }); setEditId(s.id); setShowForm(true); }
+
+  return (
+    <div className="space-y-4">
+      {/* Add button */}
+      {!showForm && (
+        <Button onClick={() => setShowForm(true)} className="gap-2 rounded-xl" variant="outline">
+          <Plus className="w-4 h-4" />تسجيل موسم جديد
+        </Button>
+      )}
+
+      {/* Form */}
+      {showForm && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-5 space-y-4">
+          <h3 className="font-bold text-foreground">{editId ? "تعديل الموسم" : "موسم جديد"}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">اسم الموسم</label>
+              <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="موسم الصيف" className="rounded-xl" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">تسمية السعر</label>
+              <Input value={form.priceLabel} onChange={e => setForm(p => ({ ...p, priceLabel: e.target.value }))} placeholder="سعر مرتفع / عادي" className="rounded-xl" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">تاريخ البدء</label>
+              <Input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} className="rounded-xl" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">تاريخ الانتهاء</label>
+              <Input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))} className="rounded-xl" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">مضاعف السعر</label>
+              <Input type="number" step="0.1" min="0.5" max="5" value={form.multiplier} onChange={e => setForm(p => ({ ...p, multiplier: e.target.value }))} className="rounded-xl" /></div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" onClick={() => { setShowForm(false); setEditId(null); setForm({ ...emptyForm }); }} className="rounded-xl">إلغاء</Button>
+            <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}حفظ
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Seasons list */}
+      {isLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        : seasons.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Sunrise className="w-8 h-8 mx-auto mb-3 opacity-30" />
+            <p>لا توجد مواسم مسجلة بعد</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {seasons.map((s: any) => (
+              <motion.div key={s.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                className="bg-card border border-border rounded-2xl px-5 py-4 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-foreground">{s.name}</span>
+                    {s.priceLabel && <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">{s.priceLabel}</span>}
+                    {!s.isActive && <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">معطل</span>}
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-0.5">{s.startDate} → {s.endDate} · مضاعف: ×{s.multiplier}</p>
+                </div>
+                <div className="flex gap-1.5">
+                  <Button variant="ghost" size="icon" onClick={() => startEdit(s)} className="rounded-lg h-8 w-8"><Edit2 className="w-3.5 h-3.5" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)} disabled={deletingId === s.id} className="rounded-lg h-8 w-8 text-red-500 hover:text-red-600">
+                    {deletingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  </Button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+    </div>
+  );
+}
+
+/* ── Service Appointments Tab ────────────────────────────── */
+function ServiceAppointmentsTab() {
+  const { providerId } = useServiceErp();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const emptyForm = { clientName: "", clientPhone: "", dateStr: "", duration: "", status: "confirmed" as const, notes: "", amount: "", source: "external" as const };
+  const [form, setForm] = useState({ ...emptyForm });
+
+  const { data: appointments = [], isLoading } = useQuery<any[]>({
+    queryKey: ["service-appointments", providerId],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: !!providerId,
+  });
+
+  async function handleSave() {
+    if (!form.clientName || !form.dateStr) return toast({ title: "بيانات ناقصة", variant: "destructive" });
+    setSaving(true);
+    try {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`, { method: "POST", body: JSON.stringify({ ...form, amount: form.amount || null }) });
+      if (!r.ok) throw new Error();
+      queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
+      toast({ title: "تم تسجيل الحجز" });
+      setForm({ ...emptyForm }); setShowForm(false);
+    } catch { toast({ title: "خطأ", description: "فشل التسجيل", variant: "destructive" }); }
+    finally { setSaving(false); }
+  }
+
+  async function handleCancel(id: number) {
+    setCancellingId(id);
+    try {
+      await apiFetch(`/providers/my/approved/${providerId}/appointments/${id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) });
+      queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
+      toast({ title: "تم إلغاء الحجز", variant: "default" });
+    } catch { toast({ title: "خطأ", variant: "destructive" }); }
+    finally { setCancellingId(null); }
+  }
+
+  const confirmedRevenue = appointments.filter(a => a.status === "confirmed" && a.amount).reduce((s, a) => s + parseFloat(a.amount), 0);
+  const statusBadge: Record<string, string> = { confirmed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", cancelled: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" };
+  const statusLabel: Record<string, string> = { confirmed: "مؤكد", pending: "معلق", cancelled: "ملغي" };
+
+  return (
+    <div className="space-y-4">
+      {/* KPI row */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "إجمالي", val: appointments.length, icon: <BookOpen className="w-4 h-4" /> },
+          { label: "مؤكد", val: appointments.filter(a => a.status === "confirmed").length, icon: <CheckCircle className="w-4 h-4" /> },
+          { label: "الإيرادات", val: `${confirmedRevenue.toLocaleString()} ر.س`, icon: <Wallet className="w-4 h-4" /> },
+        ].map(({ label, val, icon }) => (
+          <div key={label} className="bg-card border border-border rounded-xl p-3 text-center">
+            <div className="text-muted-foreground flex justify-center mb-1">{icon}</div>
+            <p className="text-lg font-extrabold text-foreground">{val}</p>
+            <p className="text-xs text-muted-foreground">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Add button */}
+      {!showForm && <Button onClick={() => setShowForm(true)} className="gap-2 rounded-xl" variant="outline"><Plus className="w-4 h-4" />تسجيل حجز جديد</Button>}
+
+      {/* Form */}
+      {showForm && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-5 space-y-4">
+          <h3 className="font-bold">حجز جديد</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">اسم العميل *</label>
+              <Input value={form.clientName} onChange={e => setForm(p => ({ ...p, clientName: e.target.value }))} placeholder="محمد أحمد" className="rounded-xl" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">رقم الجوال</label>
+              <Input value={form.clientPhone} onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value }))} placeholder="05xxxxxxxx" className="rounded-xl" dir="ltr" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">تاريخ الخدمة *</label>
+              <Input type="date" value={form.dateStr} onChange={e => setForm(p => ({ ...p, dateStr: e.target.value }))} className="rounded-xl" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">المدة</label>
+              <Input value={form.duration} onChange={e => setForm(p => ({ ...p, duration: e.target.value }))} placeholder="يوم واحد / أسبوع..." className="rounded-xl" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">المبلغ (ر.س)</label>
+              <Input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="0" className="rounded-xl" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">الحالة</label>
+              <Select value={form.status} onValueChange={(v: any) => setForm(p => ({ ...p, status: v }))}>
+                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="confirmed">مؤكد</SelectItem>
+                  <SelectItem value="pending">معلق</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">ملاحظات</label>
+            <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="أي تفاصيل إضافية..." /></div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" onClick={() => setShowForm(false)} className="rounded-xl">إلغاء</Button>
+            <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}حفظ
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Appointments list */}
+      {isLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        : appointments.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Calendar className="w-8 h-8 mx-auto mb-3 opacity-30" />
+            <p>لا توجد حجوزات بعد</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {appointments.map((a: any) => (
+              <div key={a.id} className="bg-card border border-border rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-foreground">{a.clientName}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${statusBadge[a.status] ?? ""}`}>{statusLabel[a.status] ?? a.status}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-0.5">{a.dateStr}{a.duration ? ` · ${a.duration}` : ""}{a.amount ? ` · ${parseFloat(a.amount).toLocaleString()} ر.س` : ""}</p>
+                  {a.clientPhone && <p className="text-xs text-muted-foreground" dir="ltr">{a.clientPhone}</p>}
+                  {a.notes && <p className="text-xs text-muted-foreground mt-0.5">{a.notes}</p>}
+                </div>
+                {a.status !== "cancelled" && (
+                  <Button variant="ghost" size="sm" onClick={() => handleCancel(a.id)} disabled={cancellingId === a.id}
+                    className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs gap-1 h-8">
+                    {cancellingId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}إلغاء
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+    </div>
+  );
+}
+
+/* ── Service Insurances Tab ──────────────────────────────── */
+function ServiceInsurancesTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const emptyForm = { policyName: "", insurerName: "", amount: "", renewalDate: "", notes: "" };
+  const [form, setForm] = useState({ ...emptyForm });
+
+  const { data: insurances = [], isLoading } = useQuery<any[]>({
+    queryKey: ["service-insurances"],
+    queryFn: async () => {
+      const r = await apiFetch("/providers/my/insurances");
+      return r.ok ? r.json() : [];
+    },
+  });
+
+  async function handleSave() {
+    if (!form.policyName) return toast({ title: "اسم السياسة مطلوب", variant: "destructive" });
+    setSaving(true);
+    try {
+      const r = await apiFetch("/providers/my/insurances", { method: "POST", body: JSON.stringify({ ...form, amount: form.amount || "0" }) });
+      if (!r.ok) throw new Error();
+      queryClient.invalidateQueries({ queryKey: ["service-insurances"] });
+      toast({ title: "تمت إضافة التأمين" });
+      setForm({ ...emptyForm }); setShowForm(false);
+    } catch { toast({ title: "خطأ", variant: "destructive" }); }
+    finally { setSaving(false); }
+  }
+
+  async function handleDelete(id: number) {
+    setDeletingId(id);
+    try {
+      await apiFetch(`/providers/my/insurances/${id}`, { method: "DELETE" });
+      queryClient.invalidateQueries({ queryKey: ["service-insurances"] });
+      toast({ title: "تم الحذف" });
+    } catch { toast({ title: "خطأ", variant: "destructive" }); }
+    finally { setDeletingId(null); }
+  }
+
+  const totalAmount = insurances.reduce((s, i) => s + parseFloat(i.amount ?? "0"), 0);
+  const soonExpiring = insurances.filter(i => {
+    if (!i.renewalDate) return false;
+    const days = Math.ceil((new Date(i.renewalDate).getTime() - Date.now()) / 86400000);
+    return days >= 0 && days <= 30;
+  }).length;
+
+  return (
+    <div className="space-y-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-card border border-border rounded-xl p-3 text-center">
+          <p className="text-lg font-extrabold text-foreground">{insurances.length}</p>
+          <p className="text-xs text-muted-foreground">سياسة تأمين</p>
+        </div>
+        <div className={`border rounded-xl p-3 text-center ${soonExpiring > 0 ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/40" : "bg-card border-border"}`}>
+          <p className={`text-lg font-extrabold ${soonExpiring > 0 ? "text-amber-600" : "text-foreground"}`}>{soonExpiring}</p>
+          <p className="text-xs text-muted-foreground">تنتهي خلال 30 يوم</p>
+        </div>
+      </div>
+
+      {/* Add */}
+      {!showForm && <Button onClick={() => setShowForm(true)} className="gap-2 rounded-xl" variant="outline"><Plus className="w-4 h-4" />إضافة تأمين</Button>}
+
+      {/* Form */}
+      {showForm && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-5 space-y-4">
+          <h3 className="font-bold">سياسة تأمين جديدة</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">اسم السياسة *</label>
+              <Input value={form.policyName} onChange={e => setForm(p => ({ ...p, policyName: e.target.value }))} placeholder="تأمين المعدات" className="rounded-xl" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">شركة التأمين</label>
+              <Input value={form.insurerName} onChange={e => setForm(p => ({ ...p, insurerName: e.target.value }))} className="rounded-xl" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">مبلغ القسط (ر.س)</label>
+              <Input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} className="rounded-xl" /></div>
+            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">تاريخ التجديد</label>
+              <Input type="date" value={form.renewalDate} onChange={e => setForm(p => ({ ...p, renewalDate: e.target.value }))} className="rounded-xl" /></div>
+          </div>
+          <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">ملاحظات</label>
+            <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" /></div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" onClick={() => setShowForm(false)} className="rounded-xl">إلغاء</Button>
+            <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}حفظ
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* List */}
+      {isLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        : insurances.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <Shield className="w-8 h-8 mx-auto mb-3 opacity-30" />
+            <p>لا توجد سياسات تأمين مسجلة</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {insurances.map((ins: any) => {
+              const daysLeft = ins.renewalDate ? Math.ceil((new Date(ins.renewalDate).getTime() - Date.now()) / 86400000) : null;
+              const urgent = daysLeft !== null && daysLeft <= 30;
+              return (
+                <div key={ins.id} className={`bg-card border rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap ${urgent ? "border-amber-300 dark:border-amber-700" : "border-border"}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-foreground">{ins.policyName}</span>
+                      {ins.insurerName && <span className="text-xs text-muted-foreground">{ins.insurerName}</span>}
+                      {urgent && <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">تنتهي قريباً</span>}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {parseFloat(ins.amount).toLocaleString()} ر.س
+                      {ins.renewalDate && ` · تجديد: ${ins.renewalDate}`}
+                      {daysLeft !== null && ` (${daysLeft} يوم)`}
+                    </p>
+                    {ins.notes && <p className="text-xs text-muted-foreground mt-0.5">{ins.notes}</p>}
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(ins.id)} disabled={deletingId === ins.id}
+                    className="rounded-lg h-8 w-8 text-red-500 hover:text-red-600">
+                    {deletingId === ins.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  </Button>
+                </div>
+              );
+            })}
+            <div className="text-right text-sm font-semibold text-muted-foreground pt-1">إجمالي الأقساط: {totalAmount.toLocaleString()} ر.س / سنة</div>
+          </div>
+        )}
     </div>
   );
 }
@@ -9302,6 +9949,8 @@ function NotificationSettingsSection() {
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [dashMode, setDashMode] = useState<"chalets" | "services">("chalets");
+  const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
+  const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
   const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "notifications" | "customers" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits" | "seasons">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const { user, isLoading: authLoading, isAuthenticated, logout, login } = useAuth();
@@ -9386,7 +10035,7 @@ export default function Dashboard() {
     },
     enabled: (isAuthenticated || isImpersonating) && !isStaff,
   });
-  const { data: myApprovedProviders = [] } = useQuery<{ id: number; isActive: boolean; businessName: string }[]>({
+  const { data: myApprovedProviders = [] } = useQuery<{ id: number; isActive: boolean; businessName: string; category: string; city: string }[]>({
     queryKey: ["my-approved-providers"],
     queryFn: async () => {
       const r = await apiFetch("/providers/my/approved");
@@ -9394,6 +10043,19 @@ export default function Dashboard() {
     },
     enabled: (isAuthenticated || isImpersonating) && !isStaff,
   });
+
+  /* Cross-owner logic: user has BOTH chalets AND service providers */
+  const isCrossOwner = (ownerChalets?.length ?? 0) > 0 && myApprovedProviders.length > 0;
+
+  /* Auto-select first service when entering services mode */
+  useEffect(() => {
+    if (dashMode === "services" && myApprovedProviders.length > 0 && selectedServiceId === null) {
+      setSelectedServiceId(myApprovedProviders[0].id);
+    }
+    if (dashMode === "services" && myApprovedProviders.length === 0) {
+      setSelectedServiceId(null);
+    }
+  }, [dashMode, myApprovedProviders.length]);
 
   interface NotifSummaryRow { id: number; isRead: boolean; type: string; message: string; }
   const { data: notifSummary = [] } = useQuery<NotifSummaryRow[]>({
@@ -9775,35 +10437,151 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* ══ SERVICES MODE ═══════════════════════════════════════════ */}
+        {/* ══ SERVICES MODE — Full ERP ═════════════════════════════════ */}
         {dashMode === "services" && !isStaff && (
           <motion.div
             key="services-mode"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
+            className="space-y-5"
           >
-            {/* Services mode header */}
-            <div className="flex items-center justify-between gap-4 flex-wrap">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
                 <h2 className="text-xl font-extrabold text-foreground flex items-center gap-2">
                   <Star className="w-5 h-5 text-amber-500" />
                   خدماتي المستقلة
                 </h2>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  خدمات مستقلة مسجلة باسمك في سوق القصيم (مختلفة عن خدمات الشاليه)
-                </p>
+                {isCrossOwner ? (
+                  <div className="flex items-center gap-1.5 mt-1 text-xs text-primary font-semibold">
+                    <Zap className="w-3.5 h-3.5" />
+                    نظام مُدمج — فريق عمل وميزانية موحدة مع شاليهاتك
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-0.5">نظام ERP مستقل لإدارة خدماتك في سوق القصيم</p>
+                )}
               </div>
               <Link href="/add-service-provider">
-                <Button className="gap-2 rounded-xl">
+                <Button className="gap-2 rounded-xl" variant="outline">
                   <Plus className="w-4 h-4" />
                   تسجيل خدمة جديدة
                 </Button>
               </Link>
             </div>
 
-            {/* Full-width service management */}
-            <ServiceSubmissionsTab />
+            {/* If no approved providers: show submissions manager directly */}
+            {myApprovedProviders.length === 0 ? (
+              <ServiceSubmissionsTab />
+            ) : (
+              <>
+                {/* ── Service Selector Tabs ─────────────────────────── */}
+                <div className="flex gap-1.5 flex-wrap">
+                  {myApprovedProviders.map(p => (
+                    <button key={p.id} type="button"
+                      onClick={() => { setSelectedServiceId(p.id); setSelectedServiceTab("details"); }}
+                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all border ${
+                        selectedServiceId === p.id
+                          ? "bg-background text-amber-600 border-amber-300 dark:border-amber-700 shadow-sm"
+                          : "bg-muted text-muted-foreground border-transparent hover:text-foreground"
+                      }`}>
+                      <span className="text-base">{(SERVICE_CATEGORY_LABELS[p.category as keyof typeof SERVICE_CATEGORY_LABELS] ?? "✨").split(" ")[0]}</span>
+                      <span className="max-w-[140px] truncate">{p.businessName}</span>
+                      {!p.isActive && <span className="text-xs opacity-60">(متوقف)</span>}
+                    </button>
+                  ))}
+                  {/* Submissions pill */}
+                  <button type="button"
+                    onClick={() => setSelectedServiceId("submissions")}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all border ${
+                      selectedServiceId === "submissions"
+                        ? "bg-background text-foreground border-border shadow-sm"
+                        : "bg-muted text-muted-foreground border-transparent hover:text-foreground"
+                    }`}>
+                    <Archive className="w-3.5 h-3.5" />
+                    الطلبات والتقديمات
+                  </button>
+                </div>
+
+                {/* ── Submissions View ─────────────────────────────── */}
+                {selectedServiceId === "submissions" && <ServiceSubmissionsTab />}
+
+                {/* ── Service ERP Dashboard ─────────────────────────── */}
+                {selectedServiceId !== "submissions" && selectedServiceId !== null && (() => {
+                  const selectedProvider = myApprovedProviders.find(p => p.id === selectedServiceId);
+                  const serviceErpTabs = [
+                    { id: "details",      label: "تفاصيل",      icon: <Edit2 className="w-3.5 h-3.5" /> },
+                    { id: "calendar",     label: "التقويم",     icon: <Calendar className="w-3.5 h-3.5" /> },
+                    { id: "seasons",      label: "المواسم",     icon: <Sunrise className="w-3.5 h-3.5" /> },
+                    { id: "appointments", label: "الحجوزات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
+                    { id: "revenue",      label: "الإيرادات",   icon: <TrendingUp className="w-3.5 h-3.5" /> },
+                    { id: "expenses",     label: "المصروفات",   icon: <TrendingDown className="w-3.5 h-3.5" /> },
+                    { id: "insurance",    label: "التأمينات",   icon: <Shield className="w-3.5 h-3.5" /> },
+                    { id: "staff",        label: "الموظفون",    icon: <Users className="w-3.5 h-3.5" /> },
+                    { id: "reviews",      label: "المراجعات",   icon: <Star className="w-3.5 h-3.5" /> },
+                    { id: "notifications",label: "الإشعارات",   icon: <Bell className="w-3.5 h-3.5" /> },
+                    { id: "customers",    label: "قاعدة العملاء", icon: <Users className="w-3.5 h-3.5" /> },
+                    { id: "reports",      label: "التقارير",    icon: <BarChart2 className="w-3.5 h-3.5" /> },
+                  ];
+                  return (
+                    <ServiceErpCtx.Provider value={{ providerId: selectedServiceId }}>
+                      {/* Provider header card */}
+                      <div className="bg-card border border-border rounded-2xl px-5 py-4 flex items-center gap-4 flex-wrap">
+                        <div className="w-11 h-11 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-xl font-bold shrink-0">
+                          {(SERVICE_CATEGORY_LABELS[selectedProvider?.category as keyof typeof SERVICE_CATEGORY_LABELS] ?? "✨").split(" ")[0]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-extrabold text-foreground">{selectedProvider?.businessName}</p>
+                          <p className="text-xs text-muted-foreground">{selectedProvider?.city} · {SERVICE_CATEGORY_LABELS[selectedProvider?.category as keyof typeof SERVICE_CATEGORY_LABELS] ?? selectedProvider?.category}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {selectedProvider?.isActive ? (
+                            <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2.5 py-1 rounded-full font-bold">نشط ✓</span>
+                          ) : (
+                            <span className="text-xs bg-muted text-muted-foreground px-2.5 py-1 rounded-full font-bold">متوقف</span>
+                          )}
+                          <Link href={`/providers/${selectedServiceId}`}>
+                            <Button variant="outline" size="sm" className="rounded-lg gap-1.5 text-xs h-8">
+                              <Eye className="w-3.5 h-3.5" />معاينة
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+
+                      {/* ERP Tab bar */}
+                      <div className="flex gap-0.5 border-b border-border overflow-x-auto pb-0 -mx-1 px-1">
+                        {serviceErpTabs.map(tab => (
+                          <button key={tab.id} type="button"
+                            onClick={() => setSelectedServiceTab(tab.id)}
+                            className={`relative flex items-center gap-1.5 px-3.5 py-3 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${
+                              selectedServiceTab === tab.id
+                                ? "border-amber-500 text-amber-600 dark:text-amber-400"
+                                : "border-transparent text-muted-foreground hover:text-foreground"
+                            }`}>
+                            {tab.icon}{tab.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* ERP Tab Content */}
+                      <div className="min-h-[300px]">
+                        {selectedServiceTab === "details"      && <ServiceDetailsTab />}
+                        {selectedServiceTab === "calendar"     && <ServiceCalendarTab />}
+                        {selectedServiceTab === "seasons"      && <ServiceSeasonsTab />}
+                        {selectedServiceTab === "appointments" && <ServiceAppointmentsTab />}
+                        {selectedServiceTab === "insurance"    && <ServiceInsurancesTab />}
+                        {selectedServiceTab === "revenue"      && <><ServiceIntegrationBanner isCrossOwner={isCrossOwner} /><RevenueTab /></>}
+                        {selectedServiceTab === "expenses"     && <><ServiceIntegrationBanner isCrossOwner={isCrossOwner} /><ExpensesTab /></>}
+                        {selectedServiceTab === "staff"        && <><ServiceIntegrationBanner isCrossOwner={isCrossOwner} /><StaffTab /></>}
+                        {selectedServiceTab === "reviews"      && <ReviewsTab />}
+                        {selectedServiceTab === "notifications"&& <NotificationsTab />}
+                        {selectedServiceTab === "customers"    && <CustomersTab />}
+                        {selectedServiceTab === "reports"      && <><ServiceIntegrationBanner isCrossOwner={isCrossOwner} /><ReportsTab /></>}
+                      </div>
+                    </ServiceErpCtx.Provider>
+                  );
+                })()}
+              </>
+            )}
           </motion.div>
         )}
 

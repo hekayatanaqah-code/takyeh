@@ -550,3 +550,67 @@ export const chaletServicesTable = pgTable("chalet_services", {
 });
 export type ChaletService = typeof chaletServicesTable.$inferSelect;
 export type NewChaletService = typeof chaletServicesTable.$inferInsert;
+
+/* ════════════════════════════════════════════════════════════════
+   SERVICE PROVIDER ERP TABLES
+   (Independent service providers — not chalet add-ons)
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Service Blocked Dates (calendar blocking) ─────────────── */
+export const serviceBlockedDatesTable = pgTable("service_blocked_dates", {
+  id: serial("id").primaryKey(),
+  providerId: integer("provider_id").notNull().references(() => serviceProvidersTable.id, { onDelete: "cascade" }),
+  ownerId: text("owner_id").notNull(),
+  dateStr: text("date_str").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ServiceBlockedDate = typeof serviceBlockedDatesTable.$inferSelect;
+
+/* ── Service Seasons (pricing/availability periods) ─────────── */
+export const serviceSeasonsTable = pgTable("service_seasons", {
+  id: serial("id").primaryKey(),
+  providerId: integer("provider_id").notNull().references(() => serviceProvidersTable.id, { onDelete: "cascade" }),
+  ownerId: text("owner_id").notNull(),
+  name: text("name").notNull(),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  priceLabel: text("price_label"),
+  multiplier: numeric("multiplier", { precision: 4, scale: 2 }).notNull().default("1.00"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ServiceSeason = typeof serviceSeasonsTable.$inferSelect;
+
+/* ── Service Appointments (booking records) ─────────────────── */
+export const serviceAppointmentsTable = pgTable("service_appointments", {
+  id: serial("id").primaryKey(),
+  providerId: integer("provider_id").notNull().references(() => serviceProvidersTable.id, { onDelete: "cascade" }),
+  ownerId: text("owner_id").notNull(),
+  clientName: text("client_name").notNull(),
+  clientPhone: text("client_phone"),
+  dateStr: text("date_str").notNull(),
+  duration: text("duration"),
+  status: text("status").notNull().default("confirmed"),
+  notes: text("notes"),
+  amount: numeric("amount", { precision: 10, scale: 2 }),
+  source: text("source").notNull().default("external"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelReason: text("cancel_reason"),
+});
+export type ServiceAppointment = typeof serviceAppointmentsTable.$inferSelect;
+
+/* ── Service Insurances (policy tracking) ───────────────────── */
+export const serviceInsurancesTable = pgTable("service_insurances", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  providerId: integer("provider_id").references(() => serviceProvidersTable.id, { onDelete: "set null" }),
+  policyName: text("policy_name").notNull(),
+  insurerName: text("insurer_name"),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull().default("0"),
+  renewalDate: text("renewal_date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ServiceInsurance = typeof serviceInsurancesTable.$inferSelect;
