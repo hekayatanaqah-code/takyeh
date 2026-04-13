@@ -9301,6 +9301,7 @@ function NotificationSettingsSection() {
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
+  const [dashMode, setDashMode] = useState<"chalets" | "services">("chalets");
   const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "notifications" | "customers" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits" | "seasons">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const { user, isLoading: authLoading, isAuthenticated, logout, login } = useAuth();
@@ -9374,6 +9375,24 @@ export default function Dashboard() {
       return r.json();
     },
     enabled: isAuthenticated || isImpersonating,
+  });
+
+  /* ── My independent service submissions & approved providers ── */
+  const { data: myServiceSubmissions = [] } = useQuery<{ id: number; status: string; businessName: string }[]>({
+    queryKey: ["my-service-submissions"],
+    queryFn: async () => {
+      const r = await apiFetch("/providers/my/submissions");
+      return r.ok ? r.json() : [];
+    },
+    enabled: (isAuthenticated || isImpersonating) && !isStaff,
+  });
+  const { data: myApprovedProviders = [] } = useQuery<{ id: number; isActive: boolean; businessName: string }[]>({
+    queryKey: ["my-approved-providers"],
+    queryFn: async () => {
+      const r = await apiFetch("/providers/my/approved");
+      return r.ok ? r.json() : [];
+    },
+    enabled: (isAuthenticated || isImpersonating) && !isStaff,
   });
 
   interface NotifSummaryRow { id: number; isRead: boolean; type: string; message: string; }
@@ -9713,6 +9732,85 @@ export default function Dashboard() {
           context={showHeaderUpgrade ?? "chalet"}
         />
 
+        {/* ── Dashboard Mode Switcher (owners only, not staff) ── */}
+        {!isStaff && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="flex items-center gap-0 mb-6 bg-muted rounded-2xl p-1 w-fit"
+          >
+            <button
+              onClick={() => setDashMode("chalets")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                dashMode === "chalets"
+                  ? "bg-background text-primary shadow-sm ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              إدارة شاليهاتي
+              {(submissions?.length ?? 0) > 0 && (
+                <span className="text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5 font-semibold">
+                  {submissions?.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setDashMode("services")}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                dashMode === "services"
+                  ? "bg-background text-amber-600 shadow-sm ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Star className="w-4 h-4" />
+              إدارة خدماتي
+              {(myApprovedProviders.length + myServiceSubmissions.filter(s => s.status === "pending").length) > 0 && (
+                <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full px-2 py-0.5 font-semibold">
+                  {myApprovedProviders.length + myServiceSubmissions.length}
+                </span>
+              )}
+            </button>
+          </motion.div>
+        )}
+
+        {/* ══ SERVICES MODE ═══════════════════════════════════════════ */}
+        {dashMode === "services" && !isStaff && (
+          <motion.div
+            key="services-mode"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            {/* Services mode header */}
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="text-xl font-extrabold text-foreground flex items-center gap-2">
+                  <Star className="w-5 h-5 text-amber-500" />
+                  خدماتي المستقلة
+                </h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  خدمات مستقلة مسجلة باسمك في سوق القصيم (مختلفة عن خدمات الشاليه)
+                </p>
+              </div>
+              <Link href="/add-service-provider">
+                <Button className="gap-2 rounded-xl">
+                  <Plus className="w-4 h-4" />
+                  تسجيل خدمة جديدة
+                </Button>
+              </Link>
+            </div>
+
+            {/* Full-width service management */}
+            <ServiceSubmissionsTab />
+          </motion.div>
+        )}
+
+        {/* ══ CHALETS MODE ═════════════════════════════════════════════ */}
+        {(dashMode === "chalets" || isStaff) && (
+          <>
+
         {/* Subscription / Account Settings — clickable banner */}
         {subscription && (() => {
           const planLabels: Record<string, string> = {
@@ -9758,6 +9856,39 @@ export default function Dashboard() {
         {/* Notification Settings — owner only */}
         {!isStaff && !isImpersonating && (
           <NotificationSettingsSection />
+        )}
+
+        {/* ── My Services Summary Card (in chalets mode only) ── */}
+        {!isStaff && dashMode === "chalets" && (myServiceSubmissions.length > 0 || myApprovedProviders.length > 0) && (
+          <motion.button
+            type="button"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => setDashMode("services")}
+            className="mb-4 w-full bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 rounded-2xl px-5 py-4 flex items-center gap-4 flex-wrap text-sm hover:bg-amber-100/70 dark:hover:bg-amber-900/20 transition-colors text-start cursor-pointer group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+              <Star className="w-5 h-5 text-amber-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-foreground">خدماتي المستقلة</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {myApprovedProviders.length > 0 && (
+                  <span className="text-green-600 dark:text-green-400 font-semibold">{myApprovedProviders.filter(p => p.isActive).length} نشط </span>
+                )}
+                {myServiceSubmissions.filter(s => s.status === "pending").length > 0 && (
+                  <span className="text-amber-600 font-semibold">{myServiceSubmissions.filter(s => s.status === "pending").length} قيد المراجعة</span>
+                )}
+                {myApprovedProviders.length === 0 && myServiceSubmissions.filter(s => s.status === "pending").length === 0 && (
+                  <span>{myServiceSubmissions.length} خدمة مسجلة</span>
+                )}
+              </p>
+            </div>
+            <span className="flex items-center gap-1.5 text-xs font-bold text-amber-600 group-hover:gap-2.5 transition-all">
+              إدارة خدماتي
+              <ExternalLink className="w-3.5 h-3.5" />
+            </span>
+          </motion.button>
         )}
 
         {/* Tabs */}
@@ -9819,6 +9950,8 @@ export default function Dashboard() {
         )}
         {activeTab === "deposits" && (
           <DepositsTab />
+        )}
+          </>
         )}
       </div>
     </div>
