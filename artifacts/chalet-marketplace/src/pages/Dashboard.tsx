@@ -2566,14 +2566,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
                     return ds >= b.bookingDate && ds <= endStr;
                   });
-                  // Hard-block: maintenance/صيانة dates cannot be booked
+                  // Hard-block: maintenance/صيانة dates — open the block dialog so owner can unblock
                   const avEntry = availability.find((a) => a.dateStr === ds);
                   if (avEntry?.notes && dayBkgs.length === 0) {
-                    toast({
-                      title: "هذا اليوم غير متاح للحجز",
-                      description: `صيانة/إغلاق مؤقت — ${avEntry.notes}`,
-                      variant: "destructive",
-                    });
+                    if (isReadOnly) { onBlockedEdit(); return; }
+                    setBlockDateStr(ds);
                     return;
                   }
                   if (dayBkgs.length > 0) {
@@ -4623,6 +4620,7 @@ function ServiceCalendarBookingsTab() {
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [togglingDate, setTogglingDate] = useState<string | null>(null);
+  const [unblockDay, setUnblockDay] = useState<string | null>(null);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -4800,7 +4798,7 @@ function ServiceCalendarBookingsTab() {
                   onClick={() => {
                     if (isPast) return;
                     if (blocked) {
-                      toggleDate(ds);
+                      setUnblockDay(ds);
                     } else {
                       setForm(p => ({ ...p, dateStr: ds })); setShowForm(true);
                     }
@@ -4866,7 +4864,10 @@ function ServiceCalendarBookingsTab() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">رقم الجوال</label>
-              <Input type="text" inputMode="numeric" lang="ar" value={form.clientPhone} onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value }))} placeholder="٠٥xxxxxxxx" className="rounded-xl" dir="ltr" />
+              <Input type="text" inputMode="numeric" lang="ar"
+                value={toAr(form.clientPhone)}
+                onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
+                placeholder="٠٥xxxxxxxx" className="rounded-xl" dir="ltr" />
             </div>
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-xs font-semibold text-muted-foreground">تاريخ الخدمة *</label>
@@ -4943,15 +4944,24 @@ function ServiceCalendarBookingsTab() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">المبلغ الإجمالي (ر.س)</label>
-              <Input type="text" inputMode="decimal" lang="ar" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="٠" className="rounded-xl" />
+              <Input type="text" inputMode="decimal" lang="ar"
+                value={toAr(form.amount)}
+                onChange={e => setForm(p => ({ ...p, amount: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
+                placeholder="٠" className="rounded-xl" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">العربون المدفوع (ر.س)</label>
-              <Input type="text" inputMode="decimal" lang="ar" value={form.deposit} onChange={e => setForm(p => ({ ...p, deposit: e.target.value }))} placeholder="٠" className="rounded-xl" />
+              <Input type="text" inputMode="decimal" lang="ar"
+                value={toAr(form.deposit)}
+                onChange={e => setForm(p => ({ ...p, deposit: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
+                placeholder="٠" className="rounded-xl" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">تأمين الحجز (ر.س)</label>
-              <Input type="text" inputMode="decimal" lang="ar" value={form.insuranceAmount} onChange={e => setForm(p => ({ ...p, insuranceAmount: e.target.value }))} placeholder="٠" className="rounded-xl" />
+              <Input type="text" inputMode="decimal" lang="ar"
+                value={toAr(form.insuranceAmount)}
+                onChange={e => setForm(p => ({ ...p, insuranceAmount: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
+                placeholder="٠" className="rounded-xl" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">مصدر الحجز</label>
@@ -5049,6 +5059,32 @@ function ServiceCalendarBookingsTab() {
           </div>
         )}
       </div>
+
+      {/* Unblock Day Confirmation Dialog */}
+      <Dialog open={!!unblockDay} onOpenChange={v => { if (!v) setUnblockDay(null); }}>
+        <DialogContent dir="rtl" className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Lock className="w-4 h-4 text-red-500" />هذا اليوم مغلق
+            </DialogTitle>
+            <DialogDescription>
+              {unblockDay ? formatDualDate(unblockDay).hijri + " هـ" : ""}
+              <br />هل تريد فتح هذا اليوم وإتاحته للحجز؟
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 flex-row-reverse">
+            <Button variant="outline" onClick={() => setUnblockDay(null)}>إلغاء</Button>
+            <Button
+              disabled={togglingDate === unblockDay}
+              onClick={async () => { const d = unblockDay!; setUnblockDay(null); await toggleDate(d); }}
+              className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
+            >
+              {togglingDate === unblockDay ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+              فتح اليوم
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Block-Dates Range Dialog */}
       <ServiceBlockDatesDialog
