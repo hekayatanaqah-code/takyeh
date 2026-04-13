@@ -4521,8 +4521,98 @@ const _svcHijriMon  = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { m
 const _svcHijriYear = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { year: "numeric" });
 
 const SOURCE_LABELS: Record<string, string> = {
-  platform: "المنصة", whatsapp: "واتساب", phone: "هاتف", walk_in: "حضور مباشر", external: "خارجي",
+  platform: "من المنصة",
+  external: "خارج المنصة",
 };
+
+/* ── Service Block-Dates Range Dialog ──────────── */
+function ServiceBlockDatesDialog({ open, providerId, onClose, onDone }: {
+  open: boolean;
+  providerId: number | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { toast } = useToast();
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [reason, setReason] = useState("إغلاق مؤقت");
+  const [loading, setLoading] = useState(false);
+
+  function reset() { setStartDate(""); setEndDate(""); setReason("إغلاق مؤقت"); }
+
+  async function handleBlock() {
+    if (!providerId || !startDate || !endDate || startDate > endDate) return;
+    setLoading(true);
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const dates: string[] = [];
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        dates.push(d.toISOString().slice(0, 10));
+      }
+      await Promise.all(dates.map(ds =>
+        apiFetch(`/providers/my/approved/${providerId}/blocked-dates`, { method: "POST", body: JSON.stringify({ dateStr: ds }) })
+      ));
+      toast({ title: `تم إغلاق ${dates.length} يوم بنجاح`, description: reason });
+      onDone();
+      onClose();
+      reset();
+    } catch {
+      toast({ title: "حدث خطأ", variant: "destructive" });
+    } finally { setLoading(false); }
+  }
+
+  const dayCount = startDate && endDate && startDate <= endDate
+    ? Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1
+    : 0;
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) { onClose(); reset(); } }}>
+      <DialogContent dir="rtl" className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Lock className="w-4 h-4 text-gray-500" />إغلاق أيام الخدمة
+          </DialogTitle>
+          <DialogDescription>حدد نطاق التواريخ لمنع الحجوزات (صيانة، إجازة، غياب...)</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
+              <DualCalendarPicker value={startDate} onChange={setStartDate} placeholder="من تاريخ" label="من تاريخ" />
+            </div>
+            <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
+              <DualCalendarPicker value={endDate} onChange={setEndDate} placeholder="إلى تاريخ" label="إلى تاريخ" minDate={startDate || undefined} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">سبب الإغلاق</label>
+            <div className="flex gap-2 flex-wrap">
+              {["إغلاق مؤقت", "صيانة", "إجازة", "فعالية خاصة"].map(r => (
+                <button key={r} onClick={() => setReason(r)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${reason === r ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-foreground"}`}>
+                  {r}
+                </button>
+              ))}
+            </div>
+            <Input className="mt-2" placeholder="أو اكتب سبباً آخر..." value={reason} onChange={e => setReason(e.target.value)} />
+          </div>
+          {dayCount > 0 && (
+            <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+              سيتم إغلاق {dayCount.toLocaleString("ar-SA-u-nu-arab")} يوم من {formatDualDate(startDate).hijri} إلى {formatDualDate(endDate).hijri} هـ
+            </div>
+          )}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => { onClose(); reset(); }}>إلغاء</Button>
+          <Button disabled={!startDate || !endDate || !reason.trim() || loading || startDate > endDate} onClick={handleBlock}
+            className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}إغلاق الأيام
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 /* ── Service Calendar + Bookings (Unified Tab) ──────────────── */
 function ServiceCalendarBookingsTab() {
@@ -4533,12 +4623,12 @@ function ServiceCalendarBookingsTab() {
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [togglingDate, setTogglingDate] = useState<string | null>(null);
-  const [blockMode, setBlockMode] = useState(false);
+  const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
-  const emptyForm = { clientName: "", clientPhone: "", dateStr: "", duration: "", status: "confirmed", notes: "", amount: "", deposit: "", insuranceAmount: "", source: "whatsapp" };
+  const emptyForm = { clientName: "", clientPhone: "", dateStr: "", duration: "", status: "confirmed", notes: "", amount: "", deposit: "", insuranceAmount: "", source: "platform" };
   const [form, setForm] = useState({ ...emptyForm });
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickYear, setPickYear] = useState(now.getFullYear());
@@ -4680,14 +4770,14 @@ function ServiceCalendarBookingsTab() {
           <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><ChevronLeft className="w-4 h-4" /></button>
         </div>
 
-        {/* Legend + block-mode toggle */}
+        {/* Legend */}
         <div className="flex gap-3 flex-wrap text-xs text-muted-foreground items-center">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-400 inline-block" /> محجوب</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-400 inline-block" /> محجوب — انقر لإلغاء الحجب</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-400 inline-block" /> يوم حجز</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-primary/20 border border-primary inline-block" /> اليوم</span>
-          <button type="button" onClick={() => setBlockMode(b => !b)}
-            className={`ms-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors border ${blockMode ? "bg-red-500 text-white border-red-500" : "border-border text-muted-foreground hover:border-red-400 hover:text-red-500"}`}>
-            <Lock className="w-3 h-3" />{blockMode ? "وضع الحجب: مفعّل" : "حجب الأيام"}
+          <button type="button" onClick={() => setShowBlockDialog(true)}
+            className="ms-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors border border-border text-muted-foreground hover:border-red-400 hover:text-red-500">
+            <Lock className="w-3 h-3" />إغلاق أيام
           </button>
         </div>
 
@@ -4709,8 +4799,11 @@ function ServiceCalendarBookingsTab() {
                 <button key={ds} type="button"
                   onClick={() => {
                     if (isPast) return;
-                    if (blockMode) { toggleDate(ds); }
-                    else { setForm(p => ({ ...p, dateStr: ds })); setShowForm(true); }
+                    if (blocked) {
+                      toggleDate(ds);
+                    } else {
+                      setForm(p => ({ ...p, dateStr: ds })); setShowForm(true);
+                    }
                   }}
                   disabled={isPast || togglingDate === ds}
                   className={[
@@ -4773,7 +4866,7 @@ function ServiceCalendarBookingsTab() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">رقم الجوال</label>
-              <Input value={form.clientPhone} onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value }))} placeholder="05xxxxxxxx" className="rounded-xl" dir="ltr" />
+              <Input type="text" inputMode="numeric" lang="ar" value={form.clientPhone} onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value }))} placeholder="٠٥xxxxxxxx" className="rounded-xl" dir="ltr" />
             </div>
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-xs font-semibold text-muted-foreground">تاريخ الخدمة *</label>
@@ -4850,15 +4943,15 @@ function ServiceCalendarBookingsTab() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">المبلغ الإجمالي (ر.س)</label>
-              <Input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="0" className="rounded-xl" />
+              <Input type="text" inputMode="decimal" lang="ar" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="٠" className="rounded-xl" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">العربون المدفوع (ر.س)</label>
-              <Input type="number" value={form.deposit} onChange={e => setForm(p => ({ ...p, deposit: e.target.value }))} placeholder="0" className="rounded-xl" />
+              <Input type="text" inputMode="decimal" lang="ar" value={form.deposit} onChange={e => setForm(p => ({ ...p, deposit: e.target.value }))} placeholder="٠" className="rounded-xl" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">تأمين الحجز (ر.س)</label>
-              <Input type="number" value={form.insuranceAmount} onChange={e => setForm(p => ({ ...p, insuranceAmount: e.target.value }))} placeholder="0" className="rounded-xl" />
+              <Input type="text" inputMode="decimal" lang="ar" value={form.insuranceAmount} onChange={e => setForm(p => ({ ...p, insuranceAmount: e.target.value }))} placeholder="٠" className="rounded-xl" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">مصدر الحجز</label>
@@ -4956,6 +5049,14 @@ function ServiceCalendarBookingsTab() {
           </div>
         )}
       </div>
+
+      {/* Block-Dates Range Dialog */}
+      <ServiceBlockDatesDialog
+        open={showBlockDialog}
+        providerId={providerId}
+        onClose={() => setShowBlockDialog(false)}
+        onDone={() => queryClient.invalidateQueries({ queryKey: ["service-blocked-dates", providerId] })}
+      />
     </div>
   );
 }
@@ -5031,13 +5132,15 @@ function ServiceSeasonsTab() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">تاريخ البدء *</label>
-              <Input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} className="rounded-xl" />
-              {form.startDate && <p className="text-xs text-primary">{toHijri(form.startDate)} هـ</p>}
+              <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
+                <DualCalendarPicker value={form.startDate} onChange={v => setForm(p => ({ ...p, startDate: v }))} placeholder="اختر تاريخ البدء" label="من تاريخ" />
+              </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">تاريخ الانتهاء *</label>
-              <Input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))} className="rounded-xl" />
-              {form.endDate && <p className="text-xs text-primary">{toHijri(form.endDate)} هـ</p>}
+              <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
+                <DualCalendarPicker value={form.endDate} onChange={v => setForm(p => ({ ...p, endDate: v }))} placeholder="اختر تاريخ الانتهاء" label="إلى تاريخ" minDate={form.startDate || undefined} />
+              </div>
             </div>
           </div>
           <div className="flex gap-2 justify-end">
