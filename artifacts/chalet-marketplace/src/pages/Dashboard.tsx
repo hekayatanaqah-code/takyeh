@@ -31,7 +31,7 @@ import {
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
-  X, Shield,
+  X, Shield, Briefcase,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -10220,10 +10220,11 @@ function NotificationSettingsSection() {
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
-  const [dashMode, setDashMode] = useState<"chalets" | "services">("chalets");
+  const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
+  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "insurance">("revenue");
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "notifications" | "customers" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits" | "seasons">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const [serviceFinanceMode, setServiceFinanceMode] = useState<"separate" | "consolidated">(() => (localStorage.getItem("svc_finance_mode") as any) ?? "separate");
   const [clientListMode, setClientListMode] = useState<"unified" | "separate">(() => (localStorage.getItem("svc_client_mode") as any) ?? "unified");
@@ -10438,18 +10439,12 @@ export default function Dashboard() {
   }, [notifSummary]);
 
   const allTabs = [
-    { id: "chalets",       label: "شاليهاتي",          icon: <Building2 className="w-4 h-4" /> },
-    { id: "seasons",       label: "المواسم",             icon: <Sun className="w-4 h-4" /> },
-    { id: "reviews",       label: "التقييمات",           icon: <Star className="w-4 h-4" /> },
-    { id: "notifications", label: "الإشعارات",           icon: <Bell className="w-4 h-4" /> },
-    { id: "customers",     label: "عملائي",              icon: <Users className="w-4 h-4" /> },
+    { id: "chalets",   label: "شاليهاتي",           icon: <Building2 className="w-4 h-4" /> },
+    { id: "seasons",   label: "المواسم والأسعار",    icon: <Sun className="w-4 h-4" /> },
+    { id: "reviews",   label: "التقييمات",            icon: <Star className="w-4 h-4" /> },
+    { id: "calendar",  label: "التقويم والحجوزات",   icon: <Calendar className="w-4 h-4" /> },
+    { id: "deposits",  label: "ودائع الضمان",         icon: <Lock className="w-4 h-4" /> },
     { id: "services",  label: "الخدمات الإضافية",    icon: <MessageSquare className="w-4 h-4" /> },
-    { id: "calendar",  label: "التقويم والحجوزات",  icon: <Calendar className="w-4 h-4" /> },
-    { id: "revenue",   label: "الإيرادات",           icon: <TrendingUp className="w-4 h-4" /> },
-    { id: "expenses",  label: "المصروفات",           icon: <Wallet className="w-4 h-4" /> },
-    { id: "staff",     label: "الموظفون",            icon: <Users className="w-4 h-4" /> },
-    { id: "reports",   label: "التقارير",            icon: <BarChart2 className="w-4 h-4" /> },
-    { id: "deposits",  label: "التأمينات",            icon: <Lock className="w-4 h-4" /> },
   ] as const;
 
   const tabs = useMemo(() => {
@@ -10676,11 +10671,12 @@ export default function Dashboard() {
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="flex items-center gap-0 mb-6 bg-muted rounded-2xl p-1 w-fit"
+            className="flex flex-wrap items-center gap-1 mb-6 bg-muted rounded-2xl p-1 w-fit max-w-full"
           >
+            {/* Chalets mode */}
             <button
               onClick={() => setDashMode("chalets")}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
                 dashMode === "chalets"
                   ? "bg-background text-primary shadow-sm ring-1 ring-border"
                   : "text-muted-foreground hover:text-foreground"
@@ -10694,9 +10690,10 @@ export default function Dashboard() {
                 </span>
               )}
             </button>
+            {/* Services mode */}
             <button
               onClick={() => setDashMode("services")}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
                 dashMode === "services"
                   ? "bg-background text-amber-600 shadow-sm ring-1 ring-border"
                   : "text-muted-foreground hover:text-foreground"
@@ -10707,6 +10704,23 @@ export default function Dashboard() {
               {(myApprovedProviders.length + myServiceSubmissions.filter(s => s.status === "pending").length) > 0 && (
                 <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full px-2 py-0.5 font-semibold">
                   {myApprovedProviders.length + myServiceSubmissions.length}
+                </span>
+              )}
+            </button>
+            {/* Admin Finance mode */}
+            <button
+              onClick={() => setDashMode("admin-finance")}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                dashMode === "admin-finance"
+                  ? "bg-background text-slate-700 dark:text-slate-200 shadow-sm ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Briefcase className="w-4 h-4" />
+              الشؤون المالية والإدارية
+              {unreadNotifCount > 0 && (
+                <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full px-2 py-0.5 font-semibold">
+                  {unreadNotifCount}
                 </span>
               )}
             </button>
@@ -10738,41 +10752,17 @@ export default function Dashboard() {
               </Link>
             </div>
 
-            {/* Smart Settings Row */}
+            {/* Cross-owner shortcut to admin section */}
             {isCrossOwner && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Financial Mode */}
-                <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 ${serviceFinanceMode === "consolidated" ? "bg-primary/5 border-primary/30" : "bg-card border-border"}`}>
-                  <div>
-                    <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-amber-500" />
-                      وضع الماليات
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {serviceFinanceMode === "consolidated" ? "موحّد — شاليهات + خدمات في تقرير واحد" : "منفصل — إحصائيات مستقلة لكل نشاط"}
-                    </p>
-                  </div>
-                  <button type="button" onClick={toggleFinanceMode}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${serviceFinanceMode === "consolidated" ? "bg-primary" : "bg-muted-foreground/30"}`}>
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${serviceFinanceMode === "consolidated" ? "translate-x-6" : "translate-x-1"}`} />
-                  </button>
+              <div className="bg-primary/5 border border-primary/20 rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2 text-sm text-primary font-semibold">
+                  <Zap className="w-4 h-4" />
+                  الإيرادات والمصروفات والفريق والتقارير في قسم موحّد
                 </div>
-                {/* Client List Mode */}
-                <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 ${clientListMode === "unified" ? "bg-primary/5 border-primary/30" : "bg-card border-border"}`}>
-                  <div>
-                    <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                      <Users className="w-3.5 h-3.5 text-amber-500" />
-                      قاعدة العملاء
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {clientListMode === "unified" ? "موحّدة — جميع عملاء شاليهاتك وخدماتك" : "منفصلة — قائمة خاصة بعملاء الخدمات"}
-                    </p>
-                  </div>
-                  <button type="button" onClick={toggleClientMode}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${clientListMode === "unified" ? "bg-primary" : "bg-muted-foreground/30"}`}>
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${clientListMode === "unified" ? "translate-x-6" : "translate-x-1"}`} />
-                  </button>
-                </div>
+                <button type="button" onClick={() => setDashMode("admin-finance")}
+                  className="text-xs font-bold text-primary border border-primary/30 rounded-lg px-3 py-1.5 hover:bg-primary/10 transition-colors flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5" />انتقل إلى الشؤون المالية والإدارية
+                </button>
               </div>
             )}
 
@@ -10816,18 +10806,10 @@ export default function Dashboard() {
                 {selectedServiceId !== "submissions" && selectedServiceId !== null && (() => {
                   const selectedProvider = myApprovedProviders.find(p => p.id === selectedServiceId);
                   const serviceErpTabs = [
-                    { id: "details",      label: "تفاصيل",      icon: <Edit2 className="w-3.5 h-3.5" /> },
-                    { id: "calendar",     label: "التقويم",     icon: <Calendar className="w-3.5 h-3.5" /> },
-                    { id: "seasons",      label: "المواسم",     icon: <Sunrise className="w-3.5 h-3.5" /> },
-                    { id: "appointments", label: "الحجوزات",    icon: <BookOpen className="w-3.5 h-3.5" /> },
-                    { id: "revenue",      label: "الإيرادات",   icon: <TrendingUp className="w-3.5 h-3.5" /> },
-                    { id: "expenses",     label: "المصروفات",   icon: <TrendingDown className="w-3.5 h-3.5" /> },
-                    { id: "insurance",    label: "التأمينات",   icon: <Shield className="w-3.5 h-3.5" /> },
-                    { id: "staff",        label: "الموظفون",    icon: <Users className="w-3.5 h-3.5" /> },
-                    { id: "reviews",      label: "المراجعات",   icon: <Star className="w-3.5 h-3.5" /> },
-                    { id: "notifications",label: "الإشعارات",   icon: <Bell className="w-3.5 h-3.5" /> },
-                    { id: "customers",    label: "قاعدة العملاء", icon: <Users className="w-3.5 h-3.5" /> },
-                    { id: "reports",      label: "التقارير",    icon: <BarChart2 className="w-3.5 h-3.5" /> },
+                    { id: "details",      label: "تفاصيل الخدمة",  icon: <Edit2 className="w-3.5 h-3.5" /> },
+                    { id: "seasons",      label: "المواسم والأسعار", icon: <Sunrise className="w-3.5 h-3.5" /> },
+                    { id: "calendar",     label: "التقويم",          icon: <Calendar className="w-3.5 h-3.5" /> },
+                    { id: "appointments", label: "الحجوزات",         icon: <BookOpen className="w-3.5 h-3.5" /> },
                   ];
                   return (
                     <ServiceErpCtx.Provider value={{ providerId: selectedServiceId }}>
@@ -10877,72 +10859,20 @@ export default function Dashboard() {
                         ))}
                       </div>
 
-                      {/* ERP Tab Content */}
+                      {/* ERP Tab Content — core operations only */}
                       <div className="min-h-[300px]">
                         {selectedServiceTab === "details"      && <ServiceDetailsTab />}
-                        {selectedServiceTab === "calendar"     && <ServiceCalendarTab />}
                         {selectedServiceTab === "seasons"      && <ServiceSeasonsTab />}
+                        {selectedServiceTab === "calendar"     && <ServiceCalendarTab />}
                         {selectedServiceTab === "appointments" && <ServiceAppointmentsTab />}
-                        {selectedServiceTab === "insurance"    && <ServiceInsurancesTab />}
-                        {selectedServiceTab === "revenue"      && (
-                          <div className="space-y-4">
-                            {isCrossOwner && serviceFinanceMode === "consolidated" && (
-                              <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-primary font-semibold flex items-center gap-2">
-                                <Zap className="w-3.5 h-3.5" />وضع موحّد — تشمل إيرادات الشاليهات وهذه الخدمة
-                              </div>
-                            )}
-                            <RevenueTab />
-                          </div>
-                        )}
-                        {selectedServiceTab === "expenses"     && (
-                          <div className="space-y-4">
-                            {isCrossOwner && serviceFinanceMode === "consolidated" && (
-                              <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-primary font-semibold flex items-center gap-2">
-                                <Zap className="w-3.5 h-3.5" />وضع موحّد — تشمل مصروفات الشاليهات وهذه الخدمة
-                              </div>
-                            )}
-                            <ExpensesTab />
-                          </div>
-                        )}
-                        {selectedServiceTab === "staff"        && (
-                          <div className="space-y-4">
-                            <ServiceIntegrationBanner isCrossOwner={isCrossOwner} />
-                            <StaffTab />
-                          </div>
-                        )}
-                        {selectedServiceTab === "reviews"      && (
-                          <div className="space-y-4">
-                            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl px-4 py-2.5 text-xs text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-2">
-                              <Star className="w-3.5 h-3.5" />المراجعات المعروضة خاصة بخدمة: {myApprovedProviders.find(p => p.id === selectedServiceId)?.businessName ?? "الخدمة"}
-                            </div>
-                            <ReviewsTab />
-                          </div>
-                        )}
-                        {selectedServiceTab === "notifications" && (
-                          <div className="space-y-4">
-                            <div className="bg-muted/60 border border-border rounded-xl px-4 py-2.5 text-xs text-muted-foreground flex items-center gap-2">
-                              <Bell className="w-3.5 h-3.5" />الإشعارات مفلترة تلقائياً — لا تكرار للإشعار في اليوم نفسه
-                            </div>
-                            <NotificationsTab deduplicate />
-                          </div>
-                        )}
-                        {selectedServiceTab === "customers"    && (
-                          <div className="space-y-4">
-                            {isCrossOwner && (
-                              <div className={`border rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center gap-2 ${clientListMode === "unified" ? "bg-primary/5 border-primary/20 text-primary" : "bg-muted/60 border-border text-muted-foreground"}`}>
-                                <Users className="w-3.5 h-3.5" />
-                                {clientListMode === "unified" ? "قاعدة عملاء موحّدة — تشمل عملاء شاليهاتك وخدماتك" : "قاعدة عملاء منفصلة — خاصة بهذه الخدمة فقط"}
-                              </div>
-                            )}
-                            <CustomersTab />
-                          </div>
-                        )}
-                        {selectedServiceTab === "reports"      && (
-                          <div className="space-y-4">
-                            <ServiceIntegrationBanner isCrossOwner={isCrossOwner} />
-                            <ReportsTab />
-                          </div>
-                        )}
+                      </div>
+                      {/* Shortcut to admin-finance */}
+                      <div className="mt-4 pt-4 border-t border-border">
+                        <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" />الإيرادات والمصروفات والموظفون والتقارير → </p>
+                        <button type="button" onClick={() => setDashMode("admin-finance")}
+                          className="text-xs font-semibold text-primary underline underline-offset-2 hover:opacity-80">
+                          الانتقال إلى الشؤون المالية والإدارية
+                        </button>
                       </div>
                     </ServiceErpCtx.Provider>
                   );
@@ -10951,6 +10881,95 @@ export default function Dashboard() {
             )}
           </motion.div>
         )}
+
+        {/* ══ ADMIN FINANCE MODE ══════════════════════════════════════ */}
+        {dashMode === "admin-finance" && !isStaff && (() => {
+          const afTabs = [
+            { id: "revenue",       label: "الإيرادات",        icon: <TrendingUp className="w-4 h-4" />,   color: "text-green-600" },
+            { id: "expenses",      label: "المصروفات",        icon: <TrendingDown className="w-4 h-4" />, color: "text-red-500" },
+            { id: "staff",         label: "الموظفون",         icon: <Users className="w-4 h-4" />,        color: "text-blue-600" },
+            { id: "customers",     label: "قاعدة العملاء",   icon: <UserCheck className="w-4 h-4" />,    color: "text-purple-600" },
+            { id: "notifications", label: "الإشعارات",        icon: <Bell className="w-4 h-4" />,         color: "text-amber-600" },
+            { id: "insurance",     label: "التأمينات",        icon: <Shield className="w-4 h-4" />,       color: "text-slate-600" },
+            { id: "reports",       label: "التقارير المالية", icon: <BarChart2 className="w-4 h-4" />,    color: "text-indigo-600" },
+          ] as const;
+          return (
+            <motion.div key="admin-finance-mode" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+              {/* Section header */}
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <h2 className="text-xl font-extrabold text-foreground flex items-center gap-2">
+                    <Briefcase className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                    الشؤون المالية والإدارية
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {isCrossOwner ? "لوحة مالية وإدارية موحّدة — شاليهاتك وخدماتك في مكان واحد" : "إدارة الماليات والفريق والعملاء والإشعارات"}
+                  </p>
+                </div>
+                {isCrossOwner && (
+                  <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-xl px-3.5 py-2 text-xs text-primary font-semibold">
+                    <Zap className="w-3.5 h-3.5" />
+                    نظام موحّد — شاليهات + خدمات
+                  </div>
+                )}
+              </div>
+
+              {/* Tab bar */}
+              <div className="flex gap-1 border-b border-border overflow-x-auto pb-0 -mx-1 px-1">
+                {afTabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setAdminFinanceTab(tab.id as any)}
+                    className={`relative flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+                      adminFinanceTab === tab.id
+                        ? `border-current ${tab.color}`
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {tab.icon}
+                    {tab.label}
+                    {tab.id === "notifications" && unreadNotifCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
+                        {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Consolidated banner */}
+              {isCrossOwner && (adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "staff" || adminFinanceTab === "reports") && (
+                <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-primary font-semibold flex items-center gap-2">
+                  <Zap className="w-3.5 h-3.5" />
+                  {adminFinanceTab === "revenue"  && "الإيرادات الموحّدة — تشمل حجوزات الشاليهات وإيرادات الخدمات"}
+                  {adminFinanceTab === "expenses" && "المصروفات الموحّدة — تشمل مصروفات الشاليهات والخدمات"}
+                  {adminFinanceTab === "staff"    && "فريق العمل الموحّد — جميع الموظفين في شاليهاتك وخدماتك"}
+                  {adminFinanceTab === "reports"  && "التقارير الإجمالية — تجمع بيانات كل نشاطاتك"}
+                </div>
+              )}
+
+              {/* Tab content */}
+              <div className="min-h-[320px]">
+                {adminFinanceTab === "revenue"       && <RevenueTab />}
+                {adminFinanceTab === "expenses"      && <ExpensesTab />}
+                {adminFinanceTab === "staff"         && <StaffTab />}
+                {adminFinanceTab === "customers"     && (
+                  <div className="space-y-4">
+                    {isCrossOwner && (
+                      <div className="bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800/30 rounded-xl px-4 py-2.5 text-xs text-purple-700 dark:text-purple-400 font-semibold flex items-center gap-2">
+                        <UserCheck className="w-3.5 h-3.5" />قاعدة عملاء موحّدة — تجمع عملاء شاليهاتك وخدماتك في قائمة واحدة
+                      </div>
+                    )}
+                    <CustomersTab />
+                  </div>
+                )}
+                {adminFinanceTab === "notifications" && <NotificationsTab />}
+                {adminFinanceTab === "insurance"     && <ServiceInsurancesTab />}
+                {adminFinanceTab === "reports"       && <ReportsTab />}
+              </div>
+            </motion.div>
+          );
+        })()}
 
         {/* ══ CHALETS MODE ═════════════════════════════════════════════ */}
         {(dashMode === "chalets" || isStaff) && (
@@ -11069,29 +11088,11 @@ export default function Dashboard() {
         {activeTab === "reviews" && (
           <ReviewsTab />
         )}
-        {activeTab === "notifications" && (
-          <NotificationsTab />
-        )}
-        {activeTab === "customers" && (
-          <CustomersTab />
-        )}
         {activeTab === "services" && (
           <ChaletServicesTab />
         )}
         {activeTab === "calendar" && (
           <BookingCalendarTab submissions={submissions as any[] ?? []} />
-        )}
-        {activeTab === "revenue" && (
-          <RevenueTab />
-        )}
-        {activeTab === "expenses" && (
-          <ExpensesTab />
-        )}
-        {activeTab === "staff" && (
-          <StaffTab />
-        )}
-        {activeTab === "reports" && (
-          <ReportsTab />
         )}
         {activeTab === "deposits" && (
           <DepositsTab />
