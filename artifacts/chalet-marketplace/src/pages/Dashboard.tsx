@@ -1941,6 +1941,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
   const [blockDateStr, setBlockDateStr] = useState<string | null>(null);
+  const [chalUnblockDay, setChalUnblockDay] = useState<{ ds: string; avId: number } | null>(null);
+  const [unblockingChal, setUnblockingChal] = useState(false);
   const [summaryDate, setSummaryDate] = useState<string | null>(null);
   const [reviewSentIds, setReviewSentIds] = useState<Set<number>>(new Set());
   const [reviewPendingId, setReviewPendingId] = useState<number | null>(null);
@@ -2566,11 +2568,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
                     return ds >= b.bookingDate && ds <= endStr;
                   });
-                  // Hard-block: maintenance/صيانة dates — open the block dialog so owner can unblock
+                  // Hard-block: maintenance/صيانة dates — show unblock confirmation dialog
                   const avEntry = availability.find((a) => a.dateStr === ds);
                   if (avEntry?.notes && dayBkgs.length === 0) {
                     if (isReadOnly) { onBlockedEdit(); return; }
-                    setBlockDateStr(ds);
+                    if (avEntry.id) setChalUnblockDay({ ds, avId: avEntry.id });
                     return;
                   }
                   if (dayBkgs.length > 0) {
@@ -3361,6 +3363,44 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           toast({ title: "تمت إعادة الجدولة", description: "تم تحديث موعد الحجز بنجاح." });
         }}
       />
+
+      {/* Chalet Unblock Day Confirmation Dialog */}
+      <Dialog open={!!chalUnblockDay} onOpenChange={v => { if (!v) setChalUnblockDay(null); }}>
+        <DialogContent dir="rtl" className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base text-red-600 dark:text-red-400">
+              <span className="w-5 h-5 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center">
+                <Lock className="w-3 h-3 text-red-600" />
+              </span>
+              هذا اليوم مغلق — لا يمكن الحجز
+            </DialogTitle>
+            <DialogDescription className="text-right">
+              {chalUnblockDay ? formatDualDate(chalUnblockDay.ds).hijri : ""}
+              <br />هل تريد فتح هذا اليوم وإتاحته للحجز؟
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 flex-row-reverse">
+            <Button variant="outline" onClick={() => setChalUnblockDay(null)}>إلغاء</Button>
+            <Button
+              disabled={unblockingChal}
+              onClick={async () => {
+                if (!chalUnblockDay) return;
+                setUnblockingChal(true);
+                try {
+                  await apiFetch(`/owner/availability/${chalUnblockDay.avId}`, { method: "DELETE" });
+                  qc.invalidateQueries({ queryKey: ["owner", "availability", activeChaletId] });
+                  toast({ title: "تم فتح اليوم", description: formatDualDate(chalUnblockDay.ds).hijri });
+                  setChalUnblockDay(null);
+                } finally { setUnblockingChal(false); }
+              }}
+              className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
+            >
+              {unblockingChal ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+              فتح اليوم
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Block Date Dialog */}
       {blockDateStr && activeChaletId && (
@@ -4912,16 +4952,23 @@ function ServiceCalendarBookingsTab() {
                           const ds = `${pickYear}-${String(pickMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                           const isSelected = ds === form.dateStr;
                           const isPast = ds < todayPick;
+                          const isBlockedPick = blockedSet.has(ds);
                           const hijriD = _svcHijriDay.format(new Date(pickYear, pickMonth, day));
                           const gregAr = day.toLocaleString("ar-SA-u-nu-arab");
                           return (
                             <button key={ds} type="button"
-                              onClick={() => { if (!isPast) { setForm(p => ({ ...p, dateStr: ds })); setPickerOpen(false); } }}
-                              disabled={isPast}
+                              onClick={() => {
+                                if (isPast || isBlockedPick) return;
+                                setForm(p => ({ ...p, dateStr: ds }));
+                                setPickerOpen(false);
+                              }}
+                              disabled={isPast || isBlockedPick}
+                              title={isBlockedPick ? "هذا اليوم مغلق" : undefined}
                               className={[
                                 "flex flex-col items-center justify-start pt-1 pb-1 px-0 w-full min-h-[48px]",
-                                "transition-colors focus:outline-none",
+                                "transition-colors focus:outline-none relative",
                                 isPast ? "bg-background/60 text-muted-foreground/40 cursor-default"
+                                  : isBlockedPick ? "bg-red-100 dark:bg-red-900/40 text-red-400 dark:text-red-500 cursor-not-allowed"
                                   : isSelected ? "bg-primary text-primary-foreground"
                                   : ds === todayPick ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary"
                                   : "bg-background hover:bg-primary/5 text-foreground",
@@ -4929,6 +4976,7 @@ function ServiceCalendarBookingsTab() {
                             >
                               <span className="text-[0.72rem] font-bold leading-none">{hijriD}</span>
                               <span className={`text-[0.48rem] leading-none mt-0.5 tabular-nums ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{gregAr}</span>
+                              {isBlockedPick && <span className="absolute inset-0 flex items-end justify-center pb-0.5"><span className="text-[0.38rem] text-red-500 font-bold">مغلق</span></span>}
                             </button>
                           );
                         });
@@ -4940,7 +4988,11 @@ function ServiceCalendarBookingsTab() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">المدة</label>
-              <Input value={form.duration} onChange={e => setForm(p => ({ ...p, duration: e.target.value }))} placeholder="يوم / أسبوع / شهر..." className="rounded-xl" />
+              <Input
+                type="text" inputMode="decimal" lang="ar"
+                value={toAr(form.duration)}
+                onChange={e => setForm(p => ({ ...p, duration: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
+                placeholder="١ يوم / أسبوع / شهر..." className="rounded-xl" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">المبلغ الإجمالي (ر.س)</label>
@@ -5067,8 +5119,8 @@ function ServiceCalendarBookingsTab() {
             <DialogTitle className="flex items-center gap-2 text-base">
               <Lock className="w-4 h-4 text-red-500" />هذا اليوم مغلق
             </DialogTitle>
-            <DialogDescription>
-              {unblockDay ? formatDualDate(unblockDay).hijri + " هـ" : ""}
+            <DialogDescription className="text-right">
+              {unblockDay ? formatDualDate(unblockDay).hijri : ""}
               <br />هل تريد فتح هذا اليوم وإتاحته للحجز؟
             </DialogDescription>
           </DialogHeader>
