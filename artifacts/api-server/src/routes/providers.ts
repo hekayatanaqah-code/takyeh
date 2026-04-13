@@ -194,6 +194,7 @@ router.patch("/my/approved/:id", requireAuth, async (req: any, res) => {
     yearsOfExperience: z.number().int().min(0).optional().nullable(),
     coverageTags: z.array(z.string()).optional(),
     customFeatureTags: z.array(z.string()).optional(),
+    photoCaptions: z.array(z.string()).optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors: parsed.error.flatten().fieldErrors });
@@ -360,6 +361,9 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
     notes: z.string().optional().nullable(),
     amount: z.string().optional().nullable(),
     cancelReason: z.string().optional().nullable(),
+    insuranceStatus: z.enum(["held", "refunded", "deducted"]).optional(),
+    insuranceDeductAmount: z.string().optional().nullable(),
+    insuranceDeductNote: z.string().optional().nullable(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة" });

@@ -273,6 +273,7 @@ export const serviceProvidersTable = pgTable("service_providers", {
   yearsOfExperience: integer("years_of_experience"),
   coverageTags: text("coverage_tags").array().notNull().default([]),
   customFeatureTags: text("custom_feature_tags").array().notNull().default([]),
+  photoCaptions: text("photo_captions").array().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -596,6 +597,9 @@ export const serviceAppointmentsTable = pgTable("service_appointments", {
   amount: numeric("amount", { precision: 10, scale: 2 }),
   deposit: numeric("deposit", { precision: 10, scale: 2 }).default("0"),
   insuranceAmount: numeric("insurance_amount", { precision: 10, scale: 2 }).default("0"),
+  insuranceStatus: text("insurance_status").default("held"),
+  insuranceDeductAmount: numeric("insurance_deduct_amount", { precision: 10, scale: 2 }),
+  insuranceDeductNote: text("insurance_deduct_note"),
   source: text("source").notNull().default("external"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),

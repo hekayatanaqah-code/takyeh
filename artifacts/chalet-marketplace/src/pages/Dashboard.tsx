@@ -31,7 +31,7 @@ import {
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
-  X, Shield, Briefcase,
+  X, Shield, Briefcase, Scissors, RefreshCw,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -60,6 +60,10 @@ function useReadOnly() { return useContext(ImpersonationCtx); }
 /* ─── Service ERP context — carries selected provider ID ─── */
 const ServiceErpCtx = createContext<{ providerId: number | null }>({ providerId: null });
 function useServiceErp() { return useContext(ServiceErpCtx); }
+
+type FinanceUnit = { type: "all" } | { type: "chalet"; id: number; submissionId?: number; name: string } | { type: "service"; id: number; name: string };
+const AdminFinanceCtx = createContext<{ unit: FinanceUnit }>({ unit: { type: "all" } });
+function useAdminFinance() { return useContext(AdminFinanceCtx); }
 
 const statusConfig = {
   pending:        { label: "قيد المراجعة",  icon: <Clock className="w-3.5 h-3.5" />,       className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
@@ -4221,6 +4225,11 @@ function ServiceDetailsTab() {
   const [coverageTags, setCoverageTags] = useState<string[]>([]);
   const [featureTags, setFeatureTags] = useState<string[]>([]);
   const [newFeature, setNewFeature] = useState("");
+  const [logoUrl, setLogoUrl] = useState<string>("");
+  const [galleryPhotos, setGalleryPhotos] = useState<string[]>([]);
+  const [photoCaptions, setPhotoCaptions] = useState<string[]>([]);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
 
   const { data: provider, isLoading } = useQuery({
     queryKey: ["service-provider-detail", providerId],
@@ -4244,6 +4253,9 @@ function ServiceDetailsTab() {
       });
       setCoverageTags(provider.coverageTags ?? []);
       setFeatureTags(provider.customFeatureTags ?? []);
+      setLogoUrl(provider.logoUrl ?? "");
+      setGalleryPhotos(provider.galleryPhotos ?? []);
+      setPhotoCaptions(provider.photoCaptions ?? []);
     }
   }, [provider, providerId]);
 
@@ -4256,7 +4268,7 @@ function ServiceDetailsTab() {
     try {
       const r = await apiFetch(`/providers/my/approved/${providerId}`, {
         method: "PATCH",
-        body: JSON.stringify({ ...form, coverageTags, customFeatureTags: featureTags, yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : null }),
+        body: JSON.stringify({ ...form, coverageTags, customFeatureTags: featureTags, yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : null, logoUrl: logoUrl || null, galleryPhotos, photoCaptions }),
       });
       if (!r.ok) throw new Error();
       queryClient.invalidateQueries({ queryKey: ["service-provider-detail", providerId] });
@@ -4283,6 +4295,39 @@ function ServiceDetailsTab() {
   }
 
   const allSelected = AL_QASSIM_CITIES.every(c => coverageTags.includes(c));
+
+  async function handleLogoUpload(file: File) {
+    setUploadingLogo(true);
+    try {
+      const url = await uploadFile(file);
+      if (url) setLogoUrl(url);
+    } finally { setUploadingLogo(false); }
+  }
+
+  async function handleGalleryAdd(file: File) {
+    setUploadingGallery(true);
+    try {
+      const url = await uploadFile(file);
+      if (url) {
+        setGalleryPhotos(p => [...p, url]);
+        setPhotoCaptions(p => [...p, ""]);
+      }
+    } finally { setUploadingGallery(false); }
+  }
+
+  function removeGalleryItem(idx: number) {
+    setGalleryPhotos(p => p.filter((_, i) => i !== idx));
+    setPhotoCaptions(p => p.filter((_, i) => i !== idx));
+  }
+
+  function updateCaption(idx: number, val: string) {
+    setPhotoCaptions(p => { const c = [...p]; c[idx] = val; return c; });
+  }
+
+  function setMainFromGallery(idx: number) {
+    const photo = galleryPhotos[idx];
+    setLogoUrl(photo);
+  }
 
   return (
     <div className="space-y-6 pt-2">
@@ -4379,6 +4424,86 @@ function ServiceDetailsTab() {
         </div>
       </div>
 
+      {/* ── MEDIA SECTION ── */}
+      <div className="space-y-4 border-t border-border pt-5">
+        <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+          <ImageIcon className="w-4 h-4 text-amber-500" />
+          الصور والوسائط
+        </h3>
+
+        {/* Main / Logo Image */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-muted-foreground">الصورة الرئيسية (الشعار)</label>
+          <div className="flex items-center gap-4 flex-wrap">
+            {logoUrl ? (
+              <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-border bg-muted shrink-0">
+                <img src={`${BASE}${logoUrl}`} alt="logo" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).src = ""; }} />
+                <button type="button" onClick={() => setLogoUrl("")}
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="w-24 h-24 rounded-xl border-2 border-dashed border-border bg-muted/40 flex items-center justify-center text-muted-foreground shrink-0">
+                <ImageIcon className="w-7 h-7 opacity-40" />
+              </div>
+            )}
+            <label className={`cursor-pointer flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-card hover:bg-muted transition-colors text-sm font-semibold ${uploadingLogo ? "opacity-60 pointer-events-none" : ""}`}>
+              {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+              {logoUrl ? "تغيير الصورة" : "رفع صورة"}
+              <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); e.target.value = ""; }} disabled={uploadingLogo} />
+            </label>
+          </div>
+        </div>
+
+        {/* Gallery */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-muted-foreground">معرض الصور ({galleryPhotos.length})</label>
+            <label className={`cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted transition-colors text-xs font-semibold ${uploadingGallery ? "opacity-60 pointer-events-none" : ""}`}>
+              {uploadingGallery ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+              إضافة صورة
+              <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleGalleryAdd(f); e.target.value = ""; }} disabled={uploadingGallery} />
+            </label>
+          </div>
+
+          {galleryPhotos.length === 0 ? (
+            <div className="py-6 text-center text-muted-foreground text-xs bg-muted/30 rounded-xl border border-dashed border-border">
+              لا توجد صور في المعرض — أضف صورًا تظهر في صفحة خدمتك
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {galleryPhotos.map((url, idx) => (
+                <div key={idx} className="space-y-1.5">
+                  <div className="relative aspect-square rounded-xl overflow-hidden border border-border bg-muted group">
+                    <img src={`${BASE}${url}`} alt={`gallery-${idx}`} className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).src = ""; }} />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <button type="button" onClick={() => setMainFromGallery(idx)} title="تعيين كصورة رئيسية"
+                        className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center hover:bg-amber-600">
+                        <Star className="w-3.5 h-3.5" />
+                      </button>
+                      <button type="button" onClick={() => removeGalleryItem(idx)}
+                        className="w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {logoUrl === url && (
+                      <span className="absolute top-1 right-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">رئيسية</span>
+                    )}
+                  </div>
+                  <Input
+                    value={photoCaptions[idx] ?? ""}
+                    onChange={e => updateCaption(idx, e.target.value)}
+                    placeholder="وصف الصورة..."
+                    className="h-7 text-xs rounded-lg px-2"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Save */}
       <div className="flex justify-end pt-2">
         <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2 min-w-[140px] bg-amber-500 hover:bg-amber-600 text-white">
@@ -4395,7 +4520,12 @@ const _svcHijriDay  = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { d
 const _svcHijriMon  = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long" });
 const _svcHijriYear = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { year: "numeric" });
 
-function ServiceCalendarTab() {
+const SOURCE_LABELS: Record<string, string> = {
+  platform: "المنصة", whatsapp: "واتساب", phone: "هاتف", walk_in: "حضور مباشر", external: "خارجي",
+};
+
+/* ── Service Calendar + Bookings (Unified Tab) ──────────────── */
+function ServiceCalendarBookingsTab() {
   const { providerId } = useServiceErp();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -4403,8 +4533,14 @@ function ServiceCalendarTab() {
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [togglingDate, setTogglingDate] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
+  const emptyForm = { clientName: "", clientPhone: "", dateStr: "", duration: "", status: "confirmed", notes: "", amount: "", deposit: "", insuranceAmount: "", source: "whatsapp" };
+  const [form, setForm] = useState({ ...emptyForm });
 
-  const { data: blockedDates = [] } = useQuery<{ id: number; dateStr: string; reason?: string }[]>({
+  const { data: blockedDates = [] } = useQuery<{ id: number; dateStr: string }[]>({
     queryKey: ["service-blocked-dates", providerId],
     queryFn: async () => {
       const r = await apiFetch(`/providers/my/approved/${providerId}/blocked-dates`);
@@ -4413,7 +4549,7 @@ function ServiceCalendarTab() {
     enabled: !!providerId,
   });
 
-  const { data: appointments = [] } = useQuery<any[]>({
+  const { data: appointments = [], isLoading: apptLoading } = useQuery<any[]>({
     queryKey: ["service-appointments", providerId],
     queryFn: async () => {
       const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`);
@@ -4449,6 +4585,32 @@ function ServiceCalendarTab() {
     } finally { setTogglingDate(null); }
   }
 
+  async function handleSave() {
+    if (!form.clientName || !form.dateStr) return toast({ title: "الاسم والتاريخ مطلوبان", variant: "destructive" });
+    setSaving(true);
+    try {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`, {
+        method: "POST",
+        body: JSON.stringify({ ...form, amount: form.amount || null, deposit: form.deposit || null, insuranceAmount: form.insuranceAmount || null }),
+      });
+      if (!r.ok) throw new Error();
+      queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
+      toast({ title: "تم تسجيل الحجز ✓" });
+      setForm({ ...emptyForm }); setShowForm(false);
+    } catch { toast({ title: "خطأ", description: "فشل التسجيل", variant: "destructive" }); }
+    finally { setSaving(false); }
+  }
+
+  async function handleCancel(id: number) {
+    setCancellingId(id);
+    try {
+      await apiFetch(`/providers/my/approved/${providerId}/appointments/${id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) });
+      queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
+      toast({ title: "تم إلغاء الحجز" });
+    } catch { toast({ title: "خطأ", variant: "destructive" }); }
+    finally { setCancellingId(null); }
+  }
+
   function prevMonth() { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); }
   function nextMonth() { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); }
 
@@ -4459,27 +4621,52 @@ function ServiceCalendarTab() {
   const dayNames   = ["أحد","اثن","ثلا","أرب","خمي","جمع","سبت"];
   const todayStr   = toDateStr(now.getFullYear(), now.getMonth(), now.getDate());
 
-  /* Hijri month header */
   const hijriFirst = _svcHijriMon.format(firstDay);
   const hijriLast  = _svcHijriMon.format(lastDay);
   const hijriYear  = _svcHijriYear.format(lastDay);
   const hijriLabel = hijriFirst === hijriLast ? `${hijriFirst} ${hijriYear}` : `${hijriFirst} – ${hijriLast} ${hijriYear}`;
-
-  /* Gregorian month label */
   const gregLabel  = firstDay.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" });
 
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDow; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
-  /* Appointments for this month */
   const monthStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
-  const monthAppts = appointments.filter(a => a.dateStr?.startsWith(monthStr) && a.status !== "cancelled").sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+  const monthAppts = appointments.filter(a => a.dateStr?.startsWith(monthStr) && a.status !== "cancelled");
+
+  const confirmedRevenue = appointments.filter(a => a.status === "confirmed" && a.amount).reduce((s, a) => s + parseFloat(a.amount), 0);
+  const totalDeposits    = appointments.filter(a => a.deposit).reduce((s, a) => s + parseFloat(a.deposit ?? "0"), 0);
+
+  const statusBadge: Record<string, string> = {
+    confirmed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+    pending:   "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+    cancelled: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400",
+  };
+  const statusLabel: Record<string, string> = { confirmed: "مؤكد", pending: "معلق", cancelled: "ملغي" };
+
+  const filteredAppts = listFilter === "all" ? appointments : appointments.filter(a => a.status === listFilter);
 
   return (
-    <div className="space-y-4">
-      {/* Month nav */}
-      <div className="bg-card border border-border rounded-2xl px-4 py-3 space-y-0.5">
+    <div className="space-y-5">
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "إجمالي الحجوزات", val: appointments.length, icon: <BookOpen className="w-4 h-4" />, cls: "" },
+          { label: "مؤكد", val: appointments.filter(a => a.status === "confirmed").length, icon: <CheckCircle className="w-4 h-4" />, cls: "text-green-600" },
+          { label: "إيرادات مؤكدة", val: `${Math.round(confirmedRevenue).toLocaleString()} ر.س`, icon: <Wallet className="w-4 h-4" />, cls: "text-primary" },
+          { label: "عربون محصّل", val: `${Math.round(totalDeposits).toLocaleString()} ر.س`, icon: <TrendingUp className="w-4 h-4" />, cls: "text-amber-600" },
+        ].map(({ label, val, icon, cls }) => (
+          <div key={label} className="bg-card border border-border rounded-xl p-3 text-center">
+            <div className="text-muted-foreground flex justify-center mb-1">{icon}</div>
+            <p className={`text-lg font-extrabold text-foreground ${cls}`}>{val}</p>
+            <p className="text-xs text-muted-foreground">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── CALENDAR ── */}
+      <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+        {/* Month nav */}
         <div className="flex items-center justify-between">
           <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><ChevronRight className="w-4 h-4" /></button>
           <div className="text-center">
@@ -4488,82 +4675,198 @@ function ServiceCalendarTab() {
           </div>
           <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><ChevronLeft className="w-4 h-4" /></button>
         </div>
-      </div>
 
-      {/* Legend */}
-      <div className="flex gap-3 flex-wrap text-xs text-muted-foreground px-1">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-500 inline-block"></span> محجوب</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-400 inline-block"></span> يوم حجز</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-primary/20 border border-primary inline-block"></span> اليوم</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-card border border-border inline-block"></span> متاح</span>
-      </div>
-
-      {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-1">
-        {dayNames.map(d => <div key={d} className="text-center text-xs font-bold text-muted-foreground py-1">{d}</div>)}
-        {cells.map((day, i) => {
-          if (!day) return <div key={`e-${i}`} />;
-          const ds = toDateStr(viewYear, viewMonth, day);
-          const blocked  = blockedSet.has(ds);
-          const hasAppt  = apptDays.has(ds);
-          const apptCnt  = apptDays.get(ds) ?? 0;
-          const isToday  = ds === todayStr;
-          const isPast   = ds < todayStr;
-          const hijriD   = _svcHijriDay.format(new Date(viewYear, viewMonth, day));
-          return (
-            <button key={ds} type="button" onClick={() => !isPast && toggleDate(ds)} disabled={isPast || togglingDate === ds}
-              className={`aspect-square flex flex-col items-center justify-center rounded-xl transition-all relative ${
-                isPast    ? "opacity-35 cursor-default" :
-                blocked   ? "bg-red-500 text-white hover:bg-red-600" :
-                hasAppt   ? "bg-amber-100 dark:bg-amber-900/30 border-2 border-amber-400 text-foreground hover:bg-amber-200" :
-                isToday   ? "bg-primary/20 text-primary border-2 border-primary hover:bg-primary/30" :
-                "bg-card border border-border hover:border-primary hover:bg-primary/5 text-foreground"
-              } ${togglingDate === ds ? "opacity-60" : ""}`}>
-              <span className="text-[0.75rem] font-bold leading-none">{hijriD}</span>
-              <span className={`text-[0.65rem] leading-none mt-0.5 ${blocked ? "text-white/70" : "text-muted-foreground"}`}>{day}</span>
-              {hasAppt && !blocked && (
-                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex gap-px">
-                  {Array.from({ length: Math.min(apptCnt, 3) }).map((_, k) => (
-                    <span key={k} className="w-1 h-1 rounded-full bg-amber-500 block" />
-                  ))}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Summary row */}
-      <div className="flex gap-3 text-xs">
-        <div className="flex-1 bg-muted rounded-xl px-4 py-3">
-          <span className="font-semibold text-foreground">{blockedDates.length}</span>
-          <span className="text-muted-foreground"> يوم محجوب — انقر للإضافة/الإزالة</span>
+        {/* Legend */}
+        <div className="flex gap-3 flex-wrap text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" /> محجوب (انقر للإزالة)</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-400 inline-block" /> يوم حجز</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-primary/20 border border-primary inline-block" /> اليوم</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-muted border border-border inline-block" /> متاح (انقر لحجب)</span>
         </div>
-        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 rounded-xl px-4 py-3">
-          <span className="font-semibold text-amber-700 dark:text-amber-400">{monthAppts.length}</span>
-          <span className="text-muted-foreground"> حجز هذا الشهر</span>
-        </div>
-      </div>
 
-      {/* Month appointments list */}
-      {monthAppts.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">حجوزات الشهر</p>
-          {monthAppts.map(a => {
-            const { hijri, gregorian } = formatDualDate(a.dateStr);
+        {/* Grid */}
+        <div className="grid grid-cols-7 gap-1">
+          {dayNames.map(d => <div key={d} className="text-center text-xs font-bold text-muted-foreground py-1">{d}</div>)}
+          {cells.map((day, i) => {
+            if (!day) return <div key={`e-${i}`} />;
+            const ds = toDateStr(viewYear, viewMonth, day);
+            const blocked = blockedSet.has(ds);
+            const hasAppt = apptDays.has(ds);
+            const apptCnt = apptDays.get(ds) ?? 0;
+            const isToday = ds === todayStr;
+            const isPast  = ds < todayStr;
+            const hijriD  = _svcHijriDay.format(new Date(viewYear, viewMonth, day));
             return (
-              <div key={a.id} className="bg-card border border-amber-200 dark:border-amber-800/40 rounded-xl px-4 py-3 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-foreground text-sm">{a.clientName}</p>
-                  <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">{hijri} هـ</p>
-                  <p className="text-xs text-muted-foreground">{gregorian} م{a.duration ? ` · ${a.duration}` : ""}</p>
-                </div>
-                {a.amount && <span className="text-xs font-bold text-foreground">{parseFloat(a.amount).toLocaleString()} ر.س</span>}
-              </div>
+              <button key={ds} type="button" onClick={() => !isPast && toggleDate(ds)} disabled={isPast || togglingDate === ds}
+                className={`aspect-square flex flex-col items-center justify-center rounded-xl transition-all relative ${
+                  isPast    ? "opacity-35 cursor-default" :
+                  blocked   ? "bg-red-500 text-white hover:bg-red-600" :
+                  hasAppt   ? "bg-amber-100 dark:bg-amber-900/30 border-2 border-amber-400 text-foreground hover:bg-amber-200" :
+                  isToday   ? "bg-primary/20 text-primary border-2 border-primary hover:bg-primary/30" :
+                  "bg-card border border-border hover:border-primary hover:bg-primary/5 text-foreground"
+                } ${togglingDate === ds ? "opacity-60" : ""}`}>
+                <span className="text-[0.75rem] font-bold leading-none">{hijriD}</span>
+                <span className={`text-[0.65rem] leading-none mt-0.5 ${blocked ? "text-white/70" : "text-muted-foreground"}`}>{day}</span>
+                {hasAppt && !blocked && (
+                  <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex gap-px">
+                    {Array.from({ length: Math.min(apptCnt, 3) }).map((_, k) => (
+                      <span key={k} className="w-1 h-1 rounded-full bg-amber-500 block" />
+                    ))}
+                  </span>
+                )}
+              </button>
             );
           })}
         </div>
+
+        {/* Month summary */}
+        <div className="flex gap-3 text-xs">
+          <div className="flex-1 bg-muted rounded-xl px-4 py-2.5">
+            <span className="font-semibold text-foreground">{blockedDates.length}</span>
+            <span className="text-muted-foreground"> يوم محجوب هذا الشهر</span>
+          </div>
+          <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 rounded-xl px-4 py-2.5">
+            <span className="font-semibold text-amber-700 dark:text-amber-400">{monthAppts.length}</span>
+            <span className="text-muted-foreground"> حجز</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── BOOKING FORM ── */}
+      {!showForm && (
+        <Button onClick={() => setShowForm(true)} variant="outline" className="gap-2 rounded-xl w-full md:w-auto">
+          <Plus className="w-4 h-4" />تسجيل حجز جديد
+        </Button>
       )}
+      {showForm && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-5 space-y-4">
+          <h3 className="font-bold text-foreground">حجز جديد</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">اسم العميل *</label>
+              <Input value={form.clientName} onChange={e => setForm(p => ({ ...p, clientName: e.target.value }))} placeholder="محمد أحمد" className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">رقم الجوال</label>
+              <Input value={form.clientPhone} onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value }))} placeholder="05xxxxxxxx" className="rounded-xl" dir="ltr" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">تاريخ الخدمة *</label>
+              <Input type="date" value={form.dateStr} onChange={e => setForm(p => ({ ...p, dateStr: e.target.value }))} className="rounded-xl" />
+              {form.dateStr && <p className="text-xs text-primary font-medium">{toHijri(form.dateStr)} هـ</p>}
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">المدة</label>
+              <Input value={form.duration} onChange={e => setForm(p => ({ ...p, duration: e.target.value }))} placeholder="يوم / أسبوع / شهر..." className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">المبلغ الإجمالي (ر.س)</label>
+              <Input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="0" className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">العربون المدفوع (ر.س)</label>
+              <Input type="number" value={form.deposit} onChange={e => setForm(p => ({ ...p, deposit: e.target.value }))} placeholder="0" className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">تأمين الحجز (ر.س)</label>
+              <Input type="number" value={form.insuranceAmount} onChange={e => setForm(p => ({ ...p, insuranceAmount: e.target.value }))} placeholder="0" className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">مصدر الحجز</label>
+              <Select value={form.source} onValueChange={v => setForm(p => ({ ...p, source: v }))}>
+                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SOURCE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">الحالة</label>
+              <Select value={form.status} onValueChange={v => setForm(p => ({ ...p, status: v }))}>
+                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="confirmed">مؤكد</SelectItem>
+                  <SelectItem value="pending">معلق</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">ملاحظات</label>
+            <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="تفاصيل إضافية..." />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" onClick={() => setShowForm(false)} className="rounded-xl">إلغاء</Button>
+            <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2 bg-amber-500 hover:bg-amber-600 text-white">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}حفظ الحجز
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── APPOINTMENTS LIST ── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h3 className="text-sm font-bold text-foreground">سجل الحجوزات</h3>
+          <div className="flex gap-1">
+            {(["all", "confirmed", "pending", "cancelled"] as const).map(f => (
+              <button key={f} type="button" onClick={() => setListFilter(f)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${listFilter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
+                {f === "all" ? "الكل" : statusLabel[f]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {apptLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        ) : filteredAppts.length === 0 ? (
+          <div className="text-center py-10 text-muted-foreground">
+            <Calendar className="w-8 h-8 mx-auto mb-3 opacity-30" />
+            <p className="font-medium">لا توجد حجوزات بعد</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredAppts.map((a: any) => {
+              const dual = formatDualDate(a.dateStr);
+              return (
+                <div key={a.id} className="bg-card border border-border rounded-2xl px-4 py-3.5 flex items-start gap-3 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="font-bold text-foreground">{a.clientName}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${statusBadge[a.status] ?? ""}`}>{statusLabel[a.status] ?? a.status}</span>
+                      {a.source && a.source !== "external" && (
+                        <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{SOURCE_LABELS[a.source] ?? a.source}</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-primary font-semibold">{dual.hijri} هـ</p>
+                    <p className="text-xs text-muted-foreground">{dual.gregorian} م{a.duration ? ` · ${a.duration}` : ""}</p>
+                    <div className="flex gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                      {a.amount && <span>المبلغ: <span className="font-semibold text-foreground">{parseFloat(a.amount).toLocaleString()} ر.س</span></span>}
+                      {a.deposit && parseFloat(a.deposit) > 0 && <span>عربون: <span className="font-semibold text-amber-600">{parseFloat(a.deposit).toLocaleString()} ر.س</span></span>}
+                      {a.insuranceAmount && parseFloat(a.insuranceAmount) > 0 && (
+                        <span>تأمين: <span className="font-semibold text-blue-600">{parseFloat(a.insuranceAmount).toLocaleString()} ر.س</span>
+                          {" "}<span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${a.insuranceStatus === "refunded" ? "bg-green-100 text-green-700" : a.insuranceStatus === "deducted" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
+                            {a.insuranceStatus === "refunded" ? "مسترد" : a.insuranceStatus === "deducted" ? "مخصوم" : "محتجز"}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                    {a.clientPhone && <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">{a.clientPhone}</p>}
+                    {a.notes && <p className="text-xs text-muted-foreground mt-0.5 truncate">{a.notes}</p>}
+                  </div>
+                  {a.status !== "cancelled" && (
+                    <Button variant="ghost" size="sm" onClick={() => handleCancel(a.id)} disabled={cancellingId === a.id}
+                      className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs gap-1 h-8 shrink-0">
+                      {cancellingId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}إلغاء
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -4696,19 +4999,15 @@ function ServiceSeasonsTab() {
   );
 }
 
-/* ── Service Appointments Tab ────────────────────────────── */
-const SOURCE_LABELS: Record<string, string> = {
-  platform: "المنصة", whatsapp: "واتساب", phone: "هاتف", walk_in: "حضور مباشر", external: "خارجي",
-};
-function ServiceAppointmentsTab() {
+/* ── Service Booking Insurance Tab ───────────────────────────── */
+function ServiceBookingInsurancesTab() {
   const { providerId } = useServiceErp();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [showForm, setShowForm] = useState(false);
+  const [actionOpen, setActionOpen] = useState<number | null>(null);
+  const [actionType, setActionType] = useState<"refund" | "deduct" | null>(null);
+  const [deductForm, setDeductForm] = useState({ insuranceDeductAmount: "", insuranceDeductNote: "" });
   const [saving, setSaving] = useState(false);
-  const [cancellingId, setCancellingId] = useState<number | null>(null);
-  const emptyForm = { clientName: "", clientPhone: "", dateStr: "", duration: "", status: "confirmed", notes: "", amount: "", deposit: "", insuranceAmount: "", source: "whatsapp" };
-  const [form, setForm] = useState({ ...emptyForm });
 
   const { data: appointments = [], isLoading } = useQuery<any[]>({
     queryKey: ["service-appointments", providerId],
@@ -4719,165 +5018,173 @@ function ServiceAppointmentsTab() {
     enabled: !!providerId,
   });
 
-  async function handleSave() {
-    if (!form.clientName || !form.dateStr) return toast({ title: "الاسم والتاريخ مطلوبان", variant: "destructive" });
+  const insAppts = appointments.filter(a => a.insuranceAmount && parseFloat(a.insuranceAmount) > 0);
+  const totalHeld     = insAppts.filter(a => !a.insuranceStatus || a.insuranceStatus === "held").reduce((s, a) => s + parseFloat(a.insuranceAmount), 0);
+  const totalRefunded = insAppts.filter(a => a.insuranceStatus === "refunded").reduce((s, a) => s + parseFloat(a.insuranceAmount), 0);
+  const totalDeducted = insAppts.filter(a => a.insuranceStatus === "deducted").reduce((s, a) => s + parseFloat(a.insuranceDeductAmount ?? a.insuranceAmount ?? "0"), 0);
+
+  async function handleRefund(apptId: number, amount: number) {
     setSaving(true);
     try {
-      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`, {
-        method: "POST",
-        body: JSON.stringify({ ...form, amount: form.amount || null, deposit: form.deposit || null, insuranceAmount: form.insuranceAmount || null }),
+      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments/${apptId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ insuranceStatus: "refunded" }),
       });
       if (!r.ok) throw new Error();
       queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
-      toast({ title: "تم تسجيل الحجز ✓" });
-      setForm({ ...emptyForm }); setShowForm(false);
-    } catch { toast({ title: "خطأ", description: "فشل التسجيل", variant: "destructive" }); }
+      toast({ title: `تم تسجيل استرداد التأمين ✓`, description: `${Math.round(amount).toLocaleString()} ر.س — مُعاد للعميل` });
+      setActionOpen(null); setActionType(null);
+    } catch { toast({ title: "خطأ", variant: "destructive" }); }
     finally { setSaving(false); }
   }
 
-  async function handleCancel(id: number) {
-    setCancellingId(id);
+  async function handleDeduct(apptId: number) {
+    if (!deductForm.insuranceDeductAmount || !deductForm.insuranceDeductNote) {
+      return toast({ title: "المبلغ والتوثيق مطلوبان", variant: "destructive" });
+    }
+    setSaving(true);
     try {
-      await apiFetch(`/providers/my/approved/${providerId}/appointments/${id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) });
+      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments/${apptId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          insuranceStatus: "deducted",
+          insuranceDeductAmount: deductForm.insuranceDeductAmount,
+          insuranceDeductNote: deductForm.insuranceDeductNote,
+        }),
+      });
+      if (!r.ok) throw new Error();
       queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
-      toast({ title: "تم إلغاء الحجز" });
-    } catch { toast({ title: "خطأ", variant: "destructive" }); }
-    finally { setCancellingId(null); }
+      toast({ title: "تم تسجيل الخصم التأميني ✓", description: `${parseFloat(deductForm.insuranceDeductAmount).toLocaleString()} ر.س — موثّق` });
+      setActionOpen(null); setActionType(null); setDeductForm({ insuranceDeductAmount: "", insuranceDeductNote: "" });
+    } catch { toast({ title: "خطأ في التسجيل", variant: "destructive" }); }
+    finally { setSaving(false); }
   }
 
-  const confirmedRevenue  = appointments.filter(a => a.status === "confirmed" && a.amount).reduce((s, a) => s + parseFloat(a.amount), 0);
-  const totalDeposits     = appointments.filter(a => a.deposit).reduce((s, a) => s + parseFloat(a.deposit ?? "0"), 0);
-  const statusBadge: Record<string, string> = { confirmed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", cancelled: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" };
-  const statusLabel: Record<string, string> = { confirmed: "مؤكد", pending: "معلق", cancelled: "ملغي" };
+  const insStatusMeta: Record<string, { label: string; cls: string }> = {
+    held:     { label: "محتجز",  cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+    refunded: { label: "مسترد",  cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+    deducted: { label: "مخصوم",  cls: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" },
+  };
 
   return (
     <div className="space-y-4">
       {/* KPI row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "إجمالي الحجوزات", val: appointments.length, icon: <BookOpen className="w-4 h-4" /> },
-          { label: "مؤكد", val: appointments.filter(a => a.status === "confirmed").length, icon: <CheckCircle className="w-4 h-4" /> },
-          { label: "الإيرادات", val: `${confirmedRevenue.toLocaleString()} ر.س`, icon: <Wallet className="w-4 h-4" /> },
-          { label: "العربون المحصّل", val: `${totalDeposits.toLocaleString()} ر.س`, icon: <TrendingUp className="w-4 h-4" /> },
-        ].map(({ label, val, icon }) => (
-          <div key={label} className="bg-card border border-border rounded-xl p-3 text-center">
-            <div className="text-muted-foreground flex justify-center mb-1">{icon}</div>
-            <p className="text-lg font-extrabold text-foreground">{val}</p>
-            <p className="text-xs text-muted-foreground">{label}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/40 rounded-xl p-3 text-center">
+          <p className="text-lg font-extrabold text-blue-700 dark:text-blue-300">{Math.round(totalHeld).toLocaleString()} <span className="text-xs font-normal text-muted-foreground">ر.س</span></p>
+          <p className="text-xs text-muted-foreground">محتجز</p>
+        </div>
+        <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/40 rounded-xl p-3 text-center">
+          <p className="text-lg font-extrabold text-green-700 dark:text-green-300">{Math.round(totalRefunded).toLocaleString()} <span className="text-xs font-normal text-muted-foreground">ر.س</span></p>
+          <p className="text-xs text-muted-foreground">مسترد</p>
+        </div>
+        <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/40 rounded-xl p-3 text-center">
+          <p className="text-lg font-extrabold text-red-600 dark:text-red-400">{Math.round(totalDeducted).toLocaleString()} <span className="text-xs font-normal text-muted-foreground">ر.س</span></p>
+          <p className="text-xs text-muted-foreground">مخصوم</p>
+        </div>
       </div>
 
-      {!showForm && <Button onClick={() => setShowForm(true)} className="gap-2 rounded-xl" variant="outline"><Plus className="w-4 h-4" />تسجيل حجز جديد</Button>}
+      {/* Info banner */}
+      <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/30 rounded-xl px-4 py-2.5 text-xs text-blue-700 dark:text-blue-300 font-semibold flex items-center gap-2">
+        <Shield className="w-3.5 h-3.5 shrink-0" />
+        هذه القائمة تعرض الحجوزات التي تتضمن مبالغ تأمينية — يمكنك تسجيل الاسترداد أو توثيق الخصم لكل حجز
+      </div>
 
-      {/* Booking form */}
-      {showForm && (
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-5 space-y-4">
-          <h3 className="font-bold text-foreground">حجز جديد</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">اسم العميل *</label>
-              <Input value={form.clientName} onChange={e => setForm(p => ({ ...p, clientName: e.target.value }))} placeholder="محمد أحمد" className="rounded-xl" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">رقم الجوال</label>
-              <Input value={form.clientPhone} onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value }))} placeholder="05xxxxxxxx" className="rounded-xl" dir="ltr" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">تاريخ الخدمة *</label>
-              <Input type="date" value={form.dateStr} onChange={e => setForm(p => ({ ...p, dateStr: e.target.value }))} className="rounded-xl" />
-              {form.dateStr && <p className="text-xs text-primary font-medium">{toHijri(form.dateStr)} هـ</p>}
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">المدة</label>
-              <Input value={form.duration} onChange={e => setForm(p => ({ ...p, duration: e.target.value }))} placeholder="يوم / أسبوع / شهر..." className="rounded-xl" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">المبلغ الإجمالي (ر.س)</label>
-              <Input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="0" className="rounded-xl" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">العربون المدفوع (ر.س)</label>
-              <Input type="number" value={form.deposit} onChange={e => setForm(p => ({ ...p, deposit: e.target.value }))} placeholder="0" className="rounded-xl" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">تأمين الحجز (ر.س)</label>
-              <Input type="number" value={form.insuranceAmount} onChange={e => setForm(p => ({ ...p, insuranceAmount: e.target.value }))} placeholder="0" className="rounded-xl" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">مصدر الحجز</label>
-              <Select value={form.source} onValueChange={v => setForm(p => ({ ...p, source: v }))}>
-                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(SOURCE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">الحالة</label>
-              <Select value={form.status} onValueChange={v => setForm(p => ({ ...p, status: v }))}>
-                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="confirmed">مؤكد</SelectItem>
-                  <SelectItem value="pending">معلق</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">ملاحظات</label>
-            <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="تفاصيل إضافية..." />
-          </div>
-          <div className="flex gap-2 justify-end">
-            <Button variant="ghost" onClick={() => setShowForm(false)} className="rounded-xl">إلغاء</Button>
-            <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}حفظ الحجز
-            </Button>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Appointments list */}
-      {isLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-        : appointments.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <Calendar className="w-8 h-8 mx-auto mb-3 opacity-30" />
-            <p className="font-medium">لا توجد حجوزات بعد</p>
-            <p className="text-xs mt-1">سجّل أول حجز من الزر أعلاه</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {appointments.map((a: any) => {
-              const dual = formatDualDate(a.dateStr);
-              return (
-                <div key={a.id} className="bg-card border border-border rounded-2xl px-4 py-3.5 flex items-start gap-3 flex-wrap">
+      {isLoading ? (
+        <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+      ) : insAppts.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <Shield className="w-8 h-8 mx-auto mb-3 opacity-30" />
+          <p className="font-medium">لا توجد حجوزات بتأمين</p>
+          <p className="text-xs mt-1">عند تسجيل حجز بمبلغ تأميني، سيظهر هنا</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {insAppts.map((a: any) => {
+            const dual = formatDualDate(a.dateStr);
+            const insAmt = parseFloat(a.insuranceAmount ?? "0");
+            const status = a.insuranceStatus ?? "held";
+            const meta = insStatusMeta[status] ?? insStatusMeta.held;
+            const isOpen = actionOpen === a.id;
+            return (
+              <div key={a.id} className="bg-card border border-border rounded-2xl px-4 py-4 space-y-3">
+                <div className="flex items-start gap-3 flex-wrap">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
                       <span className="font-bold text-foreground">{a.clientName}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${statusBadge[a.status] ?? ""}`}>{statusLabel[a.status] ?? a.status}</span>
-                      {a.source && a.source !== "external" && <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{SOURCE_LABELS[a.source] ?? a.source}</span>}
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${meta.cls}`}>{meta.label}</span>
                     </div>
                     <p className="text-xs text-primary font-semibold">{dual.hijri} هـ</p>
                     <p className="text-xs text-muted-foreground">{dual.gregorian} م{a.duration ? ` · ${a.duration}` : ""}</p>
-                    <div className="flex gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-                      {a.amount && <span>المبلغ: <span className="font-semibold text-foreground">{parseFloat(a.amount).toLocaleString()} ر.س</span></span>}
-                      {a.deposit && parseFloat(a.deposit) > 0 && <span>عربون: <span className="font-semibold text-amber-600">{parseFloat(a.deposit).toLocaleString()} ر.س</span></span>}
-                      {a.insuranceAmount && parseFloat(a.insuranceAmount) > 0 && <span>تأمين: <span className="font-semibold text-blue-600">{parseFloat(a.insuranceAmount).toLocaleString()} ر.س</span></span>}
+                    <div className="flex gap-3 mt-1.5 text-xs flex-wrap">
+                      <span className="font-bold text-blue-700 dark:text-blue-300">تأمين: {insAmt.toLocaleString()} ر.س</span>
+                      {a.amount && <span className="text-muted-foreground">مبلغ الخدمة: {parseFloat(a.amount).toLocaleString()} ر.س</span>}
                     </div>
-                    {a.clientPhone && <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">{a.clientPhone}</p>}
-                    {a.notes && <p className="text-xs text-muted-foreground mt-0.5">{a.notes}</p>}
+                    {status === "deducted" && a.insuranceDeductNote && (
+                      <p className="text-xs text-red-600 dark:text-red-400 mt-1">سبب الخصم: {a.insuranceDeductNote}{a.insuranceDeductAmount ? ` (${parseFloat(a.insuranceDeductAmount).toLocaleString()} ر.س)` : ""}</p>
+                    )}
                   </div>
-                  {a.status !== "cancelled" && (
-                    <Button variant="ghost" size="sm" onClick={() => handleCancel(a.id)} disabled={cancellingId === a.id}
-                      className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs gap-1 h-8 shrink-0">
-                      {cancellingId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}إلغاء
-                    </Button>
+
+                  {status === "held" && (
+                    <div className="flex gap-2 shrink-0">
+                      <Button size="sm" variant="outline" onClick={() => { setActionOpen(a.id); setActionType("refund"); }}
+                        className="rounded-xl text-xs gap-1 h-8 border-green-300 text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20">
+                        <RefreshCw className="w-3 h-3" />استرداد
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => { setActionOpen(a.id); setActionType("deduct"); setDeductForm({ insuranceDeductAmount: String(insAmt), insuranceDeductNote: "" }); }}
+                        className="rounded-xl text-xs gap-1 h-8 border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+                        <Scissors className="w-3 h-3" />خصم
+                      </Button>
+                    </div>
                   )}
                 </div>
-              );
-            })}
-          </div>
-        )}
+
+                {/* Action panel */}
+                {isOpen && actionType === "refund" && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                    className="border-t border-border pt-3 space-y-2">
+                    <p className="text-sm font-semibold text-green-700 dark:text-green-400">تأكيد استرداد التأمين للعميل</p>
+                    <p className="text-xs text-muted-foreground">سيتم تسجيل إعادة مبلغ <span className="font-bold text-foreground">{insAmt.toLocaleString()} ر.س</span> للعميل.</p>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="ghost" size="sm" className="rounded-xl" onClick={() => { setActionOpen(null); setActionType(null); }}>إلغاء</Button>
+                      <Button size="sm" disabled={saving} onClick={() => handleRefund(a.id, insAmt)}
+                        className="rounded-xl gap-1.5 bg-green-600 hover:bg-green-700 text-white">
+                        {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}تأكيد الاسترداد
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {isOpen && actionType === "deduct" && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                    className="border-t border-border pt-3 space-y-3">
+                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">توثيق خصم من التأمين</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground">مبلغ الخصم (ر.س) *</label>
+                        <Input type="number" value={deductForm.insuranceDeductAmount} onChange={e => setDeductForm(p => ({ ...p, insuranceDeductAmount: e.target.value }))}
+                          placeholder="0" className="rounded-xl h-9" max={insAmt} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-foreground">سبب الخصم / التوثيق *</label>
+                        <Input value={deductForm.insuranceDeductNote} onChange={e => setDeductForm(p => ({ ...p, insuranceDeductNote: e.target.value }))}
+                          placeholder="وصف التلفيات أو السبب..." className="rounded-xl h-9" />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="ghost" size="sm" className="rounded-xl" onClick={() => { setActionOpen(null); setActionType(null); }}>إلغاء</Button>
+                      <Button size="sm" disabled={saving} onClick={() => handleDeduct(a.id)}
+                        className="rounded-xl gap-1.5 bg-red-600 hover:bg-red-700 text-white">
+                        {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Scissors className="w-3 h-3" />}حفظ الخصم
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -5093,6 +5400,7 @@ function ServiceInsurancesTab() {
 
 /* ── Revenue Tab ─────────────────────────────── */
 function RevenueTab() {
+  const { unit } = useAdminFinance();
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
@@ -5160,10 +5468,27 @@ function RevenueTab() {
     },
   });
 
-  // Filter bookings to selected month
-  const monthBookings = useMemo(() =>
-    allBookings.filter(b => b.bookingDate?.startsWith(selectedMonth))
-  , [allBookings, selectedMonth]);
+  const serviceProviderId = unit.type === "service" ? (unit as any).id : null;
+  const { data: serviceAppts = [], isLoading: svcLoading } = useQuery<any[]>({
+    queryKey: ["service-appointments", serviceProviderId],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/my/approved/${serviceProviderId}/appointments`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: !!serviceProviderId,
+  });
+
+  // Filter bookings to selected month + optional chalet unit filter
+  const monthBookings = useMemo(() => {
+    let filtered = allBookings.filter(b => b.bookingDate?.startsWith(selectedMonth));
+    if (unit.type === "chalet") filtered = filtered.filter(b => (b as any).chaletId === (unit as any).id);
+    return filtered;
+  }, [allBookings, selectedMonth, unit]);
+
+  // Service-unit: filter service appointments to selected month
+  const monthSvcAppts = useMemo(() =>
+    serviceAppts.filter(a => a.dateStr?.startsWith(selectedMonth) && a.status !== "cancelled")
+  , [serviceAppts, selectedMonth]);
 
   // Build revenue rows: each booking can generate 1-3 rows
   interface RevenueRow {
@@ -5219,12 +5544,75 @@ function RevenueTab() {
 
   const loading = finLoading || bkLoading;
 
+  /* ── SERVICE UNIT: render service appointments revenue ── */
+  if (unit.type === "service") {
+    const svcRevenue   = monthSvcAppts.reduce((s, a) => s + parseFloat(a.amount ?? "0"), 0);
+    const svcDeposits  = monthSvcAppts.reduce((s, a) => s + parseFloat(a.deposit ?? "0"), 0);
+    const svcInsurance = monthSvcAppts.reduce((s, a) => s + parseFloat(a.insuranceAmount ?? "0"), 0);
+    return (
+      <div className="space-y-5" dir="rtl">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Activity className="w-5 h-5 text-amber-500 shrink-0" />
+          <h2 className="text-lg font-bold text-foreground">إيرادات: {(unit as any).name}</h2>
+          <div className="ms-auto w-48">
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {monthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-card border border-border rounded-2xl p-4 text-center space-y-1">
+            <div className="text-xs text-muted-foreground">إجمالي الإيرادات</div>
+            <div className="text-2xl font-bold text-green-600">{Math.round(svcRevenue).toLocaleString()} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+          </div>
+          <div className="bg-card border border-blue-200 rounded-2xl p-4 text-center space-y-1">
+            <div className="text-xs text-muted-foreground">عربون محصّل</div>
+            <div className="text-2xl font-bold text-blue-600">{Math.round(svcDeposits).toLocaleString()} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+          </div>
+          <div className="bg-card border border-orange-200 rounded-2xl p-4 text-center space-y-1">
+            <div className="text-xs text-muted-foreground">تأمينات</div>
+            <div className="text-2xl font-bold text-orange-600">{Math.round(svcInsurance).toLocaleString()} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+          </div>
+        </div>
+        {svcLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        ) : monthSvcAppts.length === 0 ? (
+          <div className="text-center py-10 text-muted-foreground">لا توجد حجوزات في هذا الشهر</div>
+        ) : (
+          <div className="space-y-2">
+            {monthSvcAppts.map((a: any) => {
+              const dual = formatDualDate(a.dateStr);
+              return (
+                <div key={a.id} className="bg-card border border-border rounded-2xl px-4 py-3 flex items-center gap-3 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-foreground">{a.clientName}</p>
+                    <p className="text-xs text-amber-600 font-semibold">{dual.hijri} هـ</p>
+                    <p className="text-xs text-muted-foreground">{dual.gregorian} م</p>
+                  </div>
+                  <div className="text-left space-y-0.5">
+                    {a.amount && <p className="text-xs font-bold text-green-600">{parseFloat(a.amount).toLocaleString()} ر.س</p>}
+                    {a.deposit && parseFloat(a.deposit) > 0 && <p className="text-xs text-blue-600">عربون: {parseFloat(a.deposit).toLocaleString()} ر.س</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5" dir="rtl">
       {/* Month selector */}
       <div className="flex items-center gap-3 flex-wrap">
         <TrendingUp className="w-5 h-5 text-primary shrink-0" />
-        <h2 className="text-lg font-bold text-foreground">الإيرادات</h2>
+        <h2 className="text-lg font-bold text-foreground">
+          {unit.type === "chalet" ? `إيرادات: ${(unit as any).name}` : "الإيرادات"}
+        </h2>
         <div className="ms-auto w-48">
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
             <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
@@ -5543,6 +5931,7 @@ function catColorClass(color: string) {
 }
 
 function ExpensesTab() {
+  const { unit } = useAdminFinance();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -5662,7 +6051,25 @@ function ExpensesTab() {
     });
   }
 
-  const totalMonth = expenses.reduce((s, e) => s + Number(e.amount), 0);
+  // Filter expenses by unit
+  const filteredExpenses = useMemo(() => {
+    if (unit.type === "chalet" && (unit as any).submissionId) {
+      return expenses.filter(e => (e as any).submissionId === (unit as any).submissionId);
+    }
+    return expenses;
+  }, [expenses, unit]);
+
+  const totalMonth = filteredExpenses.reduce((s, e) => s + Number(e.amount), 0);
+
+  if (unit.type === "service") {
+    return (
+      <div className="space-y-5 text-center py-12">
+        <Activity className="w-10 h-10 text-amber-400 mx-auto" />
+        <p className="text-foreground font-bold text-lg">{(unit as any).name}</p>
+        <p className="text-muted-foreground text-sm">المصروفات مرتبطة بالشاليهات. اختر وحدة شاليه أو الكل لعرض المصروفات.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -5670,7 +6077,7 @@ function ExpensesTab() {
       <div className="bg-card border border-border rounded-2xl p-5">
         <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
           <Receipt className="w-4 h-4 text-primary" />
-          تسجيل مصروف جديد
+          {unit.type === "chalet" ? `تسجيل مصروف: ${(unit as any).name}` : "تسجيل مصروف جديد"}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-3">
           {/* Row 1: Category + Amount */}
@@ -5802,14 +6209,14 @@ function ExpensesTab() {
 
         {isLoading ? (
           <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
-        ) : expenses.length === 0 ? (
+        ) : filteredExpenses.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground">
             <Receipt className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">لا توجد مصروفات في هذا الشهر</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {expenses.map((exp) => {
+            {filteredExpenses.map((exp) => {
               const cat = catDisplayMap[exp.category] ?? { label: exp.category, emoji: "✨", colorClass: "bg-slate-100 text-slate-700" };
               const displayLabel = exp.customCategory ? exp.customCategory : cat.label;
               return (
@@ -10222,6 +10629,7 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
   const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "insurance">("revenue");
+  const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
   const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons">("chalets");
@@ -10806,10 +11214,10 @@ export default function Dashboard() {
                 {selectedServiceId !== "submissions" && selectedServiceId !== null && (() => {
                   const selectedProvider = myApprovedProviders.find(p => p.id === selectedServiceId);
                   const serviceErpTabs = [
-                    { id: "details",      label: "تفاصيل الخدمة",  icon: <Edit2 className="w-3.5 h-3.5" /> },
-                    { id: "seasons",      label: "المواسم والأسعار", icon: <Sunrise className="w-3.5 h-3.5" /> },
-                    { id: "calendar",     label: "التقويم",          icon: <Calendar className="w-3.5 h-3.5" /> },
-                    { id: "appointments", label: "الحجوزات",         icon: <BookOpen className="w-3.5 h-3.5" /> },
+                    { id: "details",   label: "تفاصيل الخدمة",    icon: <Edit2 className="w-3.5 h-3.5" /> },
+                    { id: "seasons",   label: "المواسم والأسعار",  icon: <Sunrise className="w-3.5 h-3.5" /> },
+                    { id: "calendar",  label: "التقويم والحجوزات", icon: <Calendar className="w-3.5 h-3.5" /> },
+                    { id: "insurance", label: "إدارة التأمينات",   icon: <Shield className="w-3.5 h-3.5" /> },
                   ];
                   return (
                     <ServiceErpCtx.Provider value={{ providerId: selectedServiceId }}>
@@ -10861,10 +11269,10 @@ export default function Dashboard() {
 
                       {/* ERP Tab Content — core operations only */}
                       <div className="min-h-[300px]">
-                        {selectedServiceTab === "details"      && <ServiceDetailsTab />}
-                        {selectedServiceTab === "seasons"      && <ServiceSeasonsTab />}
-                        {selectedServiceTab === "calendar"     && <ServiceCalendarTab />}
-                        {selectedServiceTab === "appointments" && <ServiceAppointmentsTab />}
+                        {selectedServiceTab === "details"   && <ServiceDetailsTab />}
+                        {selectedServiceTab === "seasons"   && <ServiceSeasonsTab />}
+                        {selectedServiceTab === "calendar"  && <ServiceCalendarBookingsTab />}
+                        {selectedServiceTab === "insurance" && <ServiceBookingInsurancesTab />}
                       </div>
                       {/* Shortcut to admin-finance */}
                       <div className="mt-4 pt-4 border-t border-border">
@@ -10937,8 +11345,46 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              {/* Consolidated banner */}
-              {isCrossOwner && (adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "staff" || adminFinanceTab === "reports") && (
+              {/* ── Unit Selector (for Revenue / Expenses / Reports tabs) ── */}
+              {(adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "reports") && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <BarChart2 className="w-3.5 h-3.5" />عرض التقارير المالية لـ:
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    {/* Master / All */}
+                    <button type="button" onClick={() => setSelectedFinanceUnit({ type: "all" })}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors border ${selectedFinanceUnit.type === "all" ? "bg-slate-700 text-white border-slate-700 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200" : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"}`}>
+                      <Briefcase className="w-3 h-3" />الميزانية الرئيسية
+                    </button>
+                    {/* Chalets */}
+                    {ownerChalets.map((c: any) => (
+                      <button key={`chalet-${c.id}`} type="button"
+                        onClick={() => setSelectedFinanceUnit({ type: "chalet", id: c.id, submissionId: c.submissionId, name: c.nameAr ?? `شاليه ${c.id}` })}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors border ${selectedFinanceUnit.type === "chalet" && (selectedFinanceUnit as any).id === c.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}>
+                        <Home className="w-3 h-3" />{c.nameAr ?? `شاليه ${c.id}`}
+                      </button>
+                    ))}
+                    {/* Services */}
+                    {myApprovedProviders.map((p: any) => (
+                      <button key={`service-${p.id}`} type="button"
+                        onClick={() => setSelectedFinanceUnit({ type: "service", id: p.id, name: p.businessName ?? `خدمة ${p.id}` })}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors border ${selectedFinanceUnit.type === "service" && (selectedFinanceUnit as any).id === p.id ? "bg-amber-500 text-white border-amber-500" : "border-border text-muted-foreground hover:border-amber-500 hover:text-amber-600"}`}>
+                        <Activity className="w-3 h-3" />{p.businessName ?? `خدمة ${p.id}`}
+                      </button>
+                    ))}
+                  </div>
+                  {selectedFinanceUnit.type !== "all" && (
+                    <div className={`rounded-xl px-3.5 py-2 text-xs font-semibold flex items-center gap-2 ${selectedFinanceUnit.type === "chalet" ? "bg-primary/5 border border-primary/20 text-primary" : "bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 text-amber-700 dark:text-amber-300"}`}>
+                      {selectedFinanceUnit.type === "chalet" ? <Home className="w-3.5 h-3.5" /> : <Activity className="w-3.5 h-3.5" />}
+                      عرض: {(selectedFinanceUnit as any).name}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Consolidated banner (shown for "all" view only) */}
+              {selectedFinanceUnit.type === "all" && isCrossOwner && (adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "staff" || adminFinanceTab === "reports") && (
                 <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-primary font-semibold flex items-center gap-2">
                   <Zap className="w-3.5 h-3.5" />
                   {adminFinanceTab === "revenue"  && "الإيرادات الموحّدة — تشمل حجوزات الشاليهات وإيرادات الخدمات"}
@@ -10949,6 +11395,7 @@ export default function Dashboard() {
               )}
 
               {/* Tab content */}
+              <AdminFinanceCtx.Provider value={{ unit: selectedFinanceUnit }}>
               <div className="min-h-[320px]">
                 {adminFinanceTab === "revenue"       && <RevenueTab />}
                 {adminFinanceTab === "expenses"      && <ExpensesTab />}
@@ -10967,6 +11414,7 @@ export default function Dashboard() {
                 {adminFinanceTab === "insurance"     && <ServiceInsurancesTab />}
                 {adminFinanceTab === "reports"       && <ReportsTab />}
               </div>
+              </AdminFinanceCtx.Provider>
             </motion.div>
           );
         })()}
