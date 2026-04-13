@@ -5758,6 +5758,16 @@ function RevenueTab() {
     enabled: !!serviceProviderId,
   });
 
+  // Combined service revenue for "all" unit mode
+  const { data: svcRevSummary } = useQuery<{ totalRevenue: number; totalDeposits: number; totalInsurance: number; byProvider: { id: number; name: string; revenue: number; deposits: number; insurance: number }[] }>({
+    queryKey: ["owner", "service-revenue-summary", selectedMonth],
+    queryFn: async () => {
+      const r = await apiFetch(`/owner/service-revenue-summary?month=${selectedMonth}`);
+      return r.ok ? r.json() : { totalRevenue: 0, totalDeposits: 0, totalInsurance: 0, byProvider: [] };
+    },
+    enabled: unit.type === "all",
+  });
+
   // Filter bookings to selected month + optional chalet unit filter
   const monthBookings = useMemo(() => {
     let filtered = allBookings.filter(b => b.bookingDate?.startsWith(selectedMonth));
@@ -5903,13 +5913,40 @@ function RevenueTab() {
         </div>
       </div>
 
+      {/* Combined KPI when "all" mode with services */}
+      {unit.type === "all" && svcRevSummary && svcRevSummary.totalRevenue > 0 && (
+        <div className="bg-gradient-to-l from-primary/5 to-amber-500/5 border border-primary/20 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Zap className="w-4 h-4 text-primary" />
+            <span className="text-sm font-bold text-foreground">الإيرادات الموحّدة (شاليهات + خدمات)</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="text-center">
+              <div className="text-xs text-muted-foreground mb-1">شاليهات</div>
+              <div className="text-xl font-bold text-primary">{fmtN(financial?.totalRevenue ?? 0)}</div>
+              <div className="text-xs text-muted-foreground">ر.س</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-muted-foreground mb-1">خدمات</div>
+              <div className="text-xl font-bold text-amber-600">{fmtN(svcRevSummary.totalRevenue)}</div>
+              <div className="text-xs text-muted-foreground">ر.س</div>
+            </div>
+            <div className="text-center border-r border-border/40 pr-3">
+              <div className="text-xs text-muted-foreground mb-1">الإجمالي</div>
+              <div className="text-xl font-bold text-green-600">{fmtN((financial?.totalRevenue ?? 0) + svcRevSummary.totalRevenue)}</div>
+              <div className="text-xs text-muted-foreground">ر.س</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 3 Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {/* Total Monthly Revenue */}
         <div className="bg-card border border-border rounded-2xl p-4 space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
             <DollarSign className="w-3.5 h-3.5 text-green-500" />
-            إجمالي إيرادات الشهر
+            {unit.type === "all" ? "إيرادات الشاليهات" : "إجمالي إيرادات الشهر"}
           </div>
           {loading ? <Skeleton className="h-7 w-24" /> : (
             <div className="text-2xl font-bold text-green-600">{fmtN(financial?.totalRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
@@ -5941,6 +5978,26 @@ function RevenueTab() {
           <div className="text-[11px] text-muted-foreground">مبالغ مستحقة من العملاء</div>
         </div>
       </div>
+
+      {/* Service revenue by provider in "all" mode */}
+      {unit.type === "all" && svcRevSummary && svcRevSummary.byProvider.length > 0 && (
+        <div className="bg-card border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Activity className="w-4 h-4 text-amber-500" />
+            <span className="text-sm font-bold text-foreground">إيرادات الخدمات</span>
+            <span className="ms-auto text-xs text-amber-600 font-bold">{fmtN(svcRevSummary.totalRevenue)} ر.س</span>
+          </div>
+          <div className="space-y-2">
+            {svcRevSummary.byProvider.map(p => (
+              <div key={p.id} className="flex items-center gap-3 text-sm">
+                <span className="text-foreground font-medium flex-1 truncate">{p.name}</span>
+                <span className="text-green-600 font-bold">{fmtN(p.revenue)} ر.س</span>
+                {p.deposits > 0 && <span className="text-xs text-blue-500">عربون: {fmtN(p.deposits)}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
@@ -6327,29 +6384,26 @@ function ExpensesTab() {
       amount: amt,
       notes: form.notes || undefined,
       receiptUrl: receiptUrl || undefined,
-      submissionId: form.submissionId ? Number(form.submissionId) : undefined,
+      submissionId: unit.type !== "service" && form.submissionId ? Number(form.submissionId) : undefined,
+      providerId: unitProviderId ?? (form.submissionId && unit.type === "all" ? undefined : undefined),
     });
   }
+
+  // Derive providerId from unit context
+  const unitProviderId = unit.type === "service" ? (unit as any).id : null;
 
   // Filter expenses by unit
   const filteredExpenses = useMemo(() => {
     if (unit.type === "chalet" && (unit as any).submissionId) {
       return expenses.filter(e => (e as any).submissionId === (unit as any).submissionId);
     }
+    if (unit.type === "service") {
+      return expenses.filter(e => (e as any).providerId === unitProviderId);
+    }
     return expenses;
-  }, [expenses, unit]);
+  }, [expenses, unit, unitProviderId]);
 
   const totalMonth = filteredExpenses.reduce((s, e) => s + Number(e.amount), 0);
-
-  if (unit.type === "service") {
-    return (
-      <div className="space-y-5 text-center py-12">
-        <Activity className="w-10 h-10 text-amber-400 mx-auto" />
-        <p className="text-foreground font-bold text-lg">{(unit as any).name}</p>
-        <p className="text-muted-foreground text-sm">المصروفات مرتبطة بالشاليهات. اختر وحدة شاليه أو الكل لعرض المصروفات.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-5">
@@ -6357,7 +6411,7 @@ function ExpensesTab() {
       <div className="bg-card border border-border rounded-2xl p-5">
         <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
           <Receipt className="w-4 h-4 text-primary" />
-          {unit.type === "chalet" ? `تسجيل مصروف: ${(unit as any).name}` : "تسجيل مصروف جديد"}
+          {unit.type === "chalet" ? `تسجيل مصروف: ${(unit as any).name}` : unit.type === "service" ? `تسجيل مصروف: ${(unit as any).name}` : "تسجيل مصروف جديد"}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-3">
           {/* Row 1: Category + Amount */}
@@ -6417,7 +6471,16 @@ function ExpensesTab() {
                 />
               </div>
             </div>
-            {mySubmissions.length > 0 && (
+            {unit.type === "service" && (
+              <div className="flex-1 min-w-[140px]">
+                <label className="text-xs text-muted-foreground font-medium mb-1 block">الوحدة</label>
+                <div className="h-11 flex items-center px-3 rounded-md border bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/30 text-sm font-semibold text-amber-700 dark:text-amber-300 gap-2">
+                  <Activity className="w-3.5 h-3.5 shrink-0" />
+                  {(unit as any).name}
+                </div>
+              </div>
+            )}
+            {unit.type !== "service" && mySubmissions.length > 0 && (
               <div className="flex-1 min-w-[140px]">
                 <label className="text-xs text-muted-foreground font-medium mb-1 block">العقار (اختياري)</label>
                 <Select value={form.submissionId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, submissionId: v === "none" ? "" : v }))}>
@@ -6881,6 +6944,8 @@ function StaffTab() {
   /* ── state ── */
   const [addForm, setAddForm] = useState({ name: "", baseSalary: "", username: "", password: "" });
   const [addPerms, setAddPerms] = useState<StaffPermissions>({});
+  const [addAssignType, setAddAssignType] = useState<"all" | "chalet" | "service">("all");
+  const [addAssignId, setAddAssignId] = useState<string>("");
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ name: "", baseSalary: "" });
   /* Permission panel state */
@@ -6915,6 +6980,18 @@ function StaffTab() {
     queryFn: async () => { const r = await apiFetch("/owner/staff"); if (!r.ok) return []; return r.json(); },
   });
 
+  const { data: staffChalets = [] } = useQuery<{ id: number; nameAr: string | null; submissionId: number | null }[]>({
+    queryKey: ["owner", "chalets"],
+    queryFn: async () => { const r = await apiFetch("/owner/chalets"); if (!r.ok) return []; return r.json(); },
+    staleTime: 60_000,
+  });
+
+  const { data: staffProviders = [] } = useQuery<{ id: number; businessName: string }[]>({
+    queryKey: ["my-approved-providers"],
+    queryFn: async () => { const r = await apiFetch("/providers/my/approved"); if (!r.ok) return []; return r.json(); },
+    staleTime: 60_000,
+  });
+
   const { data: history = [], isLoading: histLoading } = useQuery<SalaryLog[]>({
     queryKey: ["owner", "salary-logs-history"],
     queryFn: async () => { const r = await apiFetch("/owner/salary-logs/history"); if (!r.ok) return []; return r.json(); },
@@ -6930,6 +7007,8 @@ function StaffTab() {
       qc.invalidateQueries({ queryKey: ["owner", "staff"] });
       setAddForm({ name: "", baseSalary: "", username: "", password: "" });
       setAddPerms({});
+      setAddAssignType("all");
+      setAddAssignId("");
     },
   });
 
@@ -7043,6 +7122,8 @@ function StaffTab() {
               username: addForm.username || undefined,
               password: addForm.password || undefined,
               permissions: addPerms,
+              assignedToType: addAssignType,
+              assignedToId: addAssignType !== "all" && addAssignId ? Number(addAssignId) : undefined,
             });
           }}
           className="space-y-4"
@@ -7052,6 +7133,41 @@ function StaffTab() {
             <Input placeholder="الاسم الكامل" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-[140px] h-11" required />
             <Input type="number" min="0" step="1" placeholder="الراتب الأساسي (ر.س)" value={addForm.baseSalary} onChange={(e) => setAddForm((f) => ({ ...f, baseSalary: e.target.value }))} className="flex-1 min-w-[160px] h-11" required />
           </div>
+
+          {/* Unit Assignment */}
+          {(staffChalets.length > 0 || staffProviders.length > 0) && (
+            <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
+              <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                <Briefcase className="w-3.5 h-3.5" /> الوحدة المكلّفة
+              </p>
+              <div className="flex gap-3 flex-wrap">
+                <Select value={addAssignType} onValueChange={(v) => { setAddAssignType(v as any); setAddAssignId(""); }}>
+                  <SelectTrigger className="h-10 flex-1 min-w-[130px] text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع الوحدات</SelectItem>
+                    {staffChalets.length > 0 && <SelectItem value="chalet">شاليه محدّد</SelectItem>}
+                    {staffProviders.length > 0 && <SelectItem value="service">خدمة محدّدة</SelectItem>}
+                  </SelectContent>
+                </Select>
+                {addAssignType === "chalet" && staffChalets.length > 0 && (
+                  <Select value={addAssignId} onValueChange={setAddAssignId}>
+                    <SelectTrigger className="h-10 flex-1 min-w-[150px] text-sm"><SelectValue placeholder="اختر الشاليه" /></SelectTrigger>
+                    <SelectContent>
+                      {staffChalets.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nameAr ?? `شاليه #${c.id}`}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                {addAssignType === "service" && staffProviders.length > 0 && (
+                  <Select value={addAssignId} onValueChange={setAddAssignId}>
+                    <SelectTrigger className="h-10 flex-1 min-w-[150px] text-sm"><SelectValue placeholder="اختر الخدمة" /></SelectTrigger>
+                    <SelectContent>
+                      {staffProviders.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.businessName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Login Credentials */}
           <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
@@ -7166,6 +7282,15 @@ function StaffTab() {
                             )}
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">الراتب الأساسي: <span className="font-semibold text-foreground">{formatAmount(Number(member.baseSalary))}</span></p>
+                          {(member as any).assignedToType && (member as any).assignedToType !== "all" && (
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5 mt-0.5 ${(member as any).assignedToType === "chalet" ? "bg-primary/10 text-primary border border-primary/20" : "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800/30"}`}>
+                              {(member as any).assignedToType === "chalet" ? <Home className="w-2.5 h-2.5" /> : <Activity className="w-2.5 h-2.5" />}
+                              {(member as any).assignedToType === "chalet"
+                                ? (staffChalets.find((c: any) => c.id === (member as any).assignedToId)?.nameAr ?? `شاليه #${(member as any).assignedToId}`)
+                                : (staffProviders.find((p: any) => p.id === (member as any).assignedToId)?.businessName ?? `خدمة #${(member as any).assignedToId}`)
+                              }
+                            </span>
+                          )}
                         </>
                       )}
 
@@ -7915,10 +8040,12 @@ async function generateAndUploadReportPdf(
 
 function ReportsTab() {
   const { isReadOnly, onBlockedEdit } = useReadOnly();
+  const { unit: repUnit } = useAdminFinance();
   const currentMonth = new Date().toISOString().slice(0, 7);
   const currentYear = new Date().getFullYear().toString();
 
   const [viewMode, setViewMode] = useState<"monthly" | "yearly">("monthly");
+  const [reportType, setReportType] = useState<"chalets" | "services" | "unified">("chalets");
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string>("all");
@@ -7932,7 +8059,7 @@ function ReportsTab() {
   const [archiveSavedId, setArchiveSavedId] = useState<number | null>(null);
   const qc = useQueryClient();
 
-  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedYear, selectedSubmissionId]);
+  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedYear, selectedSubmissionId, reportType]);
 
   const { data: mySubmissions = [] } = useQuery<any[]>({
     queryKey: ["my-submissions-for-report"],
@@ -8009,6 +8136,15 @@ function ReportsTab() {
       return r.json();
     },
     enabled: showArchive,
+  });
+
+  const { data: svcRepSummary } = useQuery<{ totalRevenue: number; totalDeposits: number; totalInsurance: number; byProvider: { id: number; name: string; revenue: number; deposits: number; insurance: number }[] }>({
+    queryKey: ["owner", "service-revenue-summary-rep", selectedMonth],
+    queryFn: async () => {
+      const r = await apiFetch(`/owner/service-revenue-summary?month=${selectedMonth}`);
+      return r.ok ? r.json() : { totalRevenue: 0, totalDeposits: 0, totalInsurance: 0, byProvider: [] };
+    },
+    enabled: (reportType === "services" || reportType === "unified") && viewMode === "monthly",
   });
 
   const archiveMutation = useMutation({
@@ -8234,6 +8370,130 @@ function ReportsTab() {
           </button>
         ))}
       </div>
+
+      {/* ── Report Type Selector (only in "all" unit mode) ── */}
+      {repUnit.type === "all" && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-semibold text-muted-foreground">نوع التقرير:</span>
+          {([
+            { key: "chalets", label: "الشاليهات", icon: <Home className="w-3.5 h-3.5" /> },
+            { key: "services", label: "الخدمات", icon: <Activity className="w-3.5 h-3.5" /> },
+            { key: "unified", label: "موحّد إجمالي", icon: <Zap className="w-3.5 h-3.5" /> },
+          ] as const).map(({ key, label, icon }) => (
+            <button key={key} type="button" onClick={() => setReportType(key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors border ${reportType === key
+                ? key === "chalets" ? "bg-primary text-primary-foreground border-primary"
+                  : key === "services" ? "bg-amber-500 text-white border-amber-500"
+                  : "bg-slate-700 text-white border-slate-700 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200"
+                : "border-border text-muted-foreground hover:border-foreground"}`}>
+              {icon}{label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Services Report ── */}
+      {repUnit.type === "all" && reportType === "services" && viewMode === "monthly" && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <Activity className="w-5 h-5 text-amber-500 shrink-0" />
+            <h2 className="text-lg font-bold text-foreground">تقرير الخدمات</h2>
+            <div className="ms-auto w-44">
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {monthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {svcRepSummary && svcRepSummary.byProvider.length > 0 ? (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-card border border-green-200 rounded-2xl p-4 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">إجمالي الإيرادات</div>
+                  <div className="text-2xl font-bold text-green-600">{Math.round(svcRepSummary.totalRevenue).toLocaleString("ar-SA")}</div>
+                  <div className="text-xs text-muted-foreground">ر.س</div>
+                </div>
+                <div className="bg-card border border-blue-200 rounded-2xl p-4 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">عربون محصّل</div>
+                  <div className="text-2xl font-bold text-blue-600">{Math.round(svcRepSummary.totalDeposits).toLocaleString("ar-SA")}</div>
+                  <div className="text-xs text-muted-foreground">ر.س</div>
+                </div>
+                <div className="bg-card border border-orange-200 rounded-2xl p-4 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">تأمينات</div>
+                  <div className="text-2xl font-bold text-orange-600">{Math.round(svcRepSummary.totalInsurance).toLocaleString("ar-SA")}</div>
+                  <div className="text-xs text-muted-foreground">ر.س</div>
+                </div>
+              </div>
+              <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Briefcase className="w-4 h-4 text-amber-500" /> تفصيل حسب الخدمة
+                </h3>
+                {svcRepSummary.byProvider.map(p => (
+                  <div key={p.id} className="flex items-center gap-3 py-2 border-b border-border/40 last:border-0">
+                    <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                      <Activity className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-foreground truncate">{p.name}</p>
+                      {p.deposits > 0 && <p className="text-xs text-muted-foreground">عربون: {Math.round(p.deposits).toLocaleString("ar-SA")} ر.س</p>}
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-green-600">{Math.round(p.revenue).toLocaleString("ar-SA")} ر.س</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <Activity className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">لا توجد بيانات خدمات لهذا الشهر</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Unified Report ── */}
+      {repUnit.type === "all" && reportType === "unified" && viewMode === "monthly" && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <Zap className="w-5 h-5 text-primary shrink-0" />
+            <h2 className="text-lg font-bold text-foreground">التقرير الموحّد</h2>
+            <div className="ms-auto w-44">
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {monthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-card border border-primary/20 rounded-2xl p-4 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <Home className="w-3.5 h-3.5 text-primary" />إيرادات الشاليهات
+              </div>
+              <div className="text-2xl font-bold text-primary">{Math.round(financial?.totalRevenue ?? 0).toLocaleString("ar-SA")} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+            </div>
+            <div className="bg-card border border-amber-200 rounded-2xl p-4 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <Activity className="w-3.5 h-3.5 text-amber-500" />إيرادات الخدمات
+              </div>
+              <div className="text-2xl font-bold text-amber-600">{Math.round(svcRepSummary?.totalRevenue ?? 0).toLocaleString("ar-SA")} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+            </div>
+          </div>
+          <div className="bg-gradient-to-l from-primary/5 to-amber-500/5 border border-primary/20 rounded-2xl p-4 text-center">
+            <div className="text-xs text-muted-foreground mb-1">إجمالي الإيرادات الموحّدة</div>
+            <div className="text-3xl font-extrabold text-green-600">{Math.round((financial?.totalRevenue ?? 0) + (svcRepSummary?.totalRevenue ?? 0)).toLocaleString("ar-SA")} <span className="text-lg font-normal text-muted-foreground">ر.س</span></div>
+            {financial && <div className="text-xs text-muted-foreground mt-2">المصروفات: {Math.round(financial.totalExpenses).toLocaleString("ar-SA")} ر.س · صافي الشاليهات: {Math.round(financial.netProfit).toLocaleString("ar-SA")} ر.س</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Show standard report only for "chalets" type or when unit is not "all" */}
+      {(repUnit.type !== "all" || reportType === "chalets") && (<>
 
       {/* Subscription Card */}
       {/* Subscription card moved to profile header area — not shown in Reports */}
@@ -8687,6 +8947,8 @@ function ReportsTab() {
           </div>
         )}
       </div>
+
+      </>)}
 
     </div>
   );
@@ -10382,7 +10644,9 @@ const PERIOD_LABEL: Record<string, string> = {
 function CustomersTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { unit: repUnit } = useAdminFinance();
   const [search, setSearch]           = useState("");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "chalet" | "service">("all");
   const [selected, setSelected]       = useState<string | null>(null);
   const [profile, setProfile]         = useState<CustomerProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -10445,11 +10709,43 @@ function CustomersTab() {
     },
   });
 
-  const filtered = customers.filter(
-    (c) =>
-      c.client_name.includes(search) ||
-      c.client_phone.includes(search)
-  );
+  const showServices = repUnit.type === "all";
+
+  const { data: svcClients = [], isLoading: svcLoading } = useQuery<(CustomerRow & { providers: string[] })[]>({
+    queryKey: ["owner", "service-clients"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/service-clients");
+      return r.ok ? r.json() : [];
+    },
+    enabled: showServices,
+  });
+
+  // Build a merged + tagged list
+  const mergedCustomers = useMemo(() => {
+    type TaggedRow = CustomerRow & { source: "chalet" | "service" | "both"; providers?: string[] };
+    const result: TaggedRow[] = [];
+    const chaletPhones = new Set(customers.map(c => c.client_phone));
+    const svcPhones = new Set(svcClients.map(c => c.client_phone));
+
+    for (const c of customers) {
+      result.push({ ...c, source: svcPhones.has(c.client_phone) ? "both" : "chalet" });
+    }
+    for (const c of svcClients) {
+      if (!chaletPhones.has(c.client_phone)) {
+        result.push({ ...c, source: "service", providers: c.providers });
+      } else {
+        const existing = result.find(r => r.client_phone === c.client_phone);
+        if (existing) (existing as any).providers = c.providers;
+      }
+    }
+    return result;
+  }, [customers, svcClients]);
+
+  const filtered = mergedCustomers.filter((c) => {
+    const matchSearch = c.client_name.includes(search) || c.client_phone.includes(search);
+    const matchSource = !showServices || sourceFilter === "all" || c.source === sourceFilter || (sourceFilter === "chalet" && c.source === "both") || (sourceFilter === "service" && c.source === "both");
+    return matchSearch && matchSource;
+  });
 
   async function loadProfile(phone: string) {
     setSelected(phone);
@@ -10496,8 +10792,28 @@ function CustomersTab() {
       <div className={`flex flex-col gap-3 ${selected ? "hidden lg:flex lg:w-72 shrink-0" : "w-full"}`}>
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-foreground">عملائي</h2>
-          <span className="text-xs text-muted-foreground">{toAr(customers.length)} عميل</span>
+          <span className="text-xs text-muted-foreground">{toAr(mergedCustomers.length)} عميل</span>
         </div>
+
+        {/* Source filter — only when services are enabled */}
+        {showServices && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {([
+              { key: "all", label: "الكل" },
+              { key: "chalet", label: "شاليهات" },
+              { key: "service", label: "خدمات" },
+            ] as const).map(({ key, label }) => (
+              <button key={key} type="button" onClick={() => setSourceFilter(key)}
+                className={`px-2.5 py-1 rounded-full text-xs font-bold border transition-colors ${sourceFilter === key
+                  ? key === "service" ? "bg-amber-500 text-white border-amber-500"
+                    : key === "chalet" ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-foreground text-background border-foreground"
+                  : "border-border text-muted-foreground hover:border-foreground"}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="relative">
           <Search className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -10510,7 +10826,7 @@ function CustomersTab() {
           />
         </div>
 
-        {isLoading ? (
+        {isLoading || (showServices && svcLoading) ? (
           <div className="flex justify-center py-16"><Loader2 className="animate-spin text-primary w-6 h-6" /></div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground text-sm">
@@ -10518,28 +10834,45 @@ function CustomersTab() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {filtered.map((c) => (
+            {filtered.map((c) => {
+              const src = (c as any).source as "chalet" | "service" | "both" | undefined;
+              const providers = (c as any).providers as string[] | undefined;
+              return (
               <button
-                key={c.client_phone}
-                onClick={() => loadProfile(c.client_phone)}
+                key={c.client_phone || c.client_name}
+                onClick={() => src !== "service" && c.client_phone ? loadProfile(c.client_phone) : null}
                 className={`w-full text-start rounded-xl border px-4 py-3 transition-colors hover:border-primary/50 hover:bg-accent/30 ${
                   selected === c.client_phone
                     ? "border-primary bg-primary/5"
                     : "border-border bg-card"
-                }`}
+                } ${src === "service" ? "cursor-default" : ""}`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-semibold text-sm text-foreground truncate">{c.client_name}</p>
-                  <span className="shrink-0 text-xs font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                    {toAr(Number(c.total_bookings))} حجز
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {showServices && src && (
+                      <span className={`text-xs font-bold rounded-full px-1.5 py-0.5 ${
+                        src === "both" ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400"
+                        : src === "service" ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                        : "bg-primary/10 text-primary"
+                      }`}>
+                        {src === "both" ? "شاليه + خدمة" : src === "service" ? "خدمة" : "شاليه"}
+                      </span>
+                    )}
+                    <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">
+                      {toAr(Number(c.total_bookings))} {src === "service" ? "موعد" : "حجز"}
+                    </span>
+                  </div>
                 </div>
                 <p dir="ltr" className="text-xs text-muted-foreground mt-0.5 text-right">{c.client_phone}</p>
+                {providers && providers.length > 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 truncate">{providers.join("، ")}</p>
+                )}
                 {c.last_booking_date && (() => {
                   const { hijri, gregorian } = formatDualDate(c.last_booking_date);
                   return (
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      آخر حجز:{" "}
+                      {src === "service" ? "آخر موعد:" : "آخر حجز:"}{" "}
                       <span className="text-foreground/80">
                         {hijri.replace(/\s*هـ\s*$/, "")} هـ
                       </span>
@@ -10549,7 +10882,7 @@ function CustomersTab() {
                   );
                 })()}
               </button>
-            ))}
+            )})}
           </div>
         )}
       </div>

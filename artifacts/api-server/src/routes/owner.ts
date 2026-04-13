@@ -20,6 +20,8 @@ import {
   customerNotesTable,
   chaletServicesTable,
   ownerNotificationSettingsTable,
+  serviceAppointmentsTable,
+  serviceProvidersTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
@@ -1280,6 +1282,7 @@ router.get("/subscription", async (req, res) => {
 router.get("/expenses", async (req, res) => {
   const ownerId = req.user!.id;
   const month = typeof req.query.month === "string" ? req.query.month : undefined;
+  const providerId = req.query.providerId ? Number(req.query.providerId) : undefined;
   const conditions = [eq(ownerExpensesTable.ownerId, ownerId)];
   if (month) {
     conditions.push(
@@ -1287,6 +1290,7 @@ router.get("/expenses", async (req, res) => {
       lte(ownerExpensesTable.dateStr, `${month}-31`),
     );
   }
+  if (providerId) conditions.push(eq(ownerExpensesTable.providerId as any, providerId));
   const rows = await db
     .select()
     .from(ownerExpensesTable)
@@ -1299,18 +1303,19 @@ router.post("/expenses", async (req, res) => {
   const ownerId = req.user!.id;
   const body = z.object({
     submissionId: z.number().int().positive().optional(),
+    providerId: z.number().int().positive().optional(),
     dateStr: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     category: z.string().min(1),
     customCategory: z.string().optional(),
     amount: z.number().positive(),
     notes: z.string().optional(),
-    receiptUrl: z.string().url().optional(),
+    receiptUrl: z.string().min(1).optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: body.error.flatten() });
   const { amount, ...expRest } = body.data;
   const [row] = await db
     .insert(ownerExpensesTable)
-    .values({ ownerId, ...expRest, amount: String(amount) })
+    .values({ ownerId, ...expRest, amount: String(amount) } as any)
     .returning();
   return res.status(201).json(row);
 });
@@ -1347,6 +1352,8 @@ router.post("/staff", async (req, res) => {
     username: z.string().min(3).optional(),
     password: z.string().min(6).optional(),
     permissions: z.record(z.boolean()).optional(),
+    assignedToType: z.enum(["all", "chalet", "service"]).optional(),
+    assignedToId: z.number().int().positive().optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
@@ -1355,6 +1362,8 @@ router.post("/staff", async (req, res) => {
     name: body.data.name,
     baseSalary: String(body.data.baseSalary),
     permissions: body.data.permissions ?? {},
+    assignedToType: body.data.assignedToType ?? "all",
+    assignedToId: body.data.assignedToId ?? null,
   };
 
   if (body.data.username) {
@@ -1382,6 +1391,8 @@ router.patch("/staff/:id", async (req, res) => {
     username: z.string().min(3).optional(),
     password: z.string().min(6).optional(),
     permissions: z.record(z.boolean()).optional(),
+    assignedToType: z.enum(["all", "chalet", "service"]).optional(),
+    assignedToId: z.number().int().positive().nullable().optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
@@ -1392,6 +1403,8 @@ router.patch("/staff/:id", async (req, res) => {
   if (body.data.username !== undefined) staffPatch.username = body.data.username.trim() || null;
   if (body.data.password) staffPatch.passwordHash = await bcrypt.hash(body.data.password, 10);
   if (body.data.permissions !== undefined) staffPatch.permissions = body.data.permissions;
+  if (body.data.assignedToType !== undefined) staffPatch.assignedToType = body.data.assignedToType;
+  if (body.data.assignedToId !== undefined) staffPatch.assignedToId = body.data.assignedToId;
 
   const [row] = await db
     .update(ownerStaffTable)
@@ -1754,6 +1767,131 @@ router.get("/financial-summary", async (req, res) => {
     insuranceRevenueTotals,
     trend,
   });
+});
+
+/* ── Service Revenue Summary (all providers combined) ────────── */
+
+router.get("/service-revenue-summary", async (req, res) => {
+  const ownerId = req.user!.id;
+  const selectedMonth = (typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month))
+    ? req.query.month
+    : new Date().toISOString().slice(0, 7);
+
+  // Get all approved providers for this owner
+  const providers = await db
+    .select({ id: serviceProvidersTable.id, businessName: serviceProvidersTable.businessName })
+    .from(serviceProvidersTable)
+    .where(eq(serviceProvidersTable.ownerId, ownerId));
+
+  if (providers.length === 0) return res.json({ totalRevenue: 0, totalDeposits: 0, totalInsurance: 0, byProvider: [] });
+
+  const providerIds = providers.map(p => p.id);
+
+  const appts = await db
+    .select({
+      providerId: serviceAppointmentsTable.providerId,
+      amount: serviceAppointmentsTable.amount,
+      deposit: serviceAppointmentsTable.deposit,
+      insuranceAmount: serviceAppointmentsTable.insuranceAmount,
+      status: serviceAppointmentsTable.status,
+    })
+    .from(serviceAppointmentsTable)
+    .where(
+      and(
+        inArray(serviceAppointmentsTable.providerId, providerIds),
+        gte(serviceAppointmentsTable.dateStr, `${selectedMonth}-01`),
+        lte(serviceAppointmentsTable.dateStr, `${selectedMonth}-31`),
+        ne(serviceAppointmentsTable.status, "cancelled"),
+      )
+    );
+
+  const byProvider: Record<number, { name: string; revenue: number; deposits: number; insurance: number }> = {};
+  for (const p of providers) byProvider[p.id] = { name: p.businessName ?? `خدمة #${p.id}`, revenue: 0, deposits: 0, insurance: 0 };
+
+  for (const a of appts) {
+    if (!byProvider[a.providerId]) continue;
+    byProvider[a.providerId].revenue += Number(a.amount ?? 0);
+    byProvider[a.providerId].deposits += Number(a.deposit ?? 0);
+    byProvider[a.providerId].insurance += Number(a.insuranceAmount ?? 0);
+  }
+
+  const totalRevenue = Object.values(byProvider).reduce((s, p) => s + p.revenue, 0);
+  const totalDeposits = Object.values(byProvider).reduce((s, p) => s + p.deposits, 0);
+  const totalInsurance = Object.values(byProvider).reduce((s, p) => s + p.insurance, 0);
+
+  return res.json({
+    totalRevenue,
+    totalDeposits,
+    totalInsurance,
+    byProvider: Object.entries(byProvider).map(([id, v]) => ({ id: Number(id), ...v })),
+  });
+});
+
+/* ── Service Clients ─────────────────────────────────────────── */
+
+router.get("/service-clients", async (req, res) => {
+  const ownerId = req.user!.id;
+  const providers = await db
+    .select({ id: serviceProvidersTable.id, businessName: serviceProvidersTable.businessName })
+    .from(serviceProvidersTable)
+    .where(eq(serviceProvidersTable.ownerId, ownerId));
+
+  if (providers.length === 0) return res.json([]);
+
+  const providerIds = providers.map(p => p.id);
+  const providerMap: Record<number, string> = {};
+  for (const p of providers) providerMap[p.id] = p.businessName ?? `خدمة #${p.id}`;
+
+  const appts = await db
+    .select({
+      clientName: serviceAppointmentsTable.clientName,
+      clientPhone: serviceAppointmentsTable.clientPhone,
+      providerId: serviceAppointmentsTable.providerId,
+      dateStr: serviceAppointmentsTable.dateStr,
+      amount: serviceAppointmentsTable.amount,
+      status: serviceAppointmentsTable.status,
+    })
+    .from(serviceAppointmentsTable)
+    .where(inArray(serviceAppointmentsTable.providerId, providerIds))
+    .orderBy(desc(serviceAppointmentsTable.dateStr));
+
+  // Aggregate by phone (or name if no phone)
+  const map: Record<string, {
+    client_name: string; client_phone: string; total_bookings: number;
+    total_revenue: number; last_booking_date: string | null;
+    providers: Set<string>;
+  }> = {};
+
+  for (const a of appts) {
+    const key = a.clientPhone?.trim() || `name:${a.clientName}`;
+    if (!map[key]) {
+      map[key] = {
+        client_name: a.clientName,
+        client_phone: a.clientPhone ?? "",
+        total_bookings: 0,
+        total_revenue: 0,
+        last_booking_date: null,
+        providers: new Set(),
+      };
+    }
+    map[key].total_bookings += 1;
+    if (a.status !== "cancelled") map[key].total_revenue += Number(a.amount ?? 0);
+    if (!map[key].last_booking_date || a.dateStr > (map[key].last_booking_date ?? "")) {
+      map[key].last_booking_date = a.dateStr;
+    }
+    map[key].providers.add(providerMap[a.providerId] ?? `#${a.providerId}`);
+  }
+
+  return res.json(
+    Object.values(map).map(c => ({
+      client_name: c.client_name,
+      client_phone: c.client_phone,
+      total_bookings: String(c.total_bookings),
+      total_revenue: String(c.total_revenue),
+      last_booking_date: c.last_booking_date,
+      providers: Array.from(c.providers),
+    }))
+  );
 });
 
 /* ── Yearly Summary ─────────────────────────────────────────── */

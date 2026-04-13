@@ -343,6 +343,7 @@ export const ownerExpensesTable = pgTable("owner_expenses", {
   id: serial("id").primaryKey(),
   ownerId: text("owner_id").notNull(),
   submissionId: integer("submission_id").references(() => chaletSubmissionsTable.id, { onDelete: "set null" }),
+  providerId: integer("provider_id"),
   dateStr: text("date_str").notNull(),
   category: text("category").notNull().default("other"),
   customCategory: text("custom_category"),
@@ -376,6 +377,8 @@ export const ownerStaffTable = pgTable("owner_staff", {
   permissions: jsonb("permissions").$type<StaffPermissions>().notNull().default({}),
   baseSalary: numeric("base_salary", { precision: 10, scale: 2 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  assignedToType: text("assigned_to_type").notNull().default("all"),
+  assignedToId: integer("assigned_to_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type OwnerStaff = typeof ownerStaffTable.$inferSelect;
