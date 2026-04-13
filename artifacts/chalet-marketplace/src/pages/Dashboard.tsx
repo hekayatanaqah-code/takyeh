@@ -4059,6 +4059,8 @@ function ServiceSubmissionsTab() {
   const { toast } = useToast();
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [deleteProviderConfirmId, setDeleteProviderConfirmId] = useState<number | null>(null);
+  const [deletingProviderId, setDeletingProviderId] = useState<number | null>(null);
 
   const { data: submissions = [], isLoading } = useQuery<ServiceSubmission[]>({
     queryKey: ["my-service-submissions"],
@@ -4108,6 +4110,27 @@ function ServiceSubmissionsTab() {
       }
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const handleDeleteProvider = async (provider: ApprovedProvider) => {
+    setDeletingProviderId(provider.id);
+    try {
+      const r = await apiFetch(`/providers/my/approved/${provider.id}`, { method: "DELETE" });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({})) as any;
+        if (err.hasUpcomingAppointments) {
+          toast({ title: "لا يمكن الحذف", description: "يوجد مواعيد قادمة مرتبطة بهذه الخدمة. يرجى إلغاؤها أولاً.", variant: "destructive" });
+        } else {
+          toast({ title: "خطأ", description: err.error ?? "فشل حذف الخدمة", variant: "destructive" });
+        }
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["my-approved-providers"] });
+        toast({ title: "تم الحذف", description: "تم حذف الخدمة نهائياً. تبقى السجلات المالية متاحة للاطلاع." });
+      }
+    } finally {
+      setDeletingProviderId(null);
+      setDeleteProviderConfirmId(null);
     }
   };
 
@@ -4177,7 +4200,7 @@ function ServiceSubmissionsTab() {
                     </div>
                     <p className="text-sm text-muted-foreground">{SERVICE_CATEGORY_LABELS[p.category] ?? p.category} · {p.city}</p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                     <Link href={`/providers/${p.id}`}>
                       <Button size="sm" variant="outline" className="text-xs gap-1.5">
                         <ExternalLink className="w-3.5 h-3.5" />
@@ -4199,8 +4222,49 @@ function ServiceSubmissionsTab() {
                         <><Eye className="w-3.5 h-3.5" />تفعيل</>
                       )}
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                      onClick={() => setDeleteProviderConfirmId(deleteProviderConfirmId === p.id ? null : p.id)}
+                      disabled={deletingProviderId === p.id}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      حذف
+                    </Button>
                   </div>
                 </div>
+
+                {/* ── Inline delete confirmation ── */}
+                {deleteProviderConfirmId === p.id && (
+                  <div className="mt-4 border border-destructive/30 rounded-xl bg-destructive/5 p-4 space-y-3">
+                    <p className="text-sm font-semibold text-destructive">سيتم حذف الخدمة وكافة بياناتها نهائياً، هل أنت متأكد؟</p>
+                    <p className="text-xs text-muted-foreground">لا يمكن الحذف إذا كانت هناك حجوزات قائمة مستقبلية. السجلات المالية التاريخية ستبقى متاحة.</p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="rounded-xl text-xs gap-1.5"
+                        disabled={deletingProviderId === p.id}
+                        onClick={() => handleDeleteProvider(p)}
+                      >
+                        {deletingProviderId === p.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Trash2 className="w-3.5 h-3.5" />}
+                        تأكيد الحذف
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-xl text-xs"
+                        disabled={deletingProviderId === p.id}
+                        onClick={() => setDeleteProviderConfirmId(null)}
+                      >
+                        إلغاء
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             );
           })}
