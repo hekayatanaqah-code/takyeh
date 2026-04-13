@@ -4533,12 +4533,16 @@ function ServiceCalendarBookingsTab() {
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [togglingDate, setTogglingDate] = useState<string | null>(null);
+  const [blockMode, setBlockMode] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
   const emptyForm = { clientName: "", clientPhone: "", dateStr: "", duration: "", status: "confirmed", notes: "", amount: "", deposit: "", insuranceAmount: "", source: "whatsapp" };
   const [form, setForm] = useState({ ...emptyForm });
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickYear, setPickYear] = useState(now.getFullYear());
+  const [pickMonth, setPickMonth] = useState(now.getMonth());
 
   const { data: blockedDates = [] } = useQuery<{ id: number; dateStr: string }[]>({
     queryKey: ["service-blocked-dates", providerId],
@@ -4596,7 +4600,7 @@ function ServiceCalendarBookingsTab() {
       if (!r.ok) throw new Error();
       queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
       toast({ title: "تم تسجيل الحجز ✓" });
-      setForm({ ...emptyForm }); setShowForm(false);
+      setForm({ ...emptyForm }); setShowForm(false); setPickerOpen(false);
     } catch { toast({ title: "خطأ", description: "فشل التسجيل", variant: "destructive" }); }
     finally { setSaving(false); }
   }
@@ -4676,47 +4680,68 @@ function ServiceCalendarBookingsTab() {
           <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><ChevronLeft className="w-4 h-4" /></button>
         </div>
 
-        {/* Legend */}
-        <div className="flex gap-3 flex-wrap text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" /> محجوب (انقر للإزالة)</span>
+        {/* Legend + block-mode toggle */}
+        <div className="flex gap-3 flex-wrap text-xs text-muted-foreground items-center">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-400 inline-block" /> محجوب</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-400 inline-block" /> يوم حجز</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-primary/20 border border-primary inline-block" /> اليوم</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-muted border border-border inline-block" /> متاح (انقر لحجب)</span>
+          <button type="button" onClick={() => setBlockMode(b => !b)}
+            className={`ms-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors border ${blockMode ? "bg-red-500 text-white border-red-500" : "border-border text-muted-foreground hover:border-red-400 hover:text-red-500"}`}>
+            <Lock className="w-3 h-3" />{blockMode ? "وضع الحجب: مفعّل" : "حجب الأيام"}
+          </button>
         </div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-7 gap-1">
-          {dayNames.map(d => <div key={d} className="text-center text-xs font-bold text-muted-foreground py-1">{d}</div>)}
-          {cells.map((day, i) => {
-            if (!day) return <div key={`e-${i}`} />;
-            const ds = toDateStr(viewYear, viewMonth, day);
-            const blocked = blockedSet.has(ds);
-            const hasAppt = apptDays.has(ds);
-            const apptCnt = apptDays.get(ds) ?? 0;
-            const isToday = ds === todayStr;
-            const isPast  = ds < todayStr;
-            const hijriD  = _svcHijriDay.format(new Date(viewYear, viewMonth, day));
-            return (
-              <button key={ds} type="button" onClick={() => !isPast && toggleDate(ds)} disabled={isPast || togglingDate === ds}
-                className={`aspect-square flex flex-col items-center justify-center rounded-xl transition-all relative ${
-                  isPast    ? "opacity-35 cursor-default" :
-                  blocked   ? "bg-red-500 text-white hover:bg-red-600" :
-                  hasAppt   ? "bg-amber-100 dark:bg-amber-900/30 border-2 border-amber-400 text-foreground hover:bg-amber-200" :
-                  isToday   ? "bg-primary/20 text-primary border-2 border-primary hover:bg-primary/30" :
-                  "bg-card border border-border hover:border-primary hover:bg-primary/5 text-foreground"
-                } ${togglingDate === ds ? "opacity-60" : ""}`}>
-                <span className="text-[0.75rem] font-bold leading-none">{hijriD}</span>
-                <span className={`text-[0.65rem] leading-none mt-0.5 ${blocked ? "text-white/70" : "text-muted-foreground"}`}>{day}</span>
-                {hasAppt && !blocked && (
-                  <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex gap-px">
-                    {Array.from({ length: Math.min(apptCnt, 3) }).map((_, k) => (
-                      <span key={k} className="w-1 h-1 rounded-full bg-amber-500 block" />
-                    ))}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        {/* Grid — identical structure to chalet calendar */}
+        <div className="select-none rounded-xl overflow-hidden border border-border">
+          <div className="grid grid-cols-7 gap-px bg-border">
+            {dayNames.map(d => <div key={d} className="bg-muted/60 text-center text-[10px] font-bold text-muted-foreground py-2">{d}</div>)}
+            {cells.map((day, i) => {
+              if (!day) return <div key={`e-${i}`} className="bg-background/60 min-h-[62px]" />;
+              const ds = toDateStr(viewYear, viewMonth, day);
+              const blocked = blockedSet.has(ds);
+              const hasAppt = apptDays.has(ds);
+              const apptCnt = apptDays.get(ds) ?? 0;
+              const isToday = ds === todayStr;
+              const isPast  = ds < todayStr;
+              const hijriD  = _svcHijriDay.format(new Date(viewYear, viewMonth, day));
+              const gregAr  = day.toLocaleString("ar-SA-u-nu-arab");
+              return (
+                <button key={ds} type="button"
+                  onClick={() => {
+                    if (isPast) return;
+                    if (blockMode) { toggleDate(ds); }
+                    else { setForm(p => ({ ...p, dateStr: ds })); setShowForm(true); }
+                  }}
+                  disabled={isPast || togglingDate === ds}
+                  className={[
+                    "flex flex-col items-center justify-start pt-1.5 pb-1.5 px-0.5 w-full",
+                    "transition-colors focus:outline-none focus:z-10 focus:ring-2 focus:ring-inset focus:ring-primary/60",
+                    "min-h-[62px] relative",
+                    isPast
+                      ? "bg-background/60 text-muted-foreground/40 cursor-default"
+                      : blocked
+                        ? "bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 hover:bg-red-200"
+                        : hasAppt
+                          ? "bg-amber-50 dark:bg-amber-900/20 text-foreground hover:bg-amber-100"
+                          : isToday
+                            ? "bg-primary/10 text-primary ring-2 ring-inset ring-primary"
+                            : "bg-background hover:bg-primary/5 text-foreground",
+                    togglingDate === ds ? "opacity-60" : "",
+                  ].join(" ")}
+                >
+                  <span className="text-[0.82rem] font-bold leading-none">{hijriD}</span>
+                  <span className={`text-[0.52rem] leading-none mt-0.5 tabular-nums ${blocked ? "opacity-60" : "text-muted-foreground"}`}>{gregAr}</span>
+                  {hasAppt && !blocked && (
+                    <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex gap-px">
+                      {Array.from({ length: Math.min(apptCnt, 3) }).map((_, k) => (
+                        <span key={k} className="w-1 h-1 rounded-full bg-amber-500 block" />
+                      ))}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Month summary */}
@@ -4750,10 +4775,74 @@ function ServiceCalendarBookingsTab() {
               <label className="text-xs font-semibold text-muted-foreground">رقم الجوال</label>
               <Input value={form.clientPhone} onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value }))} placeholder="05xxxxxxxx" className="rounded-xl" dir="ltr" />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 md:col-span-2">
               <label className="text-xs font-semibold text-muted-foreground">تاريخ الخدمة *</label>
-              <Input type="date" value={form.dateStr} onChange={e => setForm(p => ({ ...p, dateStr: e.target.value }))} className="rounded-xl" />
-              {form.dateStr && <p className="text-xs text-primary font-medium">{toHijri(form.dateStr)} هـ</p>}
+              {/* Unified Hijri / Gregorian date picker */}
+              {form.dateStr && !pickerOpen ? (
+                <div className="flex items-center gap-3 bg-primary/5 border border-primary/30 rounded-xl px-4 py-2.5">
+                  <div className="flex-1">
+                    <p className="font-bold text-primary text-sm">{formatDualDate(form.dateStr).hijri} هـ</p>
+                    <p className="text-xs text-muted-foreground">{formatDualDate(form.dateStr).gregorian} م</p>
+                  </div>
+                  <button type="button" onClick={() => { setPickerOpen(true); const [y,m] = form.dateStr.split("-").map(Number); setPickYear(y); setPickMonth(m - 1); }}
+                    className="text-xs text-primary underline underline-offset-2 hover:text-primary/80">تغيير</button>
+                </div>
+              ) : (
+                <div className="border border-border rounded-xl overflow-hidden">
+                  {/* Mini picker header */}
+                  <div className="flex items-center justify-between bg-muted/50 px-3 py-2">
+                    <button type="button" onClick={() => { if (pickMonth === 0) { setPickMonth(11); setPickYear(y => y - 1); } else setPickMonth(m => m - 1); }}
+                      className="p-1 rounded hover:bg-muted transition-colors"><ChevronRight className="w-3.5 h-3.5" /></button>
+                    <div className="text-center">
+                      <p className="text-xs font-bold text-foreground">{_svcHijriMon.format(new Date(pickYear, pickMonth, 1))} {_svcHijriYear.format(new Date(pickYear, pickMonth, 1))} هـ</p>
+                      <p className="text-[10px] text-muted-foreground">{new Date(pickYear, pickMonth, 1).toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" })} م</p>
+                    </div>
+                    <button type="button" onClick={() => { if (pickMonth === 11) { setPickMonth(0); setPickYear(y => y + 1); } else setPickMonth(m => m + 1); }}
+                      className="p-1 rounded hover:bg-muted transition-colors"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                  </div>
+                  {/* Mini picker grid */}
+                  <div className="select-none">
+                    <div className="grid grid-cols-7 gap-px bg-border">
+                      {["أحد","اثن","ثلا","أرب","خمي","جمع","سبت"].map(d => (
+                        <div key={d} className="bg-muted/60 text-center text-[9px] font-bold text-muted-foreground py-1.5">{d}</div>
+                      ))}
+                      {(() => {
+                        const fd = new Date(pickYear, pickMonth, 1).getDay();
+                        const dim = new Date(pickYear, pickMonth + 1, 0).getDate();
+                        const todayPick = new Date().toISOString().slice(0, 10);
+                        const pickCells: (number | null)[] = [];
+                        for (let i = 0; i < fd; i++) pickCells.push(null);
+                        for (let d = 1; d <= dim; d++) pickCells.push(d);
+                        return pickCells.map((day, idx) => {
+                          if (!day) return <div key={`pe-${idx}`} className="bg-background/60 min-h-[48px]" />;
+                          const ds = `${pickYear}-${String(pickMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                          const isSelected = ds === form.dateStr;
+                          const isPast = ds < todayPick;
+                          const hijriD = _svcHijriDay.format(new Date(pickYear, pickMonth, day));
+                          const gregAr = day.toLocaleString("ar-SA-u-nu-arab");
+                          return (
+                            <button key={ds} type="button"
+                              onClick={() => { if (!isPast) { setForm(p => ({ ...p, dateStr: ds })); setPickerOpen(false); } }}
+                              disabled={isPast}
+                              className={[
+                                "flex flex-col items-center justify-start pt-1 pb-1 px-0 w-full min-h-[48px]",
+                                "transition-colors focus:outline-none",
+                                isPast ? "bg-background/60 text-muted-foreground/40 cursor-default"
+                                  : isSelected ? "bg-primary text-primary-foreground"
+                                  : ds === todayPick ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary"
+                                  : "bg-background hover:bg-primary/5 text-foreground",
+                              ].join(" ")}
+                            >
+                              <span className="text-[0.72rem] font-bold leading-none">{hijriD}</span>
+                              <span className={`text-[0.48rem] leading-none mt-0.5 tabular-nums ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{gregAr}</span>
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">المدة</label>
@@ -4796,7 +4885,7 @@ function ServiceCalendarBookingsTab() {
             <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="تفاصيل إضافية..." />
           </div>
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" onClick={() => setShowForm(false)} className="rounded-xl">إلغاء</Button>
+            <Button variant="ghost" onClick={() => { setShowForm(false); setPickerOpen(false); setForm({ ...emptyForm }); }} className="rounded-xl">إلغاء</Button>
             <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2 bg-amber-500 hover:bg-amber-600 text-white">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}حفظ الحجز
             </Button>
@@ -10851,7 +10940,7 @@ export default function Dashboard() {
     { id: "seasons",   label: "المواسم والأسعار",    icon: <Sun className="w-4 h-4" /> },
     { id: "reviews",   label: "التقييمات",            icon: <Star className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات",   icon: <Calendar className="w-4 h-4" /> },
-    { id: "deposits",  label: "ودائع الضمان",         icon: <Lock className="w-4 h-4" /> },
+    { id: "deposits",  label: "إدارة التأمينات",       icon: <Lock className="w-4 h-4" /> },
     { id: "services",  label: "الخدمات الإضافية",    icon: <MessageSquare className="w-4 h-4" /> },
   ] as const;
 
