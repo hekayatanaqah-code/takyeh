@@ -594,6 +594,8 @@ export const serviceAppointmentsTable = pgTable("service_appointments", {
   status: text("status").notNull().default("confirmed"),
   notes: text("notes"),
   amount: numeric("amount", { precision: 10, scale: 2 }),
+  deposit: numeric("deposit", { precision: 10, scale: 2 }).default("0"),
+  insuranceAmount: numeric("insurance_amount", { precision: 10, scale: 2 }).default("0"),
   source: text("source").notNull().default("external"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
@@ -611,6 +613,8 @@ export const serviceInsurancesTable = pgTable("service_insurances", {
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull().default("0"),
   renewalDate: text("renewal_date"),
   notes: text("notes"),
+  refundAmount: numeric("refund_amount", { precision: 10, scale: 2 }).default("0"),
+  refundNote: text("refund_note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ServiceInsurance = typeof serviceInsurancesTable.$inferSelect;

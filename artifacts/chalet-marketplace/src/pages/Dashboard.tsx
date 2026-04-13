@@ -4216,6 +4216,7 @@ function ServiceDetailsTab() {
   const { toast } = useToast();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [form, setForm] = useState<Record<string, any> | null>(null);
   const [coverageTags, setCoverageTags] = useState<string[]>([]);
   const [featureTags, setFeatureTags] = useState<string[]>([]);
@@ -4231,8 +4232,9 @@ function ServiceDetailsTab() {
     enabled: !!providerId,
   });
 
+  /* Reset form whenever provider data or providerId changes */
   useEffect(() => {
-    if (provider && !form) {
+    if (provider) {
       setForm({
         businessName: provider.businessName ?? "",
         descriptionAr: provider.descriptionAr ?? "",
@@ -4243,7 +4245,7 @@ function ServiceDetailsTab() {
       setCoverageTags(provider.coverageTags ?? []);
       setFeatureTags(provider.customFeatureTags ?? []);
     }
-  }, [provider]);
+  }, [provider, providerId]);
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   if (!provider || !form) return <div className="py-12 text-center text-muted-foreground">تعذر تحميل البيانات</div>;
@@ -4259,14 +4261,45 @@ function ServiceDetailsTab() {
       if (!r.ok) throw new Error();
       queryClient.invalidateQueries({ queryKey: ["service-provider-detail", providerId] });
       queryClient.invalidateQueries({ queryKey: ["my-approved-providers"] });
-      toast({ title: "تم الحفظ", description: "تم تحديث بيانات الخدمة" });
+      toast({ title: "تم الحفظ ✓", description: "تم تحديث بيانات الخدمة بنجاح" });
     } catch {
       toast({ title: "خطأ", description: "فشل الحفظ، حاول مجدداً", variant: "destructive" });
     } finally { setSaving(false); }
   }
 
+  async function handleToggleActive() {
+    if (isReadOnly) return onBlockedEdit();
+    setToggling(true);
+    try {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/toggle`, { method: "PATCH" });
+      if (!r.ok) throw new Error();
+      queryClient.invalidateQueries({ queryKey: ["service-provider-detail", providerId] });
+      queryClient.invalidateQueries({ queryKey: ["my-approved-providers"] });
+      const d = await r.json();
+      toast({ title: d.isActive ? "تم تفعيل الخدمة ✓" : "تم إيقاف الخدمة", description: d.isActive ? "الخدمة ظاهرة الآن في السوق" : "الخدمة مخفية مؤقتاً عن العملاء" });
+    } catch {
+      toast({ title: "خطأ", description: "فشل التغيير", variant: "destructive" });
+    } finally { setToggling(false); }
+  }
+
+  const allSelected = AL_QASSIM_CITIES.every(c => coverageTags.includes(c));
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pt-2">
+      {/* Activate / Deactivate Banner */}
+      <div className={`flex items-center justify-between gap-4 rounded-2xl px-5 py-3 border ${provider.isActive ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/40" : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40"}`}>
+        <div>
+          <p className={`text-sm font-bold ${provider.isActive ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+            {provider.isActive ? "الخدمة نشطة ومرئية للعملاء" : "الخدمة موقوفة — مخفية عن السوق"}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">{provider.isActive ? "انقر لإيقاف العرض مؤقتاً" : "انقر لإعادة تفعيل الخدمة في السوق"}</p>
+        </div>
+        <Button onClick={handleToggleActive} disabled={toggling} variant="outline" size="sm"
+          className={`rounded-xl gap-1.5 text-xs font-bold ${provider.isActive ? "border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" : "border-green-400 text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"}`}>
+          {toggling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : provider.isActive ? <><X className="w-3.5 h-3.5" />إيقاف الخدمة</> : <><CheckCircle className="w-3.5 h-3.5" />تفعيل الخدمة</>}
+        </Button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Business Name */}
         <div className="space-y-1.5">
@@ -4294,24 +4327,34 @@ function ServiceDetailsTab() {
           <Input type="number" min={0} value={form.yearsOfExperience} onChange={e => setForm({ ...form, yearsOfExperience: e.target.value })} className="rounded-xl" />
         </div>
       </div>
+
       {/* Description */}
       <div className="space-y-1.5">
         <label className="text-sm font-semibold text-foreground">وصف الخدمة</label>
         <Textarea value={form.descriptionAr} onChange={e => setForm({ ...form, descriptionAr: e.target.value })} rows={4} className="rounded-xl resize-none" />
       </div>
+
       {/* Coverage Tags */}
       <div className="space-y-2">
-        <label className="text-sm font-semibold text-foreground">نطاق التغطية</label>
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-semibold text-foreground">نطاق التغطية الجغرافية</label>
+          <button type="button" onClick={() => setCoverageTags(allSelected ? [] : [...AL_QASSIM_CITIES])}
+            className="text-xs font-semibold text-primary hover:underline">
+            {allSelected ? "إلغاء تحديد الكل" : "تحديد كل القصيم"}
+          </button>
+        </div>
         <div className="flex flex-wrap gap-2 p-3 bg-muted rounded-xl min-h-[60px]">
           {AL_QASSIM_CITIES.map(city => (
             <button key={city} type="button"
               onClick={() => setCoverageTags(prev => prev.includes(city) ? prev.filter(c => c !== city) : [...prev, city])}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${coverageTags.includes(city) ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground border border-border hover:border-primary"}`}>
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${coverageTags.includes(city) ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground border border-border hover:border-primary"}`}>
               {city}
             </button>
           ))}
         </div>
+        <p className="text-xs text-muted-foreground">محدّد: {coverageTags.length} / {AL_QASSIM_CITIES.length} مدينة</p>
       </div>
+
       {/* Feature Tags */}
       <div className="space-y-2">
         <label className="text-sm font-semibold text-foreground">مميزات الخدمة</label>
@@ -4324,10 +4367,10 @@ function ServiceDetailsTab() {
               </button>
             </span>
           ))}
-          {featureTags.length === 0 && <span className="text-xs text-muted-foreground">لا توجد مميزات</span>}
+          {featureTags.length === 0 && <span className="text-xs text-muted-foreground">لا توجد مميزات — أضف مميزات تظهر في صفحة الخدمة</span>}
         </div>
         <div className="flex gap-2">
-          <Input value={newFeature} onChange={e => setNewFeature(e.target.value)} placeholder="أضف ميزة جديدة..." className="rounded-xl flex-1"
+          <Input value={newFeature} onChange={e => setNewFeature(e.target.value)} placeholder="مثال: خدمة 24 ساعة، تغطية كاملة..." className="rounded-xl flex-1"
             onKeyDown={e => { if (e.key === "Enter" && newFeature.trim()) { setFeatureTags(p => [...p, newFeature.trim()]); setNewFeature(""); } }} />
           <Button type="button" variant="outline" className="rounded-xl"
             onClick={() => { if (newFeature.trim()) { setFeatureTags(p => [...p, newFeature.trim()]); setNewFeature(""); } }}>
@@ -4335,9 +4378,10 @@ function ServiceDetailsTab() {
           </Button>
         </div>
       </div>
+
       {/* Save */}
       <div className="flex justify-end pt-2">
-        <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2 min-w-[120px]">
+        <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2 min-w-[140px] bg-amber-500 hover:bg-amber-600 text-white">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
           حفظ التعديلات
         </Button>
@@ -4346,7 +4390,11 @@ function ServiceDetailsTab() {
   );
 }
 
-/* ── Service Calendar Tab (Block Dates) ──────────────────── */
+/* ── Service Calendar Tab (Block Dates + Appointments merged) ── */
+const _svcHijriDay  = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric" });
+const _svcHijriMon  = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long" });
+const _svcHijriYear = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { year: "numeric" });
+
 function ServiceCalendarTab() {
   const { providerId } = useServiceErp();
   const queryClient = useQueryClient();
@@ -4364,7 +4412,21 @@ function ServiceCalendarTab() {
     },
     enabled: !!providerId,
   });
+
+  const { data: appointments = [] } = useQuery<any[]>({
+    queryKey: ["service-appointments", providerId],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: !!providerId,
+  });
+
   const blockedSet = new Set(blockedDates.map(d => d.dateStr));
+  const apptDays = new Map<string, number>();
+  appointments.filter(a => a.status !== "cancelled").forEach(a => {
+    apptDays.set(a.dateStr, (apptDays.get(a.dateStr) ?? 0) + 1);
+  });
 
   function toDateStr(y: number, m: number, d: number) {
     return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -4390,59 +4452,118 @@ function ServiceCalendarTab() {
   function prevMonth() { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); }
   function nextMonth() { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); }
 
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const firstDow = new Date(viewYear, viewMonth, 1).getDay();
-  const monthNames = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
-  const dayNames = ["أحد","اثن","ثلا","أرب","خمي","جمع","سبت"];
-  const todayStr = toDateStr(now.getFullYear(), now.getMonth(), now.getDate());
+  const firstDay   = new Date(viewYear, viewMonth, 1);
+  const lastDay    = new Date(viewYear, viewMonth + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  const firstDow   = firstDay.getDay();
+  const dayNames   = ["أحد","اثن","ثلا","أرب","خمي","جمع","سبت"];
+  const todayStr   = toDateStr(now.getFullYear(), now.getMonth(), now.getDate());
+
+  /* Hijri month header */
+  const hijriFirst = _svcHijriMon.format(firstDay);
+  const hijriLast  = _svcHijriMon.format(lastDay);
+  const hijriYear  = _svcHijriYear.format(lastDay);
+  const hijriLabel = hijriFirst === hijriLast ? `${hijriFirst} ${hijriYear}` : `${hijriFirst} – ${hijriLast} ${hijriYear}`;
+
+  /* Gregorian month label */
+  const gregLabel  = firstDay.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" });
 
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDow; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
+  /* Appointments for this month */
+  const monthStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
+  const monthAppts = appointments.filter(a => a.dateStr?.startsWith(monthStr) && a.status !== "cancelled").sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+
   return (
     <div className="space-y-4">
       {/* Month nav */}
-      <div className="flex items-center justify-between bg-card border border-border rounded-2xl px-4 py-3">
-        <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><ChevronRight className="w-4 h-4" /></button>
-        <span className="font-bold text-base">{monthNames[viewMonth]} {viewYear}</span>
-        <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+      <div className="bg-card border border-border rounded-2xl px-4 py-3 space-y-0.5">
+        <div className="flex items-center justify-between">
+          <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><ChevronRight className="w-4 h-4" /></button>
+          <div className="text-center">
+            <p className="font-extrabold text-base text-foreground">{hijriLabel} هـ</p>
+            <p className="text-xs text-muted-foreground">{gregLabel} م</p>
+          </div>
+          <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+        </div>
       </div>
 
       {/* Legend */}
-      <div className="flex gap-4 text-xs text-muted-foreground px-1">
+      <div className="flex gap-3 flex-wrap text-xs text-muted-foreground px-1">
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-500 inline-block"></span> محجوب</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-400 inline-block"></span> يوم حجز</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-primary/20 border border-primary inline-block"></span> اليوم</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-card border border-border inline-block"></span> متاح</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-primary/20 inline-block"></span> اليوم</span>
       </div>
 
-      {/* Day headers */}
+      {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-1">
         {dayNames.map(d => <div key={d} className="text-center text-xs font-bold text-muted-foreground py-1">{d}</div>)}
         {cells.map((day, i) => {
           if (!day) return <div key={`e-${i}`} />;
           const ds = toDateStr(viewYear, viewMonth, day);
-          const blocked = blockedSet.has(ds);
-          const isToday = ds === todayStr;
-          const isPast = ds < todayStr;
+          const blocked  = blockedSet.has(ds);
+          const hasAppt  = apptDays.has(ds);
+          const apptCnt  = apptDays.get(ds) ?? 0;
+          const isToday  = ds === todayStr;
+          const isPast   = ds < todayStr;
+          const hijriD   = _svcHijriDay.format(new Date(viewYear, viewMonth, day));
           return (
             <button key={ds} type="button" onClick={() => !isPast && toggleDate(ds)} disabled={isPast || togglingDate === ds}
-              className={`aspect-square flex items-center justify-center rounded-xl text-sm font-semibold transition-all ${
-                isPast ? "text-muted-foreground/40 cursor-default" :
-                blocked ? "bg-red-500 text-white hover:bg-red-600" :
-                isToday ? "bg-primary/20 text-primary border-2 border-primary hover:bg-primary/30" :
+              className={`aspect-square flex flex-col items-center justify-center rounded-xl transition-all relative ${
+                isPast    ? "opacity-35 cursor-default" :
+                blocked   ? "bg-red-500 text-white hover:bg-red-600" :
+                hasAppt   ? "bg-amber-100 dark:bg-amber-900/30 border-2 border-amber-400 text-foreground hover:bg-amber-200" :
+                isToday   ? "bg-primary/20 text-primary border-2 border-primary hover:bg-primary/30" :
                 "bg-card border border-border hover:border-primary hover:bg-primary/5 text-foreground"
               } ${togglingDate === ds ? "opacity-60" : ""}`}>
-              {day}
+              <span className="text-[0.75rem] font-bold leading-none">{hijriD}</span>
+              <span className={`text-[0.65rem] leading-none mt-0.5 ${blocked ? "text-white/70" : "text-muted-foreground"}`}>{day}</span>
+              {hasAppt && !blocked && (
+                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex gap-px">
+                  {Array.from({ length: Math.min(apptCnt, 3) }).map((_, k) => (
+                    <span key={k} className="w-1 h-1 rounded-full bg-amber-500 block" />
+                  ))}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
-      {/* Summary */}
-      <div className="bg-muted rounded-xl px-4 py-3 text-sm text-muted-foreground">
-        <span className="font-semibold text-foreground">{blockedDates.length}</span> يوم محجوب في السجل — انقر على أي يوم لإضافة/إزالة الحجب
+      {/* Summary row */}
+      <div className="flex gap-3 text-xs">
+        <div className="flex-1 bg-muted rounded-xl px-4 py-3">
+          <span className="font-semibold text-foreground">{blockedDates.length}</span>
+          <span className="text-muted-foreground"> يوم محجوب — انقر للإضافة/الإزالة</span>
+        </div>
+        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 rounded-xl px-4 py-3">
+          <span className="font-semibold text-amber-700 dark:text-amber-400">{monthAppts.length}</span>
+          <span className="text-muted-foreground"> حجز هذا الشهر</span>
+        </div>
       </div>
+
+      {/* Month appointments list */}
+      {monthAppts.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">حجوزات الشهر</p>
+          {monthAppts.map(a => {
+            const { hijri, gregorian } = formatDualDate(a.dateStr);
+            return (
+              <div key={a.id} className="bg-card border border-amber-200 dark:border-amber-800/40 rounded-xl px-4 py-3 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-foreground text-sm">{a.clientName}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">{hijri} هـ</p>
+                  <p className="text-xs text-muted-foreground">{gregorian} م{a.duration ? ` · ${a.duration}` : ""}</p>
+                </div>
+                {a.amount && <span className="text-xs font-bold text-foreground">{parseFloat(a.amount).toLocaleString()} ر.س</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -4456,7 +4577,7 @@ function ServiceSeasonsTab() {
   const [editId, setEditId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const emptyForm = { name: "", startDate: "", endDate: "", priceLabel: "", multiplier: "1.00", isActive: true };
+  const emptyForm = { name: "", startDate: "", endDate: "", priceLabel: "", isActive: true };
   const [form, setForm] = useState({ ...emptyForm });
 
   const { data: seasons = [], isLoading } = useQuery<any[]>({
@@ -4469,14 +4590,15 @@ function ServiceSeasonsTab() {
   });
 
   async function handleSave() {
+    if (!form.name || !form.startDate || !form.endDate) return toast({ title: "بيانات ناقصة — اسم الموسم والتواريخ مطلوبة", variant: "destructive" });
     setSaving(true);
     try {
       const method = editId ? "PATCH" : "POST";
       const url = editId ? `/providers/my/approved/${providerId}/seasons/${editId}` : `/providers/my/approved/${providerId}/seasons`;
-      const r = await apiFetch(url, { method, body: JSON.stringify(form) });
+      const r = await apiFetch(url, { method, body: JSON.stringify({ ...form, multiplier: "1.00" }) });
       if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "خطأ"); }
       queryClient.invalidateQueries({ queryKey: ["service-seasons", providerId] });
-      toast({ title: editId ? "تم التعديل" : "تم الإضافة" });
+      toast({ title: editId ? "تم تعديل الموسم ✓" : "تم إضافة الموسم ✓" });
       setForm({ ...emptyForm }); setEditId(null); setShowForm(false);
     } catch (e: any) {
       toast({ title: "خطأ", description: e.message, variant: "destructive" });
@@ -4493,32 +4615,38 @@ function ServiceSeasonsTab() {
     finally { setDeletingId(null); }
   }
 
-  function startEdit(s: any) { setForm({ name: s.name, startDate: s.startDate, endDate: s.endDate, priceLabel: s.priceLabel ?? "", multiplier: s.multiplier ?? "1.00", isActive: s.isActive }); setEditId(s.id); setShowForm(true); }
+  function startEdit(s: any) { setForm({ name: s.name, startDate: s.startDate, endDate: s.endDate, priceLabel: s.priceLabel ?? "", isActive: s.isActive }); setEditId(s.id); setShowForm(true); }
 
   return (
     <div className="space-y-4">
-      {/* Add button */}
       {!showForm && (
         <Button onClick={() => setShowForm(true)} className="gap-2 rounded-xl" variant="outline">
           <Plus className="w-4 h-4" />تسجيل موسم جديد
         </Button>
       )}
 
-      {/* Form */}
       {showForm && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-5 space-y-4">
           <h3 className="font-bold text-foreground">{editId ? "تعديل الموسم" : "موسم جديد"}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">اسم الموسم</label>
-              <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="موسم الصيف" className="rounded-xl" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">تسمية السعر</label>
-              <Input value={form.priceLabel} onChange={e => setForm(p => ({ ...p, priceLabel: e.target.value }))} placeholder="سعر مرتفع / عادي" className="rounded-xl" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">تاريخ البدء</label>
-              <Input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} className="rounded-xl" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">تاريخ الانتهاء</label>
-              <Input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))} className="rounded-xl" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">مضاعف السعر</label>
-              <Input type="number" step="0.1" min="0.5" max="5" value={form.multiplier} onChange={e => setForm(p => ({ ...p, multiplier: e.target.value }))} className="rounded-xl" /></div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">اسم الموسم *</label>
+              <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="موسم الصيف، موسم الأعياد..." className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">ملاحظة سعرية (اختياري)</label>
+              <Input value={form.priceLabel} onChange={e => setForm(p => ({ ...p, priceLabel: e.target.value }))} placeholder="مثال: أسعار مرتفعة، عروض خاصة..." className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">تاريخ البدء *</label>
+              <Input type="date" value={form.startDate} onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} className="rounded-xl" />
+              {form.startDate && <p className="text-xs text-primary">{toHijri(form.startDate)} هـ</p>}
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">تاريخ الانتهاء *</label>
+              <Input type="date" value={form.endDate} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))} className="rounded-xl" />
+              {form.endDate && <p className="text-xs text-primary">{toHijri(form.endDate)} هـ</p>}
+            </div>
           </div>
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={() => { setShowForm(false); setEditId(null); setForm({ ...emptyForm }); }} className="rounded-xl">إلغاء</Button>
@@ -4529,34 +4657,39 @@ function ServiceSeasonsTab() {
         </motion.div>
       )}
 
-      {/* Seasons list */}
       {isLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
         : seasons.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Sunrise className="w-8 h-8 mx-auto mb-3 opacity-30" />
-            <p>لا توجد مواسم مسجلة بعد</p>
+            <p className="font-medium">لا توجد مواسم مسجلة بعد</p>
+            <p className="text-xs mt-1">سجّل مواسم لتنظيم جدول خدمتك (إجازات، مواسم الذروة...)</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {seasons.map((s: any) => (
-              <motion.div key={s.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                className="bg-card border border-border rounded-2xl px-5 py-4 flex items-center gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-foreground">{s.name}</span>
-                    {s.priceLabel && <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">{s.priceLabel}</span>}
-                    {!s.isActive && <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">معطل</span>}
+            {seasons.map((s: any) => {
+              const dualStart = formatDualDate(s.startDate);
+              const dualEnd   = formatDualDate(s.endDate);
+              return (
+                <motion.div key={s.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  className="bg-card border border-border rounded-2xl px-5 py-4 flex items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-foreground">{s.name}</span>
+                      {s.priceLabel && <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">{s.priceLabel}</span>}
+                      {!s.isActive && <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">معطل</span>}
+                    </div>
+                    <p className="text-xs text-primary font-medium mt-0.5">{dualStart.hijri} هـ → {dualEnd.hijri} هـ</p>
+                    <p className="text-xs text-muted-foreground">{dualStart.gregorian} → {dualEnd.gregorian}</p>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{s.startDate} → {s.endDate} · مضاعف: ×{s.multiplier}</p>
-                </div>
-                <div className="flex gap-1.5">
-                  <Button variant="ghost" size="icon" onClick={() => startEdit(s)} className="rounded-lg h-8 w-8"><Edit2 className="w-3.5 h-3.5" /></Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)} disabled={deletingId === s.id} className="rounded-lg h-8 w-8 text-red-500 hover:text-red-600">
-                    {deletingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                  </Button>
-                </div>
-              </motion.div>
-            ))}
+                  <div className="flex gap-1.5">
+                    <Button variant="ghost" size="icon" onClick={() => startEdit(s)} className="rounded-lg h-8 w-8"><Edit2 className="w-3.5 h-3.5" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)} disabled={deletingId === s.id} className="rounded-lg h-8 w-8 text-red-500 hover:text-red-600">
+                      {deletingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
         )}
     </div>
@@ -4564,6 +4697,9 @@ function ServiceSeasonsTab() {
 }
 
 /* ── Service Appointments Tab ────────────────────────────── */
+const SOURCE_LABELS: Record<string, string> = {
+  platform: "المنصة", whatsapp: "واتساب", phone: "هاتف", walk_in: "حضور مباشر", external: "خارجي",
+};
 function ServiceAppointmentsTab() {
   const { providerId } = useServiceErp();
   const queryClient = useQueryClient();
@@ -4571,7 +4707,7 @@ function ServiceAppointmentsTab() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
-  const emptyForm = { clientName: "", clientPhone: "", dateStr: "", duration: "", status: "confirmed" as const, notes: "", amount: "", source: "external" as const };
+  const emptyForm = { clientName: "", clientPhone: "", dateStr: "", duration: "", status: "confirmed", notes: "", amount: "", deposit: "", insuranceAmount: "", source: "whatsapp" };
   const [form, setForm] = useState({ ...emptyForm });
 
   const { data: appointments = [], isLoading } = useQuery<any[]>({
@@ -4584,13 +4720,16 @@ function ServiceAppointmentsTab() {
   });
 
   async function handleSave() {
-    if (!form.clientName || !form.dateStr) return toast({ title: "بيانات ناقصة", variant: "destructive" });
+    if (!form.clientName || !form.dateStr) return toast({ title: "الاسم والتاريخ مطلوبان", variant: "destructive" });
     setSaving(true);
     try {
-      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`, { method: "POST", body: JSON.stringify({ ...form, amount: form.amount || null }) });
+      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`, {
+        method: "POST",
+        body: JSON.stringify({ ...form, amount: form.amount || null, deposit: form.deposit || null, insuranceAmount: form.insuranceAmount || null }),
+      });
       if (!r.ok) throw new Error();
       queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
-      toast({ title: "تم تسجيل الحجز" });
+      toast({ title: "تم تسجيل الحجز ✓" });
       setForm({ ...emptyForm }); setShowForm(false);
     } catch { toast({ title: "خطأ", description: "فشل التسجيل", variant: "destructive" }); }
     finally { setSaving(false); }
@@ -4601,23 +4740,25 @@ function ServiceAppointmentsTab() {
     try {
       await apiFetch(`/providers/my/approved/${providerId}/appointments/${id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) });
       queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
-      toast({ title: "تم إلغاء الحجز", variant: "default" });
+      toast({ title: "تم إلغاء الحجز" });
     } catch { toast({ title: "خطأ", variant: "destructive" }); }
     finally { setCancellingId(null); }
   }
 
-  const confirmedRevenue = appointments.filter(a => a.status === "confirmed" && a.amount).reduce((s, a) => s + parseFloat(a.amount), 0);
+  const confirmedRevenue  = appointments.filter(a => a.status === "confirmed" && a.amount).reduce((s, a) => s + parseFloat(a.amount), 0);
+  const totalDeposits     = appointments.filter(a => a.deposit).reduce((s, a) => s + parseFloat(a.deposit ?? "0"), 0);
   const statusBadge: Record<string, string> = { confirmed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", cancelled: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" };
   const statusLabel: Record<string, string> = { confirmed: "مؤكد", pending: "معلق", cancelled: "ملغي" };
 
   return (
     <div className="space-y-4">
       {/* KPI row */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "إجمالي", val: appointments.length, icon: <BookOpen className="w-4 h-4" /> },
+          { label: "إجمالي الحجوزات", val: appointments.length, icon: <BookOpen className="w-4 h-4" /> },
           { label: "مؤكد", val: appointments.filter(a => a.status === "confirmed").length, icon: <CheckCircle className="w-4 h-4" /> },
           { label: "الإيرادات", val: `${confirmedRevenue.toLocaleString()} ر.س`, icon: <Wallet className="w-4 h-4" /> },
+          { label: "العربون المحصّل", val: `${totalDeposits.toLocaleString()} ر.س`, icon: <TrendingUp className="w-4 h-4" /> },
         ].map(({ label, val, icon }) => (
           <div key={label} className="bg-card border border-border rounded-xl p-3 text-center">
             <div className="text-muted-foreground flex justify-center mb-1">{icon}</div>
@@ -4627,26 +4768,54 @@ function ServiceAppointmentsTab() {
         ))}
       </div>
 
-      {/* Add button */}
       {!showForm && <Button onClick={() => setShowForm(true)} className="gap-2 rounded-xl" variant="outline"><Plus className="w-4 h-4" />تسجيل حجز جديد</Button>}
 
-      {/* Form */}
+      {/* Booking form */}
       {showForm && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-5 space-y-4">
-          <h3 className="font-bold">حجز جديد</h3>
+          <h3 className="font-bold text-foreground">حجز جديد</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">اسم العميل *</label>
-              <Input value={form.clientName} onChange={e => setForm(p => ({ ...p, clientName: e.target.value }))} placeholder="محمد أحمد" className="rounded-xl" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">رقم الجوال</label>
-              <Input value={form.clientPhone} onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value }))} placeholder="05xxxxxxxx" className="rounded-xl" dir="ltr" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">تاريخ الخدمة *</label>
-              <Input type="date" value={form.dateStr} onChange={e => setForm(p => ({ ...p, dateStr: e.target.value }))} className="rounded-xl" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">المدة</label>
-              <Input value={form.duration} onChange={e => setForm(p => ({ ...p, duration: e.target.value }))} placeholder="يوم واحد / أسبوع..." className="rounded-xl" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">المبلغ (ر.س)</label>
-              <Input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="0" className="rounded-xl" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">الحالة</label>
-              <Select value={form.status} onValueChange={(v: any) => setForm(p => ({ ...p, status: v }))}>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">اسم العميل *</label>
+              <Input value={form.clientName} onChange={e => setForm(p => ({ ...p, clientName: e.target.value }))} placeholder="محمد أحمد" className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">رقم الجوال</label>
+              <Input value={form.clientPhone} onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value }))} placeholder="05xxxxxxxx" className="rounded-xl" dir="ltr" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">تاريخ الخدمة *</label>
+              <Input type="date" value={form.dateStr} onChange={e => setForm(p => ({ ...p, dateStr: e.target.value }))} className="rounded-xl" />
+              {form.dateStr && <p className="text-xs text-primary font-medium">{toHijri(form.dateStr)} هـ</p>}
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">المدة</label>
+              <Input value={form.duration} onChange={e => setForm(p => ({ ...p, duration: e.target.value }))} placeholder="يوم / أسبوع / شهر..." className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">المبلغ الإجمالي (ر.س)</label>
+              <Input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} placeholder="0" className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">العربون المدفوع (ر.س)</label>
+              <Input type="number" value={form.deposit} onChange={e => setForm(p => ({ ...p, deposit: e.target.value }))} placeholder="0" className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">تأمين الحجز (ر.س)</label>
+              <Input type="number" value={form.insuranceAmount} onChange={e => setForm(p => ({ ...p, insuranceAmount: e.target.value }))} placeholder="0" className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">مصدر الحجز</label>
+              <Select value={form.source} onValueChange={v => setForm(p => ({ ...p, source: v }))}>
+                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SOURCE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">الحالة</label>
+              <Select value={form.status} onValueChange={v => setForm(p => ({ ...p, status: v }))}>
                 <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="confirmed">مؤكد</SelectItem>
@@ -4655,12 +4824,14 @@ function ServiceAppointmentsTab() {
               </Select>
             </div>
           </div>
-          <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">ملاحظات</label>
-            <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="أي تفاصيل إضافية..." /></div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">ملاحظات</label>
+            <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="تفاصيل إضافية..." />
+          </div>
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={() => setShowForm(false)} className="rounded-xl">إلغاء</Button>
             <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}حفظ
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}حفظ الحجز
             </Button>
           </div>
         </motion.div>
@@ -4671,29 +4842,40 @@ function ServiceAppointmentsTab() {
         : appointments.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Calendar className="w-8 h-8 mx-auto mb-3 opacity-30" />
-            <p>لا توجد حجوزات بعد</p>
+            <p className="font-medium">لا توجد حجوزات بعد</p>
+            <p className="text-xs mt-1">سجّل أول حجز من الزر أعلاه</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {appointments.map((a: any) => (
-              <div key={a.id} className="bg-card border border-border rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-foreground">{a.clientName}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${statusBadge[a.status] ?? ""}`}>{statusLabel[a.status] ?? a.status}</span>
+            {appointments.map((a: any) => {
+              const dual = formatDualDate(a.dateStr);
+              return (
+                <div key={a.id} className="bg-card border border-border rounded-2xl px-4 py-3.5 flex items-start gap-3 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="font-bold text-foreground">{a.clientName}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${statusBadge[a.status] ?? ""}`}>{statusLabel[a.status] ?? a.status}</span>
+                      {a.source && a.source !== "external" && <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{SOURCE_LABELS[a.source] ?? a.source}</span>}
+                    </div>
+                    <p className="text-xs text-primary font-semibold">{dual.hijri} هـ</p>
+                    <p className="text-xs text-muted-foreground">{dual.gregorian} م{a.duration ? ` · ${a.duration}` : ""}</p>
+                    <div className="flex gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                      {a.amount && <span>المبلغ: <span className="font-semibold text-foreground">{parseFloat(a.amount).toLocaleString()} ر.س</span></span>}
+                      {a.deposit && parseFloat(a.deposit) > 0 && <span>عربون: <span className="font-semibold text-amber-600">{parseFloat(a.deposit).toLocaleString()} ر.س</span></span>}
+                      {a.insuranceAmount && parseFloat(a.insuranceAmount) > 0 && <span>تأمين: <span className="font-semibold text-blue-600">{parseFloat(a.insuranceAmount).toLocaleString()} ر.س</span></span>}
+                    </div>
+                    {a.clientPhone && <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">{a.clientPhone}</p>}
+                    {a.notes && <p className="text-xs text-muted-foreground mt-0.5">{a.notes}</p>}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{a.dateStr}{a.duration ? ` · ${a.duration}` : ""}{a.amount ? ` · ${parseFloat(a.amount).toLocaleString()} ر.س` : ""}</p>
-                  {a.clientPhone && <p className="text-xs text-muted-foreground" dir="ltr">{a.clientPhone}</p>}
-                  {a.notes && <p className="text-xs text-muted-foreground mt-0.5">{a.notes}</p>}
+                  {a.status !== "cancelled" && (
+                    <Button variant="ghost" size="sm" onClick={() => handleCancel(a.id)} disabled={cancellingId === a.id}
+                      className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs gap-1 h-8 shrink-0">
+                      {cancellingId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}إلغاء
+                    </Button>
+                  )}
                 </div>
-                {a.status !== "cancelled" && (
-                  <Button variant="ghost" size="sm" onClick={() => handleCancel(a.id)} disabled={cancellingId === a.id}
-                    className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs gap-1 h-8">
-                    {cancellingId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}إلغاء
-                  </Button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
     </div>
@@ -4707,6 +4889,9 @@ function ServiceInsurancesTab() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [refundOpen, setRefundOpen] = useState<number | null>(null);
+  const [refundForm, setRefundForm] = useState({ refundAmount: "", refundNote: "" });
+  const [refundSaving, setRefundSaving] = useState(false);
   const emptyForm = { policyName: "", insurerName: "", amount: "", renewalDate: "", notes: "" };
   const [form, setForm] = useState({ ...emptyForm });
 
@@ -4725,7 +4910,7 @@ function ServiceInsurancesTab() {
       const r = await apiFetch("/providers/my/insurances", { method: "POST", body: JSON.stringify({ ...form, amount: form.amount || "0" }) });
       if (!r.ok) throw new Error();
       queryClient.invalidateQueries({ queryKey: ["service-insurances"] });
-      toast({ title: "تمت إضافة التأمين" });
+      toast({ title: "تمت إضافة سياسة التأمين ✓" });
       setForm({ ...emptyForm }); setShowForm(false);
     } catch { toast({ title: "خطأ", variant: "destructive" }); }
     finally { setSaving(false); }
@@ -4741,8 +4926,25 @@ function ServiceInsurancesTab() {
     finally { setDeletingId(null); }
   }
 
-  const totalAmount = insurances.reduce((s, i) => s + parseFloat(i.amount ?? "0"), 0);
-  const soonExpiring = insurances.filter(i => {
+  async function handleRefundSave(insId: number) {
+    if (!refundForm.refundAmount || !refundForm.refundNote) return toast({ title: "المبلغ والتوثيق مطلوبان", variant: "destructive" });
+    setRefundSaving(true);
+    try {
+      const r = await apiFetch(`/providers/my/insurances/${insId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ refundAmount: refundForm.refundAmount, refundNote: refundForm.refundNote }),
+      });
+      if (!r.ok) throw new Error();
+      queryClient.invalidateQueries({ queryKey: ["service-insurances"] });
+      toast({ title: "تم تسجيل الاسترداد/الخصم ✓" });
+      setRefundOpen(null); setRefundForm({ refundAmount: "", refundNote: "" });
+    } catch { toast({ title: "خطأ في التسجيل", variant: "destructive" }); }
+    finally { setRefundSaving(false); }
+  }
+
+  const totalPremiums = insurances.reduce((s, i) => s + parseFloat(i.amount ?? "0"), 0);
+  const totalRefunds  = insurances.reduce((s, i) => s + parseFloat(i.refundAmount ?? "0"), 0);
+  const soonExpiring  = insurances.filter(i => {
     if (!i.renewalDate) return false;
     const days = Math.ceil((new Date(i.renewalDate).getTime() - Date.now()) / 86400000);
     return days >= 0 && days <= 30;
@@ -4751,36 +4953,53 @@ function ServiceInsurancesTab() {
   return (
     <div className="space-y-4">
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div className="bg-card border border-border rounded-xl p-3 text-center">
           <p className="text-lg font-extrabold text-foreground">{insurances.length}</p>
-          <p className="text-xs text-muted-foreground">سياسة تأمين</p>
+          <p className="text-xs text-muted-foreground">سياسة نشطة</p>
         </div>
         <div className={`border rounded-xl p-3 text-center ${soonExpiring > 0 ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/40" : "bg-card border-border"}`}>
           <p className={`text-lg font-extrabold ${soonExpiring > 0 ? "text-amber-600" : "text-foreground"}`}>{soonExpiring}</p>
           <p className="text-xs text-muted-foreground">تنتهي خلال 30 يوم</p>
         </div>
+        <div className="bg-card border border-border rounded-xl p-3 text-center">
+          <p className="text-lg font-extrabold text-foreground">{totalRefunds.toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground">إجمالي المسترد (ر.س)</p>
+        </div>
       </div>
 
-      {/* Add */}
-      {!showForm && <Button onClick={() => setShowForm(true)} className="gap-2 rounded-xl" variant="outline"><Plus className="w-4 h-4" />إضافة تأمين</Button>}
+      {!showForm && (
+        <Button onClick={() => setShowForm(true)} className="gap-2 rounded-xl" variant="outline">
+          <Plus className="w-4 h-4" />إضافة سياسة تأمين
+        </Button>
+      )}
 
-      {/* Form */}
       {showForm && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-5 space-y-4">
           <h3 className="font-bold">سياسة تأمين جديدة</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">اسم السياسة *</label>
-              <Input value={form.policyName} onChange={e => setForm(p => ({ ...p, policyName: e.target.value }))} placeholder="تأمين المعدات" className="rounded-xl" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">شركة التأمين</label>
-              <Input value={form.insurerName} onChange={e => setForm(p => ({ ...p, insurerName: e.target.value }))} className="rounded-xl" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">مبلغ القسط (ر.س)</label>
-              <Input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} className="rounded-xl" /></div>
-            <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">تاريخ التجديد</label>
-              <Input type="date" value={form.renewalDate} onChange={e => setForm(p => ({ ...p, renewalDate: e.target.value }))} className="rounded-xl" /></div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">اسم السياسة *</label>
+              <Input value={form.policyName} onChange={e => setForm(p => ({ ...p, policyName: e.target.value }))} placeholder="تأمين المعدات، تأمين مسؤولية..." className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">شركة التأمين</label>
+              <Input value={form.insurerName} onChange={e => setForm(p => ({ ...p, insurerName: e.target.value }))} className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">مبلغ القسط السنوي (ر.س)</label>
+              <Input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} className="rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">تاريخ التجديد</label>
+              <Input type="date" value={form.renewalDate} onChange={e => setForm(p => ({ ...p, renewalDate: e.target.value }))} className="rounded-xl" />
+              {form.renewalDate && <p className="text-xs text-primary">{toHijri(form.renewalDate)} هـ</p>}
+            </div>
           </div>
-          <div className="space-y-1.5"><label className="text-xs font-semibold text-muted-foreground">ملاحظات</label>
-            <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" /></div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">ملاحظات</label>
+            <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" />
+          </div>
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={() => setShowForm(false)} className="rounded-xl">إلغاء</Button>
             <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2">
@@ -4790,41 +5009,82 @@ function ServiceInsurancesTab() {
         </motion.div>
       )}
 
-      {/* List */}
       {isLoading ? <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
         : insurances.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Shield className="w-8 h-8 mx-auto mb-3 opacity-30" />
-            <p>لا توجد سياسات تأمين مسجلة</p>
+            <p className="font-medium">لا توجد سياسات تأمين مسجلة</p>
+            <p className="text-xs mt-1">أضف سياسات التأمين لمتابعة الأقساط والتجديدات</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {insurances.map((ins: any) => {
               const daysLeft = ins.renewalDate ? Math.ceil((new Date(ins.renewalDate).getTime() - Date.now()) / 86400000) : null;
-              const urgent = daysLeft !== null && daysLeft <= 30;
+              const urgent   = daysLeft !== null && daysLeft >= 0 && daysLeft <= 30;
+              const expired  = daysLeft !== null && daysLeft < 0;
+              const hasRefund = parseFloat(ins.refundAmount ?? "0") > 0;
               return (
-                <div key={ins.id} className={`bg-card border rounded-2xl px-4 py-3.5 flex items-center gap-3 flex-wrap ${urgent ? "border-amber-300 dark:border-amber-700" : "border-border"}`}>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-foreground">{ins.policyName}</span>
-                      {ins.insurerName && <span className="text-xs text-muted-foreground">{ins.insurerName}</span>}
-                      {urgent && <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">تنتهي قريباً</span>}
+                <div key={ins.id} className={`bg-card border rounded-2xl overflow-hidden ${urgent ? "border-amber-300 dark:border-amber-700" : expired ? "border-red-300 dark:border-red-700" : "border-border"}`}>
+                  <div className="px-4 py-3.5 flex items-start gap-3 flex-wrap">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-foreground">{ins.policyName}</span>
+                        {ins.insurerName && <span className="text-xs text-muted-foreground">{ins.insurerName}</span>}
+                        {urgent && <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-semibold">تنتهي قريباً ({daysLeft} يوم)</span>}
+                        {expired && <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full font-semibold">منتهية</span>}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-0.5">
+                        قسط: <span className="font-semibold text-foreground">{parseFloat(ins.amount).toLocaleString()} ر.س</span>
+                        {ins.renewalDate && <> · تجديد: <span className="text-primary">{toHijri(ins.renewalDate)} هـ</span></>}
+                      </p>
+                      {hasRefund && (
+                        <p className="text-xs text-green-700 dark:text-green-400 mt-0.5">
+                          مسترد/مخصوم: {parseFloat(ins.refundAmount).toLocaleString()} ر.س
+                          {ins.refundNote && ` — ${ins.refundNote}`}
+                        </p>
+                      )}
+                      {ins.notes && <p className="text-xs text-muted-foreground mt-0.5">{ins.notes}</p>}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      {parseFloat(ins.amount).toLocaleString()} ر.س
-                      {ins.renewalDate && ` · تجديد: ${ins.renewalDate}`}
-                      {daysLeft !== null && ` (${daysLeft} يوم)`}
-                    </p>
-                    {ins.notes && <p className="text-xs text-muted-foreground mt-0.5">{ins.notes}</p>}
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => { setRefundOpen(ins.id); setRefundForm({ refundAmount: ins.refundAmount ?? "", refundNote: ins.refundNote ?? "" }); }}
+                        className="rounded-lg text-xs gap-1 h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                        استرداد/خصم
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(ins.id)} disabled={deletingId === ins.id}
+                        className="rounded-lg h-8 w-8 text-red-500 hover:text-red-600">
+                        {deletingId === ins.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                      </Button>
+                    </div>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(ins.id)} disabled={deletingId === ins.id}
-                    className="rounded-lg h-8 w-8 text-red-500 hover:text-red-600">
-                    {deletingId === ins.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                  </Button>
+                  {/* Refund panel */}
+                  {refundOpen === ins.id && (
+                    <div className="border-t border-border bg-muted/40 px-4 py-3 space-y-3">
+                      <p className="text-xs font-bold text-foreground">تسجيل استرداد أو خصم موثّق</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-muted-foreground">المبلغ المسترد/المخصوم (ر.س) *</label>
+                          <Input type="number" value={refundForm.refundAmount} onChange={e => setRefundForm(p => ({ ...p, refundAmount: e.target.value }))} placeholder="0" className="rounded-lg h-9 text-sm" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-muted-foreground">التوثيق / السبب *</label>
+                          <Input value={refundForm.refundNote} onChange={e => setRefundForm(p => ({ ...p, refundNote: e.target.value }))} placeholder="مثال: استرداد بسبب إلغاء، خصم مبكر..." className="rounded-lg h-9 text-sm" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button variant="ghost" size="sm" onClick={() => setRefundOpen(null)} className="rounded-lg text-xs">إلغاء</Button>
+                        <Button size="sm" onClick={() => handleRefundSave(ins.id)} disabled={refundSaving} className="rounded-lg text-xs gap-1">
+                          {refundSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}تأكيد التسجيل
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
-            <div className="text-right text-sm font-semibold text-muted-foreground pt-1">إجمالي الأقساط: {totalAmount.toLocaleString()} ر.س / سنة</div>
+            <div className="flex justify-between text-sm pt-1">
+              <span className="text-muted-foreground">إجمالي الأقساط: <span className="font-semibold text-foreground">{totalPremiums.toLocaleString()} ر.س</span></span>
+              <span className="text-muted-foreground">صافي بعد الاسترداد: <span className="font-semibold text-green-600">{(totalPremiums - totalRefunds).toLocaleString()} ر.س</span></span>
+            </div>
           </div>
         )}
     </div>
@@ -7751,9 +8011,9 @@ interface OwnerNotifRow {
   message: string; isRead: boolean; createdAt: string;
 }
 
-function NotificationsTab() {
+function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
   const qc = useQueryClient();
-  const { data: notifications = [], isLoading } = useQuery<OwnerNotifRow[]>({
+  const { data: rawNotifications = [], isLoading } = useQuery<OwnerNotifRow[]>({
     queryKey: ["owner", "notifications"],
     queryFn: async () => {
       const r = await apiFetch("/owner/notifications");
@@ -7772,6 +8032,18 @@ function NotificationsTab() {
       qc.invalidateQueries({ queryKey: ["owner", "notifications-summary"] });
     },
   });
+
+  const notifications = deduplicate
+    ? (() => {
+        const seen = new Set<string>();
+        return rawNotifications.filter(n => {
+          const day = (n.createdAt as string | undefined)?.slice(0, 10) ?? "";
+          const key = `${n.type ?? ""}|${day}`;
+          if (seen.has(key)) return false;
+          seen.add(key); return true;
+        });
+      })()
+    : rawNotifications;
 
   const unread = notifications.filter((n) => !n.isRead);
 
@@ -9953,6 +10225,10 @@ export default function Dashboard() {
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
   const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "notifications" | "customers" | "services" | "calendar" | "revenue" | "expenses" | "staff" | "reports" | "deposits" | "seasons">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
+  const [serviceFinanceMode, setServiceFinanceMode] = useState<"separate" | "consolidated">(() => (localStorage.getItem("svc_finance_mode") as any) ?? "separate");
+  const [clientListMode, setClientListMode] = useState<"unified" | "separate">(() => (localStorage.getItem("svc_client_mode") as any) ?? "unified");
+  function toggleFinanceMode() { const n = serviceFinanceMode === "separate" ? "consolidated" : "separate"; setServiceFinanceMode(n); localStorage.setItem("svc_finance_mode", n); }
+  function toggleClientMode()  { const n = clientListMode  === "unified"  ? "separate"     : "unified";     setClientListMode(n);   localStorage.setItem("svc_client_mode",   n); }
   const { user, isLoading: authLoading, isAuthenticated, logout, login } = useAuth();
   const { isStaff, staffUser, permissions, isLoading: staffLoading, logout: staffLogout } = useStaffAuth();
   const { toast } = useToast();
@@ -10452,14 +10728,7 @@ export default function Dashboard() {
                   <Star className="w-5 h-5 text-amber-500" />
                   خدماتي المستقلة
                 </h2>
-                {isCrossOwner ? (
-                  <div className="flex items-center gap-1.5 mt-1 text-xs text-primary font-semibold">
-                    <Zap className="w-3.5 h-3.5" />
-                    نظام مُدمج — فريق عمل وميزانية موحدة مع شاليهاتك
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground mt-0.5">نظام ERP مستقل لإدارة خدماتك في سوق القصيم</p>
-                )}
+                <p className="text-sm text-muted-foreground mt-0.5">نظام ERP لإدارة خدماتك في سوق القصيم</p>
               </div>
               <Link href="/add-service-provider">
                 <Button className="gap-2 rounded-xl" variant="outline">
@@ -10468,6 +10737,44 @@ export default function Dashboard() {
                 </Button>
               </Link>
             </div>
+
+            {/* Smart Settings Row */}
+            {isCrossOwner && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Financial Mode */}
+                <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 ${serviceFinanceMode === "consolidated" ? "bg-primary/5 border-primary/30" : "bg-card border-border"}`}>
+                  <div>
+                    <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-amber-500" />
+                      وضع الماليات
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {serviceFinanceMode === "consolidated" ? "موحّد — شاليهات + خدمات في تقرير واحد" : "منفصل — إحصائيات مستقلة لكل نشاط"}
+                    </p>
+                  </div>
+                  <button type="button" onClick={toggleFinanceMode}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${serviceFinanceMode === "consolidated" ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${serviceFinanceMode === "consolidated" ? "translate-x-6" : "translate-x-1"}`} />
+                  </button>
+                </div>
+                {/* Client List Mode */}
+                <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between gap-3 ${clientListMode === "unified" ? "bg-primary/5 border-primary/30" : "bg-card border-border"}`}>
+                  <div>
+                    <p className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-amber-500" />
+                      قاعدة العملاء
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {clientListMode === "unified" ? "موحّدة — جميع عملاء شاليهاتك وخدماتك" : "منفصلة — قائمة خاصة بعملاء الخدمات"}
+                    </p>
+                  </div>
+                  <button type="button" onClick={toggleClientMode}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${clientListMode === "unified" ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${clientListMode === "unified" ? "translate-x-6" : "translate-x-1"}`} />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* If no approved providers: show submissions manager directly */}
             {myApprovedProviders.length === 0 ? (
@@ -10577,13 +10884,65 @@ export default function Dashboard() {
                         {selectedServiceTab === "seasons"      && <ServiceSeasonsTab />}
                         {selectedServiceTab === "appointments" && <ServiceAppointmentsTab />}
                         {selectedServiceTab === "insurance"    && <ServiceInsurancesTab />}
-                        {selectedServiceTab === "revenue"      && <><ServiceIntegrationBanner isCrossOwner={isCrossOwner} /><RevenueTab /></>}
-                        {selectedServiceTab === "expenses"     && <><ServiceIntegrationBanner isCrossOwner={isCrossOwner} /><ExpensesTab /></>}
-                        {selectedServiceTab === "staff"        && <><ServiceIntegrationBanner isCrossOwner={isCrossOwner} /><StaffTab /></>}
-                        {selectedServiceTab === "reviews"      && <ReviewsTab />}
-                        {selectedServiceTab === "notifications"&& <NotificationsTab />}
-                        {selectedServiceTab === "customers"    && <CustomersTab />}
-                        {selectedServiceTab === "reports"      && <><ServiceIntegrationBanner isCrossOwner={isCrossOwner} /><ReportsTab /></>}
+                        {selectedServiceTab === "revenue"      && (
+                          <div className="space-y-4">
+                            {isCrossOwner && serviceFinanceMode === "consolidated" && (
+                              <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-primary font-semibold flex items-center gap-2">
+                                <Zap className="w-3.5 h-3.5" />وضع موحّد — تشمل إيرادات الشاليهات وهذه الخدمة
+                              </div>
+                            )}
+                            <RevenueTab />
+                          </div>
+                        )}
+                        {selectedServiceTab === "expenses"     && (
+                          <div className="space-y-4">
+                            {isCrossOwner && serviceFinanceMode === "consolidated" && (
+                              <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-primary font-semibold flex items-center gap-2">
+                                <Zap className="w-3.5 h-3.5" />وضع موحّد — تشمل مصروفات الشاليهات وهذه الخدمة
+                              </div>
+                            )}
+                            <ExpensesTab />
+                          </div>
+                        )}
+                        {selectedServiceTab === "staff"        && (
+                          <div className="space-y-4">
+                            <ServiceIntegrationBanner isCrossOwner={isCrossOwner} />
+                            <StaffTab />
+                          </div>
+                        )}
+                        {selectedServiceTab === "reviews"      && (
+                          <div className="space-y-4">
+                            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl px-4 py-2.5 text-xs text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-2">
+                              <Star className="w-3.5 h-3.5" />المراجعات المعروضة خاصة بخدمة: {myApprovedProviders.find(p => p.id === selectedServiceId)?.businessName ?? "الخدمة"}
+                            </div>
+                            <ReviewsTab />
+                          </div>
+                        )}
+                        {selectedServiceTab === "notifications" && (
+                          <div className="space-y-4">
+                            <div className="bg-muted/60 border border-border rounded-xl px-4 py-2.5 text-xs text-muted-foreground flex items-center gap-2">
+                              <Bell className="w-3.5 h-3.5" />الإشعارات مفلترة تلقائياً — لا تكرار للإشعار في اليوم نفسه
+                            </div>
+                            <NotificationsTab deduplicate />
+                          </div>
+                        )}
+                        {selectedServiceTab === "customers"    && (
+                          <div className="space-y-4">
+                            {isCrossOwner && (
+                              <div className={`border rounded-xl px-4 py-2.5 text-xs font-semibold flex items-center gap-2 ${clientListMode === "unified" ? "bg-primary/5 border-primary/20 text-primary" : "bg-muted/60 border-border text-muted-foreground"}`}>
+                                <Users className="w-3.5 h-3.5" />
+                                {clientListMode === "unified" ? "قاعدة عملاء موحّدة — تشمل عملاء شاليهاتك وخدماتك" : "قاعدة عملاء منفصلة — خاصة بهذه الخدمة فقط"}
+                              </div>
+                            )}
+                            <CustomersTab />
+                          </div>
+                        )}
+                        {selectedServiceTab === "reports"      && (
+                          <div className="space-y-4">
+                            <ServiceIntegrationBanner isCrossOwner={isCrossOwner} />
+                            <ReportsTab />
+                          </div>
+                        )}
                       </div>
                     </ServiceErpCtx.Provider>
                   );

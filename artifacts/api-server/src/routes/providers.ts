@@ -333,7 +333,9 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
     status: z.enum(["confirmed", "pending", "cancelled"]).default("confirmed"),
     notes: z.string().optional().nullable(),
     amount: z.string().optional().nullable(),
-    source: z.enum(["platform", "external"]).default("external"),
+    deposit: z.string().optional().nullable(),
+    insuranceAmount: z.string().optional().nullable(),
+    source: z.enum(["platform", "whatsapp", "phone", "walk_in", "external"]).default("external"),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors: parsed.error.flatten().fieldErrors });
@@ -397,6 +399,8 @@ router.post("/my/insurances", requireAuth, async (req: any, res) => {
     renewalDate: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
     providerId: z.number().int().optional().nullable(),
+    refundAmount: z.string().optional().nullable(),
+    refundNote: z.string().optional().nullable(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors: parsed.error.flatten().fieldErrors });
@@ -419,6 +423,8 @@ router.patch("/my/insurances/:insId", requireAuth, async (req: any, res) => {
     renewalDate: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
     providerId: z.number().int().optional().nullable(),
+    refundAmount: z.string().optional().nullable(),
+    refundNote: z.string().optional().nullable(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة" });
