@@ -51,6 +51,7 @@ export const chaletsTable = pgTable("chalets", {
   termsAndConditions: text("terms_and_conditions"),
   waReviewTemplate: text("wa_review_template"),
   isVerified: boolean("is_verified").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

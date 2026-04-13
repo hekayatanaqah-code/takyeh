@@ -451,9 +451,47 @@ function BlockDatesDialog({
 
 function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any[] | undefined; isLoading: boolean; ownerChalets: any[] }) {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [blockTarget, setBlockTarget] = useState<{ id: number; nameAr: string } | null>(null);
   const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
+  async function handleToggleChaletActive(chaletId: number) {
+    setTogglingId(chaletId);
+    try {
+      const r = await apiFetch(`/owner/chalets/${chaletId}/toggle-active`, { method: "PATCH" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error ?? "فشل");
+      qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
+      toast({ title: d.isActive ? "تم التفعيل ✓" : "تم الإيقاف", description: d.isActive ? "الشاليه ظاهر الآن للعملاء" : "الشاليه مخفي مؤقتاً عن الزوار" });
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    } finally { setTogglingId(null); }
+  }
+
+  async function handleDeleteChalet(chaletId: number) {
+    setDeletingId(chaletId);
+    try {
+      const r = await apiFetch(`/owner/chalets/${chaletId}`, { method: "DELETE" });
+      const d = await r.json();
+      if (!r.ok) {
+        if (d.hasUpcomingBookings) {
+          toast({ title: "لا يمكن الحذف", description: "لا يمكن الحذف لوجود حجوزات مستقبلية. أوقف النشاط مؤقتاً.", variant: "destructive" });
+        } else {
+          toast({ title: "خطأ", description: d.error ?? "فشل الحذف", variant: "destructive" });
+        }
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
+      qc.invalidateQueries({ queryKey: ["submissions"] });
+      toast({ title: "تم الحذف", description: "تم حذف الشاليه نهائياً. تبقى السجلات المالية متاحة." });
+    } catch {
+      toast({ title: "خطأ", description: "فشل الحذف، حاول مجدداً", variant: "destructive" });
+    } finally { setDeletingId(null); setDeleteConfirmId(null); }
+  }
 
   const { data: planLimits } = useQuery<{ plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number }>({
     queryKey: ["owner", "plan-limits"],
@@ -599,6 +637,38 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                   </div>
                 )}
 
+                {/* Activity status banner for approved chalets */}
+                {isApproved && (
+                  <div className={`mt-3 flex items-center justify-between gap-3 rounded-xl px-3 py-2 border text-xs ${approvedChalet.isActive !== false ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/40" : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40"}`}>
+                    <span className={`font-semibold ${approvedChalet.isActive !== false ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                      حالة النشاط: {approvedChalet.isActive !== false ? "نشط — ظاهر في البحث" : "غير نشط — مخفي عن الزوار"}
+                    </span>
+                    <button type="button"
+                      onClick={() => handleToggleChaletActive(approvedChalet.id)}
+                      disabled={togglingId === approvedChalet.id}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold border transition-colors text-xs ${approvedChalet.isActive !== false ? "border-red-300 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20" : "border-green-400 text-green-700 hover:bg-green-100 dark:hover:bg-green-900/20"}`}>
+                      {togglingId === approvedChalet.id ? <Loader2 className="w-3 h-3 animate-spin" /> : approvedChalet.isActive !== false ? <><X className="w-3 h-3" />إيقاف</> : <><CheckCircle className="w-3 h-3" />تفعيل</>}
+                    </button>
+                  </div>
+                )}
+
+                {/* Delete confirmation inline */}
+                {deleteConfirmId === (approvedChalet?.id ?? -1) && (
+                  <div className="mt-2 flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs">
+                    <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />
+                    <span className="flex-1 text-destructive font-medium">هل أنت متأكد من حذف هذا النشاط نهائياً؟</span>
+                    <button type="button" disabled={deletingId === approvedChalet?.id}
+                      onClick={() => handleDeleteChalet(approvedChalet!.id)}
+                      className="px-2.5 py-1 rounded-lg bg-destructive text-destructive-foreground font-bold hover:bg-destructive/90 transition-colors">
+                      {deletingId === approvedChalet?.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "حذف نهائي"}
+                    </button>
+                    <button type="button" onClick={() => setDeleteConfirmId(null)}
+                      className="px-2.5 py-1 rounded-lg border border-border text-muted-foreground hover:bg-muted transition-colors">
+                      إلغاء
+                    </button>
+                  </div>
+                )}
+
                 {/* Action buttons */}
                 <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
                   <Link href={`/my-chalet/${sub.id}`}>
@@ -623,6 +693,15 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                       >
                         <Lock className="w-3.5 h-3.5" />
                         إغلاق أيام
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 rounded-xl text-xs h-8 border-destructive/40 text-destructive hover:bg-destructive/5"
+                        onClick={() => setDeleteConfirmId(deleteConfirmId === approvedChalet.id ? null : approvedChalet.id)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        حذف
                       </Button>
                     </>
                   )}
@@ -4258,6 +4337,8 @@ function ServiceDetailsTab() {
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [form, setForm] = useState<Record<string, any> | null>(null);
   const [coverageTags, setCoverageTags] = useState<string[]>([]);
   const [featureTags, setFeatureTags] = useState<string[]>([]);
@@ -4329,6 +4410,28 @@ function ServiceDetailsTab() {
     } catch {
       toast({ title: "خطأ", description: "فشل التغيير", variant: "destructive" });
     } finally { setToggling(false); }
+  }
+
+  async function handleDeleteService() {
+    if (isReadOnly) return onBlockedEdit();
+    setDeleting(true);
+    try {
+      const r = await apiFetch(`/providers/my/approved/${providerId}`, { method: "DELETE" });
+      const d = await r.json();
+      if (!r.ok) {
+        if (d.hasUpcomingBookings) {
+          toast({ title: "لا يمكن الحذف", description: "لا يمكن الحذف لوجود حجوزات مستقبلية. أوقف الخدمة مؤقتاً.", variant: "destructive" });
+        } else {
+          toast({ title: "خطأ", description: d.error ?? "فشل الحذف", variant: "destructive" });
+        }
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["my-approved-providers"] });
+      toast({ title: "تم الحذف", description: "تم حذف الخدمة نهائياً. تبقى السجلات المالية متاحة للاطلاع." });
+      setDeleteConfirm(false);
+    } catch {
+      toast({ title: "خطأ", description: "فشل الحذف، حاول مجدداً", variant: "destructive" });
+    } finally { setDeleting(false); }
   }
 
   const allSelected = AL_QASSIM_CITIES.every(c => coverageTags.includes(c));
@@ -4547,6 +4650,40 @@ function ServiceDetailsTab() {
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
           حفظ التعديلات
         </Button>
+      </div>
+
+      {/* ── Danger Zone: Delete Service ── */}
+      <div className="border border-destructive/30 rounded-2xl p-4 space-y-3 bg-destructive/5">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+          <h3 className="text-sm font-bold text-destructive">منطقة الخطر</h3>
+        </div>
+        {!deleteConfirm ? (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">سيتم حذف الخدمة نهائياً. تبقى السجلات المالية التاريخية متاحة للاطلاع.</p>
+            <Button size="sm" variant="outline" onClick={() => setDeleteConfirm(true)}
+              className="rounded-xl border-destructive/40 text-destructive hover:bg-destructive/10 shrink-0 gap-1.5 text-xs">
+              <Trash2 className="w-3.5 h-3.5" />
+              حذف الخدمة
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-destructive">هل أنت متأكد من حذف هذا النشاط نهائياً؟</p>
+            <p className="text-xs text-muted-foreground">لا يمكن الحذف إذا كانت هناك حجوزات مستقبلية قائمة.</p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="destructive" onClick={handleDeleteService} disabled={deleting}
+                className="rounded-xl gap-1.5 text-xs">
+                {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                تأكيد الحذف النهائي
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setDeleteConfirm(false)} disabled={deleting}
+                className="rounded-xl text-xs">
+                إلغاء
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

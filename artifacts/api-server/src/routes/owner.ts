@@ -619,6 +619,69 @@ router.delete("/review-invitations/:id", async (req, res) => {
   return res.json({ ok: true });
 });
 
+/* ── Toggle Chalet Active/Inactive ────────────────────────────── */
+
+router.patch("/chalets/:id/toggle-active", async (req, res) => {
+  const ownerId = req.user!.id;
+  const chaletId = Number(req.params.id);
+  if (isNaN(chaletId)) return res.status(400).json({ error: "معرّف غير صالح" });
+
+  // Verify ownership via submission link
+  const [chalet] = await db.select({ id: chaletsTable.id, submissionId: chaletsTable.submissionId, isActive: chaletsTable.isActive })
+    .from(chaletsTable).where(eq(chaletsTable.id, chaletId)).limit(1);
+  if (!chalet) return res.status(404).json({ error: "الشاليه غير موجود" });
+
+  const [sub] = await db.select({ ownerId: chaletSubmissionsTable.ownerId })
+    .from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, chalet.submissionId!)).limit(1);
+  if (!sub || sub.ownerId !== ownerId) return res.status(403).json({ error: "غير مصرح" });
+
+  const [updated] = await db.update(chaletsTable)
+    .set({ isActive: !chalet.isActive })
+    .where(eq(chaletsTable.id, chaletId))
+    .returning({ isActive: chaletsTable.isActive });
+
+  return res.json({ isActive: updated.isActive });
+});
+
+/* ── Delete Chalet (with upcoming bookings safety check) ─────── */
+
+router.delete("/chalets/:id", async (req, res) => {
+  const ownerId = req.user!.id;
+  const chaletId = Number(req.params.id);
+  if (isNaN(chaletId)) return res.status(400).json({ error: "معرّف غير صالح" });
+
+  // Verify ownership
+  const [chalet] = await db.select({ id: chaletsTable.id, submissionId: chaletsTable.submissionId })
+    .from(chaletsTable).where(eq(chaletsTable.id, chaletId)).limit(1);
+  if (!chalet) return res.status(404).json({ error: "الشاليه غير موجود" });
+
+  const [sub] = await db.select({ id: chaletSubmissionsTable.id, ownerId: chaletSubmissionsTable.ownerId })
+    .from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, chalet.submissionId!)).limit(1);
+  if (!sub || sub.ownerId !== ownerId) return res.status(403).json({ error: "غير مصرح" });
+
+  // Check for upcoming bookings (future date, not cancelled)
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = await db.select({ id: ownerBookingsTable.id })
+    .from(ownerBookingsTable)
+    .where(and(
+      eq(ownerBookingsTable.submissionId, sub.id),
+      isNull(ownerBookingsTable.cancelledAt),
+      gte(ownerBookingsTable.bookingDate, today),
+    ))
+    .limit(1);
+
+  if (upcoming.length > 0) {
+    return res.status(409).json({ error: "لا يمكن الحذف لوجود حجوزات مستقبلية", hasUpcomingBookings: true });
+  }
+
+  // Delete chalet (cascade will handle related records)
+  await db.delete(chaletsTable).where(eq(chaletsTable.id, chaletId));
+  // Keep submission for financial history (just mark it)
+  await db.update(chaletSubmissionsTable).set({ status: "rejected", adminNote: "تم الحذف من قبل المالك" }).where(eq(chaletSubmissionsTable.id, sub.id));
+
+  return res.json({ ok: true });
+});
+
 /* ── Save per-chalet WhatsApp review template ────────────────── */
 
 router.patch("/chalets/:id/review-template", async (req, res) => {

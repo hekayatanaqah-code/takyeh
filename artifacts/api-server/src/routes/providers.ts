@@ -8,7 +8,7 @@ import {
   serviceAppointmentsTable,
   serviceInsurancesTable,
 } from "@workspace/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull, gte } from "drizzle-orm";
 import { z } from "zod";
 
 const router = Router();
@@ -158,6 +158,33 @@ router.patch("/my/approved/:id/toggle", requireAuth, async (req: any, res) => {
     .where(eq(serviceProvidersTable.id, id))
     .returning();
   return res.json({ isActive: updated.isActive });
+});
+
+/* ── Owner: delete approved provider (with upcoming appointments check) ── */
+router.delete("/my/approved/:id", requireAuth, async (req: any, res) => {
+  const id = Number(req.params.id);
+  const [provider] = await db.select().from(serviceProvidersTable).where(eq(serviceProvidersTable.id, id)).limit(1);
+  if (!provider || provider.ownerId !== req.user.id) return res.status(404).json({ error: "المزود غير موجود" });
+
+  // Check for upcoming appointments (future date, not cancelled)
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = await db
+    .select({ id: serviceAppointmentsTable.id })
+    .from(serviceAppointmentsTable)
+    .where(and(
+      eq(serviceAppointmentsTable.providerId, id),
+      isNull(serviceAppointmentsTable.cancelledAt),
+      gte(serviceAppointmentsTable.dateStr, today),
+    ))
+    .limit(1);
+
+  if (upcoming.length > 0) {
+    return res.status(409).json({ error: "لا يمكن الحذف لوجود حجوزات مستقبلية", hasUpcomingBookings: true });
+  }
+
+  // Delete the service provider (cascade handles appointments, seasons, insurances, etc.)
+  await db.delete(serviceProvidersTable).where(eq(serviceProvidersTable.id, id));
+  return res.json({ ok: true });
 });
 
 /* ── Public: request new city from admin ──────────── */

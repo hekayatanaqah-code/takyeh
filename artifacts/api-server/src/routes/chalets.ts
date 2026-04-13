@@ -23,7 +23,7 @@ router.get("/", async (req, res) => {
   const searchDate = req.query.date as string | undefined;
   const searchPeriod = req.query.period as string | undefined;
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(chaletsTable.isActive, true)];
 
   if (location) {
     conditions.push(eq(chaletsTable.location, location));
