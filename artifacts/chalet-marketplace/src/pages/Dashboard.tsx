@@ -10533,12 +10533,20 @@ export default function Dashboard() {
                           <p className="font-extrabold text-foreground">{selectedProvider?.businessName}</p>
                           <p className="text-xs text-muted-foreground">{selectedProvider?.city} · {SERVICE_CATEGORY_LABELS[selectedProvider?.category as keyof typeof SERVICE_CATEGORY_LABELS] ?? selectedProvider?.category}</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           {selectedProvider?.isActive ? (
                             <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2.5 py-1 rounded-full font-bold">نشط ✓</span>
                           ) : (
                             <span className="text-xs bg-muted text-muted-foreground px-2.5 py-1 rounded-full font-bold">متوقف</span>
                           )}
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="rounded-lg gap-1.5 text-xs h-8 bg-amber-500 hover:bg-amber-600 text-white"
+                            onClick={() => setSelectedServiceTab("details")}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />تعديل
+                          </Button>
                           <Link href={`/providers/${selectedServiceId}`}>
                             <Button variant="outline" size="sm" className="rounded-lg gap-1.5 text-xs h-8">
                               <Eye className="w-3.5 h-3.5" />معاينة
