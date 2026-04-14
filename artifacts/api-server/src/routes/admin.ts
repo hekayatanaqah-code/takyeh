@@ -816,12 +816,13 @@ router.delete("/plans/:id", async (req, res) => {
 router.get("/applications", async (_req, res) => {
   const rows = await db.execute<{
     id: number; full_name: string; business_name: string; business_type: string;
-    phone: string; email: string; status: string; created_at: string;
+    phone: string; email: string; status: string; docs_status: string; created_at: string;
   }>(
-    sql`SELECT id, full_name, business_name, business_type, phone, email, status, created_at
+    sql`SELECT id, full_name, business_name, business_type, phone, email, status,
+               COALESCE(docs_status, 'pending_docs') as docs_status, created_at
         FROM owner_applications ORDER BY created_at DESC`
   );
-  return res.json(rows);
+  return res.json(rows.rows);
 });
 
 /* ══════════════════════════════════════════════════════
@@ -1012,6 +1013,60 @@ router.patch("/applications/:id", async (req, res) => {
     sql`UPDATE owner_applications SET status = ${String(status)} WHERE id = ${Number(req.params.id)}`
   );
   return res.json({ ok: true });
+});
+
+router.patch("/applications/:id/docs", async (req, res) => {
+  const { docs_status } = req.body ?? {};
+  if (!["pending_docs", "docs_submitted", "verified"].includes(String(docs_status))) {
+    return res.status(400).json({ error: "حالة التوثيق غير صحيحة" });
+  }
+  await db.execute(
+    sql`UPDATE owner_applications SET docs_status = ${String(docs_status)} WHERE id = ${Number(req.params.id)}`
+  );
+  return res.json({ ok: true });
+});
+
+/* ══════════════════════════════════════════════════════
+   Platform Revenue — subscription fees + commission summary
+   ══════════════════════════════════════════════════════ */
+router.get("/platform-revenue", async (_req, res) => {
+  const subRows = await db.execute<{
+    plan: string; count: string; plan_price: string;
+  }>(sql`
+    SELECT os.plan,
+           COUNT(*) as count,
+           COALESCE(sp.price::text, '0') as plan_price
+    FROM owner_subscriptions os
+    LEFT JOIN subscription_plans sp ON sp.slug = os.plan
+    WHERE os.payment_status = 'paid'
+    GROUP BY os.plan, sp.price
+  `);
+
+  const breakdown = subRows.rows.map(r => ({
+    plan: r.plan,
+    count: Number(r.count),
+    planPrice: Number(r.plan_price),
+    total: Number(r.count) * Number(r.plan_price),
+  }));
+  const totalSubscriptionRevenue = breakdown.reduce((s, r) => s + r.total, 0);
+  const totalCommission = 0;
+  const totalRevenue = totalSubscriptionRevenue + totalCommission;
+
+  const totalSubCount = breakdown.reduce((s, r) => s + r.count, 0);
+
+  const allSubs = await db.execute<{ status: string; count: string }>(sql`
+    SELECT status, COUNT(*) as count FROM owner_subscriptions GROUP BY status
+  `);
+
+  return res.json({
+    totalSubscriptionRevenue,
+    totalCommission,
+    totalRevenue,
+    netProfit: totalRevenue,
+    totalSubscriptions: totalSubCount,
+    subscriptionBreakdown: breakdown,
+    subscriptionsByStatus: allSubs.rows,
+  });
 });
 
 export default router;

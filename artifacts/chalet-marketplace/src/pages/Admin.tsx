@@ -40,7 +40,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -3634,6 +3634,7 @@ interface PartnerApp {
   phone: string;
   email: string;
   status: "pending" | "approved" | "rejected";
+  docs_status: "pending_docs" | "docs_submitted" | "verified";
   created_at: string;
 }
 
@@ -3649,15 +3650,22 @@ const APP_STATUS_BADGE: Record<string, { label: string; className: string }> = {
   rejected: { label: "مرفوض",       className: "bg-red-900/40 text-red-300 border border-red-700/40" },
 };
 
+const DOCS_STATUS_BADGE: Record<string, { label: string; icon: string; className: string }> = {
+  pending_docs:   { label: "في انتظار المستندات", icon: "🕐", className: "bg-orange-900/40 text-orange-300 border border-orange-700/50" },
+  docs_submitted: { label: "مستندات مرفوعة",      icon: "📋", className: "bg-blue-900/40 text-blue-300 border border-blue-700/50" },
+  verified:       { label: "موثّق",                icon: "✅", className: "bg-emerald-900/40 text-emerald-300 border border-emerald-700/50" },
+};
+
 function PartnerApplicationsTab() {
   const [apps, setApps]         = useState<PartnerApp[]>([]);
   const [loading, setLoading]   = useState(true);
   const [updating, setUpdating] = useState<number | null>(null);
+  const [docsUpdating, setDocsUpdating] = useState<number | null>(null);
 
   useEffect(() => {
     fetch(`${API}/admin/applications`, { credentials: "include" })
       .then((r) => r.json())
-      .then(setApps)
+      .then((d) => setApps(Array.isArray(d) ? d : (d?.rows ?? [])))
       .finally(() => setLoading(false));
   }, []);
 
@@ -3673,6 +3681,18 @@ function PartnerApplicationsTab() {
     setUpdating(null);
   }
 
+  async function setDocsStatus(id: number, docs_status: PartnerApp["docs_status"]) {
+    setDocsUpdating(id);
+    await fetch(`${API}/admin/applications/${id}/docs`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ docs_status }),
+    });
+    setApps((prev) => prev.map((a) => (a.id === id ? { ...a, docs_status } : a)));
+    setDocsUpdating(null);
+  }
+
   if (loading) return (
     <div className="flex items-center justify-center py-20">
       <Loader2 className="animate-spin text-amber-400 w-8 h-8" />
@@ -3685,6 +3705,16 @@ function PartnerApplicationsTab() {
   function AppCard({ app }: { app: PartnerApp }) {
     const typeBadge   = BUSINESS_TYPE_BADGE[app.business_type] ?? BUSINESS_TYPE_BADGE.chalet;
     const statusBadge = APP_STATUS_BADGE[app.status]           ?? APP_STATUS_BADGE.pending;
+    const docsBadge   = DOCS_STATUS_BADGE[app.docs_status]     ?? DOCS_STATUS_BADGE.pending_docs;
+    const { hijri, gregorian } = formatDualDate(app.created_at);
+    const isDocsUpdating = docsUpdating === app.id;
+
+    const nextDocsStatus: Record<PartnerApp["docs_status"], PartnerApp["docs_status"]> = {
+      pending_docs:   "docs_submitted",
+      docs_submitted: "verified",
+      verified:       "pending_docs",
+    };
+
     return (
       <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 space-y-3">
         <div className="flex items-start justify-between gap-3">
@@ -3693,18 +3723,38 @@ function PartnerApplicationsTab() {
             <p className="text-slate-400 text-xs mt-0.5">{app.business_name}</p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
-            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${typeBadge.className}`}>
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${typeBadge.className}`}>
               {typeBadge.label}
             </span>
-            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusBadge.className}`}>
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${statusBadge.className}`}>
               {statusBadge.label}
             </span>
           </div>
         </div>
+
+        {/* Verification status badge */}
+        <div className="flex items-center justify-between">
+          <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-full border ${docsBadge.className}`}>
+            <span>{docsBadge.icon}</span>
+            <span>{docsBadge.label}</span>
+          </span>
+          <button
+            disabled={isDocsUpdating}
+            onClick={() => setDocsStatus(app.id, nextDocsStatus[app.docs_status ?? "pending_docs"])}
+            className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-50 underline underline-offset-2"
+          >
+            {isDocsUpdating ? "…" : "تغيير"}
+          </button>
+        </div>
+
         <div className="text-xs text-slate-400 space-y-0.5">
           <p dir="ltr" className="text-left">{app.email}</p>
           <p dir="ltr" className="text-left">{app.phone}</p>
-          <p>{new Date(app.created_at).toLocaleDateString("ar-SA-u-ca-gregory")}</p>
+          <p className="text-slate-500">
+            <span>{hijri}</span>
+            <span className="mx-1 opacity-40">·</span>
+            <span dir="ltr" className="inline">{gregorian}</span>
+          </p>
         </div>
         {app.status === "pending" && (
           <div className="flex gap-2 pt-1">
@@ -3713,7 +3763,7 @@ function PartnerApplicationsTab() {
               onClick={() => setStatus(app.id, "approved")}
               className="flex-1 h-8 rounded-lg bg-green-700/60 hover:bg-green-700 text-green-200 text-xs font-semibold transition-colors disabled:opacity-50"
             >
-              {updating === app.id ? "…" : "قبول"}
+              {updating === app.id ? "…" : "قبول الطلب"}
             </button>
             <button
               disabled={updating === app.id}
@@ -3738,9 +3788,23 @@ function PartnerApplicationsTab() {
 
   return (
     <div className="space-y-6" dir="rtl">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-slate-100">طلبات الانضمام كشريك</h2>
-        <span className="text-xs text-slate-500">{apps.length} طلب إجمالاً</span>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-slate-100">طلبات الانضمام كشريك</h2>
+          <p className="text-xs text-slate-500 mt-1">
+            الطلبات: تسجيل الحساب الأولي · التوثيق: رفع المستندات الرسمية (الهوية، الصك، الترخيص)
+          </p>
+        </div>
+        <span className="text-xs text-slate-500 shrink-0">{Math.round(apps.length).toLocaleString("ar-SA")} طلب</span>
+      </div>
+
+      {/* Verification legend */}
+      <div className="flex flex-wrap gap-2 text-[10px]">
+        {Object.entries(DOCS_STATUS_BADGE).map(([k, v]) => (
+          <span key={k} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${v.className}`}>
+            {v.icon} {v.label}
+          </span>
+        ))}
       </div>
 
       {apps.length === 0 && (
@@ -3751,7 +3815,7 @@ function PartnerApplicationsTab() {
         <div>
           <h3 className="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            قيد الانتظار ({pending.length})
+            قيد الانتظار ({Math.round(pending.length).toLocaleString("ar-SA")})
           </h3>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {pending.map((a) => <AppCard key={a.id} app={a} />)}
@@ -3761,10 +3825,180 @@ function PartnerApplicationsTab() {
 
       {reviewed.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-slate-400 mb-3">تمت المراجعة ({reviewed.length})</h3>
+          <h3 className="text-sm font-semibold text-slate-400 mb-3">
+            تمت المراجعة ({Math.round(reviewed.length).toLocaleString("ar-SA")})
+          </h3>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {reviewed.map((a) => <AppCard key={a.id} app={a} />)}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Platform Revenue Tab — subscription fees, commission, net profit
+   ══════════════════════════════════════════════════════════════ */
+interface PlatformRevenueData {
+  totalSubscriptionRevenue: number;
+  totalCommission: number;
+  totalRevenue: number;
+  netProfit: number;
+  totalSubscriptions: number;
+  subscriptionBreakdown: { plan: string; count: number; planPrice: number; total: number }[];
+  subscriptionsByStatus: { status: string; count: string }[];
+}
+
+function PlatformRevenueTab() {
+  const { data, isLoading } = useQuery<PlatformRevenueData>({
+    queryKey: ["admin", "platform-revenue"],
+    queryFn: async () => {
+      const r = await fetch(`${API}/admin/platform-revenue`, { credentials: "include" });
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    },
+    staleTime: 30_000,
+  });
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="animate-spin text-amber-400 w-8 h-8" />
+    </div>
+  );
+
+  const d = data!;
+  const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
+
+  const kpis = [
+    {
+      label: "رسوم الاشتراكات المحصّلة",
+      value: `${fmtN(d.totalSubscriptionRevenue)} ر.س`,
+      icon: <CreditCard className="w-5 h-5 text-emerald-400" />,
+      className: "border-emerald-700/40 bg-emerald-900/20",
+      sub: `${fmtN(d.totalSubscriptions)} اشتراك نشط`,
+    },
+    {
+      label: "العمولات من الحجوزات",
+      value: `${fmtN(d.totalCommission)} ر.س`,
+      icon: <DollarSign className="w-5 h-5 text-blue-400" />,
+      className: "border-blue-700/40 bg-blue-900/20",
+      sub: "لا توجد عمولات محددة حتى الآن",
+    },
+    {
+      label: "صافي ربح المنصة",
+      value: `${fmtN(d.netProfit)} ر.س`,
+      icon: <TrendingUp className="w-5 h-5 text-amber-400" />,
+      className: "border-amber-700/40 bg-amber-900/20",
+      sub: "الإيرادات الكلية (قبل التشغيل والتسويق)",
+    },
+  ];
+
+  const statusLabels: Record<string, string> = {
+    active:   "نشط",
+    expired:  "منتهي",
+    trial:    "تجريبي",
+    inactive: "غير نشط",
+    canceled: "ملغى",
+  };
+
+  const planLabels: Record<string, string> = {
+    monthly:            "شهري",
+    yearly:             "سنوي",
+    chalet_basic:       "أساسي",
+    chalet_pro:         "متقدم",
+    chalet_unlimited:   "غير محدود",
+    service_basic:      "خدمات - أساسي",
+    service_pro:        "خدمات - متقدم",
+  };
+
+  return (
+    <div className="space-y-6" dir="rtl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-amber-400" />
+            إيرادات المنصة
+          </h2>
+          <p className="text-xs text-slate-500 mt-1">ملخص الرسوم والعمولات المحصّلة من الشركاء</p>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {kpis.map((k) => (
+          <div key={k.label} className={`border rounded-2xl p-4 space-y-2 ${k.className}`}>
+            <div className="flex items-center gap-2">
+              {k.icon}
+              <span className="text-xs text-slate-400">{k.label}</span>
+            </div>
+            <p className="text-2xl font-bold text-slate-100 tracking-tight">{k.value}</p>
+            <p className="text-[10px] text-slate-500">{k.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Subscription breakdown by plan */}
+      {d.subscriptionBreakdown.length > 0 && (
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-amber-400" />
+            <h3 className="text-sm font-bold text-slate-200">توزيع الاشتراكات حسب الخطة</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-slate-300">
+              <thead>
+                <tr className="border-b border-slate-700/50 text-slate-500">
+                  <th className="text-right py-2 font-medium">الخطة</th>
+                  <th className="text-center py-2 font-medium">العدد</th>
+                  <th className="text-center py-2 font-medium">سعر الخطة</th>
+                  <th className="text-left py-2 font-medium">الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.subscriptionBreakdown.map((row) => (
+                  <tr key={row.plan} className="border-b border-slate-700/30 hover:bg-slate-700/20">
+                    <td className="py-2 font-medium">{planLabels[row.plan] ?? row.plan}</td>
+                    <td className="py-2 text-center">{fmtN(row.count)}</td>
+                    <td className="py-2 text-center">{fmtN(row.planPrice)} ر.س</td>
+                    <td className="py-2 text-left text-emerald-400 font-semibold">{fmtN(row.total)} ر.س</td>
+                  </tr>
+                ))}
+                <tr className="font-bold text-slate-200">
+                  <td className="py-2">الإجمالي</td>
+                  <td className="py-2 text-center">{fmtN(d.totalSubscriptions)}</td>
+                  <td className="py-2" />
+                  <td className="py-2 text-left text-emerald-300">{fmtN(d.totalSubscriptionRevenue)} ر.س</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Subscriptions by status */}
+      {d.subscriptionsByStatus.length > 0 && (
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <FileCheck className="w-4 h-4 text-slate-400" />
+            <h3 className="text-sm font-bold text-slate-200">الاشتراكات حسب الحالة</h3>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {d.subscriptionsByStatus.map((s) => (
+              <div key={s.status} className="bg-slate-700/40 rounded-xl px-3 py-2 text-center min-w-[90px]">
+                <p className="text-lg font-bold text-slate-100">{Number(s.count).toLocaleString("ar-SA")}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{statusLabels[s.status] ?? s.status}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Zero-state */}
+      {d.totalSubscriptions === 0 && (
+        <div className="text-center py-12 text-slate-500 text-sm">
+          <DollarSign className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          لا توجد اشتراكات مدفوعة بعد
         </div>
       )}
     </div>
@@ -3775,6 +4009,7 @@ const ALL_TABS = [
   { id: "submissions",          label: "الطلبات",               icon: Settings },
   { id: "chaletVerify",         label: "التوثيق",                icon: ShieldCheck },
   { id: "partnerApplications",  label: "طلبات الشركاء",         icon: Users },
+  { id: "platformRevenue",      label: "إيرادات المنصة",        icon: TrendingUp },
   { id: "services",             label: "خدمات المناسبات",       icon: Wrench },
   { id: "providerSubmissions",  label: "طلبات مزودي الخدمات",  icon: Star },
   { id: "serviceCategories",    label: "فئات الخدمات",          icon: Tag },
@@ -4862,6 +5097,7 @@ export default function Admin() {
         {activeTab === "submissions"          && <SubmissionsTab isSuperAdmin={isSuperAdmin} />}
         {activeTab === "chaletVerify"         && <ChaletsVerifyTab />}
         {activeTab === "partnerApplications"  && <PartnerApplicationsTab />}
+        {activeTab === "platformRevenue"      && <PlatformRevenueTab />}
         {activeTab === "services"             && <ServicesTab />}
         {activeTab === "providerSubmissions"  && <ProviderSubmissionsTab />}
         {activeTab === "serviceCategories"   && <ServiceCategoriesTab />}
