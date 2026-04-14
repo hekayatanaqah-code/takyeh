@@ -3466,7 +3466,7 @@ function PlansTab() {
                 </div>
                 <div className="flex flex-wrap gap-4 text-sm text-slate-300">
                   <span>
-                    <span className="text-amber-400 font-bold">{Number(p.price).toLocaleString("ar-SA")}</span>
+                    <span className="text-amber-400 font-bold">{toAr(Number(p.price).toLocaleString())}</span>
                     {" "}ر.س
                   </span>
                   <span>مدة: <span className="text-white font-semibold">{toAr(p.durationDays)}</span> يوم</span>
@@ -4077,11 +4077,18 @@ function PlatformRevenueTab() {
                   onChange={(e) => setExpForm((f) => ({ ...f, dateStr: e.target.value }))}
                   className="bg-slate-800 border-slate-600 text-slate-100 text-xs h-8"
                 />
-                {expForm.dateStr && (
-                  <p className="text-[10px] text-amber-400 mt-0.5">
-                    {toHijri(expForm.dateStr)} هـ
+                <div className={`rounded-lg px-2.5 py-1.5 mt-1 border text-xs ${expForm.dateStr ? "bg-amber-950/40 border-amber-700/50" : "bg-slate-800/40 border-slate-700/30"}`}>
+                  <p className="text-[9px] text-slate-500 mb-0.5">التاريخ الهجري</p>
+                  <p className={`font-bold text-sm ${expForm.dateStr ? "text-amber-300" : "text-slate-600"}`} dir="rtl">
+                    {expForm.dateStr ? toHijri(expForm.dateStr) : toHijri(new Date().toISOString().slice(0, 10))}
+                    <span className="text-xs font-normal mr-1 opacity-70">هـ</span>
                   </p>
-                )}
+                  {expForm.dateStr && (
+                    <p className="text-[9px] text-slate-500 mt-0.5">
+                      {new Date(expForm.dateStr + "T12:00:00").toLocaleDateString("ar-SA", { weekday: "long", day: "numeric", month: "long", year: "numeric", calendar: "gregory" })} م
+                    </p>
+                  )}
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-400 font-medium">المبلغ (ر.س) *</label>
@@ -4228,10 +4235,17 @@ function OverviewTab() {
     staleTime: 60_000,
   });
 
-  if (isLoading || !data) return (
+  if (isLoading) return (
     <div className="flex items-center justify-center py-24 flex-col gap-3">
       <Loader2 className="animate-spin text-amber-400 w-8 h-8" />
-      {!isLoading && <p className="text-slate-500 text-sm">تعذّر تحميل الإحصائيات — يُرجى المحاولة مرة أخرى</p>}
+      <p className="text-slate-500 text-sm">جارٍ تحميل الإحصائيات…</p>
+    </div>
+  );
+  if (!data) return (
+    <div className="flex items-center justify-center py-24 flex-col gap-3">
+      <BarChart3 className="w-10 h-10 text-slate-600" />
+      <p className="text-slate-400 text-sm font-medium">تعذّر تحميل الإحصائيات</p>
+      <p className="text-slate-600 text-xs">يُرجى إعادة تحميل الصفحة أو التواصل مع الدعم الفني</p>
     </div>
   );
 
@@ -4301,7 +4315,7 @@ function OverviewTab() {
               <LineChart data={revenueData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} />
-                <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} />
+                <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} tickFormatter={(v: number) => toAr(String(v))} />
                 <Tooltip
                   contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" }}
                   formatter={(v: number) => [`${fmtN(v)} ر.س`, "الإيراد"]}
@@ -4362,7 +4376,7 @@ function OverviewTab() {
               <BarChart data={d.geographicData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="city" tick={{ fill: "#94a3b8", fontSize: 10 }} />
-                <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} allowDecimals={false} />
+                <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} allowDecimals={false} tickFormatter={(v: number) => toAr(String(v))} />
                 <Tooltip
                   contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" }}
                   formatter={(v: number) => [fmtN(v), "حجز"]}

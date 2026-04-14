@@ -1131,14 +1131,14 @@ router.delete("/platform-expenses/:id", async (req, res) => {
 router.get("/analytics", async (_req, res) => {
   // 1. Monthly subscription revenue — last 12 months
   const monthlyRev = await db.execute<{ month: string; total: string }>(sql`
-    SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
+    SELECT TO_CHAR(DATE_TRUNC('month', os.created_at), 'YYYY-MM') AS month,
            SUM(sp.price) AS total
     FROM owner_subscriptions os
     LEFT JOIN subscription_plans sp ON sp.slug = os.plan
     WHERE os.payment_status = 'paid'
       AND os.created_at >= NOW() - INTERVAL '12 months'
-    GROUP BY DATE_TRUNC('month', created_at)
-    ORDER BY DATE_TRUNC('month', created_at)
+    GROUP BY DATE_TRUNC('month', os.created_at)
+    ORDER BY DATE_TRUNC('month', os.created_at)
   `);
 
   // 2. Market distribution — chalets vs services
@@ -1147,10 +1147,11 @@ router.get("/analytics", async (_req, res) => {
 
   // 3. Geographic heatmap — bookings by city (top 10)
   const geoData = await db.execute<{ city: string; count: string }>(sql`
-    SELECT c.location AS city, COUNT(b.id) AS count
+    SELECT cs.location AS city, COUNT(b.id) AS count
     FROM owner_bookings b
-    JOIN chalets c ON c.id = b.chalet_id
-    GROUP BY c.location
+    JOIN chalet_submissions cs ON cs.id = b.submission_id
+    WHERE cs.location IS NOT NULL
+    GROUP BY cs.location
     ORDER BY COUNT(b.id) DESC
     LIMIT 10
   `);

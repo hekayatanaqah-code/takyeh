@@ -1,4 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap');
+/* ── Global Arabic-Indic digit rendering ─────────────────────
+   Noto Sans Arabic ships an OpenType "locl" feature that
+   substitutes Western digits (0-9) with Arabic-Indic glyphs
+   (٠-٩) whenever the element language is set to Arabic.
+   Because the HTML root already carries lang="ar", this rule
+   applies to every element in the document — including inputs,
+   chart labels, badges and tooltips — without touching JS.
+   ─────────────────────────────────────────────────────────── */
+html, :lang(ar), [lang="ar"] {
+  font-feature-settings: "locl" 1;
+}
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
