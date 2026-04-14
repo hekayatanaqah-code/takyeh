@@ -5885,6 +5885,7 @@ function RevenueTab() {
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
+  const [svcFilter, setSvcFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
   const [reviewSentRevIds, setReviewSentRevIds] = useState<Set<number>>(new Set());
   const [reviewPendingRevId, setReviewPendingRevId] = useState<number | null>(null);
@@ -5960,11 +5961,11 @@ function RevenueTab() {
   });
 
   // Combined service revenue for "all" unit mode
-  const { data: svcRevSummary } = useQuery<{ totalRevenue: number; totalDeposits: number; totalInsurance: number; byProvider: { id: number; name: string; revenue: number; deposits: number; insurance: number }[] }>({
+  const { data: svcRevSummary } = useQuery<{ totalRevenue: number; totalDeposits: number; totalInsurance: number; totalPending: number; byProvider: { id: number; name: string; revenue: number; deposits: number; insurance: number; pending: number }[] }>({
     queryKey: ["owner", "service-revenue-summary", selectedMonth],
     queryFn: async () => {
       const r = await apiFetch(`/owner/service-revenue-summary?month=${selectedMonth}`);
-      return r.ok ? r.json() : { totalRevenue: 0, totalDeposits: 0, totalInsurance: 0, byProvider: [] };
+      return r.ok ? r.json() : { totalRevenue: 0, totalDeposits: 0, totalInsurance: 0, totalPending: 0, byProvider: [] };
     },
     enabled: unit.type === "all",
   });
@@ -6037,11 +6038,29 @@ function RevenueTab() {
 
   /* ── SERVICE UNIT: render service appointments revenue ── */
   if (unit.type === "service") {
-    const svcRevenue   = monthSvcAppts.reduce((s, a) => s + parseFloat(a.amount ?? "0"), 0);
-    const svcDeposits  = monthSvcAppts.reduce((s, a) => s + parseFloat(a.deposit ?? "0"), 0);
-    const svcInsurance = monthSvcAppts.reduce((s, a) => s + parseFloat(a.insuranceAmount ?? "0"), 0);
+    // Build revenue rows mirroring chalet row structure
+    interface SvcRow { apptId: number; clientName: string; dateStr: string; type: "deposit" | "balance" | "damage"; amount: number; note?: string; }
+    const svcRows: SvcRow[] = [];
+    for (const a of monthSvcAppts) {
+      const amt = Math.round(Number(a.amount ?? 0));
+      const dep = Math.round(Number(a.deposit ?? 0));
+      const insDeduct = Math.round(Number(a.insuranceDeductAmount ?? 0));
+      if (dep > 0) svcRows.push({ apptId: a.id, clientName: a.clientName, dateStr: a.dateStr, type: "deposit", amount: dep });
+      if (amt > dep && amt > 0) svcRows.push({ apptId: a.id, clientName: a.clientName, dateStr: a.dateStr, type: "balance", amount: amt - dep });
+      if (insDeduct > 0) svcRows.push({ apptId: a.id, clientName: a.clientName, dateStr: a.dateStr, type: "damage", amount: insDeduct, note: a.insuranceDeductNote ?? undefined });
+    }
+    const filteredSvcRows = svcFilter === "all" ? svcRows : svcRows.filter(r => r.type === svcFilter);
+
+    const svcCollected = monthSvcAppts.reduce((s, a) => s + Math.round(Number(a.deposit ?? 0)), 0);
+    const svcInsurance = monthSvcAppts.reduce((s, a) => s + Math.round(Number(a.insuranceAmount ?? 0)), 0);
+    const svcPending   = monthSvcAppts.reduce((s, a) => {
+      const amt = Math.round(Number(a.amount ?? 0)); const dep = Math.round(Number(a.deposit ?? 0));
+      return s + Math.max(0, amt - dep);
+    }, 0);
+
     return (
       <div className="space-y-5" dir="rtl">
+        {/* Header */}
         <div className="flex items-center gap-3 flex-wrap">
           <Activity className="w-5 h-5 text-amber-500 shrink-0" />
           <h2 className="text-lg font-bold text-foreground">إيرادات: {(unit as any).name}</h2>
@@ -6054,44 +6073,120 @@ function RevenueTab() {
             </Select>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-card border border-border rounded-2xl p-4 text-center space-y-1">
-            <div className="text-xs text-muted-foreground">إجمالي الإيرادات</div>
-            <div className="text-2xl font-bold text-green-600">{Math.round(svcRevenue).toLocaleString()} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+
+        {/* KPI cards — same structure as chalets */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="bg-card border border-border rounded-2xl p-4 space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+              <DollarSign className="w-3.5 h-3.5 text-green-500" />
+              إيرادات الخدمة المحصّلة
+            </div>
+            {svcLoading ? <Skeleton className="h-7 w-24" /> : (
+              <div className="text-2xl font-bold text-green-600">{fmtN(svcCollected)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+            )}
+            <div className="text-[11px] text-muted-foreground">عربون + متبقي محصّل + تلفيات</div>
           </div>
-          <div className="bg-card border border-blue-200 rounded-2xl p-4 text-center space-y-1">
-            <div className="text-xs text-muted-foreground">عربون محصّل</div>
-            <div className="text-2xl font-bold text-blue-600">{Math.round(svcDeposits).toLocaleString()} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+          <div className="bg-card border border-orange-200 rounded-2xl p-4 space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+              <Lock className="w-3.5 h-3.5 text-orange-500" />
+              تأمينات محتجزة حالياً
+            </div>
+            {svcLoading ? <Skeleton className="h-7 w-24" /> : (
+              <div className="text-2xl font-bold text-orange-600">{fmtN(svcInsurance)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+            )}
+            <div className="text-[11px] text-muted-foreground">غير محتسبة في الأرباح</div>
           </div>
-          <div className="bg-card border border-orange-200 rounded-2xl p-4 text-center space-y-1">
-            <div className="text-xs text-muted-foreground">تأمينات</div>
-            <div className="text-2xl font-bold text-orange-600">{Math.round(svcInsurance).toLocaleString()} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+          <div className="bg-card border border-amber-200 rounded-2xl p-4 space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+              <Clock className="w-3.5 h-3.5 text-amber-500" />
+              مبالغ متبقية لم تُحصَّل
+            </div>
+            {svcLoading ? <Skeleton className="h-7 w-24" /> : (
+              <div className="text-2xl font-bold text-amber-600">{fmtN(svcPending)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+            )}
+            <div className="text-[11px] text-muted-foreground">مبالغ مستحقة من عملاء الخدمات</div>
           </div>
         </div>
-        {svcLoading ? (
-          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-        ) : monthSvcAppts.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground">لا توجد حجوزات في هذا الشهر</div>
-        ) : (
-          <div className="space-y-2">
-            {monthSvcAppts.map((a: any) => {
-              const dual = formatDualDate(a.dateStr);
-              return (
-                <div key={a.id} className="bg-card border border-border rounded-2xl px-4 py-3 flex items-center gap-3 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-foreground">{a.clientName}</p>
-                    <p className="text-xs text-amber-600 font-semibold">{dual.hijri} هـ</p>
-                    <p className="text-xs text-muted-foreground">{dual.gregorian} م</p>
-                  </div>
-                  <div className="text-left space-y-0.5">
-                    {a.amount && <p className="text-xs font-bold text-green-600">{parseFloat(a.amount).toLocaleString()} ر.س</p>}
-                    {a.deposit && parseFloat(a.deposit) > 0 && <p className="text-xs text-blue-600">عربون: {parseFloat(a.deposit).toLocaleString()} ر.س</p>}
-                  </div>
-                </div>
-              );
-            })}
+
+        {/* Revenue log — mirror of chalet log */}
+        <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Receipt className="w-4 h-4 text-amber-500" />
+            <h3 className="font-bold text-sm text-foreground">سجل إيرادات الخدمة</h3>
+            <div className="ms-auto flex gap-1 flex-wrap">
+              {([["all", "الكل"], ["deposit", "عربون"], ["balance", "متبقي"], ["damage", "تلفيات"]] as const).map(([v, l]) => (
+                <button key={v} onClick={() => setSvcFilter(v)}
+                  className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${svcFilter === v ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
           </div>
-        )}
+          {svcLoading ? (
+            <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+          ) : filteredSvcRows.length === 0 ? (
+            <div className="text-center text-muted-foreground text-sm py-8">لا توجد إيرادات لهذا الشهر</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[480px]">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">العميل</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">التاريخ</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">النوع</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">المبلغ</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSvcRows.map((row, i) => {
+                    const { hijri, gregorian } = formatDualDate(row.dateStr);
+                    const meta = TYPE_META[row.type];
+                    return (
+                      <tr key={`${row.apptId}-${row.type}-${i}`} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                        <td className="py-2.5 px-3 font-medium">{row.clientName}</td>
+                        <td className="py-2.5 px-3 text-xs">
+                          <div className="font-medium">{hijri}</div>
+                          <div className="text-muted-foreground">{gregorian}</div>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${meta.cls}`}>
+                            {meta.emoji} {meta.label}
+                          </span>
+                          {row.note && <div className="text-[10px] text-muted-foreground mt-0.5">{row.note}</div>}
+                        </td>
+                        <td className="py-2.5 px-3 text-left font-bold text-base tabular-nums">
+                          <span className={row.type === "damage" ? "text-red-600" : row.type === "balance" ? "text-green-600" : "text-blue-600"}>
+                            {fmtN(row.amount)}
+                          </span>
+                          <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                            row.type === "deposit" ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" :
+                            row.type === "balance" ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" :
+                            "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                          }`}>
+                            {row.type === "deposit" ? "محصّل" : row.type === "balance" ? "مستحق" : "مخصوم"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-muted/30">
+                    <td colSpan={3} className="py-2 px-3 text-xs font-bold text-muted-foreground">المجموع</td>
+                    <td className="py-2 px-3 text-left font-extrabold text-base text-primary tabular-nums">
+                      {fmtN(filteredSvcRows.reduce((s, r) => s + r.amount, 0))} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -6114,40 +6209,47 @@ function RevenueTab() {
         </div>
       </div>
 
-      {/* Combined KPI when "all" mode with services */}
-      {unit.type === "all" && svcRevSummary && svcRevSummary.totalRevenue > 0 && (
-        <div className="bg-gradient-to-l from-primary/5 to-amber-500/5 border border-primary/20 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-3">
+      {/* ── MASTER VIEW: Unified Net Profit Card ── */}
+      {unit.type === "all" && (
+        <div className="bg-gradient-to-l from-primary/5 to-green-500/5 border border-primary/20 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
             <Zap className="w-4 h-4 text-primary" />
-            <span className="text-sm font-bold text-foreground">الإيرادات الموحّدة (شاليهات + خدمات)</span>
+            <span className="text-sm font-bold text-foreground">ملخص الإيرادات الموحّدة</span>
+            <span className="text-xs text-muted-foreground ms-auto">{monthOptions.find(o => o.val === selectedMonth)?.label}</span>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-xs text-muted-foreground mb-1">شاليهات</div>
-              <div className="text-xl font-bold text-primary">{fmtN(financial?.totalRevenue ?? 0)}</div>
-              <div className="text-xs text-muted-foreground">ر.س</div>
+              <div className="text-[11px] text-muted-foreground mb-1">إيرادات الشاليهات</div>
+              <div className="text-xl font-bold text-primary tabular-nums">{fmtN(financial?.totalRevenue ?? 0)}</div>
+              <div className="text-[10px] text-muted-foreground">ر.س</div>
             </div>
             <div className="text-center">
-              <div className="text-xs text-muted-foreground mb-1">خدمات</div>
-              <div className="text-xl font-bold text-amber-600">{fmtN(svcRevSummary.totalRevenue)}</div>
-              <div className="text-xs text-muted-foreground">ر.س</div>
+              <div className="text-[11px] text-muted-foreground mb-1">إيرادات الخدمات</div>
+              <div className="text-xl font-bold text-amber-600 tabular-nums">{fmtN(svcRevSummary?.totalRevenue ?? 0)}</div>
+              <div className="text-[10px] text-muted-foreground">ر.س</div>
             </div>
-            <div className="text-center border-r border-border/40 pr-3">
-              <div className="text-xs text-muted-foreground mb-1">الإجمالي</div>
-              <div className="text-xl font-bold text-green-600">{fmtN((financial?.totalRevenue ?? 0) + svcRevSummary.totalRevenue)}</div>
-              <div className="text-xs text-muted-foreground">ر.س</div>
+            <div className="text-center border-r border-border/40 pr-4">
+              <div className="text-[11px] text-muted-foreground mb-1">الإجمالي المحصّل</div>
+              <div className="text-xl font-bold text-green-600 tabular-nums">{fmtN((financial?.totalRevenue ?? 0) + (svcRevSummary?.totalRevenue ?? 0))}</div>
+              <div className="text-[10px] text-muted-foreground">ر.س</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[11px] text-muted-foreground mb-1">مبالغ لم تُحصَّل</div>
+              <div className="text-xl font-bold text-orange-500 tabular-nums">{fmtN((financial?.totalPendingBalance ?? 0) + (svcRevSummary?.totalPending ?? 0))}</div>
+              <div className="text-[10px] text-muted-foreground">ر.س</div>
             </div>
           </div>
         </div>
       )}
 
-      {/* 3 Summary Cards */}
+      {/* ── Chalet KPI Cards ── */}
+      {unit.type === "all" && <div className="flex items-center gap-2 px-1"><Home className="w-4 h-4 text-primary shrink-0" /><span className="text-sm font-bold text-foreground">تفاصيل إيرادات الشاليهات</span></div>}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {/* Total Monthly Revenue */}
         <div className="bg-card border border-border rounded-2xl p-4 space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
             <DollarSign className="w-3.5 h-3.5 text-green-500" />
-            {unit.type === "all" ? "إيرادات الشاليهات" : "إجمالي إيرادات الشهر"}
+            {unit.type === "all" ? "إيرادات الشاليهات المحصّلة" : "إجمالي إيرادات الشهر"}
           </div>
           {loading ? <Skeleton className="h-7 w-24" /> : (
             <div className="text-2xl font-bold text-green-600">{fmtN(financial?.totalRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
@@ -6180,27 +6282,75 @@ function RevenueTab() {
         </div>
       </div>
 
-      {/* Service revenue by provider in "all" mode */}
-      {unit.type === "all" && svcRevSummary && svcRevSummary.byProvider.length > 0 && (
-        <div className="bg-card border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Activity className="w-4 h-4 text-amber-500" />
-            <span className="text-sm font-bold text-foreground">إيرادات الخدمات</span>
-            <span className="ms-auto text-xs text-amber-600 font-bold">{fmtN(svcRevSummary.totalRevenue)} ر.س</span>
+      {/* ── Service KPI Cards in "all" mode ── */}
+      {unit.type === "all" && svcRevSummary && (
+        <>
+          <div className="flex items-center gap-2 px-1">
+            <Activity className="w-4 h-4 text-amber-500 shrink-0" />
+            <span className="text-sm font-bold text-foreground">تفاصيل إيرادات الخدمات</span>
           </div>
-          <div className="space-y-2">
-            {svcRevSummary.byProvider.map(p => (
-              <div key={p.id} className="flex items-center gap-3 text-sm">
-                <span className="text-foreground font-medium flex-1 truncate">{p.name}</span>
-                <span className="text-green-600 font-bold">{fmtN(p.revenue)} ر.س</span>
-                {p.deposits > 0 && <span className="text-xs text-blue-500">عربون: {fmtN(p.deposits)}</span>}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-card border border-border rounded-2xl p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+                <DollarSign className="w-3.5 h-3.5 text-green-500" />
+                إيرادات الخدمات المحصّلة
               </div>
-            ))}
+              <div className="text-2xl font-bold text-green-600 tabular-nums">{fmtN(svcRevSummary.totalRevenue)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+              <div className="text-[11px] text-muted-foreground">عربون + متبقي محصّل + تلفيات</div>
+            </div>
+            <div className="bg-card border border-orange-200 rounded-2xl p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+                <Lock className="w-3.5 h-3.5 text-orange-500" />
+                تأمينات محتجزة حالياً
+              </div>
+              <div className="text-2xl font-bold text-orange-600 tabular-nums">{fmtN(svcRevSummary.totalInsurance)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+              <div className="text-[11px] text-muted-foreground">غير محتسبة في الأرباح</div>
+            </div>
+            <div className="bg-card border border-amber-200 rounded-2xl p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+                <Clock className="w-3.5 h-3.5 text-amber-500" />
+                مبالغ متبقية لم تُحصَّل
+              </div>
+              <div className="text-2xl font-bold text-amber-600 tabular-nums">{fmtN(svcRevSummary.totalPending)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+              <div className="text-[11px] text-muted-foreground">مبالغ مستحقة من عملاء الخدمات</div>
+            </div>
           </div>
-        </div>
+          {/* Per-provider breakdown */}
+          {svcRevSummary.byProvider.length > 0 && (
+            <div className="bg-card border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Activity className="w-4 h-4 text-amber-500" />
+                <span className="text-sm font-bold text-foreground">تفصيل الإيرادات حسب مزود الخدمة</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[400px]">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-right py-2 px-2 text-xs font-semibold text-muted-foreground">مزود الخدمة</th>
+                      <th className="text-left py-2 px-2 text-xs font-semibold text-muted-foreground">محصّل</th>
+                      <th className="text-left py-2 px-2 text-xs font-semibold text-muted-foreground">تأمينات</th>
+                      <th className="text-left py-2 px-2 text-xs font-semibold text-muted-foreground">لم يُحصَّل</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {svcRevSummary.byProvider.map(p => (
+                      <tr key={p.id} className="border-b border-border/50 hover:bg-muted/20">
+                        <td className="py-2 px-2 font-medium">{p.name}</td>
+                        <td className="py-2 px-2 text-left font-bold text-green-600 tabular-nums">{fmtN(p.revenue)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></td>
+                        <td className="py-2 px-2 text-left text-orange-600 tabular-nums">{fmtN(p.insurance)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></td>
+                        <td className="py-2 px-2 text-left text-amber-600 tabular-nums">{fmtN(p.pending)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Filter bar */}
+      {/* Revenue log + damage deductions: only in individual unit view, NOT master */}
+      {unit.type !== "all" && (
       <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Receipt className="w-4 h-4 text-primary" />
@@ -6331,9 +6481,10 @@ function RevenueTab() {
           </div>
         )}
       </div>
+      )}
 
-      {/* Damage Deductions sub-section */}
-      {rows.filter(r => r.type === "damage").length > 0 && (
+      {/* Damage Deductions sub-section — individual unit only */}
+      {unit.type !== "all" && rows.filter(r => r.type === "damage").length > 0 && (
         <div className="bg-card border border-red-200 rounded-2xl p-4 space-y-3">
           <div className="flex items-center gap-2">
             <span className="text-base">✂️</span>
@@ -6608,11 +6759,12 @@ function ExpensesTab() {
 
   return (
     <div className="space-y-5">
-      {/* Quick Entry Form */}
+      {/* Quick Entry Form — only for individual unit, not master view */}
+      {unit.type !== "all" && (
       <div className="bg-card border border-border rounded-2xl p-5">
         <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
           <Receipt className="w-4 h-4 text-primary" />
-          {unit.type === "chalet" ? `تسجيل مصروف: ${(unit as any).name}` : unit.type === "service" ? `تسجيل مصروف: ${(unit as any).name}` : "تسجيل مصروف جديد"}
+          {unit.type === "chalet" ? `تسجيل مصروف: ${(unit as any).name}` : `تسجيل مصروف: ${(unit as any).name}`}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-3">
           {/* Row 1: Category + Amount */}
@@ -6729,6 +6881,18 @@ function ExpensesTab() {
           </Button>
         </form>
       </div>
+      )}
+
+      {/* Master view notice */}
+      {unit.type === "all" && (
+        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4 flex items-center gap-3">
+          <Receipt className="w-5 h-5 text-amber-500 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">لتسجيل مصروف جديد</p>
+            <p className="text-xs text-muted-foreground">اختر شاليهاً أو خدمةً محددة من القائمة لإضافة مصروف مرتبط بها</p>
+          </div>
+        </div>
+      )}
 
       {/* Month Filter + List */}
       <div className="bg-card border border-border rounded-2xl p-5">

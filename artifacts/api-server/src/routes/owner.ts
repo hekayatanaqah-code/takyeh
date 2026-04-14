@@ -1868,24 +1868,29 @@ router.get("/service-revenue-summary", async (req, res) => {
       )
     );
 
-  const byProvider: Record<number, { name: string; revenue: number; deposits: number; insurance: number }> = {};
-  for (const p of providers) byProvider[p.id] = { name: p.businessName ?? `خدمة #${p.id}`, revenue: 0, deposits: 0, insurance: 0 };
+  const byProvider: Record<number, { name: string; revenue: number; deposits: number; insurance: number; pending: number }> = {};
+  for (const p of providers) byProvider[p.id] = { name: p.businessName ?? `خدمة #${p.id}`, revenue: 0, deposits: 0, insurance: 0, pending: 0 };
 
   for (const a of appts) {
     if (!byProvider[a.providerId]) continue;
-    byProvider[a.providerId].revenue += Number(a.amount ?? 0);
-    byProvider[a.providerId].deposits += Number(a.deposit ?? 0);
+    const amt = Number(a.amount ?? 0);
+    const dep = Number(a.deposit ?? 0);
+    byProvider[a.providerId].revenue  += dep; // collected = deposit paid
+    byProvider[a.providerId].deposits += dep;
     byProvider[a.providerId].insurance += Number(a.insuranceAmount ?? 0);
+    byProvider[a.providerId].pending  += Math.max(0, amt - dep);
   }
 
-  const totalRevenue = Object.values(byProvider).reduce((s, p) => s + p.revenue, 0);
+  const totalRevenue  = Object.values(byProvider).reduce((s, p) => s + p.revenue, 0);
   const totalDeposits = Object.values(byProvider).reduce((s, p) => s + p.deposits, 0);
   const totalInsurance = Object.values(byProvider).reduce((s, p) => s + p.insurance, 0);
+  const totalPending  = Object.values(byProvider).reduce((s, p) => s + p.pending, 0);
 
   return res.json({
     totalRevenue,
     totalDeposits,
     totalInsurance,
+    totalPending,
     byProvider: Object.entries(byProvider).map(([id, v]) => ({ id: Number(id), ...v })),
   });
 });
