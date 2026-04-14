@@ -4,7 +4,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, LineChart, Line, Legend,
 } from "recharts";
-import { formatDualDate } from "@/lib/hijri";
+import { formatDualDate, toHijri } from "@/lib/hijri";
 import { toAr } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -56,6 +56,15 @@ import { ChaletDiamondContent } from "@/components/chalet/ChaletDiamondContent";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const API = `${BASE}/api`;
+
+/** Display an ISO/YYYY-MM-DD date as "Hijri هـ · Gregorian م" */
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const dateStr = iso.split("T")[0];
+  const { hijri, gregorian } = formatDualDate(dateStr);
+  if (!hijri) return gregorian || "—";
+  return `${hijri} هـ · ${gregorian} م`;
+}
 
 /* ── Domain types ─────────────────────────────── */
 type ServiceCategory = "bounce_houses" | "ice_cream" | "productive_families";
@@ -379,9 +388,9 @@ function SubmissionReviewModal({
             <h2 className="text-xl font-bold text-white leading-tight">{s.nameAr}</h2>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <StatusBadge status={s.status} />
-              {s.createdAt && (
+              {s.createdAt && ( /* submission date */
                 <span className="text-slate-400 text-xs">
-                  {new Date(s.createdAt).toLocaleDateString("ar-SA")}
+                  {fmtDate(s.createdAt)}
                 </span>
               )}
               {s.pricePerNight && (
@@ -671,13 +680,13 @@ function SubmissionsTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                   {s.trialEndsAt ? (
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
-                      {new Date(s.trialEndsAt).toLocaleDateString("ar-SA")}
+                      {fmtDate(s.trialEndsAt)}
                     </span>
                   ) : (
                     <span className="text-slate-600">—</span>
                   )}
                 </TableCell>
-                <TableCell className="text-slate-400 text-sm">{new Date(s.createdAt).toLocaleDateString("ar-SA")}</TableCell>
+                <TableCell className="text-slate-400 text-sm">{fmtDate(s.createdAt)}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <Button
@@ -1170,7 +1179,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
               <TableCell className="font-mono text-xs text-slate-400 max-w-[150px] truncate" dir="ltr">{owner.ownerId}</TableCell>
               <TableCell className="text-white font-medium">{owner.nameAr}</TableCell>
               <TableCell className="text-slate-300 font-mono text-sm" dir="ltr">{owner.whatsappNumber}</TableCell>
-              <TableCell className="text-slate-400 text-sm">{new Date(owner.createdAt).toLocaleDateString("ar-SA")}</TableCell>
+              <TableCell className="text-slate-400 text-sm">{fmtDate(owner.createdAt)}</TableCell>
               {isSuperAdmin && (
               <TableCell>
                 <button
@@ -3052,7 +3061,7 @@ function ProviderSubmissionsTab() {
                   </div>
                   <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
                     <span className="text-xs text-slate-500">
-                      {new Date(sub.createdAt).toLocaleDateString("ar-SA")}
+                      {fmtDate(sub.createdAt)}
                     </span>
                     <Button
                       size="sm"
@@ -3460,11 +3469,11 @@ function PlansTab() {
                     <span className="text-amber-400 font-bold">{Number(p.price).toLocaleString("ar-SA")}</span>
                     {" "}ر.س
                   </span>
-                  <span>مدة: <span className="text-white font-semibold">{p.durationDays}</span> يوم</span>
+                  <span>مدة: <span className="text-white font-semibold">{toAr(p.durationDays)}</span> يوم</span>
                   {p.trialDays > 0 && (
-                    <span className="text-blue-400">تجريبي: {p.trialDays} يوم</span>
+                    <span className="text-blue-400">تجريبي: {toAr(p.trialDays)} يوم</span>
                   )}
-                  <span className="text-slate-500">ترتيب: {p.sortOrder}</span>
+                  <span className="text-slate-500">ترتيب: {toAr(p.sortOrder)}</span>
                 </div>
                 {(p.features ?? []).length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -3941,7 +3950,7 @@ function PlatformRevenueTab() {
   );
 
   const d = data!;
-  const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
+  const fmtN = (n: number) => toAr(Math.round(n).toLocaleString());
 
   const planLabels: Record<string, string> = {
     monthly: "شهري", yearly: "سنوي",
@@ -4068,6 +4077,11 @@ function PlatformRevenueTab() {
                   onChange={(e) => setExpForm((f) => ({ ...f, dateStr: e.target.value }))}
                   className="bg-slate-800 border-slate-600 text-slate-100 text-xs h-8"
                 />
+                {expForm.dateStr && (
+                  <p className="text-[10px] text-amber-400 mt-0.5">
+                    {toHijri(expForm.dateStr)} هـ
+                  </p>
+                )}
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-400 font-medium">المبلغ (ر.س) *</label>
@@ -4214,14 +4228,15 @@ function OverviewTab() {
     staleTime: 60_000,
   });
 
-  if (isLoading) return (
-    <div className="flex items-center justify-center py-24">
+  if (isLoading || !data) return (
+    <div className="flex items-center justify-center py-24 flex-col gap-3">
       <Loader2 className="animate-spin text-amber-400 w-8 h-8" />
+      {!isLoading && <p className="text-slate-500 text-sm">تعذّر تحميل الإحصائيات — يُرجى المحاولة مرة أخرى</p>}
     </div>
   );
 
-  const d = data!;
-  const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
+  const d = data;
+  const fmtN = (n: number) => toAr(Math.round(n).toLocaleString());
 
   // Prepare monthly revenue with Arabic month labels
   const revenueData = d.monthlyRevenue.map(r => ({
@@ -4581,7 +4596,7 @@ function ReviewsTab() {
                   </div>
                   {rev.isVerified && <CheckCircle className="w-3.5 h-3.5 text-green-400" />}
                   <span className="text-slate-500 text-xs mr-auto">
-                    أُبلغ عنه: {new Date(rev.reportedAt!).toLocaleDateString("ar-SA")}
+                    أُبلغ عنه: {fmtDate(rev.reportedAt)}
                   </span>
                 </div>
                 {rev.comment && <p className="text-slate-400 text-sm leading-relaxed">"{rev.comment}"</p>}
@@ -4771,7 +4786,7 @@ function ChaletReviewsList({ chaletId, reviews }: { chaletId: number; reviews: A
                   <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded-full">مُبلَّغ عنه</span>
                 )}
                 <span className="text-slate-500 text-xs mr-auto">
-                  {new Date(rev.createdAt).toLocaleDateString("ar-SA")}
+                  {fmtDate(rev.createdAt)}
                 </span>
               </div>
 
