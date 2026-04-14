@@ -391,6 +391,45 @@ function SubmissionReviewModal({
           {/* ── Scrollable Body: Diamond Edition ── */}
           <div className="flex-1 overflow-y-auto min-h-0">
             <div className="p-6">
+
+              {/* ── Verification Panel: Phone + Instagram (the only required checks) ── */}
+              <div className="mb-5 bg-slate-800/80 border border-slate-600/60 rounded-2xl p-4 space-y-2">
+                <p className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  نقاط التحقق المطلوبة للقبول
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Phone */}
+                  <div className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${s.whatsappNumber ? "bg-green-900/30 border-green-700/40" : "bg-red-900/20 border-red-700/40"}`}>
+                    <Phone className={`w-4 h-4 shrink-0 ${s.whatsappNumber ? "text-green-400" : "text-red-400"}`} />
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-slate-500 mb-0.5">رقم الجوال / واتساب</p>
+                      {s.whatsappNumber
+                        ? <p className="text-sm font-bold text-green-300 font-mono" dir="ltr">{s.whatsappNumber}</p>
+                        : <p className="text-xs text-red-400">غير مُدخل</p>
+                      }
+                    </div>
+                    {s.whatsappNumber && <CheckCircle className="w-4 h-4 text-green-400 shrink-0 mr-auto" />}
+                  </div>
+
+                  {/* Instagram / social */}
+                  <div className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border ${s.socialLink ? "bg-green-900/30 border-green-700/40" : "bg-orange-900/20 border-orange-700/30"}`}>
+                    <Instagram className={`w-4 h-4 shrink-0 ${s.socialLink ? "text-pink-400" : "text-orange-400"}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] text-slate-500 mb-0.5">حساب إنستقرام</p>
+                      {s.socialLink
+                        ? <a href={s.socialLink} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-pink-300 hover:text-pink-200 truncate block transition-colors">{s.socialLink}</a>
+                        : <p className="text-xs text-orange-400">غير مُدخل</p>
+                      }
+                    </div>
+                    {s.socialLink && <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />}
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-600 pt-1">
+                  بمجرد قبول الطلب يصبح صاحب الشاليه مالكاً موثّقاً تلقائياً في المنصة.
+                </p>
+              </div>
+
               <ChaletDiamondContent
                 mode="modal"
                 data={{
@@ -3838,19 +3877,25 @@ function PartnerApplicationsTab() {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   Platform Revenue Tab — subscription fees, commission, net profit
+   Platform Budget Tab — Subscriptions − Expenses = Net Profit
    ══════════════════════════════════════════════════════════════ */
+interface PlatformExpense { id: number; dateStr: string; category: string; amount: number; notes: string }
 interface PlatformRevenueData {
   totalSubscriptionRevenue: number;
-  totalCommission: number;
-  totalRevenue: number;
+  totalExpenses: number;
   netProfit: number;
   totalSubscriptions: number;
   subscriptionBreakdown: { plan: string; count: number; planPrice: number; total: number }[];
   subscriptionsByStatus: { status: string; count: string }[];
+  platformExpenses: PlatformExpense[];
 }
 
 function PlatformRevenueTab() {
+  const qc = useQueryClient();
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [expForm, setExpForm] = useState({ dateStr: "", category: "", amount: "", notes: "" });
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
   const { data, isLoading } = useQuery<PlatformRevenueData>({
     queryKey: ["admin", "platform-revenue"],
     queryFn: async () => {
@@ -3861,6 +3906,30 @@ function PlatformRevenueTab() {
     staleTime: 30_000,
   });
 
+  const addExpense = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${API}/admin/platform-expenses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ...expForm, amount: Number(expForm.amount) }),
+      });
+      if (!r.ok) throw new Error("failed");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "platform-revenue"] });
+      setExpForm({ dateStr: "", category: "", amount: "", notes: "" });
+      setShowAddExpense(false);
+    },
+  });
+
+  async function deleteExpense(id: number) {
+    setDeletingId(id);
+    await fetch(`${API}/admin/platform-expenses/${id}`, { method: "DELETE", credentials: "include" });
+    qc.invalidateQueries({ queryKey: ["admin", "platform-revenue"] });
+    setDeletingId(null);
+  }
+
   if (isLoading) return (
     <div className="flex items-center justify-center py-20">
       <Loader2 className="animate-spin text-amber-400 w-8 h-8" />
@@ -3870,81 +3939,72 @@ function PlatformRevenueTab() {
   const d = data!;
   const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
 
-  const kpis = [
-    {
-      label: "رسوم الاشتراكات المحصّلة",
-      value: `${fmtN(d.totalSubscriptionRevenue)} ر.س`,
-      icon: <CreditCard className="w-5 h-5 text-emerald-400" />,
-      className: "border-emerald-700/40 bg-emerald-900/20",
-      sub: `${fmtN(d.totalSubscriptions)} اشتراك نشط`,
-    },
-    {
-      label: "العمولات من الحجوزات",
-      value: `${fmtN(d.totalCommission)} ر.س`,
-      icon: <DollarSign className="w-5 h-5 text-blue-400" />,
-      className: "border-blue-700/40 bg-blue-900/20",
-      sub: "لا توجد عمولات محددة حتى الآن",
-    },
-    {
-      label: "صافي ربح المنصة",
-      value: `${fmtN(d.netProfit)} ر.س`,
-      icon: <TrendingUp className="w-5 h-5 text-amber-400" />,
-      className: "border-amber-700/40 bg-amber-900/20",
-      sub: "الإيرادات الكلية (قبل التشغيل والتسويق)",
-    },
-  ];
-
-  const statusLabels: Record<string, string> = {
-    active:   "نشط",
-    expired:  "منتهي",
-    trial:    "تجريبي",
-    inactive: "غير نشط",
-    canceled: "ملغى",
-  };
-
   const planLabels: Record<string, string> = {
-    monthly:            "شهري",
-    yearly:             "سنوي",
-    chalet_basic:       "أساسي",
-    chalet_pro:         "متقدم",
-    chalet_unlimited:   "غير محدود",
-    service_basic:      "خدمات - أساسي",
-    service_pro:        "خدمات - متقدم",
+    monthly: "شهري", yearly: "سنوي",
+    chalet_basic: "أساسي", chalet_pro: "متقدم", chalet_unlimited: "غير محدود",
+    service_basic: "خدمات - أساسي", service_pro: "خدمات - متقدم",
   };
+  const statusLabels: Record<string, string> = {
+    active: "نشط", expired: "منتهي", trial: "تجريبي", inactive: "غير نشط", canceled: "ملغى",
+  };
+  const netIsPos = d.netProfit >= 0;
 
   return (
     <div className="space-y-6" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-amber-400" />
-            إيرادات المنصة
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">ملخص الرسوم والعمولات المحصّلة من الشركاء</p>
+      {/* Title */}
+      <div>
+        <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-amber-400" />
+          ميزانية المنصة
+        </h2>
+        <p className="text-xs text-slate-500 mt-1">
+          إيرادات الاشتراكات ← مصروفات المنصة → صافي الربح
+        </p>
+      </div>
+
+      {/* ── Equation KPI Bar ── */}
+      <div className="grid grid-cols-3 gap-0 bg-slate-800/70 border border-slate-700/50 rounded-2xl overflow-hidden">
+        {/* Subscriptions */}
+        <div className="p-4 border-l border-slate-700/50 space-y-1">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider">إيرادات الاشتراكات</p>
+          <p className="text-xl font-bold text-emerald-300">{fmtN(d.totalSubscriptionRevenue)} <span className="text-xs font-normal">ر.س</span></p>
+          <p className="text-[10px] text-slate-500">{fmtN(d.totalSubscriptions)} اشتراك</p>
+        </div>
+        {/* Expenses */}
+        <div className="p-4 border-l border-slate-700/50 space-y-1">
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider">مصروفات المنصة</p>
+          <p className="text-xl font-bold text-red-300">− {fmtN(d.totalExpenses)} <span className="text-xs font-normal">ر.س</span></p>
+          <p className="text-[10px] text-slate-500">{fmtN(d.platformExpenses.length)} بند مصروف</p>
+        </div>
+        {/* Net Profit */}
+        <div className={`p-4 space-y-1 ${netIsPos ? "bg-emerald-900/20" : "bg-red-900/20"}`}>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider">صافي الربح</p>
+          <p className={`text-xl font-bold ${netIsPos ? "text-amber-300" : "text-red-400"}`}>
+            = {fmtN(Math.abs(d.netProfit))} <span className="text-xs font-normal">ر.س</span>
+            {!netIsPos && <span className="text-xs text-red-400 mr-1">(خسارة)</span>}
+          </p>
+          <p className="text-[10px] text-slate-500">الرصيد الصافي</p>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {kpis.map((k) => (
-          <div key={k.label} className={`border rounded-2xl p-4 space-y-2 ${k.className}`}>
-            <div className="flex items-center gap-2">
-              {k.icon}
-              <span className="text-xs text-slate-400">{k.label}</span>
-            </div>
-            <p className="text-2xl font-bold text-slate-100 tracking-tight">{k.value}</p>
-            <p className="text-[10px] text-slate-500">{k.sub}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Subscription breakdown by plan */}
-      {d.subscriptionBreakdown.length > 0 && (
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+      {/* ── Subscription breakdown ── */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-amber-400" />
-            <h3 className="text-sm font-bold text-slate-200">توزيع الاشتراكات حسب الخطة</h3>
+            <CreditCard className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-sm font-bold text-slate-200">تفصيل الاشتراكات حسب الخطة</h3>
           </div>
+          <div className="flex gap-2">
+            {d.subscriptionsByStatus.map((s) => (
+              <span key={s.status} className="text-[10px] bg-slate-700/60 rounded-lg px-2 py-1 text-slate-400">
+                {statusLabels[s.status] ?? s.status}: {Number(s.count).toLocaleString("ar-SA")}
+              </span>
+            ))}
+          </div>
+        </div>
+        {d.subscriptionBreakdown.length === 0 ? (
+          <p className="text-slate-500 text-sm text-center py-6">لا توجد اشتراكات مدفوعة بعد</p>
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-slate-300">
               <thead>
@@ -3952,7 +4012,7 @@ function PlatformRevenueTab() {
                   <th className="text-right py-2 font-medium">الخطة</th>
                   <th className="text-center py-2 font-medium">العدد</th>
                   <th className="text-center py-2 font-medium">سعر الخطة</th>
-                  <th className="text-left py-2 font-medium">الإجمالي</th>
+                  <th className="text-left py-2 font-medium text-emerald-400">الإجمالي</th>
                 </tr>
               </thead>
               <tbody>
@@ -3964,19 +4024,127 @@ function PlatformRevenueTab() {
                     <td className="py-2 text-left text-emerald-400 font-semibold">{fmtN(row.total)} ر.س</td>
                   </tr>
                 ))}
-                <tr className="font-bold text-slate-200">
+                <tr className="font-bold text-slate-200 border-t border-slate-600">
                   <td className="py-2">الإجمالي</td>
                   <td className="py-2 text-center">{fmtN(d.totalSubscriptions)}</td>
                   <td className="py-2" />
-                  <td className="py-2 text-left text-emerald-300">{fmtN(d.totalSubscriptionRevenue)} ر.س</td>
+                  <td className="py-2 text-left text-emerald-300 text-sm">{fmtN(d.totalSubscriptionRevenue)} ر.س</td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Subscriptions by status */}
+      {/* ── Platform Expenses ── */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-4 h-4 text-red-400" />
+            <h3 className="text-sm font-bold text-slate-200">مصروفات المنصة</h3>
+          </div>
+          <button
+            onClick={() => setShowAddExpense((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 transition-colors font-medium"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            إضافة مصروف
+          </button>
+        </div>
+
+        {/* Add expense form */}
+        {showAddExpense && (
+          <div className="bg-slate-900/60 border border-slate-600/50 rounded-xl p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-medium">التاريخ *</label>
+                <Input
+                  type="date"
+                  value={expForm.dateStr}
+                  onChange={(e) => setExpForm((f) => ({ ...f, dateStr: e.target.value }))}
+                  className="bg-slate-800 border-slate-600 text-slate-100 text-xs h-8"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-medium">المبلغ (ر.س) *</label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={expForm.amount}
+                  onChange={(e) => setExpForm((f) => ({ ...f, amount: e.target.value }))}
+                  className="bg-slate-800 border-slate-600 text-slate-100 text-xs h-8"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-slate-400 font-medium">البند / الفئة *</label>
+              <Input
+                placeholder="مثال: استضافة، تسويق، رسوم دفع..."
+                value={expForm.category}
+                onChange={(e) => setExpForm((f) => ({ ...f, category: e.target.value }))}
+                className="bg-slate-800 border-slate-600 text-slate-100 text-xs h-8"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] text-slate-400 font-medium">ملاحظات</label>
+              <Input
+                placeholder="تفاصيل اختيارية..."
+                value={expForm.notes}
+                onChange={(e) => setExpForm((f) => ({ ...f, notes: e.target.value }))}
+                className="bg-slate-800 border-slate-600 text-slate-100 text-xs h-8"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button
+                size="sm"
+                onClick={() => addExpense.mutate()}
+                disabled={!expForm.dateStr || !expForm.category || !expForm.amount || addExpense.isPending}
+                className="bg-amber-600 hover:bg-amber-500 text-white text-xs"
+              >
+                {addExpense.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "حفظ المصروف"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowAddExpense(false)} className="text-xs text-slate-400">
+                إلغاء
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Expenses list */}
+        {d.platformExpenses.length === 0 ? (
+          <p className="text-slate-500 text-sm text-center py-6">لا توجد مصروفات مسجّلة بعد</p>
+        ) : (
+          <div className="space-y-2">
+            {d.platformExpenses.map((exp) => {
+              const { hijri, gregorian } = formatDualDate(exp.dateStr);
+              return (
+                <div key={exp.id} className="flex items-center justify-between bg-slate-900/40 rounded-xl px-3 py-2.5 gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-200">{exp.category}</p>
+                    {exp.notes && <p className="text-[10px] text-slate-500 mt-0.5">{exp.notes}</p>}
+                    <p className="text-[10px] text-slate-600 mt-0.5">{hijri} · <span dir="ltr" className="inline">{gregorian}</span></p>
+                  </div>
+                  <p className="text-sm font-bold text-red-300 shrink-0">{fmtN(exp.amount)} ر.س</p>
+                  <button
+                    onClick={() => deleteExpense(exp.id)}
+                    disabled={deletingId === exp.id}
+                    className="text-slate-600 hover:text-red-400 transition-colors disabled:opacity-50"
+                  >
+                    {deletingId === exp.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              );
+            })}
+            {/* Total row */}
+            <div className="flex items-center justify-between bg-red-900/20 border border-red-700/30 rounded-xl px-3 py-2">
+              <p className="text-xs font-bold text-slate-300">إجمالي المصروفات</p>
+              <p className="text-sm font-bold text-red-300">{fmtN(d.totalExpenses)} ر.س</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Subscriptions by status (compact) ── */}
       {d.subscriptionsByStatus.length > 0 && (
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
           <div className="flex items-center gap-2">
@@ -4007,9 +4175,7 @@ function PlatformRevenueTab() {
 
 const ALL_TABS = [
   { id: "submissions",          label: "الطلبات",               icon: Settings },
-  { id: "chaletVerify",         label: "التوثيق",                icon: ShieldCheck },
-  { id: "partnerApplications",  label: "طلبات الشركاء",         icon: Users },
-  { id: "platformRevenue",      label: "إيرادات المنصة",        icon: TrendingUp },
+  { id: "platformRevenue",      label: "ميزانية المنصة",        icon: TrendingUp },
   { id: "services",             label: "خدمات المناسبات",       icon: Wrench },
   { id: "providerSubmissions",  label: "طلبات مزودي الخدمات",  icon: Star },
   { id: "serviceCategories",    label: "فئات الخدمات",          icon: Tag },
@@ -5095,8 +5261,6 @@ export default function Admin() {
       {/* Content */}
       <main className="p-6 max-w-7xl mx-auto">
         {activeTab === "submissions"          && <SubmissionsTab isSuperAdmin={isSuperAdmin} />}
-        {activeTab === "chaletVerify"         && <ChaletsVerifyTab />}
-        {activeTab === "partnerApplications"  && <PartnerApplicationsTab />}
         {activeTab === "platformRevenue"      && <PlatformRevenueTab />}
         {activeTab === "services"             && <ServicesTab />}
         {activeTab === "providerSubmissions"  && <ProviderSubmissionsTab />}

@@ -19,10 +19,8 @@ export const ALL_ADMIN_PERM_KEYS = Object.keys(ADMIN_PERM_LABELS) as AdminPermKe
 
 export const ADMIN_TAB_PERMISSION: Record<string, AdminPermKey | "__superadmin__"> = {
   submissions:           "chaletApprovals",
-  chaletVerify:          "chaletApprovals",
   services:              "chaletApprovals",
   providerSubmissions:   "chaletApprovals",
-  partnerApplications:   "chaletApprovals",
   platformRevenue:       "__superadmin__",
   serviceCategories:     "platformSettings",
   expenseCategories:     "platformSettings",

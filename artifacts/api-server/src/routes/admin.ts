@@ -1027,9 +1027,10 @@ router.patch("/applications/:id/docs", async (req, res) => {
 });
 
 /* ══════════════════════════════════════════════════════
-   Platform Revenue — subscription fees + commission summary
+   Platform Budget — subscriptions income vs platform expenses → net profit
    ══════════════════════════════════════════════════════ */
 router.get("/platform-revenue", async (_req, res) => {
+  // Subscription revenue
   const subRows = await db.execute<{
     plan: string; count: string; plan_price: string;
   }>(sql`
@@ -1049,10 +1050,28 @@ router.get("/platform-revenue", async (_req, res) => {
     total: Number(r.count) * Number(r.plan_price),
   }));
   const totalSubscriptionRevenue = breakdown.reduce((s, r) => s + r.total, 0);
-  const totalCommission = 0;
-  const totalRevenue = totalSubscriptionRevenue + totalCommission;
-
   const totalSubCount = breakdown.reduce((s, r) => s + r.count, 0);
+
+  // Platform expenses — stored as owner_expenses with owner_id = '__platform__'
+  const expRows = await db.execute<{
+    id: number; date_str: string; category: string; custom_category: string;
+    amount: string; notes: string;
+  }>(sql`
+    SELECT id, date_str, category, custom_category, amount, notes
+    FROM owner_expenses
+    WHERE owner_id = '__platform__'
+    ORDER BY date_str DESC
+  `);
+
+  const platformExpenses = expRows.rows.map(r => ({
+    id: r.id,
+    dateStr: r.date_str,
+    category: r.custom_category || r.category,
+    amount: Number(r.amount),
+    notes: r.notes,
+  }));
+  const totalExpenses = platformExpenses.reduce((s, r) => s + r.amount, 0);
+  const netProfit = totalSubscriptionRevenue - totalExpenses;
 
   const allSubs = await db.execute<{ status: string; count: string }>(sql`
     SELECT status, COUNT(*) as count FROM owner_subscriptions GROUP BY status
@@ -1060,13 +1079,32 @@ router.get("/platform-revenue", async (_req, res) => {
 
   return res.json({
     totalSubscriptionRevenue,
-    totalCommission,
-    totalRevenue,
-    netProfit: totalRevenue,
+    totalExpenses,
+    netProfit,
     totalSubscriptions: totalSubCount,
     subscriptionBreakdown: breakdown,
     subscriptionsByStatus: allSubs.rows,
+    platformExpenses,
   });
+});
+
+router.post("/platform-expenses", async (req, res) => {
+  const { dateStr, category, amount, notes } = req.body ?? {};
+  if (!dateStr || !category || !amount) {
+    return res.status(400).json({ error: "البيانات ناقصة" });
+  }
+  await db.execute(sql`
+    INSERT INTO owner_expenses (owner_id, date_str, category, custom_category, amount, notes)
+    VALUES ('__platform__', ${String(dateStr)}, 'other', ${String(category)}, ${Number(amount)}, ${String(notes ?? "")})
+  `);
+  return res.json({ ok: true });
+});
+
+router.delete("/platform-expenses/:id", async (req, res) => {
+  await db.execute(sql`
+    DELETE FROM owner_expenses WHERE id = ${Number(req.params.id)} AND owner_id = '__platform__'
+  `);
+  return res.json({ ok: true });
 });
 
 export default router;
