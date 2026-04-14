@@ -20,8 +20,9 @@ import {
   ownerStaffTable,
   ownerExpensesTable,
   customerNotesTable,
+  ownerSubscriptionsTable,
 } from "@workspace/db/schema";
-import { eq, inArray, and, gt, sql } from "drizzle-orm";
+import { eq, inArray, and, gt, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
@@ -240,13 +241,32 @@ router.patch("/submissions/:id/status", async (req, res) => {
     adminNote: body.data.adminNote ?? null,
   };
   if (body.data.status === "approved") {
-    updateData.trialEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const trialExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    updateData.trialEndsAt = trialExpiry;
 
     const [submission] = await db
       .select()
       .from(chaletSubmissionsTable)
       .where(eq(chaletSubmissionsTable.id, id))
       .limit(1);
+
+    if (submission?.ownerId) {
+      // Create or refresh a free-trial subscription for the owner
+      const existingSub = await db
+        .select()
+        .from(ownerSubscriptionsTable)
+        .where(eq(ownerSubscriptionsTable.ownerId, submission.ownerId))
+        .limit(1);
+      if (existingSub.length === 0) {
+        await db.insert(ownerSubscriptionsTable).values({
+          ownerId: submission.ownerId,
+          plan: "trial",
+          status: "active",
+          paymentStatus: "free",
+          expiresAt: trialExpiry,
+        }).onConflictDoNothing();
+      }
+    }
 
     if (submission) {
       await db.insert(chaletsTable).values({
@@ -1106,5 +1126,114 @@ router.delete("/platform-expenses/:id", async (req, res) => {
   `);
   return res.json({ ok: true });
 });
+
+/* ── Admin Analytics ─────────────────────────────────────── */
+router.get("/analytics", async (_req, res) => {
+  // 1. Monthly subscription revenue — last 12 months
+  const monthlyRev = await db.execute<{ month: string; total: string }>(sql`
+    SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month,
+           SUM(sp.price) AS total
+    FROM owner_subscriptions os
+    LEFT JOIN subscription_plans sp ON sp.slug = os.plan
+    WHERE os.payment_status = 'paid'
+      AND os.created_at >= NOW() - INTERVAL '12 months'
+    GROUP BY DATE_TRUNC('month', created_at)
+    ORDER BY DATE_TRUNC('month', created_at)
+  `);
+
+  // 2. Market distribution — chalets vs services
+  const chaletCount = await db.execute<{ count: string }>(sql`SELECT COUNT(*) as count FROM chalets`);
+  const serviceCount = await db.execute<{ count: string }>(sql`SELECT COUNT(*) as count FROM external_services`);
+
+  // 3. Geographic heatmap — bookings by city (top 10)
+  const geoData = await db.execute<{ city: string; count: string }>(sql`
+    SELECT c.location AS city, COUNT(b.id) AS count
+    FROM owner_bookings b
+    JOIN chalets c ON c.id = b.chalet_id
+    GROUP BY c.location
+    ORDER BY COUNT(b.id) DESC
+    LIMIT 10
+  `);
+
+  // 4. Account status distribution
+  const statusDist = await db.execute<{ status: string; count: string }>(sql`
+    SELECT status, COUNT(*) as count FROM owner_subscriptions GROUP BY status
+  `);
+  const noSubOwners = await db.execute<{ count: string }>(sql`
+    SELECT COUNT(DISTINCT cs.owner_id) as count
+    FROM chalet_submissions cs
+    WHERE cs.owner_id IS NOT NULL
+      AND cs.status = 'approved'
+      AND cs.owner_id NOT IN (SELECT owner_id FROM owner_subscriptions)
+  `);
+
+  return res.json({
+    monthlyRevenue: monthlyRev.rows.map(r => ({
+      month: r.month,
+      total: Number(r.total ?? 0),
+    })),
+    marketDistribution: {
+      chalets: Number(chaletCount.rows[0]?.count ?? 0),
+      services: Number(serviceCount.rows[0]?.count ?? 0),
+    },
+    geographicData: geoData.rows.map(r => ({
+      city: r.city,
+      count: Number(r.count),
+    })),
+    accountStatus: [
+      ...statusDist.rows.map(r => ({ status: r.status, count: Number(r.count) })),
+      ...(Number(noSubOwners.rows[0]?.count ?? 0) > 0
+        ? [{ status: "no_sub", count: Number(noSubOwners.rows[0]?.count ?? 0) }]
+        : []),
+    ],
+  });
+});
+
+/* ── Auto-deactivation export (called at server startup) ─── */
+export async function runSubscriptionExpiryJob() {
+  try {
+    // Find expired active subscriptions
+    const expired = await db
+      .select({ ownerId: ownerSubscriptionsTable.ownerId })
+      .from(ownerSubscriptionsTable)
+      .where(
+        and(
+          eq(ownerSubscriptionsTable.status, "active"),
+          lt(ownerSubscriptionsTable.expiresAt, new Date()),
+        )
+      );
+
+    if (expired.length === 0) return;
+
+    const ownerIds = expired.map(r => r.ownerId);
+
+    // Mark subscriptions as inactive
+    await db
+      .update(ownerSubscriptionsTable)
+      .set({ status: "inactive" })
+      .where(
+        and(
+          eq(ownerSubscriptionsTable.status, "active"),
+          lt(ownerSubscriptionsTable.expiresAt, new Date()),
+        )
+      );
+
+    // Deactivate all chalets belonging to expired owners
+    await db
+      .update(chaletsTable)
+      .set({ isActive: false })
+      .where(inArray(chaletsTable.ownerId, ownerIds));
+
+    // Deactivate all services belonging to expired owners
+    await db
+      .update(externalServicesTable)
+      .set({ isActive: false })
+      .where(inArray(externalServicesTable.ownerId, ownerIds));
+
+    console.log(`[subscription-expiry] Deactivated ${ownerIds.length} owners`);
+  } catch (err) {
+    console.error("[subscription-expiry] Error:", err);
+  }
+}
 
 export default router;

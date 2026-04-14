@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+  PieChart, Pie, Cell, LineChart, Line, Legend,
+} from "recharts";
 import { formatDualDate } from "@/lib/hijri";
 import { toAr } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -3501,9 +3505,9 @@ function PlansTab() {
       {/* Add/Edit Form Dialog */}
       <Dialog open={showForm} onOpenChange={(o) => { if (!o) setShowForm(false); }}>
         <DialogContent
-          className="bg-slate-900 border-slate-700 text-white max-w-lg flex flex-col"
+          className="bg-slate-900 border-slate-700 text-white max-w-lg flex flex-col z-[200]"
           dir="rtl"
-          style={{ top: '50px', transform: 'translateX(-50%)', maxHeight: 'calc(100dvh - 70px)' }}
+          style={{ maxHeight: 'min(calc(100dvh - 60px), 700px)', overflowY: 'auto' }}
         >
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-white flex items-center gap-2">
@@ -4173,11 +4177,231 @@ function PlatformRevenueTab() {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Overview / Analytics Tab — charts & KPIs
+   ══════════════════════════════════════════════════════════════ */
+interface AnalyticsData {
+  monthlyRevenue: { month: string; total: number }[];
+  marketDistribution: { chalets: number; services: number };
+  geographicData: { city: string; count: number }[];
+  accountStatus: { status: string; count: number }[];
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  active:   "نشط",
+  inactive: "غير نشط",
+  expired:  "منتهي",
+  trial:    "تجريبي",
+  canceled: "ملغى",
+  no_sub:   "بدون اشتراك",
+};
+
+const MONTH_AR: Record<string, string> = {
+  "01":"يناير","02":"فبراير","03":"مارس","04":"أبريل","05":"مايو","06":"يونيو",
+  "07":"يوليو","08":"أغسطس","09":"سبتمبر","10":"أكتوبر","11":"نوفمبر","12":"ديسمبر",
+};
+
+const CHART_COLORS = ["#f59e0b","#10b981","#3b82f6","#ef4444","#8b5cf6","#ec4899"];
+
+function OverviewTab() {
+  const { data, isLoading } = useQuery<AnalyticsData>({
+    queryKey: ["admin", "analytics"],
+    queryFn: async () => {
+      const r = await fetch(`${API}/admin/analytics`, { credentials: "include" });
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    },
+    staleTime: 60_000,
+  });
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-24">
+      <Loader2 className="animate-spin text-amber-400 w-8 h-8" />
+    </div>
+  );
+
+  const d = data!;
+  const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
+
+  // Prepare monthly revenue with Arabic month labels
+  const revenueData = d.monthlyRevenue.map(r => ({
+    ...r,
+    label: MONTH_AR[r.month.split("-")[1]] ?? r.month,
+    totalLabel: `${fmtN(r.total)} ر.س`,
+  }));
+
+  // Pie data for market distribution
+  const marketPie = [
+    { name: "شاليهات", value: d.marketDistribution.chalets },
+    { name: "خدمات مناسبات", value: d.marketDistribution.services },
+  ];
+
+  // Account status pie
+  const statusPie = d.accountStatus.map(s => ({
+    name: STATUS_LABELS[s.status] ?? s.status,
+    value: s.count,
+  }));
+
+  const totalUnits = d.marketDistribution.chalets + d.marketDistribution.services;
+  const totalAccounts = d.accountStatus.reduce((s, r) => s + r.count, 0);
+
+  return (
+    <div className="space-y-6" dir="rtl">
+      {/* Title */}
+      <div>
+        <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-amber-400" />
+          لوحة الإحصائيات
+        </h2>
+        <p className="text-xs text-slate-500 mt-1">نظرة شاملة على أداء المنصة</p>
+      </div>
+
+      {/* KPI row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: "إجمالي الشاليهات", value: fmtN(d.marketDistribution.chalets), icon: <Home className="w-4 h-4 text-amber-400" /> },
+          { label: "الخدمات المسجّلة", value: fmtN(d.marketDistribution.services), icon: <Wrench className="w-4 h-4 text-blue-400" /> },
+          { label: "الحسابات النشطة", value: fmtN(d.accountStatus.find(s => s.status === "active")?.count ?? 0), icon: <CheckCircle className="w-4 h-4 text-emerald-400" /> },
+          { label: "إيرادات الاشتراكات", value: `${fmtN(d.monthlyRevenue.reduce((s, r) => s + r.total, 0))} ر.س`, icon: <TrendingUp className="w-4 h-4 text-amber-400" /> },
+        ].map(k => (
+          <div key={k.label} className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-2">
+            <div className="flex items-center gap-2">{k.icon}<span className="text-[10px] text-slate-500">{k.label}</span></div>
+            <p className="text-xl font-bold text-slate-100">{k.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Row 1: Revenue Growth + Market Pie */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Revenue Growth Line Chart */}
+        <div className="lg:col-span-2 bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-emerald-400" />
+            نمو إيرادات الاشتراكات (آخر ١٢ شهرًا)
+          </h3>
+          {revenueData.length === 0 ? (
+            <p className="text-slate-500 text-xs text-center py-10">لا توجد بيانات إيرادات بعد</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={revenueData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} />
+                <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} />
+                <Tooltip
+                  contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" }}
+                  formatter={(v: number) => [`${fmtN(v)} ر.س`, "الإيراد"]}
+                  labelStyle={{ color: "#f59e0b" }}
+                />
+                <Line type="monotone" dataKey="total" stroke="#f59e0b" strokeWidth={2} dot={{ fill: "#f59e0b", r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Market Distribution Pie */}
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <Globe className="w-4 h-4 text-blue-400" />
+            توزيع السوق
+          </h3>
+          {totalUnits === 0 ? (
+            <p className="text-slate-500 text-xs text-center py-10">لا توجد بيانات</p>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie data={marketPie} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={3}>
+                    {marketPie.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-1.5">
+                {marketPie.map((item, i) => (
+                  <div key={item.name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                      <span className="text-slate-400">{item.name}</span>
+                    </div>
+                    <span className="font-semibold text-slate-200">{fmtN(item.value)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Row 2: Geographic Bar + Account Status Pie */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Geographic Heatmap Bar Chart */}
+        <div className="lg:col-span-2 bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-red-400" />
+            حجم الحجوزات حسب المدينة
+          </h3>
+          {d.geographicData.length === 0 ? (
+            <p className="text-slate-500 text-xs text-center py-10">لا توجد بيانات حجوزات بعد</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={d.geographicData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                <XAxis dataKey="city" tick={{ fill: "#94a3b8", fontSize: 10 }} />
+                <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" }}
+                  formatter={(v: number) => [fmtN(v), "حجز"]}
+                />
+                <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                  {d.geographicData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Account Status Pie */}
+        <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
+          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <Users className="w-4 h-4 text-purple-400" />
+            حالة الحسابات
+          </h3>
+          {totalAccounts === 0 ? (
+            <p className="text-slate-500 text-xs text-center py-10">لا توجد بيانات</p>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie data={statusPie} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={3}>
+                    {statusPie.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-1.5">
+                {statusPie.map((item, i) => (
+                  <div key={item.name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                      <span className="text-slate-400">{item.name}</span>
+                    </div>
+                    <span className="font-semibold text-slate-200">{fmtN(item.value)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ALL_TABS = [
+  { id: "overview",             label: "الإحصائيات",            icon: BarChart3 },
   { id: "submissions",          label: "الطلبات",               icon: Settings },
   { id: "platformRevenue",      label: "ميزانية المنصة",        icon: TrendingUp },
   { id: "services",             label: "خدمات المناسبات",       icon: Wrench },
-  { id: "providerSubmissions",  label: "طلبات مزودي الخدمات",  icon: Star },
   { id: "serviceCategories",    label: "فئات الخدمات",          icon: Tag },
   { id: "expenseCategories",   label: "فئات المصروفات",        icon: Tag },
   { id: "locations",           label: "المدن والأحياء",        icon: Building2 },
@@ -5081,7 +5305,7 @@ export default function Admin() {
   const [, setLocation]         = useLocation();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { adminStaffUser, isAdminStaff, permissions: adminPerms, isLoading: staffLoading, logout: adminStaffLogout } = useAdminStaffAuth();
-  const [activeTab, setActiveTab] = useState<TabId>("submissions");
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
 
   const { data: accessCheck, isLoading: checkLoading, error: checkError } = useQuery({
     queryKey: ["admin", "access-check"],
@@ -5260,10 +5484,10 @@ export default function Admin() {
 
       {/* Content */}
       <main className="p-6 max-w-7xl mx-auto">
+        {activeTab === "overview"             && <OverviewTab />}
         {activeTab === "submissions"          && <SubmissionsTab isSuperAdmin={isSuperAdmin} />}
         {activeTab === "platformRevenue"      && <PlatformRevenueTab />}
         {activeTab === "services"             && <ServicesTab />}
-        {activeTab === "providerSubmissions"  && <ProviderSubmissionsTab />}
         {activeTab === "serviceCategories"   && <ServiceCategoriesTab />}
         {activeTab === "expenseCategories"   && <ExpenseCategoriesTab />}
         {activeTab === "locations"           && <LocationsTab />}

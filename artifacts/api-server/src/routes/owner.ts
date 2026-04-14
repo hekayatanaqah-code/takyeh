@@ -1325,6 +1325,12 @@ router.get("/subscription", async (req, res) => {
     .from(ownerSubscriptionsTable)
     .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
 
+  const calcDaysLeft = (expiresAt: Date | null): number => {
+    if (!expiresAt) return 0;
+    const ms = new Date(expiresAt).getTime() - Date.now();
+    return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+  };
+
   if (!sub) {
     const trialExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     return res.json({
@@ -1334,10 +1340,11 @@ router.get("/subscription", async (req, res) => {
       expiresAt: trialExpiry.toISOString(),
       paymentStatus: "pending",
       createdAt: new Date().toISOString(),
+      daysLeft: 30,
     });
   }
 
-  return res.json(sub);
+  return res.json({ ...sub, daysLeft: calcDaysLeft(sub.expiresAt) });
 });
 
 /* ── Expenses ──────────────────────────────────────────────── */

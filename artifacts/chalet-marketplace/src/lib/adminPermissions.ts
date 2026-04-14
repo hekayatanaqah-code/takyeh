@@ -18,9 +18,9 @@ export const ADMIN_PERM_LABELS: Record<AdminPermKey, { label: string; descriptio
 export const ALL_ADMIN_PERM_KEYS = Object.keys(ADMIN_PERM_LABELS) as AdminPermKey[];
 
 export const ADMIN_TAB_PERMISSION: Record<string, AdminPermKey | "__superadmin__"> = {
+  overview:              "globalFinancials",
   submissions:           "chaletApprovals",
   services:              "chaletApprovals",
-  providerSubmissions:   "chaletApprovals",
   platformRevenue:       "__superadmin__",
   serviceCategories:     "platformSettings",
   expenseCategories:     "platformSettings",
