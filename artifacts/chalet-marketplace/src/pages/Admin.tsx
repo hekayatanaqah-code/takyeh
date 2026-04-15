@@ -45,7 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, Check, Video } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -4419,21 +4419,101 @@ function OverviewTab() {
    DirectAdd Tab — admin directly creates a chalet or service provider
    under a chosen owner, bypassing the submission review flow.
    ══════════════════════════════════════════════════════════════ */
+const DA_PROPERTY_TYPES = [
+  { value: "شالية",    label: "🏕️ شالية" },
+  { value: "مزرعة",   label: "🌿 مزرعة" },
+  { value: "استراحة", label: "🏡 استراحة" },
+  { value: "مخيم",    label: "⛺ مخيم" },
+];
+const DA_SECTIONS_OPTS = [
+  { value: "قسم واحد",      label: "🔑 قسم واحد" },
+  { value: "قسمين منفصلة", label: "🔑🔑 قسمين منفصلة" },
+];
+const DA_DAY_NAMES = ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+const DA_DEFAULT_TERMS = "يمنع التدخين داخل الشاليه\nوقت تسجيل الخروج الساعة ١٠:٠٠ صباحاً\nيمنع إحضار الحيوانات الأليفة\nالضيوف المسموح بهم فقط كما هو محدد عند الحجز\nأي أضرار تلحق بالمكان تُحسب على الضيف";
+type DA_DayRow = { morning: string; evening: string; fullday: string };
+const daInitGrid = (): Record<number, DA_DayRow> =>
+  Object.fromEntries([0,1,2,3,4,5,6].map(d => [d, { morning: "", evening: "", fullday: "" }]));
+
+async function daUploadFile(file: File, type: "image" | "video"): Promise<string | null> {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("type", type);
+  const r = await fetch(`${BASE}/api/storage/uploads/process`, { method: "POST", body: fd, credentials: "include" });
+  if (!r.ok) return null;
+  const d = await r.json().catch(() => ({}));
+  return d.url ?? d.originalUrl ?? null;
+}
+
 function DirectAddTab() {
   const qc = useQueryClient();
+  const photoInputRef    = useRef<HTMLInputElement>(null);
+  const videoInputRef    = useRef<HTMLInputElement>(null);
+  const logoInputRef     = useRef<HTMLInputElement>(null);
+  const galleryInputRef  = useRef<HTMLInputElement>(null);
+  const svcVideoInputRef = useRef<HTMLInputElement>(null);
+
   const [assetType, setAssetType] = useState<"chalet" | "service">("chalet");
-  const [form, setForm] = useState({
-    ownerId: "",
-    name: "",
-    location: "",
-    district: "",
-    category: "",
-    whatsapp: "",
-    price: "",
-    description: "",
+
+  /* ── Owner ── */
+  const [ownerId, setOwnerId]             = useState("");
+  const [showNewOwner, setShowNewOwner]   = useState(false);
+  const [newOwner, setNewOwner]           = useState({ fullName: "", businessName: "", phone: "", email: "", password: "" });
+  const [registeringOwner, setRegisteringOwner] = useState(false);
+  const [ownerRegErr, setOwnerRegErr]     = useState<string | null>(null);
+  const [ownerRegOk, setOwnerRegOk]       = useState<string | null>(null);
+
+  /* ── Chalet fields ── */
+  const [cForm, setCForm] = useState({
+    nameAr: "", location: "", district: "", whatsapp: "",
+    price: "", priceMorning: "", priceEvening: "", priceFullDay: "",
+    descriptionAr: "", mapsUrl: "", socialLink: "",
+    termsAndConditions: DA_DEFAULT_TERMS,
   });
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [propertyType,    setPropertyType]    = useState("");
+  const [sections,        setSections]        = useState("");
+  const [hasBedrooms,     setHasBedrooms]     = useState(false);
+  const [bedroomCount,    setBedroomCount]    = useState("");
+  const [maxGuests,       setMaxGuests]       = useState("");
+  const [slotMorning,     setSlotMorning]     = useState(true);
+  const [slotEvening,     setSlotEvening]     = useState(true);
+  const [slotFullDay,     setSlotFullDay]     = useState(true);
+  const [morningCheckIn,  setMorningCheckIn]  = useState("");
+  const [morningCheckOut, setMorningCheckOut] = useState("");
+  const [eveningCheckIn,  setEveningCheckIn]  = useState("");
+  const [eveningCheckOut, setEveningCheckOut] = useState("");
+  const [fullDayCheckIn,  setFullDayCheckIn]  = useState("");
+  const [fullDayCheckOut, setFullDayCheckOut] = useState("");
+  const [seasonalDisclaimer, setSeasonalDisclaimer] = useState(true);
+  const [dailyPriceGrid,  setDailyPriceGrid] = useState<Record<number, DA_DayRow>>(daInitGrid());
+  const [selectedAmenities, setSelectedAmenities] = useState<Set<string>>(new Set());
+  const [customAmenityTags, setCustomAmenityTags] = useState<string[]>([]);
+  const [customAmenityInput, setCustomAmenityInput] = useState("");
+  const [chaletPhotos,   setChaletPhotos]  = useState<string[]>([]);
+  const [chaletVideo,    setChaletVideo]   = useState<string | null>(null);
+  const [legalAccepted,  setLegalAccepted] = useState(false);
+  const [uploadingCPh,   setUploadingCPh]  = useState(false);
+  const [uploadingCVid,  setUploadingCVid] = useState(false);
+
+  /* ── Service fields ── */
+  const [sForm, setSForm] = useState({
+    businessName: "", city: "", category: "", whatsapp: "",
+    yearsOfExperience: "", descriptionAr: "",
+  });
+  const [coverageTags,      setCoverageTags]      = useState<string[]>([]);
+  const [customFeatureTags, setCustomFeatureTags] = useState<string[]>([]);
+  const [customFeatureInput, setCustomFeatureInput] = useState("");
+  const [svcLogoUrl,  setSvcLogoUrl]  = useState<string | null>(null);
+  const [svcGallery,  setSvcGallery]  = useState<string[]>([]);
+  const [svcVideo,    setSvcVideo]    = useState<string | null>(null);
+  const [svcLegal,    setSvcLegal]    = useState(false);
+  const [uploadingLogo, setUploadingLogo]   = useState(false);
+  const [uploadingGal,  setUploadingGal]   = useState(false);
+  const [uploadingSVid, setUploadingSVid]  = useState(false);
+
+  /* ── UI state ── */
+  const [error,      setError]      = useState<string | null>(null);
+  const [success,    setSuccess]    = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const { data: owners = [] } = useQuery<{ ownerId: string; nameAr: string; whatsappNumber: string }[]>({
@@ -4446,68 +4526,115 @@ function DirectAddTab() {
 
   const { data: cities = [] } = useQuery<City[]>({
     queryKey: ["admin", "cities"],
-    queryFn: async () => {
-      const r = await apiFetch("/admin/cities");
-      return r.ok ? r.json() : [];
-    },
+    queryFn: async () => { const r = await apiFetch("/admin/cities"); return r.ok ? r.json() : []; },
   });
-
   const { data: serviceCategories = [] } = useQuery<ServiceCat[]>({
     queryKey: ["admin", "service-categories"],
-    queryFn: async () => {
-      const r = await apiFetch("/admin/service-categories");
-      return r.ok ? r.json() : [];
-    },
+    queryFn: async () => { const r = await apiFetch("/admin/service-categories"); return r.ok ? r.json() : []; },
+  });
+  const { data: amenities = [] } = useQuery<{ id: number; key: string; labelAr: string }[]>({
+    queryKey: ["admin", "amenities"],
+    queryFn: async () => { const r = await apiFetch("/admin/amenities"); return r.ok ? r.json() : []; },
   });
 
-  function resetForm() {
-    setForm({ ownerId: "", name: "", location: "", district: "", category: "", whatsapp: "", price: "", description: "" });
-    setError(null);
+  function resetAll() {
+    setCForm({ nameAr:"", location:"", district:"", whatsapp:"", price:"", priceMorning:"", priceEvening:"", priceFullDay:"", descriptionAr:"", mapsUrl:"", socialLink:"", termsAndConditions: DA_DEFAULT_TERMS });
+    setPropertyType(""); setSections(""); setHasBedrooms(false); setBedroomCount(""); setMaxGuests("");
+    setSlotMorning(true); setSlotEvening(true); setSlotFullDay(true);
+    setMorningCheckIn(""); setMorningCheckOut(""); setEveningCheckIn(""); setEveningCheckOut(""); setFullDayCheckIn(""); setFullDayCheckOut("");
+    setSeasonalDisclaimer(true); setDailyPriceGrid(daInitGrid());
+    setSelectedAmenities(new Set()); setCustomAmenityTags([]); setCustomAmenityInput("");
+    setChaletPhotos([]); setChaletVideo(null); setLegalAccepted(false);
+    setSForm({ businessName:"", city:"", category:"", whatsapp:"", yearsOfExperience:"", descriptionAr:"" });
+    setCoverageTags([]); setCustomFeatureTags([]); setCustomFeatureInput("");
+    setSvcLogoUrl(null); setSvcGallery([]); setSvcVideo(null); setSvcLegal(false);
+    setError(null); setSuccess(null);
+  }
+
+  async function handleRegisterOwner(e: React.MouseEvent) {
+    e.preventDefault();
+    setOwnerRegErr(null); setOwnerRegOk(null); setRegisteringOwner(true);
+    try {
+      const r = await apiFetch("/register-owner", { method: "POST", body: JSON.stringify({ fullName: newOwner.fullName.trim(), businessName: newOwner.businessName.trim() || undefined, phone: newOwner.phone.trim(), email: newOwner.email.trim() || undefined, password: newOwner.password }) });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) { setOwnerRegErr(json.error ?? "حدث خطأ"); }
+      else {
+        setOwnerRegOk(`تم تسجيل "${newOwner.fullName}" — سيظهر في القائمة بعد تسجيل دخوله الأول`);
+        setNewOwner({ fullName:"", businessName:"", phone:"", email:"", password:"" });
+        setShowNewOwner(false);
+        qc.invalidateQueries({ queryKey: ["admin","owners"] });
+      }
+    } catch { setOwnerRegErr("فشل الاتصال بالخادم"); }
+    finally { setRegisteringOwner(false); }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    setSuccess(null);
+    setError(null); setSuccess(null);
+    if (!ownerId) { setError("يجب اختيار المالك"); return; }
+    if (assetType === "chalet") {
+      if (!cForm.nameAr.trim() || !cForm.location || !cForm.district.trim()) { setError("الاسم والمدينة والحي مطلوبة"); return; }
+      if (!propertyType) { setError("يجب اختيار نوع العقار"); return; }
+      if (!sections) { setError("يجب اختيار عدد الأقسام"); return; }
+      if (!cForm.price) { setError("يجب إدخال السعر الأساسي"); return; }
+      if (chaletPhotos.length === 0) { setError("يجب إضافة صورة واحدة على الأقل"); return; }
+      if (!legalAccepted) { setError("يجب الموافقة على الإقرار القانوني"); return; }
+    } else {
+      if (!sForm.businessName.trim() || !sForm.city || !sForm.category) { setError("اسم النشاط والمدينة والفئة مطلوبة"); return; }
+      if (!sForm.whatsapp.trim()) { setError("رقم الواتساب مطلوب"); return; }
+      if (svcGallery.length < 3) { setError("يجب إضافة ٣ صور على الأقل للمعرض"); return; }
+      if (!svcLegal) { setError("يجب الموافقة على الإقرار القانوني"); return; }
+    }
     setSubmitting(true);
     try {
-      const endpoint = assetType === "chalet" ? "/admin/direct-add-chalet" : "/admin/direct-add-service";
-      const body = assetType === "chalet"
-        ? {
-            ownerId: form.ownerId,
-            nameAr: form.name,
-            location: form.location,
-            district: form.district || undefined,
-            whatsappNumber: form.whatsapp,
-            pricePerNight: Number(form.price),
-            descriptionAr: form.description || undefined,
-          }
-        : {
-            ownerId: form.ownerId,
-            businessName: form.name,
-            category: form.category,
-            city: form.location,
-            whatsappNumber: form.whatsapp,
-            descriptionAr: form.description || undefined,
-          };
-      const r = await apiFetch(endpoint, { method: "POST", body: JSON.stringify(body) });
-      const json = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        setError(json.error ?? "حدث خطأ غير متوقع");
+      let r: Response;
+      if (assetType === "chalet") {
+        const grid: Record<string, Record<string, number>> = {};
+        (["morning","evening","fullday"] as const).forEach(p => {
+          const entries: Record<string, number> = {};
+          [0,1,2,3,4,5,6].forEach(d => { const v = dailyPriceGrid[d][p]; if (v.trim() && !isNaN(Number(v))) entries[String(d)] = Number(v); });
+          if (Object.keys(entries).length) grid[p] = entries;
+        });
+        r = await apiFetch("/admin/direct-add-chalet", { method:"POST", body: JSON.stringify({
+          ownerId, nameAr: cForm.nameAr.trim(), location: cForm.location, district: cForm.district.trim(),
+          whatsappNumber: cForm.whatsapp.trim(), pricePerNight: Number(cForm.price),
+          priceMorning: cForm.priceMorning ? Number(cForm.priceMorning) : null,
+          priceEvening: cForm.priceEvening ? Number(cForm.priceEvening) : null,
+          priceFullDay: cForm.priceFullDay ? Number(cForm.priceFullDay) : null,
+          descriptionAr: cForm.descriptionAr || null, propertyType, sections,
+          bedrooms: hasBedrooms && bedroomCount ? Number(bedroomCount) : null,
+          maxGuests: maxGuests ? Number(maxGuests) : null,
+          mapsUrl: cForm.mapsUrl || null, socialLink: cForm.socialLink || null,
+          termsAndConditions: cForm.termsAndConditions || null, seasonalDisclaimer,
+          amenities: [...Array.from(selectedAmenities), ...customAmenityTags.map(t => `other:${t}`)],
+          photos: chaletPhotos, videoUrl: chaletVideo || null,
+          dailyPrices: Object.keys(grid).length ? grid : null,
+          slotMorning, slotEvening, slotFullDay,
+          morningCheckIn: morningCheckIn || null, morningCheckOut: morningCheckOut || null,
+          eveningCheckIn: eveningCheckIn || null, eveningCheckOut: eveningCheckOut || null,
+          fullDayCheckIn: fullDayCheckIn || null, fullDayCheckOut: fullDayCheckOut || null,
+        })});
       } else {
-        setSuccess(assetType === "chalet" ? "تم إضافة الشاليه بنجاح وهو نشط الآن" : "تم إضافة مزود الخدمة بنجاح وهو نشط الآن");
-        resetForm();
-        qc.invalidateQueries({ queryKey: ["admin", "owners"] });
+        r = await apiFetch("/admin/direct-add-service", { method:"POST", body: JSON.stringify({
+          ownerId, businessName: sForm.businessName.trim(), category: sForm.category, city: sForm.city,
+          whatsappNumber: sForm.whatsapp.trim(), descriptionAr: sForm.descriptionAr || null,
+          yearsOfExperience: sForm.yearsOfExperience ? Number(sForm.yearsOfExperience) : null,
+          coverageTags, customFeatureTags, logoUrl: svcLogoUrl, galleryPhotos: svcGallery, videoUrl: svcVideo,
+        })});
       }
-    } catch {
-      setError("فشل الاتصال بالخادم");
-    } finally {
-      setSubmitting(false);
-    }
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) { setError(json.error ?? "حدث خطأ غير متوقع"); }
+      else {
+        setSuccess(assetType === "chalet" ? `تم إضافة "${cForm.nameAr}" بنجاح ✓` : `تم إضافة "${sForm.businessName}" بنجاح ✓`);
+        resetAll();
+        qc.invalidateQueries({ queryKey: ["admin","owners"] });
+      }
+    } catch { setError("فشل الاتصال بالخادم"); }
+    finally { setSubmitting(false); }
   }
 
   return (
-    <div className="max-w-xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-6 pb-16">
       <div>
         <h2 className="text-xl font-bold text-white">إضافة وحدة جديدة مباشرة</h2>
         <p className="text-slate-400 text-sm mt-1">أنشئ شاليهاً أو مزود خدمة تحت حساب مالك موجود — يُفعّل فوراً دون مراجعة.</p>
@@ -4515,167 +4642,478 @@ function DirectAddTab() {
 
       {/* Type toggle */}
       <div className="flex rounded-lg overflow-hidden border border-slate-700">
-        <button
-          type="button"
-          onClick={() => { setAssetType("chalet"); resetForm(); }}
-          className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType === "chalet" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}
-        >
-          🏡 شاليه
-        </button>
-        <button
-          type="button"
-          onClick={() => { setAssetType("service"); resetForm(); }}
-          className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType === "service" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}
-        >
-          🎪 مزود خدمة
-        </button>
+        <button type="button" onClick={() => { setAssetType("chalet"); resetAll(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType==="chalet" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}>🏡 شاليه</button>
+        <button type="button" onClick={() => { setAssetType("service"); resetAll(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType==="service" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}>🎪 مزود خدمة</button>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4 bg-slate-800/50 border border-slate-700 rounded-xl p-5">
-        {/* Owner */}
-        <div className="space-y-1.5">
-          <label className="text-sm text-slate-300 font-medium">المالك</label>
-          <Select value={form.ownerId} onValueChange={(v) => setForm((f) => ({ ...f, ownerId: v }))}>
-            <SelectTrigger className="bg-slate-900 border-slate-600 text-white">
-              <SelectValue placeholder="اختر المالك..." />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-900 border-slate-700 max-h-64 overflow-y-auto">
-              {owners.length === 0 && (
-                <SelectItem value="__none__" disabled className="text-slate-500">لا يوجد ملاك مسجّلون بعد</SelectItem>
-              )}
-              {owners.map((o) => (
-                <SelectItem key={o.ownerId} value={o.ownerId} className="text-white focus:bg-slate-700">
-                  <span className="font-medium">{o.nameAr}</span>
-                  <span className="text-slate-400 text-xs mr-2 font-mono">{o.ownerId.slice(0, 14)}…</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <form onSubmit={handleSubmit} className="space-y-6">
 
-        {/* Name */}
-        <div className="space-y-1.5">
-          <label className="text-sm text-slate-300 font-medium">
-            {assetType === "chalet" ? "اسم الشاليه" : "اسم النشاط التجاري"}
-          </label>
-          <Input
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder={assetType === "chalet" ? "مثال: شاليه الأندلس" : "مثال: شركة الأفراح"}
-            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
-            required
-          />
-        </div>
-
-        {/* City / Location */}
-        <div className="space-y-1.5">
-          <label className="text-sm text-slate-300 font-medium">المدينة</label>
-          <Select value={form.location} onValueChange={(v) => setForm((f) => ({ ...f, location: v }))}>
-            <SelectTrigger className="bg-slate-900 border-slate-600 text-white">
-              <SelectValue placeholder="اختر المدينة..." />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-900 border-slate-700">
-              {cities.map((c) => (
-                <SelectItem key={c.id} value={c.name} className="text-white focus:bg-slate-700">{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* District — chalet only */}
-        {assetType === "chalet" && (
+        {/* ── OWNER SECTION ── */}
+        <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
+          <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">المالك</h3>
           <div className="space-y-1.5">
-            <label className="text-sm text-slate-300 font-medium">الحي <span className="text-slate-500 font-normal">(اختياري)</span></label>
-            <Input
-              value={form.district}
-              onChange={(e) => setForm((f) => ({ ...f, district: e.target.value }))}
-              placeholder="مثال: حي النخيل"
-              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
-            />
-          </div>
-        )}
-
-        {/* Service category — service only */}
-        {assetType === "service" && (
-          <div className="space-y-1.5">
-            <label className="text-sm text-slate-300 font-medium">فئة الخدمة</label>
-            <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
-              <SelectTrigger className="bg-slate-900 border-slate-600 text-white">
-                <SelectValue placeholder="اختر الفئة..." />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-900 border-slate-700">
-                {serviceCategories.map((cat) => (
-                  <SelectItem key={cat.key} value={cat.key} className="text-white focus:bg-slate-700">
-                    {cat.emoji} {cat.labelAr}
+            <label className="text-sm text-slate-300 font-medium">اختر مالكاً موجوداً</label>
+            <Select value={ownerId} onValueChange={setOwnerId}>
+              <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر المالك..." /></SelectTrigger>
+              <SelectContent className="bg-slate-900 border-slate-700 max-h-64 overflow-y-auto">
+                {owners.length === 0 && <SelectItem value="__none__" disabled className="text-slate-500">لا يوجد ملاك مسجّلون بعد</SelectItem>}
+                {owners.map(o => (
+                  <SelectItem key={o.ownerId} value={o.ownerId} className="text-white focus:bg-slate-700">
+                    <span className="font-medium">{o.nameAr}</span>
+                    <span className="text-slate-400 text-xs mr-2">{o.whatsappNumber}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-        )}
+          {ownerRegOk && <div className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 text-sm">{ownerRegOk}</div>}
+          <button type="button" onClick={() => setShowNewOwner(v => !v)} className="text-amber-400 text-sm hover:underline underline-offset-2">
+            {showNewOwner ? "← إخفاء نموذج التسجيل" : "+ تسجيل مالك جديد"}
+          </button>
+          {showNewOwner && (
+            <div className="border border-slate-600 rounded-lg p-4 space-y-3 bg-slate-900/60">
+              <p className="text-xs text-slate-400">سيُسجَّل المالك ويمكنه تسجيل الدخول بالبريد/الهاتف وكلمة المرور.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><label className="text-xs text-slate-400">الاسم الكامل *</label><Input value={newOwner.fullName} onChange={e => setNewOwner(v => ({...v, fullName: e.target.value}))} placeholder="محمد السليم" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
+                <div className="space-y-1"><label className="text-xs text-slate-400">اسم النشاط</label><Input value={newOwner.businessName} onChange={e => setNewOwner(v => ({...v, businessName: e.target.value}))} placeholder="شاليهات السليم" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
+                <div className="space-y-1"><label className="text-xs text-slate-400">رقم الجوال *</label><Input value={newOwner.phone} onChange={e => setNewOwner(v => ({...v, phone: fromAr(e.target.value)}))} placeholder="05XXXXXXXX" data-no-arabic inputMode="numeric" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
+                <div className="space-y-1"><label className="text-xs text-slate-400">البريد الإلكتروني</label><Input value={newOwner.email} onChange={e => setNewOwner(v => ({...v, email: e.target.value}))} placeholder="example@email.com" type="email" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
+                <div className="space-y-1 col-span-2"><label className="text-xs text-slate-400">كلمة المرور * (٨ أحرف على الأقل)</label><Input value={newOwner.password} onChange={e => setNewOwner(v => ({...v, password: e.target.value}))} placeholder="••••••••" type="password" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
+              </div>
+              {ownerRegErr && <p className="text-red-400 text-xs">{ownerRegErr}</p>}
+              <Button type="button" onClick={handleRegisterOwner} disabled={registeringOwner || !newOwner.fullName.trim() || !newOwner.phone.trim() || !newOwner.password} className="bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs h-8 px-4">
+                {registeringOwner ? <Loader2 className="animate-spin w-3 h-3 ml-1" /> : <Plus className="w-3 h-3 ml-1" />}تسجيل المالك
+              </Button>
+            </div>
+          )}
+        </section>
 
-        {/* WhatsApp */}
-        <div className="space-y-1.5">
-          <label className="text-sm text-slate-300 font-medium">رقم الواتساب</label>
-          <Input
-            value={form.whatsapp}
-            onChange={(e) => setForm((f) => ({ ...f, whatsapp: fromAr(e.target.value) }))}
-            placeholder="05XXXXXXXX"
-            inputMode="numeric"
-            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
-            data-no-arabic
-            required
-          />
-        </div>
+        {/* ──── CHALET FIELDS ──── */}
+        {assetType === "chalet" && <>
+          {/* Basic Info */}
+          <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
+            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">المعلومات الأساسية</h3>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-300 font-medium">اسم الشاليه *</label>
+              <Input value={cForm.nameAr} onChange={e => setCForm(f => ({...f, nameAr: e.target.value}))} placeholder="مثال: شاليه الأندلس" className="bg-slate-900 border-slate-600 text-white" required />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm text-slate-300 font-medium">نوع العقار *</label>
+                <Select value={propertyType} onValueChange={setPropertyType}>
+                  <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر..." /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-700">
+                    {DA_PROPERTY_TYPES.map(pt => <SelectItem key={pt.value} value={pt.value} className="text-white focus:bg-slate-700">{pt.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm text-slate-300 font-medium">الأقسام *</label>
+                <Select value={sections} onValueChange={setSections}>
+                  <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر..." /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-700">
+                    {DA_SECTIONS_OPTS.map(s => <SelectItem key={s.value} value={s.value} className="text-white focus:bg-slate-700">{s.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm text-slate-300 font-medium">المدينة *</label>
+                <Select value={cForm.location} onValueChange={v => setCForm(f => ({...f, location: v}))}>
+                  <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر المدينة..." /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-700">
+                    {cities.map(c => <SelectItem key={c.id} value={c.name} className="text-white focus:bg-slate-700">{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm text-slate-300 font-medium">الحي *</label>
+                <Input value={cForm.district} onChange={e => setCForm(f => ({...f, district: e.target.value}))} placeholder="مثال: حي النخيل" className="bg-slate-900 border-slate-600 text-white" required />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm text-slate-300 font-medium">غرف النوم</label>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setHasBedrooms(v => !v)} className={`px-3 py-1.5 rounded text-xs font-medium transition-colors flex-shrink-0 ${hasBedrooms ? "bg-amber-500 text-slate-900" : "bg-slate-700 text-slate-300"}`}>{hasBedrooms ? "يوجد" : "بدون"}</button>
+                  {hasBedrooms && <Input value={toAr(bedroomCount)} onChange={e => setBedroomCount(fromAr(e.target.value))} placeholder="العدد" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white text-center" />}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm text-slate-300 font-medium">أقصى عدد ضيوف</label>
+                <Input value={toAr(maxGuests)} onChange={e => setMaxGuests(fromAr(e.target.value))} placeholder="٠" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-300 font-medium">رقم الواتساب *</label>
+              <Input value={cForm.whatsapp} onChange={e => setCForm(f => ({...f, whatsapp: fromAr(e.target.value)}))} placeholder="05XXXXXXXX" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white" required />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm text-slate-300 font-medium">رابط الخريطة</label>
+                <Input value={cForm.mapsUrl} onChange={e => setCForm(f => ({...f, mapsUrl: e.target.value}))} placeholder="https://maps.google.com/..." className="bg-slate-900 border-slate-600 text-white" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm text-slate-300 font-medium">رابط السوشيال</label>
+                <Input value={cForm.socialLink} onChange={e => setCForm(f => ({...f, socialLink: e.target.value}))} placeholder="https://instagram.com/..." className="bg-slate-900 border-slate-600 text-white" />
+              </div>
+            </div>
+          </section>
 
-        {/* Price — chalet only */}
-        {assetType === "chalet" && (
-          <div className="space-y-1.5">
-            <label className="text-sm text-slate-300 font-medium">السعر لليلة (ريال)</label>
-            <Input
-              value={form.price}
-              onChange={(e) => setForm((f) => ({ ...f, price: fromAr(e.target.value) }))}
-              placeholder="٠"
-              inputMode="numeric"
-              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
-              data-no-arabic
-              required
-            />
-          </div>
-        )}
+          {/* Pricing */}
+          <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
+            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">التسعير</h3>
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300 font-medium">الفترات المتاحة</label>
+              <div className="flex gap-2">
+                {[{k:"morning",l:"صباحية",s:slotMorning,fn:setSlotMorning},{k:"evening",l:"مسائية",s:slotEvening,fn:setSlotEvening},{k:"fullday",l:"يومية كاملة",s:slotFullDay,fn:setSlotFullDay}].map(sl => (
+                  <button key={sl.k} type="button" onClick={() => sl.fn(v => !v)} className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${sl.s ? "bg-amber-500 text-slate-900" : "bg-slate-700 text-slate-400"}`}>{sl.l}</button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-400 font-medium">السعر الأساسي (ليلة) *</label>
+                <Input value={toAr(cForm.price)} onChange={e => setCForm(f => ({...f, price: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white text-center" required />
+              </div>
+              {slotMorning && <div className="space-y-1.5"><label className="text-xs text-slate-400 font-medium">سعر الصباحية</label><Input value={toAr(cForm.priceMorning)} onChange={e => setCForm(f => ({...f, priceMorning: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white text-center" /></div>}
+              {slotEvening && <div className="space-y-1.5"><label className="text-xs text-slate-400 font-medium">سعر المسائية</label><Input value={toAr(cForm.priceEvening)} onChange={e => setCForm(f => ({...f, priceEvening: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white text-center" /></div>}
+              {slotFullDay && <div className="space-y-1.5"><label className="text-xs text-slate-400 font-medium">سعر اليوم الكامل</label><Input value={toAr(cForm.priceFullDay)} onChange={e => setCForm(f => ({...f, priceFullDay: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white text-center" /></div>}
+            </div>
+            <details>
+              <summary className="cursor-pointer text-sm text-amber-400 hover:text-amber-300 select-none">📅 جدول أسعار الأيام (اختياري)</summary>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead><tr>
+                    <th className="text-slate-400 text-right pr-2 py-1.5 font-medium">اليوم</th>
+                    {slotMorning && <th className="text-slate-400 text-center py-1.5">صباحية</th>}
+                    {slotEvening && <th className="text-slate-400 text-center py-1.5">مسائية</th>}
+                    {slotFullDay && <th className="text-slate-400 text-center py-1.5">يومية</th>}
+                  </tr></thead>
+                  <tbody>
+                    {[0,1,2,3,4,5,6].map(d => (
+                      <tr key={d} className="border-t border-slate-700/50">
+                        <td className="text-slate-300 pr-2 py-1 font-medium">{DA_DAY_NAMES[d]}</td>
+                        {slotMorning && <td className="py-1 px-1"><Input value={toAr(dailyPriceGrid[d].morning)} onChange={e => setDailyPriceGrid(g => ({...g,[d]:{...g[d],morning:fromAr(e.target.value)}}))} placeholder="—" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-700 text-white text-center h-7 text-xs w-20 mx-auto" /></td>}
+                        {slotEvening && <td className="py-1 px-1"><Input value={toAr(dailyPriceGrid[d].evening)} onChange={e => setDailyPriceGrid(g => ({...g,[d]:{...g[d],evening:fromAr(e.target.value)}}))} placeholder="—" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-700 text-white text-center h-7 text-xs w-20 mx-auto" /></td>}
+                        {slotFullDay && <td className="py-1 px-1"><Input value={toAr(dailyPriceGrid[d].fullday)} onChange={e => setDailyPriceGrid(g => ({...g,[d]:{...g[d],fullday:fromAr(e.target.value)}}))} placeholder="—" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-700 text-white text-center h-7 text-xs w-20 mx-auto" /></td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+            <details>
+              <summary className="cursor-pointer text-sm text-amber-400 hover:text-amber-300 select-none">⏰ أوقات الدخول والخروج لكل فترة</summary>
+              <div className="mt-3 space-y-3">
+                {slotMorning && <div>
+                  <p className="text-xs text-slate-400 mb-2 font-medium">📅 الفترة الصباحية</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1"><label className="text-xs text-slate-500">وقت الدخول</label><Input type="time" value={morningCheckIn} onChange={e => setMorningCheckIn(e.target.value)} className="bg-slate-900 border-slate-600 text-white h-8 text-sm" /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">وقت الخروج</label><Input type="time" value={morningCheckOut} onChange={e => setMorningCheckOut(e.target.value)} className="bg-slate-900 border-slate-600 text-white h-8 text-sm" /></div>
+                  </div>
+                </div>}
+                {slotEvening && <div>
+                  <p className="text-xs text-slate-400 mb-2 font-medium">🌙 الفترة المسائية</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1"><label className="text-xs text-slate-500">وقت الدخول</label><Input type="time" value={eveningCheckIn} onChange={e => setEveningCheckIn(e.target.value)} className="bg-slate-900 border-slate-600 text-white h-8 text-sm" /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">وقت الخروج</label><Input type="time" value={eveningCheckOut} onChange={e => setEveningCheckOut(e.target.value)} className="bg-slate-900 border-slate-600 text-white h-8 text-sm" /></div>
+                  </div>
+                </div>}
+                {slotFullDay && <div>
+                  <p className="text-xs text-slate-400 mb-2 font-medium">☀️ اليوم الكامل</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1"><label className="text-xs text-slate-500">وقت الدخول</label><Input type="time" value={fullDayCheckIn} onChange={e => setFullDayCheckIn(e.target.value)} className="bg-slate-900 border-slate-600 text-white h-8 text-sm" /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">وقت الخروج</label><Input type="time" value={fullDayCheckOut} onChange={e => setFullDayCheckOut(e.target.value)} className="bg-slate-900 border-slate-600 text-white h-8 text-sm" /></div>
+                  </div>
+                </div>}
+              </div>
+            </details>
+          </section>
 
-        {/* Description */}
-        <div className="space-y-1.5">
-          <label className="text-sm text-slate-300 font-medium">وصف مختصر <span className="text-slate-500 font-normal">(اختياري)</span></label>
-          <Textarea
-            value={form.description}
-            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            placeholder="وصف النشاط..."
-            rows={3}
-            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none"
-          />
-        </div>
+          {/* Description + Terms */}
+          <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
+            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">الوصف والشروط</h3>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-300 font-medium">وصف الشاليه</label>
+              <Textarea value={cForm.descriptionAr} onChange={e => setCForm(f => ({...f, descriptionAr: e.target.value}))} placeholder="وصف الشاليه والمزايا..." rows={3} className="bg-slate-900 border-slate-600 text-white resize-none" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-300 font-medium">الشروط والأحكام</label>
+              <Textarea value={cForm.termsAndConditions} onChange={e => setCForm(f => ({...f, termsAndConditions: e.target.value}))} rows={5} className="bg-slate-900 border-slate-600 text-white resize-none text-sm font-mono" />
+            </div>
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSeasonalDisclaimer(v => !v)}>
+              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${seasonalDisclaimer ? "bg-amber-500 border-amber-500" : "border-slate-600"}`}>{seasonalDisclaimer && <Check className="w-3 h-3 text-slate-900" />}</div>
+              <label className="text-sm text-slate-300 cursor-pointer">تفعيل إخلاء المسؤولية الموسمية</label>
+            </div>
+          </section>
 
+          {/* Amenities */}
+          <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
+            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">المرافق والمميزات</h3>
+            {amenities.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {amenities.map(a => {
+                  const checked = selectedAmenities.has(a.key);
+                  return (
+                    <button key={a.key} type="button" onClick={() => setSelectedAmenities(s => { const n = new Set(s); checked ? n.delete(a.key) : n.add(a.key); return n; })} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors text-right ${checked ? "border-amber-500 bg-amber-500/10 text-amber-300" : "border-slate-600 bg-slate-900/50 text-slate-400 hover:border-slate-500"}`}>
+                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${checked ? "bg-amber-500 border-amber-500" : "border-slate-500"}`}>{checked && <Check className="w-2.5 h-2.5 text-slate-900" />}</div>
+                      {a.labelAr}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input value={customAmenityInput} onChange={e => setCustomAmenityInput(e.target.value)} onKeyDown={e => { if (e.key==="Enter") { e.preventDefault(); if (customAmenityInput.trim()) { setCustomAmenityTags(t => [...t, customAmenityInput.trim()]); setCustomAmenityInput(""); }}}} placeholder="أضف ميزة مخصصة..." className="bg-slate-900 border-slate-600 text-white flex-1" />
+              <Button type="button" onClick={() => { if (customAmenityInput.trim()) { setCustomAmenityTags(t => [...t, customAmenityInput.trim()]); setCustomAmenityInput(""); }}} className="bg-slate-700 hover:bg-slate-600 text-white px-3">إضافة</Button>
+            </div>
+            {customAmenityTags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {customAmenityTags.map((t, i) => (
+                  <span key={i} className="flex items-center gap-1 px-2 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full text-amber-300 text-xs">
+                    {t}<button type="button" onClick={() => setCustomAmenityTags(arr => arr.filter((_,j) => j!==i))} className="hover:text-red-400 ml-1">×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Photos & Video */}
+          <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
+            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">الصور والفيديو</h3>
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300 font-medium">صور الشاليه * (حتى ١٥ صورة)</label>
+              <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={async e => {
+                const files = Array.from(e.target.files ?? []); if (!files.length) return;
+                setUploadingCPh(true);
+                const urls: string[] = [];
+                for (const f of files.slice(0, 15 - chaletPhotos.length)) { const u = await daUploadFile(f, "image"); if (u) urls.push(u); }
+                setChaletPhotos(p => [...p, ...urls]); setUploadingCPh(false); e.target.value = "";
+              }} />
+              <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploadingCPh || chaletPhotos.length >= 15} className="w-full border-2 border-dashed border-slate-600 rounded-lg py-8 text-center text-slate-400 hover:border-amber-500/50 hover:text-amber-400 transition-colors disabled:opacity-50">
+                {uploadingCPh ? <><Loader2 className="animate-spin w-5 h-5 mx-auto mb-1" /><div className="text-xs">جاري الرفع...</div></> : <><ImageIcon className="w-6 h-6 mx-auto mb-2" /><div className="text-sm">اضغط لاختيار الصور ({chaletPhotos.length}/١٥)</div></>}
+              </button>
+              {chaletPhotos.length > 0 && (
+                <div className="grid grid-cols-4 gap-2">
+                  {chaletPhotos.map((url, i) => (
+                    <div key={i} className="relative group aspect-video rounded overflow-hidden bg-slate-900">
+                      <img src={url} className="w-full h-full object-cover" alt="" />
+                      <button type="button" onClick={() => setChaletPhotos(p => p.filter((_,j) => j!==i))} className="absolute top-1 left-1 w-5 h-5 bg-red-500 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                      {i === 0 && <span className="absolute bottom-1 right-1 text-xs bg-amber-500 text-slate-900 px-1 rounded font-bold">رئيسية</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300 font-medium">فيديو الشاليه (اختياري)</label>
+              <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={async e => {
+                const file = e.target.files?.[0]; if (!file) return;
+                setUploadingCVid(true); const url = await daUploadFile(file, "video"); if (url) setChaletVideo(url);
+                setUploadingCVid(false); e.target.value = "";
+              }} />
+              {chaletVideo ? (
+                <div className="flex items-center gap-3 bg-slate-900 rounded-lg p-3">
+                  <Video className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                  <span className="text-sm text-slate-300 truncate flex-1">تم رفع الفيديو ✓</span>
+                  <button type="button" onClick={() => setChaletVideo(null)} className="text-red-400 text-xs hover:underline">إزالة</button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => videoInputRef.current?.click()} disabled={uploadingCVid} className="w-full border-2 border-dashed border-slate-600 rounded-lg py-5 text-center text-slate-400 hover:border-amber-500/50 hover:text-amber-400 transition-colors disabled:opacity-50">
+                  {uploadingCVid ? <><Loader2 className="animate-spin w-4 h-4 mx-auto mb-1" /><div className="text-xs">جاري رفع الفيديو...</div></> : <><Video className="w-5 h-5 mx-auto mb-1" /><div className="text-sm">اضغط لرفع فيديو</div></>}
+                </button>
+              )}
+            </div>
+          </section>
+
+          {/* Legal */}
+          <section className="bg-slate-800/50 border border-amber-500/20 rounded-xl p-5">
+            <div className="flex items-start gap-3 cursor-pointer" onClick={() => setLegalAccepted(v => !v)}>
+              <div className={`w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${legalAccepted ? "bg-amber-500 border-amber-500" : "border-slate-600"}`}>{legalAccepted && <Check className="w-3 h-3 text-slate-900" />}</div>
+              <p className="text-sm text-slate-300">أقرّ بأن جميع المعلومات المدخلة صحيحة وأن صاحب الوحدة وافق على شروط المنصة وأذن بنشر هذه الوحدة.</p>
+            </div>
+          </section>
+        </>}
+
+        {/* ──── SERVICE FIELDS ──── */}
+        {assetType === "service" && <>
+          {/* Basic Info */}
+          <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
+            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">المعلومات الأساسية</h3>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-300 font-medium">اسم النشاط التجاري *</label>
+              <Input value={sForm.businessName} onChange={e => setSForm(f => ({...f, businessName: e.target.value}))} placeholder="مثال: شركة الأفراح للمناسبات" className="bg-slate-900 border-slate-600 text-white" required />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm text-slate-300 font-medium">المدينة *</label>
+                <Select value={sForm.city} onValueChange={v => setSForm(f => ({...f, city: v}))}>
+                  <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر المدينة..." /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-700">
+                    {cities.map(c => <SelectItem key={c.id} value={c.name} className="text-white focus:bg-slate-700">{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm text-slate-300 font-medium">فئة الخدمة *</label>
+                <Select value={sForm.category} onValueChange={v => setSForm(f => ({...f, category: v}))}>
+                  <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر الفئة..." /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-700">
+                    {serviceCategories.map(cat => <SelectItem key={cat.key} value={cat.key} className="text-white focus:bg-slate-700">{cat.emoji} {cat.labelAr}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm text-slate-300 font-medium">رقم الواتساب *</label>
+                <Input value={sForm.whatsapp} onChange={e => setSForm(f => ({...f, whatsapp: fromAr(e.target.value)}))} placeholder="05XXXXXXXX" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white" required />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm text-slate-300 font-medium">سنوات الخبرة</label>
+                <Input value={toAr(sForm.yearsOfExperience)} onChange={e => setSForm(f => ({...f, yearsOfExperience: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-300 font-medium">وصف النشاط</label>
+              <Textarea value={sForm.descriptionAr} onChange={e => setSForm(f => ({...f, descriptionAr: e.target.value}))} placeholder="وصف الخدمات التي يقدمها النشاط..." rows={3} className="bg-slate-900 border-slate-600 text-white resize-none" />
+            </div>
+          </section>
+
+          {/* Coverage + Custom Tags */}
+          <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
+            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">نطاق التغطية والمميزات</h3>
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300 font-medium">مدن التغطية</label>
+              <div className="grid grid-cols-3 gap-2">
+                {cities.map(c => {
+                  const active = coverageTags.includes(c.name);
+                  return (
+                    <button key={c.id} type="button" onClick={() => setCoverageTags(t => active ? t.filter(x => x!==c.name) : [...t, c.name])} className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${active ? "border-amber-500 bg-amber-500/10 text-amber-300" : "border-slate-600 bg-slate-900/50 text-slate-400 hover:border-slate-500"}`}>
+                      {c.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300 font-medium">مميزات مخصصة</label>
+              <div className="flex gap-2">
+                <Input value={customFeatureInput} onChange={e => setCustomFeatureInput(e.target.value)} onKeyDown={e => { if (e.key==="Enter") { e.preventDefault(); if (customFeatureInput.trim()) { setCustomFeatureTags(t => [...t, customFeatureInput.trim()]); setCustomFeatureInput(""); }}}} placeholder="مثال: توصيل مجاني، عروض خاصة..." className="bg-slate-900 border-slate-600 text-white flex-1" />
+                <Button type="button" onClick={() => { if (customFeatureInput.trim()) { setCustomFeatureTags(t => [...t, customFeatureInput.trim()]); setCustomFeatureInput(""); }}} className="bg-slate-700 hover:bg-slate-600 text-white px-3">إضافة</Button>
+              </div>
+              {customFeatureTags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {customFeatureTags.map((t, i) => (
+                    <span key={i} className="flex items-center gap-1 px-2 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full text-amber-300 text-xs">
+                      {t}<button type="button" onClick={() => setCustomFeatureTags(arr => arr.filter((_,j) => j!==i))} className="hover:text-red-400 ml-1">×</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Logo + Gallery + Video */}
+          <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
+            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">الشعار والمعرض والفيديو</h3>
+            {/* Logo */}
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300 font-medium">شعار النشاط (اختياري)</label>
+              <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={async e => {
+                const file = e.target.files?.[0]; if (!file) return;
+                setUploadingLogo(true); const url = await daUploadFile(file, "image"); if (url) setSvcLogoUrl(url);
+                setUploadingLogo(false); e.target.value = "";
+              }} />
+              {svcLogoUrl ? (
+                <div className="flex items-center gap-3">
+                  <img src={svcLogoUrl} className="w-16 h-16 object-cover rounded-lg border border-slate-600" alt="logo" />
+                  <button type="button" onClick={() => setSvcLogoUrl(null)} className="text-red-400 text-xs hover:underline">إزالة</button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo} className="w-full border-2 border-dashed border-slate-600 rounded-lg py-5 text-center text-slate-400 hover:border-amber-500/50 hover:text-amber-400 transition-colors disabled:opacity-50">
+                  {uploadingLogo ? <Loader2 className="animate-spin w-4 h-4 mx-auto" /> : <><ImageIcon className="w-5 h-5 mx-auto mb-1" /><div className="text-sm">رفع الشعار</div></>}
+                </button>
+              )}
+            </div>
+            {/* Gallery */}
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300 font-medium">صور المعرض * (٣ على الأقل، حتى ١٠)</label>
+              <input ref={galleryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={async e => {
+                const files = Array.from(e.target.files ?? []); if (!files.length) return;
+                setUploadingGal(true);
+                const urls: string[] = [];
+                for (const f of files.slice(0, 10 - svcGallery.length)) { const u = await daUploadFile(f, "image"); if (u) urls.push(u); }
+                setSvcGallery(p => [...p, ...urls]); setUploadingGal(false); e.target.value = "";
+              }} />
+              <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={uploadingGal || svcGallery.length >= 10} className="w-full border-2 border-dashed border-slate-600 rounded-lg py-6 text-center text-slate-400 hover:border-amber-500/50 hover:text-amber-400 transition-colors disabled:opacity-50">
+                {uploadingGal ? <><Loader2 className="animate-spin w-4 h-4 mx-auto mb-1" /><div className="text-xs">جاري الرفع...</div></> : <><ImageIcon className="w-5 h-5 mx-auto mb-1" /><div className="text-sm">اختر صور المعرض ({svcGallery.length}/١٠)</div></>}
+              </button>
+              {svcGallery.length > 0 && (
+                <div className="grid grid-cols-4 gap-2">
+                  {svcGallery.map((url, i) => (
+                    <div key={i} className="relative group aspect-video rounded overflow-hidden bg-slate-900">
+                      <img src={url} className="w-full h-full object-cover" alt="" />
+                      <button type="button" onClick={() => setSvcGallery(p => p.filter((_,j) => j!==i))} className="absolute top-1 left-1 w-5 h-5 bg-red-500 rounded-full text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Video */}
+            <div className="space-y-2">
+              <label className="text-sm text-slate-300 font-medium">فيديو تعريفي (اختياري)</label>
+              <input ref={svcVideoInputRef} type="file" accept="video/*" className="hidden" onChange={async e => {
+                const file = e.target.files?.[0]; if (!file) return;
+                setUploadingSVid(true); const url = await daUploadFile(file, "video"); if (url) setSvcVideo(url);
+                setUploadingSVid(false); e.target.value = "";
+              }} />
+              {svcVideo ? (
+                <div className="flex items-center gap-3 bg-slate-900 rounded-lg p-3">
+                  <Video className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                  <span className="text-sm text-slate-300 truncate flex-1">تم رفع الفيديو ✓</span>
+                  <button type="button" onClick={() => setSvcVideo(null)} className="text-red-400 text-xs hover:underline">إزالة</button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => svcVideoInputRef.current?.click()} disabled={uploadingSVid} className="w-full border-2 border-dashed border-slate-600 rounded-lg py-5 text-center text-slate-400 hover:border-amber-500/50 hover:text-amber-400 transition-colors disabled:opacity-50">
+                  {uploadingSVid ? <><Loader2 className="animate-spin w-4 h-4 mx-auto mb-1" /><div className="text-xs">جاري رفع الفيديو...</div></> : <><Video className="w-5 h-5 mx-auto mb-1" /><div className="text-sm">اضغط لرفع فيديو</div></>}
+                </button>
+              )}
+            </div>
+          </section>
+
+          {/* Legal */}
+          <section className="bg-slate-800/50 border border-amber-500/20 rounded-xl p-5">
+            <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSvcLegal(v => !v)}>
+              <div className={`w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${svcLegal ? "bg-amber-500 border-amber-500" : "border-slate-600"}`}>{svcLegal && <Check className="w-3 h-3 text-slate-900" />}</div>
+              <p className="text-sm text-slate-300">أقرّ بأن جميع المعلومات المدخلة صحيحة وأن صاحب النشاط وافق على شروط المنصة وأذن بنشر هذه البطاقة.</p>
+            </div>
+          </section>
+        </>}
+
+        {/* Error / Success */}
         {error && (
           <div className="flex items-center gap-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-sm">
-            <XCircle className="w-4 h-4 flex-shrink-0" />
-            {error}
+            <XCircle className="w-4 h-4 flex-shrink-0" />{error}
           </div>
         )}
         {success && (
           <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 text-sm">
-            <CheckCircle className="w-4 h-4 flex-shrink-0" />
-            {success}
+            <CheckCircle className="w-4 h-4 flex-shrink-0" />{success}
           </div>
         )}
 
         <Button
           type="submit"
-          disabled={submitting || !form.ownerId || !form.name || !form.location || !form.whatsapp || (assetType === "chalet" && !form.price) || (assetType === "service" && !form.category)}
-          className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold"
+          disabled={submitting || !ownerId
+            || (assetType==="chalet" && (!cForm.nameAr||!cForm.location||!cForm.district||!propertyType||!sections||!cForm.price||!legalAccepted))
+            || (assetType==="service" && (!sForm.businessName||!sForm.city||!sForm.category||!sForm.whatsapp||!svcLegal))}
+          className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold py-3 text-base"
         >
-          {submitting ? <Loader2 className="animate-spin w-4 h-4 ml-2" /> : <Plus className="w-4 h-4 ml-2" />}
-          {assetType === "chalet" ? "إضافة الشاليه الآن" : "إضافة مزود الخدمة الآن"}
+          {submitting ? <Loader2 className="animate-spin w-5 h-5 ml-2" /> : <Plus className="w-5 h-5 ml-2" />}
+          {assetType==="chalet" ? "إضافة الشاليه الآن" : "إضافة مزود الخدمة الآن"}
         </Button>
       </form>
     </div>

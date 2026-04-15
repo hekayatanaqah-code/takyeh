@@ -1196,10 +1196,34 @@ router.post("/direct-add-chalet", requireSuperAdmin, async (req, res) => {
     ownerId: z.string().min(1),
     nameAr: z.string().min(2, "الاسم مطلوب"),
     location: z.string().min(1, "المدينة مطلوبة"),
-    district: z.string().optional(),
+    district: z.string().min(1, "الحي مطلوب"),
     whatsappNumber: z.string().min(9, "رقم واتساب غير صحيح"),
     pricePerNight: z.number().min(0),
     descriptionAr: z.string().optional().default(""),
+    propertyType: z.string().optional(),
+    sections: z.string().optional(),
+    bedrooms: z.number().int().min(0).nullable().optional(),
+    maxGuests: z.number().int().min(1).nullable().optional(),
+    mapsUrl: z.string().optional().nullable(),
+    socialLink: z.string().optional().nullable(),
+    amenities: z.array(z.string()).optional().default([]),
+    photos: z.array(z.string()).optional().default([]),
+    videoUrl: z.string().optional().nullable(),
+    termsAndConditions: z.string().optional().nullable(),
+    seasonalDisclaimer: z.boolean().optional().default(true),
+    dailyPrices: z.record(z.string(), z.record(z.string(), z.number())).nullable().optional(),
+    morningCheckIn: z.string().optional().nullable(),
+    morningCheckOut: z.string().optional().nullable(),
+    eveningCheckIn: z.string().optional().nullable(),
+    eveningCheckOut: z.string().optional().nullable(),
+    fullDayCheckIn: z.string().optional().nullable(),
+    fullDayCheckOut: z.string().optional().nullable(),
+    slotMorning: z.boolean().optional().default(true),
+    slotEvening: z.boolean().optional().default(true),
+    slotFullDay: z.boolean().optional().default(true),
+    priceMorning: z.number().nullable().optional(),
+    priceEvening: z.number().nullable().optional(),
+    priceFullDay: z.number().nullable().optional(),
   }).safeParse(req.body);
 
   if (!body.success) {
@@ -1223,40 +1247,80 @@ router.post("/direct-add-chalet", requireSuperAdmin, async (req, res) => {
     return res.status(409).json({ error: "هذا الاسم مستخدم مسبقاً في هذه المدينة" });
   }
 
+  const vals = {
+    ownerId: data.ownerId,
+    nameAr: data.nameAr,
+    location: data.location,
+    district: data.district,
+    whatsappNumber: data.whatsappNumber,
+    descriptionAr: data.descriptionAr || "",
+    pricePerNight: String(data.pricePerNight),
+    priceMorning: data.priceMorning != null ? String(data.priceMorning) : null,
+    priceEvening: data.priceEvening != null ? String(data.priceEvening) : null,
+    priceFullDay: data.priceFullDay != null ? String(data.priceFullDay) : null,
+    status: "approved" as const,
+    amenities: data.amenities ?? [],
+    photos: data.photos ?? [],
+    videoUrl: data.videoUrl || null,
+    propertyType: data.propertyType || null,
+    sections: data.sections || null,
+    bedrooms: data.bedrooms ?? null,
+    maxGuests: data.maxGuests ?? null,
+    mapsUrl: data.mapsUrl || null,
+    socialLink: data.socialLink || null,
+    termsAndConditions: data.termsAndConditions || null,
+    seasonalDisclaimer: data.seasonalDisclaimer ?? true,
+    dailyPrices: data.dailyPrices ?? null,
+    slotMorning: data.slotMorning ?? true,
+    slotEvening: data.slotEvening ?? true,
+    slotFullDay: data.slotFullDay ?? true,
+    morningCheckIn: data.morningCheckIn || null,
+    morningCheckOut: data.morningCheckOut || null,
+    eveningCheckIn: data.eveningCheckIn || null,
+    eveningCheckOut: data.eveningCheckOut || null,
+    fullDayCheckIn: data.fullDayCheckIn || null,
+    fullDayCheckOut: data.fullDayCheckOut || null,
+  };
+
   /* Create submission (already approved) */
   const [submission] = await db
     .insert(chaletSubmissionsTable)
-    .values({
-      ownerId: data.ownerId,
-      nameAr: data.nameAr,
-      location: data.location,
-      district: data.district || null,
-      whatsappNumber: data.whatsappNumber,
-      descriptionAr: data.descriptionAr || "",
-      pricePerNight: String(data.pricePerNight),
-      status: "approved",
-      amenities: [],
-      photos: [],
-      slotMorning: true,
-      slotEvening: true,
-      slotFullDay: true,
-    })
+    .values(vals)
     .returning({ id: chaletSubmissionsTable.id });
 
   /* Auto-create active chalet record */
   await db.insert(chaletsTable).values({
     submissionId: submission.id,
-    nameAr: data.nameAr,
-    descriptionAr: data.descriptionAr || "",
-    location: data.location,
-    district: data.district ?? undefined,
-    pricePerNight: String(data.pricePerNight),
-    whatsappNumber: data.whatsappNumber,
-    amenities: [],
-    photos: [],
-    slotMorning: true,
-    slotEvening: true,
-    slotFullDay: true,
+    nameAr: vals.nameAr,
+    descriptionAr: vals.descriptionAr,
+    location: vals.location,
+    district: vals.district ?? undefined,
+    pricePerNight: vals.pricePerNight,
+    priceMorning: vals.priceMorning ?? undefined,
+    priceEvening: vals.priceEvening ?? undefined,
+    priceFullDay: vals.priceFullDay ?? undefined,
+    whatsappNumber: vals.whatsappNumber,
+    amenities: vals.amenities,
+    photos: vals.photos,
+    videoUrl: vals.videoUrl ?? undefined,
+    propertyType: vals.propertyType ?? undefined,
+    sections: vals.sections ?? undefined,
+    bedrooms: vals.bedrooms,
+    maxGuests: vals.maxGuests,
+    mapsUrl: vals.mapsUrl ?? undefined,
+    socialLink: vals.socialLink,
+    termsAndConditions: vals.termsAndConditions,
+    seasonalDisclaimer: vals.seasonalDisclaimer,
+    dailyPrices: vals.dailyPrices,
+    slotMorning: vals.slotMorning,
+    slotEvening: vals.slotEvening,
+    slotFullDay: vals.slotFullDay,
+    morningCheckIn: vals.morningCheckIn,
+    morningCheckOut: vals.morningCheckOut,
+    eveningCheckIn: vals.eveningCheckIn,
+    eveningCheckOut: vals.eveningCheckOut,
+    fullDayCheckIn: vals.fullDayCheckIn,
+    fullDayCheckOut: vals.fullDayCheckOut,
     isVerified: false,
   }).onConflictDoNothing();
 
@@ -1272,6 +1336,12 @@ router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
     city: z.string().min(1, "المدينة مطلوبة"),
     whatsappNumber: z.string().min(9, "رقم واتساب غير صحيح"),
     descriptionAr: z.string().optional().default(""),
+    yearsOfExperience: z.number().int().min(0).optional(),
+    coverageTags: z.array(z.string()).optional().default([]),
+    customFeatureTags: z.array(z.string()).optional().default([]),
+    logoUrl: z.string().optional().nullable(),
+    galleryPhotos: z.array(z.string()).optional().default([]),
+    videoUrl: z.string().optional().nullable(),
   }).safeParse(req.body);
 
   if (!body.success) {
@@ -1295,34 +1365,30 @@ router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
     return res.status(409).json({ error: "هذا الاسم مستخدم مسبقاً في هذه المدينة" });
   }
 
-  /* Create submission (already approved) */
-  const [submission] = await db
-    .insert(serviceProviderSubmissionsTable)
-    .values({
-      ownerId: data.ownerId,
-      businessName: data.businessName,
-      category: data.category,
-      city: data.city,
-      whatsappNumber: data.whatsappNumber,
-      descriptionAr: data.descriptionAr || null,
-      galleryPhotos: [],
-      coverageTags: [],
-      customFeatureTags: [],
-      status: "approved",
-    })
-    .returning({ id: serviceProviderSubmissionsTable.id });
-
-  /* Auto-create active service provider record */
-  await db.insert(serviceProvidersTable).values({
+  const svcVals = {
     ownerId: data.ownerId,
     businessName: data.businessName,
     category: data.category,
     city: data.city,
     whatsappNumber: data.whatsappNumber,
     descriptionAr: data.descriptionAr || null,
-    galleryPhotos: [],
-    coverageTags: [],
-    customFeatureTags: [],
+    yearsOfExperience: data.yearsOfExperience ?? null,
+    coverageTags: data.coverageTags ?? [],
+    customFeatureTags: data.customFeatureTags ?? [],
+    logoUrl: data.logoUrl || null,
+    galleryPhotos: data.galleryPhotos ?? [],
+    videoUrl: data.videoUrl || null,
+  };
+
+  /* Create submission (already approved) */
+  const [submission] = await db
+    .insert(serviceProviderSubmissionsTable)
+    .values({ ...svcVals, status: "approved" })
+    .returning({ id: serviceProviderSubmissionsTable.id });
+
+  /* Auto-create active service provider record */
+  await db.insert(serviceProvidersTable).values({
+    ...svcVals,
     isActive: true,
   }).onConflictDoNothing();
 
