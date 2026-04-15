@@ -12654,13 +12654,12 @@ function OwnerProfileTab() {
         <div className="space-y-1.5">
           <label className="text-sm font-semibold">رقم الجوال</label>
           <Input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            value={toAr(phone)}
+            onChange={(e) => setPhone(fromAr(e.target.value))}
             className="text-right"
-            placeholder="05xxxxxxxx"
-            type="tel"
-            data-no-arabic="true"
-            dir="ltr"
+            placeholder="٠٥xxxxxxxx"
+            type="text"
+            inputMode="numeric"
           />
         </div>
 

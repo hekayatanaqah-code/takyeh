@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, Building2, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import { toAr, fromAr } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -187,12 +188,12 @@ export default function Register() {
               رقم الجوال <span className="text-red-500">*</span>
             </label>
             <Input
-              type="tel"
+              type="text"
+              inputMode="numeric"
               placeholder="٠٥١٢٣٤٥٦٧٨"
-              value={form.phone}
-              onChange={(e) => update("phone", e.target.value)}
-              dir="ltr"
-              className="h-11 text-left border-gray-200 focus:border-green-500"
+              value={toAr(form.phone)}
+              onChange={(e) => update("phone", fromAr(e.target.value))}
+              className="h-11 text-right border-gray-200 focus:border-green-500"
               required
             />
             <p className="text-xs text-gray-400">مثال: ٠٥١٢٣٤٥٦٧٨</p>

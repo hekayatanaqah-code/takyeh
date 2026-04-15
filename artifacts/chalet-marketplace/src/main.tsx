@@ -80,6 +80,8 @@ const _SKIP_TAGS = new Set([
 /**
  * Walk up the DOM and check if any ancestor should prevent conversion.
  * Stops at document.body.
+ * Only data-no-arabic prevents conversion — dir="ltr" is NOT excluded so
+ * phone numbers and stats in LTR containers still get Arabic-Indic digits.
  */
 function _hasExcludedAncestor(node: Node): boolean {
   let cur: Element | null =
@@ -91,8 +93,6 @@ function _hasExcludedAncestor(node: Node): boolean {
     const tag = cur.tagName?.toLowerCase() ?? "";
     if (_SKIP_TAGS.has(tag)) return true;
     if ("noArabic" in (cur as HTMLElement).dataset) return true;
-    // dir="ltr" means intentional Western/English content — skip
-    if ((cur as HTMLElement).dir === "ltr") return true;
     cur = cur.parentElement;
   }
   return false;

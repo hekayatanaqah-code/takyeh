@@ -4821,12 +4821,12 @@ function DirectAddTab() {
                 <label className="text-sm text-slate-300 font-medium">غرف النوم</label>
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => setHasBedrooms(v => !v)} className={`px-3 py-1.5 rounded text-xs font-medium transition-colors flex-shrink-0 ${hasBedrooms ? "bg-amber-500 text-slate-900" : "bg-slate-700 text-slate-300"}`}>{hasBedrooms ? "يوجد" : "بدون"}</button>
-                  {hasBedrooms && <Input value={toAr(bedroomCount)} onChange={e => setBedroomCount(fromAr(e.target.value))} placeholder="العدد" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white text-center" />}
+                  {hasBedrooms && <Input value={toAr(bedroomCount)} onChange={e => setBedroomCount(fromAr(e.target.value))} placeholder="العدد" inputMode="numeric" className="bg-slate-900 border-slate-600 text-white text-center" />}
                 </div>
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm text-slate-300 font-medium">أقصى عدد ضيوف</label>
-                <Input value={toAr(maxGuests)} onChange={e => setMaxGuests(fromAr(e.target.value))} placeholder="٠" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white" />
+                <Input value={toAr(maxGuests)} onChange={e => setMaxGuests(fromAr(e.target.value))} placeholder="٠" inputMode="numeric" className="bg-slate-900 border-slate-600 text-white" />
               </div>
             </div>
             <div className="space-y-1.5">

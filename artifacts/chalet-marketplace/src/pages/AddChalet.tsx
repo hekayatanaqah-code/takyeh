@@ -866,14 +866,12 @@ export default function AddChalet() {
                         </Label>
                         <div className="relative">
                           <Input
-                            type="number"
-                            min="1"
-                            max="200"
-                            placeholder="مثال: 20"
-                            value={maxGuestsInput}
-                            onChange={(e) => setMaxGuestsInput(e.target.value)}
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="مثال: ٢٠"
+                            value={toAr(maxGuestsInput)}
+                            onChange={(e) => setMaxGuestsInput(fromAr(e.target.value))}
                             className="h-12 text-base"
-                            dir="rtl"
                           />
                         </div>
                         <p className="text-xs text-muted-foreground">إذا تُرك فارغاً لن يظهر للضيوف</p>
