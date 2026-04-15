@@ -10,6 +10,13 @@
 html, :lang(ar), [lang="ar"] {
   font-feature-settings: "locl" 1;
 }
+
+/* Form controls don't inherit font-feature-settings in all browsers.
+   Force Arabic-Indic digit rendering in every input / textarea / select. */
+input, textarea, select, [contenteditable] {
+  font-family: "Noto Sans Arabic", "Segoe UI", sans-serif;
+  font-feature-settings: "locl" 1, "tnum" 0, "onum" 0;
+}
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";

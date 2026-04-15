@@ -29,7 +29,7 @@ function formatDisplay(dateStr: string): string {
     const greg = new Intl.DateTimeFormat("ar-SA", {
       day: "numeric", month: "long", year: "numeric", calendar: "gregory",
     }).format(d);
-    return `${hijri} هـ — ${greg} م`;
+    return `${hijri} — ${greg} م`;
   } catch { return dateStr; }
 }
 
@@ -104,7 +104,7 @@ export function DualDatePicker({ value, onChange, className = "" }: DualDatePick
                 <ChevronRight className="w-4 h-4" />
               </button>
               <div className="text-center flex-1">
-                <p className="text-amber-300 font-bold text-sm">{hijriHeader} هـ</p>
+                <p className="text-amber-300 font-bold text-sm">{hijriHeader}</p>
                 <p className="text-slate-500 text-[10px]">{gregHeader} م</p>
               </div>
               <button

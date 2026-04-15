@@ -64,7 +64,7 @@ function fmtDate(iso: string | null | undefined): string {
   const dateStr = iso.split("T")[0];
   const { hijri, gregorian } = formatDualDate(dateStr);
   if (!hijri) return gregorian || "—";
-  return `${hijri} هـ · ${gregorian} م`;
+  return `${hijri} · ${gregorian} م`;
 }
 
 /* ── Domain types ─────────────────────────────── */
@@ -674,7 +674,7 @@ function SubmissionsTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                   {s.location}
                   {s.district && <span className="block text-xs text-slate-500">{s.district}</span>}
                 </TableCell>
-                <TableCell className="text-slate-300 font-mono text-sm" dir="ltr">{s.whatsappNumber}</TableCell>
+                <TableCell className="text-slate-300 font-mono text-sm">{toAr(s.whatsappNumber)}</TableCell>
                 <TableCell className="text-slate-300">{Number(s.pricePerNight).toLocaleString("ar-SA")} ر.س</TableCell>
                 <TableCell><StatusBadge status={s.status} /></TableCell>
                 <TableCell className="text-slate-400 text-sm">
@@ -1177,9 +1177,9 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
           )}
           {owners.map((owner: Owner) => (
             <TableRow key={owner.ownerId} className="border-slate-700 hover:bg-slate-800/50">
-              <TableCell className="font-mono text-xs text-slate-400 max-w-[150px] truncate" dir="ltr">{owner.ownerId}</TableCell>
+              <TableCell className="font-mono text-xs text-slate-400 max-w-[150px] truncate">{toAr(owner.ownerId)}</TableCell>
               <TableCell className="text-white font-medium">{owner.nameAr}</TableCell>
-              <TableCell className="text-slate-300 font-mono text-sm" dir="ltr">{owner.whatsappNumber}</TableCell>
+              <TableCell className="text-slate-300 font-mono text-sm">{toAr(owner.whatsappNumber)}</TableCell>
               <TableCell className="text-slate-400 text-sm">{fmtDate(owner.createdAt)}</TableCell>
               {isSuperAdmin && (
               <TableCell>
@@ -2883,8 +2883,8 @@ function ProviderReviewModal({
             <div className="bg-muted/50 rounded-xl p-3">
               <p className="text-muted-foreground text-xs mb-1">واتساب</p>
               <a href={`https://wa.me/${sub.whatsappNumber}`} target="_blank" rel="noreferrer"
-                className="font-semibold text-green-600 hover:underline flex items-center gap-1 dir-ltr">
-                <Phone className="w-3.5 h-3.5" />{sub.whatsappNumber}
+                className="font-semibold text-green-600 hover:underline flex items-center gap-1">
+                <Phone className="w-3.5 h-3.5" />{toAr(sub.whatsappNumber)}
               </a>
             </div>
           </div>
