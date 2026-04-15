@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { chaletSubmissionsTable } from "@workspace/db/schema";
 import { CreateSubmissionBody } from "@workspace/api-zod";
-import { eq } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { sendAdminNewSubmissionEmail } from "../lib/email";
 
@@ -65,6 +65,24 @@ router.post("/", async (req, res) => {
 
   const data = result.data;
   const ownerId = req.isAuthenticated() ? req.user.id : null;
+
+  /* ── Unique name per city check ───────────────────────────── */
+  const [duplicate] = await db
+    .select({ id: chaletSubmissionsTable.id })
+    .from(chaletSubmissionsTable)
+    .where(
+      and(
+        sql`lower(${chaletSubmissionsTable.nameAr}) = lower(${data.nameAr})`,
+        sql`lower(${chaletSubmissionsTable.location}) = lower(${data.location})`,
+        ne(chaletSubmissionsTable.status, "rejected"),
+      )
+    )
+    .limit(1);
+  if (duplicate) {
+    return res.status(409).json({
+      error: "عذراً، هذا الاسم مستخدم مسبقاً في هذه المدينة. يرجى اختيار اسم مختلف أو إضافة تمييز للحي",
+    });
+  }
 
   const [submission] = await db
     .insert(chaletSubmissionsTable)

@@ -38,6 +38,15 @@ router.post("/register-owner", async (req, res) => {
     return res.status(409).json({ error: "هذا البريد الإلكتروني مسجّل مسبقاً. تواصل مع الإدارة إذا لم يتم التفعيل" });
   }
 
+  /* Check for duplicate phone */
+  const phoneClean = String(phone).trim().replace(/\s+/g, "");
+  const [existingPhone] = await db.execute<{ id: number }>(
+    sql`SELECT id FROM owner_applications WHERE phone = ${phoneClean} LIMIT 1`
+  );
+  if (existingPhone) {
+    return res.status(409).json({ error: "رقم الجوال مسجّل مسبقاً. تواصل مع الإدارة إذا لم يتم التفعيل" });
+  }
+
   const passwordHash = await bcrypt.hash(String(password), 10);
 
   await db.execute(

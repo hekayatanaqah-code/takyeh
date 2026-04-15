@@ -8,7 +8,7 @@ import {
   serviceAppointmentsTable,
   serviceInsurancesTable,
 } from "@workspace/db/schema";
-import { eq, and, desc, isNull, gte, sql } from "drizzle-orm";
+import { eq, and, ne, desc, isNull, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 const router = Router();
@@ -78,6 +78,24 @@ router.post("/submit", requireAuth, async (req: any, res) => {
   }
 
   const data = parsed.data;
+
+  /* ── Unique business name per city check ──────────────────── */
+  const [dupProvider] = await db
+    .select({ id: serviceProviderSubmissionsTable.id })
+    .from(serviceProviderSubmissionsTable)
+    .where(
+      and(
+        sql`lower(${serviceProviderSubmissionsTable.businessName}) = lower(${data.businessName})`,
+        sql`lower(${serviceProviderSubmissionsTable.city}) = lower(${data.city})`,
+        ne(serviceProviderSubmissionsTable.status, "rejected"),
+      )
+    )
+    .limit(1);
+  if (dupProvider) {
+    return res.status(409).json({
+      error: "عذراً، هذا الاسم مستخدم مسبقاً في هذه المدينة. يرجى اختيار اسم مختلف",
+    });
+  }
 
   // Clean up empty strings from optional URL fields
   const values = {

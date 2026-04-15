@@ -22,7 +22,7 @@ import {
   customerNotesTable,
   ownerSubscriptionsTable,
 } from "@workspace/db/schema";
-import { eq, inArray, and, gt, lt, sql } from "drizzle-orm";
+import { eq, inArray, and, gt, lt, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
@@ -1188,6 +1188,145 @@ router.get("/analytics", async (_req, res) => {
         : []),
     ],
   });
+});
+
+/* ── Admin: direct-add chalet under owner ──────────────────── */
+router.post("/direct-add-chalet", requireSuperAdmin, async (req, res) => {
+  const body = z.object({
+    ownerId: z.string().min(1),
+    nameAr: z.string().min(2, "الاسم مطلوب"),
+    location: z.string().min(1, "المدينة مطلوبة"),
+    district: z.string().optional(),
+    whatsappNumber: z.string().min(9, "رقم واتساب غير صحيح"),
+    pricePerNight: z.number().min(0),
+    descriptionAr: z.string().optional().default(""),
+  }).safeParse(req.body);
+
+  if (!body.success) {
+    return res.status(400).json({ error: "بيانات غير صحيحة", details: body.error.flatten().fieldErrors });
+  }
+
+  const data = body.data;
+
+  /* Uniqueness check */
+  const [dup] = await db
+    .select({ id: chaletSubmissionsTable.id })
+    .from(chaletSubmissionsTable)
+    .where(
+      and(
+        sql`lower(${chaletSubmissionsTable.nameAr}) = lower(${data.nameAr})`,
+        sql`lower(${chaletSubmissionsTable.location}) = lower(${data.location})`,
+        ne(chaletSubmissionsTable.status, "rejected"),
+      )
+    ).limit(1);
+  if (dup) {
+    return res.status(409).json({ error: "هذا الاسم مستخدم مسبقاً في هذه المدينة" });
+  }
+
+  /* Create submission (already approved) */
+  const [submission] = await db
+    .insert(chaletSubmissionsTable)
+    .values({
+      ownerId: data.ownerId,
+      nameAr: data.nameAr,
+      location: data.location,
+      district: data.district || null,
+      whatsappNumber: data.whatsappNumber,
+      descriptionAr: data.descriptionAr || "",
+      pricePerNight: String(data.pricePerNight),
+      status: "approved",
+      amenities: [],
+      photos: [],
+      slotMorning: true,
+      slotEvening: true,
+      slotFullDay: true,
+    })
+    .returning({ id: chaletSubmissionsTable.id });
+
+  /* Auto-create active chalet record */
+  await db.insert(chaletsTable).values({
+    submissionId: submission.id,
+    nameAr: data.nameAr,
+    descriptionAr: data.descriptionAr || "",
+    location: data.location,
+    district: data.district ?? undefined,
+    pricePerNight: String(data.pricePerNight),
+    whatsappNumber: data.whatsappNumber,
+    amenities: [],
+    photos: [],
+    slotMorning: true,
+    slotEvening: true,
+    slotFullDay: true,
+    isVerified: false,
+  }).onConflictDoNothing();
+
+  return res.status(201).json({ ok: true, submissionId: submission.id });
+});
+
+/* ── Admin: direct-add service provider under owner ──────── */
+router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
+  const body = z.object({
+    ownerId: z.string().min(1),
+    businessName: z.string().min(2, "الاسم مطلوب"),
+    category: z.string().min(1, "الفئة مطلوبة"),
+    city: z.string().min(1, "المدينة مطلوبة"),
+    whatsappNumber: z.string().min(9, "رقم واتساب غير صحيح"),
+    descriptionAr: z.string().optional().default(""),
+  }).safeParse(req.body);
+
+  if (!body.success) {
+    return res.status(400).json({ error: "بيانات غير صحيحة", details: body.error.flatten().fieldErrors });
+  }
+
+  const data = body.data;
+
+  /* Uniqueness check */
+  const [dup] = await db
+    .select({ id: serviceProviderSubmissionsTable.id })
+    .from(serviceProviderSubmissionsTable)
+    .where(
+      and(
+        sql`lower(${serviceProviderSubmissionsTable.businessName}) = lower(${data.businessName})`,
+        sql`lower(${serviceProviderSubmissionsTable.city}) = lower(${data.city})`,
+        ne(serviceProviderSubmissionsTable.status, "rejected"),
+      )
+    ).limit(1);
+  if (dup) {
+    return res.status(409).json({ error: "هذا الاسم مستخدم مسبقاً في هذه المدينة" });
+  }
+
+  /* Create submission (already approved) */
+  const [submission] = await db
+    .insert(serviceProviderSubmissionsTable)
+    .values({
+      ownerId: data.ownerId,
+      businessName: data.businessName,
+      category: data.category,
+      city: data.city,
+      whatsappNumber: data.whatsappNumber,
+      descriptionAr: data.descriptionAr || null,
+      galleryPhotos: [],
+      coverageTags: [],
+      customFeatureTags: [],
+      status: "approved",
+    })
+    .returning({ id: serviceProviderSubmissionsTable.id });
+
+  /* Auto-create active service provider record */
+  await db.insert(serviceProvidersTable).values({
+    ownerId: data.ownerId,
+    businessName: data.businessName,
+    category: data.category,
+    city: data.city,
+    whatsappNumber: data.whatsappNumber,
+    descriptionAr: data.descriptionAr || null,
+    galleryPhotos: [],
+    coverageTags: [],
+    customFeatureTags: [],
+    isActive: true,
+  }).onConflictDoNothing();
+
+  return res.status(201).json({ ok: true, submissionId: submission.id });
 });
 
 /* ── Auto-deactivation export (called at server startup) ─── */

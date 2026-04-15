@@ -4415,6 +4415,273 @@ function OverviewTab() {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   DirectAdd Tab — admin directly creates a chalet or service provider
+   under a chosen owner, bypassing the submission review flow.
+   ══════════════════════════════════════════════════════════════ */
+function DirectAddTab() {
+  const qc = useQueryClient();
+  const [assetType, setAssetType] = useState<"chalet" | "service">("chalet");
+  const [form, setForm] = useState({
+    ownerId: "",
+    name: "",
+    location: "",
+    district: "",
+    category: "",
+    whatsapp: "",
+    price: "",
+    description: "",
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const { data: owners = [] } = useQuery<{ ownerId: string; nameAr: string; whatsappNumber: string }[]>({
+    queryKey: ["admin", "owners"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/owners");
+      return r.ok ? r.json() : [];
+    },
+  });
+
+  const { data: cities = [] } = useQuery<City[]>({
+    queryKey: ["admin", "cities"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/cities");
+      return r.ok ? r.json() : [];
+    },
+  });
+
+  const { data: serviceCategories = [] } = useQuery<ServiceCat[]>({
+    queryKey: ["admin", "service-categories"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/service-categories");
+      return r.ok ? r.json() : [];
+    },
+  });
+
+  function resetForm() {
+    setForm({ ownerId: "", name: "", location: "", district: "", category: "", whatsapp: "", price: "", description: "" });
+    setError(null);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setSubmitting(true);
+    try {
+      const endpoint = assetType === "chalet" ? "/admin/direct-add-chalet" : "/admin/direct-add-service";
+      const body = assetType === "chalet"
+        ? {
+            ownerId: form.ownerId,
+            nameAr: form.name,
+            location: form.location,
+            district: form.district || undefined,
+            whatsappNumber: form.whatsapp,
+            pricePerNight: Number(form.price),
+            descriptionAr: form.description || undefined,
+          }
+        : {
+            ownerId: form.ownerId,
+            businessName: form.name,
+            category: form.category,
+            city: form.location,
+            whatsappNumber: form.whatsapp,
+            descriptionAr: form.description || undefined,
+          };
+      const r = await apiFetch(endpoint, { method: "POST", body: JSON.stringify(body) });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setError(json.error ?? "حدث خطأ غير متوقع");
+      } else {
+        setSuccess(assetType === "chalet" ? "تم إضافة الشاليه بنجاح وهو نشط الآن" : "تم إضافة مزود الخدمة بنجاح وهو نشط الآن");
+        resetForm();
+        qc.invalidateQueries({ queryKey: ["admin", "owners"] });
+      }
+    } catch {
+      setError("فشل الاتصال بالخادم");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="max-w-xl mx-auto space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-white">إضافة وحدة جديدة مباشرة</h2>
+        <p className="text-slate-400 text-sm mt-1">أنشئ شاليهاً أو مزود خدمة تحت حساب مالك موجود — يُفعّل فوراً دون مراجعة.</p>
+      </div>
+
+      {/* Type toggle */}
+      <div className="flex rounded-lg overflow-hidden border border-slate-700">
+        <button
+          type="button"
+          onClick={() => { setAssetType("chalet"); resetForm(); }}
+          className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType === "chalet" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}
+        >
+          🏡 شاليه
+        </button>
+        <button
+          type="button"
+          onClick={() => { setAssetType("service"); resetForm(); }}
+          className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType === "service" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}
+        >
+          🎪 مزود خدمة
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4 bg-slate-800/50 border border-slate-700 rounded-xl p-5">
+        {/* Owner */}
+        <div className="space-y-1.5">
+          <label className="text-sm text-slate-300 font-medium">المالك</label>
+          <Select value={form.ownerId} onValueChange={(v) => setForm((f) => ({ ...f, ownerId: v }))}>
+            <SelectTrigger className="bg-slate-900 border-slate-600 text-white">
+              <SelectValue placeholder="اختر المالك..." />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-900 border-slate-700 max-h-64 overflow-y-auto">
+              {owners.length === 0 && (
+                <SelectItem value="__none__" disabled className="text-slate-500">لا يوجد ملاك مسجّلون بعد</SelectItem>
+              )}
+              {owners.map((o) => (
+                <SelectItem key={o.ownerId} value={o.ownerId} className="text-white focus:bg-slate-700">
+                  <span className="font-medium">{o.nameAr}</span>
+                  <span className="text-slate-400 text-xs mr-2 font-mono">{o.ownerId.slice(0, 14)}…</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Name */}
+        <div className="space-y-1.5">
+          <label className="text-sm text-slate-300 font-medium">
+            {assetType === "chalet" ? "اسم الشاليه" : "اسم النشاط التجاري"}
+          </label>
+          <Input
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder={assetType === "chalet" ? "مثال: شاليه الأندلس" : "مثال: شركة الأفراح"}
+            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+            required
+          />
+        </div>
+
+        {/* City / Location */}
+        <div className="space-y-1.5">
+          <label className="text-sm text-slate-300 font-medium">المدينة</label>
+          <Select value={form.location} onValueChange={(v) => setForm((f) => ({ ...f, location: v }))}>
+            <SelectTrigger className="bg-slate-900 border-slate-600 text-white">
+              <SelectValue placeholder="اختر المدينة..." />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-900 border-slate-700">
+              {cities.map((c) => (
+                <SelectItem key={c.id} value={c.name} className="text-white focus:bg-slate-700">{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* District — chalet only */}
+        {assetType === "chalet" && (
+          <div className="space-y-1.5">
+            <label className="text-sm text-slate-300 font-medium">الحي <span className="text-slate-500 font-normal">(اختياري)</span></label>
+            <Input
+              value={form.district}
+              onChange={(e) => setForm((f) => ({ ...f, district: e.target.value }))}
+              placeholder="مثال: حي النخيل"
+              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+            />
+          </div>
+        )}
+
+        {/* Service category — service only */}
+        {assetType === "service" && (
+          <div className="space-y-1.5">
+            <label className="text-sm text-slate-300 font-medium">فئة الخدمة</label>
+            <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+              <SelectTrigger className="bg-slate-900 border-slate-600 text-white">
+                <SelectValue placeholder="اختر الفئة..." />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 border-slate-700">
+                {serviceCategories.map((cat) => (
+                  <SelectItem key={cat.key} value={cat.key} className="text-white focus:bg-slate-700">
+                    {cat.emoji} {cat.labelAr}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* WhatsApp */}
+        <div className="space-y-1.5">
+          <label className="text-sm text-slate-300 font-medium">رقم الواتساب</label>
+          <Input
+            value={form.whatsapp}
+            onChange={(e) => setForm((f) => ({ ...f, whatsapp: fromAr(e.target.value) }))}
+            placeholder="05XXXXXXXX"
+            inputMode="numeric"
+            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+            data-no-arabic
+            required
+          />
+        </div>
+
+        {/* Price — chalet only */}
+        {assetType === "chalet" && (
+          <div className="space-y-1.5">
+            <label className="text-sm text-slate-300 font-medium">السعر لليلة (ريال)</label>
+            <Input
+              value={form.price}
+              onChange={(e) => setForm((f) => ({ ...f, price: fromAr(e.target.value) }))}
+              placeholder="٠"
+              inputMode="numeric"
+              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
+              data-no-arabic
+              required
+            />
+          </div>
+        )}
+
+        {/* Description */}
+        <div className="space-y-1.5">
+          <label className="text-sm text-slate-300 font-medium">وصف مختصر <span className="text-slate-500 font-normal">(اختياري)</span></label>
+          <Textarea
+            value={form.description}
+            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            placeholder="وصف النشاط..."
+            rows={3}
+            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none"
+          />
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-sm">
+            <XCircle className="w-4 h-4 flex-shrink-0" />
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 text-sm">
+            <CheckCircle className="w-4 h-4 flex-shrink-0" />
+            {success}
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          disabled={submitting || !form.ownerId || !form.name || !form.location || !form.whatsapp || (assetType === "chalet" && !form.price) || (assetType === "service" && !form.category)}
+          className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold"
+        >
+          {submitting ? <Loader2 className="animate-spin w-4 h-4 ml-2" /> : <Plus className="w-4 h-4 ml-2" />}
+          {assetType === "chalet" ? "إضافة الشاليه الآن" : "إضافة مزود الخدمة الآن"}
+        </Button>
+      </form>
+    </div>
+  );
+}
+
 const ALL_TABS = [
   { id: "overview",             label: "الإحصائيات",            icon: BarChart3 },
   { id: "submissions",          label: "الطلبات",               icon: Settings },
@@ -4430,6 +4697,7 @@ const ALL_TABS = [
   { id: "reviews",             label: "التقييمات",             icon: Star },
   { id: "siteSettings",        label: "إعدادات الموقع",        icon: Settings },
   { id: "adminStaff",          label: "موظفو الإدارة",         icon: Shield },
+  { id: "directAdd",           label: "إضافة وحدة",            icon: Plus },
 ] as const;
 
 type TabId = typeof ALL_TABS[number]["id"];
@@ -5516,6 +5784,7 @@ export default function Admin() {
         {activeTab === "reviews"             && <ReviewsTab />}
         {activeTab === "siteSettings"        && <SettingsTab />}
         {activeTab === "adminStaff"          && <AdminStaffTab isSuperAdmin={isSuperAdmin} currentUserName={displayName ?? ""} />}
+        {activeTab === "directAdd"           && <DirectAddTab />}
       </main>
     </div>
   );

@@ -32,4 +32,5 @@ export const ADMIN_TAB_PERMISSION: Record<string, AdminPermKey | "__superadmin__
   reviews:               "supportDisputes",
   siteSettings:          "platformSettings",
   adminStaff:            "__superadmin__",
+  directAdd:             "__superadmin__",
 };
