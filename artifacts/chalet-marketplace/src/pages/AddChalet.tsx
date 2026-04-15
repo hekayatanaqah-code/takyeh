@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { fromAr } from "@/lib/utils";
+import { fromAr, toAr } from "@/lib/utils";
 import { useSearch, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
@@ -1016,13 +1016,14 @@ export default function AddChalet() {
                         <Phone className="absolute top-3.5 right-3 w-4 h-4 text-muted-foreground pointer-events-none" />
                         <Input
                           id="whatsappNumber"
-                          type="tel"
-                          placeholder="05XXXXXXXX"
-                          value={form.whatsappNumber}
-                          onChange={(e) => handleChange("whatsappNumber", e.target.value)}
+                          type="text"
+                          inputMode="numeric"
+                          data-no-arabic
+                          placeholder="٠٥XXXXXXXX"
+                          value={toAr(form.whatsappNumber)}
+                          onChange={(e) => handleChange("whatsappNumber", fromAr(e.target.value))}
                           required
                           className="h-12 text-base pr-10"
-                          dir="ltr"
                         />
                       </div>
                     </div>
@@ -1063,7 +1064,7 @@ export default function AddChalet() {
                                       <input
                                         type="text"
                                         inputMode="numeric"
-                                        value={dailyPriceGrid[idx][period]}
+                                        value={toAr(dailyPriceGrid[idx][period] || "")}
                                         onChange={e => setDayCell(idx, period, e.target.value)}
                                         placeholder="—"
                                         style={{
@@ -1077,7 +1078,6 @@ export default function AddChalet() {
                                           textAlign: "center",
                                           background: dailyPriceGrid[idx][period] ? "#f0fdf4" : "#f9fafb",
                                           outline: "none",
-                                          direction: "ltr",
                                           transition: "border-color 0.15s, background 0.15s",
                                         }}
                                       />
