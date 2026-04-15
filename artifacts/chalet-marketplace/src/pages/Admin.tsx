@@ -4512,10 +4512,15 @@ function DirectAddTab() {
   const [uploadingSVid, setUploadingSVid]  = useState(false);
 
   /* ── Custom city "other" state ── */
-  const [cCitySelectVal, setCCitySelectVal] = useState("");
-  const [cCustomCity,    setCCustomCity]    = useState("");
-  const [sCitySelectVal, setSCitySelectVal] = useState("");
-  const [sCustomCity,    setSCustomCity]    = useState("");
+  const [cCitySelectVal,     setCCitySelectVal]     = useState("");
+  const [cCustomCity,        setCCustomCity]        = useState("");
+  const [sCitySelectVal,     setSCitySelectVal]     = useState("");
+  const [sCustomCity,        setSCustomCity]        = useState("");
+
+  /* ── District dropdown (chalet) ── */
+  const [cSelectedCityId,    setCSelectedCityId]    = useState<number | null>(null);
+  const [cDistrictSelectVal, setCDistrictSelectVal] = useState("");
+  const [cCustomDistrict,    setCCustomDistrict]    = useState("");
 
   /* ── UI state ── */
   const [error,      setError]      = useState<string | null>(null);
@@ -4533,6 +4538,16 @@ function DirectAddTab() {
   const { data: cities = [] } = useQuery<City[]>({
     queryKey: ["admin", "cities"],
     queryFn: async () => { const r = await apiFetch("/admin/cities"); return r.ok ? r.json() : []; },
+  });
+  const { data: daDistricts = [] } = useQuery<{ id: number; name: string; cityId: number }[]>({
+    queryKey: ["catalog", "districts", cSelectedCityId],
+    queryFn: async () => {
+      const url = cSelectedCityId ? `/api/districts?cityId=${cSelectedCityId}` : "/api/districts";
+      const r = await fetch(`${BASE}${url}`, { credentials: "include" });
+      return r.ok ? r.json() : [];
+    },
+    enabled: true,
+    staleTime: 60_000,
   });
   const { data: serviceCategories = [] } = useQuery<ServiceCat[]>({
     queryKey: ["admin", "service-categories"],
@@ -4552,6 +4567,7 @@ function DirectAddTab() {
     setSelectedAmenities(new Set()); setCustomAmenityTags([]); setCustomAmenityInput("");
     setChaletPhotos([]); setChaletVideo(null); setLegalAccepted(false);
     setCCitySelectVal(""); setCCustomCity(""); setSCitySelectVal(""); setSCustomCity("");
+    setCSelectedCityId(null); setCDistrictSelectVal(""); setCCustomDistrict("");
     setSForm({ businessName:"", city:"", category:"", whatsapp:"", yearsOfExperience:"", descriptionAr:"" });
     setCoverageTags([]); setCustomFeatureTags([]); setCustomFeatureInput("");
     setSvcLogoUrl(null); setSvcGallery([]); setSvcVideo(null); setSvcLegal(false);
@@ -4600,6 +4616,17 @@ function DirectAddTab() {
         const city = await r.json();
         resolvedSCity = city.name ?? trimmed;
       } catch { resolvedSCity = trimmed; }
+    }
+
+    /* ── Save custom district to catalog ── */
+    if (assetType === "chalet" && cDistrictSelectVal === "__other__" && cCustomDistrict.trim() && resolvedCLocation) {
+      const cityObj = cities.find(c => c.name === resolvedCLocation);
+      const cityId = cityObj?.id ?? cSelectedCityId;
+      if (cityId) {
+        try {
+          await apiFetch("/districts", { method: "POST", body: JSON.stringify({ name: cCustomDistrict.trim(), cityId }) });
+        } catch {}
+      }
     }
 
     if (assetType === "chalet") {
@@ -4752,8 +4779,14 @@ function DirectAddTab() {
                 <label className="text-sm text-slate-300 font-medium">المدينة *</label>
                 <Select value={cCitySelectVal} onValueChange={v => {
                   setCCitySelectVal(v);
-                  if (v === "__other__") { setCForm(f => ({...f, location: ""})); setCCustomCity(""); }
-                  else { setCForm(f => ({...f, location: v})); }
+                  setCDistrictSelectVal(""); setCCustomDistrict(""); setCForm(f => ({...f, district: ""}));
+                  if (v === "__other__") {
+                    setCForm(f => ({...f, location: ""})); setCCustomCity(""); setCSelectedCityId(null);
+                  } else {
+                    setCForm(f => ({...f, location: v}));
+                    const cityObj = cities.find(c => c.name === v);
+                    setCSelectedCityId(cityObj?.id ?? null);
+                  }
                 }}>
                   <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر المدينة..." /></SelectTrigger>
                   <SelectContent className="bg-slate-900 border-slate-700">
@@ -4767,7 +4800,20 @@ function DirectAddTab() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm text-slate-300 font-medium">الحي *</label>
-                <Input value={cForm.district} onChange={e => setCForm(f => ({...f, district: e.target.value}))} placeholder="مثال: حي النخيل" className="bg-slate-900 border-slate-600 text-white" required />
+                <Select value={cDistrictSelectVal} onValueChange={v => {
+                  setCDistrictSelectVal(v);
+                  if (v === "__other__") { setCCustomDistrict(""); setCForm(f => ({...f, district: ""})); }
+                  else { setCForm(f => ({...f, district: v})); }
+                }}>
+                  <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder={daDistricts.length > 0 ? "اختر الحي..." : "حي / منطقة"} /></SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-slate-700">
+                    {daDistricts.map(d => <SelectItem key={d.id} value={d.name} className="text-white focus:bg-slate-700">{d.name}</SelectItem>)}
+                    <SelectItem value="__other__" className="text-amber-400 focus:bg-slate-700">أخرى...</SelectItem>
+                  </SelectContent>
+                </Select>
+                {cDistrictSelectVal === "__other__" && (
+                  <Input value={cCustomDistrict} onChange={e => { setCCustomDistrict(e.target.value); setCForm(f => ({...f, district: e.target.value})); }} placeholder="اكتب اسم الحي أو المنطقة" className="bg-slate-900 border-slate-600 text-white mt-1" autoFocus />
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -4785,7 +4831,7 @@ function DirectAddTab() {
             </div>
             <div className="space-y-1.5">
               <label className="text-sm text-slate-300 font-medium">رقم الواتساب *</label>
-              <Input value={cForm.whatsapp} onChange={e => setCForm(f => ({...f, whatsapp: fromAr(e.target.value)}))} placeholder="05XXXXXXXX" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white" required />
+              <Input value={toAr(cForm.whatsapp)} onChange={e => setCForm(f => ({...f, whatsapp: fromAr(e.target.value)}))} placeholder="٠٥XXXXXXXX" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white" required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -4813,11 +4859,11 @@ function DirectAddTab() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs text-slate-400 font-medium">السعر الأساسي (ليلة) *</label>
-                <Input value={toAr(cForm.price)} onChange={e => setCForm(f => ({...f, price: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white text-center" required />
+                <Input value={toAr(cForm.price)} onChange={e => setCForm(f => ({...f, price: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" className="bg-slate-900 border-slate-600 text-white text-center" required />
               </div>
-              {slotMorning && <div className="space-y-1.5"><label className="text-xs text-slate-400 font-medium">سعر الصباحية</label><Input value={toAr(cForm.priceMorning)} onChange={e => setCForm(f => ({...f, priceMorning: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white text-center" /></div>}
-              {slotEvening && <div className="space-y-1.5"><label className="text-xs text-slate-400 font-medium">سعر المسائية</label><Input value={toAr(cForm.priceEvening)} onChange={e => setCForm(f => ({...f, priceEvening: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white text-center" /></div>}
-              {slotFullDay && <div className="space-y-1.5"><label className="text-xs text-slate-400 font-medium">سعر اليوم الكامل</label><Input value={toAr(cForm.priceFullDay)} onChange={e => setCForm(f => ({...f, priceFullDay: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white text-center" /></div>}
+              {slotMorning && <div className="space-y-1.5"><label className="text-xs text-slate-400 font-medium">سعر الصباحية</label><Input value={toAr(cForm.priceMorning)} onChange={e => setCForm(f => ({...f, priceMorning: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" className="bg-slate-900 border-slate-600 text-white text-center" /></div>}
+              {slotEvening && <div className="space-y-1.5"><label className="text-xs text-slate-400 font-medium">سعر المسائية</label><Input value={toAr(cForm.priceEvening)} onChange={e => setCForm(f => ({...f, priceEvening: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" className="bg-slate-900 border-slate-600 text-white text-center" /></div>}
+              {slotFullDay && <div className="space-y-1.5"><label className="text-xs text-slate-400 font-medium">سعر اليوم الكامل</label><Input value={toAr(cForm.priceFullDay)} onChange={e => setCForm(f => ({...f, priceFullDay: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" className="bg-slate-900 border-slate-600 text-white text-center" /></div>}
             </div>
             <details>
               <summary className="cursor-pointer text-sm text-amber-400 hover:text-amber-300 select-none">📅 جدول أسعار الأيام (اختياري)</summary>
@@ -4833,9 +4879,9 @@ function DirectAddTab() {
                     {[0,1,2,3,4,5,6].map(d => (
                       <tr key={d} className="border-t border-slate-700/50">
                         <td className="text-slate-300 pr-2 py-1 font-medium">{DA_DAY_NAMES[d]}</td>
-                        {slotMorning && <td className="py-1 px-1"><Input value={toAr(dailyPriceGrid[d].morning)} onChange={e => setDailyPriceGrid(g => ({...g,[d]:{...g[d],morning:fromAr(e.target.value)}}))} placeholder="—" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-700 text-white text-center h-7 text-xs w-20 mx-auto" /></td>}
-                        {slotEvening && <td className="py-1 px-1"><Input value={toAr(dailyPriceGrid[d].evening)} onChange={e => setDailyPriceGrid(g => ({...g,[d]:{...g[d],evening:fromAr(e.target.value)}}))} placeholder="—" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-700 text-white text-center h-7 text-xs w-20 mx-auto" /></td>}
-                        {slotFullDay && <td className="py-1 px-1"><Input value={toAr(dailyPriceGrid[d].fullday)} onChange={e => setDailyPriceGrid(g => ({...g,[d]:{...g[d],fullday:fromAr(e.target.value)}}))} placeholder="—" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-700 text-white text-center h-7 text-xs w-20 mx-auto" /></td>}
+                        {slotMorning && <td className="py-1 px-1"><Input value={toAr(dailyPriceGrid[d].morning)} onChange={e => setDailyPriceGrid(g => ({...g,[d]:{...g[d],morning:fromAr(e.target.value)}}))} placeholder="—" inputMode="numeric" className="bg-slate-900 border-slate-700 text-white text-center h-7 text-xs w-20 mx-auto" /></td>}
+                        {slotEvening && <td className="py-1 px-1"><Input value={toAr(dailyPriceGrid[d].evening)} onChange={e => setDailyPriceGrid(g => ({...g,[d]:{...g[d],evening:fromAr(e.target.value)}}))} placeholder="—" inputMode="numeric" className="bg-slate-900 border-slate-700 text-white text-center h-7 text-xs w-20 mx-auto" /></td>}
+                        {slotFullDay && <td className="py-1 px-1"><Input value={toAr(dailyPriceGrid[d].fullday)} onChange={e => setDailyPriceGrid(g => ({...g,[d]:{...g[d],fullday:fromAr(e.target.value)}}))} placeholder="—" inputMode="numeric" className="bg-slate-900 border-slate-700 text-white text-center h-7 text-xs w-20 mx-auto" /></td>}
                       </tr>
                     ))}
                   </tbody>
@@ -5015,7 +5061,7 @@ function DirectAddTab() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-sm text-slate-300 font-medium">رقم الواتساب *</label>
-                <Input value={sForm.whatsapp} onChange={e => setSForm(f => ({...f, whatsapp: fromAr(e.target.value)}))} placeholder="05XXXXXXXX" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white" required />
+                <Input value={toAr(sForm.whatsapp)} onChange={e => setSForm(f => ({...f, whatsapp: fromAr(e.target.value)}))} placeholder="٠٥XXXXXXXX" inputMode="numeric" data-no-arabic className="bg-slate-900 border-slate-600 text-white" required />
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm text-slate-300 font-medium">سنوات الخبرة</label>
