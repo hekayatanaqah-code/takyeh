@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, chaletsTable } from "@workspace/db";
 import { chaletAvailabilityTable } from "@workspace/db/schema";
-import { eq, lte, gte, and, type SQL } from "drizzle-orm";
+import { eq, lte, gte, and, sql, type SQL } from "drizzle-orm";
 import {
   GetChaletsQueryParams,
   GetChaletByIdParams,
@@ -42,7 +42,7 @@ router.get("/", async (req, res) => {
     .select()
     .from(chaletsTable)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(chaletsTable.id);
+    .orderBy(sql`RANDOM()`);
 
   /* ── Availability filter ─────────────────────────────────── */
   if (searchDate && /^\d{4}-\d{2}-\d{2}$/.test(searchDate)) {

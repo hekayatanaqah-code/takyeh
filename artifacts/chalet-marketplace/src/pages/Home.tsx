@@ -73,6 +73,7 @@ export default function Home() {
   const [searchCategory, setSearchCategory] = useState<string>("");
   const [searchPeriod, setSearchPeriod]     = useState<string>("");
   const [bookingDate, setBookingDate]       = useState<string>("");
+  const [searchError, setSearchError]       = useState<string>("");
   const [numDays, setNumDays]               = useState<number>(1);
   /* Hero tab — "properties" (default) | "services" — pre-select from URL */
   const [heroTab, setHeroTab]               = useState<"properties" | "services">(
@@ -145,6 +146,11 @@ export default function Home() {
   };
 
   const handleSearch = () => {
+    if (!searchCity || searchCity === "all" || !bookingDate) {
+      setSearchError("يرجى تحديد المدينة وتاريخ الحجز للمتابعة");
+      return;
+    }
+    setSearchError("");
     const params = new URLSearchParams();
     if (searchCity && searchCity !== "all") params.append("location", searchCity);
     if (searchDistrict && searchDistrict !== "all") params.append("district", searchDistrict);
@@ -367,13 +373,20 @@ export default function Home() {
                 </div>
 
                 {/* Search button */}
-                <Button
-                  onClick={handleSearch}
-                  className="h-auto md:h-full py-4 px-8 rounded-xl text-lg font-bold shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all shrink-0"
-                >
-                  <Search className="w-5 h-5 me-2" />
-                  ابحث الآن
-                </Button>
+                <div className="flex flex-col gap-1 shrink-0">
+                  <Button
+                    onClick={handleSearch}
+                    className="h-auto md:h-full py-4 px-8 rounded-xl text-lg font-bold shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
+                  >
+                    <Search className="w-5 h-5 me-2" />
+                    ابحث الآن
+                  </Button>
+                  {searchError && (
+                    <p className="text-xs text-amber-300 font-medium text-center px-1 animate-pulse">
+                      {searchError}
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* ── Booking summary ─────────────────────────────────── */}

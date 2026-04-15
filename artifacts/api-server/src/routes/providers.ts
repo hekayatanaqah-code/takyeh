@@ -8,7 +8,7 @@ import {
   serviceAppointmentsTable,
   serviceInsurancesTable,
 } from "@workspace/db/schema";
-import { eq, and, desc, isNull, gte } from "drizzle-orm";
+import { eq, and, desc, isNull, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 const router = Router();
@@ -31,8 +31,8 @@ router.get("/", async (req, res) => {
     .select()
     .from(serviceProvidersTable)
     .where(and(...conditions))
-    .orderBy(serviceProvidersTable.createdAt);
-  return res.json(rows.reverse());
+    .orderBy(sql`RANDOM()`);
+  return res.json(rows);
 });
 
 /* ── Public: single provider ──────────────────────── */
