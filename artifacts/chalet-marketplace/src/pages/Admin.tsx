@@ -5,7 +5,8 @@ import {
   PieChart, Pie, Cell, LineChart, Line, Legend,
 } from "recharts";
 import { formatDualDate, toHijri } from "@/lib/hijri";
-import { toAr } from "@/lib/utils";
+import { toAr, fromAr } from "@/lib/utils";
+import { DualDatePicker } from "@/components/DualDatePicker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useAdminStaffAuth } from "@/lib/useAdminStaffAuth";
@@ -418,7 +419,7 @@ function SubmissionReviewModal({
                     <div className="min-w-0">
                       <p className="text-[10px] text-slate-500 mb-0.5">رقم الجوال / واتساب</p>
                       {s.whatsappNumber
-                        ? <p className="text-sm font-bold text-green-300 font-mono" dir="ltr">{s.whatsappNumber}</p>
+                        ? <p className="text-sm font-bold text-green-300">{toAr(s.whatsappNumber)}</p>
                         : <p className="text-xs text-red-400">غير مُدخل</p>
                       }
                     </div>
@@ -1339,11 +1340,12 @@ function ServicesTab() {
             <div className="space-y-1.5">
               <label className="text-slate-300 text-sm font-medium">رقم الواتساب *</label>
               <Input
-                value={form.whatsappNumber}
-                onChange={(e) => setForm((f) => ({ ...f, whatsappNumber: e.target.value }))}
-                placeholder="966501234567"
+                type="text"
+                inputMode="tel"
+                value={toAr(form.whatsappNumber)}
+                onChange={(e) => setForm((f) => ({ ...f, whatsappNumber: fromAr(e.target.value) }))}
+                placeholder="٩٦٦٥٠١٢٣٤٥٦٧"
                 className="bg-slate-900 border-slate-600 text-white placeholder-slate-400"
-                dir="ltr"
               />
             </div>
 
@@ -1442,7 +1444,7 @@ function ServicesTab() {
                     <TableCell className="text-slate-300">{svc.city ?? "—"}</TableCell>
                     <TableCell className="text-slate-300">
                       {svc.price
-                        ? `${Number(svc.price).toLocaleString("ar-SA")} ر.س`
+                        ? `${toAr(Number(svc.price).toLocaleString())} ر.س`
                         : svc.priceNote ?? "بالاتفاق"}
                     </TableCell>
                     <TableCell>
@@ -3552,34 +3554,34 @@ function PlansTab() {
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">السعر (ر.س) *</label>
                 <Input
-                  type="number"
-                  placeholder="99"
-                  value={form.price}
-                  onChange={(e) => setForm({ ...form, price: e.target.value })}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="٩٩"
+                  value={toAr(form.price)}
+                  onChange={(e) => setForm({ ...form, price: fromAr(e.target.value) })}
                   className="bg-slate-800 border-slate-600 text-white"
-                  dir="ltr"
                 />
               </div>
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">المدة (أيام) *</label>
                 <Input
-                  type="number"
-                  placeholder="30"
-                  value={form.durationDays}
-                  onChange={(e) => setForm({ ...form, durationDays: Number(e.target.value) })}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="٣٠"
+                  value={toAr(String(form.durationDays))}
+                  onChange={(e) => setForm({ ...form, durationDays: Number(fromAr(e.target.value)) || 0 })}
                   className="bg-slate-800 border-slate-600 text-white"
-                  dir="ltr"
                 />
               </div>
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">أيام تجريبية</label>
                 <Input
-                  type="number"
-                  placeholder="0"
-                  value={form.trialDays}
-                  onChange={(e) => setForm({ ...form, trialDays: Number(e.target.value) })}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="٠"
+                  value={toAr(String(form.trialDays))}
+                  onChange={(e) => setForm({ ...form, trialDays: Number(fromAr(e.target.value)) || 0 })}
                   className="bg-slate-800 border-slate-600 text-white"
-                  dir="ltr"
                 />
               </div>
             </div>
@@ -3588,12 +3590,12 @@ function PlansTab() {
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">ترتيب العرض</label>
                 <Input
-                  type="number"
-                  placeholder="0"
-                  value={form.sortOrder}
-                  onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="٠"
+                  value={toAr(String(form.sortOrder))}
+                  onChange={(e) => setForm({ ...form, sortOrder: Number(fromAr(e.target.value)) || 0 })}
                   className="bg-slate-800 border-slate-600 text-white"
-                  dir="ltr"
                 />
               </div>
               <div className="flex items-end">
@@ -4071,32 +4073,19 @@ function PlatformRevenueTab() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-400 font-medium">التاريخ *</label>
-                <Input
-                  type="date"
+                <DualDatePicker
                   value={expForm.dateStr}
-                  onChange={(e) => setExpForm((f) => ({ ...f, dateStr: e.target.value }))}
-                  className="bg-slate-800 border-slate-600 text-slate-100 text-xs h-8"
+                  onChange={(v) => setExpForm((f) => ({ ...f, dateStr: v }))}
                 />
-                <div className={`rounded-lg px-2.5 py-1.5 mt-1 border text-xs ${expForm.dateStr ? "bg-amber-950/40 border-amber-700/50" : "bg-slate-800/40 border-slate-700/30"}`}>
-                  <p className="text-[9px] text-slate-500 mb-0.5">التاريخ الهجري</p>
-                  <p className={`font-bold text-sm ${expForm.dateStr ? "text-amber-300" : "text-slate-600"}`} dir="rtl">
-                    {expForm.dateStr ? toHijri(expForm.dateStr) : toHijri(new Date().toISOString().slice(0, 10))}
-                    <span className="text-xs font-normal mr-1 opacity-70">هـ</span>
-                  </p>
-                  {expForm.dateStr && (
-                    <p className="text-[9px] text-slate-500 mt-0.5">
-                      {new Date(expForm.dateStr + "T12:00:00").toLocaleDateString("ar-SA", { weekday: "long", day: "numeric", month: "long", year: "numeric", calendar: "gregory" })} م
-                    </p>
-                  )}
-                </div>
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-400 font-medium">المبلغ (ر.س) *</label>
                 <Input
-                  type="number"
-                  placeholder="0"
-                  value={expForm.amount}
-                  onChange={(e) => setExpForm((f) => ({ ...f, amount: e.target.value }))}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="٠"
+                  value={toAr(expForm.amount)}
+                  onChange={(e) => setExpForm((f) => ({ ...f, amount: fromAr(e.target.value) }))}
                   className="bg-slate-800 border-slate-600 text-slate-100 text-xs h-8"
                 />
               </div>
