@@ -5212,6 +5212,195 @@ function DirectAddTab() {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Terms Management Tab — dedicated CRUD for platform Terms of Use
+   ══════════════════════════════════════════════════════════════ */
+function TermsManagementTab() {
+  const qc = useQueryClient();
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+  function apiFetch(path: string, opts?: RequestInit) {
+    return fetch(`${BASE}/api${path}`, {
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(opts?.headers ?? {}) },
+      ...opts,
+    });
+  }
+
+  const [termsText, setTermsText] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [charCount, setCharCount] = useState(0);
+
+  const { data: settings, isLoading } = useQuery<Record<string, string>>({
+    queryKey: ["admin", "settings"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/settings");
+      if (!r.ok) throw new Error("فشل التحميل");
+      return r.json();
+    },
+  });
+
+  useEffect(() => {
+    if (settings?.terms_page_content !== undefined) {
+      setTermsText(settings.terms_page_content ?? "");
+      setCharCount((settings.terms_page_content ?? "").length);
+    }
+  }, [settings]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (text: string) => {
+      const r = await apiFetch("/admin/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ terms_page_content: text }),
+      });
+      if (!r.ok) throw new Error("فشل الحفظ");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "settings"] });
+      qc.invalidateQueries({ queryKey: ["page-content"] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="animate-spin text-slate-400 w-8 h-8" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl space-y-6">
+      {/* Header card */}
+      <div className="bg-gradient-to-l from-amber-500/20 to-slate-800 border border-amber-500/30 rounded-2xl p-6 flex items-start gap-4">
+        <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
+          <FileCheck className="w-6 h-6 text-amber-400" />
+        </div>
+        <div className="flex-1">
+          <h2 className="text-xl font-bold text-slate-100 mb-1">إدارة شروط الاستخدام</h2>
+          <p className="text-slate-400 text-sm leading-relaxed">
+            النص الذي تكتبه هنا يظهر مباشرةً على{" "}
+            <span className="text-amber-300 font-medium">صفحة تسجيل الملاك الجدد</span> في خانة
+            «شروط استخدام المنصة»، ويُشترط الموافقة عليه لإتمام التسجيل.
+            أي تعديل تحفظه هنا ينعكس فوراً على نموذج التسجيل.
+          </p>
+          <div className="flex flex-wrap gap-3 mt-3">
+            <a
+              href="/register"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 underline underline-offset-2"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              معاينة صفحة التسجيل ↗
+            </a>
+            <a
+              href="/terms"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-300 underline underline-offset-2"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              معاينة صفحة الشروط الكاملة ↗
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Editor card */}
+      <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-amber-400"></div>
+            <span className="text-slate-200 font-semibold text-sm">نص شروط الاستخدام</span>
+          </div>
+          <span className="text-xs text-slate-500">{charCount} حرف</span>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <Textarea
+            value={termsText}
+            onChange={(e) => {
+              setTermsText(e.target.value);
+              setCharCount(e.target.value.length);
+            }}
+            placeholder={`مثال على شروط الاستخدام:\n\nيمنع التدخين داخل الشاليه\nوقت تسجيل الخروج الساعة ١٠:٠٠ صباحاً\nيمنع إحضار الحيوانات الأليفة\nالضيوف المسموح بهم فقط كما هو محدد عند الحجز\nأي أضرار تلحق بالمكان تُحسب على الضيف\n\nيُقرّ المالك بأن هذه الشروط ملزمة قانوناً...`}
+            rows={18}
+            dir="rtl"
+            className="bg-slate-900 border-slate-600 text-slate-100 placeholder:text-slate-600 text-sm leading-relaxed resize-y font-medium"
+          />
+
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => saveMutation.mutate(termsText)}
+              disabled={saveMutation.isPending}
+              className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-8 py-2.5 gap-2 text-sm flex-1 sm:flex-none"
+            >
+              {saveMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> جاري الحفظ...</>
+              ) : saved ? (
+                <><Check className="w-4 h-4" /> تم الحفظ ✓</>
+              ) : (
+                <><Save className="w-4 h-4" /> حفظ الشروط</>
+              )}
+            </Button>
+            {saved && (
+              <span className="text-green-400 text-sm font-medium animate-fade-in">
+                ✓ تم تحديث الشروط — يظهر الآن على صفحة التسجيل
+              </span>
+            )}
+          </div>
+
+          {saveMutation.isError && (
+            <p className="text-red-400 text-sm bg-red-950/30 border border-red-800/40 rounded-lg px-4 py-2">
+              ⚠️ فشل الحفظ، يرجى المحاولة مرة أخرى
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Live preview */}
+      {termsText && (
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-700 flex items-center gap-2">
+            <Eye className="w-4 h-4 text-slate-400" />
+            <span className="text-slate-300 font-semibold text-sm">معاينة — كما يراه المالك عند التسجيل</span>
+          </div>
+          <div className="p-6">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-h-48 overflow-y-auto">
+              <pre className="text-slate-300 text-sm whitespace-pre-wrap leading-relaxed font-sans" dir="rtl">
+                {termsText}
+              </pre>
+            </div>
+            <div className="mt-4 flex items-start gap-3 bg-green-950/30 border border-green-800/30 rounded-xl px-4 py-3">
+              <div className="w-4 h-4 rounded border border-green-500 bg-green-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                <Check className="w-3 h-3 text-green-400" />
+              </div>
+              <span className="text-green-300 text-sm">أوافق على شروط استخدام المنصة</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Instructions */}
+      <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 space-y-3">
+        <h4 className="text-slate-300 font-semibold text-sm flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-400" />
+          تعليمات الاستخدام
+        </h4>
+        <ul className="text-slate-400 text-sm space-y-2 list-disc list-inside leading-relaxed">
+          <li>اكتب كل بند في سطر مستقل لتظهر الشروط بشكل واضح ومرتب</li>
+          <li>يمكنك استخدام الأرقام في بداية كل سطر (مثال: ١. يمنع التدخين)</li>
+          <li>النص يُعرض كاملاً عند الضغط على «شروط استخدام المنصة» في نموذج التسجيل</li>
+          <li>يجب على كل مالك جديد الموافقة على هذه الشروط قبل إتمام تسجيل حسابه</li>
+          <li>التغييرات تنعكس فوراً — لا حاجة لإعادة تشغيل أي شيء</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 const ALL_TABS = [
   { id: "overview",             label: "الإحصائيات",            icon: BarChart3 },
   { id: "submissions",          label: "الطلبات",               icon: Settings },
@@ -5226,6 +5415,7 @@ const ALL_TABS = [
   { id: "plans",               label: "خطط الاشتراك",          icon: CreditCard },
   { id: "reviews",             label: "التقييمات",             icon: Star },
   { id: "siteSettings",        label: "إعدادات الموقع",        icon: Settings },
+  { id: "termsManagement",     label: "شروط الاستخدام",        icon: FileCheck },
   { id: "adminStaff",          label: "موظفو الإدارة",         icon: Shield },
   { id: "directAdd",           label: "إضافة وحدة",            icon: Plus },
 ] as const;
@@ -6313,6 +6503,7 @@ export default function Admin() {
         {activeTab === "plans"               && <PlansTab />}
         {activeTab === "reviews"             && <ReviewsTab />}
         {activeTab === "siteSettings"        && <SettingsTab />}
+        {activeTab === "termsManagement"     && <TermsManagementTab />}
         {activeTab === "adminStaff"          && <AdminStaffTab isSuperAdmin={isSuperAdmin} currentUserName={displayName ?? ""} />}
         {activeTab === "directAdd"           && <DirectAddTab />}
       </main>
