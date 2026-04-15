@@ -93,7 +93,66 @@ function Router() {
   );
 }
 
+/** Western digit → Arabic-Indic digit map */
+const AR_DIGIT: Record<string, string> = {
+  '0':'٠','1':'١','2':'٢','3':'٣','4':'٤',
+  '5':'٥','6':'٦','7':'٧','8':'٨','9':'٩',
+};
+
+/** Input types where we must NOT intercept digits */
+const SKIP_TYPES = new Set([
+  'password','email','url','hidden','file',
+  'range','color','date','time','datetime-local',
+  'month','week','number','search',
+]);
+
+function useArabicDigitInput() {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const ar = AR_DIGIT[e.key];
+      if (!ar) return;
+
+      const el = e.target as HTMLElement;
+      const tag = el.tagName;
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA') return;
+
+      const input = el as HTMLInputElement | HTMLTextAreaElement;
+      if (SKIP_TYPES.has((input as HTMLInputElement).type)) return;
+      if (input.readOnly || input.disabled) return;
+      if (el.dataset.noArabic) return;
+
+      e.preventDefault();
+
+      const start = input.selectionStart ?? input.value.length;
+      const end   = input.selectionEnd   ?? input.value.length;
+      const before = input.value.slice(0, start);
+      const after  = input.value.slice(end);
+      const newVal = before + ar + after;
+      const newPos = start + ar.length;
+
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        tag === 'INPUT'
+          ? window.HTMLInputElement.prototype
+          : window.HTMLTextAreaElement.prototype,
+        'value'
+      )?.set;
+
+      if (nativeSetter) {
+        nativeSetter.call(input, newVal);
+        input.setSelectionRange(newPos, newPos);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, []);
+}
+
 function App() {
+  useArabicDigitInput();
+
   useEffect(() => {
     document.documentElement.dir = 'rtl';
     document.documentElement.lang = 'ar';
