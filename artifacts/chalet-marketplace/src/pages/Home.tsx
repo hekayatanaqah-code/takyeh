@@ -27,6 +27,24 @@ function getHijriDate(dateStr: string): string {
   } catch { return ""; }
 }
 
+function getDualDate(dateStr: string): { hijri: string; gregorian: string } {
+  if (!dateStr) return { hijri: "", gregorian: "" };
+  try {
+    const d = new Date(dateStr + "T12:00:00");
+    const hijri = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(d);
+    const gregorian = new Intl.DateTimeFormat("ar-SA", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(d);
+    return { hijri, gregorian };
+  } catch { return { hijri: "", gregorian: "" }; }
+}
+
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + "T12:00:00");
   d.setDate(d.getDate() + days);
@@ -164,6 +182,7 @@ export default function Home() {
   };
 
   const hijriBookingDate = getHijriDate(bookingDate);
+  const dualBookingDate  = getDualDate(bookingDate);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -401,7 +420,10 @@ export default function Home() {
                     {toArabicNum(numDays)} {numDays === 1 ? "يوم" : "أيام"}
                   </span>
                   {" "}· تبدأ من{" "}
-                  <span className="font-bold">{hijriBookingDate}</span>
+                  <span className="font-bold">{dualBookingDate.hijri}</span>
+                  {dualBookingDate.gregorian && (
+                    <span className="font-normal opacity-80"> | الموافق {dualBookingDate.gregorian} م</span>
+                  )}
                 </motion.p>
               )}
 

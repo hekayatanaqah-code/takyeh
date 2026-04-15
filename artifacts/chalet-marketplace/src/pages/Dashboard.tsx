@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { formatDualDate, toHijri } from "@/lib/hijri";
-import { toAr } from "@/lib/utils";
+import { toAr, fromAr } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -7535,7 +7535,7 @@ function StaffTab() {
           {/* Basic Info */}
           <div className="flex gap-3 flex-wrap">
             <Input placeholder="الاسم الكامل" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-[140px] h-11" required />
-            <Input type="number" min="0" step="1" placeholder="الراتب الأساسي (ر.س)" value={addForm.baseSalary} onChange={(e) => setAddForm((f) => ({ ...f, baseSalary: e.target.value }))} className="flex-1 min-w-[160px] h-11" required />
+            <Input type="text" inputMode="numeric" placeholder="الراتب الأساسي (ر.س)" value={toAr(addForm.baseSalary)} onChange={(e) => setAddForm((f) => ({ ...f, baseSalary: fromAr(e.target.value) }))} className="flex-1 min-w-[160px] h-11" required />
           </div>
 
           {/* Unit Assignment */}
@@ -7664,7 +7664,7 @@ function StaffTab() {
                       {editId === member.id ? (
                         <div className="flex gap-2 flex-wrap">
                           <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-[120px] h-8 text-sm" placeholder="الاسم" />
-                          <Input type="number" value={editForm.baseSalary} onChange={(e) => setEditForm((f) => ({ ...f, baseSalary: e.target.value }))} className="w-32 h-8 text-sm" placeholder="الراتب" />
+                          <Input type="text" inputMode="numeric" value={toAr(editForm.baseSalary)} onChange={(e) => setEditForm((f) => ({ ...f, baseSalary: fromAr(e.target.value) }))} className="w-32 h-8 text-sm" placeholder="الراتب" />
                           <Button size="sm" disabled={isReadOnly} onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } editStaff.mutate({ id: member.id, data: { name: editForm.name, baseSalary: parseFloat(editForm.baseSalary) } }); }}>حفظ</Button>
                           <Button size="sm" variant="ghost" onClick={() => setEditId(null)}>إلغاء</Button>
                         </div>
@@ -8126,11 +8126,11 @@ function StaffTab() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground font-medium mb-1 block">مكافأة / بدل (+)</label>
-                    <Input type="number" min="0" step="1" value={payForm.bonus} onChange={(e) => setPayForm((f) => ({ ...f, bonus: e.target.value }))} className="h-10" />
+                    <Input type="text" inputMode="numeric" value={toAr(payForm.bonus)} onChange={(e) => setPayForm((f) => ({ ...f, bonus: fromAr(e.target.value) }))} className="h-10" />
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground font-medium mb-1 block">خصومات (-)</label>
-                    <Input type="number" min="0" step="1" value={payForm.deduction} onChange={(e) => setPayForm((f) => ({ ...f, deduction: e.target.value }))} className="h-10" />
+                    <Input type="text" inputMode="numeric" value={toAr(payForm.deduction)} onChange={(e) => setPayForm((f) => ({ ...f, deduction: fromAr(e.target.value) }))} className="h-10" />
                   </div>
                 </div>
                 {/* Reason */}
