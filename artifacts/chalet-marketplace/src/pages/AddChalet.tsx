@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { fromAr } from "@/lib/utils";
 import { useSearch, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
@@ -125,6 +126,8 @@ export default function AddChalet() {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [customDistrict, setCustomDistrict] = useState("");
+  const [citySelectVal, setCitySelectVal] = useState("");
+  const [customCity, setCustomCity] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const [video, setVideo] = useState<UploadedVideo | null>(null);
@@ -159,7 +162,7 @@ export default function AddChalet() {
   const [dailyPriceGrid, setDailyPriceGrid] = useState<Record<number, DayPriceRow>>(initGrid());
 
   const setDayCell = (day: number, period: keyof DayPriceRow, val: string) =>
-    setDailyPriceGrid(prev => ({ ...prev, [day]: { ...prev[day], [period]: val.replace(/[^\d.]/g, "") } }));
+    setDailyPriceGrid(prev => ({ ...prev, [day]: { ...prev[day], [period]: fromAr(val).replace(/[^\d.]/g, "") } }));
 
   /* ── Per-period check-in / check-out times ── */
   const [morningCheckIn, setMorningCheckIn] = useState("");
@@ -414,14 +417,14 @@ export default function AddChalet() {
     setVideoError(null);
   };
 
-  const buildPayload = () => {
+  const buildPayload = (locationOverride?: string, districtOverride?: string) => {
     const successfulPhotoObjs = photos.filter((p) => p.url && p.url !== "error");
     const successfulPhotos = successfulPhotoObjs.map((p) => p.url);
     const photoCaptions = successfulPhotoObjs.map((p) => p.caption ?? "");
     const successfulVideo = video && video.url && video.url !== "error" ? video.url : undefined;
-    const finalDistrict = selectedDistrict === "__other__"
+    const finalDistrict = districtOverride ?? (selectedDistrict === "__other__"
       ? customDistrict.trim() || undefined
-      : selectedDistrict || undefined;
+      : selectedDistrict || undefined);
     const amenitiesList = Array.from(selectedAmenities).filter(k => k !== "__other__");
     for (const tag of customAmenityTags) {
       if (tag.trim()) amenitiesList.push(`other:${tag.trim()}`);
@@ -429,7 +432,7 @@ export default function AddChalet() {
     return {
       nameAr: form.nameAr,
       whatsappNumber: form.whatsappNumber,
-      location: form.location,
+      location: locationOverride ?? form.location,
       district: finalDistrict,
       propertyType: propertyType || undefined,
       sections: sections || undefined,
@@ -474,10 +477,68 @@ export default function AddChalet() {
     setFieldErrors({});
     mutation.reset();
 
+    /* ── Resolve custom city (if "other" selected) ── */
+    let resolvedLocation = citySelectVal === "__other__" ? "" : form.location;
+    let resolvedCityId = selectedCityId;
+    if (citySelectVal === "__other__") {
+      const trimmedCity = customCity.trim();
+      if (!trimmedCity) {
+        setFieldErrors({ location: ["يجب إدخال اسم المدينة"] });
+        return;
+      }
+      try {
+        const r = await fetch(`${BASE}/api/cities`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ name: trimmedCity }),
+        });
+        const city = await r.json();
+        resolvedLocation = city.name ?? trimmedCity;
+        resolvedCityId = city.id ?? null;
+      } catch {
+        resolvedLocation = trimmedCity;
+      }
+    }
+
+    /* ── Resolve custom district (if "other" selected) ── */
+    let resolvedDistrict: string | undefined;
+    if (selectedDistrict === "__other__") {
+      const trimmedDistrict = customDistrict.trim();
+      if (!trimmedDistrict) {
+        setFieldErrors({ district: ["يجب إدخال اسم الحي أو المنطقة"] });
+        return;
+      }
+      if (resolvedCityId) {
+        try {
+          const r = await fetch(`${BASE}/api/districts`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ name: trimmedDistrict, cityId: resolvedCityId }),
+          });
+          const dist = await r.json();
+          resolvedDistrict = dist.name ?? trimmedDistrict;
+        } catch {
+          resolvedDistrict = trimmedDistrict;
+        }
+      } else {
+        resolvedDistrict = trimmedDistrict;
+      }
+    } else {
+      resolvedDistrict = selectedDistrict || undefined;
+    }
+
+    /* ── District is required ── */
+    if (!resolvedDistrict) {
+      setFieldErrors({ district: ["الحي أو المنطقة مطلوب"] });
+      return;
+    }
+
     if (isEditMode && editId) {
       setEditSaving(true);
       try {
-        const payload = buildPayload();
+        const payload = buildPayload(resolvedLocation, resolvedDistrict);
         const base = import.meta.env.BASE_URL.replace(/\/$/, "");
         const r = await fetch(`${base}/api/owner/submissions/${editId}`, {
           method: "PATCH",
@@ -497,7 +558,7 @@ export default function AddChalet() {
     }
 
     mutation.mutate(
-      { data: buildPayload() as any },
+      { data: buildPayload(resolvedLocation, resolvedDistrict) as any },
       {
         onSuccess: () => setSubmitted(true),
         onError: (err: unknown) => {
@@ -642,13 +703,19 @@ export default function AddChalet() {
                         المدينة <span className="text-destructive">*</span>
                       </Label>
                       <Select
-                        value={form.location}
+                        value={citySelectVal}
                         onValueChange={(val) => {
-                          handleChange("location", val);
-                          const city = cities.find((c) => c.name === val);
-                          setSelectedCityId(city?.id ?? null);
+                          setCitySelectVal(val);
                           setSelectedDistrict("");
                           setCustomDistrict("");
+                          if (val === "__other__") {
+                            handleChange("location", "");
+                            setSelectedCityId(null);
+                          } else {
+                            handleChange("location", val);
+                            const city = cities.find((c) => c.name === val);
+                            setSelectedCityId(city?.id ?? null);
+                          }
                         }}
                         required
                       >
@@ -664,16 +731,28 @@ export default function AddChalet() {
                               {city.name}
                             </SelectItem>
                           ))}
+                          <SelectItem value="__other__">مدينة أخرى...</SelectItem>
                         </SelectContent>
                       </Select>
+                      {citySelectVal === "__other__" && (
+                        <Input
+                          placeholder="اكتب اسم المدينة"
+                          value={customCity}
+                          onChange={(e) => setCustomCity(e.target.value)}
+                          className={`h-12 text-base ${fieldErrors.location ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                          autoFocus
+                        />
+                      )}
+                      {fieldErrors.location && (
+                        <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.location[0]}</p>
+                      )}
                     </div>
 
                     {/* Smart District Dropdown */}
-                    {form.location && (
+                    {(form.location || citySelectVal === "__other__") && (
                       <div className="space-y-2">
                         <Label htmlFor="district" className="text-base font-medium">
-                          الحي أو المنطقة{" "}
-                          <span className="text-muted-foreground font-normal text-sm">(اختياري)</span>
+                          الحي أو المنطقة <span className="text-destructive">*</span>
                         </Label>
                         <Select
                           value={selectedDistrict}
@@ -702,8 +781,11 @@ export default function AddChalet() {
                             placeholder="اكتب اسم الحي أو المنطقة"
                             value={customDistrict}
                             onChange={(e) => setCustomDistrict(e.target.value)}
-                            className="h-12 text-base"
+                            className={`h-12 text-base ${fieldErrors.district ? "border-red-500 ring-1 ring-red-500" : ""}`}
                           />
+                        )}
+                        {fieldErrors.district && (
+                          <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.district[0]}</p>
                         )}
                       </div>
                     )}

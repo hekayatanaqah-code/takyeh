@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { fromAr } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -21,10 +22,6 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const MAX_GALLERY = 10;
 
-const CITIES = [
-  "بريدة", "عنيزة", "الرس", "المذنب", "الشماسية",
-  "البكيرية", "رياض الخبراء", "البدائع", "عيون الجواء",
-];
 
 interface UploadedPhoto {
   url: string;
@@ -111,10 +108,28 @@ export default function AddServiceProvider() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: citiesCatalog = [] } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["catalog", "cities"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/cities`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const [citySelectVal, setCitySelectVal] = useState("");
+  const [customCity, setCustomCity] = useState("");
+
   const handleChange = (field: string, value: string) =>
     setForm((p) => ({ ...p, [field]: value }));
 
   const handleCityChange = (city: string) => {
+    setCitySelectVal(city);
+    if (city === "__other__") {
+      handleChange("city", "");
+      return;
+    }
     handleChange("city", city);
     if (city && !coverageTags.includes(city)) {
       setCoverageTags((prev) => [city, ...prev.filter((t) => t !== city)]);
@@ -124,14 +139,14 @@ export default function AddServiceProvider() {
   const toggleCityTag = (city: string, checked: boolean) => {
     setCoverageTags((prev) => {
       const next = checked ? [...prev.filter((t) => t !== city), city] : prev.filter((t) => t !== city);
-      setCoverageAll(CITIES.every((c) => next.includes(c)));
+      setCoverageAll(citiesCatalog.every((c) => next.includes(c.name)));
       return next;
     });
   };
 
   const toggleAllCities = (checked: boolean) => {
     setCoverageAll(checked);
-    setCoverageTags(checked ? [...CITIES] : (form.city ? [form.city] : []));
+    setCoverageTags(checked ? citiesCatalog.map((c) => c.name) : (form.city ? [form.city] : []));
   };
 
   const submitCityRequest = async () => {
@@ -255,12 +270,38 @@ export default function AddServiceProvider() {
     setSubmitError(null);
     setFieldErrors({});
 
+    /* ── Resolve custom city if "other" selected ── */
+    let resolvedCity = citySelectVal === "__other__" ? "" : form.city;
+    if (citySelectVal === "__other__") {
+      const trimmedCity = customCity.trim();
+      if (!trimmedCity) {
+        setFieldErrors({ city: "يجب إدخال اسم المدينة" });
+        setSubmitError("يجب إدخال اسم المدينة");
+        return;
+      }
+      try {
+        const r = await fetch(`${BASE}/api/cities`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ name: trimmedCity }),
+        });
+        const city = await r.json();
+        resolvedCity = city.name ?? trimmedCity;
+        if (!coverageTags.includes(resolvedCity)) {
+          setCoverageTags((prev) => [resolvedCity, ...prev]);
+        }
+      } catch {
+        resolvedCity = trimmedCity;
+      }
+    }
+
     // Client-side field validation with specific messages
     const errs: Record<string, string> = {};
     if (!form.businessName.trim()) errs.businessName = "اسم النشاط مطلوب";
     if (!form.category) errs.category = "يرجى اختيار فئة الخدمة";
     if (form.category === "other" && !customCategory.trim()) errs.customCategory = "يرجى كتابة اسم الفئة المخصصة";
-    if (!form.city) errs.city = "يرجى اختيار المدينة";
+    if (!resolvedCity) errs.city = "يرجى اختيار المدينة";
     if (!form.whatsappNumber) errs.whatsappNumber = "رقم الواتساب مطلوب";
     else if (form.whatsappNumber.length < 9) errs.whatsappNumber = "رقم الواتساب يجب أن يكون 9 أرقام على الأقل";
     if (!form.yearsOfExperience) errs.yearsOfExperience = "يرجى إدخال سنوات الخبرة";
@@ -288,7 +329,7 @@ export default function AddServiceProvider() {
       const payload = {
         businessName: form.businessName.trim(),
         category: finalCategory,
-        city: form.city,
+        city: resolvedCity,
         descriptionAr: form.descriptionAr.trim() || undefined,
         whatsappNumber: form.whatsappNumber,
         yearsOfExperience: Number(form.yearsOfExperience),
@@ -460,16 +501,26 @@ export default function AddServiceProvider() {
 
                 <div className="space-y-1.5">
                   <Label>المدينة الرئيسية <span className="text-red-500">*</span></Label>
-                  <Select value={form.city} onValueChange={handleCityChange} required>
+                  <Select value={citySelectVal} onValueChange={handleCityChange} required>
                     <SelectTrigger className={fieldErrors.city ? "border-red-500 ring-1 ring-red-500" : ""}>
                       <SelectValue placeholder="اختر المدينة" />
                     </SelectTrigger>
                     <SelectContent>
-                      {CITIES.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      {citiesCatalog.map((c) => (
+                        <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
                       ))}
+                      <SelectItem value="__other__">مدينة أخرى...</SelectItem>
                     </SelectContent>
                   </Select>
+                  {citySelectVal === "__other__" && (
+                    <Input
+                      placeholder="اكتب اسم المدينة"
+                      value={customCity}
+                      onChange={(e) => setCustomCity(e.target.value)}
+                      className={`mt-1 ${fieldErrors.city ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                      autoFocus
+                    />
+                  )}
                   {fieldErrors.city && (
                     <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.city}</p>
                   )}
@@ -486,12 +537,11 @@ export default function AddServiceProvider() {
                 </Label>
                 <Input
                   id="experience"
-                  type="number"
-                  min={0}
-                  max={50}
+                  type="text"
+                  inputMode="numeric"
                   value={form.yearsOfExperience}
-                  onChange={(e) => handleChange("yearsOfExperience", e.target.value)}
-                  placeholder="مثال: 5"
+                  onChange={(e) => handleChange("yearsOfExperience", fromAr(e.target.value).replace(/[^\d]/g, ""))}
+                  placeholder="مثال: ٥"
                   className={`w-40 ${fieldErrors.yearsOfExperience ? "border-red-500 ring-1 ring-red-500" : ""}`}
                   required
                 />
@@ -513,6 +563,7 @@ export default function AddServiceProvider() {
                     placeholder="05xxxxxxxx"
                     className={`pr-10 ${fieldErrors.whatsappNumber ? "border-red-500 ring-1 ring-red-500" : ""}`}
                     dir="ltr"
+                    data-no-arabic=""
                     required
                   />
                 </div>
@@ -562,21 +613,21 @@ export default function AddServiceProvider() {
 
               {/* City checkboxes grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {CITIES.map((city) => (
+                {citiesCatalog.map((city) => (
                   <label
-                    key={city}
+                    key={city.id}
                     className={`flex items-center gap-2.5 cursor-pointer rounded-xl border px-3 py-2.5 text-sm transition-all ${
-                      coverageTags.includes(city)
+                      coverageTags.includes(city.name)
                         ? "border-primary bg-primary/10 text-primary font-semibold"
                         : "border-border bg-card hover:border-primary/40 hover:bg-muted text-foreground"
                     }`}
                   >
                     <Checkbox
-                      checked={coverageTags.includes(city)}
-                      onCheckedChange={(v) => toggleCityTag(city, !!v)}
+                      checked={coverageTags.includes(city.name)}
+                      onCheckedChange={(v) => toggleCityTag(city.name, !!v)}
                     />
                     <MapPin className="w-3.5 h-3.5 shrink-0 opacity-70" />
-                    {city}
+                    {city.name}
                   </label>
                 ))}
               </div>

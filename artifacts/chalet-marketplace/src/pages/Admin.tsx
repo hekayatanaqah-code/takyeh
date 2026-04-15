@@ -4511,6 +4511,12 @@ function DirectAddTab() {
   const [uploadingGal,  setUploadingGal]   = useState(false);
   const [uploadingSVid, setUploadingSVid]  = useState(false);
 
+  /* ── Custom city "other" state ── */
+  const [cCitySelectVal, setCCitySelectVal] = useState("");
+  const [cCustomCity,    setCCustomCity]    = useState("");
+  const [sCitySelectVal, setSCitySelectVal] = useState("");
+  const [sCustomCity,    setSCustomCity]    = useState("");
+
   /* ── UI state ── */
   const [error,      setError]      = useState<string | null>(null);
   const [success,    setSuccess]    = useState<string | null>(null);
@@ -4545,6 +4551,7 @@ function DirectAddTab() {
     setSeasonalDisclaimer(true); setDailyPriceGrid(daInitGrid());
     setSelectedAmenities(new Set()); setCustomAmenityTags([]); setCustomAmenityInput("");
     setChaletPhotos([]); setChaletVideo(null); setLegalAccepted(false);
+    setCCitySelectVal(""); setCCustomCity(""); setSCitySelectVal(""); setSCustomCity("");
     setSForm({ businessName:"", city:"", category:"", whatsapp:"", yearsOfExperience:"", descriptionAr:"" });
     setCoverageTags([]); setCustomFeatureTags([]); setCustomFeatureInput("");
     setSvcLogoUrl(null); setSvcGallery([]); setSvcVideo(null); setSvcLegal(false);
@@ -4572,15 +4579,38 @@ function DirectAddTab() {
     e.preventDefault();
     setError(null); setSuccess(null);
     if (!ownerId) { setError("يجب اختيار المالك"); return; }
+
+    /* ── Resolve custom cities ── */
+    let resolvedCLocation = cCitySelectVal === "__other__" ? "" : cForm.location;
+    if (cCitySelectVal === "__other__") {
+      const trimmed = cCustomCity.trim();
+      if (!trimmed) { setError("يجب إدخال اسم المدينة للشاليه"); return; }
+      try {
+        const r = await apiFetch("/cities", { method: "POST", body: JSON.stringify({ name: trimmed }) });
+        const city = await r.json();
+        resolvedCLocation = city.name ?? trimmed;
+      } catch { resolvedCLocation = trimmed; }
+    }
+    let resolvedSCity = sCitySelectVal === "__other__" ? "" : sForm.city;
+    if (sCitySelectVal === "__other__") {
+      const trimmed = sCustomCity.trim();
+      if (!trimmed) { setError("يجب إدخال اسم المدينة للخدمة"); return; }
+      try {
+        const r = await apiFetch("/cities", { method: "POST", body: JSON.stringify({ name: trimmed }) });
+        const city = await r.json();
+        resolvedSCity = city.name ?? trimmed;
+      } catch { resolvedSCity = trimmed; }
+    }
+
     if (assetType === "chalet") {
-      if (!cForm.nameAr.trim() || !cForm.location || !cForm.district.trim()) { setError("الاسم والمدينة والحي مطلوبة"); return; }
+      if (!cForm.nameAr.trim() || !resolvedCLocation || !cForm.district.trim()) { setError("الاسم والمدينة والحي مطلوبة"); return; }
       if (!propertyType) { setError("يجب اختيار نوع العقار"); return; }
       if (!sections) { setError("يجب اختيار عدد الأقسام"); return; }
       if (!cForm.price) { setError("يجب إدخال السعر الأساسي"); return; }
       if (chaletPhotos.length === 0) { setError("يجب إضافة صورة واحدة على الأقل"); return; }
       if (!legalAccepted) { setError("يجب الموافقة على الإقرار القانوني"); return; }
     } else {
-      if (!sForm.businessName.trim() || !sForm.city || !sForm.category) { setError("اسم النشاط والمدينة والفئة مطلوبة"); return; }
+      if (!sForm.businessName.trim() || !resolvedSCity || !sForm.category) { setError("اسم النشاط والمدينة والفئة مطلوبة"); return; }
       if (!sForm.whatsapp.trim()) { setError("رقم الواتساب مطلوب"); return; }
       if (svcGallery.length < 3) { setError("يجب إضافة ٣ صور على الأقل للمعرض"); return; }
       if (!svcLegal) { setError("يجب الموافقة على الإقرار القانوني"); return; }
@@ -4596,7 +4626,7 @@ function DirectAddTab() {
           if (Object.keys(entries).length) grid[p] = entries;
         });
         r = await apiFetch("/admin/direct-add-chalet", { method:"POST", body: JSON.stringify({
-          ownerId, nameAr: cForm.nameAr.trim(), location: cForm.location, district: cForm.district.trim(),
+          ownerId, nameAr: cForm.nameAr.trim(), location: resolvedCLocation, district: cForm.district.trim(),
           whatsappNumber: cForm.whatsapp.trim(), pricePerNight: Number(cForm.price),
           priceMorning: cForm.priceMorning ? Number(cForm.priceMorning) : null,
           priceEvening: cForm.priceEvening ? Number(cForm.priceEvening) : null,
@@ -4616,7 +4646,7 @@ function DirectAddTab() {
         })});
       } else {
         r = await apiFetch("/admin/direct-add-service", { method:"POST", body: JSON.stringify({
-          ownerId, businessName: sForm.businessName.trim(), category: sForm.category, city: sForm.city,
+          ownerId, businessName: sForm.businessName.trim(), category: sForm.category, city: resolvedSCity,
           whatsappNumber: sForm.whatsapp.trim(), descriptionAr: sForm.descriptionAr || null,
           yearsOfExperience: sForm.yearsOfExperience ? Number(sForm.yearsOfExperience) : null,
           coverageTags, customFeatureTags, logoUrl: svcLogoUrl, galleryPhotos: svcGallery, videoUrl: svcVideo,
@@ -4720,12 +4750,20 @@ function DirectAddTab() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-sm text-slate-300 font-medium">المدينة *</label>
-                <Select value={cForm.location} onValueChange={v => setCForm(f => ({...f, location: v}))}>
+                <Select value={cCitySelectVal} onValueChange={v => {
+                  setCCitySelectVal(v);
+                  if (v === "__other__") { setCForm(f => ({...f, location: ""})); setCCustomCity(""); }
+                  else { setCForm(f => ({...f, location: v})); }
+                }}>
                   <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر المدينة..." /></SelectTrigger>
                   <SelectContent className="bg-slate-900 border-slate-700">
                     {cities.map(c => <SelectItem key={c.id} value={c.name} className="text-white focus:bg-slate-700">{c.name}</SelectItem>)}
+                    <SelectItem value="__other__" className="text-amber-400 focus:bg-slate-700">مدينة أخرى...</SelectItem>
                   </SelectContent>
                 </Select>
+                {cCitySelectVal === "__other__" && (
+                  <Input value={cCustomCity} onChange={e => setCCustomCity(e.target.value)} placeholder="اكتب اسم المدينة" className="bg-slate-900 border-slate-600 text-white mt-1" autoFocus />
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm text-slate-300 font-medium">الحي *</label>
@@ -4949,12 +4987,20 @@ function DirectAddTab() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-sm text-slate-300 font-medium">المدينة *</label>
-                <Select value={sForm.city} onValueChange={v => setSForm(f => ({...f, city: v}))}>
+                <Select value={sCitySelectVal} onValueChange={v => {
+                  setSCitySelectVal(v);
+                  if (v === "__other__") { setSForm(f => ({...f, city: ""})); setSCustomCity(""); }
+                  else { setSForm(f => ({...f, city: v})); }
+                }}>
                   <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر المدينة..." /></SelectTrigger>
                   <SelectContent className="bg-slate-900 border-slate-700">
                     {cities.map(c => <SelectItem key={c.id} value={c.name} className="text-white focus:bg-slate-700">{c.name}</SelectItem>)}
+                    <SelectItem value="__other__" className="text-amber-400 focus:bg-slate-700">مدينة أخرى...</SelectItem>
                   </SelectContent>
                 </Select>
+                {sCitySelectVal === "__other__" && (
+                  <Input value={sCustomCity} onChange={e => setSCustomCity(e.target.value)} placeholder="اكتب اسم المدينة" className="bg-slate-900 border-slate-600 text-white mt-1" autoFocus />
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm text-slate-300 font-medium">فئة الخدمة *</label>

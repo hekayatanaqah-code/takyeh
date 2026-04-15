@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { citiesCatalogTable, amenitiesCatalogTable, districtsCatalogTable, chaletCategoriesTable, serviceCategoriesTable, expenseCategoriesTable, siteSettingsTable } from "@workspace/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { z } from "zod";
 
 const router = Router();
 
@@ -24,6 +25,30 @@ router.get("/districts", async (req, res) => {
     rows = rows.filter((r) => r.cityId === cityId);
   }
   return res.json(rows);
+});
+
+/* ── Public write: auto-save cities typed by users ── */
+router.post("/cities", async (req, res) => {
+  const body = z.object({ name: z.string().min(1).trim() }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "الاسم مطلوب" });
+  const name = body.data.name.trim();
+  const existing = await db.select().from(citiesCatalogTable)
+    .where(sql`LOWER(${citiesCatalogTable.name}) = LOWER(${name})`);
+  if (existing.length > 0) return res.json(existing[0]);
+  const [city] = await db.insert(citiesCatalogTable).values({ name }).returning();
+  return res.status(201).json(city);
+});
+
+/* ── Public write: auto-save districts typed by users ── */
+router.post("/districts", async (req, res) => {
+  const body = z.object({ name: z.string().min(1).trim(), cityId: z.number().int().positive() }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const { name, cityId } = body.data;
+  const existing = await db.select().from(districtsCatalogTable)
+    .where(and(sql`LOWER(${districtsCatalogTable.name}) = LOWER(${name})`, eq(districtsCatalogTable.cityId, cityId)));
+  if (existing.length > 0) return res.json(existing[0]);
+  const [district] = await db.insert(districtsCatalogTable).values({ name, cityId }).returning();
+  return res.status(201).json(district);
 });
 
 router.get("/amenities", async (_req, res) => {
