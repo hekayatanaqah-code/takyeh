@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, Building2, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, Building2, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -17,11 +17,23 @@ export default function Register() {
     password: "",
     confirmPassword: "",
   });
-  const [showPw, setShowPw]         = useState(false);
-  const [showCPw, setShowCPw]       = useState(false);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState<string | null>(null);
-  const [submitted, setSubmitted]   = useState(false);
+  const [showPw, setShowPw]               = useState(false);
+  const [showCPw, setShowCPw]             = useState(false);
+  const [loading, setLoading]             = useState(false);
+  const [error, setError]                 = useState<string | null>(null);
+  const [submitted, setSubmitted]         = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsExpanded, setTermsExpanded] = useState(false);
+  const [platformTerms, setPlatformTerms] = useState<string>("");
+
+  useEffect(() => {
+    fetch(`${BASE}/api/page-content`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : {})
+      .then((data: Record<string, string>) => {
+        if (data.terms_page_content) setPlatformTerms(data.terms_page_content);
+      })
+      .catch(() => {});
+  }, []);
 
   function update(field: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -46,6 +58,10 @@ export default function Register() {
     const phoneRegex = /^05\d{8}$/;
     if (!phoneRegex.test(phone.replace(/\s/g, ""))) {
       setError("رقم الجوال يجب أن يبدأ بـ ٠٥ ويتكون من ١٠ أرقام");
+      return;
+    }
+    if (!termsAccepted) {
+      setError("يجب الموافقة على شروط استخدام المنصة للمتابعة");
       return;
     }
 
@@ -253,6 +269,40 @@ export default function Register() {
             </div>
           </div>
 
+          {/* ── Platform Terms ── */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setTermsExpanded(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <span>شروط استخدام المنصة</span>
+              {termsExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            </button>
+            {termsExpanded && (
+              <div className="px-4 pb-4 max-h-48 overflow-y-auto text-xs text-gray-600 leading-relaxed whitespace-pre-wrap border-t border-gray-200 pt-3">
+                {platformTerms || "سيتم تحديث شروط الاستخدام قريباً."}
+              </div>
+            )}
+            <label className="flex items-start gap-3 px-4 py-3 border-t border-gray-200 cursor-pointer hover:bg-green-50 transition-colors">
+              <div className="mt-0.5 shrink-0">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={e => setTermsAccepted(e.target.checked)}
+                  className="w-4 h-4 rounded text-green-600 focus:ring-green-500 border-gray-300"
+                />
+              </div>
+              <span className="text-sm text-gray-700 leading-relaxed">
+                أوافق على{" "}
+                <a href={`${BASE}/terms`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline font-medium">
+                  شروط استخدام المنصة
+                </a>{" "}
+                وأقر بصحة البيانات المدخلة <span className="text-red-500">*</span>
+              </span>
+            </label>
+          </div>
+
           {error && (
             <div className="rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3">
               {error}
@@ -261,8 +311,8 @@ export default function Register() {
 
           <Button
             type="submit"
-            disabled={loading}
-            className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl gap-2"
+            disabled={loading || !termsAccepted}
+            className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl gap-2 disabled:opacity-60"
           >
             {loading ? (
               <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">

@@ -52,6 +52,46 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 router.use(requireAuth);
 
+/* ── GET /owner/profile — fetch owner profile ──────────────── */
+router.get("/profile", async (req, res) => {
+  const email = req.user!.email;
+  if (!email) return res.status(400).json({ error: "البريد الإلكتروني غير متاح" });
+  const rows = await db.execute<{ full_name: string; phone: string; email: string }>(
+    sql`SELECT full_name, phone, email FROM owner_applications WHERE email = ${email} LIMIT 1`
+  );
+  const row = rows[0];
+  if (!row) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
+  return res.json({ fullName: row.full_name, phone: row.phone, email: row.email });
+});
+
+/* ── PUT /owner/profile — update owner profile ─────────────── */
+router.put("/profile", async (req, res) => {
+  const email = req.user!.email;
+  if (!email) return res.status(400).json({ error: "البريد الإلكتروني غير متاح" });
+  const { fullName, phone, currentPassword, newPassword } = req.body as Record<string, string>;
+
+  if (!fullName?.trim()) return res.status(400).json({ error: "الاسم الكامل مطلوب" });
+
+  const updates: string[] = ["full_name = " + `'${fullName.trim().replace(/'/g, "''")}'`];
+  if (phone !== undefined) updates.push(`phone = '${phone.trim().replace(/'/g, "''")}'`);
+
+  if (currentPassword && newPassword) {
+    if (newPassword.length < 6) return res.status(400).json({ error: "كلمة المرور الجديدة قصيرة جداً" });
+    const rows = await db.execute<{ password_hash: string }>(
+      sql`SELECT password_hash FROM owner_applications WHERE email = ${email} LIMIT 1`
+    );
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: "الحساب غير موجود" });
+    const match = await bcrypt.compare(currentPassword, row.password_hash);
+    if (!match) return res.status(400).json({ error: "كلمة المرور الحالية غير صحيحة" });
+    const newHash = await bcrypt.hash(newPassword, 10);
+    updates.push(`password_hash = '${newHash}'`);
+  }
+
+  await db.execute(sql.raw(`UPDATE owner_applications SET ${updates.join(", ")} WHERE email = '${email}'`));
+  return res.json({ ok: true });
+});
+
 /* ── Availability sync helper ──────────────────────────────── */
 /**
  * After any booking mutation (create / cancel / reschedule), call this to keep
@@ -2338,12 +2378,22 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
   if (body.fullDayCheckIn !== undefined) updateData.fullDayCheckIn = body.fullDayCheckIn || null;
   if (body.fullDayCheckOut !== undefined) updateData.fullDayCheckOut = body.fullDayCheckOut || null;
 
-  if (Object.keys(updateData).length === 0) return res.json({ ok: true });
+  /* ── Reminder fields live in chaletsTable, not chaletSubmissionsTable ── */
+  const hasReminder = body.reminderEnabled !== undefined || body.reminderDays !== undefined;
 
-  await db
-    .update(chaletSubmissionsTable)
-    .set(updateData)
-    .where(eq(chaletSubmissionsTable.id, submissionId));
+  if (Object.keys(updateData).length > 0) {
+    await db
+      .update(chaletSubmissionsTable)
+      .set(updateData)
+      .where(eq(chaletSubmissionsTable.id, submissionId));
+  }
+
+  if (hasReminder) {
+    const reminderPatch: { reminderEnabled?: boolean; reminderDays?: number } = {};
+    if (body.reminderEnabled !== undefined) reminderPatch.reminderEnabled = !!body.reminderEnabled;
+    if (body.reminderDays !== undefined) reminderPatch.reminderDays = Math.max(1, Math.min(7, Number(body.reminderDays) || 1));
+    await db.update(chaletsTable).set(reminderPatch).where(eq(chaletsTable.submissionId, submissionId));
+  }
 
   return res.json({ ok: true });
 });

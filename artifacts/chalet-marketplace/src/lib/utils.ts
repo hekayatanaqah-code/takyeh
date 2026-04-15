@@ -28,3 +28,40 @@ export function fromAr(v: string): string {
     .replace(/٦/g, "6").replace(/٧/g, "7").replace(/٨/g, "8")
     .replace(/٩/g, "9");
 }
+
+/**
+ * hijriAndGregorian — formats a date as:
+ * "١٢ ذو القعدة ١٤٤٧ هـ | ١ مايو ٢٠٢٦ م"
+ *
+ * Uses the browser's built-in Intl API with calendar: 'islamic-umalqura'.
+ */
+export function hijriAndGregorian(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return "";
+  const locale = "ar-SA";
+  const hijri = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    calendar: "islamic-umalqura",
+  } as Intl.DateTimeFormatOptions).format(d);
+  const gregorian = new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(d);
+  return `${hijri} | ${gregorian} م`;
+}
+
+/**
+ * hijriShort — short Hijri date: "١٢ / ١١ / ١٤٤٧ هـ"
+ */
+export function hijriShort(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+  } as Intl.DateTimeFormatOptions).format(d) + " هـ";
+}

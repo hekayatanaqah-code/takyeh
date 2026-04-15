@@ -1,0 +1,41 @@
+"We are launching a new development phase for 'Takiah'. Please implement the following features and fixes immediately:
+
+1. Dynamic Terms & Conditions:
+
+Create a 'Terms of Use' section in the Super Admin Dashboard where I can write and edit the text.
+
+Display these terms during Owner Registration with a mandatory checkbox: (أوافق على شروط استخدام المنصة). Registration cannot proceed without agreement.
+
+2. Enhanced Search & Dual Dates:
+
+Dual Calendar: In search results and bookings, display dates in both formats: (Hijri - Gregorian). Example: (١٢ ذو القعدة ١٤٤٧ هـ | ١ مايو ٢٠٢٦ م).
+
+Availability Logic: If a user searches without selecting a 'Period' (Morning/Evening), show all available units and display a clear label on each result: (متاح: صباحاً) or (متاح: مساءً).
+
+3. Map Search Integration (Google Maps):
+
+Add a 'Search via Map' toggle on the results page.
+
+Display pins (Markers) only for chalets that are Available on the selected date.
+
+4. Owner Profile & Multi-Asset Management:
+
+Create an 'Account Settings' page for Owners to update their personal info (Name, Login Phone, Password).
+
+WhatsApp Routing: Ensure each Chalet or Service has its own dedicated WhatsApp Request Number, independent of the Owner's account phone number.
+
+5. WhatsApp Reminder System (Logic Setup):
+
+In the Owner's unit settings, add a toggle: 'Enable Booking Reminder'.
+
+Allow owners to choose the timing: (1 day or 2 days before arrival). Note: We will link the API later; please build the UI and Database logic now.
+
+6. CRITICAL FIX - UI Consistency & Numeric Rendering:
+
+Standardize Admin Panel: Change the 'District' (الحي) field in the Admin Dashboard from a text box to a Dropdown Menu identical to the Owner's form, including the 'Other/أخرى' option.
+
+City Selection: Add 'Other/إضافة مدينة جديدة' to the City dropdown in both dashboards.
+
+Arabic Numerals: Use a global JavaScript Listener to force Arabic-Indic digits (٠-٩) in all phone, WhatsApp, and price fields across the platform. No English digits [0-9] should render in these inputs.
+
+Please confirm once these features are integrated and the UI is unified."

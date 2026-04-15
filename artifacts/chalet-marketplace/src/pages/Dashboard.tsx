@@ -243,7 +243,7 @@ function EditChaletDialog({
   open, sub, onClose, onSaved,
 }: {
   open: boolean;
-  sub: { id: number; nameAr: string; descriptionAr?: string; priceMorning?: string | null; priceEvening?: string | null; priceFullDay?: string | null } | null;
+  sub: { id: number; nameAr: string; descriptionAr?: string; priceMorning?: string | null; priceEvening?: string | null; priceFullDay?: string | null; reminderEnabled?: boolean; reminderDays?: number } | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -254,6 +254,8 @@ function EditChaletDialog({
   const [priceMorning, setPriceMorning] = useState("");
   const [priceEvening, setPriceEvening] = useState("");
   const [priceFullDay, setPriceFullDay] = useState("");
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderDays, setReminderDays] = useState(1);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -263,6 +265,8 @@ function EditChaletDialog({
       setPriceMorning(sub.priceMorning ? String(Number(sub.priceMorning)) : "");
       setPriceEvening(sub.priceEvening ? String(Number(sub.priceEvening)) : "");
       setPriceFullDay(sub.priceFullDay ? String(Number(sub.priceFullDay)) : "");
+      setReminderEnabled(Boolean(sub.reminderEnabled));
+      setReminderDays(sub.reminderDays ?? 1);
     }
   }, [sub, open]);
 
@@ -282,6 +286,8 @@ function EditChaletDialog({
           priceMorning: priceMorning || "",
           priceEvening: priceEvening || "",
           priceFullDay: priceFullDay || "",
+          reminderEnabled,
+          reminderDays,
         }),
       });
       if (!r.ok) { toast({ title: "حدث خطأ أثناء الحفظ", variant: "destructive" }); return; }
@@ -338,6 +344,39 @@ function EditChaletDialog({
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* ── WhatsApp Booking Reminder ── */}
+          <div className="rounded-xl border border-border bg-secondary/30 p-3.5 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">تذكير واتساب للحجوزات</p>
+                <p className="text-xs text-muted-foreground mt-0.5">إرسال رسالة واتساب للعميل قبل موعد الحجز</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReminderEnabled(!reminderEnabled)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${reminderEnabled ? "bg-emerald-500" : "bg-muted"}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${reminderEnabled ? "-translate-x-6" : "-translate-x-1"}`} />
+              </button>
+            </div>
+            {reminderEnabled && (
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-muted-foreground shrink-0">عدد الأيام قبل الحجز</label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={toAr(reminderDays)}
+                  onChange={(e) => {
+                    const n = parseInt(normNum(e.target.value)) || 1;
+                    setReminderDays(Math.max(1, Math.min(7, n)));
+                  }}
+                  className="w-20 text-center h-8 text-sm"
+                />
+                <span className="text-xs text-muted-foreground">{toAr(reminderDays)} {reminderDays === 1 ? "يوم" : "أيام"}</span>
+              </div>
+            )}
           </div>
         </div>
         <DialogFooter className="gap-2">
@@ -11610,7 +11649,7 @@ export default function Dashboard() {
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "profile">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const [serviceFinanceMode, setServiceFinanceMode] = useState<"separate" | "consolidated">(() => (localStorage.getItem("svc_finance_mode") as any) ?? "separate");
   const [clientListMode, setClientListMode] = useState<"unified" | "separate">(() => (localStorage.getItem("svc_client_mode") as any) ?? "unified");
@@ -11831,6 +11870,7 @@ export default function Dashboard() {
     { id: "calendar",  label: "التقويم والحجوزات",   icon: <Calendar className="w-4 h-4" /> },
     { id: "deposits",  label: "إدارة التأمينات",       icon: <Lock className="w-4 h-4" /> },
     { id: "services",  label: "الخدمات الإضافية",    icon: <MessageSquare className="w-4 h-4" /> },
+    { id: "profile",   label: "إعدادات الحساب",      icon: <Settings className="w-4 h-4" /> },
   ] as const;
 
   const tabs = useMemo(() => {
@@ -12523,10 +12563,146 @@ export default function Dashboard() {
         {activeTab === "deposits" && (
           <DepositsTab />
         )}
+        {activeTab === "profile" && (
+          <OwnerProfileTab />
+        )}
           </>
         )}
       </div>
     </div>
     </ImpersonationCtx.Provider>
+  );
+}
+
+/* ── Owner Account Settings Tab ────────────────────────────── */
+function OwnerProfileTab() {
+  const { toast } = useToast();
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+  function apiFetch(path: string, opts?: RequestInit) {
+    return fetch(`${BASE}/api${path}`, { credentials: "include", headers: { "Content-Type": "application/json", ...(opts?.headers ?? {}) }, ...opts });
+  }
+
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+
+  useEffect(() => {
+    apiFetch("/owner/profile")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d) {
+          setFullName(d.fullName ?? "");
+          setPhone(d.phone ?? "");
+          setEmail(d.email ?? "");
+        }
+      })
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleSave() {
+    if (!fullName.trim()) { toast({ title: "الاسم مطلوب", variant: "destructive" }); return; }
+    if (showPasswordSection) {
+      if (!currentPassword) { toast({ title: "يرجى إدخال كلمة المرور الحالية", variant: "destructive" }); return; }
+      if (newPassword.length < 6) { toast({ title: "كلمة المرور الجديدة يجب أن تكون ٦ أحرف على الأقل", variant: "destructive" }); return; }
+      if (newPassword !== confirmPassword) { toast({ title: "كلمتا المرور غير متطابقتين", variant: "destructive" }); return; }
+    }
+    setSaving(true);
+    try {
+      const body: Record<string, string> = { fullName: fullName.trim(), phone: phone.trim() };
+      if (showPasswordSection && currentPassword && newPassword) {
+        body.currentPassword = currentPassword;
+        body.newPassword = newPassword;
+      }
+      const r = await apiFetch("/owner/profile", { method: "PUT", body: JSON.stringify(body) });
+      const d = await r.json();
+      if (!r.ok) { toast({ title: "خطأ", description: d.error ?? "فشل الحفظ", variant: "destructive" }); return; }
+      toast({ title: "تم الحفظ ✓", description: "تم تحديث بيانات حسابك بنجاح" });
+      setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+      setShowPasswordSection(false);
+    } finally { setSaving(false); }
+  }
+
+  if (loading) return <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
+
+  return (
+    <div className="max-w-lg mx-auto space-y-5 py-4">
+      <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <Settings className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-foreground">إعدادات الحساب</h2>
+            <p className="text-xs text-muted-foreground">تعديل بياناتك الشخصية</p>
+          </div>
+        </div>
+
+        {/* Name */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold">الاسم الكامل <span className="text-destructive">*</span></label>
+          <Input value={fullName} onChange={(e) => setFullName(e.target.value)} className="text-right" placeholder="اسمك الكامل" />
+        </div>
+
+        {/* Phone */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold">رقم الجوال</label>
+          <Input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="text-right"
+            placeholder="05xxxxxxxx"
+            type="tel"
+            data-no-arabic="true"
+            dir="ltr"
+          />
+        </div>
+
+        {/* Email (read-only) */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-muted-foreground">البريد الإلكتروني</label>
+          <Input value={email} readOnly disabled className="text-right opacity-60 cursor-not-allowed" dir="ltr" />
+          <p className="text-xs text-muted-foreground">البريد الإلكتروني لا يمكن تغييره</p>
+        </div>
+
+        {/* Password section toggle */}
+        <button
+          type="button"
+          onClick={() => setShowPasswordSection(!showPasswordSection)}
+          className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+        >
+          <Lock className="w-4 h-4" />
+          {showPasswordSection ? "إلغاء تغيير كلمة المرور" : "تغيير كلمة المرور"}
+        </button>
+
+        {showPasswordSection && (
+          <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">كلمة المرور الحالية</label>
+              <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="text-right" placeholder="••••••••" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">كلمة المرور الجديدة</label>
+              <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="text-right" placeholder="٦ أحرف على الأقل" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">تأكيد كلمة المرور</label>
+              <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="text-right" placeholder="أعد كتابة كلمة المرور" />
+            </div>
+          </div>
+        )}
+
+        <Button onClick={handleSave} disabled={saving || !fullName.trim()} className="w-full gap-2">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+          حفظ التغييرات
+        </Button>
+      </div>
+    </div>
   );
 }

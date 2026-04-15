@@ -50,6 +50,12 @@ export const chaletsTable = pgTable("chalets", {
   socialLink: text("social_link"),
   termsAndConditions: text("terms_and_conditions"),
   waReviewTemplate: text("wa_review_template"),
+  /* ── Booking Reminder (WhatsApp) ── */
+  reminderEnabled: boolean("reminder_enabled").notNull().default(false),
+  reminderDays: integer("reminder_days").notNull().default(1),
+  /* ── Map coordinates ── */
+  latitude: numeric("latitude", { precision: 10, scale: 6 }),
+  longitude: numeric("longitude", { precision: 10, scale: 6 }),
   isVerified: boolean("is_verified").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

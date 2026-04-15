@@ -46,8 +46,17 @@ Arabic-language vacation rental marketplace for chalets in Al-Qassim region, Sau
 - Full RTL (right-to-left) Arabic interface
 - Landing page with hero section and search filters (city, guests)
 - Listings page with property cards and filter sidebar (city, guests, max price)
+  - Grid/Map view toggle — OpenStreetMap via react-leaflet with chalet markers
+  - Hijri+Gregorian dual-date label when a check-in date is selected
+  - Period availability badges on cards (صباحي / مسائي / يوم كامل) when no period filter active
 - Property detail page with photo gallery, amenities, and WhatsApp booking button
 - Mobile-responsive design
+- **Owner Registration**: mandatory Terms & Conditions checkbox (fetched from DB) before submitting
+- **Owner Dashboard** tabs: شاليهاتي | المواسم | التقييمات | التقويم | التأمينات | الخدمات | إعدادات الحساب
+  - Account settings tab (GET/PUT /api/owner/profile) — update name, phone, password
+  - Chalet edit dialog includes WhatsApp reminder toggle (enabled/disabled + days before booking)
+- **Arabic numerals**: system-wide toAr/fromAr pattern; interceptor in main.tsx for inputMode="numeric" fields
+- **Hijri date utilities** in `src/lib/utils.ts`: `hijriAndGregorian()` and `hijriShort()`
 
 **Pages:**
 - `/` — Landing page with dynamic city search (from DB)

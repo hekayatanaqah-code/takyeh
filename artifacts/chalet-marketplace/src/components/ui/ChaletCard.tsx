@@ -33,6 +33,9 @@ export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardPro
   const propertyType = (chalet as any).propertyType as string | null | undefined;
   const sections = (chalet as any).sections as string | null | undefined;
   const seasonalDisclaimer = Boolean((chalet as any).seasonalDisclaimer ?? true);
+  const slotMorning = (chalet as any).slotMorning !== false;
+  const slotEvening = (chalet as any).slotEvening !== false;
+  const slotFullDay = (chalet as any).slotFullDay !== false;
 
   /* Weekday / Weekend prices */
   const weekdayPrice = fmt(chalet.priceWeekday);
@@ -149,6 +152,21 @@ export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardPro
               <span className="text-xs font-semibold text-[#25D366] bg-[#25D366]/10 px-2 py-1 rounded-full">
                 الأسعار عند التواصل
               </span>
+            </div>
+          )}
+
+          {/* ── Available period badges (when no period filter active) ── */}
+          {!selectedPeriod && (slotMorning || slotEvening || slotFullDay) && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {slotMorning && (
+                <span className="text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">🌅 صباحي</span>
+              )}
+              {slotEvening && (
+                <span className="text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">🌙 مسائي</span>
+              )}
+              {slotFullDay && (
+                <span className="text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">☀️ يوم كامل</span>
+              )}
             </div>
           )}
 
