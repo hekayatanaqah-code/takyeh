@@ -92,33 +92,52 @@ export default function Verify() {
     }
   }
 
-  function handleDigitInput(index: number, value: string) {
-    /* Allow pasting the full 6-digit code */
-    const pasted = value.replace(/\D/g, "").slice(0, 6 - index);
-    if (pasted.length > 1) {
-      const next = [...digits];
-      for (let i = 0; i < pasted.length; i++) {
-        if (index + i < 6) next[index + i] = pasted[i];
-      }
-      setDigits(next);
-      const nextFocus = Math.min(index + pasted.length, 5);
-      inputRefs.current[nextFocus]?.focus();
-      return;
-    }
-    const char = value.replace(/\D/g, "").slice(-1);
+  function handleDigitChange(index: number, e: React.ChangeEvent<HTMLInputElement>) {
+    /* Strip non-digits, take the last character typed (handles replacement) */
+    const raw = e.target.value.replace(/\D/g, "");
+    const char = raw.slice(-1); // only 1 digit per box
     const next = [...digits];
     next[index] = char;
     setDigits(next);
-    if (char && index < 5) inputRefs.current[index + 1]?.focus();
+    if (char && index < 5) {
+      setTimeout(() => inputRefs.current[index + 1]?.focus(), 0);
+    }
   }
 
   function handleKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Backspace" && !digits[index] && index > 0) {
+    if (e.key === "Backspace") {
+      if (digits[index]) {
+        /* Clear current box */
+        const next = [...digits];
+        next[index] = "";
+        setDigits(next);
+      } else if (index > 0) {
+        /* Move to previous box and clear it */
+        const next = [...digits];
+        next[index - 1] = "";
+        setDigits(next);
+        inputRefs.current[index - 1]?.focus();
+      }
+      e.preventDefault();
+    } else if (e.key >= "0" && e.key <= "9" && digits[index]) {
+      /* Replace existing digit with the new one directly */
       const next = [...digits];
-      next[index - 1] = "";
+      next[index] = e.key;
       setDigits(next);
-      inputRefs.current[index - 1]?.focus();
+      if (index < 5) setTimeout(() => inputRefs.current[index + 1]?.focus(), 0);
+      e.preventDefault();
     }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    e.preventDefault();
+    const next = ["", "", "", "", "", ""];
+    for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
+    setDigits(next);
+    const lastFilled = Math.min(pasted.length - 1, 5);
+    setTimeout(() => inputRefs.current[lastFilled]?.focus(), 0);
   }
 
   /* ── Success Screen ── */
@@ -203,12 +222,15 @@ export default function Verify() {
             <input
               key={i}
               ref={el => { inputRefs.current[i] = el; }}
-              type="text"
+              type="tel"
               inputMode="numeric"
-              maxLength={6}
+              pattern="[0-9]*"
+              autoComplete="one-time-code"
+              maxLength={1}
               value={d}
-              onChange={e => handleDigitInput(i, e.target.value)}
+              onChange={e => handleDigitChange(i, e)}
               onKeyDown={e => handleKeyDown(i, e)}
+              onPaste={handlePaste}
               onFocus={e => e.target.select()}
               disabled={loading}
               className={[
