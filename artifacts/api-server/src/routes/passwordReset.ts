@@ -30,9 +30,10 @@ router.post("/forgot-password", async (req, res) => {
 
   if (portalType === "admin") {
     /* Look in admin_staff by username or email */
-    const [admin] = await db.execute<{ id: number }>(
+    const adminResult = await db.execute(
       sql`SELECT id FROM admin_staff WHERE username = ${id} OR email = ${id} LIMIT 1`
     );
+    const admin = ((adminResult as any).rows as Array<{ id: number }>)[0];
     if (admin) { targetId = String(admin.id); targetType = "admin_staff"; }
   } else {
     /* Look in owner_staff by username */
@@ -75,9 +76,12 @@ router.post("/reset-password", async (req, res) => {
     return res.status(400).json({ error: "كلمة المرور يجب أن تكون ٦ أحرف على الأقل" });
   }
 
-  const [row] = await db.execute<{
+  const rowResult = await db.execute(
+    sql`SELECT * FROM password_reset_tokens WHERE token = ${String(token)} LIMIT 1`
+  );
+  const row = ((rowResult as any).rows as Array<{
     id: number; target_type: string; target_id: string; expires_at: Date; used: boolean;
-  }>(sql`SELECT * FROM password_reset_tokens WHERE token = ${String(token)} LIMIT 1`);
+  }>)[0];
 
   if (!row || row.used || new Date(row.expires_at) < new Date()) {
     return res.status(410).json({ error: "الرابط منتهي الصلاحية أو تم استخدامه مسبقاً" });
