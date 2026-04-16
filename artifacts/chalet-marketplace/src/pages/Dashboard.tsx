@@ -830,10 +830,21 @@ function AddBookingDialog({
     return blocked;
   }, [bookingDate, durationDays, existingBookings, submissionId]);
 
-  const morningDisabled  = conflictSet.has("morning")  || conflictSet.has("full_day");
-  const eveningDisabled  = conflictSet.has("evening")  || conflictSet.has("full_day");
-  const fullDayDisabled  = conflictSet.has("morning")  || conflictSet.has("evening") || conflictSet.has("full_day");
+  /* ── Unpriced slot detection — disable period if no default price set ── */
+  const morningUnpriced  = !selectedChalet?.priceMorning && !selectedChalet?.priceFullDay;
+  const eveningUnpriced  = !selectedChalet?.priceEvening && !selectedChalet?.priceFullDay;
+  const fullDayUnpriced  = !selectedChalet?.priceFullDay && !selectedChalet?.priceMorning && !selectedChalet?.priceEvening;
+  // Only apply unpriced lock when a chalet is actually selected
+  const hasChalet        = !!(submissionId && submissionId !== "none");
+
+  const morningDisabled  = conflictSet.has("morning")  || conflictSet.has("full_day") || (hasChalet && morningUnpriced);
+  const eveningDisabled  = conflictSet.has("evening")  || conflictSet.has("full_day") || (hasChalet && eveningUnpriced);
+  const fullDayDisabled  = conflictSet.has("morning")  || conflictSet.has("evening") || conflictSet.has("full_day") || (hasChalet && fullDayUnpriced);
   const isFullyBlocked   = conflictSet.has("full_day") || (conflictSet.has("morning") && conflictSet.has("evening"));
+
+  const morningBookingBlocked  = conflictSet.has("morning")  || conflictSet.has("full_day");
+  const eveningBookingBlocked  = conflictSet.has("evening")  || conflictSet.has("full_day");
+  const fullDayBookingBlocked  = conflictSet.has("morning")  || conflictSet.has("evening") || conflictSet.has("full_day");
 
   /* ── Maintenance block detection: any day in the booking range manually blocked ── */
   const maintenanceBlockNote = useMemo(() => {
@@ -864,6 +875,31 @@ function AddBookingDialog({
     if (open && prefilledChaletId) setSubmissionId(prefilledChaletId);
     if (!open) { setBookingDate(""); }
   }, [open, prefilledDate, prefilledChaletId]);
+
+  /* ── Auto-fill price when period or date changes ── */
+  useEffect(() => {
+    if (!period || !bookingDate) return;
+    // Priority 1: active season price for this period/date
+    if (activeSeason) {
+      const dayDP = activeSeason.dailyPrices?.[bookingDate] ?? null;
+      const sp =
+        period === "morning"  ? (dayDP?.morning  ?? (activeSeason.priceMorning  ? Number(activeSeason.priceMorning)  : null)) :
+        period === "evening"  ? (dayDP?.evening  ?? (activeSeason.priceEvening  ? Number(activeSeason.priceEvening)  : null)) :
+        period === "full_day" ? (dayDP?.fullDay  ?? (activeSeason.priceFullDay  ? Number(activeSeason.priceFullDay)  : null)) :
+        null;
+      if (sp != null) { setTotalPrice(String(sp)); return; }
+    }
+    // Priority 2: chalet default price
+    if (selectedChalet) {
+      const dp =
+        period === "morning"  ? selectedChalet.priceMorning :
+        period === "evening"  ? selectedChalet.priceEvening :
+        period === "full_day" ? selectedChalet.priceFullDay :
+        null;
+      if (dp) setTotalPrice(String(Math.round(Number(dp))));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, bookingDate, submissionId]);
 
   const tp = totalPrice ? Math.round(Number(totalPrice)) : null;
   const dp = depositPaid ? Math.round(Number(depositPaid)) : null;
@@ -1073,10 +1109,19 @@ function AddBookingDialog({
             )}
             <div className="grid grid-cols-3 gap-2">
               {([
-                { value: "morning",  label: "صباحي",     sub: "الفترة الصباحية",  disabled: morningDisabled,  icon: "🌅" },
-                { value: "evening",  label: "مسائي",     sub: "الفترة المسائية",  disabled: eveningDisabled,  icon: "🌙" },
-                { value: "full_day", label: "يوم كامل",  sub: "يوم كامل",         disabled: fullDayDisabled,  icon: "☀️" },
-              ] as const).map(({ value, label, sub, disabled, icon }) => (
+                {
+                  value: "morning",  label: "صباحي",    sub: "الفترة الصباحية",
+                  disabled: morningDisabled, booked: morningBookingBlocked, unpriced: hasChalet && morningUnpriced && !morningBookingBlocked, icon: "🌅",
+                },
+                {
+                  value: "evening",  label: "مسائي",    sub: "الفترة المسائية",
+                  disabled: eveningDisabled, booked: eveningBookingBlocked, unpriced: hasChalet && eveningUnpriced && !eveningBookingBlocked, icon: "🌙",
+                },
+                {
+                  value: "full_day", label: "يوم كامل", sub: "يوم كامل",
+                  disabled: fullDayDisabled, booked: fullDayBookingBlocked, unpriced: hasChalet && fullDayUnpriced && !fullDayBookingBlocked, icon: "☀️",
+                },
+              ] as const).map(({ value, label, sub, disabled, booked, unpriced, icon }) => (
                 <button
                   key={value}
                   type="button"
@@ -1095,7 +1140,8 @@ function AddBookingDialog({
                   <span className="text-sm font-semibold flex items-center gap-1">
                     {icon && <span>{icon}</span>}
                     {label}
-                    {disabled && <span className="text-[10px] font-bold text-red-500 dark:text-red-400 mr-1">(محجوز)</span>}
+                    {booked   && <span className="text-[10px] font-bold text-red-500 dark:text-red-400 mr-1">(محجوز)</span>}
+                    {unpriced && <span className="text-[10px] font-bold text-gray-400 mr-1">(غير مسعّر)</span>}
                   </span>
                   {(value as string) !== "none" && (
                     <span className="text-[10px] text-muted-foreground leading-none">{sub}</span>
@@ -12582,15 +12628,19 @@ function OwnerProfileTab() {
     return fetch(`${BASE}/api${path}`, { credentials: "include", headers: { "Content-Type": "application/json", ...(opts?.headers ?? {}) }, ...opts });
   }
 
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
+  const [fullName, setFullName]         = useState("");
+  const [phone, setPhone]               = useState("");
+  const [initialPhone, setInitialPhone] = useState(""); // to detect changes
+  const [email, setEmail]               = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
+  const [newPassword, setNewPassword]   = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading]           = useState(true);
+  const [saving, setSaving]             = useState(false);
   const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw]       = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   useEffect(() => {
     apiFetch("/owner/profile")
@@ -12599,6 +12649,7 @@ function OwnerProfileTab() {
         if (d) {
           setFullName(d.fullName ?? "");
           setPhone(d.phone ?? "");
+          setInitialPhone(d.phone ?? "");
           setEmail(d.email ?? "");
         }
       })
@@ -12606,24 +12657,33 @@ function OwnerProfileTab() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const phoneChanged = phone.trim() !== initialPhone.trim();
+  /* Show password section if phone changed (security) or user explicitly opened it */
+  const needsPassword = phoneChanged || showPasswordSection;
+
   async function handleSave() {
     if (!fullName.trim()) { toast({ title: "الاسم مطلوب", variant: "destructive" }); return; }
+    if (needsPassword && !currentPassword) {
+      toast({ title: "يرجى إدخال كلمة المرور الحالية", description: "مطلوبة للتحقق من هويتك عند تغيير رقم الجوال أو كلمة المرور", variant: "destructive" }); return;
+    }
     if (showPasswordSection) {
-      if (!currentPassword) { toast({ title: "يرجى إدخال كلمة المرور الحالية", variant: "destructive" }); return; }
       if (newPassword.length < 6) { toast({ title: "كلمة المرور الجديدة يجب أن تكون ٦ أحرف على الأقل", variant: "destructive" }); return; }
       if (newPassword !== confirmPassword) { toast({ title: "كلمتا المرور غير متطابقتين", variant: "destructive" }); return; }
     }
     setSaving(true);
     try {
-      const body: Record<string, string> = { fullName: fullName.trim(), phone: phone.trim() };
-      if (showPasswordSection && currentPassword && newPassword) {
-        body.currentPassword = currentPassword;
-        body.newPassword = newPassword;
-      }
+      const body: Record<string, string> = {
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        phoneChanged: String(phoneChanged),
+      };
+      if (needsPassword && currentPassword) body.currentPassword = currentPassword;
+      if (showPasswordSection && newPassword) body.newPassword = newPassword;
       const r = await apiFetch("/owner/profile", { method: "PUT", body: JSON.stringify(body) });
       const d = await r.json();
       if (!r.ok) { toast({ title: "خطأ", description: d.error ?? "فشل الحفظ", variant: "destructive" }); return; }
       toast({ title: "تم الحفظ ✓", description: "تم تحديث بيانات حسابك بنجاح" });
+      setInitialPhone(phone.trim());
       setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
       setShowPasswordSection(false);
     } finally { setSaving(false); }
@@ -12652,7 +12712,10 @@ function OwnerProfileTab() {
 
         {/* Phone */}
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold">رقم الجوال</label>
+          <label className="text-sm font-semibold flex items-center gap-1.5">
+            رقم الجوال
+            {phoneChanged && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">تم التغيير — مطلوب كلمة المرور</span>}
+          </label>
           <Input
             value={toAr(phone)}
             onChange={(e) => setPhone(fromAr(e.target.value))}
@@ -12667,10 +12730,10 @@ function OwnerProfileTab() {
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-muted-foreground">البريد الإلكتروني</label>
           <Input value={email} readOnly disabled className="text-right opacity-60 cursor-not-allowed" dir="ltr" />
-          <p className="text-xs text-muted-foreground">البريد الإلكتروني لا يمكن تغييره</p>
+          <p className="text-xs text-muted-foreground">البريد الإلكتروني لا يمكن تغييره — تواصل مع الدعم إذا احتجت لتغييره</p>
         </div>
 
-        {/* Password section toggle */}
+        {/* Password / security section */}
         <button
           type="button"
           onClick={() => setShowPasswordSection(!showPasswordSection)}
@@ -12680,20 +12743,80 @@ function OwnerProfileTab() {
           {showPasswordSection ? "إلغاء تغيير كلمة المرور" : "تغيير كلمة المرور"}
         </button>
 
-        {showPasswordSection && (
-          <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
+        {/* Current password field — shown when phone changed OR password section open */}
+        {needsPassword && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-800/40 p-4 space-y-3">
+            {phoneChanged && (
+              <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 font-medium mb-1">
+                <Shield className="w-3.5 h-3.5 shrink-0" />
+                أدخل كلمة المرور الحالية للتأكيد قبل تغيير رقم الجوال
+              </div>
+            )}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">كلمة المرور الحالية</label>
-              <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="text-right" placeholder="••••••••" />
+              <label className="text-sm font-semibold">كلمة المرور الحالية <span className="text-destructive">*</span></label>
+              <div className="relative">
+                <Input
+                  type={showCurrentPw ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="text-right pl-10"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPw(v => !v)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold">كلمة المرور الجديدة</label>
-              <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="text-right" placeholder="٦ أحرف على الأقل" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold">تأكيد كلمة المرور</label>
-              <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="text-right" placeholder="أعد كتابة كلمة المرور" />
-            </div>
+
+            {showPasswordSection && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold">كلمة المرور الجديدة</label>
+                  <div className="relative">
+                    <Input
+                      type={showNewPw ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="text-right pl-10"
+                      placeholder="٦ أحرف على الأقل"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPw(v => !v)}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      tabIndex={-1}
+                    >
+                      {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold">تأكيد كلمة المرور</label>
+                  <div className="relative">
+                    <Input
+                      type={showConfirmPw ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="text-right pl-10"
+                      placeholder="أعد كتابة كلمة المرور"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPw(v => !v)}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      tabIndex={-1}
+                    >
+                      {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 

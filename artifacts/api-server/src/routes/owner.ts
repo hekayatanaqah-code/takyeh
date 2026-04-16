@@ -56,10 +56,10 @@ router.use(requireAuth);
 router.get("/profile", async (req, res) => {
   const email = req.user!.email;
   if (!email) return res.status(400).json({ error: "البريد الإلكتروني غير متاح" });
-  const rows = await db.execute<{ full_name: string; phone: string; email: string }>(
+  const result = await db.execute(
     sql`SELECT full_name, phone, email FROM owner_applications WHERE email = ${email} LIMIT 1`
   );
-  const row = rows[0];
+  const row = ((result as any).rows as Array<{ full_name: string; phone: string; email: string }>)[0];
   if (!row) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
   return res.json({ fullName: row.full_name, phone: row.phone, email: row.email });
 });
@@ -68,22 +68,30 @@ router.get("/profile", async (req, res) => {
 router.put("/profile", async (req, res) => {
   const email = req.user!.email;
   if (!email) return res.status(400).json({ error: "البريد الإلكتروني غير متاح" });
-  const { fullName, phone, currentPassword, newPassword } = req.body as Record<string, string>;
+  const { fullName, phone, currentPassword, newPassword, phoneChanged } = req.body as Record<string, string>;
 
   if (!fullName?.trim()) return res.status(400).json({ error: "الاسم الكامل مطلوب" });
 
-  const updates: string[] = ["full_name = " + `'${fullName.trim().replace(/'/g, "''")}'`];
+  /* If phone has changed, require current password verification */
+  const phoneIsChanging = phoneChanged === "true";
+  const passwordNeeded = phoneIsChanging || (currentPassword && newPassword);
+
+  if (passwordNeeded) {
+    if (!currentPassword) return res.status(400).json({ error: "يرجى إدخال كلمة المرور الحالية للتحقق من هويتك" });
+    const pwResult = await db.execute(
+      sql`SELECT password_hash FROM owner_applications WHERE email = ${email} LIMIT 1`
+    );
+    const pwRow = ((pwResult as any).rows as Array<{ password_hash: string }>)[0];
+    if (!pwRow) return res.status(404).json({ error: "الحساب غير موجود" });
+    const match = await bcrypt.compare(currentPassword, pwRow.password_hash);
+    if (!match) return res.status(400).json({ error: "كلمة المرور الحالية غير صحيحة" });
+  }
+
+  const updates: string[] = [`full_name = '${fullName.trim().replace(/'/g, "''")}'`];
   if (phone !== undefined) updates.push(`phone = '${phone.trim().replace(/'/g, "''")}'`);
 
   if (currentPassword && newPassword) {
     if (newPassword.length < 6) return res.status(400).json({ error: "كلمة المرور الجديدة قصيرة جداً" });
-    const rows = await db.execute<{ password_hash: string }>(
-      sql`SELECT password_hash FROM owner_applications WHERE email = ${email} LIMIT 1`
-    );
-    const row = rows[0];
-    if (!row) return res.status(404).json({ error: "الحساب غير موجود" });
-    const match = await bcrypt.compare(currentPassword, row.password_hash);
-    if (!match) return res.status(400).json({ error: "كلمة المرور الحالية غير صحيحة" });
     const newHash = await bcrypt.hash(newPassword, 10);
     updates.push(`password_hash = '${newHash}'`);
   }

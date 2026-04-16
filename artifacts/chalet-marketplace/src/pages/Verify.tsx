@@ -16,14 +16,19 @@ export default function Verify() {
   const [, navigate] = useLocation();
   const email = getEmailFromUrl();
 
-  const [digits, setDigits]         = useState<string[]>(["", "", "", "", "", ""]);
-  const [loading, setLoading]       = useState(false);
-  const [resending, setResending]   = useState(false);
-  const [error, setError]           = useState<string | null>(null);
-  const [verified, setVerified]     = useState(false);
-  const [countdown, setCountdown]   = useState(RESEND_SECONDS);
-  const [canResend, setCanResend]   = useState(false);
-  const inputRefs                   = useRef<(HTMLInputElement | null)[]>([]);
+  const [code, setCode]           = useState("");
+  const [loading, setLoading]     = useState(false);
+  const [resending, setResending] = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+  const [verified, setVerified]   = useState(false);
+  const [countdown, setCountdown] = useState(RESEND_SECONDS);
+  const [canResend, setCanResend] = useState(false);
+  const inputRef                  = useRef<HTMLInputElement>(null);
+
+  /* ── Auto-focus the hidden input on mount ── */
+  useEffect(() => {
+    setTimeout(() => inputRef.current?.focus(), 300);
+  }, []);
 
   /* ── Countdown timer ── */
   useEffect(() => {
@@ -37,16 +42,15 @@ export default function Verify() {
     if (!email) navigate("/register");
   }, [email, navigate]);
 
-  /* ── Auto-submit when all 6 digits are filled ── */
-  const codeValue = digits.join("");
+  /* ── Auto-submit when all 6 digits are entered ── */
   useEffect(() => {
-    if (codeValue.length === 6 && !loading && !verified) {
-      handleVerify(codeValue);
+    if (code.length === 6 && !loading && !verified) {
+      handleVerify(code);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codeValue]);
+  }, [code]);
 
-  const handleVerify = useCallback(async (code: string) => {
+  const handleVerify = useCallback(async (otp: string) => {
     if (loading) return;
     setError(null);
     setLoading(true);
@@ -54,18 +58,19 @@ export default function Verify() {
       const r = await fetch(`${BASE}/api/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code }),
+        body: JSON.stringify({ email, code: otp }),
       });
       const data = await r.json();
       if (!r.ok) {
         setError(data.error ?? "الرمز غير صحيح");
-        setDigits(["", "", "", "", "", ""]);
-        inputRefs.current[0]?.focus();
+        setCode("");
+        setTimeout(() => inputRef.current?.focus(), 100);
         return;
       }
       setVerified(true);
     } catch {
       setError("تعذّر الاتصال بالخادم");
+      setCode("");
     } finally {
       setLoading(false);
     }
@@ -83,8 +88,8 @@ export default function Verify() {
       });
       setCountdown(RESEND_SECONDS);
       setCanResend(false);
-      setDigits(["", "", "", "", "", ""]);
-      inputRefs.current[0]?.focus();
+      setCode("");
+      setTimeout(() => inputRef.current?.focus(), 100);
     } catch {
       setError("فشل إعادة الإرسال، حاول مرة أخرى");
     } finally {
@@ -92,53 +97,14 @@ export default function Verify() {
     }
   }
 
-  function handleDigitChange(index: number, e: React.ChangeEvent<HTMLInputElement>) {
-    /* Strip non-digits, take the last character typed (handles replacement) */
-    const raw = e.target.value.replace(/\D/g, "");
-    const char = raw.slice(-1); // only 1 digit per box
-    const next = [...digits];
-    next[index] = char;
-    setDigits(next);
-    if (char && index < 5) {
-      setTimeout(() => inputRefs.current[index + 1]?.focus(), 0);
-    }
+  function handleCodeChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+    setCode(val);
+    if (error) setError(null);
   }
 
-  function handleKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Backspace") {
-      if (digits[index]) {
-        /* Clear current box */
-        const next = [...digits];
-        next[index] = "";
-        setDigits(next);
-      } else if (index > 0) {
-        /* Move to previous box and clear it */
-        const next = [...digits];
-        next[index - 1] = "";
-        setDigits(next);
-        inputRefs.current[index - 1]?.focus();
-      }
-      e.preventDefault();
-    } else if (e.key >= "0" && e.key <= "9" && digits[index]) {
-      /* Replace existing digit with the new one directly */
-      const next = [...digits];
-      next[index] = e.key;
-      setDigits(next);
-      if (index < 5) setTimeout(() => inputRefs.current[index + 1]?.focus(), 0);
-      e.preventDefault();
-    }
-  }
-
-  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
-    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    if (!pasted) return;
-    e.preventDefault();
-    const next = ["", "", "", "", "", ""];
-    for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
-    setDigits(next);
-    const lastFilled = Math.min(pasted.length - 1, 5);
-    setTimeout(() => inputRefs.current[lastFilled]?.focus(), 0);
-  }
+  /* ── Visual digit display (6 boxes built from the single input value) ── */
+  const displayDigits = Array(6).fill("").map((_, i) => code[i] ?? "");
 
   /* ── Success Screen ── */
   if (verified) {
@@ -216,39 +182,54 @@ export default function Verify() {
           </p>
         </div>
 
-        {/* 6-digit boxes */}
-        <div className="flex items-center justify-center gap-2 mb-5" dir="ltr">
-          {digits.map((d, i) => (
-            <input
+        {/* ── 6-box OTP display backed by a single hidden input ── */}
+        <div
+          className="relative flex items-center justify-center gap-2 mb-5 cursor-text"
+          dir="ltr"
+          onClick={() => inputRef.current?.focus()}
+          role="group"
+          aria-label="رمز التحقق"
+        >
+          {/* Hidden single input — receives ALL keyboard/touch input */}
+          <input
+            ref={inputRef}
+            type="tel"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={code}
+            onChange={handleCodeChange}
+            disabled={loading}
+            aria-label="أدخل رمز التحقق المكون من ٦ أرقام"
+            className="absolute opacity-0 w-full h-full top-0 left-0 cursor-text z-10"
+            style={{ fontSize: "16px" }}
+          />
+
+          {/* Visual digit boxes */}
+          {displayDigits.map((d, i) => (
+            <div
               key={i}
-              ref={el => { inputRefs.current[i] = el; }}
-              type="tel"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              autoComplete="one-time-code"
-              maxLength={1}
-              value={d}
-              onChange={e => handleDigitChange(i, e)}
-              onKeyDown={e => handleKeyDown(i, e)}
-              onPaste={handlePaste}
-              onFocus={e => e.target.select()}
-              disabled={loading}
+              aria-hidden="true"
               className={[
-                "w-11 h-14 text-center text-xl font-bold rounded-xl border-2 outline-none transition-all",
-                "bg-gray-50 text-gray-900",
+                "w-11 h-14 flex items-center justify-center text-xl font-bold rounded-xl border-2 transition-all select-none pointer-events-none",
+                loading ? "opacity-50" : "",
                 d
-                  ? "border-green-500 bg-green-50"
-                  : "border-gray-200 focus:border-green-400",
-                loading ? "opacity-50 cursor-not-allowed" : "",
+                  ? "border-green-500 bg-green-50 text-gray-900"
+                  : i === code.length && !loading
+                    ? "border-green-400 ring-2 ring-green-100 bg-white text-gray-900"
+                    : "border-gray-200 bg-gray-50 text-gray-300",
               ].join(" ")}
-            />
+            >
+              {d || (i === code.length && !loading ? "|" : "")}
+            </div>
           ))}
         </div>
 
-        {/* OTP in Arabic for display */}
-        {codeValue.length > 0 && (
+        {/* OTP progress hint */}
+        {code.length > 0 && code.length < 6 && (
           <p className="text-center text-xs text-gray-400 mb-3">
-            الرمز المُدخل: <span className="font-mono font-bold text-gray-600">{toAr(codeValue)}</span>
+            {toAr(String(code.length))}/٦ أرقام
           </p>
         )}
 
@@ -270,15 +251,22 @@ export default function Verify() {
           </div>
         )}
 
-        {/* Verify button (also auto-submits when all digits filled) */}
-        {codeValue.length === 6 && !loading && (
+        {/* Verify button (also auto-submits when all 6 filled) */}
+        {code.length === 6 && !loading && (
           <Button
-            onClick={() => handleVerify(codeValue)}
+            onClick={() => handleVerify(code)}
             className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl gap-2 mb-4"
           >
             <CheckCircle2 className="w-4 h-4" />
             تحقق وأكمل التسجيل
           </Button>
+        )}
+
+        {/* Tap-to-focus hint */}
+        {code.length === 0 && !loading && (
+          <p className="text-center text-xs text-green-600 mb-3 font-medium animate-pulse">
+            اضغط على المربعات وابدأ الكتابة
+          </p>
         )}
 
         {/* Resend */}
