@@ -26,6 +26,7 @@ import OwnerChaletDetail from "./pages/OwnerChaletDetail";
 import Login from "./pages/Login";
 import AdminPortal from "./pages/AdminPortal";
 import Register from "./pages/Register";
+import Verify from "./pages/Verify";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 
@@ -80,6 +81,7 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/staff-login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/verify" component={Verify} />
       <Route path="/forgot-password">{() => <ForgotPassword portalType="public" />}</Route>
       <Route path="/forgot-password/admin">{() => <ForgotPassword portalType="admin" />}</Route>
       <Route path="/reset-password" component={ResetPassword} />

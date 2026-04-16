@@ -22,7 +22,6 @@ export default function Register() {
   const [showCPw, setShowCPw]             = useState(false);
   const [loading, setLoading]             = useState(false);
   const [error, setError]                 = useState<string | null>(null);
-  const [submitted, setSubmitted]         = useState(false);
   const [platformTerms, setPlatformTerms] = useState<string>("");
   const [showModal, setShowModal]         = useState(false);
   const scrollRef                         = useRef<HTMLDivElement>(null);
@@ -80,40 +79,14 @@ export default function Register() {
         return;
       }
       setShowModal(false);
-      setSubmitted(true);
+      /* Redirect to OTP verification page */
+      navigate(`/verify?email=${encodeURIComponent(email)}`);
     } catch {
       setShowModal(false);
       setError("تعذّر الاتصال بالخادم. يرجى المحاولة مرة أخرى");
     } finally {
       setLoading(false);
     }
-  }
-
-  if (submitted) {
-    return (
-      <div
-        className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex flex-col items-center justify-center px-4"
-        dir="rtl"
-      >
-        <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-gray-100 p-8 flex flex-col items-center text-center">
-          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
-            <CheckCircle2 className="w-9 h-9 text-green-600" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">تم استلام طلبك</h2>
-          <p className="text-gray-600 text-sm leading-relaxed mb-6">
-            تم استلام طلبك، سيتم مراجعته وتفعيل حسابك قريباً.
-            <br />
-            سنتواصل معك على البريد الإلكتروني المُدخل.
-          </p>
-          <Button
-            onClick={() => navigate("/login")}
-            className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl"
-          >
-            العودة لصفحة الدخول
-          </Button>
-        </div>
-      </div>
-    );
   }
 
   return (

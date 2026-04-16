@@ -45,7 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, Check, Video } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, Check, Video } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -2518,6 +2518,42 @@ function SettingsTab() {
         </div>
       </div>
 
+      {/* ══ 3.8. Registration / OTP Settings ══ */}
+      <div className="bg-slate-800 rounded-xl border border-blue-500/30 overflow-hidden">
+        <div className="bg-gradient-to-l from-blue-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+          <span className="text-xl leading-none">🔐</span>
+          <h3 className="text-slate-100 font-bold text-lg">إعدادات التحقق عند التسجيل</h3>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Email OTP — always on, just informational */}
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-900/40 px-5 py-4">
+            <div className="space-y-0.5">
+              <p className="text-sm font-semibold text-slate-200">التحقق عبر البريد الإلكتروني (OTP)</p>
+              <p className="text-xs text-slate-400">يُرسل رمز مكوّن من ٦ أرقام إلى بريد المالك عند التسجيل. مُفعّل دائماً.</p>
+            </div>
+            <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full bg-green-900/40 text-green-300 border border-green-700/40">
+              ✓ مفعّل
+            </span>
+          </div>
+
+          {/* WhatsApp OTP toggle */}
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-900/40 px-5 py-4">
+            <div className="space-y-0.5">
+              <p className="text-sm font-semibold text-slate-200">التحقق عبر واتساب (OTP)</p>
+              <p className="text-xs text-slate-400">إرسال رمز تحقق عبر واتساب بالإضافة إلى البريد الإلكتروني عند تسجيل مالك جديد.</p>
+            </div>
+            <button
+              onClick={() => setForm((f) => ({ ...f, wa_otp_enabled: f.wa_otp_enabled === "true" ? "false" : "true" }))}
+              className={`relative shrink-0 w-12 h-6 rounded-full transition-colors ${form.wa_otp_enabled === "true" ? "bg-green-500" : "bg-slate-600"}`}
+            >
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.wa_otp_enabled === "true" ? "right-0.5" : "left-0.5"}`} />
+            </button>
+          </div>
+
+          <SaveBtn label="حفظ إعدادات التحقق" />
+        </div>
+      </div>
+
       {/* ══ 4. Social Media ══ */}
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
         <div className="bg-gradient-to-l from-purple-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
@@ -3689,6 +3725,7 @@ interface PartnerApp {
   email: string;
   status: "pending" | "approved" | "rejected";
   docs_status: "pending_docs" | "docs_submitted" | "verified";
+  email_verified: boolean;
   created_at: string;
 }
 
@@ -3715,6 +3752,7 @@ function PartnerApplicationsTab() {
   const [loading, setLoading]   = useState(true);
   const [updating, setUpdating] = useState<number | null>(null);
   const [docsUpdating, setDocsUpdating] = useState<number | null>(null);
+  const [verifying, setVerifying] = useState<number | null>(null);
 
   useEffect(() => {
     fetch(`${API}/admin/applications`, { credentials: "include" })
@@ -3745,6 +3783,17 @@ function PartnerApplicationsTab() {
     });
     setApps((prev) => prev.map((a) => (a.id === id ? { ...a, docs_status } : a)));
     setDocsUpdating(null);
+  }
+
+  async function manualVerify(id: number) {
+    setVerifying(id);
+    await fetch(`${API}/admin/applications/${id}/manual-verify`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+    });
+    setApps((prev) => prev.map((a) => (a.id === id ? { ...a, email_verified: true } : a)));
+    setVerifying(null);
   }
 
   if (loading) return (
@@ -3799,6 +3848,28 @@ function PartnerApplicationsTab() {
           >
             {isDocsUpdating ? "…" : "تغيير"}
           </button>
+        </div>
+
+        {/* Email verification status */}
+        <div className="flex items-center justify-between gap-2">
+          {app.email_verified ? (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full border bg-green-900/30 text-green-300 border-green-700/40">
+              ✓ تم التحقق من البريد
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-full border bg-amber-900/30 text-amber-300 border-amber-700/40">
+              ⏳ في انتظار التحقق من البريد
+            </span>
+          )}
+          {!app.email_verified && (
+            <button
+              disabled={verifying === app.id}
+              onClick={() => manualVerify(app.id)}
+              className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50 underline underline-offset-2 whitespace-nowrap"
+            >
+              {verifying === app.id ? "…" : "تحقق يدوي"}
+            </button>
+          )}
         </div>
 
         <div className="text-xs text-slate-400 space-y-0.5">
@@ -4458,7 +4529,9 @@ function DirectAddTab() {
   /* ── Owner ── */
   const [ownerId, setOwnerId]             = useState("");
   const [showNewOwner, setShowNewOwner]   = useState(false);
-  const [newOwner, setNewOwner]           = useState({ fullName: "", businessName: "", phone: "", email: "", password: "" });
+  const [newOwner, setNewOwner]           = useState({ fullName: "", businessName: "", phone: "", email: "", password: "", confirmPassword: "" });
+  const [showNewOwnerPw, setShowNewOwnerPw]   = useState(false);
+  const [showNewOwnerCPw, setShowNewOwnerCPw] = useState(false);
   const [registeringOwner, setRegisteringOwner] = useState(false);
   const [ownerRegErr, setOwnerRegErr]     = useState<string | null>(null);
   const [ownerRegOk, setOwnerRegOk]       = useState<string | null>(null);
@@ -4576,18 +4649,30 @@ function DirectAddTab() {
 
   async function handleRegisterOwner(e: React.MouseEvent) {
     e.preventDefault();
-    setOwnerRegErr(null); setOwnerRegOk(null); setRegisteringOwner(true);
+    setOwnerRegErr(null); setOwnerRegOk(null);
+    if (!newOwner.fullName.trim()) { setOwnerRegErr("الاسم الكامل مطلوب"); return; }
+    if (!newOwner.phone.trim())    { setOwnerRegErr("رقم الجوال مطلوب"); return; }
+    if (!newOwner.email.trim())    { setOwnerRegErr("البريد الإلكتروني مطلوب"); return; }
+    if (newOwner.password.length < 6) { setOwnerRegErr("كلمة المرور يجب أن تكون ٦ أحرف على الأقل"); return; }
+    if (newOwner.password !== newOwner.confirmPassword) { setOwnerRegErr("كلمتا المرور غير متطابقتين"); return; }
+    setRegisteringOwner(true);
     try {
-      const r = await apiFetch("/register-owner", { method: "POST", body: JSON.stringify({ fullName: newOwner.fullName.trim(), businessName: newOwner.businessName.trim() || undefined, phone: newOwner.phone.trim(), email: newOwner.email.trim() || undefined, password: newOwner.password }) });
+      const r = await apiFetch("/register-owner", { method: "POST", body: JSON.stringify({
+        fullName: newOwner.fullName.trim(),
+        businessName: newOwner.businessName.trim() || newOwner.fullName.trim(),
+        phone: newOwner.phone.trim(),
+        email: newOwner.email.trim(),
+        password: newOwner.password
+      }) });
       const json = await r.json().catch(() => ({}));
-      if (!r.ok) { setOwnerRegErr(json.error ?? "حدث خطأ"); }
+      if (!r.ok) { setOwnerRegErr(json.error ?? "حدث خطأ أثناء التسجيل"); }
       else {
-        setOwnerRegOk(`تم تسجيل "${newOwner.fullName}" — سيظهر في القائمة بعد تسجيل دخوله الأول`);
-        setNewOwner({ fullName:"", businessName:"", phone:"", email:"", password:"" });
+        setOwnerRegOk(`✓ تم تسجيل "${newOwner.fullName}" بنجاح — سيظهر في قائمة الطلبات بعد تحقق البريد الإلكتروني`);
+        setNewOwner({ fullName:"", businessName:"", phone:"", email:"", password:"", confirmPassword:"" });
         setShowNewOwner(false);
         qc.invalidateQueries({ queryKey: ["admin","owners"] });
       }
-    } catch { setOwnerRegErr("فشل الاتصال بالخادم"); }
+    } catch { setOwnerRegErr("فشل الاتصال بالخادم، يرجى المحاولة مرة أخرى"); }
     finally { setRegisteringOwner(false); }
   }
 
@@ -4735,10 +4820,27 @@ function DirectAddTab() {
                 <div className="space-y-1"><label className="text-xs text-slate-400">اسم النشاط</label><Input value={newOwner.businessName} onChange={e => setNewOwner(v => ({...v, businessName: e.target.value}))} placeholder="شاليهات السليم" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
                 <div className="space-y-1"><label className="text-xs text-slate-400">رقم الجوال *</label><Input value={toAr(newOwner.phone)} onChange={e => setNewOwner(v => ({...v, phone: fromAr(e.target.value)}))} placeholder="٠٥XXXXXXXX" data-no-arabic inputMode="numeric" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
                 <div className="space-y-1"><label className="text-xs text-slate-400">البريد الإلكتروني</label><Input value={newOwner.email} onChange={e => setNewOwner(v => ({...v, email: e.target.value}))} placeholder="example@email.com" type="email" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
-                <div className="space-y-1 col-span-2"><label className="text-xs text-slate-400">كلمة المرور * (٨ أحرف على الأقل)</label><Input value={newOwner.password} onChange={e => setNewOwner(v => ({...v, password: e.target.value}))} placeholder="••••••••" type="password" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
+                <div className="space-y-1 col-span-2">
+                  <label className="text-xs text-slate-400">كلمة المرور * (٦ أحرف على الأقل)</label>
+                  <div className="relative">
+                    <Input value={newOwner.password} onChange={e => setNewOwner(v => ({...v, password: e.target.value}))} placeholder="••••••••" type={showNewOwnerPw ? "text" : "password"} dir="ltr" className="bg-slate-800 border-slate-600 text-white text-sm h-8 text-left pr-8" />
+                    <button type="button" tabIndex={-1} onClick={() => setShowNewOwnerPw(v => !v)} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
+                      {showNewOwnerPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <label className="text-xs text-slate-400">تأكيد كلمة المرور *</label>
+                  <div className="relative">
+                    <Input value={newOwner.confirmPassword} onChange={e => setNewOwner(v => ({...v, confirmPassword: e.target.value}))} placeholder="••••••••" type={showNewOwnerCPw ? "text" : "password"} dir="ltr" className="bg-slate-800 border-slate-600 text-white text-sm h-8 text-left pr-8" />
+                    <button type="button" tabIndex={-1} onClick={() => setShowNewOwnerCPw(v => !v)} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
+                      {showNewOwnerCPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
               </div>
               {ownerRegErr && <p className="text-red-400 text-xs">{ownerRegErr}</p>}
-              <Button type="button" onClick={handleRegisterOwner} disabled={registeringOwner || !newOwner.fullName.trim() || !newOwner.phone.trim() || !newOwner.password} className="bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs h-8 px-4">
+              <Button type="button" onClick={handleRegisterOwner} disabled={registeringOwner || !newOwner.fullName.trim() || !newOwner.phone.trim() || !newOwner.email.trim() || !newOwner.password || !newOwner.confirmPassword} className="bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs h-8 px-4">
                 {registeringOwner ? <Loader2 className="animate-spin w-3 h-3 ml-1" /> : <Plus className="w-3 h-3 ml-1" />}تسجيل المالك
               </Button>
             </div>
