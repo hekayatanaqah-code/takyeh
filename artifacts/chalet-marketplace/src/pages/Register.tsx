@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, Building2, CheckCircle2, X, ScrollText, Loader2 } from "lucide-react";
+import { Eye, EyeOff, UserCircle2, CheckCircle2, X, ScrollText, Loader2 } from "lucide-react";
 import { toAr, fromAr } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -11,8 +11,6 @@ export default function Register() {
   const [, navigate] = useLocation();
   const [form, setForm] = useState({
     fullName: "",
-    businessName: "",
-    businessType: "chalet" as "chalet" | "service" | "both",
     phone: "",
     email: "",
     password: "",
@@ -41,8 +39,8 @@ export default function Register() {
   }
 
   function validateForm(): string | null {
-    const { fullName, businessName, phone, email, password, confirmPassword } = form;
-    if (!fullName || !businessName || !phone || !email || !password)
+    const { fullName, phone, email, password, confirmPassword } = form;
+    if (!fullName || !phone || !email || !password)
       return "يرجى تعبئة جميع الحقول المطلوبة";
     if (password !== confirmPassword)
       return "كلمتا المرور غير متطابقتين";
@@ -65,12 +63,12 @@ export default function Register() {
 
   async function handleConfirmedSubmit() {
     setLoading(true);
-    const { fullName, businessName, businessType, phone, email, password } = form;
+    const { fullName, phone, email, password } = form;
     try {
       const r = await fetch(`${BASE}/api/register-owner`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName, businessName, businessType, phone, email, password }),
+        body: JSON.stringify({ fullName, phone, email, password }),
       });
       const data = await r.json();
       if (!r.ok) {
@@ -79,7 +77,6 @@ export default function Register() {
         return;
       }
       setShowModal(false);
-      /* Redirect to OTP verification page */
       navigate(`/verify?email=${encodeURIComponent(email)}`);
     } catch {
       setShowModal(false);
@@ -125,10 +122,7 @@ export default function Register() {
             </div>
 
             {/* Terms content — scrollable */}
-            <div
-              ref={scrollRef}
-              className="flex-1 overflow-y-auto px-6 py-5"
-            >
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5">
               {platformTerms ? (
                 <pre className="text-gray-700 text-sm leading-loose whitespace-pre-wrap font-sans">
                   {platformTerms}
@@ -140,7 +134,7 @@ export default function Register() {
               )}
             </div>
 
-            {/* Modal footer — sticky at bottom */}
+            {/* Modal footer */}
             <div className="shrink-0 border-t border-gray-100 bg-white px-6 py-4 space-y-3">
               <p className="text-xs text-gray-500 text-center leading-relaxed">
                 بالنقر على «موافق، إكمال التسجيل» فإنك تُقرّ بأنك قرأت هذه الشروط وتوافق عليها بالكامل
@@ -179,16 +173,16 @@ export default function Register() {
       >
         <div className="flex flex-col items-center mb-6 select-none">
           <div className="w-14 h-14 rounded-2xl bg-green-600 shadow-lg shadow-green-200 flex items-center justify-center mb-3">
-            <Building2 className="w-7 h-7 text-white" />
+            <UserCircle2 className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">تكيّة</h1>
-          <p className="text-gray-500 text-sm mt-0.5">انضم إلى شركاء تكيّة وابدأ إدارة أعمالك</p>
+          <p className="text-gray-500 text-sm mt-0.5">أنشئ حسابك الشخصي وابدأ رحلتك معنا</p>
         </div>
 
         <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-gray-100 p-7">
           <h2 className="font-bold text-gray-800 text-base mb-1">إنشاء حساب جديد</h2>
           <p className="text-gray-400 text-xs mb-5">
-            سيتم مراجعة طلبك من قِبل الإدارة قبل التفعيل
+            أدخل بياناتك الشخصية — ستُضاف تفاصيل النشاط بعد التفعيل
           </p>
 
           <form onSubmit={handleSubmitClick} className="space-y-4">
@@ -205,38 +199,6 @@ export default function Register() {
                 className="h-11 border-gray-200 focus:border-green-500"
                 required
                 autoFocus
-              />
-            </div>
-
-            {/* Business Type */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">
-                نوع النشاط <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={form.businessType}
-                onChange={(e) => update("businessType", e.target.value as typeof form.businessType)}
-                className="w-full h-11 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-                required
-              >
-                <option value="chalet">🏡  مالك شاليه</option>
-                <option value="service">🔧  مزود خدمة</option>
-                <option value="both">🏡🔧  كلاهما</option>
-              </select>
-            </div>
-
-            {/* Business Name */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">
-                اسم النشاط التجاري <span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="text"
-                placeholder={form.businessType === "service" ? "شركة الخدمات المتميزة" : "شاليه النخيل"}
-                value={form.businessName}
-                onChange={(e) => update("businessName", e.target.value)}
-                className="h-11 border-gray-200 focus:border-green-500"
-                required
               />
             </div>
 
@@ -271,7 +233,7 @@ export default function Register() {
                 className="h-11 text-left border-gray-200 focus:border-green-500"
                 required
               />
-              <p className="text-xs text-gray-400">سيُستخدم للدخول وإعادة تعيين كلمة المرور</p>
+              <p className="text-xs text-gray-400">سيُستخدم للدخول وإرسال رمز التحقق</p>
             </div>
 
             {/* Password */}

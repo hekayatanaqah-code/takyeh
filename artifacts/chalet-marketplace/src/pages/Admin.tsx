@@ -45,7 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, Check, Video } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, Check, Video, Mail, MessageSquare, Send } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -2518,42 +2518,6 @@ function SettingsTab() {
         </div>
       </div>
 
-      {/* ══ 3.8. Registration / OTP Settings ══ */}
-      <div className="bg-slate-800 rounded-xl border border-blue-500/30 overflow-hidden">
-        <div className="bg-gradient-to-l from-blue-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <span className="text-xl leading-none">🔐</span>
-          <h3 className="text-slate-100 font-bold text-lg">إعدادات التحقق عند التسجيل</h3>
-        </div>
-        <div className="p-6 space-y-5">
-          {/* Email OTP — always on, just informational */}
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-900/40 px-5 py-4">
-            <div className="space-y-0.5">
-              <p className="text-sm font-semibold text-slate-200">التحقق عبر البريد الإلكتروني (OTP)</p>
-              <p className="text-xs text-slate-400">يُرسل رمز مكوّن من ٦ أرقام إلى بريد المالك عند التسجيل. مُفعّل دائماً.</p>
-            </div>
-            <span className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-full bg-green-900/40 text-green-300 border border-green-700/40">
-              ✓ مفعّل
-            </span>
-          </div>
-
-          {/* WhatsApp OTP toggle */}
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-900/40 px-5 py-4">
-            <div className="space-y-0.5">
-              <p className="text-sm font-semibold text-slate-200">التحقق عبر واتساب (OTP)</p>
-              <p className="text-xs text-slate-400">إرسال رمز تحقق عبر واتساب بالإضافة إلى البريد الإلكتروني عند تسجيل مالك جديد.</p>
-            </div>
-            <button
-              onClick={() => setForm((f) => ({ ...f, wa_otp_enabled: f.wa_otp_enabled === "true" ? "false" : "true" }))}
-              className={`relative shrink-0 w-12 h-6 rounded-full transition-colors ${form.wa_otp_enabled === "true" ? "bg-green-500" : "bg-slate-600"}`}
-            >
-              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.wa_otp_enabled === "true" ? "right-0.5" : "left-0.5"}`} />
-            </button>
-          </div>
-
-          <SaveBtn label="حفظ إعدادات التحقق" />
-        </div>
-      </div>
-
       {/* ══ 4. Social Media ══ */}
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
         <div className="bg-gradient-to-l from-purple-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
@@ -4529,7 +4493,7 @@ function DirectAddTab() {
   /* ── Owner ── */
   const [ownerId, setOwnerId]             = useState("");
   const [showNewOwner, setShowNewOwner]   = useState(false);
-  const [newOwner, setNewOwner]           = useState({ fullName: "", businessName: "", phone: "", email: "", password: "", confirmPassword: "" });
+  const [newOwner, setNewOwner]           = useState({ fullName: "", phone: "", email: "", password: "", confirmPassword: "" });
   const [showNewOwnerPw, setShowNewOwnerPw]   = useState(false);
   const [showNewOwnerCPw, setShowNewOwnerCPw] = useState(false);
   const [registeringOwner, setRegisteringOwner] = useState(false);
@@ -4659,7 +4623,6 @@ function DirectAddTab() {
     try {
       const r = await apiFetch("/register-owner", { method: "POST", body: JSON.stringify({
         fullName: newOwner.fullName.trim(),
-        businessName: newOwner.businessName.trim() || newOwner.fullName.trim(),
         phone: newOwner.phone.trim(),
         email: newOwner.email.trim(),
         password: newOwner.password
@@ -4668,7 +4631,7 @@ function DirectAddTab() {
       if (!r.ok) { setOwnerRegErr(json.error ?? "حدث خطأ أثناء التسجيل"); }
       else {
         setOwnerRegOk(`✓ تم تسجيل "${newOwner.fullName}" بنجاح — سيظهر في قائمة الطلبات بعد تحقق البريد الإلكتروني`);
-        setNewOwner({ fullName:"", businessName:"", phone:"", email:"", password:"", confirmPassword:"" });
+        setNewOwner({ fullName:"", phone:"", email:"", password:"", confirmPassword:"" });
         setShowNewOwner(false);
         qc.invalidateQueries({ queryKey: ["admin","owners"] });
       }
@@ -4816,10 +4779,9 @@ function DirectAddTab() {
             <div className="border border-slate-600 rounded-lg p-4 space-y-3 bg-slate-900/60">
               <p className="text-xs text-slate-400">سيُسجَّل المالك ويمكنه تسجيل الدخول بالبريد/الهاتف وكلمة المرور.</p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><label className="text-xs text-slate-400">الاسم الكامل *</label><Input value={newOwner.fullName} onChange={e => setNewOwner(v => ({...v, fullName: e.target.value}))} placeholder="محمد السليم" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
-                <div className="space-y-1"><label className="text-xs text-slate-400">اسم النشاط</label><Input value={newOwner.businessName} onChange={e => setNewOwner(v => ({...v, businessName: e.target.value}))} placeholder="شاليهات السليم" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
+                <div className="space-y-1 col-span-2"><label className="text-xs text-slate-400">الاسم الكامل *</label><Input value={newOwner.fullName} onChange={e => setNewOwner(v => ({...v, fullName: e.target.value}))} placeholder="محمد عبدالله السليم" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
                 <div className="space-y-1"><label className="text-xs text-slate-400">رقم الجوال *</label><Input value={toAr(newOwner.phone)} onChange={e => setNewOwner(v => ({...v, phone: fromAr(e.target.value)}))} placeholder="٠٥XXXXXXXX" data-no-arabic inputMode="numeric" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
-                <div className="space-y-1"><label className="text-xs text-slate-400">البريد الإلكتروني</label><Input value={newOwner.email} onChange={e => setNewOwner(v => ({...v, email: e.target.value}))} placeholder="example@email.com" type="email" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
+                <div className="space-y-1"><label className="text-xs text-slate-400">البريد الإلكتروني *</label><Input value={newOwner.email} onChange={e => setNewOwner(v => ({...v, email: e.target.value}))} placeholder="example@email.com" type="email" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
                 <div className="space-y-1 col-span-2">
                   <label className="text-xs text-slate-400">كلمة المرور * (٦ أحرف على الأقل)</label>
                   <div className="relative">
@@ -5503,23 +5465,252 @@ function TermsManagementTab() {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Communication Settings Tab
+   ══════════════════════════════════════════════════════════════ */
+const DEFAULT_OTP_TEMPLATE = `مرحباً {NAME}،
+
+شكراً لتسجيلك في منصة تكيّة. رمز التحقق الخاص بك لإتمام إنشاء حسابك هو:
+
+{OTP}
+
+هذا الرمز صالح لمدة ١٠ دقائق فقط.
+إذا لم تطلب هذا الرمز، يرجى تجاهل هذا البريد.
+
+منصة تكيّة`;
+
+const DEFAULT_WELCOME_TEMPLATE = `مرحباً {NAME}،
+
+يسعدنا انضمامك إلى منصة تكيّة! 🎉
+
+حسابك الآن قيد المراجعة من فريق الإدارة. بعد التفعيل، يمكنك البدء بالخطوات التالية:
+
+1️⃣  أضف شاليهك — أدخل الصور والتفاصيل والموقع
+2️⃣  حدّد الأسعار والمواسم — يومي، نهاية أسبوع، مواسم خاصة
+3️⃣  استقبل الحجوزات — وتابعها مباشرة من لوحة التحكم
+
+سنُرسل إليك إشعاراً فور تفعيل حسابك.
+
+فريق تكيّة ❤️`;
+
+const DEFAULT_WA_OTP_TEMPLATE = `مرحباً {NAME}، رمز التحقق الخاص بك في منصة تكيّة هو: {OTP}
+هذا الرمز صالح لمدة ١٠ دقائق فقط.`;
+
+function CommunicationSettingsTab() {
+  const qc = useQueryClient();
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState<string | null>(null);
+
+  const { data: settings, isLoading } = useQuery<Record<string, string>>({
+    queryKey: ["admin", "settings"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/settings");
+      if (!r.ok) throw new Error("فشل التحميل");
+      return r.json();
+    },
+  });
+
+  useEffect(() => { if (settings) setForm(settings); }, [settings]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: Record<string, string>) => {
+      const r = await apiFetch("/admin/settings", { method: "PATCH", body: JSON.stringify(data) });
+      if (!r.ok) throw new Error("فشل الحفظ");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "settings"] });
+    },
+  });
+
+  function saveSection(keys: string[], label: string) {
+    const partial: Record<string, string> = {};
+    keys.forEach(k => { if (form[k] !== undefined) partial[k] = form[k]; });
+    saveMutation.mutate(partial, {
+      onSuccess: () => {
+        setSaved(label);
+        setTimeout(() => setSaved(null), 2500);
+      },
+    });
+  }
+
+  function Toggle({ settingKey, label, description }: { settingKey: string; label: string; description?: string }) {
+    const on = form[settingKey] === "true";
+    return (
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-900/40 px-5 py-4">
+        <div className="space-y-0.5">
+          <p className="text-sm font-semibold text-slate-200">{label}</p>
+          {description && <p className="text-xs text-slate-400">{description}</p>}
+        </div>
+        <button
+          onClick={() => setForm(f => ({ ...f, [settingKey]: on ? "false" : "true" }))}
+          className={`relative shrink-0 w-12 h-6 rounded-full transition-colors ${on ? "bg-green-500" : "bg-slate-600"}`}
+        >
+          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${on ? "right-0.5" : "left-0.5"}`} />
+        </button>
+      </div>
+    );
+  }
+
+  function TemplateArea({ settingKey, placeholder, rows = 6 }: { settingKey: string; placeholder: string; rows?: number }) {
+    return (
+      <Textarea
+        value={form[settingKey] ?? ""}
+        onChange={e => setForm(f => ({ ...f, [settingKey]: e.target.value }))}
+        placeholder={placeholder}
+        rows={rows}
+        dir="rtl"
+        className="bg-slate-900 border-slate-600 text-white text-sm placeholder:text-slate-500 resize-y font-mono"
+      />
+    );
+  }
+
+  function SaveBtn({ keys, label }: { keys: string[]; label: string }) {
+    const isSaving = saveMutation.isPending;
+    const isSaved  = saved === label;
+    return (
+      <Button
+        onClick={() => saveSection(keys, label)}
+        disabled={isSaving}
+        className="bg-amber-600 hover:bg-amber-700 w-full gap-2"
+      >
+        <Save className="w-4 h-4" />
+        {isSaved ? "✓ تم الحفظ" : isSaving ? "جاري الحفظ..." : label}
+      </Button>
+    );
+  }
+
+  const placeholderBadge = (vars: string[]) => (
+    <div className="flex flex-wrap gap-2 mb-2">
+      {vars.map(v => (
+        <span key={v} className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded bg-slate-700 text-amber-300 border border-slate-600">
+          {`{${v}}`}
+        </span>
+      ))}
+      <span className="text-[10px] text-slate-500 self-center">متغيرات مدعومة</span>
+    </div>
+  );
+
+  if (isLoading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-400 w-6 h-6" /></div>;
+
+  return (
+    <div className="max-w-2xl space-y-6">
+
+      {/* ══ 1. Email OTP ══ */}
+      <div className="bg-slate-800 rounded-xl border border-green-500/30 overflow-hidden">
+        <div className="bg-gradient-to-l from-green-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+          <Mail className="w-5 h-5 text-green-400" />
+          <h3 className="text-slate-100 font-bold text-lg">رمز التحقق عبر البريد (Email OTP)</h3>
+        </div>
+        <div className="p-6 space-y-5">
+          <Toggle
+            settingKey="email_otp_enabled"
+            label="تفعيل رمز التحقق عبر البريد الإلكتروني"
+            description="يُرسل رمز ٦ أرقام لكل مالك جديد عند التسجيل"
+          />
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">موضوع البريد (Subject)</label>
+            <Input
+              value={form.email_otp_subject ?? ""}
+              onChange={e => setForm(f => ({ ...f, email_otp_subject: e.target.value }))}
+              placeholder="رمز التحقق: {OTP} — منصة تكيّة"
+              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-sm"
+              dir="ltr"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص رسالة البريد</label>
+            {placeholderBadge(["NAME", "OTP"])}
+            <TemplateArea settingKey="email_otp_template" placeholder={DEFAULT_OTP_TEMPLATE} rows={8} />
+            <p className="text-[11px] text-slate-500">اترك الحقل فارغاً لاستخدام القالب الافتراضي (HTML منسّق).</p>
+          </div>
+
+          <SaveBtn keys={["email_otp_enabled", "email_otp_subject", "email_otp_template"]} label="حفظ إعدادات OTP البريد" />
+        </div>
+      </div>
+
+      {/* ══ 2. WhatsApp OTP ══ */}
+      <div className="bg-slate-800 rounded-xl border border-emerald-500/30 overflow-hidden">
+        <div className="bg-gradient-to-l from-emerald-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+          <MessageSquare className="w-5 h-5 text-emerald-400" />
+          <h3 className="text-slate-100 font-bold text-lg">رمز التحقق عبر واتساب (WhatsApp OTP)</h3>
+          <span className="mr-auto text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">قريباً</span>
+        </div>
+        <div className="p-6 space-y-5">
+          <Toggle
+            settingKey="wa_otp_enabled"
+            label="تفعيل رمز التحقق عبر واتساب"
+            description="إرسال رمز واتساب إضافي مع أو بدل البريد الإلكتروني (يتطلب تكامل WhatsApp API)"
+          />
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص رسالة واتساب</label>
+            {placeholderBadge(["NAME", "OTP"])}
+            <TemplateArea settingKey="wa_otp_template" placeholder={DEFAULT_WA_OTP_TEMPLATE} rows={4} />
+          </div>
+
+          <SaveBtn keys={["wa_otp_enabled", "wa_otp_template"]} label="حفظ إعدادات OTP واتساب" />
+        </div>
+      </div>
+
+      {/* ══ 3. Welcome Email ══ */}
+      <div className="bg-slate-800 rounded-xl border border-blue-500/30 overflow-hidden">
+        <div className="bg-gradient-to-l from-blue-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+          <Send className="w-5 h-5 text-blue-400" />
+          <h3 className="text-slate-100 font-bold text-lg">بريد الترحيب بعد التحقق</h3>
+        </div>
+        <div className="p-6 space-y-5">
+          <Toggle
+            settingKey="welcome_email_enabled"
+            label="إرسال بريد ترحيب تلقائياً"
+            description="يُرسل تلقائياً بعد نجاح التحقق من البريد، ويتضمن خطوات البداية"
+          />
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">موضوع البريد (Subject)</label>
+            <Input
+              value={form.welcome_email_subject ?? ""}
+              onChange={e => setForm(f => ({ ...f, welcome_email_subject: e.target.value }))}
+              placeholder="مرحباً بك في منصة تكيّة 🎉"
+              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-sm"
+              dir="ltr"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص رسالة الترحيب</label>
+            {placeholderBadge(["NAME"])}
+            <TemplateArea settingKey="welcome_email_template" placeholder={DEFAULT_WELCOME_TEMPLATE} rows={10} />
+            <p className="text-[11px] text-slate-500">اترك الحقل فارغاً لاستخدام القالب الافتراضي مع خطوات التأهيل.</p>
+          </div>
+
+          <SaveBtn keys={["welcome_email_enabled", "welcome_email_subject", "welcome_email_template"]} label="حفظ إعدادات بريد الترحيب" />
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
 const ALL_TABS = [
-  { id: "overview",             label: "الإحصائيات",            icon: BarChart3 },
-  { id: "submissions",          label: "الطلبات",               icon: Settings },
-  { id: "platformRevenue",      label: "ميزانية المنصة",        icon: TrendingUp },
-  { id: "services",             label: "خدمات المناسبات",       icon: Wrench },
-  { id: "serviceCategories",    label: "فئات الخدمات",          icon: Tag },
-  { id: "expenseCategories",   label: "فئات المصروفات",        icon: Tag },
-  { id: "locations",           label: "المدن والأحياء",        icon: Building2 },
-  { id: "amenities",           label: "المرافق",                icon: Tag },
-  { id: "categories",          label: "فئات الشاليهات",        icon: Tag },
-  { id: "owners",              label: "الملاك",                 icon: Users },
-  { id: "plans",               label: "خطط الاشتراك",          icon: CreditCard },
-  { id: "reviews",             label: "التقييمات",             icon: Star },
-  { id: "siteSettings",        label: "إعدادات الموقع",        icon: Settings },
-  { id: "termsManagement",     label: "شروط الاستخدام",        icon: FileCheck },
-  { id: "adminStaff",          label: "موظفو الإدارة",         icon: Shield },
-  { id: "directAdd",           label: "إضافة وحدة",            icon: Plus },
+  { id: "overview",                label: "الإحصائيات",            icon: BarChart3 },
+  { id: "submissions",             label: "الطلبات",               icon: Settings },
+  { id: "platformRevenue",         label: "ميزانية المنصة",        icon: TrendingUp },
+  { id: "services",                label: "خدمات المناسبات",       icon: Wrench },
+  { id: "serviceCategories",       label: "فئات الخدمات",          icon: Tag },
+  { id: "expenseCategories",       label: "فئات المصروفات",        icon: Tag },
+  { id: "locations",               label: "المدن والأحياء",        icon: Building2 },
+  { id: "amenities",               label: "المرافق",                icon: Tag },
+  { id: "categories",              label: "فئات الشاليهات",        icon: Tag },
+  { id: "owners",                  label: "الملاك",                 icon: Users },
+  { id: "plans",                   label: "خطط الاشتراك",          icon: CreditCard },
+  { id: "reviews",                 label: "التقييمات",             icon: Star },
+  { id: "siteSettings",            label: "إعدادات الموقع",        icon: Settings },
+  { id: "communicationSettings",   label: "إعدادات التواصل",       icon: Mail },
+  { id: "termsManagement",         label: "شروط الاستخدام",        icon: FileCheck },
+  { id: "adminStaff",              label: "موظفو الإدارة",         icon: Shield },
+  { id: "directAdd",               label: "إضافة وحدة",            icon: Plus },
 ] as const;
 
 type TabId = typeof ALL_TABS[number]["id"];
@@ -6605,6 +6796,7 @@ export default function Admin() {
         {activeTab === "plans"               && <PlansTab />}
         {activeTab === "reviews"             && <ReviewsTab />}
         {activeTab === "siteSettings"        && <SettingsTab />}
+        {activeTab === "communicationSettings" && <CommunicationSettingsTab />}
         {activeTab === "termsManagement"     && <TermsManagementTab />}
         {activeTab === "adminStaff"          && <AdminStaffTab isSuperAdmin={isSuperAdmin} currentUserName={displayName ?? ""} />}
         {activeTab === "directAdd"           && <DirectAddTab />}

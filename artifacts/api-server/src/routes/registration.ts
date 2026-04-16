@@ -3,15 +3,9 @@ import bcrypt from "bcryptjs";
 import { createHash, randomInt } from "crypto";
 import { sql } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { sendOtpEmail } from "../lib/email";
+import { sendOtpEmail, sendWelcomeEmail } from "../lib/email";
 
 const router = Router();
-
-const BUSINESS_TYPE_LABELS: Record<string, string> = {
-  chalet:  "مالك شاليه",
-  service: "مزود خدمة",
-  both:    "مالك شاليه + مزود خدمة",
-};
 
 /* ── OTP Helpers ────────────────────────────────────────────── */
 function generateCode(): string {
@@ -50,21 +44,26 @@ async function verifyAndConsumeOtp(email: string, code: string): Promise<boolean
   return true;
 }
 
+async function getSettings(keys: string[]): Promise<Record<string, string>> {
+  const keyList = keys.map(k => `'${k}'`).join(", ");
+  const rows = await db.execute<{ key: string; value: string }>(
+    sql`SELECT key, value FROM site_settings WHERE key IN (${sql.raw(keyList)})`
+  );
+  return Object.fromEntries(rows.map(r => [r.key, r.value]));
+}
+
 /* ── POST /register-owner ───────────────────────────────────
-   Public registration for new partners (chalet owners / service providers).
-   Stored as pending application, OTP sent to email for verification.
+   Public registration — only personal info required.
+   Business details are collected after account activation.
    ─────────────────────────────────────────────────────────── */
 router.post("/register-owner", async (req, res) => {
-  const { fullName, businessName, businessType = "chalet", phone, email, password } = req.body ?? {};
+  const { fullName, phone, email, password } = req.body ?? {};
 
-  if (!fullName || !businessName || !phone || !email || !password) {
+  if (!fullName || !phone || !email || !password) {
     return res.status(400).json({ error: "يرجى تعبئة جميع الحقول المطلوبة" });
   }
   if (String(password).length < 6) {
     return res.status(400).json({ error: "كلمة المرور يجب أن تكون ٦ أحرف على الأقل" });
-  }
-  if (!["chalet", "service", "both"].includes(businessType)) {
-    return res.status(400).json({ error: "نوع النشاط غير صحيح" });
   }
 
   const emailLower = String(email).trim().toLowerCase();
@@ -85,14 +84,16 @@ router.post("/register-owner", async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(String(password), 10);
+  const nameClean    = String(fullName).trim();
 
+  /* businessName = fullName, businessType = "chalet" (updated after activation) */
   await db.execute(
     sql`INSERT INTO owner_applications
           (full_name, business_name, business_type, phone, email, password_hash, status, email_verified)
         VALUES (
-          ${String(fullName).trim()},
-          ${String(businessName).trim()},
-          ${String(businessType)},
+          ${nameClean},
+          ${nameClean},
+          'chalet',
           ${phoneClean},
           ${emailLower},
           ${passwordHash},
@@ -101,21 +102,30 @@ router.post("/register-owner", async (req, res) => {
         )`
   );
 
-  /* Generate + send OTP (non-blocking — don't fail registration if email fails) */
+  /* Fetch settings to determine OTP behaviour */
+  const settings = await getSettings(["email_otp_enabled", "email_otp_subject", "email_otp_template"]).catch(() => ({} as Record<string, string>));
+  const emailOtpEnabled = settings.email_otp_enabled !== "false"; // default: true
+
   const code = generateCode();
   await createOtp(emailLower, code);
-  sendOtpEmail(emailLower, String(fullName).trim(), code).catch(() => {});
 
-  console.log(
-    `[New Partner Application] Name: ${fullName}, Business: ${businessName}, ` +
-    `Type: ${BUSINESS_TYPE_LABELS[businessType] ?? businessType}, Email: ${emailLower}`
-  );
+  if (emailOtpEnabled) {
+    sendOtpEmail(emailLower, nameClean, code, {
+      subject: settings.email_otp_subject || undefined,
+      template: settings.email_otp_template || undefined,
+    }).catch(() => {});
+  } else {
+    console.log(`[OTP] Email OTP disabled by admin — Code for ${emailLower}: ${code}`);
+  }
+
+  console.log(`[New Partner Application] Name: ${nameClean}, Email: ${emailLower}`);
 
   return res.status(201).json({ ok: true, requiresVerification: true, email: emailLower });
 });
 
 /* ── POST /verify-otp ───────────────────────────────────────
    Verify the 6-digit OTP code sent to owner's email.
+   On success: marks email verified + sends welcome email if enabled.
    ─────────────────────────────────────────────────────────── */
 router.post("/verify-otp", async (req, res) => {
   const { email, code } = req.body ?? {};
@@ -126,8 +136,8 @@ router.post("/verify-otp", async (req, res) => {
   const emailLower = String(email).trim().toLowerCase();
   const cleanCode  = String(code).trim().replace(/\s/g, "");
 
-  const [app] = await db.execute<{ id: number; email_verified: boolean }>(
-    sql`SELECT id, email_verified FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
+  const [app] = await db.execute<{ id: number; full_name: string; email_verified: boolean }>(
+    sql`SELECT id, full_name, email_verified FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
   );
   if (!app) {
     return res.status(404).json({ error: "لم يتم العثور على حساب بهذا البريد الإلكتروني" });
@@ -144,6 +154,21 @@ router.post("/verify-otp", async (req, res) => {
   await db.execute(
     sql`UPDATE owner_applications SET email_verified = true, email_verified_at = now() WHERE email = ${emailLower}`
   );
+
+  /* Send welcome email if enabled */
+  try {
+    const settings = await getSettings([
+      "welcome_email_enabled",
+      "welcome_email_subject",
+      "welcome_email_template",
+    ]);
+    if (settings.welcome_email_enabled === "true") {
+      sendWelcomeEmail(emailLower, app.full_name, {
+        subject: settings.welcome_email_subject || undefined,
+        template: settings.welcome_email_template || undefined,
+      }).catch(() => {});
+    }
+  } catch {}
 
   return res.json({ ok: true });
 });
@@ -171,9 +196,13 @@ router.post("/resend-otp", async (req, res) => {
     sql`UPDATE owner_otp_tokens SET used_at = now() WHERE email = ${emailLower} AND used_at IS NULL`
   );
 
+  const settings = await getSettings(["email_otp_subject", "email_otp_template"]).catch(() => ({} as Record<string, string>));
   const code = generateCode();
   await createOtp(emailLower, code);
-  sendOtpEmail(emailLower, app.full_name, code).catch(() => {});
+  sendOtpEmail(emailLower, app.full_name, code, {
+    subject: settings.email_otp_subject || undefined,
+    template: settings.email_otp_template || undefined,
+  }).catch(() => {});
 
   return res.json({ ok: true });
 });

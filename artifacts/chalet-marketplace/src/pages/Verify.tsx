@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
-import { CheckCircle2, Mail, RefreshCw, ArrowRight, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Mail, RefreshCw, ArrowRight, ShieldCheck, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toAr } from "@/lib/utils";
 
@@ -131,10 +131,35 @@ export default function Verify() {
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">تم التحقق بنجاح ✓</h2>
           <p className="text-gray-500 text-sm leading-relaxed mb-6">
-            تم التحقق من بريدك الإلكتروني. سيتم مراجعة طلبك من قِبل الإدارة وتفعيل حسابك قريباً.
-            <br className="mb-2" />
-            سنتواصل معك على <span className="text-green-700 font-medium">{email}</span>
+            تم التحقق من بريدك الإلكتروني بنجاح.
+            <br className="mb-1" />
+            طلبك الآن قيد المراجعة من فريق الإدارة، وستصلك رسالة ترحيب على{" "}
+            <span className="text-green-700 font-medium">{email}</span>{" "}
+            تتضمن خطوات إعداد نشاطك فور التفعيل.
           </p>
+
+          {/* Onboarding preview */}
+          <div className="w-full bg-green-50 border border-green-100 rounded-2xl p-4 mb-6 text-right">
+            <div className="flex items-center gap-2 mb-3">
+              <ClipboardList className="w-4 h-4 text-green-600 shrink-0" />
+              <p className="text-xs font-semibold text-green-800">ما الذي سيحدث بعد التفعيل؟</p>
+            </div>
+            <ol className="space-y-1.5">
+              {[
+                "أضف شاليهك — الصور والتفاصيل والموقع",
+                "حدّد الأسعار والمواسم",
+                "استقبل الحجوزات مباشرة من لوحة التحكم",
+              ].map((step, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
+                  <span className="w-5 h-5 rounded-full bg-green-200 text-green-800 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                    {i + 1}
+                  </span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+          </div>
+
           <Button
             onClick={() => navigate("/login")}
             className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl gap-2"
