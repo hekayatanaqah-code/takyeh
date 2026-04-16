@@ -456,6 +456,7 @@ export const ownerNotificationsTable = pgTable("owner_notifications", {
   type: text("type").notNull(),
   chaletId: integer("chalet_id").references(() => chaletsTable.id, { onDelete: "cascade" }),
   reviewId: integer("review_id").references(() => reviewsTable.id, { onDelete: "cascade" }),
+  bookingId: integer("booking_id").references(() => ownerBookingsTable.id, { onDelete: "cascade" }),
   message: text("message").notNull(),
   isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

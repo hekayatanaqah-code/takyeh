@@ -53,6 +53,7 @@ async function sendBookingReminders() {
         await db.insert(ownerNotificationsTable).values({
           ownerId: booking.ownerId,
           type: "booking_reminder",
+          bookingId: booking.id,
           message: `⏰ تذكير: حجز غداً · ${booking.clientName}${periodLabel ? ` · ${periodLabel}` : ""} ${tag}`,
         });
         logger.info({ bookingId: booking.id }, "Booking reminder notification created");

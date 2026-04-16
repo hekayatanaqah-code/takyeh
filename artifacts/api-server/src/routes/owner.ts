@@ -313,6 +313,7 @@ router.post("/bookings", async (req, res) => {
         ownerId,
         type: "new_booking",
         chaletId: chaletId ?? undefined,
+        bookingId: booking.id,
         message: msg,
         isRead: false,
       });
@@ -531,6 +532,7 @@ router.delete("/bookings/:id", async (req, res) => {
           ownerId,
           type: "cancellation",
           chaletId: chaletId ?? undefined,
+          bookingId: target.id,
           message: msg,
           isRead: false,
         });
@@ -714,7 +716,19 @@ router.delete("/chalets/:id", async (req, res) => {
     return res.status(409).json({ error: "لا يمكن الحذف لوجود حجوزات مستقبلية", hasUpcomingBookings: true });
   }
 
-  // Delete chalet (cascade will handle related records)
+  // Purge booking-linked notifications for this chalet's bookings
+  // (cascade via chaletId handles chalet-linked ones; this covers booking_reminder and cancellation orphans)
+  const bookingIds = await db
+    .select({ id: ownerBookingsTable.id })
+    .from(ownerBookingsTable)
+    .where(eq(ownerBookingsTable.submissionId, sub.id));
+  if (bookingIds.length > 0) {
+    await db.delete(ownerNotificationsTable).where(
+      inArray(ownerNotificationsTable.bookingId, bookingIds.map(b => b.id))
+    );
+  }
+
+  // Delete chalet (cascade will handle chaletId-linked notifications + related records)
   await db.delete(chaletsTable).where(eq(chaletsTable.id, chaletId));
   // Keep submission for financial history (just mark it)
   await db.update(chaletSubmissionsTable).set({ status: "rejected", adminNote: "تم الحذف من قبل المالك" }).where(eq(chaletSubmissionsTable.id, sub.id));
