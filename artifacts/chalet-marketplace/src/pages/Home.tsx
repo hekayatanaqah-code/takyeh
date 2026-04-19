@@ -212,7 +212,28 @@ export default function Home() {
               className="max-w-4xl mx-auto text-center text-white"
             >
               <h1 className="text-4xl md:text-6xl font-extrabold mb-6 leading-tight">
-                {siteSettings.hero_title || <>اكتشف أجمل الشاليهات في <span className="text-primary">القصيم</span></>}
+                {(siteSettings.hero_line1 || siteSettings.hero_line2) ? (
+                  <>
+                    {siteSettings.hero_line1 && (
+                      <span className="block">
+                        {(() => {
+                          const words = siteSettings.hero_line1.trim().split(/\s+/);
+                          const color = siteSettings.hero_word_color || "#F59E0B";
+                          return words.map((w, i) =>
+                            i === 0
+                              ? <span key={i} style={{ color }}>{w}</span>
+                              : <span key={i}> {w}</span>
+                          );
+                        })()}
+                      </span>
+                    )}
+                    {siteSettings.hero_line2 && (
+                      <span className="block">{siteSettings.hero_line2}</span>
+                    )}
+                  </>
+                ) : (
+                  siteSettings.hero_title || <>اكتشف أجمل الشاليهات في <span className="text-primary">القصيم</span></>
+                )}
               </h1>
               <p className="text-lg md:text-xl text-white/80 mb-8 max-w-2xl mx-auto">
                 {siteSettings.hero_subtitle || "احجز استراحتك أو شاليهك القادم بكل سهولة. خيارات متنوعة تناسب جميع العائلات والمناسبات."}
@@ -521,9 +542,11 @@ export default function Home() {
         <section className="bg-secondary/50 py-20 px-4">
           <div className="container mx-auto">
             <div className="text-center max-w-2xl mx-auto mb-16">
-              <h2 className="text-3xl font-bold text-foreground mb-4">لماذا تختار شاليهات القصيم؟</h2>
+              <h2 className="text-3xl font-bold text-foreground mb-4">
+                {siteSettings.feat_section_title || "لماذا تختار شاليهات القصيم؟"}
+              </h2>
               <p className="text-muted-foreground text-lg">
-                نحن نسهل عليك العثور على المكان المثالي لمناسباتك العائلية والخاصة
+                {siteSettings.feat_section_desc || "نحن نسهل عليك العثور على المكان المثالي لمناسباتك العائلية والخاصة"}
               </p>
             </div>
 

@@ -1,20 +1,35 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, Home, Compass, LogIn, LayoutDashboard, Settings } from "lucide-react";
+import { MapPin, Menu, Home, LogIn, LayoutDashboard, Settings } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@workspace/replit-auth-web";
+import { useQuery } from "@tanstack/react-query";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export function Navbar() {
   const [location, navigate] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
 
+  const { data: settings = {} } = useQuery<Record<string, string>>({
+    queryKey: ["page-content"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include" });
+      if (!r.ok) return {};
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const siteTitle  = settings.site_display_name || settings.site_title || "تكية";
+  const logoUrl    = settings.site_logo_url || "";
+  const logoSize   = settings.logo_size === "lg" ? "w-14 h-14" : settings.logo_size === "sm" ? "w-8 h-8" : "w-10 h-10";
+
   const navLinks = [
     { href: "/", label: "الرئيسية", icon: <Home className="w-4 h-4 me-2" /> },
-    { href: "/chalets", label: "الشاليهات", icon: <Compass className="w-4 h-4 me-2" /> },
-    { href: "/services", label: "خدمات المناسبات", icon: <span className="me-2 text-base">🎪</span> },
   ];
 
   const goToLogin = () => {
@@ -27,10 +42,18 @@ export function Navbar() {
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform duration-300">
-              <MapPin className="w-6 h-6" />
-            </div>
-            <span className="text-xl font-bold text-foreground tracking-tight">شاليهات القصيم</span>
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={siteTitle}
+                className={`${logoSize} object-contain rounded-xl group-hover:scale-105 transition-transform duration-300`}
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform duration-300">
+                <MapPin className="w-6 h-6" />
+              </div>
+            )}
+            <span className="text-xl font-bold text-foreground tracking-tight">{siteTitle}</span>
           </Link>
 
           {/* Desktop Nav */}

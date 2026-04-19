@@ -75,6 +75,8 @@ export function Footer() {
               <li><Link href="/about" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">من نحن</Link></li>
               <li><Link href="/faq" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">أسئلة شائعة</Link></li>
               <li><Link href="/terms" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">شروط الاستخدام</Link></li>
+              <li><Link href="/privacy" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">سياسة الخصوصية</Link></li>
+              <li><Link href="/contact" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">اتصل بنا</Link></li>
             </ul>
           </div>
 

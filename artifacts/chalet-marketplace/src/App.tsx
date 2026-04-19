@@ -20,6 +20,8 @@ import ProviderDetail from "./pages/ProviderDetail";
 import About from "./pages/About";
 import FAQ from "./pages/FAQ";
 import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
+import ContactUs from "./pages/ContactUs";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import RatePage from "./pages/RatePage";
 import OwnerChaletDetail from "./pages/OwnerChaletDetail";
@@ -90,6 +92,8 @@ function Router() {
       <Route path="/about" component={About} />
       <Route path="/faq" component={FAQ} />
       <Route path="/terms" component={Terms} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/contact" component={ContactUs} />
       <Route component={NotFound} />
     </Switch>
   );

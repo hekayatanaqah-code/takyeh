@@ -14,6 +14,7 @@ import providersRouter from "./providers";
 import reviewsRouter from "./reviews";
 import passwordResetRouter from "./passwordReset";
 import registrationRouter from "./registration";
+import contactRouter from "./contact";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use("/services", servicesRouter);
 router.use("/owner", ownerRouter);
 router.use("/providers", providersRouter);
 router.use(reviewsRouter);
+router.use("/contact", contactRouter);
 
 export default router;

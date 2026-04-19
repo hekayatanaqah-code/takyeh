@@ -45,7 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, Check, Video, Mail, MessageSquare, Send } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, Check, Video, Mail, MessageSquare, Send } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -2142,9 +2142,10 @@ function SettingsTab() {
   }
 
   const pageContentFields = [
-    { key: "about_page_content",  label: "محتوى صفحة «من نحن»",         icon: "ℹ️", path: "/about" },
-    { key: "faq_page_content",    label: "محتوى صفحة «أسئلة شائعة»",    icon: "❓", path: "/faq"   },
-    { key: "terms_page_content",  label: "محتوى صفحة «شروط الاستخدام»", icon: "📄", path: "/terms" },
+    { key: "about_page_content",   label: "محتوى صفحة «من نحن»",          icon: "ℹ️", path: "/about"    },
+    { key: "faq_page_content",     label: "محتوى صفحة «أسئلة شائعة»",     icon: "❓", path: "/faq"      },
+    { key: "terms_page_content",   label: "محتوى صفحة «شروط الاستخدام»",  icon: "📄", path: "/terms"    },
+    { key: "privacy_page_content", label: "محتوى صفحة «سياسة الخصوصية»",  icon: "🔒", path: "/privacy"  },
   ];
 
   if (isLoading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-400 w-6 h-6" /></div>;
@@ -2159,6 +2160,55 @@ function SettingsTab() {
   return (
     <div className="max-w-2xl space-y-6">
 
+      {/* ══ 0. Branding ══ */}
+      <div className="bg-slate-800 rounded-xl border border-amber-500/40 overflow-hidden">
+        <div className="bg-gradient-to-l from-amber-500/20 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+          <ImageIcon className="w-5 h-5 text-amber-400" />
+          <h3 className="text-slate-100 font-bold text-lg">الهوية البصرية (Branding)</h3>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Site Display Name */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">اسم الموقع في القائمة والترويسة</label>
+            <Input value={form.site_display_name ?? ""} onChange={(e) => setForm((f) => ({ ...f, site_display_name: e.target.value }))}
+              placeholder="تكية" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-base font-bold" dir="rtl" />
+            <p className="text-xs text-slate-500">يظهر بجانب الشعار في شريط التنقل وأسفل الصفحة.</p>
+          </div>
+          {/* Logo Upload */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">شعار الموقع (Logo)</label>
+            {form.site_logo_url && (
+              <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-slate-900 border border-slate-600 flex items-center justify-center">
+                <img src={form.site_logo_url} alt="Logo" className="w-full h-full object-contain p-2" />
+                <Button variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, site_logo_url: "" }))}
+                  className="absolute top-1 left-1 text-white bg-black/50 hover:bg-red-600/80 h-6 w-6 p-0 rounded-full"><X className="w-3 h-3" /></Button>
+              </div>
+            )}
+            <div className="flex gap-3 flex-wrap items-center">
+              <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" id="logo-upload-branding" />
+              <label htmlFor="logo-upload-branding" className="cursor-pointer bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm px-4 py-2 rounded-lg border border-slate-600 transition-colors flex items-center gap-2">
+                <ImageIcon className="w-4 h-4" />{logoUploading ? "جاري الرفع..." : "رفع الشعار"}
+              </label>
+              {form.site_logo_url && <span className="text-xs text-green-400 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> تم الرفع</span>}
+            </div>
+          </div>
+          {/* Logo Size */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">حجم الشعار</label>
+            <div className="flex gap-2">
+              {(["sm", "md", "lg"] as const).map((s) => (
+                <button key={s} type="button"
+                  onClick={() => setForm((f) => ({ ...f, logo_size: s }))}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors ${form.logo_size === s ? "bg-amber-600 border-amber-500 text-white" : "bg-slate-900 border-slate-600 text-slate-400 hover:text-white"}`}>
+                  {s === "sm" ? "صغير" : s === "md" ? "متوسط" : "كبير"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <SaveBtn label="حفظ الهوية البصرية" />
+        </div>
+      </div>
+
       {/* ══ 1. Home Page Content ══ */}
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
         <div className="bg-gradient-to-l from-amber-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
@@ -2166,9 +2216,39 @@ function SettingsTab() {
           <h3 className="text-slate-100 font-bold text-lg">محتوى الصفحة الرئيسية</h3>
         </div>
         <div className="p-6 space-y-5">
-          {/* Hero Title */}
+          {/* Hero Line 1 + Line 2 */}
+          <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 space-y-3">
+            <p className="text-xs font-bold text-amber-400 uppercase tracking-wider">العنوان الرئيسي (سطرين)</p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400">السطر الأول (الكلمة الأولى ملوّنة)</label>
+              <Input value={form.hero_line1 ?? ""} onChange={(e) => setForm((f) => ({ ...f, hero_line1: e.target.value }))}
+                placeholder="تكيّـة .." className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-lg font-bold" dir="rtl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400">السطر الثاني</label>
+              <Input value={form.hero_line2 ?? ""} onChange={(e) => setForm((f) => ({ ...f, hero_line2: e.target.value }))}
+                placeholder="بوابتك المتكاملة لأجمل الوجهات و الخدمات" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-400">لون الكلمة الأولى</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={form.hero_word_color ?? "#F59E0B"}
+                  onChange={(e) => setForm((f) => ({ ...f, hero_word_color: e.target.value }))}
+                  className="w-10 h-10 rounded-lg cursor-pointer border border-slate-600 bg-transparent p-0.5"
+                />
+                <span className="text-sm font-mono text-slate-300">{form.hero_word_color ?? "#F59E0B"}</span>
+                <span className="text-2xl font-extrabold" style={{ color: form.hero_word_color ?? "#F59E0B" }}>
+                  {(form.hero_line1 ?? "تكيّة").trim().split(/\s+/)[0]}
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">اترك السطرين فارغين لاستخدام العنوان التقليدي (حقل «العنوان الرئيسي» أدناه).</p>
+          </div>
+          {/* Hero Title (legacy single field) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">العنوان الرئيسي</label>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">العنوان الرئيسي (احتياطي — يُستخدم إن تُركت السطور أعلاه فارغة)</label>
             <Input value={form.hero_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, hero_title: e.target.value }))}
               placeholder="اكتشف أجمل الشاليهات في القصيم"
               className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-base" dir="rtl" />
@@ -2298,6 +2378,30 @@ function SettingsTab() {
 
           <p className="text-xs text-slate-500">اترك أي حقل فارغاً لاستخدام النص الافتراضي. انقر على الأيقونة لتغييرها.</p>
           <SaveBtn label="حفظ بطاقات المميزات" />
+        </div>
+      </div>
+
+      {/* ══ 2.7. "لماذا تختار" Section Header ══ */}
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div className="bg-gradient-to-l from-purple-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+          <Star className="w-5 h-5 text-purple-400" />
+          <h3 className="text-slate-100 font-bold text-lg">عنوان قسم «لماذا تختار»</h3>
+          <span className="text-xs text-slate-500 mr-auto">يظهر فوق البطاقات الثلاث</span>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">عنوان القسم</label>
+            <Input value={form.feat_section_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_section_title: e.target.value }))}
+              placeholder="لماذا تختار شاليهات القصيم؟"
+              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">النص الوصفي أسفل العنوان</label>
+            <Textarea value={form.feat_section_desc ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_section_desc: e.target.value }))}
+              placeholder="نحن نسهل عليك العثور على المكان المثالي لمناسباتك العائلية والخاصة"
+              rows={2} className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
+          </div>
+          <SaveBtn label="حفظ عنوان القسم" />
         </div>
       </div>
 
@@ -5693,6 +5797,123 @@ function CommunicationSettingsTab() {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Contact Inquiries Tab — view and manage contact form submissions
+   ══════════════════════════════════════════════════════════════ */
+interface ContactInquiryRow {
+  id: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  message: string;
+  status: string;
+  created_at: string;
+}
+
+function ContactInquiriesTab() {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [statusUpdating, setStatusUpdating] = useState<number | null>(null);
+
+  const { data: inquiries = [], isLoading, refetch } = useQuery<ContactInquiryRow[]>({
+    queryKey: ["admin", "contact-inquiries"],
+    queryFn: async () => {
+      const r = await apiFetch("/contact/admin/inquiries");
+      if (!r.ok) throw new Error("فشل التحميل");
+      return r.json();
+    },
+  });
+
+  async function updateStatus(id: number, status: string) {
+    setStatusUpdating(id);
+    try {
+      await apiFetch(`/contact/admin/inquiries/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      refetch();
+    } finally {
+      setStatusUpdating(null);
+    }
+  }
+
+  const statusLabel = (s: string) => s === "new" ? "جديد" : s === "read" ? "مقروء" : "تمت الإجابة";
+  const statusColor = (s: string) => s === "new" ? "bg-amber-500/20 text-amber-300" : s === "read" ? "bg-blue-500/20 text-blue-300" : "bg-green-500/20 text-green-300";
+  const newCount = inquiries.filter((i) => i.status === "new").length;
+
+  if (isLoading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-400 w-6 h-6" /></div>;
+
+  return (
+    <div className="max-w-3xl space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Mail className="w-5 h-5 text-blue-400" />
+          <h3 className="text-slate-100 font-bold text-lg">رسائل «اتصل بنا»</h3>
+          {newCount > 0 && (
+            <span className="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{newCount} جديد</span>
+          )}
+        </div>
+        <Button variant="outline" size="sm" onClick={() => refetch()} className="border-slate-600 text-slate-300 hover:text-white">
+          تحديث
+        </Button>
+      </div>
+
+      {inquiries.length === 0 ? (
+        <div className="bg-slate-800 rounded-xl border border-slate-700 p-12 text-center">
+          <Mail className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+          <p className="text-slate-500">لا توجد رسائل بعد.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {inquiries.map((inq) => (
+            <div key={inq.id} className={`bg-slate-800 rounded-xl border overflow-hidden transition-colors ${inq.status === "new" ? "border-amber-500/40" : "border-slate-700"}`}>
+              <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => setExpandedId(expandedId === inq.id ? null : inq.id)}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-slate-100 font-semibold text-sm">{inq.name}</span>
+                    {inq.phone && <span className="text-slate-400 text-xs font-mono" dir="ltr">{inq.phone}</span>}
+                    {inq.email && <span className="text-slate-500 text-xs">{inq.email}</span>}
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(inq.status)}`}>{statusLabel(inq.status)}</span>
+                  </div>
+                  <p className="text-slate-400 text-xs mt-0.5 truncate">{inq.message}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-slate-500">{new Date(inq.created_at).toLocaleDateString("ar-SA")}</span>
+                  <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${expandedId === inq.id ? "rotate-180" : ""}`} />
+                </div>
+              </div>
+
+              {expandedId === inq.id && (
+                <div className="border-t border-slate-700 px-4 pb-4 pt-3 space-y-3">
+                  <div className="bg-slate-900/60 rounded-lg p-3">
+                    <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap" dir="rtl">{inq.message}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-slate-500 me-1">تغيير الحالة:</span>
+                    {["new", "read", "replied"].map((s) => (
+                      <button key={s} type="button" disabled={inq.status === s || statusUpdating === inq.id}
+                        onClick={() => updateStatus(inq.id, s)}
+                        className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors disabled:opacity-40 ${inq.status === s ? statusColor(s) + " border-transparent" : "bg-slate-700 border-slate-600 text-slate-300 hover:text-white"}`}>
+                        {statusUpdating === inq.id ? <Loader2 className="w-3 h-3 animate-spin" /> : statusLabel(s)}
+                      </button>
+                    ))}
+                    {inq.phone && (
+                      <a href={`https://wa.me/966${inq.phone.replace(/^0/, "").replace(/\D/g, "")}`}
+                        target="_blank" rel="noreferrer"
+                        className="px-3 py-1 rounded-lg text-xs font-medium bg-[#25D366]/20 text-[#25D366] border border-[#25D366]/30 hover:bg-[#25D366]/30 transition-colors ms-auto">
+                        💬 واتساب
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const ALL_TABS = [
   { id: "overview",                label: "الإحصائيات",            icon: BarChart3 },
   { id: "submissions",             label: "الطلبات",               icon: Settings },
@@ -5706,6 +5927,7 @@ const ALL_TABS = [
   { id: "owners",                  label: "الملاك",                 icon: Users },
   { id: "plans",                   label: "خطط الاشتراك",          icon: CreditCard },
   { id: "reviews",                 label: "التقييمات",             icon: Star },
+  { id: "contactInquiries",        label: "رسائل التواصل",         icon: Mail },
   { id: "siteSettings",            label: "إعدادات الموقع",        icon: Settings },
   { id: "communicationSettings",   label: "إعدادات التواصل",       icon: Mail },
   { id: "termsManagement",         label: "شروط الاستخدام",        icon: FileCheck },
@@ -6795,7 +7017,8 @@ export default function Admin() {
         {activeTab === "owners"              && <OwnersTab isSuperAdmin={isSuperAdmin} />}
         {activeTab === "plans"               && <PlansTab />}
         {activeTab === "reviews"             && <ReviewsTab />}
-        {activeTab === "siteSettings"        && <SettingsTab />}
+        {activeTab === "contactInquiries"      && <ContactInquiriesTab />}
+        {activeTab === "siteSettings"          && <SettingsTab />}
         {activeTab === "communicationSettings" && <CommunicationSettingsTab />}
         {activeTab === "termsManagement"     && <TermsManagementTab />}
         {activeTab === "adminStaff"          && <AdminStaffTab isSuperAdmin={isSuperAdmin} currentUserName={displayName ?? ""} />}

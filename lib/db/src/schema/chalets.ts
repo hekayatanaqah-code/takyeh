@@ -633,3 +633,15 @@ export const serviceInsurancesTable = pgTable("service_insurances", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ServiceInsurance = typeof serviceInsurancesTable.$inferSelect;
+
+/* ── Contact Inquiries (submitted via Contact Us page) ───────── */
+export const contactInquiriesTable = pgTable("contact_inquiries", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("new"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ContactInquiry = typeof contactInquiriesTable.$inferSelect;
