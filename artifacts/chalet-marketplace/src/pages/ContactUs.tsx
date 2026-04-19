@@ -17,6 +17,10 @@ export default function ContactUs() {
   const [success, setSuccess] = useState(false);
   const [error, setError]     = useState("");
 
+  function normalizePhone(val: string) {
+    return val.replace(/[٠١٢٣٤٥٦٧٨٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -30,7 +34,7 @@ export default function ContactUs() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: name.trim(), phone: phone.trim(), email: email.trim(), message: message.trim() }),
+        body: JSON.stringify({ name: name.trim(), phone: normalizePhone(phone.trim()), email: email.trim(), message: message.trim() }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -88,9 +92,8 @@ export default function ContactUs() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="05XXXXXXXX"
-                  dir="ltr"
+                  dir="rtl"
                   inputMode="tel"
-                  data-no-arabic
                 />
               </div>
 

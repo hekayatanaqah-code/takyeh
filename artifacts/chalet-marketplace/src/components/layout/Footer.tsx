@@ -31,6 +31,7 @@ export function Footer() {
     staleTime: 1000 * 60 * 5,
   });
 
+  const logoUrl     = settings.site_logo_url ?? "";
   const whatsappRaw = settings.platform_whatsapp ?? "";
   const whatsappMsg = settings.whatsapp_message ?? "مرحباً، أود الاستفسار عن شاليهات القصيم";
   const whatsappNum = whatsappRaw.replace(/\D/g, "") || "966500000000";
@@ -58,9 +59,13 @@ export function Footer() {
           {/* Brand */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
-                <MapPin className="w-5 h-5" />
-              </div>
+              {logoUrl ? (
+                <img src={logoUrl} alt={settings.site_display_name || settings.site_title || "تكية"} className="w-10 h-10 object-contain rounded-lg" />
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
+                  <MapPin className="w-5 h-5" />
+                </div>
+              )}
               <span className="text-xl font-bold">{settings.footer_title || settings.site_title || "شاليهات القصيم"}</span>
             </div>
             <p className="text-background/70 text-sm leading-relaxed max-w-xs">
