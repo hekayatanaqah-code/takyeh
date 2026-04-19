@@ -137,12 +137,23 @@ router.get("/profile", async (req, res) => {
         noApplication: true,
       });
     }
+    /* Fetch profile — phone uses COALESCE: owner_applications.phone first,
+       then falls back to chalet_submissions.whatsapp_number (what the admin panel shows) */
     const result = await db.execute(
-      sql`SELECT full_name, phone, email FROM owner_applications WHERE email = ${email} LIMIT 1`
+      sql`SELECT
+            oa.full_name,
+            COALESCE(NULLIF(oa.phone, ''), cs.whatsapp_number, '') AS phone,
+            oa.email
+          FROM owner_applications oa
+          LEFT JOIN chalet_submissions cs
+            ON cs.owner_id = (SELECT u.id FROM users u WHERE lower(u.email) = lower(oa.email) LIMIT 1)
+          WHERE oa.email = ${email}
+          ORDER BY cs.created_at DESC
+          LIMIT 1`
     );
     const row = ((result as any).rows as Array<{ full_name: string; phone: string; email: string }>)[0];
     if (!row) return res.json({ fullName: req.user?.firstName ?? "", phone: "", email: email, noApplication: true });
-    return res.json({ fullName: row.full_name, phone: row.phone, email: row.email });
+    return res.json({ fullName: row.full_name, phone: row.phone ?? "", email: row.email });
   } catch (err) {
     console.error("[GET /owner/profile]", err);
     return res.status(500).json({ error: "حدث خطأ أثناء جلب بيانات الحساب" });
@@ -165,12 +176,28 @@ router.put("/profile", async (req, res) => {
       const valid = await _verifyOtp(otpTarget.trim().toLowerCase(), otp.trim());
       if (!valid) return res.status(400).json({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته" });
 
+      const newPhoneClean = phone !== undefined ? (phone ?? "").trim() : null;
+      const newEmailClean = newEmail ? newEmail.trim().toLowerCase() : null;
+
       const updates: string[] = [`full_name = '${fullName.trim().replace(/'/g, "''")}'`];
-      if (phone !== undefined) updates.push(`phone = '${(phone ?? "").trim().replace(/'/g, "''")}'`);
-      if (newEmail && newEmail.trim().toLowerCase() !== currentEmail.toLowerCase()) {
-        updates.push(`email = '${newEmail.trim().toLowerCase().replace(/'/g, "''")}'`);
+      if (newPhoneClean !== null) updates.push(`phone = '${newPhoneClean.replace(/'/g, "''")}'`);
+      if (newEmailClean && newEmailClean !== currentEmail.toLowerCase()) {
+        updates.push(`email = '${newEmailClean.replace(/'/g, "''")}'`);
       }
       await db.execute(sql.raw(`UPDATE owner_applications SET ${updates.join(", ")} WHERE email = '${currentEmail.replace(/'/g, "''")}'`));
+
+      /* Keep chalet_submissions.whatsapp_number in sync with the admin panel */
+      if (newPhoneClean) {
+        const ownerIdRow = await db.execute(
+          sql`SELECT u.id FROM users u WHERE lower(u.email) = lower(${currentEmail}) LIMIT 1`
+        );
+        const ownerId = ((ownerIdRow as any).rows as Array<{ id: string }>)[0]?.id;
+        if (ownerId) {
+          await db.execute(
+            sql`UPDATE chalet_submissions SET whatsapp_number = ${newPhoneClean} WHERE owner_id = ${ownerId}`
+          );
+        }
+      }
       return res.json({ ok: true });
     }
 
@@ -205,6 +232,13 @@ router.post("/profile/request-change", async (req, res) => {
     const { currentPassword, newEmail, newPhone } = req.body as Record<string, string>;
     if (!currentPassword) return res.status(400).json({ error: "كلمة المرور الحالية مطلوبة" });
     if (!newEmail && !newPhone) return res.status(400).json({ error: "يرجى تحديد البريد الإلكتروني أو رقم الجوال الجديد" });
+    /* Phone format validation — Saudi 05xxxxxxxx */
+    if (newPhone) {
+      const cleaned = newPhone.trim().replace(/\s+/g, "");
+      if (!/^05\d{8}$/.test(cleaned)) {
+        return res.status(400).json({ error: "صيغة رقم الجوال غير صحيحة — يجب أن يبدأ بـ 05 ويكون ١٠ أرقام" });
+      }
+    }
 
     /* Verify current password */
     const pwResult = await db.execute(
