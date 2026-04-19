@@ -126,34 +126,58 @@ async function resolveOwnerEmail(req: Request): Promise<string | null> {
 /* ── GET /owner/profile — fetch owner profile ──────────────── */
 router.get("/profile", async (req, res) => {
   try {
+    const userId = req.user?.id ?? null;
+
+    /* ── Path 1: owner has an owner_applications record ── */
     const email = await resolveOwnerEmail(req);
-    if (!email) {
-      /* No matching owner_application — return what we know from the session
-         so the UI is not completely blank for admin/dev users */
-      return res.json({
-        fullName: req.user?.firstName ?? "",
-        phone:    "",
-        email:    req.user?.email ?? "",
-        noApplication: true,
-      });
+    if (email) {
+      /* Phone: prefer owner_applications.phone, fall back to chalet_submissions.whatsapp_number
+         for the same owner (matching by userId in chalet_submissions) */
+      let phone = "";
+      const oaResult = await db.execute(
+        sql`SELECT full_name, phone, email FROM owner_applications WHERE email = ${email} LIMIT 1`
+      );
+      const oaRow = ((oaResult as any).rows as Array<{ full_name: string; phone: string; email: string }>)[0];
+      if (!oaRow) {
+        return res.json({ fullName: req.user?.firstName ?? "", phone: "", email: email, noApplication: true });
+      }
+      phone = oaRow.phone ?? "";
+      /* If owner_applications.phone is empty, pull from chalet_submissions */
+      if (!phone && userId) {
+        const csResult = await db.execute(
+          sql`SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = ${userId} AND whatsapp_number IS NOT NULL AND whatsapp_number != '' ORDER BY created_at DESC LIMIT 1`
+        );
+        phone = ((csResult as any).rows as Array<{ whatsapp_number: string }>)[0]?.whatsapp_number ?? "";
+      }
+      console.log(`[GET /owner/profile] owner_applications path: email=${email} phone=${phone}`);
+      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email });
     }
-    /* Fetch profile — phone uses COALESCE: owner_applications.phone first,
-       then falls back to chalet_submissions.whatsapp_number (what the admin panel shows) */
-    const result = await db.execute(
-      sql`SELECT
-            oa.full_name,
-            COALESCE(NULLIF(oa.phone, ''), cs.whatsapp_number, '') AS phone,
-            oa.email
-          FROM owner_applications oa
-          LEFT JOIN chalet_submissions cs
-            ON cs.owner_id = (SELECT u.id FROM users u WHERE lower(u.email) = lower(oa.email) LIMIT 1)
-          WHERE oa.email = ${email}
-          ORDER BY cs.created_at DESC
-          LIMIT 1`
-    );
-    const row = ((result as any).rows as Array<{ full_name: string; phone: string; email: string }>)[0];
-    if (!row) return res.json({ fullName: req.user?.firstName ?? "", phone: "", email: email, noApplication: true });
-    return res.json({ fullName: row.full_name, phone: row.phone ?? "", email: row.email });
+
+    /* ── Path 2: Replit OIDC owner — look up via chalet_submissions ── */
+    if (userId) {
+      const csResult = await db.execute(
+        sql`SELECT cs.whatsapp_number, cs.name_ar, u.email, u.first_name, u.last_name
+            FROM chalet_submissions cs
+            JOIN users u ON u.id = cs.owner_id
+            WHERE cs.owner_id = ${userId}
+              AND cs.owner_id NOT IN ('__demo_preview__')
+            ORDER BY cs.created_at DESC
+            LIMIT 1`
+      );
+      const csRow = ((csResult as any).rows as Array<{
+        whatsapp_number: string; name_ar: string;
+        email: string; first_name: string; last_name: string;
+      }>)[0];
+      if (csRow) {
+        const fullName = [csRow.first_name, csRow.last_name].filter(Boolean).join(" ") || csRow.name_ar || "";
+        console.log(`[GET /owner/profile] chalet_submissions path: userId=${userId} phone=${csRow.whatsapp_number}`);
+        return res.json({ fullName, phone: csRow.whatsapp_number ?? "", email: csRow.email ?? req.user?.email ?? "" });
+      }
+    }
+
+    /* ── Path 3: last resort — return whatever the session has ── */
+    console.log(`[GET /owner/profile] no data found for userId=${userId} email=${req.user?.email}`);
+    return res.json({ fullName: req.user?.firstName ?? "", phone: "", email: req.user?.email ?? "", noApplication: true });
   } catch (err) {
     console.error("[GET /owner/profile]", err);
     return res.status(500).json({ error: "حدث خطأ أثناء جلب بيانات الحساب" });
@@ -164,7 +188,39 @@ router.get("/profile", async (req, res) => {
 router.put("/profile", async (req, res) => {
   try {
     const currentEmail = await resolveOwnerEmail(req);
-    if (!currentEmail) return res.status(404).json({ error: "لم يتم العثور على حساب مرتبط بهذا المستخدم" });
+
+    /* ── Path C: Replit OIDC owner (no owner_applications) — direct update via chalet_submissions ── */
+    if (!currentEmail) {
+      const userId = req.user?.id;
+      if (!userId) return res.status(404).json({ error: "لم يتم العثور على حساب مرتبط بهذا المستخدم" });
+
+      /* Verify this user actually has a chalet_submission */
+      const csCheck = await db.execute(
+        sql`SELECT id FROM chalet_submissions WHERE owner_id = ${userId} LIMIT 1`
+      );
+      if (!((csCheck as any).rows as Array<unknown>)[0]) {
+        return res.status(404).json({ error: "لم يتم العثور على حساب مرتبط بهذا المستخدم" });
+      }
+
+      const { fullName, phone } = req.body as Record<string, string>;
+      /* Update display name in users table */
+      if (fullName?.trim()) {
+        const parts = fullName.trim().split(" ");
+        const firstName = parts[0] ?? "";
+        const lastName  = parts.slice(1).join(" ") ?? null;
+        await db.execute(
+          sql`UPDATE users SET first_name = ${firstName}, last_name = ${lastName} WHERE id = ${userId}`
+        );
+      }
+      /* Update phone in chalet_submissions */
+      if (phone !== undefined) {
+        await db.execute(
+          sql`UPDATE chalet_submissions SET whatsapp_number = ${phone.trim()} WHERE owner_id = ${userId}`
+        );
+      }
+      console.log(`[PUT /owner/profile] Path C (OIDC direct): userId=${userId} phone=${phone}`);
+      return res.json({ ok: true });
+    }
 
     const { fullName, phone, email: newEmail, currentPassword, newPassword, otp, otpTarget, sensitiveChange } = req.body as Record<string, string>;
     if (!fullName?.trim()) return res.status(400).json({ error: "الاسم الكامل مطلوب" });

@@ -12669,9 +12669,11 @@ function OwnerProfileTab() {
     apiFetch("/owner/profile")
       .then(async (r) => {
         const d = await r.json().catch(() => null);
+        console.log("[OwnerProfileTab] API response:", d);
         if (!r.ok) { setFetchError(d?.error ?? "تعذّر تحميل بيانات الحساب"); return; }
         if (d) {
           const n = d.fullName ?? "", ph = d.phone ?? "", em = d.email ?? "";
+          console.log("[OwnerProfileTab] Setting fields — name:", n, "phone:", ph, "email:", em);
           setFullName(n); setInitName(n);
           setPhone(ph);   setInitPhone(ph);
           setEmail(em);   setInitEmail(em);
