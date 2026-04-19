@@ -26,7 +26,7 @@ export function Navbar() {
 
   const siteTitle  = settings.site_display_name || settings.site_title || "تكية";
   const logoUrl    = settings.site_logo_url || "";
-  const logoSize   = settings.logo_size === "lg" ? "w-14 h-14" : settings.logo_size === "sm" ? "w-8 h-8" : "w-10 h-10";
+  const logoSize   = settings.logo_size === "lg" ? "w-16 h-16" : settings.logo_size === "sm" ? "w-9 h-9" : "w-12 h-12";
 
   const navLinks = [
     { href: "/", label: "الرئيسية", icon: <Home className="w-4 h-4 me-2" /> },
