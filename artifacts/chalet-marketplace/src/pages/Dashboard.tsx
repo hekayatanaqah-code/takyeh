@@ -12632,34 +12632,46 @@ function OwnerProfileTab() {
 
   const [fullName, setFullName]         = useState("");
   const [phone, setPhone]               = useState("");
-  const [initialPhone, setInitialPhone] = useState(""); // to detect changes
+  const [initialName, setInitialName]   = useState(""); // track changes
+  const [initialPhone, setInitialPhone] = useState(""); // track changes
   const [email, setEmail]               = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword]   = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading]           = useState(true);
   const [saving, setSaving]             = useState(false);
+  const [fetchError, setFetchError]     = useState<string | null>(null);
   const [showPasswordSection, setShowPasswordSection] = useState(false);
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw]       = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   useEffect(() => {
+    setFetchError(null);
     apiFetch("/owner/profile")
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => {
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) { setFetchError(d?.error ?? "تعذّر تحميل بيانات الحساب"); return; }
         if (d) {
-          setFullName(d.fullName ?? "");
-          setPhone(d.phone ?? "");
-          setInitialPhone(d.phone ?? "");
+          const name  = d.fullName ?? "";
+          const ph    = d.phone ?? "";
+          setFullName(name);  setInitialName(name);
+          setPhone(ph);       setInitialPhone(ph);
           setEmail(d.email ?? "");
         }
       })
+      .catch(() => setFetchError("تعذّر الاتصال بالخادم"))
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const phoneChanged = phone.trim() !== initialPhone.trim();
+  const nameChanged  = fullName.trim() !== initialName.trim();
+  /* Whether any editable field has changed from what was loaded */
+  const hasDataChanges  = nameChanged || phoneChanged;
+  const hasPasswordEdit = showPasswordSection && (currentPassword || newPassword || confirmPassword);
+  const hasChanges      = hasDataChanges || hasPasswordEdit;
+
   /* Show password section if phone changed (security) or user explicitly opened it */
   const needsPassword = phoneChanged || showPasswordSection;
 
@@ -12685,6 +12697,7 @@ function OwnerProfileTab() {
       const d = await r.json();
       if (!r.ok) { toast({ title: "خطأ", description: d.error ?? "فشل الحفظ", variant: "destructive" }); return; }
       toast({ title: "تم الحفظ ✓", description: "تم تحديث بيانات حسابك بنجاح" });
+      setInitialName(fullName.trim());
       setInitialPhone(phone.trim());
       setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
       setShowPasswordSection(false);
@@ -12695,6 +12708,11 @@ function OwnerProfileTab() {
 
   return (
     <div className="max-w-lg mx-auto space-y-5 py-4">
+      {fetchError && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3 text-sm text-destructive font-medium text-right">
+          {fetchError}
+        </div>
+      )}
       <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -12822,7 +12840,7 @@ function OwnerProfileTab() {
           </div>
         )}
 
-        <Button onClick={handleSave} disabled={saving || !fullName.trim()} className="w-full gap-2">
+        <Button onClick={handleSave} disabled={saving || !hasChanges || !fullName.trim()} className="w-full gap-2">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
           حفظ التغييرات
         </Button>

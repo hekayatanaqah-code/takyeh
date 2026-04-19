@@ -52,52 +52,119 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 router.use(requireAuth);
 
+/* ── Helper: resolve the owner_applications email for the current session ──
+   Strategy 1 – direct email from session (owner-login sessions store email).
+   Strategy 2 – look up the users table by Replit user-id, then match email.
+   Strategy 3 – look up via chalet_submissions.owner_id → users.email.
+   Returns null only if no matching owner_application can be found.
+   ──────────────────────────────────────────────────────────────────────── */
+async function resolveOwnerEmail(req: Request): Promise<string | null> {
+  const sessionEmail = req.user?.email ?? null;
+  const userId       = req.user?.id ?? null;
+
+  /* Strategy 1 — session email matches an owner_application */
+  if (sessionEmail) {
+    const r = await db.execute(
+      sql`SELECT email FROM owner_applications WHERE email = ${sessionEmail} LIMIT 1`
+    );
+    const hit = ((r as any).rows as Array<{ email: string }>)[0];
+    if (hit) return hit.email;
+  }
+
+  /* Strategy 2 — Replit user ID → users.email → owner_applications */
+  if (userId) {
+    const r = await db.execute(
+      sql`SELECT oa.email
+          FROM owner_applications oa
+          JOIN users u ON lower(u.email) = lower(oa.email)
+          WHERE u.id = ${userId}
+          LIMIT 1`
+    );
+    const hit = ((r as any).rows as Array<{ email: string }>)[0];
+    if (hit) return hit.email;
+  }
+
+  /* Strategy 3 — Replit user ID used as ownerId in chalet_submissions → email via users */
+  if (userId) {
+    const r = await db.execute(
+      sql`SELECT oa.email
+          FROM chalet_submissions cs
+          JOIN users u ON u.id = cs.owner_id
+          JOIN owner_applications oa ON lower(oa.email) = lower(u.email)
+          WHERE cs.owner_id = ${userId}
+          LIMIT 1`
+    );
+    const hit = ((r as any).rows as Array<{ email: string }>)[0];
+    if (hit) return hit.email;
+  }
+
+  return null;
+}
+
 /* ── GET /owner/profile — fetch owner profile ──────────────── */
 router.get("/profile", async (req, res) => {
-  const email = req.user!.email;
-  if (!email) return res.status(400).json({ error: "البريد الإلكتروني غير متاح" });
-  const result = await db.execute(
-    sql`SELECT full_name, phone, email FROM owner_applications WHERE email = ${email} LIMIT 1`
-  );
-  const row = ((result as any).rows as Array<{ full_name: string; phone: string; email: string }>)[0];
-  if (!row) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
-  return res.json({ fullName: row.full_name, phone: row.phone, email: row.email });
+  try {
+    const email = await resolveOwnerEmail(req);
+    if (!email) {
+      /* No matching owner_application — return what we know from the session
+         so the UI is not completely blank for admin/dev users */
+      return res.json({
+        fullName: req.user?.firstName ?? "",
+        phone:    "",
+        email:    req.user?.email ?? "",
+        noApplication: true,
+      });
+    }
+    const result = await db.execute(
+      sql`SELECT full_name, phone, email FROM owner_applications WHERE email = ${email} LIMIT 1`
+    );
+    const row = ((result as any).rows as Array<{ full_name: string; phone: string; email: string }>)[0];
+    if (!row) return res.json({ fullName: req.user?.firstName ?? "", phone: "", email: email, noApplication: true });
+    return res.json({ fullName: row.full_name, phone: row.phone, email: row.email });
+  } catch (err) {
+    console.error("[GET /owner/profile]", err);
+    return res.status(500).json({ error: "حدث خطأ أثناء جلب بيانات الحساب" });
+  }
 });
 
 /* ── PUT /owner/profile — update owner profile ─────────────── */
 router.put("/profile", async (req, res) => {
-  const email = req.user!.email;
-  if (!email) return res.status(400).json({ error: "البريد الإلكتروني غير متاح" });
-  const { fullName, phone, currentPassword, newPassword, phoneChanged } = req.body as Record<string, string>;
+  try {
+    const email = await resolveOwnerEmail(req);
+    if (!email) return res.status(404).json({ error: "لم يتم العثور على حساب مرتبط بهذا المستخدم" });
 
-  if (!fullName?.trim()) return res.status(400).json({ error: "الاسم الكامل مطلوب" });
+    const { fullName, phone, currentPassword, newPassword, phoneChanged } = req.body as Record<string, string>;
+    if (!fullName?.trim()) return res.status(400).json({ error: "الاسم الكامل مطلوب" });
 
-  /* If phone has changed, require current password verification */
-  const phoneIsChanging = phoneChanged === "true";
-  const passwordNeeded = phoneIsChanging || (currentPassword && newPassword);
+    const phoneIsChanging = phoneChanged === "true";
+    const passwordNeeded  = phoneIsChanging || (currentPassword && newPassword);
 
-  if (passwordNeeded) {
-    if (!currentPassword) return res.status(400).json({ error: "يرجى إدخال كلمة المرور الحالية للتحقق من هويتك" });
-    const pwResult = await db.execute(
-      sql`SELECT password_hash FROM owner_applications WHERE email = ${email} LIMIT 1`
-    );
-    const pwRow = ((pwResult as any).rows as Array<{ password_hash: string }>)[0];
-    if (!pwRow) return res.status(404).json({ error: "الحساب غير موجود" });
-    const match = await bcrypt.compare(currentPassword, pwRow.password_hash);
-    if (!match) return res.status(400).json({ error: "كلمة المرور الحالية غير صحيحة" });
+    if (passwordNeeded) {
+      if (!currentPassword) return res.status(400).json({ error: "يرجى إدخال كلمة المرور الحالية للتحقق من هويتك" });
+      const pwResult = await db.execute(
+        sql`SELECT password_hash FROM owner_applications WHERE email = ${email} LIMIT 1`
+      );
+      const pwRow = ((pwResult as any).rows as Array<{ password_hash: string }>)[0];
+      if (!pwRow?.password_hash) return res.status(400).json({ error: "هذا الحساب لا يملك كلمة مرور — تواصل مع الدعم" });
+      const match = await bcrypt.compare(currentPassword, pwRow.password_hash);
+      if (!match) return res.status(400).json({ error: "كلمة المرور الحالية غير صحيحة" });
+    }
+
+    const updates: string[] = [`full_name = '${fullName.trim().replace(/'/g, "''")}'`];
+    if (phone !== undefined) updates.push(`phone = '${(phone ?? "").trim().replace(/'/g, "''")}'`);
+
+    if (currentPassword && newPassword) {
+      if (newPassword.length < 6) return res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تكون ٦ أحرف على الأقل" });
+      const newHash = await bcrypt.hash(newPassword, 10);
+      updates.push(`password_hash = '${newHash}'`);
+    }
+
+    await db.execute(sql.raw(`UPDATE owner_applications SET ${updates.join(", ")} WHERE email = '${email.replace(/'/g, "''")}'`));
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[PUT /owner/profile]", err);
+    return res.status(500).json({ error: "حدث خطأ أثناء حفظ البيانات" });
   }
-
-  const updates: string[] = [`full_name = '${fullName.trim().replace(/'/g, "''")}'`];
-  if (phone !== undefined) updates.push(`phone = '${phone.trim().replace(/'/g, "''")}'`);
-
-  if (currentPassword && newPassword) {
-    if (newPassword.length < 6) return res.status(400).json({ error: "كلمة المرور الجديدة قصيرة جداً" });
-    const newHash = await bcrypt.hash(newPassword, 10);
-    updates.push(`password_hash = '${newHash}'`);
-  }
-
-  await db.execute(sql.raw(`UPDATE owner_applications SET ${updates.join(", ")} WHERE email = '${email}'`));
-  return res.json({ ok: true });
 });
 
 /* ── Availability sync helper ──────────────────────────────── */
