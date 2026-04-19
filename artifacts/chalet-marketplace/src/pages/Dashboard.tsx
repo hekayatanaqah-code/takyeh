@@ -31,7 +31,7 @@ import {
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
-  X, Shield, Briefcase, Scissors, RefreshCw,
+  X, Shield, Briefcase, Scissors, RefreshCw, Send,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -12630,21 +12630,39 @@ function OwnerProfileTab() {
     return fetch(`${BASE}/api${path}`, { credentials: "include", headers: { "Content-Type": "application/json", ...(opts?.headers ?? {}) }, ...opts });
   }
 
-  const [fullName, setFullName]         = useState("");
-  const [phone, setPhone]               = useState("");
-  const [initialName, setInitialName]   = useState(""); // track changes
-  const [initialPhone, setInitialPhone] = useState(""); // track changes
-  const [email, setEmail]               = useState("");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword]   = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading]           = useState(true);
-  const [saving, setSaving]             = useState(false);
-  const [fetchError, setFetchError]     = useState<string | null>(null);
-  const [showPasswordSection, setShowPasswordSection] = useState(false);
-  const [showCurrentPw, setShowCurrentPw] = useState(false);
-  const [showNewPw, setShowNewPw]       = useState(false);
-  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  /* ── form fields ── */
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone]       = useState("");
+  const [email, setEmail]       = useState("");
+
+  /* ── baselines for dirty-detection ── */
+  const [initName,  setInitName]  = useState("");
+  const [initPhone, setInitPhone] = useState("");
+  const [initEmail, setInitEmail] = useState("");
+
+  /* ── password-change section ── */
+  const [showPwSection, setShowPwSection]   = useState(false);
+  const [currentPw, setCurrentPw]           = useState("");
+  const [newPw, setNewPw]                   = useState("");
+  const [confirmPw, setConfirmPw]           = useState("");
+  const [showCurPw, setShowCurPw]           = useState(false);
+  const [showNewPw, setShowNewPw]           = useState(false);
+  const [showConPw, setShowConPw]           = useState(false);
+
+  /* ── multi-step secure flow for email/phone changes ── */
+  type SecureStep = "idle" | "password" | "otp";
+  const [secureStep, setSecureStep]     = useState<SecureStep>("idle");
+  const [securePw, setSecurePw]         = useState("");
+  const [showSecPw, setShowSecPw]       = useState(false);
+  const [secureOtp, setSecureOtp]       = useState("");
+  const [otpSentTo, setOtpSentTo]       = useState("");
+  const [sendingOtp, setSendingOtp]     = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+
+  /* ── page-level state ── */
+  const [loading,    setLoading]    = useState(true);
+  const [saving,     setSaving]     = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     setFetchError(null);
@@ -12653,11 +12671,10 @@ function OwnerProfileTab() {
         const d = await r.json().catch(() => null);
         if (!r.ok) { setFetchError(d?.error ?? "تعذّر تحميل بيانات الحساب"); return; }
         if (d) {
-          const name  = d.fullName ?? "";
-          const ph    = d.phone ?? "";
-          setFullName(name);  setInitialName(name);
-          setPhone(ph);       setInitialPhone(ph);
-          setEmail(d.email ?? "");
+          const n = d.fullName ?? "", ph = d.phone ?? "", em = d.email ?? "";
+          setFullName(n); setInitName(n);
+          setPhone(ph);   setInitPhone(ph);
+          setEmail(em);   setInitEmail(em);
         }
       })
       .catch(() => setFetchError("تعذّر الاتصال بالخادم"))
@@ -12665,44 +12682,79 @@ function OwnerProfileTab() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const phoneChanged = phone.trim() !== initialPhone.trim();
-  const nameChanged  = fullName.trim() !== initialName.trim();
-  /* Whether any editable field has changed from what was loaded */
-  const hasDataChanges  = nameChanged || phoneChanged;
-  const hasPasswordEdit = showPasswordSection && (currentPassword || newPassword || confirmPassword);
-  const hasChanges      = hasDataChanges || hasPasswordEdit;
+  /* dirty-detection */
+  const nameChanged  = fullName.trim() !== initName.trim();
+  const phoneChanged = phone.trim()    !== initPhone.trim();
+  const emailChanged = email.trim().toLowerCase() !== initEmail.trim().toLowerCase();
+  const sensitiveChanged = phoneChanged || emailChanged;
+  const pwEdited = showPwSection && (currentPw || newPw || confirmPw);
+  const hasChanges = nameChanged || sensitiveChanged || pwEdited;
 
-  /* Show password section if phone changed (security) or user explicitly opened it */
-  const needsPassword = phoneChanged || showPasswordSection;
-
+  /* ── Save (non-sensitive: name / password only) ── */
   async function handleSave() {
     if (!fullName.trim()) { toast({ title: "الاسم مطلوب", variant: "destructive" }); return; }
-    if (needsPassword && !currentPassword) {
-      toast({ title: "يرجى إدخال كلمة المرور الحالية", description: "مطلوبة للتحقق من هويتك عند تغيير رقم الجوال أو كلمة المرور", variant: "destructive" }); return;
-    }
-    if (showPasswordSection) {
-      if (newPassword.length < 6) { toast({ title: "كلمة المرور الجديدة يجب أن تكون ٦ أحرف على الأقل", variant: "destructive" }); return; }
-      if (newPassword !== confirmPassword) { toast({ title: "كلمتا المرور غير متطابقتين", variant: "destructive" }); return; }
+    if (sensitiveChanged) { setSecureStep("password"); setSecurePw(""); setSecureOtp(""); return; }
+    if (showPwSection) {
+      if (!currentPw) { toast({ title: "كلمة المرور الحالية مطلوبة", variant: "destructive" }); return; }
+      if (newPw.length < 6) { toast({ title: "كلمة المرور الجديدة يجب أن تكون ٦ أحرف على الأقل", variant: "destructive" }); return; }
+      if (newPw !== confirmPw) { toast({ title: "كلمتا المرور غير متطابقتين", variant: "destructive" }); return; }
     }
     setSaving(true);
     try {
-      const body: Record<string, string> = {
-        fullName: fullName.trim(),
-        phone: phone.trim(),
-        phoneChanged: String(phoneChanged),
-      };
-      if (needsPassword && currentPassword) body.currentPassword = currentPassword;
-      if (showPasswordSection && newPassword) body.newPassword = newPassword;
+      const body: Record<string, string> = { fullName: fullName.trim() };
+      if (showPwSection && currentPw && newPw) { body.currentPassword = currentPw; body.newPassword = newPw; }
       const r = await apiFetch("/owner/profile", { method: "PUT", body: JSON.stringify(body) });
       const d = await r.json();
       if (!r.ok) { toast({ title: "خطأ", description: d.error ?? "فشل الحفظ", variant: "destructive" }); return; }
       toast({ title: "تم الحفظ ✓", description: "تم تحديث بيانات حسابك بنجاح" });
-      setInitialName(fullName.trim());
-      setInitialPhone(phone.trim());
-      setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
-      setShowPasswordSection(false);
+      setInitName(fullName.trim());
+      setCurrentPw(""); setNewPw(""); setConfirmPw(""); setShowPwSection(false);
     } finally { setSaving(false); }
   }
+
+  /* ── Step 1: verify password & send OTP ── */
+  async function handleSendOtp() {
+    if (!securePw) { toast({ title: "كلمة المرور مطلوبة", variant: "destructive" }); return; }
+    setSendingOtp(true);
+    try {
+      const body: Record<string, string> = { currentPassword: securePw };
+      if (emailChanged) body.newEmail = email.trim();
+      else if (phoneChanged) body.newPhone = phone.trim();
+      const r = await apiFetch("/owner/profile/request-change", { method: "POST", body: JSON.stringify(body) });
+      const d = await r.json();
+      if (!r.ok) { toast({ title: "خطأ", description: d.error ?? "فشل التحقق", variant: "destructive" }); return; }
+      setOtpSentTo(d.otpSentTo ?? "");
+      setSecureStep("otp");
+      setSecureOtp("");
+    } finally { setSendingOtp(false); }
+  }
+
+  /* ── Step 2: verify OTP & save all changes ── */
+  async function handleVerifyAndSave() {
+    if (secureOtp.length < 6) { toast({ title: "رمز التحقق يجب أن يكون ٦ أرقام", variant: "destructive" }); return; }
+    setVerifyingOtp(true);
+    try {
+      const body: Record<string, string> = {
+        fullName: fullName.trim(),
+        phone:    phone.trim(),
+        email:    email.trim().toLowerCase(),
+        otp:      secureOtp.trim(),
+        otpTarget: otpSentTo,
+        sensitiveChange: "true",
+      };
+      const r = await apiFetch("/owner/profile", { method: "PUT", body: JSON.stringify(body) });
+      const d = await r.json();
+      if (!r.ok) { toast({ title: "خطأ", description: d.error ?? "رمز التحقق غير صحيح", variant: "destructive" }); return; }
+      toast({ title: "تم الحفظ ✓", description: "تم تحديث بيانات حسابك بنجاح" });
+      setInitName(fullName.trim());
+      setInitPhone(phone.trim());
+      setInitEmail(email.trim().toLowerCase());
+      setSecureStep("idle");
+      setSecurePw(""); setSecureOtp("");
+    } finally { setVerifyingOtp(false); }
+  }
+
+  function cancelSecure() { setSecureStep("idle"); setSecurePw(""); setSecureOtp(""); }
 
   if (loading) return <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
 
@@ -12713,7 +12765,9 @@ function OwnerProfileTab() {
           {fetchError}
         </div>
       )}
+
       <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
+        {/* Header */}
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
             <Settings className="w-5 h-5 text-primary" />
@@ -12724,126 +12778,181 @@ function OwnerProfileTab() {
           </div>
         </div>
 
-        {/* Name */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold">الاسم الكامل <span className="text-destructive">*</span></label>
-          <Input value={fullName} onChange={(e) => setFullName(e.target.value)} className="text-right" placeholder="اسمك الكامل" />
-        </div>
-
-        {/* Phone */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold flex items-center gap-1.5">
-            رقم الجوال
-            {phoneChanged && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">تم التغيير — مطلوب كلمة المرور</span>}
-          </label>
-          <Input
-            value={toAr(phone)}
-            onChange={(e) => setPhone(fromAr(e.target.value))}
-            className="text-right"
-            placeholder="٠٥xxxxxxxx"
-            type="text"
-            inputMode="numeric"
-          />
-        </div>
-
-        {/* Email (read-only) */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-muted-foreground">البريد الإلكتروني</label>
-          <Input value={email} readOnly disabled className="text-right opacity-60 cursor-not-allowed" dir="ltr" />
-          <p className="text-xs text-muted-foreground">البريد الإلكتروني لا يمكن تغييره — تواصل مع الدعم إذا احتجت لتغييره</p>
-        </div>
-
-        {/* Password / security section */}
-        <button
-          type="button"
-          onClick={() => setShowPasswordSection(!showPasswordSection)}
-          className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-        >
-          <Lock className="w-4 h-4" />
-          {showPasswordSection ? "إلغاء تغيير كلمة المرور" : "تغيير كلمة المرور"}
-        </button>
-
-        {/* Current password field — shown when phone changed OR password section open */}
-        {needsPassword && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-800/40 p-4 space-y-3">
-            {phoneChanged && (
-              <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 font-medium mb-1">
-                <Shield className="w-3.5 h-3.5 shrink-0" />
-                أدخل كلمة المرور الحالية للتأكيد قبل تغيير رقم الجوال
-              </div>
-            )}
+        {/* ══════════ Normal editing form ══════════ */}
+        {secureStep === "idle" && (
+          <>
+            {/* Full name */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">كلمة المرور الحالية <span className="text-destructive">*</span></label>
-              <div className="relative">
-                <Input
-                  type={showCurrentPw ? "text" : "password"}
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="text-right pl-10"
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrentPw(v => !v)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
-                >
-                  {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
+              <label className="text-sm font-semibold">الاسم الكامل <span className="text-destructive">*</span></label>
+              <Input value={fullName} onChange={(e) => setFullName(e.target.value)} className="text-right" placeholder="اسمك الكامل" />
             </div>
 
-            {showPasswordSection && (
-              <>
+            {/* Phone */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold flex items-center gap-1.5">
+                رقم الجوال
+                {phoneChanged && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">تم التغيير</span>}
+              </label>
+              <Input
+                value={toAr(phone)}
+                onChange={(e) => setPhone(fromAr(e.target.value))}
+                className="text-right"
+                placeholder="٠٥xxxxxxxx"
+                type="text"
+                inputMode="numeric"
+              />
+            </div>
+
+            {/* Email — editable */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold flex items-center gap-1.5">
+                البريد الإلكتروني
+                {emailChanged && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">تم التغيير</span>}
+              </label>
+              <Input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="text-right"
+                placeholder="example@email.com"
+                type="email"
+                dir="ltr"
+              />
+              {sensitiveChanged && (
+                <p className="text-xs text-amber-600 flex items-center gap-1">
+                  <Shield className="w-3 h-3 shrink-0" />
+                  تغيير البريد أو الجوال يتطلب التحقق بكلمة المرور ورمز OTP
+                </p>
+              )}
+            </div>
+
+            {/* Password change toggle */}
+            <button
+              type="button"
+              onClick={() => { setShowPwSection(v => !v); setCurrentPw(""); setNewPw(""); setConfirmPw(""); }}
+              className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+            >
+              <Lock className="w-4 h-4" />
+              {showPwSection ? "إلغاء تغيير كلمة المرور" : "تغيير كلمة المرور"}
+            </button>
+
+            {showPwSection && (
+              <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+                {/* Current password */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold">كلمة المرور الحالية <span className="text-destructive">*</span></label>
+                  <div className="relative">
+                    <Input type={showCurPw ? "text" : "password"} value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} className="text-right pl-10" placeholder="••••••••" />
+                    <button type="button" onClick={() => setShowCurPw(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
+                      {showCurPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                {/* New password */}
                 <div className="space-y-1.5">
                   <label className="text-sm font-semibold">كلمة المرور الجديدة</label>
                   <div className="relative">
-                    <Input
-                      type={showNewPw ? "text" : "password"}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="text-right pl-10"
-                      placeholder="٦ أحرف على الأقل"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPw(v => !v)}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      tabIndex={-1}
-                    >
+                    <Input type={showNewPw ? "text" : "password"} value={newPw} onChange={(e) => setNewPw(e.target.value)} className="text-right pl-10" placeholder="٦ أحرف على الأقل" />
+                    <button type="button" onClick={() => setShowNewPw(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
                       {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
+                {/* Confirm password */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-semibold">تأكيد كلمة المرور</label>
+                  <label className="text-sm font-semibold">تأكيد كلمة المرور الجديدة</label>
                   <div className="relative">
-                    <Input
-                      type={showConfirmPw ? "text" : "password"}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="text-right pl-10"
-                      placeholder="أعد كتابة كلمة المرور"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPw(v => !v)}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      tabIndex={-1}
-                    >
-                      {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    <Input type={showConPw ? "text" : "password"} value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} className="text-right pl-10" placeholder="أعد كتابة كلمة المرور" />
+                    <button type="button" onClick={() => setShowConPw(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
+                      {showConPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
-              </>
+              </div>
             )}
+
+            <Button onClick={handleSave} disabled={saving || !hasChanges || !fullName.trim()} className="w-full gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              {sensitiveChanged ? "التحقق من الهوية وحفظ" : "حفظ التغييرات"}
+            </Button>
+          </>
+        )}
+
+        {/* ══════════ Step 1: Password verification ══════════ */}
+        {secureStep === "password" && (
+          <div className="space-y-5">
+            <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-xl p-4">
+              <Shield className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
+                <p className="font-semibold mb-1">التحقق من الهوية مطلوب</p>
+                <p>لحماية حسابك، أدخل كلمة المرور الحالية لتأكيد هويتك قبل تغيير {emailChanged ? "البريد الإلكتروني" : "رقم الجوال"}.</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">كلمة المرور الحالية <span className="text-destructive">*</span></label>
+              <div className="relative">
+                <Input
+                  type={showSecPw ? "text" : "password"}
+                  value={securePw}
+                  onChange={(e) => setSecurePw(e.target.value)}
+                  className="text-right pl-10"
+                  placeholder="••••••••"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSendOtp(); }}
+                />
+                <button type="button" onClick={() => setShowSecPw(v => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
+                  {showSecPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={cancelSecure} disabled={sendingOtp}>إلغاء</Button>
+              <Button className="flex-1 gap-2" onClick={handleSendOtp} disabled={sendingOtp || !securePw}>
+                {sendingOtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                التحقق وإرسال الرمز
+              </Button>
+            </div>
           </div>
         )}
 
-        <Button onClick={handleSave} disabled={saving || !hasChanges || !fullName.trim()} className="w-full gap-2">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-          حفظ التغييرات
-        </Button>
+        {/* ══════════ Step 2: OTP verification ══════════ */}
+        {secureStep === "otp" && (
+          <div className="space-y-5">
+            <div className="flex items-start gap-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/40 rounded-xl p-4">
+              <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+              <div className="text-sm leading-relaxed">
+                <p className="font-semibold text-green-800 dark:text-green-300 mb-1">تم إرسال رمز التحقق</p>
+                <p className="text-green-700 dark:text-green-400">
+                  تم إرسال الرمز إلى: <span className="font-bold text-foreground" dir="ltr">{otpSentTo}</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">الرمز صالح لمدة ١٠ دقائق</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">رمز التحقق <span className="text-destructive">*</span></label>
+              <Input
+                value={secureOtp}
+                onChange={(e) => setSecureOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                className="text-center tracking-[0.5em] text-xl font-bold"
+                placeholder="000000"
+                inputMode="numeric"
+                maxLength={6}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter" && secureOtp.length === 6) handleVerifyAndSave(); }}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={cancelSecure} disabled={verifyingOtp}>إلغاء</Button>
+              <Button className="flex-1 gap-2" onClick={handleVerifyAndSave} disabled={verifyingOtp || secureOtp.length < 6}>
+                {verifyingOtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                تأكيد وحفظ التغييرات
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

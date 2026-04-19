@@ -25,11 +25,33 @@ import {
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
-import { randomBytes } from "crypto";
+import { randomBytes, createHash, randomInt } from "crypto";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
+import { sendOtpEmail } from "../lib/email";
 
 const router = Router();
+
+/* ── OTP helpers (mirrors registration.ts helpers) ─────────── */
+function _genCode(): string { return String(randomInt(100000, 999999)); }
+function _hashCode(code: string): string { return createHash("sha256").update(code).digest("hex"); }
+async function _createOtp(email: string, code: string): Promise<void> {
+  const hash = _hashCode(code);
+  const exp  = new Date(Date.now() + 10 * 60 * 1000);
+  await db.execute(
+    sql`INSERT INTO owner_otp_tokens (email, code_hash, expires_at) VALUES (${email}, ${hash}, ${exp.toISOString()})`
+  );
+}
+async function _verifyOtp(email: string, code: string): Promise<boolean> {
+  const hash = _hashCode(code);
+  const r = await db.execute(
+    sql`SELECT id FROM owner_otp_tokens WHERE email = ${email} AND code_hash = ${hash} AND expires_at > now() AND used_at IS NULL ORDER BY created_at DESC LIMIT 1`
+  );
+  const row = ((r as any).rows as Array<{ id: number }>)[0];
+  if (!row) return false;
+  await db.execute(sql`UPDATE owner_otp_tokens SET used_at = now() WHERE id = ${row.id}`);
+  return true;
+}
 
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (req.isAuthenticated()) { next(); return; }
@@ -130,40 +152,100 @@ router.get("/profile", async (req, res) => {
 /* ── PUT /owner/profile — update owner profile ─────────────── */
 router.put("/profile", async (req, res) => {
   try {
-    const email = await resolveOwnerEmail(req);
-    if (!email) return res.status(404).json({ error: "لم يتم العثور على حساب مرتبط بهذا المستخدم" });
+    const currentEmail = await resolveOwnerEmail(req);
+    if (!currentEmail) return res.status(404).json({ error: "لم يتم العثور على حساب مرتبط بهذا المستخدم" });
 
-    const { fullName, phone, currentPassword, newPassword, phoneChanged } = req.body as Record<string, string>;
+    const { fullName, phone, email: newEmail, currentPassword, newPassword, otp, otpTarget, sensitiveChange } = req.body as Record<string, string>;
     if (!fullName?.trim()) return res.status(400).json({ error: "الاسم الكامل مطلوب" });
 
-    const phoneIsChanging = phoneChanged === "true";
-    const passwordNeeded  = phoneIsChanging || (currentPassword && newPassword);
+    /* ── Path A: Sensitive change (email / phone) — requires OTP ── */
+    if (sensitiveChange === "true") {
+      if (!otp?.trim()) return res.status(400).json({ error: "رمز التحقق مطلوب" });
+      if (!otpTarget?.trim()) return res.status(400).json({ error: "هدف التحقق مفقود" });
+      const valid = await _verifyOtp(otpTarget.trim().toLowerCase(), otp.trim());
+      if (!valid) return res.status(400).json({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته" });
 
-    if (passwordNeeded) {
-      if (!currentPassword) return res.status(400).json({ error: "يرجى إدخال كلمة المرور الحالية للتحقق من هويتك" });
+      const updates: string[] = [`full_name = '${fullName.trim().replace(/'/g, "''")}'`];
+      if (phone !== undefined) updates.push(`phone = '${(phone ?? "").trim().replace(/'/g, "''")}'`);
+      if (newEmail && newEmail.trim().toLowerCase() !== currentEmail.toLowerCase()) {
+        updates.push(`email = '${newEmail.trim().toLowerCase().replace(/'/g, "''")}'`);
+      }
+      await db.execute(sql.raw(`UPDATE owner_applications SET ${updates.join(", ")} WHERE email = '${currentEmail.replace(/'/g, "''")}'`));
+      return res.json({ ok: true });
+    }
+
+    /* ── Path B: Non-sensitive change (name / password only) ── */
+    if (currentPassword && newPassword) {
+      if (newPassword.length < 6) return res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تكون ٦ أحرف على الأقل" });
       const pwResult = await db.execute(
-        sql`SELECT password_hash FROM owner_applications WHERE email = ${email} LIMIT 1`
+        sql`SELECT password_hash FROM owner_applications WHERE email = ${currentEmail} LIMIT 1`
       );
       const pwRow = ((pwResult as any).rows as Array<{ password_hash: string }>)[0];
       if (!pwRow?.password_hash) return res.status(400).json({ error: "هذا الحساب لا يملك كلمة مرور — تواصل مع الدعم" });
       const match = await bcrypt.compare(currentPassword, pwRow.password_hash);
       if (!match) return res.status(400).json({ error: "كلمة المرور الحالية غير صحيحة" });
-    }
-
-    const updates: string[] = [`full_name = '${fullName.trim().replace(/'/g, "''")}'`];
-    if (phone !== undefined) updates.push(`phone = '${(phone ?? "").trim().replace(/'/g, "''")}'`);
-
-    if (currentPassword && newPassword) {
-      if (newPassword.length < 6) return res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تكون ٦ أحرف على الأقل" });
       const newHash = await bcrypt.hash(newPassword, 10);
-      updates.push(`password_hash = '${newHash}'`);
+      await db.execute(sql.raw(`UPDATE owner_applications SET full_name = '${fullName.trim().replace(/'/g, "''")}', password_hash = '${newHash}' WHERE email = '${currentEmail.replace(/'/g, "''")}'`));
+    } else {
+      await db.execute(sql.raw(`UPDATE owner_applications SET full_name = '${fullName.trim().replace(/'/g, "''")}' WHERE email = '${currentEmail.replace(/'/g, "''")}'`));
     }
-
-    await db.execute(sql.raw(`UPDATE owner_applications SET ${updates.join(", ")} WHERE email = '${email.replace(/'/g, "''")}'`));
     return res.json({ ok: true });
   } catch (err) {
     console.error("[PUT /owner/profile]", err);
     return res.status(500).json({ error: "حدث خطأ أثناء حفظ البيانات" });
+  }
+});
+
+/* ── POST /owner/profile/request-change — verify password & send OTP ── */
+router.post("/profile/request-change", async (req, res) => {
+  try {
+    const currentEmail = await resolveOwnerEmail(req);
+    if (!currentEmail) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
+
+    const { currentPassword, newEmail, newPhone } = req.body as Record<string, string>;
+    if (!currentPassword) return res.status(400).json({ error: "كلمة المرور الحالية مطلوبة" });
+    if (!newEmail && !newPhone) return res.status(400).json({ error: "يرجى تحديد البريد الإلكتروني أو رقم الجوال الجديد" });
+
+    /* Verify current password */
+    const pwResult = await db.execute(
+      sql`SELECT password_hash, full_name FROM owner_applications WHERE email = ${currentEmail} LIMIT 1`
+    );
+    const pwRow = ((pwResult as any).rows as Array<{ password_hash: string; full_name: string }>)[0];
+    if (!pwRow?.password_hash) return res.status(400).json({ error: "هذا الحساب لا يملك كلمة مرور — تواصل مع الدعم" });
+    const match = await bcrypt.compare(currentPassword, pwRow.password_hash);
+    if (!match) return res.status(400).json({ error: "كلمة المرور الحالية غير صحيحة" });
+
+    const ownerName = pwRow.full_name ?? "صاحب الحساب";
+
+    /* ── Changing email ── */
+    if (newEmail) {
+      const emailLower = newEmail.trim().toLowerCase();
+      if (emailLower === currentEmail.toLowerCase()) return res.status(400).json({ error: "البريد الإلكتروني الجديد هو نفس الحالي" });
+      const taken = await db.execute(sql`SELECT id FROM owner_applications WHERE lower(email) = ${emailLower} LIMIT 1`);
+      if (((taken as any).rows as any[]).length > 0) return res.status(409).json({ error: "هذا البريد الإلكتروني مسجّل لدى حساب آخر" });
+      const code = _genCode();
+      await _createOtp(emailLower, code);
+      await sendOtpEmail(emailLower, ownerName, code);
+      return res.json({ ok: true, otpSentTo: emailLower, isNewEmail: true });
+    }
+
+    /* ── Changing phone ── */
+    if (newPhone) {
+      const phoneClean = newPhone.trim();
+      const curPhoneR = await db.execute(sql`SELECT phone FROM owner_applications WHERE email = ${currentEmail} LIMIT 1`);
+      const curPhone  = ((curPhoneR as any).rows as Array<{ phone: string }>)[0]?.phone ?? "";
+      if (phoneClean === curPhone) return res.status(400).json({ error: "رقم الجوال الجديد هو نفس الحالي" });
+      const taken = await db.execute(sql`SELECT id FROM owner_applications WHERE phone = ${phoneClean} AND email != ${currentEmail} LIMIT 1`);
+      if (((taken as any).rows as any[]).length > 0) return res.status(409).json({ error: "رقم الجوال مسجّل لدى حساب آخر" });
+      /* No SMS service — send OTP to current email */
+      const code = _genCode();
+      await _createOtp(currentEmail, code);
+      await sendOtpEmail(currentEmail, ownerName, code);
+      return res.json({ ok: true, otpSentTo: currentEmail, isNewEmail: false });
+    }
+  } catch (err) {
+    console.error("[POST /owner/profile/request-change]", err);
+    return res.status(500).json({ error: "حدث خطأ أثناء إرسال رمز التحقق" });
   }
 });
 
