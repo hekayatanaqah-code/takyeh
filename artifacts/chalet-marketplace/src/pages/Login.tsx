@@ -26,19 +26,19 @@ export default function Login() {
     setError(null);
     setIsAdminBlock(false);
 
-    /* ── Auto-detect: email → OIDC, username → staff login ── */
-    if (trimmed.includes("@")) {
-      window.location.href = `${BASE}/api/login`;
-      return;
-    }
-
     setLoading(true);
     try {
-      const r = await fetch(`${BASE}/api/unified-login`, {
+      /* ── Auto-detect: email → custom owner login, username → staff/admin login ── */
+      const endpoint = trimmed.includes("@") ? "/api/owner-login" : "/api/unified-login";
+      const body = trimmed.includes("@")
+        ? JSON.stringify({ email: trimmed, password, rememberMe })
+        : JSON.stringify({ username: trimmed, password, rememberMe });
+
+      const r = await fetch(`${BASE}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username: trimmed, password, rememberMe }),
+        body,
       });
       const data = await r.json();
 
@@ -51,6 +51,7 @@ export default function Login() {
         return;
       }
 
+      qc.invalidateQueries({ queryKey: ["auth", "user"] });
       qc.invalidateQueries({ queryKey: ["staff", "me"] });
       navigate(data.redirect ?? "/dashboard");
     } catch {

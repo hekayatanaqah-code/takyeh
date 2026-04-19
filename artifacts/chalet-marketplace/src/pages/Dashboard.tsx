@@ -802,6 +802,9 @@ function AddBookingDialog({
     ) ?? null;
   }, [bookingDate, period, dialogSeasons]);
 
+  /* ── Derived chalet — must be declared BEFORE any derived variables that use it ── */
+  const selectedChalet = submissions.find((s: any) => String(s.id) === submissionId) ?? null;
+
   /* ── Conflict detection: which periods are already booked across range ── */
   const conflictSet = useMemo(() => {
     const blocked = new Set<string>();
@@ -969,7 +972,6 @@ function AddBookingDialog({
   };
 
   /* ── Derived display values ── */
-  const selectedChalet = submissions.find((s: any) => String(s.id) === submissionId) ?? null;
   const bookingHijri = bookingDate ? formatDualDate(bookingDate).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : null;
 
   return (

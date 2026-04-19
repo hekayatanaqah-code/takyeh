@@ -1,9 +1,11 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { createHash, randomInt } from "crypto";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
+import { usersTable } from "@workspace/db/schema";
 import { sendOtpEmail, sendWelcomeEmail } from "../lib/email";
+import { createSession, SESSION_COOKIE, SESSION_TTL } from "../lib/auth";
 
 const router = Router();
 
@@ -228,6 +230,84 @@ router.post("/resend-otp", async (req, res) => {
   } catch (err) {
     console.error("[resend-otp] Error:", err);
     return res.status(500).json({ error: "حدث خطأ أثناء إعادة الإرسال" });
+  }
+});
+
+/* ── POST /owner-login ──────────────────────────────────────
+   Custom email+password login for chalet owners.
+   Looks up owner_applications, validates bcrypt password, then
+   creates a platform session (sid cookie) so authMiddleware
+   can set req.user correctly for all /owner/* routes.
+   ─────────────────────────────────────────────────────────── */
+router.post("/owner-login", async (req, res) => {
+  const { email, password, rememberMe } = req.body ?? {};
+  if (!email || !password) {
+    return res.status(400).json({ error: "البريد الإلكتروني وكلمة المرور مطلوبان" });
+  }
+  const emailLower = String(email).trim().toLowerCase();
+
+  try {
+    const appResult = await db.execute(
+      sql`SELECT id, full_name, phone, email, password_hash, email_verified, status
+          FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
+    );
+    const app = ((appResult as any).rows as Array<{
+      id: number; full_name: string; phone: string; email: string;
+      password_hash: string; email_verified: boolean; status: string;
+    }>)[0];
+
+    if (!app) {
+      return res.status(401).json({ error: "لا يوجد حساب مرتبط بهذا البريد الإلكتروني" });
+    }
+    if (!app.email_verified) {
+      return res.status(403).json({ error: "يرجى التحقق من بريدك الإلكتروني أولاً قبل تسجيل الدخول" });
+    }
+    if (!app.password_hash) {
+      return res.status(401).json({ error: "هذا الحساب لا يملك كلمة مرور — تواصل مع الدعم" });
+    }
+
+    const valid = await bcrypt.compare(String(password), app.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: "كلمة المرور غير صحيحة" });
+    }
+
+    /* ── Determine user ID:
+       Prefer the Replit user ID if the owner has a Replit account with the same email
+       (so existing bookings/submissions stay linked). Otherwise use "owner_<id>". ── */
+    let userId = `owner_${app.id}`;
+    try {
+      const [replUser] = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.email, emailLower))
+        .limit(1);
+      if (replUser?.id) userId = replUser.id;
+    } catch { /* ignore — non-critical */ }
+
+    const ttl = rememberMe ? 30 * 24 * 60 * 60 * 1000 : SESSION_TTL;
+    const sid = await createSession({
+      user: {
+        id: userId,
+        email: app.email,
+        firstName: app.full_name,
+        lastName: null,
+        profileImageUrl: null,
+      },
+      access_token: "owner_password_auth",
+      expires_at: Math.floor((Date.now() + ttl) / 1000),
+    });
+
+    res.cookie(SESSION_COOKIE, sid, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: rememberMe ? ttl : undefined,
+    });
+
+    return res.json({ ok: true, redirect: "/dashboard" });
+  } catch (err) {
+    console.error("[owner-login] Error:", err);
+    return res.status(500).json({ error: "حدث خطأ أثناء تسجيل الدخول، يرجى المحاولة لاحقاً" });
   }
 });
 
