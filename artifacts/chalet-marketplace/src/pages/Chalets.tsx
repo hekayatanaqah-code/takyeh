@@ -115,7 +115,11 @@ export default function Chalets() {
 
   const filteredChalets = (chalets ?? []).filter((c) => {
     if (filterDistrict && filterDistrict !== "all" && (c as any).district !== filterDistrict) return false;
-    if (filterCategory && filterCategory !== "all" && (c as any).category !== filterCategory) return false;
+    if (filterCategory && filterCategory !== "all") {
+      /* Properties with no category are unclassified — include them in every category search */
+      const chaletCat = (c as any).category;
+      if (chaletCat && chaletCat !== filterCategory) return false;
+    }
     if (filterSections && filterSections !== "all") {
       /* Treat null/empty sections as "قسم واحد" — properties added before the field existed */
       const chaletSections = (c as any).sections || "قسم واحد";
