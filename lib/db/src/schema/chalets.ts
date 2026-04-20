@@ -172,6 +172,7 @@ export const chaletCategoriesTable = pgTable("chalet_categories", {
   id: serial("id").primaryKey(),
   nameAr: text("name_ar").notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  showSectionFilter: boolean("show_section_filter").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ChaletCategory = typeof chaletCategoriesTable.$inferSelect;

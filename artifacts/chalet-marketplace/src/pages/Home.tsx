@@ -89,6 +89,7 @@ export default function Home() {
   const [searchCity, setSearchCity]         = useState<string>("");
   const [searchDistrict, setSearchDistrict] = useState<string>("");
   const [searchCategory, setSearchCategory] = useState<string>("");
+  const [searchSections, setSearchSections] = useState<string>("");
   const [searchPeriod, setSearchPeriod]     = useState<string>("");
   const [bookingDate, setBookingDate]       = useState<string>("");
   const [searchError, setSearchError]       = useState<string>("");
@@ -134,7 +135,7 @@ export default function Home() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const { data: categories = [] } = useQuery<{ id: number; nameAr: string }[]>({
+  const { data: categories = [] } = useQuery<{ id: number; nameAr: string; showSectionFilter: boolean }[]>({
     queryKey: ["catalog", "categories"],
     queryFn: async () => {
       const r = await fetch(`${BASE}/api/categories`, { credentials: "include" });
@@ -143,6 +144,9 @@ export default function Home() {
     },
     staleTime: 1000 * 60 * 5,
   });
+
+  /* Whether the currently selected category has section filter enabled */
+  const showSectionsField = !!categories.find((c) => c.nameAr === searchCategory)?.showSectionFilter;
 
   /* ── Service categories for the services search bar ── */
   const { data: serviceCategories = [] } = useQuery<{ id: number; key: string; labelAr: string; emoji: string }[]>({
@@ -173,6 +177,7 @@ export default function Home() {
     if (searchCity && searchCity !== "all") params.append("location", searchCity);
     if (searchDistrict && searchDistrict !== "all") params.append("district", searchDistrict);
     if (searchCategory && searchCategory !== "all") params.append("category", searchCategory);
+    if (showSectionsField && searchSections && searchSections !== "all") params.append("sections", searchSections);
     if (searchPeriod && searchPeriod !== "all") params.append("period", searchPeriod);
     if (bookingDate) {
       params.append("checkIn", bookingDate);
@@ -330,7 +335,7 @@ export default function Home() {
                   <Tag className="w-5 h-5 text-muted-foreground shrink-0" />
                   <div className="w-full">
                     <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الفئة</p>
-                    <Select value={searchCategory} onValueChange={setSearchCategory}>
+                    <Select value={searchCategory} onValueChange={(v) => { setSearchCategory(v); setSearchSections(""); }}>
                       <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
                         <SelectValue placeholder="جميع الفئات" />
                       </SelectTrigger>
@@ -348,6 +353,28 @@ export default function Home() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+
+                {/* Sections — conditional: only when selected category has showSectionFilter */}
+                <div
+                  className={`overflow-hidden transition-all duration-300 ease-in-out ${showSectionsField ? "flex-1 min-w-[140px] opacity-100 max-w-[200px]" : "max-w-0 opacity-0 pointer-events-none"}`}
+                >
+                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3 h-full">
+                    <span className="text-base shrink-0">🔑</span>
+                    <div className="w-full">
+                      <p className="text-xs font-semibold text-muted-foreground text-right mb-1">عدد الأقسام</p>
+                      <Select value={searchSections} onValueChange={setSearchSections}>
+                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
+                          <SelectValue placeholder="الكل" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">الكل</SelectItem>
+                          <SelectItem value="قسم واحد">🔑 قسم واحد</SelectItem>
+                          <SelectItem value="قسمين منفصلة">🔑🔑 قسمين منفصلة</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
 

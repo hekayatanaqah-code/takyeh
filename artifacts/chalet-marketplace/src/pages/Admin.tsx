@@ -1521,7 +1521,7 @@ function CategoriesTab() {
   const [newName, setNewName] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  interface Category { id: number; nameAr: string; isActive: boolean }
+  interface Category { id: number; nameAr: string; isActive: boolean; showSectionFilter: boolean }
 
   const { data: categories = [], isLoading } = useQuery<Category[]>({
     queryKey: ["admin", "categories"],
@@ -1543,6 +1543,14 @@ function CategoriesTab() {
   const toggleActive = useMutation({
     mutationFn: async ({ id, isActive }: { id: number; isActive: boolean }) => {
       const r = await apiFetch(`/admin/categories/${id}`, { method: "PATCH", body: JSON.stringify({ isActive }) });
+      if (!r.ok) throw new Error("فشل التحديث");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "categories"] }),
+  });
+
+  const toggleSectionFilter = useMutation({
+    mutationFn: async ({ id, showSectionFilter }: { id: number; showSectionFilter: boolean }) => {
+      const r = await apiFetch(`/admin/categories/${id}`, { method: "PATCH", body: JSON.stringify({ showSectionFilter }) });
       if (!r.ok) throw new Error("فشل التحديث");
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "categories"] }),
@@ -1590,6 +1598,7 @@ function CategoriesTab() {
               <TableRow className="border-slate-700 bg-slate-800">
                 <TableHead className="text-slate-300 text-right">اسم الفئة</TableHead>
                 <TableHead className="text-slate-300 text-right">الحالة</TableHead>
+                <TableHead className="text-slate-300 text-right">فلتر الأقسام</TableHead>
                 <TableHead className="text-slate-300 text-right">إجراءات</TableHead>
               </TableRow>
             </TableHeader>
@@ -1603,6 +1612,15 @@ function CategoriesTab() {
                       className={`text-xs px-2.5 py-1 rounded-full font-semibold ${cat.isActive ? "bg-green-900/50 text-green-400" : "bg-slate-700 text-slate-400"}`}
                     >
                       {cat.isActive ? "مفعّل" : "مخفي"}
+                    </button>
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      onClick={() => toggleSectionFilter.mutate({ id: cat.id, showSectionFilter: !cat.showSectionFilter })}
+                      title="تفعيل فلتر الأقسام (قسم / قسمين) في شريط البحث لهذه الفئة"
+                      className={`text-xs px-2.5 py-1 rounded-full font-semibold transition-colors ${cat.showSectionFilter ? "bg-amber-800/50 text-amber-400" : "bg-slate-700 text-slate-400"}`}
+                    >
+                      {cat.showSectionFilter ? "🔑 مفعّل" : "معطّل"}
                     </button>
                   </TableCell>
                   <TableCell>

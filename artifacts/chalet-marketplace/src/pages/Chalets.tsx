@@ -46,7 +46,7 @@ export default function Chalets() {
   const [filterCity, setFilterCity]         = useState<string>(searchParams.get("location") || "all");
   const [filterDistrict, setFilterDistrict] = useState<string>(searchParams.get("district") || "all");
   const [filterCategory, setFilterCategory] = useState<string>(searchParams.get("category") || "all");
-  const [filterSections, setFilterSections] = useState<string>("all");
+  const [filterSections, setFilterSections] = useState<string>(searchParams.get("sections") || "all");
   const [filterPeriod, setFilterPeriod]     = useState<string>(searchParams.get("period") || "all");
   const [filterAmenities, setFilterAmenities] = useState<Set<string>>(new Set());
   const [filterMaxPrice, setFilterMaxPrice] = useState<string>(searchParams.get("maxPrice") || "");

@@ -562,7 +562,11 @@ router.post("/categories", async (req, res) => {
 
 router.patch("/categories/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const body = z.object({ nameAr: z.string().min(1).optional(), isActive: z.boolean().optional() }).safeParse(req.body);
+  const body = z.object({
+    nameAr: z.string().min(1).optional(),
+    isActive: z.boolean().optional(),
+    showSectionFilter: z.boolean().optional(),
+  }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
   await db.update(chaletCategoriesTable).set(body.data).where(eq(chaletCategoriesTable.id, id));
   return res.json({ ok: true });
