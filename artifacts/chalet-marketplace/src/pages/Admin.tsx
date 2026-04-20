@@ -5793,6 +5793,34 @@ function CommunicationSettingsTab() {
         </div>
       </div>
 
+      {/* ══ 4. Dev Mode ══ */}
+      <div className="bg-slate-800 rounded-xl border border-amber-500/30 overflow-hidden">
+        <div className="bg-gradient-to-l from-amber-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-400" />
+          <h3 className="text-slate-100 font-bold text-lg">وضع التطوير (Dev Mode)</h3>
+          <span className="mr-auto text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">مؤقت</span>
+        </div>
+        <div className="p-6 space-y-4">
+          <Toggle
+            settingKey="otp_dev_mode"
+            label="تفعيل وضع التطوير لرمز OTP"
+            description="يقبل الرمز '123456' كرمز تحقق سحري بدون إرسال بريد — للاختبار فقط"
+          />
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 flex gap-3">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-sm text-amber-300/80 space-y-1">
+              <p className="font-semibold text-amber-300">عند تفعيل وضع التطوير:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-xs">
+                <li>أي رمز التحقق المُدخل <span className="font-mono bg-amber-500/20 px-1 rounded">123456</span> سيُقبل لأي بريد إلكتروني</li>
+                <li>الرمز الحقيقي المُرسل بالبريد يظل يعمل أيضاً</li>
+                <li>أوقف هذا الخيار عند الإطلاق الفعلي للمنصة</li>
+              </ul>
+            </div>
+          </div>
+          <SaveBtn keys={["otp_dev_mode"]} label="حفظ إعداد وضع التطوير" />
+        </div>
+      </div>
+
     </div>
   );
 }
@@ -5917,6 +5945,7 @@ function ContactInquiriesTab() {
 const ALL_TABS = [
   { id: "overview",                label: "الإحصائيات",            icon: BarChart3 },
   { id: "submissions",             label: "الطلبات",               icon: Settings },
+  { id: "partnerApplications",     label: "طلبات الملاك",          icon: Users },
   { id: "platformRevenue",         label: "ميزانية المنصة",        icon: TrendingUp },
   { id: "services",                label: "خدمات المناسبات",       icon: Wrench },
   { id: "serviceCategories",       label: "فئات الخدمات",          icon: Tag },
@@ -7007,6 +7036,7 @@ export default function Admin() {
       <main className="p-6 max-w-7xl mx-auto">
         {activeTab === "overview"             && <OverviewTab />}
         {activeTab === "submissions"          && <SubmissionsTab isSuperAdmin={isSuperAdmin} />}
+        {activeTab === "partnerApplications" && <PartnerApplicationsTab />}
         {activeTab === "platformRevenue"      && <PlatformRevenueTab />}
         {activeTab === "services"             && <ServicesTab />}
         {activeTab === "serviceCategories"   && <ServiceCategoriesTab />}

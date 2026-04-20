@@ -27,7 +27,29 @@ async function createOtp(email: string, code: string) {
   );
 }
 
+async function isDevModeEnabled(): Promise<boolean> {
+  try {
+    const result = await db.execute(
+      sql`SELECT value FROM site_settings WHERE key = 'otp_dev_mode' LIMIT 1`
+    );
+    const rows = (result as any).rows as Array<{ value: string }>;
+    const v = rows[0]?.value;
+    return v === "1" || v === "true";
+  } catch {
+    return false;
+  }
+}
+
+const DEV_MASTER_CODE = "123456";
+
 async function verifyAndConsumeOtp(email: string, code: string): Promise<boolean> {
+  /* Dev-mode bypass: accept master code without touching the OTP table */
+  const devMode = await isDevModeEnabled();
+  if (devMode && code.trim() === DEV_MASTER_CODE) {
+    console.log(`[OTP-DEV] Master-code bypass accepted for ${email}`);
+    return true;
+  }
+
   const codeHash = hashCode(code);
   const result = await db.execute(
     sql`SELECT id FROM owner_otp_tokens
