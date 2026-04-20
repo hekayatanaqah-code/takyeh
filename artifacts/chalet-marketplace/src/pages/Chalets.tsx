@@ -162,16 +162,16 @@ export default function Chalets() {
 
       {/* ── Booking Date ── */}
       <div className="space-y-3">
-        <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <CalendarDays className="w-4 h-4 text-primary" />
-          تاريخ الحجز
-        </label>
-        <DualCalendarPicker
-          value={filterDate}
-          onChange={setFilterDate}
-          placeholder="اختر تاريخ الحجز"
-          label="تاريخ الحجز"
-        />
+        <label className="text-sm font-semibold text-foreground">تاريخ الحجز</label>
+        <div className="relative">
+          <DualCalendarPicker
+            value={filterDate}
+            onChange={setFilterDate}
+            placeholder="اختر تاريخ الحجز"
+            className="rounded-md border border-input bg-background px-3 pr-10 py-2.5 text-sm hover:bg-accent/30 transition-colors"
+          />
+          <CalendarDays className="absolute top-1/2 -translate-y-1/2 right-3 w-4 h-4 text-primary pointer-events-none" />
+        </div>
         {filterDate && (
           <button
             type="button"
