@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { SlidersHorizontal, FilterX, CheckSquare, Square, CalendarDays, LayoutGrid, Map } from "lucide-react";
+import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { hijriAndGregorian } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -50,10 +51,8 @@ export default function Chalets() {
   const [filterPeriod, setFilterPeriod]     = useState<string>(searchParams.get("period") || "all");
   const [filterAmenities, setFilterAmenities] = useState<Set<string>>(new Set());
   const [filterMaxPrice, setFilterMaxPrice] = useState<string>(searchParams.get("maxPrice") || "");
+  const [filterDate, setFilterDate]         = useState<string>(searchParams.get("checkIn") || "");
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
-
-  /* Read check-in date from search params (passed by the home search bar) */
-  const searchDate = searchParams.get("checkIn") || "";
 
   const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["catalog", "cities"],
@@ -98,11 +97,11 @@ export default function Chalets() {
   });
 
   const { data: chalets, isLoading, refetch } = useQuery<any[]>({
-    queryKey: ["chalets", filterCity, searchDate, filterPeriod],
+    queryKey: ["chalets", filterCity, filterDate, filterPeriod],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filterCity && filterCity !== "all") params.set("location", filterCity);
-      if (searchDate) params.set("date", searchDate);
+      if (filterDate) params.set("date", filterDate);
       if (filterPeriod && filterPeriod !== "all") params.set("period", filterPeriod);
       const r = await fetch(`${BASE}/api/chalets?${params.toString()}`, { credentials: "include" });
       if (!r.ok) return [];
@@ -112,12 +111,16 @@ export default function Chalets() {
 
   useEffect(() => {
     refetch();
-  }, [filterCity, searchDate, filterPeriod, refetch]);
+  }, [filterCity, filterDate, filterPeriod, refetch]);
 
   const filteredChalets = (chalets ?? []).filter((c) => {
     if (filterDistrict && filterDistrict !== "all" && (c as any).district !== filterDistrict) return false;
     if (filterCategory && filterCategory !== "all" && (c as any).category !== filterCategory) return false;
-    if (filterSections && filterSections !== "all" && (c as any).sections !== filterSections) return false;
+    if (filterSections && filterSections !== "all") {
+      /* Treat null/empty sections as "قسم واحد" — properties added before the field existed */
+      const chaletSections = (c as any).sections || "قسم واحد";
+      if (chaletSections !== filterSections) return false;
+    }
     if (filterAmenities.size > 0) {
       const chaletAmenities: string[] = (c as any).amenities ?? [];
       for (const key of filterAmenities) {
@@ -151,10 +154,35 @@ export default function Chalets() {
     setFilterPeriod("all");
     setFilterAmenities(new Set());
     setFilterMaxPrice("");
+    setFilterDate("");
   };
 
   const FilterControls = () => (
     <div className="space-y-8">
+
+      {/* ── Booking Date ── */}
+      <div className="space-y-3">
+        <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <CalendarDays className="w-4 h-4 text-primary" />
+          تاريخ الحجز
+        </label>
+        <DualCalendarPicker
+          value={filterDate}
+          onChange={setFilterDate}
+          placeholder="اختر تاريخ الحجز"
+          label="تاريخ الحجز"
+        />
+        {filterDate && (
+          <button
+            type="button"
+            onClick={() => setFilterDate("")}
+            className="text-xs text-destructive hover:underline"
+          >
+            مسح التاريخ
+          </button>
+        )}
+      </div>
+
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">المدينة</label>
         <Select value={filterCity} onValueChange={(v) => { setFilterCity(v); setFilterDistrict("all"); }}>
@@ -327,10 +355,10 @@ export default function Chalets() {
           <div className="flex-1">
             {/* ── View mode toggle + date label ── */}
             <div className="flex items-center justify-between gap-3 mb-4">
-              {searchDate ? (
+              {filterDate ? (
                 <div className="flex items-center gap-2 text-sm bg-primary/5 border border-primary/15 rounded-xl px-3 py-2 flex-1 min-w-0">
                   <CalendarDays className="w-4 h-4 text-primary shrink-0" />
-                  <span className="text-foreground font-medium truncate">{hijriAndGregorian(searchDate)}</span>
+                  <span className="text-foreground font-medium truncate">{hijriAndGregorian(filterDate)}</span>
                 </div>
               ) : <div />}
               <div className="flex items-center gap-1 bg-muted rounded-lg p-1 shrink-0">
@@ -429,7 +457,7 @@ export default function Chalets() {
                       key={chalet.id}
                       chalet={chalet}
                       selectedPeriod={filterPeriod !== "all" ? (filterPeriod as "morning" | "evening" | "full_day") : undefined}
-                      searchDate={searchDate || undefined}
+                      searchDate={filterDate || undefined}
                     />
                   ))}
                 </div>
