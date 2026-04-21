@@ -98,6 +98,41 @@ async function logLongPauseAlerts(chalets: Array<{ id: number; nameAr: string; p
     });
 }
 
+type PauseAlertGlobal = typeof globalThis & {
+  __takyaPauseAlertTimer?: ReturnType<typeof setInterval>;
+  __takyaPauseAlertRunning?: boolean;
+};
+
+async function runLongPauseAlertCheck() {
+  const rows = await db
+    .select({
+      id: chaletsTable.id,
+      nameAr: chaletsTable.nameAr,
+      pausedFrom: chaletsTable.pausedFrom,
+      pausedUntil: chaletsTable.pausedUntil,
+    })
+    .from(chaletsTable);
+  await logLongPauseAlerts(rows);
+}
+
+function startLongPauseAlertCheck() {
+  const g = globalThis as PauseAlertGlobal;
+  if (g.__takyaPauseAlertTimer) return;
+  const run = () => {
+    if (g.__takyaPauseAlertRunning) return;
+    g.__takyaPauseAlertRunning = true;
+    runLongPauseAlertCheck()
+      .catch(() => {})
+      .finally(() => {
+        g.__takyaPauseAlertRunning = false;
+      });
+  };
+  run();
+  g.__takyaPauseAlertTimer = setInterval(run, 60 * 60 * 1000);
+}
+
+startLongPauseAlertCheck();
+
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.isAuthenticated()) {
     res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
@@ -462,6 +497,7 @@ router.get("/chalets", async (req, res) => {
 });
 
 router.get("/pause-alerts", async (_req, res) => {
+  await runLongPauseAlertCheck();
   const [existing] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "admin_pause_alert_log")).limit(1);
   try {
     return res.json(existing?.value ? JSON.parse(existing.value) : []);
