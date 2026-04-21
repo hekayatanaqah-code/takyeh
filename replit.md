@@ -57,6 +57,8 @@ Arabic-language vacation rental marketplace for chalets in Al-Qassim region, Sau
   - Account settings tab (GET/PUT /api/owner/profile) — update name, phone, password
   - Chalet edit dialog includes WhatsApp reminder toggle (enabled/disabled + days before booking)
   - Message settings tab lets owners manage free manual wa.me guest-message templates for booking confirmation, cancellation, modification, and custom owner messages; template dropdowns are available from both reservation cards and calendar booking-detail modals without paid WhatsApp API credentials
+  - Multi-property booking management: calendar can show one chalet or “عرض الكل”, agenda view supports week/month bulk review, reservation cards show the chalet name, and Add Booking only lists approved active non-paused chalets
+  - Owners can temporarily pause a chalet for a date range; paused chalets are hidden from public browsing and blocked from new manual bookings during the pause
 - **Arabic numerals**: system-wide toAr/fromAr pattern; interceptor in main.tsx for inputMode="numeric" fields
 - **Hijri date utilities** in `src/lib/utils.ts`: `hijriAndGregorian()` and `hijriShort()`
 

@@ -58,6 +58,8 @@ export const chaletsTable = pgTable("chalets", {
   longitude: numeric("longitude", { precision: 10, scale: 6 }),
   isVerified: boolean("is_verified").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
+  pausedFrom: text("paused_from"),
+  pausedUntil: text("paused_until"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -11,6 +11,16 @@ import {
 
 const router: IRouter = Router();
 
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function isPausedNow(row: { pausedFrom?: string | null; pausedUntil?: string | null }, today = todayStr()) {
+  if (!row.pausedFrom) return false;
+  return row.pausedFrom <= today && (!row.pausedUntil || row.pausedUntil >= today);
+}
+
 router.get("/", async (req, res) => {
   const parseResult = GetChaletsQueryParams.safeParse(req.query);
   if (!parseResult.success) {
@@ -43,6 +53,8 @@ router.get("/", async (req, res) => {
     .from(chaletsTable)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(sql`RANDOM()`);
+
+  rows = rows.filter((row) => !isPausedNow(row));
 
   /* ── Availability filter ─────────────────────────────────── */
   if (searchDate && /^\d{4}-\d{2}-\d{2}$/.test(searchDate)) {
@@ -152,6 +164,10 @@ router.get("/:id", async (req, res) => {
   }
 
   const row = rows[0];
+  if (row.isActive === false || isPausedNow(row)) {
+    res.status(404).json({ error: "Chalet not found" });
+    return;
+  }
   const data = {
     ...GetChaletByIdResponse.parse({
       id: row.id,

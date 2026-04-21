@@ -31,7 +31,7 @@ import {
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
-  X, Shield, Briefcase, Scissors, RefreshCw, Send,
+  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -95,6 +95,14 @@ interface OwnerBooking {
   cancelledAt?: string | null;
   cancelReason?: string | null;
   ratedAt?: string | null;
+}
+
+function getLocalDateStr(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function isCurrentPause(chalet: { pausedFrom?: string | null; pausedUntil?: string | null }, dateStr = getLocalDateStr()) {
+  return !!chalet.pausedFrom && chalet.pausedFrom <= dateStr && (!chalet.pausedUntil || chalet.pausedUntil >= dateStr);
 }
 
 interface OwnerMessageSettings {
@@ -514,11 +522,96 @@ function BlockDatesDialog({
   );
 }
 
+function PauseChaletDialog({
+  chalet,
+  onClose,
+  onSave,
+}: {
+  chalet: any | null;
+  onClose: () => void;
+  onSave: (chaletId: number, pausedFrom: string | null, pausedUntil: string | null, clear?: boolean) => Promise<void>;
+}) {
+  const [pausedFrom, setPausedFrom] = useState("");
+  const [pausedUntil, setPausedUntil] = useState("");
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (chalet) {
+      setPausedFrom(chalet.pausedFrom ?? getLocalDateStr());
+      setPausedUntil(chalet.pausedUntil ?? "");
+    }
+  }, [chalet]);
+
+  if (!chalet) return null;
+
+  const submit = async (clear = false) => {
+    if (!clear && (!pausedFrom || (pausedUntil && pausedUntil < pausedFrom))) return;
+    setSaving(true);
+    try {
+      await onSave(chalet.id, pausedFrom || null, pausedUntil || null, clear);
+      onClose();
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message ?? "تعذر حفظ الإيقاف", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <DialogContent dir="rtl" className="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle className="text-base">إيقاف مؤقت — {chalet.nameAr}</DialogTitle>
+        <DialogDescription className="text-right">
+          خلال فترة الإيقاف لن يظهر الشاليه للزوار، ولن يُقبل عليه حجز يدوي جديد من لوحة المالك.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold">تاريخ البداية</label>
+          <div className="rounded-xl border border-border bg-background px-3 py-2 min-h-[2.5rem] flex items-center text-sm">
+            <DualCalendarPicker value={pausedFrom} onChange={setPausedFrom} placeholder="اختر تاريخ البداية" />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold">تاريخ النهاية <span className="text-xs text-muted-foreground font-normal">(اختياري)</span></label>
+          <div className="rounded-xl border border-border bg-background px-3 py-2 min-h-[2.5rem] flex items-center text-sm">
+            <DualCalendarPicker value={pausedUntil} onChange={setPausedUntil} placeholder="بدون تاريخ نهاية" />
+          </div>
+          {pausedUntil && (
+            <button type="button" onClick={() => setPausedUntil("")} className="text-xs text-muted-foreground hover:text-foreground">
+              مسح تاريخ النهاية
+            </button>
+          )}
+        </div>
+      </div>
+      <DialogFooter className="gap-2 flex-wrap">
+        {chalet.pausedFrom && (
+          <Button type="button" variant="outline" onClick={() => submit(true)} disabled={saving} className="border-green-300 text-green-700 hover:bg-green-50">
+            إلغاء الإيقاف
+          </Button>
+        )}
+        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>إغلاق</Button>
+        <Button
+          type="button"
+          onClick={() => submit(false)}
+          disabled={saving || !pausedFrom || (!!pausedUntil && pausedUntil < pausedFrom)}
+          className="gap-1.5 bg-orange-600 hover:bg-orange-700 text-white"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <PauseCircle className="w-4 h-4" />}
+          حفظ الإيقاف
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
 function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any[] | undefined; isLoading: boolean; ownerChalets: any[] }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [blockTarget, setBlockTarget] = useState<{ id: number; nameAr: string } | null>(null);
+  const [pauseTarget, setPauseTarget] = useState<any | null>(null);
   const [editTarget, setEditTarget] = useState<any | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -556,6 +649,20 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
     } catch {
       toast({ title: "خطأ", description: "فشل الحذف، حاول مجدداً", variant: "destructive" });
     } finally { setDeletingId(null); setDeleteConfirmId(null); }
+  }
+
+  async function handlePauseChalet(chaletId: number, pausedFrom: string | null, pausedUntil: string | null, clear = false) {
+    const r = await apiFetch(`/owner/chalets/${chaletId}/pause`, {
+      method: "PATCH",
+      body: JSON.stringify(clear ? { clear: true } : { pausedFrom, pausedUntil }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error ?? "فشل حفظ الإيقاف المؤقت");
+    qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
+    toast({
+      title: clear ? "تم إلغاء الإيقاف ✓" : "تم ضبط الإيقاف المؤقت ✓",
+      description: clear ? "سيعود الشاليه للظهور حسب حالة النشاط" : "سيُخفى الشاليه عن الزوار خلال فترة الإيقاف",
+    });
   }
 
   const { data: planLimits } = useQuery<{ plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number }>({
@@ -630,6 +737,13 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
         onClose={() => setBlockTarget(null)}
         onBlocked={() => qc.invalidateQueries({ queryKey: ["owner", "availability"] })}
       />
+      <Dialog open={!!pauseTarget} onOpenChange={(v) => { if (!v) setPauseTarget(null); }}>
+        <PauseChaletDialog
+          chalet={pauseTarget}
+          onClose={() => setPauseTarget(null)}
+          onSave={handlePauseChalet}
+        />
+      </Dialog>
       <EditChaletDialog
         open={!!editTarget}
         sub={editTarget}
@@ -640,6 +754,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
         const status = statusConfig[sub.status as keyof typeof statusConfig] ?? statusConfig.pending;
         const approvedChalet = ownerChalets.find((c: any) => c.submissionId === sub.id);
         const isApproved = sub.status === "approved" && !!approvedChalet;
+        const pausedNow = approvedChalet ? isCurrentPause(approvedChalet) : false;
         return (
           <motion.div
             key={sub.id}
@@ -706,7 +821,13 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                 {isApproved && (
                   <div className={`mt-3 flex items-center justify-between gap-3 rounded-xl px-3 py-2 border text-xs ${approvedChalet.isActive !== false ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/40" : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40"}`}>
                     <span className={`font-semibold ${approvedChalet.isActive !== false ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                      حالة النشاط: {approvedChalet.isActive !== false ? "نشط — ظاهر في البحث" : "غير نشط — مخفي عن الزوار"}
+                      حالة النشاط: {approvedChalet.isActive !== false ? (pausedNow ? "نشط لكن موقوف مؤقتاً الآن" : "نشط — ظاهر في البحث") : "غير نشط — مخفي عن الزوار"}
+                      {approvedChalet.pausedFrom && (
+                        <span className="block mt-0.5 font-normal">
+                          الإيقاف: من {formatDualDate(approvedChalet.pausedFrom).hijri.replace(/\s*هـ\s*$/, "")} هـ
+                          {approvedChalet.pausedUntil ? ` إلى ${formatDualDate(approvedChalet.pausedUntil).hijri.replace(/\s*هـ\s*$/, "")} هـ` : " بدون تاريخ نهاية"}
+                        </span>
+                      )}
                     </span>
                     <button type="button"
                       onClick={() => handleToggleChaletActive(approvedChalet.id)}
@@ -758,6 +879,15 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                       >
                         <Lock className="w-3.5 h-3.5" />
                         إغلاق أيام
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 rounded-xl text-xs h-8 border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-300 dark:hover:bg-orange-950/20"
+                        onClick={() => setPauseTarget({ ...approvedChalet, nameAr: sub.nameAr })}
+                      >
+                        <PauseCircle className="w-3.5 h-3.5" />
+                        إيقاف مؤقت
                       </Button>
                       <Button
                         size="sm"
@@ -2129,7 +2259,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
-  const [selectedChaletId, setSelectedChaletId] = useState<number | null>(null);
+  const [selectedChaletId, setSelectedChaletId] = useState<number | "all" | null>(null);
+  const [calendarMode, setCalendarMode] = useState<"calendar" | "agenda">("calendar");
+  const [agendaScope, setAgendaScope] = useState<"week" | "month">("week");
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
   const [blockDateStr, setBlockDateStr] = useState<string | null>(null);
@@ -2167,7 +2299,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     staleTime: 5 * 60 * 1000,
   });
 
-  const activeChaletId = selectedChaletId ?? ownerChalets[0]?.id ?? null;
+  const showAllChalets = selectedChaletId === "all";
+  const activeChaletId = showAllChalets ? null : selectedChaletId ?? ownerChalets[0]?.id ?? null;
 
   /* ── Build WhatsApp review message from template ── */
   const DEFAULT_WA_REVIEW = "أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} 🌟\nاضغط هنا لتقييمك: {link}";
@@ -2263,7 +2396,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     refetchInterval: 60_000,
   });
 
-  const activeChalet = ownerChalets.find((c: any) => c.id === activeChaletId) as any | undefined;
+  const activeChalet = activeChaletId ? ownerChalets.find((c: any) => c.id === activeChaletId) as any | undefined : undefined;
   const [morningCheckIn, setMorningCheckIn] = useState<string>("");
   const [morningCheckOut, setMorningCheckOut] = useState<string>("");
   const [eveningCheckIn, setEveningCheckIn] = useState<string>("");
@@ -2369,20 +2502,20 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
   /* Filter bookings whose range OVERLAPS with the current calendar month (fixes multi-day cross-month display) */
   const calBookings = useMemo(() => {
-    if (!activeChalet) return [];
+    if (!showAllChalets && !activeChalet) return [];
     const lastDay = new Date(calYear, calMonth, 0).getDate();
     const monthStart = `${calYear}-${String(calMonth).padStart(2, "0")}-01`;
     const monthEnd   = `${calYear}-${String(calMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
     return bookings.filter((b) => {
       if (!b.bookingDate) return false;
-      if (b.submissionId !== activeChalet.submissionId) return false;
+      if (!showAllChalets && b.submissionId !== activeChalet?.submissionId) return false;
       const [by, bm, bd] = b.bookingDate.split("-").map(Number);
       const dur = Math.max(1, b.durationDays ?? 1);
       const bEndDate = new Date(by, bm - 1, bd + dur - 1);
       const bEnd = `${bEndDate.getFullYear()}-${String(bEndDate.getMonth() + 1).padStart(2, "0")}-${String(bEndDate.getDate()).padStart(2, "0")}`;
       return b.bookingDate <= monthEnd && bEnd >= monthStart;
     });
-  }, [bookings, activeChalet, calYear, calMonth]);
+  }, [bookings, activeChalet, calYear, calMonth, showAllChalets]);
 
   const blockEntry = blockDateStr ? availability.find((a) => a.dateStr === blockDateStr) ?? null : null;
 
@@ -2405,11 +2538,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       if (q) {
         const nameMatch = b.clientName?.toLowerCase().includes(q);
         const phoneMatch = b.clientPhone?.toLowerCase().includes(q);
-        if (!nameMatch && !phoneMatch) return false;
+        const chaletMatch = getBookingChaletName(b).toLowerCase().includes(q);
+        if (!nameMatch && !phoneMatch && !chaletMatch) return false;
       }
       return true;
     });
-  }, [bookings, filterFrom, filterTo, searchQuery]);
+  }, [bookings, filterFrom, filterTo, searchQuery, ownerChalets]);
 
   const getManualWhatsAppTemplates = () => messageSettings.waEnabled ? [
     { id: "confirmation", title: "تأكيد الحجز", body: messageSettings.bookingConfirmationTemplate },
@@ -2426,10 +2560,13 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     return rawPhone;
   };
 
-  const getBookingChaletName = (b: OwnerBooking) =>
+  function getBookingChaletName(b: OwnerBooking) {
+    return (
     ownerChalets.find((c: any) => c.submissionId === b.submissionId)?.nameAr ??
     ownerChalets.find((c: any) => c.id === activeChaletId)?.nameAr ??
-    "العقار";
+    "العقار"
+    );
+  }
 
   const getBookingDateText = (b: OwnerBooking) => {
     const { hijri, gregorian } = formatDualDate(b.bookingDate);
@@ -2465,6 +2602,46 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   };
 
   const noApprovedChalets = !chaletsLoading && ownerChalets.length === 0;
+  const bookableSubmissions = useMemo(() => {
+    return submissions.filter((s: any) => {
+      if (s.status !== "approved") return false;
+      const chalet = ownerChalets.find((c: any) => c.submissionId === s.id);
+      return !!chalet && chalet.isActive !== false && !isCurrentPause(chalet);
+    });
+  }, [submissions, ownerChalets]);
+  const agendaRows = useMemo(() => {
+    const scopeStart = (() => {
+      if (agendaScope === "month") return `${calYear}-${String(calMonth).padStart(2, "0")}-01`;
+      const base = new Date();
+      const inCurrentMonth = base.getFullYear() === calYear && base.getMonth() + 1 === calMonth;
+      const anchor = inCurrentMonth ? base : new Date(calYear, calMonth - 1, 1);
+      anchor.setDate(anchor.getDate() - anchor.getDay());
+      return `${anchor.getFullYear()}-${String(anchor.getMonth() + 1).padStart(2, "0")}-${String(anchor.getDate()).padStart(2, "0")}`;
+    })();
+    const scopeEnd = (() => {
+      if (agendaScope === "month") {
+        const lastDay = new Date(calYear, calMonth, 0).getDate();
+        return `${calYear}-${String(calMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      }
+      const [y, m, d] = scopeStart.split("-").map(Number);
+      const end = new Date(y, m - 1, d + 6);
+      return `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+    })();
+    const rows: Array<{ dateStr: string; bookings: OwnerBooking[] }> = [];
+    const [sy, sm, sd] = scopeStart.split("-").map(Number);
+    const [ey, em, ed] = scopeEnd.split("-").map(Number);
+    for (let d = new Date(sy, sm - 1, sd); d <= new Date(ey, em - 1, ed); d.setDate(d.getDate() + 1)) {
+      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const dayBookings = calBookings.filter((b) => {
+        const [by, bm, bd] = b.bookingDate.split("-").map(Number);
+        const end = new Date(by, bm - 1, bd + Math.max(1, b.durationDays ?? 1) - 1);
+        const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+        return ds >= b.bookingDate && ds <= endStr;
+      });
+      rows.push({ dateStr: ds, bookings: dayBookings });
+    }
+    return rows;
+  }, [agendaScope, calYear, calMonth, calBookings]);
 
   return (
     <div className="space-y-6">
@@ -2530,14 +2707,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       <AddBookingDialog
         open={addOpen}
         onClose={() => { setAddOpen(false); setPrefilledDate(null); }}
-        submissions={submissions}
+        submissions={bookableSubmissions}
         onAdded={() => {
           qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
           qc.invalidateQueries({ queryKey: ["owner", "customers"] });
         }}
         existingBookings={bookings}
         prefilledDate={prefilledDate}
-        prefilledChaletId={activeChaletId ? String(activeChaletId) : undefined}
+        prefilledChaletId={activeChalet?.submissionId ? String(activeChalet.submissionId) : undefined}
         availabilityBlocks={availability}
       />
 
@@ -2769,19 +2946,38 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           <h3 className="font-bold text-foreground flex-1">التقويم والإتاحة</h3>
           {ownerChalets.length > 1 && (
             <Select
-              value={String(activeChaletId ?? "")}
-              onValueChange={(v) => setSelectedChaletId(Number(v))}
+              value={showAllChalets ? "all" : String(activeChaletId ?? "")}
+              onValueChange={(v) => setSelectedChaletId(v === "all" ? "all" : Number(v))}
             >
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="اختر الشاليه" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">عرض الكل</SelectItem>
                 {ownerChalets.map((c: any) => (
                   <SelectItem key={c.id} value={String(c.id)}>{c.nameAr}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           )}
+          <div className="flex rounded-xl bg-muted p-1">
+            <button
+              type="button"
+              onClick={() => setCalendarMode("calendar")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${calendarMode === "calendar" ? "bg-background text-primary shadow-sm" : "text-muted-foreground"}`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              تقويم
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarMode("agenda")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${calendarMode === "agenda" ? "bg-background text-primary shadow-sm" : "text-muted-foreground"}`}
+            >
+              <ListChecks className="w-3.5 h-3.5" />
+              أجندة
+            </button>
+          </div>
         </div>
 
         {noApprovedChalets ? (
@@ -2802,7 +2998,64 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               </button>
             </div>
 
-            {availLoading ? (
+            {calendarMode === "agenda" ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <p className="text-xs text-muted-foreground">
+                    عرض سريع للحجوزات {showAllChalets ? "لكل الشاليهات" : `لـ ${activeChalet?.nameAr ?? "الشاليه"}`}
+                  </p>
+                  <div className="flex rounded-xl bg-muted p-1">
+                    <button
+                      type="button"
+                      onClick={() => setAgendaScope("week")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold ${agendaScope === "week" ? "bg-background text-primary shadow-sm" : "text-muted-foreground"}`}
+                    >
+                      أسبوع
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAgendaScope("month")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold ${agendaScope === "month" ? "bg-background text-primary shadow-sm" : "text-muted-foreground"}`}
+                    >
+                      شهر
+                    </button>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-border overflow-hidden">
+                  {agendaRows.map((row) => {
+                    const dual = formatDualDate(row.dateStr);
+                    return (
+                      <div key={row.dateStr} className="grid grid-cols-1 md:grid-cols-[170px_1fr] border-b border-border last:border-b-0">
+                        <div className="bg-muted/40 px-3 py-3 text-xs font-bold text-foreground">
+                          <p>{dual.hijri.replace(/\s*هـ\s*$/, "")} هـ</p>
+                          <p className="text-muted-foreground font-medium mt-0.5">{dual.gregorian}</p>
+                        </div>
+                        <div className="px-3 py-3 space-y-2 min-h-[3.25rem]">
+                          {row.bookings.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">لا توجد حجوزات</p>
+                          ) : row.bookings.map((b) => (
+                            <button
+                              key={`${row.dateStr}-${b.id}`}
+                              type="button"
+                              onClick={() => setSummaryDate(row.dateStr)}
+                              className="w-full text-right rounded-xl border border-border bg-card hover:bg-muted/40 px-3 py-2 transition-colors"
+                            >
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <span className="text-sm font-bold text-foreground">{b.clientName}</span>
+                                <span className="text-[11px] font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5">{getBookingChaletName(b)}</span>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {b.period === "morning" ? "🌅 صباحي" : b.period === "evening" ? "🌙 مسائي" : "☀️ يوم كامل"} · {toAr(b.durationDays ?? 1)} {b.durationDays === 1 ? "يوم" : "أيام"}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : availLoading ? (
               <Skeleton className="h-48 w-full rounded-xl" />
             ) : (
               <MiniCalendar
@@ -2811,7 +3064,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 availability={calAvailability}
                 bookings={calBookings}
                 onDateClick={(ds) => {
-                  if (!activeChaletId) return;
                   const dayBkgs = calBookings.filter((b) => {
                     if (!b.bookingDate) return false;
                     const [by, bm, bd] = b.bookingDate.split("-").map(Number);
@@ -2819,6 +3071,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
                     return ds >= b.bookingDate && ds <= endStr;
                   });
+                  if (showAllChalets) {
+                    if (dayBkgs.length > 0) setSummaryDate(ds);
+                    else {
+                      if (isReadOnly) { onBlockedEdit(); return; }
+                      setPrefilledDate(ds);
+                      setAddOpen(true);
+                    }
+                    return;
+                  }
+                  if (!activeChaletId) return;
                   // Hard-block: maintenance/صيانة dates — show unblock confirmation dialog
                   const avEntry = availability.find((a) => a.dateStr === ds);
                   if (avEntry?.notes && dayBkgs.length === 0) {
@@ -2985,7 +3247,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               const raw = e.target.value.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
               setSearchQuery(raw);
             }}
-            placeholder="بحث عن عميل بالاسم أو رقم الجوال..."
+            placeholder="بحث عن عميل أو رقم الجوال أو اسم الشاليه..."
             className="pr-9 rounded-xl text-sm"
             dir="rtl"
           />
@@ -3052,6 +3314,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               const ins = b.insuranceFee ? Number(b.insuranceFee) : null;
               const remaining = tp !== null && dp !== null ? Math.max(0, tp - dp) : null;
               const fmtAR = (n: number) => n.toLocaleString("ar-SA", { maximumFractionDigits: 2 });
+              const bookingChaletName = getBookingChaletName(b);
 
               const sendReceiptWhatsApp = () => {
                 // Normalize Saudi phone: strip non-digits, add 966 if starts with 0
@@ -3068,6 +3331,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 const lines: string[] = [
                   `🏡 إيصال حجز – حكاية أناقة`,
                   ``,
+                  `🏠 الشاليه: ${bookingChaletName}`,
                   `👤 العميل: ${b.clientName}`,
                   `📅 التاريخ: ${dualDate}`,
                   `⏱ المدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`,
@@ -3162,7 +3426,13 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 flex-wrap">
                         <div>
-                          <p className="font-semibold text-foreground leading-tight">{b.clientName}</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-foreground leading-tight">{b.clientName}</p>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 text-[11px] font-bold">
+                              <Home className="w-3 h-3" />
+                              {bookingChaletName}
+                            </span>
+                          </div>
                           {b.clientPhone && <p className="text-xs text-muted-foreground" dir="ltr">{toAr(b.clientPhone)}</p>}
                         </div>
                         <div className="flex items-center gap-1.5 flex-wrap">

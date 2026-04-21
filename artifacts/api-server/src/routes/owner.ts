@@ -427,6 +427,25 @@ function bookingDates(bookingDate: string, durationDays: number): string[] {
   return results;
 }
 
+function getTodayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function isChaletPaused(chalet: { pausedFrom?: string | null; pausedUntil?: string | null }, dateStr = getTodayStr()) {
+  if (!chalet.pausedFrom) return false;
+  return chalet.pausedFrom <= dateStr && (!chalet.pausedUntil || chalet.pausedUntil >= dateStr);
+}
+
+function bookingRangeOverlapsPause(bookingDate: string, durationDays: number, chalet: { pausedFrom?: string | null; pausedUntil?: string | null }) {
+  if (!chalet.pausedFrom) return false;
+  const dates = bookingDates(bookingDate, durationDays);
+  const bookingStart = dates[0];
+  const bookingEnd = dates[dates.length - 1];
+  const pauseEnd = chalet.pausedUntil ?? "9999-12-31";
+  return bookingStart <= pauseEnd && bookingEnd >= chalet.pausedFrom;
+}
+
 function normalizeMessageSettings(row: typeof ownerNotificationSettingsTable.$inferSelect | undefined, ownerId: string) {
   let customTemplates: Array<{ id: string; title: string; body: string }> = [];
   try {
@@ -585,11 +604,29 @@ router.post("/bookings", async (req, res) => {
 
   if (body.data.submissionId) {
     const [sub] = await db
-      .select({ ownerId: chaletSubmissionsTable.ownerId })
+      .select({ ownerId: chaletSubmissionsTable.ownerId, status: chaletSubmissionsTable.status })
       .from(chaletSubmissionsTable)
       .where(eq(chaletSubmissionsTable.id, body.data.submissionId));
     if (!sub || sub.ownerId !== ownerId) {
       return res.status(403).json({ error: "غير مصرح" });
+    }
+    if (sub.status !== "approved") {
+      return res.status(400).json({ error: "لا يمكن إضافة حجز إلا لشاليه معتمد" });
+    }
+    const [chalet] = await db
+      .select({
+        isActive: chaletsTable.isActive,
+        pausedFrom: chaletsTable.pausedFrom,
+        pausedUntil: chaletsTable.pausedUntil,
+      })
+      .from(chaletsTable)
+      .where(eq(chaletsTable.submissionId, body.data.submissionId))
+      .limit(1);
+    if (!chalet || chalet.isActive === false) {
+      return res.status(400).json({ error: "الشاليه غير نشط حالياً" });
+    }
+    if (bookingRangeOverlapsPause(body.data.bookingDate, body.data.durationDays, chalet)) {
+      return res.status(409).json({ error: "الشاليه موقوف مؤقتاً ضمن تاريخ الحجز المحدد" });
     }
   }
 
@@ -901,6 +938,48 @@ router.get("/chalets", async (req, res) => {
     .where(inArray(chaletsTable.submissionId, subIds));
 
   return res.json(chalets);
+});
+
+router.patch("/chalets/:id/pause", async (req, res) => {
+  const ownerId = req.user!.id;
+  const chaletId = Number(req.params.id);
+  if (isNaN(chaletId)) return res.status(400).json({ error: "معرّف غير صالح" });
+
+  const body = z.object({
+    pausedFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    pausedUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    clear: z.boolean().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  if (!body.data.clear && !body.data.pausedFrom) {
+    return res.status(400).json({ error: "تاريخ بداية الإيقاف مطلوب" });
+  }
+  if (!body.data.clear && body.data.pausedFrom && body.data.pausedUntil && body.data.pausedUntil < body.data.pausedFrom) {
+    return res.status(400).json({ error: "تاريخ نهاية الإيقاف قبل البداية" });
+  }
+
+  const [chalet] = await db.select({ id: chaletsTable.id, submissionId: chaletsTable.submissionId })
+    .from(chaletsTable).where(eq(chaletsTable.id, chaletId)).limit(1);
+  if (!chalet) return res.status(404).json({ error: "الشاليه غير موجود" });
+
+  const [sub] = await db.select({ ownerId: chaletSubmissionsTable.ownerId })
+    .from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, chalet.submissionId!)).limit(1);
+  if (!sub || sub.ownerId !== ownerId) return res.status(403).json({ error: "غير مصرح" });
+
+  const [updated] = await db.update(chaletsTable)
+    .set({
+      pausedFrom: body.data.clear ? null : body.data.pausedFrom!,
+      pausedUntil: body.data.clear ? null : body.data.pausedUntil ?? null,
+    })
+    .where(eq(chaletsTable.id, chaletId))
+    .returning({
+      id: chaletsTable.id,
+      pausedFrom: chaletsTable.pausedFrom,
+      pausedUntil: chaletsTable.pausedUntil,
+    });
+
+  return res.json({ ...updated, isPausedNow: isChaletPaused(updated) });
 });
 
 /* ── Review Invitations (owner generates for their own chalets) ── */
