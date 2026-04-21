@@ -34,7 +34,8 @@ const router = Router();
 
 const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = "مرحباً {guest_name}، تم تأكيد حجزك في {property_name} بتاريخ {booking_date}. الموقع: {location_link}. الإجمالي: {total_price} ر.س";
 const DEFAULT_ARRIVAL_REMINDER_TEMPLATE = "تذكير ودي يا {guest_name}: موعد وصولك إلى {property_name} بتاريخ {booking_date}. الموقع: {location_link}";
-const DEFAULT_CHANGE_NOTICE_TEMPLATE = "مرحباً {guest_name}، تم تحديث حالة حجزك في {property_name} بتاريخ {booking_date}. للمزيد من التفاصيل تواصل معنا.";
+const DEFAULT_CHANGE_NOTICE_TEMPLATE = "مرحباً {guest_name}، تم تحديث حالة حجزك في {property_name} بتاريخ {booking_date}. السبب: {change_reason}. للمزيد من التفاصيل تواصل معنا.";
+const INVALID_WA_CREDENTIALS_MESSAGE = "بيانات الربط غير صحيحة، يرجى التأكد والمحاولة مرة أخرى";
 
 /* ── OTP helpers (mirrors registration.ts helpers) ─────────── */
 function _genCode(): string { return String(randomInt(100000, 999999)); }
@@ -437,7 +438,7 @@ function normalizeWhatsAppPhone(phone?: string | null): string {
 }
 
 function applyWhatsAppTemplate(template: string, values: Record<string, string>): string {
-  return template.replace(/\{(guest_name|property_name|booking_date|location_link|total_price)\}/g, (_, key: string) => values[key] ?? "");
+  return template.replace(/\{(guest_name|property_name|booking_date|location_link|total_price|change_reason)\}/g, (_, key: string) => values[key] ?? "");
 }
 
 async function sendOwnerWhatsAppMessage(instanceId: string, token: string, to: string, body: string): Promise<boolean> {
@@ -447,6 +448,70 @@ async function sendOwnerWhatsAppMessage(instanceId: string, token: string, to: s
     body: new URLSearchParams({ token, to, body }),
   });
   return response.ok;
+}
+
+async function validateUltraMsgCredentials(instanceId: string, token: string): Promise<boolean> {
+  try {
+    const response = await fetch(`https://api.ultramsg.com/${encodeURIComponent(instanceId)}/instance/status?token=${encodeURIComponent(token)}`);
+    return response.ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function getBookingWhatsAppValues(booking: typeof ownerBookingsTable.$inferSelect, changeReason = "") {
+  let chaletName = "شاليهك";
+  let locationLink = "";
+  if (booking.submissionId) {
+    const [chalet] = await db
+      .select({ nameAr: chaletsTable.nameAr, mapsUrl: chaletsTable.mapsUrl })
+      .from(chaletsTable)
+      .where(eq(chaletsTable.submissionId, booking.submissionId))
+      .limit(1);
+    if (chalet) {
+      chaletName = chalet.nameAr;
+      locationLink = chalet.mapsUrl ?? "";
+    } else {
+      const [sub] = await db
+        .select({ nameAr: chaletSubmissionsTable.nameAr, mapsUrl: chaletSubmissionsTable.mapsUrl })
+        .from(chaletSubmissionsTable)
+        .where(eq(chaletSubmissionsTable.id, booking.submissionId))
+        .limit(1);
+      if (sub) {
+        chaletName = sub.nameAr;
+        locationLink = sub.mapsUrl ?? "";
+      }
+    }
+  }
+  return {
+    guest_name: booking.clientName,
+    property_name: chaletName,
+    booking_date: booking.bookingDate,
+    location_link: locationLink || "سيتم إرسال الموقع من المالك",
+    total_price: booking.totalPrice ? String(Math.round(Number(booking.totalPrice))) : "غير محدد",
+    change_reason: changeReason || "تحديث على الحجز",
+  };
+}
+
+async function sendBookingChangeWhatsAppNotice(ownerId: string, booking: typeof ownerBookingsTable.$inferSelect, changeReason: string): Promise<void> {
+  const [waSetting] = await db
+    .select()
+    .from(ownerNotificationSettingsTable)
+    .where(eq(ownerNotificationSettingsTable.ownerId, ownerId))
+    .limit(1);
+  const settings = normalizeMessageSettings(waSetting, ownerId);
+  const guestPhone = normalizeWhatsAppPhone(booking.clientPhone);
+  if (
+    !settings.waEnabled ||
+    !settings.changeNoticeEnabled ||
+    !settings.waInstanceId ||
+    !settings.waToken ||
+    !guestPhone
+  ) return;
+
+  const values = await getBookingWhatsAppValues(booking, changeReason);
+  const body = applyWhatsAppTemplate(settings.changeNoticeTemplate, values);
+  await sendOwnerWhatsAppMessage(settings.waInstanceId, settings.waToken, guestPhone, body);
 }
 
 function normalizeMessageSettings(row: typeof ownerNotificationSettingsTable.$inferSelect | undefined, ownerId: string) {
@@ -495,6 +560,11 @@ router.put("/message-settings", async (req, res) => {
     changeNoticeTemplate: z.string().optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  if (body.data.waEnabled && body.data.waInstanceId?.trim() && body.data.waToken?.trim()) {
+    const isValid = await validateUltraMsgCredentials(body.data.waInstanceId.trim(), body.data.waToken.trim());
+    if (!isValid) return res.status(400).json({ error: INVALID_WA_CREDENTIALS_MESSAGE, code: "INVALID_WA_CREDENTIALS" });
+  }
 
   const values = {
     ownerId,
@@ -820,6 +890,7 @@ router.patch("/bookings/:id", async (req, res) => {
         const allDates = [...new Set([...oldDates, ...newDates])];
         syncAvailabilityFromBookings(row.submissionId, ownerId, allDates).catch(() => {});
       }
+      sendBookingChangeWhatsAppNotice(ownerId, row, rescheduleReason ? `تم تعديل الحجز: ${rescheduleReason}` : "تم تعديل موعد الحجز").catch(() => {});
     }
   }
 
@@ -907,6 +978,7 @@ router.delete("/bookings/:id", async (req, res) => {
           message: msg,
           isRead: false,
         });
+        await sendBookingChangeWhatsAppNotice(ownerId, target, reason ? `تم إلغاء الحجز: ${reason}` : "تم إلغاء الحجز");
       } catch (_) {}
     })();
   }

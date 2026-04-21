@@ -111,7 +111,7 @@ interface OwnerMessageSettings {
   changeNoticeTemplate: string;
 }
 
-const MESSAGE_VARIABLES = ["{guest_name}", "{property_name}", "{booking_date}", "{location_link}", "{total_price}"];
+const MESSAGE_VARIABLES = ["{guest_name}", "{property_name}", "{booking_date}", "{location_link}", "{total_price}", "{change_reason}"];
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   waEnabled: false,
@@ -124,7 +124,7 @@ const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   arrivalReminderOffsetHours: 24,
   arrivalReminderTemplate: "تذكير ودي يا {guest_name}: موعد وصولك إلى {property_name} بتاريخ {booking_date}. الموقع: {location_link}",
   changeNoticeEnabled: false,
-  changeNoticeTemplate: "مرحباً {guest_name}، تم تحديث حالة حجزك في {property_name} بتاريخ {booking_date}. للمزيد من التفاصيل تواصل معنا.",
+  changeNoticeTemplate: "مرحباً {guest_name}، تم تحديث حالة حجزك في {property_name} بتاريخ {booking_date}. السبب: {change_reason}. للمزيد من التفاصيل تواصل معنا.",
 };
 
 interface RescheduleLogItem {
@@ -11726,6 +11726,7 @@ function OwnerMessageSettingsTab() {
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const [form, setForm] = useState<OwnerMessageSettings>(DEFAULT_OWNER_MESSAGE_SETTINGS);
   const [showToken, setShowToken] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   const { data, isLoading } = useQuery<OwnerMessageSettings>({
     queryKey: ["owner", "message-settings"],
@@ -11751,7 +11752,7 @@ function OwnerMessageSettingsTab() {
       });
       if (!r.ok) {
         const err = await r.json().catch(() => null);
-        throw new Error(err?.error || "تعذر حفظ الإعدادات");
+        throw new Error(err?.code === "INVALID_WA_CREDENTIALS" ? "بيانات الربط غير صحيحة، يرجى التأكد والمحاولة مرة أخرى" : err?.error || "تعذر حفظ الإعدادات");
       }
       return r.json();
     },
@@ -11761,7 +11762,12 @@ function OwnerMessageSettingsTab() {
       toast({ title: "تم حفظ إعدادات الرسائل", description: "سيتم إرسال تأكيد الحجز تلقائياً عند تفعيل القالب وبيانات واتساب." });
     },
     onError: (err: any) => {
-      toast({ title: "تعذر الحفظ", description: err?.message ?? "حدث خطأ غير متوقع", variant: "destructive" });
+      const message = err?.message ?? "حدث خطأ غير متوقع";
+      toast({
+        title: message.includes("بيانات الربط غير صحيحة") ? message : "تعذر الحفظ",
+        description: message.includes("بيانات الربط غير صحيحة") ? "تأكد من رقم معرف الجهاز ومفتاح الربط ثم أعد المحاولة." : message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -11785,6 +11791,62 @@ function OwnerMessageSettingsTab() {
 
   return (
     <div className="space-y-6">
+      <Dialog open={showGuide} onOpenChange={setShowGuide}>
+        <DialogContent className="max-w-3xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <BookOpen className="w-5 h-5 text-primary" />
+              طريقة الحصول على بيانات ربط واتساب
+            </DialogTitle>
+            <DialogDescription>
+              اتبع الخطوات التالية من حساب مزوّد خدمة واتساب، ثم انسخ القيم كما هي إلى الحقول.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-2">
+            {[
+              {
+                title: "١. افتح لوحة الخدمة",
+                text: "سجّل الدخول في UltraMsg ثم اختر الجهاز أو الرقم المرتبط بواتساب.",
+                image: "الجهاز المتصل",
+              },
+              {
+                title: "٢. انسخ رقم معرف الجهاز",
+                text: "ابحث عن رقم معرف الجهاز في لوحة الخدمة، وسيظهر غالباً مثل: instance12345.",
+                image: "instance12345",
+              },
+              {
+                title: "٣. انسخ مفتاح الربط",
+                text: "افتح صفحة API أو Token وانسخ المفتاح السري كاملاً بدون مسافات.",
+                image: "Token •••••••••",
+              },
+            ].map((step) => (
+              <div key={step.title} className="rounded-2xl border border-border bg-card overflow-hidden">
+                <div className="h-28 bg-gradient-to-br from-emerald-50 to-primary/10 dark:from-emerald-950/30 dark:to-primary/10 flex items-center justify-center p-4">
+                  <div className="w-full max-w-[11rem] rounded-xl bg-background border border-border shadow-sm p-3 text-center">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto mb-2">
+                      <MessageSquare className="w-4 h-4" />
+                    </div>
+                    <p className="text-xs font-mono text-foreground" dir="ltr">{step.image}</p>
+                  </div>
+                </div>
+                <div className="p-4 space-y-1.5">
+                  <h4 className="font-bold text-foreground">{step.title}</h4>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{step.text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-4 text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
+            تأكد أن حالة الجهاز في مزود الخدمة “Connected” أو “متصل”. إذا تغيّر الرقم أو أعيد ربط الجهاز، قد تحتاج إلى نسخ بيانات الربط الجديدة.
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowGuide(false)} className="rounded-xl">
+              فهمت، سأكمل الإعداد
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="space-y-1">
@@ -11812,6 +11874,15 @@ function OwnerMessageSettingsTab() {
           </div>
           <Switch checked={form.waEnabled} onCheckedChange={(v) => setField("waEnabled", v)} disabled={isReadOnly} />
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setShowGuide(true)}
+          className="rounded-xl border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-300"
+        >
+          <BookOpen className="w-4 h-4 ms-1" />
+          اضغط هنا لمعرفة طريقة الحصول على بيانات الربط
+        </Button>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
@@ -11819,29 +11890,29 @@ function OwnerMessageSettingsTab() {
             <Input
               value={form.waPhone}
               onChange={(e) => setField("waPhone", e.target.value)}
-              placeholder="9665XXXXXXXX"
+              placeholder="مثال: 9665XXXXXXXX"
               dir="ltr"
               disabled={isReadOnly}
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-foreground">Instance ID</label>
+            <label className="text-sm font-semibold text-foreground">رقم معرف الجهاز</label>
             <Input
               value={form.waInstanceId}
               onChange={(e) => setField("waInstanceId", e.target.value)}
-              placeholder="instanceXXXXX"
+              placeholder="مثال: instance12345"
               dir="ltr"
               disabled={isReadOnly}
             />
           </div>
           <div className="space-y-1.5 md:col-span-2">
-            <label className="text-sm font-semibold text-foreground">API Token</label>
+            <label className="text-sm font-semibold text-foreground">مفتاح الربط (Token)</label>
             <div className="relative">
               <Input
                 type={showToken ? "text" : "password"}
                 value={form.waToken}
                 onChange={(e) => setField("waToken", e.target.value)}
-                placeholder="token"
+                placeholder="ألصق مفتاح الربط هنا"
                 dir="ltr"
                 className="pl-10"
                 disabled={isReadOnly}
@@ -11892,7 +11963,7 @@ function OwnerMessageSettingsTab() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h4 className="font-bold text-foreground">تذكير الوصول</h4>
-              <p className="text-xs text-muted-foreground mt-0.5">تم تجهيز الواجهة والقالب، وسيتم ربطه بالجدولة التلقائية في المرحلة التالية.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">يُرسل تلقائياً للضيف قبل موعد الوصول حسب الوقت الذي تحدده.</p>
             </div>
             <Switch checked={form.arrivalReminderEnabled} onCheckedChange={(v) => setField("arrivalReminderEnabled", v)} disabled={isReadOnly} />
           </div>
@@ -11915,13 +11986,20 @@ function OwnerMessageSettingsTab() {
             dir="rtl"
             disabled={isReadOnly}
           />
+          <div className="flex flex-wrap gap-1.5">
+            {MESSAGE_VARIABLES.map((v) => (
+              <button key={v} type="button" onClick={() => insertVariable("arrivalReminderTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
+                {v}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h4 className="font-bold text-foreground">إشعار الإلغاء أو التعديل</h4>
-              <p className="text-xs text-muted-foreground mt-0.5">قالب جاهز للإرسال عند ربط أحداث التعديل والإلغاء.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">يُرسل تلقائياً عند إلغاء الحجز أو تعديل موعده مع سبب التغيير.</p>
             </div>
             <Switch checked={form.changeNoticeEnabled} onCheckedChange={(v) => setField("changeNoticeEnabled", v)} disabled={isReadOnly} />
           </div>
@@ -11932,6 +12010,13 @@ function OwnerMessageSettingsTab() {
             dir="rtl"
             disabled={isReadOnly}
           />
+          <div className="flex flex-wrap gap-1.5">
+            {MESSAGE_VARIABLES.map((v) => (
+              <button key={v} type="button" onClick={() => insertVariable("changeNoticeTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
+                {v}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">

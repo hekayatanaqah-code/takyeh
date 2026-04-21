@@ -56,6 +56,7 @@ Arabic-language vacation rental marketplace for chalets in Al-Qassim region, Sau
 - **Owner Dashboard** tabs: شاليهاتي | المواسم | التقييمات | التقويم | التأمينات | الخدمات | إعدادات الحساب
   - Account settings tab (GET/PUT /api/owner/profile) — update name, phone, password
   - Chalet edit dialog includes WhatsApp reminder toggle (enabled/disabled + days before booking)
+  - Message settings tab lets owners connect their WhatsApp provider credentials in Arabic, view an in-app setup guide, and control automated guest messages for booking confirmation, arrival reminders, and cancellation/reschedule notices
 - **Arabic numerals**: system-wide toAr/fromAr pattern; interceptor in main.tsx for inputMode="numeric" fields
 - **Hijri date utilities** in `src/lib/utils.ts`: `hijriAndGregorian()` and `hijriShort()`
 
@@ -90,6 +91,7 @@ REST API serving chalet data.
 - `GET /api/admin/contact-inquiries` — List contact form inquiries (admin)
 - `PATCH /api/admin/contact-inquiries/:id/status` — Mark contact inquiry as new/read/replied (admin)
 - `POST /api/contact` — Public contact form submission
+- `GET/PUT /api/owner/message-settings` — Owner WhatsApp automation settings with credential validation
 - CRUD `/api/admin/cities`, `/api/admin/districts`, `/api/admin/amenities` (admin)
 
 **Admin Setup:**
