@@ -6093,7 +6093,7 @@ const ADMIN_NAV_GROUPS: Array<{
 }> = [
   { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
   { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "amenities", "locations"] },
-  { id: "users", label: "المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "adminStaff"] },
+  { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "adminStaff"] },
   { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "services", "reviews"] },
   { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
   { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "communicationSettings", "contactInquiries", "termsManagement"] },
@@ -7174,13 +7174,13 @@ export default function Admin() {
                 <button
                   key={group.id}
                   onClick={() => setActiveTab(firstTab.id as TabId)}
-                  className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors whitespace-nowrap ${
+                  className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors whitespace-nowrap ${
                     isGroupActive
-                      ? "border-amber-500 bg-amber-500/15 text-amber-200"
-                      : "border-slate-700 bg-slate-800/70 text-slate-300 hover:border-slate-500 hover:text-white"
+                      ? "border-amber-500 bg-amber-500/20 text-amber-100 font-extrabold shadow-sm shadow-amber-900/20"
+                      : "border-slate-700 bg-slate-800/70 text-slate-300 font-bold hover:border-slate-500 hover:text-white"
                   }`}
                 >
-                  <GroupIcon className="w-4 h-4" />
+                  <GroupIcon className={`w-4 h-4 ${isGroupActive ? "text-amber-300" : "text-slate-400"}`} />
                   {group.label}
                 </button>
               );
@@ -7190,23 +7190,23 @@ export default function Admin() {
               <DropdownMenu key={group.id} dir="rtl">
                 <DropdownMenuTrigger asChild>
                   <button
-                    className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors whitespace-nowrap outline-none ${
+                    className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors whitespace-nowrap outline-none ${
                       isGroupActive
-                        ? "border-amber-500 bg-amber-500/15 text-amber-200"
-                        : "border-slate-700 bg-slate-800/70 text-slate-300 hover:border-slate-500 hover:text-white"
+                        ? "border-amber-500 bg-amber-500/20 text-amber-100 font-extrabold shadow-sm shadow-amber-900/20"
+                        : "border-slate-700 bg-slate-800/70 text-slate-300 font-bold hover:border-slate-500 hover:text-white"
                     }`}
                   >
-                    <GroupIcon className="w-4 h-4" />
+                    <GroupIcon className={`w-4 h-4 ${isGroupActive ? "text-amber-300" : "text-slate-400"}`} />
                     {group.label}
-                    <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+                    <ChevronDown className={`w-3.5 h-3.5 ${isGroupActive ? "text-amber-300" : "opacity-70"}`} />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-56 border-slate-700 bg-slate-900 p-2 text-slate-100 shadow-2xl">
+                <DropdownMenuContent align="start" className="min-w-64 border-slate-700 bg-slate-900 p-3 text-slate-100 shadow-2xl">
                   {group.tabs.map(({ id, label, icon: Icon }) => (
                     <DropdownMenuItem
                       key={id}
                       onClick={() => setActiveTab(id as TabId)}
-                      className={`flex cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-sm transition-colors focus:bg-slate-800 focus:text-white ${
+                      className={`flex cursor-pointer items-center justify-between rounded-xl px-3.5 py-3 text-sm transition-colors focus:bg-slate-800 focus:text-white ${
                         activeTab === id ? "bg-amber-500/15 text-amber-200" : "text-slate-300"
                       }`}
                     >
