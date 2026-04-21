@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { citiesCatalogTable, amenitiesCatalogTable } from "@workspace/db/schema";
+import { citiesCatalogTable, amenitiesCatalogTable, siteSettingsTable } from "@workspace/db/schema";
 
 const INITIAL_CITIES = [
   "بريدة", "عنيزة", "الرس", "الخبراء",
@@ -26,6 +26,16 @@ const INITIAL_AMENITIES = [
   { key: "kitchen",        labelAr: "مطبخ مجهز" },
 ];
 
+const INITIAL_SITE_SETTINGS = [
+  { key: "site_display_name", value: "تكية" },
+  { key: "hero_line1", value: "تكية" },
+  { key: "hero_line2", value: "بوابتك المتكاملة لأجمل الوجهات والخدمات" },
+  { key: "hero_word_color", value: "#F59E0B" },
+  { key: "feat_section_title", value: "لماذا تختار تكية؟" },
+  { key: "feat_section_desc", value: "نحن نسهل عليك العثور على المكان المثالي لمناسباتك العائلية والخاصة" },
+  { key: "privacy_page_content", value: "نحترم خصوصيتك ونلتزم بحماية بياناتك. تُستخدم المعلومات التي تقدمها لتحسين تجربتك والتواصل معك بشأن الحجوزات والاستفسارات فقط." },
+];
+
 export async function seedCatalogIfEmpty() {
   const existingCities = await db.select().from(citiesCatalogTable);
   if (existingCities.length === 0) {
@@ -39,5 +49,12 @@ export async function seedCatalogIfEmpty() {
       .insert(amenitiesCatalogTable)
       .values(amenity)
       .onConflictDoNothing({ target: amenitiesCatalogTable.key });
+  }
+
+  for (const setting of INITIAL_SITE_SETTINGS) {
+    await db
+      .insert(siteSettingsTable)
+      .values(setting)
+      .onConflictDoNothing({ target: siteSettingsTable.key });
   }
 }

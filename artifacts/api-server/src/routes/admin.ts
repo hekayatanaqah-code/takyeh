@@ -21,6 +21,7 @@ import {
   ownerExpensesTable,
   customerNotesTable,
   ownerSubscriptionsTable,
+  contactInquiriesTable,
 } from "@workspace/db/schema";
 import { eq, inArray, and, gt, lt, ne, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -779,6 +780,31 @@ router.patch("/settings", async (req, res) => {
       .values({ key, value, updatedAt: new Date() })
       .onConflictDoUpdate({ target: siteSettingsTable.key, set: { value, updatedAt: new Date() } });
   }
+  return res.json({ ok: true });
+});
+
+router.get("/contact-inquiries", async (_req, res) => {
+  const rows = await db
+    .select({
+      id: contactInquiriesTable.id,
+      name: contactInquiriesTable.name,
+      phone: contactInquiriesTable.phone,
+      email: contactInquiriesTable.email,
+      message: contactInquiriesTable.message,
+      status: contactInquiriesTable.status,
+      created_at: contactInquiriesTable.createdAt,
+    })
+    .from(contactInquiriesTable)
+    .orderBy(sql`${contactInquiriesTable.createdAt} DESC`)
+    .limit(200);
+  return res.json(rows);
+});
+
+router.patch("/contact-inquiries/:id/status", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({ status: z.enum(["new", "read", "replied"]) }).safeParse(req.body);
+  if (!body.success || !Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  await db.update(contactInquiriesTable).set({ status: body.data.status }).where(eq(contactInquiriesTable.id, id));
   return res.json({ ok: true });
 });
 

@@ -5863,7 +5863,7 @@ function ContactInquiriesTab() {
   const { data: inquiries = [], isLoading, refetch } = useQuery<ContactInquiryRow[]>({
     queryKey: ["admin", "contact-inquiries"],
     queryFn: async () => {
-      const r = await apiFetch("/contact/admin/inquiries");
+      const r = await apiFetch("/admin/contact-inquiries");
       if (!r.ok) throw new Error("فشل التحميل");
       return r.json();
     },
@@ -5872,7 +5872,7 @@ function ContactInquiriesTab() {
   async function updateStatus(id: number, status: string) {
     setStatusUpdating(id);
     try {
-      await apiFetch(`/contact/admin/inquiries/${id}/status`, {
+      await apiFetch(`/admin/contact-inquiries/${id}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });

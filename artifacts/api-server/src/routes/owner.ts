@@ -32,6 +32,10 @@ import { sendOtpEmail } from "../lib/email";
 
 const router = Router();
 
+const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = "مرحباً {guest_name}، تم تأكيد حجزك في {property_name} بتاريخ {booking_date}. الموقع: {location_link}. الإجمالي: {total_price} ر.س";
+const DEFAULT_ARRIVAL_REMINDER_TEMPLATE = "تذكير ودي يا {guest_name}: موعد وصولك إلى {property_name} بتاريخ {booking_date}. الموقع: {location_link}";
+const DEFAULT_CHANGE_NOTICE_TEMPLATE = "مرحباً {guest_name}، تم تحديث حالة حجزك في {property_name} بتاريخ {booking_date}. للمزيد من التفاصيل تواصل معنا.";
+
 /* ── OTP helpers (mirrors registration.ts helpers) ─────────── */
 function _genCode(): string { return String(randomInt(100000, 999999)); }
 function _hashCode(code: string): string { return createHash("sha256").update(code).digest("hex"); }
@@ -423,7 +427,102 @@ function bookingDates(bookingDate: string, durationDays: number): string[] {
   return results;
 }
 
+function normalizeWhatsAppPhone(phone?: string | null): string {
+  const digits = (phone ?? "").replace(/[^\d]/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("966")) return digits;
+  if (digits.startsWith("0")) return `966${digits.slice(1)}`;
+  if (digits.length === 9 && digits.startsWith("5")) return `966${digits}`;
+  return digits;
+}
+
+function applyWhatsAppTemplate(template: string, values: Record<string, string>): string {
+  return template.replace(/\{(guest_name|property_name|booking_date|location_link|total_price)\}/g, (_, key: string) => values[key] ?? "");
+}
+
+async function sendOwnerWhatsAppMessage(instanceId: string, token: string, to: string, body: string): Promise<boolean> {
+  const response = await fetch(`https://api.ultramsg.com/${encodeURIComponent(instanceId)}/messages/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token, to, body }),
+  });
+  return response.ok;
+}
+
+function normalizeMessageSettings(row: typeof ownerNotificationSettingsTable.$inferSelect | undefined, ownerId: string) {
+  return {
+    ownerId,
+    waEnabled: row?.waEnabled ?? false,
+    waPhone: row?.waPhone ?? "",
+    waInstanceId: row?.waInstanceId ?? "",
+    waToken: row?.waToken ?? "",
+    bookingConfirmationEnabled: row?.bookingConfirmationEnabled ?? false,
+    bookingConfirmationTemplate: row?.bookingConfirmationTemplate || DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
+    arrivalReminderEnabled: row?.arrivalReminderEnabled ?? false,
+    arrivalReminderOffsetHours: row?.arrivalReminderOffsetHours ?? 24,
+    arrivalReminderTemplate: row?.arrivalReminderTemplate || DEFAULT_ARRIVAL_REMINDER_TEMPLATE,
+    changeNoticeEnabled: row?.changeNoticeEnabled ?? false,
+    changeNoticeTemplate: row?.changeNoticeTemplate || DEFAULT_CHANGE_NOTICE_TEMPLATE,
+    updatedAt: row?.updatedAt ?? null,
+  };
+}
+
 /* ── Bookings ──────────────────────────────────────────────── */
+
+router.get("/message-settings", async (req, res) => {
+  const ownerId = req.user!.id;
+  const [settings] = await db
+    .select()
+    .from(ownerNotificationSettingsTable)
+    .where(eq(ownerNotificationSettingsTable.ownerId, ownerId))
+    .limit(1);
+  return res.json(normalizeMessageSettings(settings, ownerId));
+});
+
+router.put("/message-settings", async (req, res) => {
+  const ownerId = req.user!.id;
+  const body = z.object({
+    waEnabled: z.boolean().optional(),
+    waPhone: z.string().optional(),
+    waInstanceId: z.string().optional(),
+    waToken: z.string().optional(),
+    bookingConfirmationEnabled: z.boolean().optional(),
+    bookingConfirmationTemplate: z.string().optional(),
+    arrivalReminderEnabled: z.boolean().optional(),
+    arrivalReminderOffsetHours: z.number().int().min(1).max(720).optional(),
+    arrivalReminderTemplate: z.string().optional(),
+    changeNoticeEnabled: z.boolean().optional(),
+    changeNoticeTemplate: z.string().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const values = {
+    ownerId,
+    waEnabled: body.data.waEnabled ?? false,
+    waPhone: body.data.waPhone?.trim() || null,
+    waInstanceId: body.data.waInstanceId?.trim() || null,
+    waToken: body.data.waToken?.trim() || null,
+    bookingConfirmationEnabled: body.data.bookingConfirmationEnabled ?? false,
+    bookingConfirmationTemplate: body.data.bookingConfirmationTemplate?.trim() || DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
+    arrivalReminderEnabled: body.data.arrivalReminderEnabled ?? false,
+    arrivalReminderOffsetHours: Math.max(1, Math.min(720, body.data.arrivalReminderOffsetHours ?? 24)),
+    arrivalReminderTemplate: body.data.arrivalReminderTemplate?.trim() || DEFAULT_ARRIVAL_REMINDER_TEMPLATE,
+    changeNoticeEnabled: body.data.changeNoticeEnabled ?? false,
+    changeNoticeTemplate: body.data.changeNoticeTemplate?.trim() || DEFAULT_CHANGE_NOTICE_TEMPLATE,
+    updatedAt: new Date(),
+  };
+
+  const [saved] = await db
+    .insert(ownerNotificationSettingsTable)
+    .values(values)
+    .onConflictDoUpdate({
+      target: ownerNotificationSettingsTable.ownerId,
+      set: values,
+    })
+    .returning();
+
+  return res.json(normalizeMessageSettings(saved, ownerId));
+});
 
 router.get("/bookings/stats", async (req, res) => {
   const ownerId = req.user!.id;
@@ -533,20 +632,27 @@ router.post("/bookings", async (req, res) => {
   // Create booking notification (async, don't block response)
   ;(async () => {
     try {
-      // Find chalet name via submission
       let chaletName = "شاليهك";
       let chaletId: number | null = null;
+      let locationLink = "";
       if (booking.submissionId) {
         const [chalet] = await db
-          .select({ id: chaletsTable.id, nameAr: chaletsTable.nameAr })
+          .select({ id: chaletsTable.id, nameAr: chaletsTable.nameAr, mapsUrl: chaletsTable.mapsUrl })
           .from(chaletsTable)
           .where(eq(chaletsTable.submissionId, booking.submissionId))
           .limit(1);
-        if (chalet) { chaletName = chalet.nameAr; chaletId = chalet.id; }
+        if (chalet) { chaletName = chalet.nameAr; chaletId = chalet.id; locationLink = chalet.mapsUrl ?? ""; }
+        if (!chalet) {
+          const [sub] = await db
+            .select({ nameAr: chaletSubmissionsTable.nameAr, mapsUrl: chaletSubmissionsTable.mapsUrl })
+            .from(chaletSubmissionsTable)
+            .where(eq(chaletSubmissionsTable.id, booking.submissionId))
+            .limit(1);
+          if (sub) { chaletName = sub.nameAr; locationLink = sub.mapsUrl ?? ""; }
+        }
       }
       const periodLabel = booking.period === "morning" ? "صباحي" : booking.period === "evening" ? "مسائي" : "يوم كامل";
       let msg = `حجز جديد في ${chaletName} — ${booking.clientName} — ${booking.bookingDate} (${periodLabel})`;
-      // Append WhatsApp link if owner has WA notifications enabled
       const [waSetting] = await db
         .select()
         .from(ownerNotificationSettingsTable)
@@ -564,6 +670,24 @@ router.post("/bookings", async (req, res) => {
         message: msg,
         isRead: false,
       });
+      const guestPhone = normalizeWhatsAppPhone(booking.clientPhone);
+      const settings = normalizeMessageSettings(waSetting, ownerId);
+      if (
+        settings.waEnabled &&
+        settings.bookingConfirmationEnabled &&
+        settings.waInstanceId &&
+        settings.waToken &&
+        guestPhone
+      ) {
+        const body = applyWhatsAppTemplate(settings.bookingConfirmationTemplate, {
+          guest_name: booking.clientName,
+          property_name: chaletName,
+          booking_date: booking.bookingDate,
+          location_link: locationLink || "سيتم إرسال الموقع من المالك",
+          total_price: booking.totalPrice ? String(Math.round(Number(booking.totalPrice))) : "غير محدد",
+        });
+        await sendOwnerWhatsAppMessage(settings.waInstanceId, settings.waToken, guestPhone, body);
+      }
     } catch (_) {}
   })();
 

@@ -45,6 +45,7 @@ Arabic-language vacation rental marketplace for chalets in Al-Qassim region, Sau
 **Features:**
 - Full RTL (right-to-left) Arabic interface
 - Landing page with hero section and search filters (city, guests)
+  - Homepage hero supports editable two-line heading, first-word highlight color, dynamic logo/site name, and editable “لماذا تختار” section through admin settings
 - Listings page with property cards and filter sidebar (city, guests, max price)
   - Grid/Map view toggle — OpenStreetMap via react-leaflet with chalet markers
   - Hijri+Gregorian dual-date label when a check-in date is selected
@@ -65,6 +66,8 @@ Arabic-language vacation rental marketplace for chalets in Al-Qassim region, Sau
 - `/add-chalet` — Owner submission form (authenticated; dynamic cities + amenities from DB)
 - `/dashboard` — Owner dashboard (authenticated)
 - `/admin` — Admin CMS panel (authenticated + ADMIN_USER_ID check)
+- `/contact` — Contact form that stores inquiries for admin review
+- `/privacy` — Dynamic privacy policy page driven by site settings
 
 **Tech:** React 19 + Vite, Wouter, TanStack React Query, Tailwind CSS, Embla Carousel, Framer Motion
 
@@ -84,6 +87,9 @@ REST API serving chalet data.
 - `PATCH /api/admin/submissions/:id/status` — Update status (admin)
 - `DELETE /api/admin/submissions/:id` — Delete submission (admin)
 - `GET /api/admin/owners` — List all owners (admin)
+- `GET /api/admin/contact-inquiries` — List contact form inquiries (admin)
+- `PATCH /api/admin/contact-inquiries/:id/status` — Mark contact inquiry as new/read/replied (admin)
+- `POST /api/contact` — Public contact form submission
 - CRUD `/api/admin/cities`, `/api/admin/districts`, `/api/admin/amenities` (admin)
 
 **Admin Setup:**

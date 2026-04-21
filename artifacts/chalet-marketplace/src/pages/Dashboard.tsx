@@ -97,6 +97,36 @@ interface OwnerBooking {
   ratedAt?: string | null;
 }
 
+interface OwnerMessageSettings {
+  waEnabled: boolean;
+  waPhone: string;
+  waInstanceId: string;
+  waToken: string;
+  bookingConfirmationEnabled: boolean;
+  bookingConfirmationTemplate: string;
+  arrivalReminderEnabled: boolean;
+  arrivalReminderOffsetHours: number;
+  arrivalReminderTemplate: string;
+  changeNoticeEnabled: boolean;
+  changeNoticeTemplate: string;
+}
+
+const MESSAGE_VARIABLES = ["{guest_name}", "{property_name}", "{booking_date}", "{location_link}", "{total_price}"];
+
+const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
+  waEnabled: false,
+  waPhone: "",
+  waInstanceId: "",
+  waToken: "",
+  bookingConfirmationEnabled: false,
+  bookingConfirmationTemplate: "مرحباً {guest_name}، تم تأكيد حجزك في {property_name} بتاريخ {booking_date}. الموقع: {location_link}. الإجمالي: {total_price} ر.س",
+  arrivalReminderEnabled: false,
+  arrivalReminderOffsetHours: 24,
+  arrivalReminderTemplate: "تذكير ودي يا {guest_name}: موعد وصولك إلى {property_name} بتاريخ {booking_date}. الموقع: {location_link}",
+  changeNoticeEnabled: false,
+  changeNoticeTemplate: "مرحباً {guest_name}، تم تحديث حالة حجزك في {property_name} بتاريخ {booking_date}. للمزيد من التفاصيل تواصل معنا.",
+};
+
 interface RescheduleLogItem {
   id: number;
   bookingId: number;
@@ -11690,6 +11720,238 @@ function NotificationSettingsSection() {
   );
 }
 
+function OwnerMessageSettingsTab() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { isReadOnly, onBlockedEdit } = useReadOnly();
+  const [form, setForm] = useState<OwnerMessageSettings>(DEFAULT_OWNER_MESSAGE_SETTINGS);
+  const [showToken, setShowToken] = useState(false);
+
+  const { data, isLoading } = useQuery<OwnerMessageSettings>({
+    queryKey: ["owner", "message-settings"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/message-settings");
+      if (!r.ok) throw new Error("فشل تحميل إعدادات الرسائل");
+      return r.json();
+    },
+  });
+
+  useEffect(() => {
+    if (data) setForm({ ...DEFAULT_OWNER_MESSAGE_SETTINGS, ...data });
+  }, [data]);
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const r = await apiFetch("/owner/message-settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          ...form,
+          arrivalReminderOffsetHours: Number(form.arrivalReminderOffsetHours) || 24,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => null);
+        throw new Error(err?.error || "تعذر حفظ الإعدادات");
+      }
+      return r.json();
+    },
+    onSuccess: (saved) => {
+      setForm({ ...DEFAULT_OWNER_MESSAGE_SETTINGS, ...saved });
+      qc.invalidateQueries({ queryKey: ["owner", "message-settings"] });
+      toast({ title: "تم حفظ إعدادات الرسائل", description: "سيتم إرسال تأكيد الحجز تلقائياً عند تفعيل القالب وبيانات واتساب." });
+    },
+    onError: (err: any) => {
+      toast({ title: "تعذر الحفظ", description: err?.message ?? "حدث خطأ غير متوقع", variant: "destructive" });
+    },
+  });
+
+  function setField<K extends keyof OwnerMessageSettings>(key: K, value: OwnerMessageSettings[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function insertVariable(key: "bookingConfirmationTemplate" | "arrivalReminderTemplate" | "changeNoticeTemplate", variable: string) {
+    setForm((prev) => ({ ...prev, [key]: `${prev[key] || ""} ${variable}`.trim() }));
+  }
+
+  const channelReady = form.waEnabled && form.waInstanceId.trim() && form.waToken.trim();
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="w-7 h-7 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                <Send className="w-5 h-5" />
+              </div>
+              <h2 className="text-xl font-extrabold text-foreground">إعدادات الرسائل الآلية</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              اربط رقم واتساب الخاص بك عبر UltraMsg أو خدمة مشابهة، وعدّل القوالب التي تُرسل للضيف باسم رقمك.
+            </p>
+          </div>
+          <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${channelReady ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+            {channelReady ? "الاتصال جاهز" : "أكمل بيانات الربط"}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-border bg-card p-6 shadow-sm space-y-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-bold text-foreground">ربط رقم واتساب الخاص بالمالك</h3>
+            <p className="text-xs text-muted-foreground mt-1">هذه البيانات تُستخدم لإرسال الرسائل من رقمك أنت، وليس من رقم المنصة.</p>
+          </div>
+          <Switch checked={form.waEnabled} onCheckedChange={(v) => setField("waEnabled", v)} disabled={isReadOnly} />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-foreground">رقم واتساب المرتبط</label>
+            <Input
+              value={form.waPhone}
+              onChange={(e) => setField("waPhone", e.target.value)}
+              placeholder="9665XXXXXXXX"
+              dir="ltr"
+              disabled={isReadOnly}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-foreground">Instance ID</label>
+            <Input
+              value={form.waInstanceId}
+              onChange={(e) => setField("waInstanceId", e.target.value)}
+              placeholder="instanceXXXXX"
+              dir="ltr"
+              disabled={isReadOnly}
+            />
+          </div>
+          <div className="space-y-1.5 md:col-span-2">
+            <label className="text-sm font-semibold text-foreground">API Token</label>
+            <div className="relative">
+              <Input
+                type={showToken ? "text" : "password"}
+                value={form.waToken}
+                onChange={(e) => setField("waToken", e.target.value)}
+                placeholder="token"
+                dir="ltr"
+                className="pl-10"
+                disabled={isReadOnly}
+              />
+              <button type="button" onClick={() => setShowToken((v) => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
+                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-border bg-card p-6 shadow-sm space-y-6">
+        <div>
+          <h3 className="text-base font-bold text-foreground">المتغيرات المدعومة داخل الرسائل</h3>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {MESSAGE_VARIABLES.map((v) => (
+              <span key={v} className="px-2.5 py-1 rounded-lg bg-muted text-xs font-mono text-foreground" dir="ltr">{v}</span>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3 rounded-2xl border border-border p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h4 className="font-bold text-foreground">تأكيد الحجز الفوري</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">تُرسل مباشرة للضيف عند إضافة حجز جديد.</p>
+            </div>
+            <Switch checked={form.bookingConfirmationEnabled} onCheckedChange={(v) => setField("bookingConfirmationEnabled", v)} disabled={isReadOnly} />
+          </div>
+          <Textarea
+            value={form.bookingConfirmationTemplate}
+            onChange={(e) => setField("bookingConfirmationTemplate", e.target.value)}
+            rows={5}
+            dir="rtl"
+            disabled={isReadOnly}
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {MESSAGE_VARIABLES.map((v) => (
+              <button key={v} type="button" onClick={() => insertVariable("bookingConfirmationTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h4 className="font-bold text-foreground">تذكير الوصول</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">تم تجهيز الواجهة والقالب، وسيتم ربطه بالجدولة التلقائية في المرحلة التالية.</p>
+            </div>
+            <Switch checked={form.arrivalReminderEnabled} onCheckedChange={(v) => setField("arrivalReminderEnabled", v)} disabled={isReadOnly} />
+          </div>
+          <div className="max-w-xs space-y-1.5">
+            <label className="text-sm font-semibold text-foreground">قبل الوصول بـ</label>
+            <div className="flex items-center gap-2">
+              <Input
+                value={toAr(form.arrivalReminderOffsetHours)}
+                onChange={(e) => setField("arrivalReminderOffsetHours", Number(fromAr(e.target.value).replace(/\D/g, "")) || 1)}
+                inputMode="numeric"
+                disabled={isReadOnly}
+              />
+              <span className="text-sm text-muted-foreground shrink-0">ساعة</span>
+            </div>
+          </div>
+          <Textarea
+            value={form.arrivalReminderTemplate}
+            onChange={(e) => setField("arrivalReminderTemplate", e.target.value)}
+            rows={4}
+            dir="rtl"
+            disabled={isReadOnly}
+          />
+        </div>
+
+        <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h4 className="font-bold text-foreground">إشعار الإلغاء أو التعديل</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">قالب جاهز للإرسال عند ربط أحداث التعديل والإلغاء.</p>
+            </div>
+            <Switch checked={form.changeNoticeEnabled} onCheckedChange={(v) => setField("changeNoticeEnabled", v)} disabled={isReadOnly} />
+          </div>
+          <Textarea
+            value={form.changeNoticeTemplate}
+            onChange={(e) => setField("changeNoticeTemplate", e.target.value)}
+            rows={4}
+            dir="rtl"
+            disabled={isReadOnly}
+          />
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+          <p className="text-xs text-muted-foreground">
+            المتغيرات تُستبدل تلقائياً ببيانات الحجز عند الإرسال.
+          </p>
+          <Button
+            onClick={() => isReadOnly ? onBlockedEdit() : save.mutate()}
+            disabled={save.isPending}
+            className="rounded-xl"
+          >
+            {save.isPending ? <Loader2 className="w-4 h-4 me-2 animate-spin" /> : <CheckCircle className="w-4 h-4 me-2" />}
+            حفظ إعدادات الرسائل
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
@@ -11697,7 +11959,7 @@ export default function Dashboard() {
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "profile">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "profile">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const [serviceFinanceMode, setServiceFinanceMode] = useState<"separate" | "consolidated">(() => (localStorage.getItem("svc_finance_mode") as any) ?? "separate");
   const [clientListMode, setClientListMode] = useState<"unified" | "separate">(() => (localStorage.getItem("svc_client_mode") as any) ?? "unified");
@@ -11918,6 +12180,7 @@ export default function Dashboard() {
     { id: "calendar",  label: "التقويم والحجوزات",   icon: <Calendar className="w-4 h-4" /> },
     { id: "deposits",  label: "إدارة التأمينات",       icon: <Lock className="w-4 h-4" /> },
     { id: "services",  label: "الخدمات الإضافية",    icon: <MessageSquare className="w-4 h-4" /> },
+    { id: "messageSettings", label: "إعدادات الرسائل الآلية", icon: <Send className="w-4 h-4" /> },
     { id: "profile",   label: "إعدادات الحساب",      icon: <Settings className="w-4 h-4" /> },
   ] as const;
 
@@ -12610,6 +12873,9 @@ export default function Dashboard() {
         )}
         {activeTab === "deposits" && (
           <DepositsTab />
+        )}
+        {activeTab === "messageSettings" && (
+          <OwnerMessageSettingsTab />
         )}
         {activeTab === "profile" && (
           <OwnerProfileTab />

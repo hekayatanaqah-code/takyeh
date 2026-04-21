@@ -543,6 +543,15 @@ export const ownerNotificationSettingsTable = pgTable("owner_notification_settin
   ownerId: text("owner_id").notNull().unique(),
   waEnabled: boolean("wa_enabled").notNull().default(false),
   waPhone: text("wa_phone"),
+  waInstanceId: text("wa_instance_id"),
+  waToken: text("wa_token"),
+  bookingConfirmationEnabled: boolean("booking_confirmation_enabled").notNull().default(false),
+  bookingConfirmationTemplate: text("booking_confirmation_template"),
+  arrivalReminderEnabled: boolean("arrival_reminder_enabled").notNull().default(false),
+  arrivalReminderOffsetHours: integer("arrival_reminder_offset_hours").notNull().default(24),
+  arrivalReminderTemplate: text("arrival_reminder_template"),
+  changeNoticeEnabled: boolean("change_notice_enabled").notNull().default(false),
+  changeNoticeTemplate: text("change_notice_template"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type OwnerNotificationSettings = typeof ownerNotificationSettingsTable.$inferSelect;
