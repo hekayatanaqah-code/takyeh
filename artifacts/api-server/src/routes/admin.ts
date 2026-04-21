@@ -39,6 +39,65 @@ declare global {
 
 const router = Router();
 
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function isPausedNow(row: { pausedFrom?: string | null; pausedUntil?: string | null }, today = todayStr()) {
+  if (!row.pausedFrom) return false;
+  return row.pausedFrom <= today && (!row.pausedUntil || row.pausedUntil >= today);
+}
+
+function daysInclusive(from: string, to = todayStr()) {
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1);
+}
+
+async function logLongPauseAlerts(chalets: Array<{ id: number; nameAr: string; pausedFrom?: string | null; pausedUntil?: string | null }>) {
+  const today = todayStr();
+  const overdue = chalets
+    .filter((c) => isPausedNow(c, today) && c.pausedFrom && daysInclusive(c.pausedFrom, today) > 7)
+    .map((c) => ({
+      chaletId: c.id,
+      chaletName: c.nameAr,
+      pausedFrom: c.pausedFrom!,
+      pausedUntil: c.pausedUntil ?? null,
+      daysPaused: daysInclusive(c.pausedFrom!, today),
+      loggedAt: new Date().toISOString(),
+    }));
+
+  if (overdue.length === 0) return;
+
+  const key = "admin_pause_alert_log";
+  const [existing] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, key)).limit(1);
+  let log: typeof overdue = [];
+  try {
+    const parsed = existing?.value ? JSON.parse(existing.value) : [];
+    log = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    log = [];
+  }
+
+  for (const alert of overdue) {
+    const alreadyLogged = log.some((entry) =>
+      entry.chaletId === alert.chaletId &&
+      entry.pausedFrom === alert.pausedFrom &&
+      !entry.resolvedAt
+    );
+    if (!alreadyLogged) log.unshift(alert);
+  }
+
+  await db.insert(siteSettingsTable)
+    .values({ key, value: JSON.stringify(log.slice(0, 100)), updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: siteSettingsTable.key,
+      set: { value: JSON.stringify(log.slice(0, 100)), updatedAt: new Date() },
+    });
+}
+
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.isAuthenticated()) {
     res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
@@ -326,12 +385,89 @@ router.delete("/submissions/:id", async (req, res) => {
 
 /* ── Chalets Verification ────────────────────────────────── */
 
-router.get("/chalets", async (_req, res) => {
+router.get("/chalets", async (req, res) => {
   const rows = await db
     .select()
     .from(chaletsTable)
     .orderBy(chaletsTable.id);
-  return res.json(rows);
+
+  await logLongPauseAlerts(rows);
+
+  if (req.query.includeStatus !== "true") {
+    return res.json(rows);
+  }
+
+  const pending = await db
+    .select()
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.status, "pending"))
+    .orderBy(chaletSubmissionsTable.createdAt);
+
+  const deleted = await db
+    .select()
+    .from(chaletSubmissionsTable)
+    .where(and(eq(chaletSubmissionsTable.status, "rejected"), eq(chaletSubmissionsTable.adminNote, "تم الحذف من قبل المالك")))
+    .orderBy(chaletSubmissionsTable.createdAt);
+
+  const today = todayStr();
+  const activeRows = rows.map((row) => {
+    const paused = isPausedNow(row, today);
+    const pausedDays = paused && row.pausedFrom ? daysInclusive(row.pausedFrom, today) : 0;
+    const hiddenByOwner = row.isActive === false;
+    return {
+      ...row,
+      adminStatus: paused || hiddenByOwner ? "paused" : "active",
+      isPausedNow: paused,
+      hiddenByOwner,
+      pausedDays,
+      pauseAlert: pausedDays > 7,
+    };
+  });
+
+  const pendingRows = pending.map((row) => ({
+    id: -row.id,
+    submissionId: row.id,
+    nameAr: row.nameAr,
+    location: row.location,
+    district: row.district,
+    category: row.category,
+    whatsappNumber: row.whatsappNumber,
+    createdAt: row.createdAt,
+    isVerified: false,
+    isActive: false,
+    adminStatus: "pending",
+    isPausedNow: false,
+    pausedDays: 0,
+    pauseAlert: false,
+  }));
+
+  const deletedRows = deleted.map((row) => ({
+    id: -100000 - row.id,
+    submissionId: row.id,
+    nameAr: row.nameAr,
+    location: row.location,
+    district: row.district,
+    category: row.category,
+    whatsappNumber: row.whatsappNumber,
+    createdAt: row.createdAt,
+    isVerified: false,
+    isActive: false,
+    adminStatus: "deleted",
+    isPausedNow: false,
+    pausedDays: 0,
+    pauseAlert: false,
+  }));
+
+  return res.json([...activeRows, ...pendingRows.reverse(), ...deletedRows.reverse()]);
+});
+
+router.get("/pause-alerts", async (_req, res) => {
+  const [existing] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "admin_pause_alert_log")).limit(1);
+  try {
+    return res.json(existing?.value ? JSON.parse(existing.value) : []);
+  } catch {
+    return res.json([]);
+  }
 });
 
 router.patch("/chalets/:id/verify", async (req, res) => {

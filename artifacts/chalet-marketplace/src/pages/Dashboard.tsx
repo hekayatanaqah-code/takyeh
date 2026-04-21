@@ -819,8 +819,20 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
 
                 {/* Activity status banner for approved chalets */}
                 {isApproved && (
-                  <div className={`mt-3 flex items-center justify-between gap-3 rounded-xl px-3 py-2 border text-xs ${approvedChalet.isActive !== false ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/40" : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40"}`}>
-                    <span className={`font-semibold ${approvedChalet.isActive !== false ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                  <div className={`mt-3 flex items-center justify-between gap-3 rounded-xl px-3 py-2 border text-xs ${
+                    pausedNow
+                      ? "bg-orange-50 dark:bg-orange-950/20 border-orange-300 dark:border-orange-800"
+                      : approvedChalet.isActive !== false
+                        ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/40"
+                        : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40"
+                  }`}>
+                    <span className={`font-semibold ${
+                      pausedNow
+                        ? "text-orange-700 dark:text-orange-300"
+                        : approvedChalet.isActive !== false
+                          ? "text-green-700 dark:text-green-400"
+                          : "text-red-600 dark:text-red-400"
+                    }`}>
                       حالة النشاط: {approvedChalet.isActive !== false ? (pausedNow ? "نشط لكن موقوف مؤقتاً الآن" : "نشط — ظاهر في البحث") : "غير نشط — مخفي عن الزوار"}
                       {approvedChalet.pausedFrom && (
                         <span className="block mt-0.5 font-normal">

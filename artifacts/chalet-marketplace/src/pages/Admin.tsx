@@ -114,11 +114,20 @@ interface Submission {
 
 interface AdminChalet {
   id: number;
+  submissionId?: number | null;
   nameAr: string;
   location: string;
   district?: string | null;
   category?: string | null;
   isVerified: boolean;
+  isActive?: boolean;
+  adminStatus?: "active" | "pending" | "paused" | "deleted";
+  isPausedNow?: boolean;
+  hiddenByOwner?: boolean;
+  pausedFrom?: string | null;
+  pausedUntil?: string | null;
+  pausedDays?: number;
+  pauseAlert?: boolean;
   whatsappNumber: string;
   createdAt: string;
 }
@@ -2766,12 +2775,22 @@ function SettingsTab() {
 /* ── Chalets Verification Tab ─────────────────── */
 function ChaletsVerifyTab() {
   const qc = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<"active" | "pending" | "paused" | "deleted">("active");
 
   const { data: chalets = [], isLoading } = useQuery<AdminChalet[]>({
     queryKey: ["admin", "chalets"],
     queryFn: async () => {
-      const r = await apiFetch("/admin/chalets");
+      const r = await apiFetch("/admin/chalets?includeStatus=true");
       if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    },
+  });
+
+  const { data: pauseAlerts = [] } = useQuery<Array<{ chaletId: number; chaletName: string; pausedFrom: string; daysPaused: number; loggedAt: string }>>({
+    queryKey: ["admin", "pause-alerts"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/pause-alerts");
+      if (!r.ok) return [];
       return r.json();
     },
   });
@@ -2796,12 +2815,67 @@ function ChaletsVerifyTab() {
     );
   }
 
+  const statusLabels: Record<NonNullable<AdminChalet["adminStatus"]>, string> = {
+    active: "نشطة",
+    pending: "قيد المراجعة",
+    paused: "موقوفة مؤقتاً",
+    deleted: "محذوفة",
+  };
+  const statusStyles: Record<NonNullable<AdminChalet["adminStatus"]>, string> = {
+    active: "bg-emerald-900/30 text-emerald-300 border-emerald-800",
+    pending: "bg-amber-900/30 text-amber-300 border-amber-800",
+    paused: "bg-orange-900/40 text-orange-300 border-orange-700",
+    deleted: "bg-red-900/30 text-red-300 border-red-800",
+  };
+  const counts = {
+    active: chalets.filter((c) => (c.adminStatus ?? "active") === "active").length,
+    pending: chalets.filter((c) => c.adminStatus === "pending").length,
+    paused: chalets.filter((c) => c.adminStatus === "paused").length,
+    deleted: chalets.filter((c) => c.adminStatus === "deleted").length,
+  };
+  const filteredChalets = chalets.filter((c) => (c.adminStatus ?? "active") === statusFilter);
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-white">التحقق من الشاليهات</h2>
-        <p className="text-slate-400 text-sm">{toAr(chalets.filter((c) => c.isVerified).length)} موثق من أصل {toAr(chalets.length)}</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-xl font-bold text-white">إدارة ومراقبة الشاليهات</h2>
+          <p className="text-slate-400 text-sm mt-1">{toAr(chalets.filter((c) => c.isVerified && c.id > 0).length)} موثق من أصل {toAr(chalets.filter((c) => c.id > 0).length)} شاليه منشور</p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {[
+            { id: "active" as const, label: "نشطة" },
+            { id: "pending" as const, label: "قيد المراجعة" },
+            { id: "paused" as const, label: "الشاليهات الموقوفة مؤقتاً" },
+            { id: "deleted" as const, label: "محذوفة" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setStatusFilter(tab.id)}
+              className={`rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
+                statusFilter === tab.id
+                  ? "border-amber-500 bg-amber-500/15 text-amber-200"
+                  : "border-slate-700 bg-slate-800/60 text-slate-400 hover:text-white hover:border-slate-500"
+              }`}
+            >
+              {tab.label} ({toAr(counts[tab.id])})
+            </button>
+          ))}
+        </div>
       </div>
+
+      {pauseAlerts.length > 0 && (
+        <div className="bg-orange-950/40 border border-orange-800 rounded-xl p-4 text-sm text-orange-100 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-orange-300 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold text-orange-200">تنبيهات الشاليهات الموقوفة مؤقتاً</p>
+            <p className="text-orange-100/75 text-xs mt-1">
+              يوجد {toAr(pauseAlerts.length)} تنبيه مسجل لشاليهات بقيت موقوفة أكثر من ٧ أيام. آخر تنبيه: {pauseAlerts[0]?.chaletName} منذ {toAr(pauseAlerts[0]?.daysPaused ?? 0)} يوم.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* How-to guide */}
       <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 text-sm text-slate-300 flex items-start gap-3">
@@ -2824,15 +2898,18 @@ function ChaletsVerifyTab() {
               <TableHead className="text-slate-300 text-right font-semibold">الموقع</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">الفئة</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">الحالة</TableHead>
+              <TableHead className="text-slate-300 text-right font-semibold">الإيقاف المؤقت</TableHead>
               <TableHead className="text-slate-300 text-center font-semibold">توثيق</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {chalets.length === 0 ? (
+            {filteredChalets.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-slate-400 py-12">لا توجد شاليهات بعد</TableCell>
+                <TableCell colSpan={6} className="text-center text-slate-400 py-12">لا توجد شاليهات ضمن هذا التصنيف</TableCell>
               </TableRow>
-            ) : chalets.map((c) => (
+            ) : filteredChalets.map((c) => {
+              const adminStatus = c.adminStatus ?? "active";
+              return (
               <TableRow key={c.id} className="border-slate-700 hover:bg-slate-800/50 transition-colors">
                 <TableCell className="font-semibold text-white">{c.nameAr}</TableCell>
                 <TableCell className="text-slate-300 text-sm">
@@ -2841,35 +2918,52 @@ function ChaletsVerifyTab() {
                 </TableCell>
                 <TableCell className="text-slate-400 text-sm">{c.category ?? "—"}</TableCell>
                 <TableCell>
-                  {c.isVerified ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 bg-emerald-900/30 px-2.5 py-1 rounded-full border border-emerald-800">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      موثق
+                  <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusStyles[adminStatus]}`}>
+                    {statusLabels[adminStatus]}
+                  </span>
+                </TableCell>
+                <TableCell className="text-sm">
+                  {c.isPausedNow ? (
+                    <div className="space-y-1">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-orange-300 bg-orange-900/40 px-2.5 py-1 rounded-full border border-orange-700">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        موقوف منذ {toAr(c.pausedDays ?? 0)} يوم
+                      </span>
+                      <p className="text-xs text-slate-400">
+                        من {fmtDate(c.pausedFrom)}{c.pausedUntil ? ` إلى ${fmtDate(c.pausedUntil)}` : " — بدون نهاية"}
+                      </p>
+                      {c.pauseAlert && <p className="text-xs text-orange-300 font-semibold">تنبيه: تجاوز ٧ أيام</p>}
+                    </div>
+                  ) : c.hiddenByOwner ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-orange-300 bg-orange-900/40 px-2.5 py-1 rounded-full border border-orange-700">
+                      مخفي من قبل المالك
                     </span>
                   ) : (
-                    <span className="text-xs text-slate-500 bg-slate-700/50 px-2.5 py-1 rounded-full border border-slate-600">
-                      غير موثق
-                    </span>
+                    <span className="text-xs text-slate-500">—</span>
                   )}
                 </TableCell>
                 <TableCell className="text-center">
-                  <button
-                    onClick={() => toggleVerify.mutate({ id: c.id, isVerified: !c.isVerified })}
-                    disabled={toggleVerify.isPending}
-                    title={c.isVerified ? "إلغاء التوثيق" : "منح التوثيق"}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                      c.isVerified ? "bg-emerald-600" : "bg-slate-600"
-                    } ${toggleVerify.isPending ? "opacity-60 cursor-not-allowed" : "hover:opacity-90 cursor-pointer"}`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                        c.isVerified ? "translate-x-1" : "translate-x-6"
-                      }`}
-                    />
-                  </button>
+                  {c.id > 0 ? (
+                    <button
+                      onClick={() => toggleVerify.mutate({ id: c.id, isVerified: !c.isVerified })}
+                      disabled={toggleVerify.isPending}
+                      title={c.isVerified ? "إلغاء التوثيق" : "منح التوثيق"}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                        c.isVerified ? "bg-emerald-600" : "bg-slate-600"
+                      } ${toggleVerify.isPending ? "opacity-60 cursor-not-allowed" : "hover:opacity-90 cursor-pointer"}`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                          c.isVerified ? "translate-x-1" : "translate-x-6"
+                        }`}
+                      />
+                    </button>
+                  ) : (
+                    <span className="text-xs text-slate-500">غير منشور</span>
+                  )}
                 </TableCell>
               </TableRow>
-            ))}
+            );})}
           </TableBody>
         </Table>
       </div>
