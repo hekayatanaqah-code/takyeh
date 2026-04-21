@@ -6056,7 +6056,8 @@ function ContactInquiriesTab() {
 
 const ALL_TABS = [
   { id: "overview",                label: "الإحصائيات",            icon: BarChart3 },
-  { id: "submissions",             label: "الطلبات",               icon: Settings },
+  { id: "chalets",                 label: "قائمة العقارات",        icon: Home },
+  { id: "submissions",             label: "طلبات الشاليهات",       icon: Settings },
   { id: "partnerApplications",     label: "طلبات الملاك",          icon: Users },
   { id: "platformRevenue",         label: "ميزانية المنصة",        icon: TrendingUp },
   { id: "services",                label: "خدمات المناسبات",       icon: Wrench },
@@ -7147,6 +7148,7 @@ export default function Admin() {
       {/* Content */}
       <main className="p-6 max-w-7xl mx-auto">
         {activeTab === "overview"             && <OverviewTab />}
+        {activeTab === "chalets"              && <ChaletsVerifyTab />}
         {activeTab === "submissions"          && <SubmissionsTab isSuperAdmin={isSuperAdmin} />}
         {activeTab === "partnerApplications" && <PartnerApplicationsTab />}
         {activeTab === "platformRevenue"      && <PlatformRevenueTab />}
