@@ -2411,6 +2411,50 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     });
   }, [bookings, filterFrom, filterTo, searchQuery]);
 
+  const getManualWhatsAppTemplates = () => messageSettings.waEnabled ? [
+    { id: "confirmation", title: "تأكيد الحجز", body: messageSettings.bookingConfirmationTemplate },
+    { id: "cancellation", title: "إلغاء الحجز", body: messageSettings.cancellationTemplate },
+    { id: "modification", title: "تعديل الحجز", body: messageSettings.modificationTemplate },
+    ...((messageSettings.customTemplates ?? []).map((tpl) => ({ id: tpl.id, title: tpl.title, body: tpl.body }))),
+  ].filter((tpl) => tpl.body?.trim()) : [];
+
+  const normalizeGuestPhone = (b: OwnerBooking) => {
+    let rawPhone = b.clientPhone?.replace(/\D/g, "") ?? "";
+    if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
+    if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
+    if (rawPhone.length === 9 && rawPhone.startsWith("5")) rawPhone = "966" + rawPhone;
+    return rawPhone;
+  };
+
+  const getBookingChaletName = (b: OwnerBooking) =>
+    ownerChalets.find((c: any) => c.submissionId === b.submissionId)?.nameAr ??
+    ownerChalets.find((c: any) => c.id === activeChaletId)?.nameAr ??
+    "العقار";
+
+  const getBookingDateText = (b: OwnerBooking) => {
+    const { hijri, gregorian } = formatDualDate(b.bookingDate);
+    return hijri && gregorian ? `${hijri} (${gregorian})` : b.bookingDate;
+  };
+
+  const openManualWhatsAppTemplate = (b: OwnerBooking, templateBody: string, reason = "") => {
+    const msg = templateBody
+      .replace(/\{اسم_العميل\}/g, b.clientName ?? "")
+      .replace(/\{اسم_العقار\}/g, getBookingChaletName(b))
+      .replace(/\{التاريخ\}/g, getBookingDateText(b))
+      .replace(/\{سبب_الإلغاء\}/g, reason || b.cancelReason || "حسب الاتفاق");
+    const encoded = encodeURIComponent(msg);
+    const phone = normalizeGuestPhone(b);
+    const waUrl = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+    const a = document.createElement("a");
+    a.href = waUrl;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setOpenMessageMenuId(null);
+  };
+
   const prevMonth = () => {
     if (calMonth === 1) { setCalYear(y => y - 1); setCalMonth(12); }
     else setCalMonth(m => m - 1);
@@ -2533,6 +2577,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const popStartG = formatDualDate(b.bookingDate).gregorian;
                   const popEndH   = formatDualDate(popEndStr).hijri.replace(/\s*هـ\s*$/, "");
                   const popEndG   = formatDualDate(popEndStr).gregorian;
+                  const modalMessageTemplates = getManualWhatsAppTemplates();
+                  const sendModalWhatsAppTemplate = (templateBody: string) => openManualWhatsAppTemplate(b, templateBody);
                   return (
                     <div key={b.id} className={`rounded-xl border p-3 space-y-1.5 ${bi > 0 ? "mt-2" : ""} ${
                       b.period === "morning" ? "border-amber-200 bg-amber-50 dark:bg-amber-900/20" :
@@ -2644,6 +2690,35 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       })()}
                       {/* Cancel / Reschedule / Review quick actions */}
                       <div className="flex gap-2 mt-2 pt-2 border-t border-border/50 flex-wrap">
+                        <div className="relative flex-1 min-w-[150px]">
+                          <button
+                            type="button"
+                            onClick={() => setOpenMessageMenuId(openMessageMenuId === b.id ? null : b.id)}
+                            className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-green-600 border border-green-700 rounded-lg py-1.5 hover:bg-green-700 transition-colors shadow-sm"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            إرسال عبر الواتساب
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                          {openMessageMenuId === b.id && (
+                            <div className="absolute right-0 top-full mt-1 z-30 min-w-56 rounded-xl border border-border bg-card shadow-lg p-1.5">
+                              {modalMessageTemplates.length > 0 ? (
+                                modalMessageTemplates.map((tpl) => (
+                                  <button
+                                    key={tpl.id}
+                                    type="button"
+                                    onClick={() => sendModalWhatsAppTemplate(tpl.body)}
+                                    className="w-full text-right px-3 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                                  >
+                                    {tpl.title}
+                                  </button>
+                                ))
+                              ) : (
+                                <p className="px-3 py-2 text-xs text-muted-foreground">أضف قالباً من إعدادات الرسائل</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                         <button
                           onClick={() => { setSummaryDate(null); setRescheduleBooking(b); }}
                           className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-primary border border-primary/30 rounded-lg py-1.5 hover:bg-primary/10 transition-colors"
@@ -3091,48 +3166,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 document.body.removeChild(a);
               };
 
-              const normalizeGuestPhone = () => {
-                let rawPhone = b.clientPhone?.replace(/\D/g, "") ?? "";
-                if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
-                if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
-                if (rawPhone.length === 9 && rawPhone.startsWith("5")) rawPhone = "966" + rawPhone;
-                return rawPhone;
-              };
-
-              const bookingChaletName =
-                ownerChalets.find((c: any) => c.submissionId === b.submissionId)?.nameAr ??
-                ownerChalets.find((c: any) => c.id === activeChaletId)?.nameAr ??
-                "العقار";
-              const bookingDateText = (() => {
-                const { hijri, gregorian } = formatDualDate(b.bookingDate);
-                return hijri && gregorian ? `${hijri} (${gregorian})` : b.bookingDate;
-              })();
-              const messageTemplates = messageSettings.waEnabled ? [
-                ...(messageSettings.bookingConfirmationEnabled ? [{ id: "confirmation", title: "تأكيد الحجز", body: messageSettings.bookingConfirmationTemplate }] : []),
-                ...(messageSettings.changeNoticeEnabled ? [
-                  { id: "cancellation", title: "إلغاء الحجز", body: messageSettings.cancellationTemplate },
-                  { id: "modification", title: "تعديل الحجز", body: messageSettings.modificationTemplate },
-                ] : []),
-                ...((messageSettings.customTemplates ?? []).map((tpl) => ({ id: tpl.id, title: tpl.title, body: tpl.body }))),
-              ].filter((tpl) => tpl.body?.trim()) : [];
+              const messageTemplates = getManualWhatsAppTemplates();
 
               const sendManualWhatsAppTemplate = (templateBody: string, reason = "") => {
-                const msg = templateBody
-                  .replace(/\{اسم_العميل\}/g, b.clientName ?? "")
-                  .replace(/\{اسم_العقار\}/g, bookingChaletName)
-                  .replace(/\{التاريخ\}/g, bookingDateText)
-                  .replace(/\{سبب_الإلغاء\}/g, reason || b.cancelReason || "حسب الاتفاق");
-                const encoded = encodeURIComponent(msg);
-                const phone = normalizeGuestPhone();
-                const waUrl = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
-                const a = document.createElement("a");
-                a.href = waUrl;
-                a.target = "_blank";
-                a.rel = "noopener noreferrer";
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setOpenMessageMenuId(null);
+                openManualWhatsAppTemplate(b, templateBody, reason);
               };
 
               return (
@@ -11907,7 +11944,7 @@ function OwnerMessageSettingsTab() {
           <Switch checked={form.waEnabled} onCheckedChange={(v) => setField("waEnabled", v)} disabled={isReadOnly} />
         </div>
         <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 p-4 text-sm text-emerald-800 dark:text-emerald-200 leading-relaxed">
-          لا توجد حقول Instance ID أو Token. عند اختيار قالب من بطاقة الحجز يفتح واتساب مباشرة برسالة جاهزة، ويمكنك مراجعتها وإرفاق الصور يدوياً قبل الإرسال.
+          لا توجد حقول ربط خارجي أو مفاتيح خدمة. عند اختيار قالب من بطاقة الحجز يفتح واتساب مباشرة برسالة جاهزة، ويمكنك مراجعتها وإرفاق الصور يدوياً قبل الإرسال.
         </div>
       </div>
 
