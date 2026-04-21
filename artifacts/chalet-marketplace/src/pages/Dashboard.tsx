@@ -2603,7 +2603,42 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         <span className="font-semibold text-foreground text-left">{b.clientName}</span>
                         {b.clientPhone && <>
                           <span>الجوال</span>
-                          <span className="font-semibold text-foreground text-left" dir="ltr">{toAr(b.clientPhone)}</span>
+                          <span className="font-semibold text-foreground text-left">
+                            <span className="inline-flex items-center justify-end gap-1.5 w-full">
+                              <span dir="ltr">{toAr(b.clientPhone)}</span>
+                              <span className="relative" dir="rtl">
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenMessageMenuId(openMessageMenuId === b.id ? null : b.id)}
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-full px-2 py-0.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                                  aria-label="إرسال عبر الواتساب"
+                                  title="إرسال عبر الواتساب"
+                                >
+                                  <MessageSquare className="w-3 h-3" />
+                                  واتساب
+                                  <ChevronDown className="w-2.5 h-2.5" />
+                                </button>
+                                {openMessageMenuId === b.id && (
+                                  <div className="absolute left-0 top-full mt-1 z-50 w-56 max-w-[calc(100vw-3rem)] max-h-48 overflow-y-auto rounded-xl border border-border bg-card shadow-xl p-1.5">
+                                    {modalMessageTemplates.length > 0 ? (
+                                      modalMessageTemplates.map((tpl) => (
+                                        <button
+                                          key={tpl.id}
+                                          type="button"
+                                          onClick={() => sendModalWhatsAppTemplate(tpl.body)}
+                                          className="w-full text-right px-3 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                                        >
+                                          {tpl.title}
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <p className="px-3 py-2 text-xs text-muted-foreground">أضف قالباً من إعدادات الرسائل</p>
+                                    )}
+                                  </div>
+                                )}
+                              </span>
+                            </span>
+                          </span>
                         </>}
                         {total !== null && <>
                           <span>الإجمالي</span>
@@ -2688,37 +2723,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           </div>
                         );
                       })()}
-                      {/* Cancel / Reschedule / Review quick actions */}
+                      {/* Booking management quick actions */}
                       <div className="flex gap-2 mt-2 pt-2 border-t border-border/50 flex-wrap">
-                        <div className="relative flex-1 min-w-[150px]">
-                          <button
-                            type="button"
-                            onClick={() => setOpenMessageMenuId(openMessageMenuId === b.id ? null : b.id)}
-                            className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-green-600 border border-green-700 rounded-lg py-1.5 hover:bg-green-700 transition-colors shadow-sm"
-                          >
-                            <MessageSquare className="w-3.5 h-3.5" />
-                            إرسال عبر الواتساب
-                            <ChevronDown className="w-3 h-3" />
-                          </button>
-                          {openMessageMenuId === b.id && (
-                            <div className="absolute right-0 top-full mt-1 z-30 min-w-56 rounded-xl border border-border bg-card shadow-lg p-1.5">
-                              {modalMessageTemplates.length > 0 ? (
-                                modalMessageTemplates.map((tpl) => (
-                                  <button
-                                    key={tpl.id}
-                                    type="button"
-                                    onClick={() => sendModalWhatsAppTemplate(tpl.body)}
-                                    className="w-full text-right px-3 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors"
-                                  >
-                                    {tpl.title}
-                                  </button>
-                                ))
-                              ) : (
-                                <p className="px-3 py-2 text-xs text-muted-foreground">أضف قالباً من إعدادات الرسائل</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
                         <button
                           onClick={() => { setSummaryDate(null); setRescheduleBooking(b); }}
                           className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-primary border border-primary/30 rounded-lg py-1.5 hover:bg-primary/10 transition-colors"
@@ -2733,37 +2739,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <XCircle className="w-3 h-3" />
                           إلغاء
                         </button>
-                        {b.insuranceFee && Number(b.insuranceFee) > 0 && !b.insuranceRefunded && (
-                          <button
-                            onClick={() => patchBookingStatus.mutate({ id: b.id, patch: { insuranceRefunded: true } })}
-                            disabled={patchBookingStatus.isPending}
-                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-800 rounded-lg py-1.5 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors disabled:opacity-50"
-                          >
-                            <Lock className="w-3 h-3" />
-                            إعادة التأمين
-                          </button>
-                        )}
-                        {b.ratedAt ? (
-                          <span className="flex-1 flex items-center justify-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-lg py-1.5 bg-green-50 dark:bg-green-900/10">
-                            <CheckCircle className="w-3 h-3" />
-                            تم التقييم ✅
-                          </span>
-                        ) : (
-                          <button
-                            disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
-                            onClick={() => sendReviewRequest(b)}
-                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 border border-teal-300 dark:border-teal-800 rounded-lg py-1.5 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-50"
-                          >
-                            {reviewPendingId === b.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : reviewSentIds.has(b.id) ? (
-                              <CheckCircle className="w-3 h-3" />
-                            ) : (
-                              <Star className="w-3 h-3" />
-                            )}
-                            {reviewSentIds.has(b.id) ? "تم ✓" : "تقييم"}
-                          </button>
-                        )}
                       </div>
                     </div>
                   );
