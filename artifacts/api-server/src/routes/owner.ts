@@ -32,10 +32,9 @@ import { sendOtpEmail } from "../lib/email";
 
 const router = Router();
 
-const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = "مرحباً {guest_name}، تم تأكيد حجزك في {property_name} بتاريخ {booking_date}. الموقع: {location_link}. الإجمالي: {total_price} ر.س";
-const DEFAULT_ARRIVAL_REMINDER_TEMPLATE = "تذكير ودي يا {guest_name}: موعد وصولك إلى {property_name} بتاريخ {booking_date}. الموقع: {location_link}";
-const DEFAULT_CHANGE_NOTICE_TEMPLATE = "مرحباً {guest_name}، تم تحديث حالة حجزك في {property_name} بتاريخ {booking_date}. السبب: {change_reason}. للمزيد من التفاصيل تواصل معنا.";
-const INVALID_WA_CREDENTIALS_MESSAGE = "بيانات الربط غير صحيحة، يرجى التأكد والمحاولة مرة أخرى";
+const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.";
+const DEFAULT_CANCELLATION_TEMPLATE = "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}. السبب: {سبب_الإلغاء}.";
+const DEFAULT_MODIFICATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار}. التاريخ الجديد: {التاريخ}. السبب: {سبب_الإلغاء}.";
 
 /* ── OTP helpers (mirrors registration.ts helpers) ─────────── */
 function _genCode(): string { return String(randomInt(100000, 999999)); }
@@ -428,106 +427,24 @@ function bookingDates(bookingDate: string, durationDays: number): string[] {
   return results;
 }
 
-function normalizeWhatsAppPhone(phone?: string | null): string {
-  const digits = (phone ?? "").replace(/[^\d]/g, "");
-  if (!digits) return "";
-  if (digits.startsWith("966")) return digits;
-  if (digits.startsWith("0")) return `966${digits.slice(1)}`;
-  if (digits.length === 9 && digits.startsWith("5")) return `966${digits}`;
-  return digits;
-}
-
-function applyWhatsAppTemplate(template: string, values: Record<string, string>): string {
-  return template.replace(/\{(guest_name|property_name|booking_date|location_link|total_price|change_reason)\}/g, (_, key: string) => values[key] ?? "");
-}
-
-async function sendOwnerWhatsAppMessage(instanceId: string, token: string, to: string, body: string): Promise<boolean> {
-  const response = await fetch(`https://api.ultramsg.com/${encodeURIComponent(instanceId)}/messages/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ token, to, body }),
-  });
-  return response.ok;
-}
-
-async function validateUltraMsgCredentials(instanceId: string, token: string): Promise<boolean> {
-  try {
-    const response = await fetch(`https://api.ultramsg.com/${encodeURIComponent(instanceId)}/instance/status?token=${encodeURIComponent(token)}`);
-    return response.ok;
-  } catch (_) {
-    return false;
-  }
-}
-
-async function getBookingWhatsAppValues(booking: typeof ownerBookingsTable.$inferSelect, changeReason = "") {
-  let chaletName = "شاليهك";
-  let locationLink = "";
-  if (booking.submissionId) {
-    const [chalet] = await db
-      .select({ nameAr: chaletsTable.nameAr, mapsUrl: chaletsTable.mapsUrl })
-      .from(chaletsTable)
-      .where(eq(chaletsTable.submissionId, booking.submissionId))
-      .limit(1);
-    if (chalet) {
-      chaletName = chalet.nameAr;
-      locationLink = chalet.mapsUrl ?? "";
-    } else {
-      const [sub] = await db
-        .select({ nameAr: chaletSubmissionsTable.nameAr, mapsUrl: chaletSubmissionsTable.mapsUrl })
-        .from(chaletSubmissionsTable)
-        .where(eq(chaletSubmissionsTable.id, booking.submissionId))
-        .limit(1);
-      if (sub) {
-        chaletName = sub.nameAr;
-        locationLink = sub.mapsUrl ?? "";
-      }
-    }
-  }
-  return {
-    guest_name: booking.clientName,
-    property_name: chaletName,
-    booking_date: booking.bookingDate,
-    location_link: locationLink || "سيتم إرسال الموقع من المالك",
-    total_price: booking.totalPrice ? String(Math.round(Number(booking.totalPrice))) : "غير محدد",
-    change_reason: changeReason || "تحديث على الحجز",
-  };
-}
-
-async function sendBookingChangeWhatsAppNotice(ownerId: string, booking: typeof ownerBookingsTable.$inferSelect, changeReason: string): Promise<void> {
-  const [waSetting] = await db
-    .select()
-    .from(ownerNotificationSettingsTable)
-    .where(eq(ownerNotificationSettingsTable.ownerId, ownerId))
-    .limit(1);
-  const settings = normalizeMessageSettings(waSetting, ownerId);
-  const guestPhone = normalizeWhatsAppPhone(booking.clientPhone);
-  if (
-    !settings.waEnabled ||
-    !settings.changeNoticeEnabled ||
-    !settings.waInstanceId ||
-    !settings.waToken ||
-    !guestPhone
-  ) return;
-
-  const values = await getBookingWhatsAppValues(booking, changeReason);
-  const body = applyWhatsAppTemplate(settings.changeNoticeTemplate, values);
-  await sendOwnerWhatsAppMessage(settings.waInstanceId, settings.waToken, guestPhone, body);
-}
-
 function normalizeMessageSettings(row: typeof ownerNotificationSettingsTable.$inferSelect | undefined, ownerId: string) {
+  let customTemplates: Array<{ id: string; title: string; body: string }> = [];
+  try {
+    customTemplates = row?.waToken ? JSON.parse(row.waToken) : [];
+  } catch (_) {
+    customTemplates = [];
+  }
   return {
     ownerId,
     waEnabled: row?.waEnabled ?? false,
     waPhone: row?.waPhone ?? "",
-    waInstanceId: row?.waInstanceId ?? "",
-    waToken: row?.waToken ?? "",
     bookingConfirmationEnabled: row?.bookingConfirmationEnabled ?? false,
     bookingConfirmationTemplate: row?.bookingConfirmationTemplate || DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
-    arrivalReminderEnabled: row?.arrivalReminderEnabled ?? false,
-    arrivalReminderOffsetHours: row?.arrivalReminderOffsetHours ?? 24,
-    arrivalReminderTemplate: row?.arrivalReminderTemplate || DEFAULT_ARRIVAL_REMINDER_TEMPLATE,
     changeNoticeEnabled: row?.changeNoticeEnabled ?? false,
-    changeNoticeTemplate: row?.changeNoticeTemplate || DEFAULT_CHANGE_NOTICE_TEMPLATE,
+    cancellationTemplate: row?.arrivalReminderTemplate || DEFAULT_CANCELLATION_TEMPLATE,
+    modificationTemplate: row?.changeNoticeTemplate || DEFAULT_MODIFICATION_TEMPLATE,
+    customTemplates: Array.isArray(customTemplates) ? customTemplates : [],
+    attachmentNote: row?.waInstanceId ?? "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
     updatedAt: row?.updatedAt ?? null,
   };
 }
@@ -549,36 +466,35 @@ router.put("/message-settings", async (req, res) => {
   const body = z.object({
     waEnabled: z.boolean().optional(),
     waPhone: z.string().optional(),
-    waInstanceId: z.string().optional(),
-    waToken: z.string().optional(),
     bookingConfirmationEnabled: z.boolean().optional(),
     bookingConfirmationTemplate: z.string().optional(),
-    arrivalReminderEnabled: z.boolean().optional(),
-    arrivalReminderOffsetHours: z.number().int().min(1).max(720).optional(),
-    arrivalReminderTemplate: z.string().optional(),
     changeNoticeEnabled: z.boolean().optional(),
-    changeNoticeTemplate: z.string().optional(),
+    cancellationTemplate: z.string().optional(),
+    modificationTemplate: z.string().optional(),
+    customTemplates: z.array(z.object({ id: z.string(), title: z.string(), body: z.string() })).optional(),
+    attachmentNote: z.string().optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
-  if (body.data.waEnabled && body.data.waInstanceId?.trim() && body.data.waToken?.trim()) {
-    const isValid = await validateUltraMsgCredentials(body.data.waInstanceId.trim(), body.data.waToken.trim());
-    if (!isValid) return res.status(400).json({ error: INVALID_WA_CREDENTIALS_MESSAGE, code: "INVALID_WA_CREDENTIALS" });
-  }
+  const sanitizedCustomTemplates = (body.data.customTemplates ?? []).map((tpl) => ({
+    id: tpl.id || randomBytes(8).toString("hex"),
+    title: tpl.title.trim() || "رسالة إضافية",
+    body: tpl.body.trim(),
+  })).filter((tpl) => tpl.body);
 
   const values = {
     ownerId,
     waEnabled: body.data.waEnabled ?? false,
     waPhone: body.data.waPhone?.trim() || null,
-    waInstanceId: body.data.waInstanceId?.trim() || null,
-    waToken: body.data.waToken?.trim() || null,
     bookingConfirmationEnabled: body.data.bookingConfirmationEnabled ?? false,
     bookingConfirmationTemplate: body.data.bookingConfirmationTemplate?.trim() || DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
-    arrivalReminderEnabled: body.data.arrivalReminderEnabled ?? false,
-    arrivalReminderOffsetHours: Math.max(1, Math.min(720, body.data.arrivalReminderOffsetHours ?? 24)),
-    arrivalReminderTemplate: body.data.arrivalReminderTemplate?.trim() || DEFAULT_ARRIVAL_REMINDER_TEMPLATE,
+    arrivalReminderEnabled: false,
+    arrivalReminderOffsetHours: 24,
+    arrivalReminderTemplate: body.data.cancellationTemplate?.trim() || DEFAULT_CANCELLATION_TEMPLATE,
     changeNoticeEnabled: body.data.changeNoticeEnabled ?? false,
-    changeNoticeTemplate: body.data.changeNoticeTemplate?.trim() || DEFAULT_CHANGE_NOTICE_TEMPLATE,
+    changeNoticeTemplate: body.data.modificationTemplate?.trim() || DEFAULT_MODIFICATION_TEMPLATE,
+    waInstanceId: body.data.attachmentNote?.trim() || null,
+    waToken: JSON.stringify(sanitizedCustomTemplates),
     updatedAt: new Date(),
   };
 
@@ -740,24 +656,6 @@ router.post("/bookings", async (req, res) => {
         message: msg,
         isRead: false,
       });
-      const guestPhone = normalizeWhatsAppPhone(booking.clientPhone);
-      const settings = normalizeMessageSettings(waSetting, ownerId);
-      if (
-        settings.waEnabled &&
-        settings.bookingConfirmationEnabled &&
-        settings.waInstanceId &&
-        settings.waToken &&
-        guestPhone
-      ) {
-        const body = applyWhatsAppTemplate(settings.bookingConfirmationTemplate, {
-          guest_name: booking.clientName,
-          property_name: chaletName,
-          booking_date: booking.bookingDate,
-          location_link: locationLink || "سيتم إرسال الموقع من المالك",
-          total_price: booking.totalPrice ? String(Math.round(Number(booking.totalPrice))) : "غير محدد",
-        });
-        await sendOwnerWhatsAppMessage(settings.waInstanceId, settings.waToken, guestPhone, body);
-      }
     } catch (_) {}
   })();
 
@@ -890,7 +788,6 @@ router.patch("/bookings/:id", async (req, res) => {
         const allDates = [...new Set([...oldDates, ...newDates])];
         syncAvailabilityFromBookings(row.submissionId, ownerId, allDates).catch(() => {});
       }
-      sendBookingChangeWhatsAppNotice(ownerId, row, rescheduleReason ? `تم تعديل الحجز: ${rescheduleReason}` : "تم تعديل موعد الحجز").catch(() => {});
     }
   }
 
@@ -978,7 +875,6 @@ router.delete("/bookings/:id", async (req, res) => {
           message: msg,
           isRead: false,
         });
-        await sendBookingChangeWhatsAppNotice(ownerId, target, reason ? `تم إلغاء الحجز: ${reason}` : "تم إلغاء الحجز");
       } catch (_) {}
     })();
   }

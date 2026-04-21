@@ -100,31 +100,27 @@ interface OwnerBooking {
 interface OwnerMessageSettings {
   waEnabled: boolean;
   waPhone: string;
-  waInstanceId: string;
-  waToken: string;
   bookingConfirmationEnabled: boolean;
   bookingConfirmationTemplate: string;
-  arrivalReminderEnabled: boolean;
-  arrivalReminderOffsetHours: number;
-  arrivalReminderTemplate: string;
   changeNoticeEnabled: boolean;
-  changeNoticeTemplate: string;
+  cancellationTemplate: string;
+  modificationTemplate: string;
+  customTemplates: Array<{ id: string; title: string; body: string }>;
+  attachmentNote: string;
 }
 
-const MESSAGE_VARIABLES = ["{guest_name}", "{property_name}", "{booking_date}", "{location_link}", "{total_price}", "{change_reason}"];
+const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}"];
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   waEnabled: false,
   waPhone: "",
-  waInstanceId: "",
-  waToken: "",
-  bookingConfirmationEnabled: false,
-  bookingConfirmationTemplate: "مرحباً {guest_name}، تم تأكيد حجزك في {property_name} بتاريخ {booking_date}. الموقع: {location_link}. الإجمالي: {total_price} ر.س",
-  arrivalReminderEnabled: false,
-  arrivalReminderOffsetHours: 24,
-  arrivalReminderTemplate: "تذكير ودي يا {guest_name}: موعد وصولك إلى {property_name} بتاريخ {booking_date}. الموقع: {location_link}",
-  changeNoticeEnabled: false,
-  changeNoticeTemplate: "مرحباً {guest_name}، تم تحديث حالة حجزك في {property_name} بتاريخ {booking_date}. السبب: {change_reason}. للمزيد من التفاصيل تواصل معنا.",
+  bookingConfirmationEnabled: true,
+  bookingConfirmationTemplate: "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.",
+  changeNoticeEnabled: true,
+  cancellationTemplate: "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}. السبب: {سبب_الإلغاء}.",
+  modificationTemplate: "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار}. التاريخ الجديد: {التاريخ}. السبب: {سبب_الإلغاء}.",
+  customTemplates: [],
+  attachmentNote: "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
 };
 
 interface RescheduleLogItem {
@@ -2237,6 +2233,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       return r.json();
     },
   });
+  const { data: messageSettings = DEFAULT_OWNER_MESSAGE_SETTINGS } = useQuery<OwnerMessageSettings>({
+    queryKey: ["owner", "message-settings"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/message-settings");
+      if (!r.ok) return DEFAULT_OWNER_MESSAGE_SETTINGS;
+      return r.json();
+    },
+  });
+  const [openMessageMenuId, setOpenMessageMenuId] = useState<number | null>(null);
 
   const [insuranceTarget, setInsuranceTarget] = useState<OwnerBooking | null>(null);
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
@@ -3086,6 +3091,50 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 document.body.removeChild(a);
               };
 
+              const normalizeGuestPhone = () => {
+                let rawPhone = b.clientPhone?.replace(/\D/g, "") ?? "";
+                if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
+                if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
+                if (rawPhone.length === 9 && rawPhone.startsWith("5")) rawPhone = "966" + rawPhone;
+                return rawPhone;
+              };
+
+              const bookingChaletName =
+                ownerChalets.find((c: any) => c.submissionId === b.submissionId)?.nameAr ??
+                ownerChalets.find((c: any) => c.id === activeChaletId)?.nameAr ??
+                "العقار";
+              const bookingDateText = (() => {
+                const { hijri, gregorian } = formatDualDate(b.bookingDate);
+                return hijri && gregorian ? `${hijri} (${gregorian})` : b.bookingDate;
+              })();
+              const messageTemplates = messageSettings.waEnabled ? [
+                ...(messageSettings.bookingConfirmationEnabled ? [{ id: "confirmation", title: "تأكيد الحجز", body: messageSettings.bookingConfirmationTemplate }] : []),
+                ...(messageSettings.changeNoticeEnabled ? [
+                  { id: "cancellation", title: "إلغاء الحجز", body: messageSettings.cancellationTemplate },
+                  { id: "modification", title: "تعديل الحجز", body: messageSettings.modificationTemplate },
+                ] : []),
+                ...((messageSettings.customTemplates ?? []).map((tpl) => ({ id: tpl.id, title: tpl.title, body: tpl.body }))),
+              ].filter((tpl) => tpl.body?.trim()) : [];
+
+              const sendManualWhatsAppTemplate = (templateBody: string, reason = "") => {
+                const msg = templateBody
+                  .replace(/\{اسم_العميل\}/g, b.clientName ?? "")
+                  .replace(/\{اسم_العقار\}/g, bookingChaletName)
+                  .replace(/\{التاريخ\}/g, bookingDateText)
+                  .replace(/\{سبب_الإلغاء\}/g, reason || b.cancelReason || "حسب الاتفاق");
+                const encoded = encodeURIComponent(msg);
+                const phone = normalizeGuestPhone();
+                const waUrl = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+                const a = document.createElement("a");
+                a.href = waUrl;
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setOpenMessageMenuId(null);
+              };
+
               return (
                 <motion.div
                   key={b.id}
@@ -3252,14 +3301,42 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
                   {/* Action buttons */}
                   <div className="flex flex-wrap gap-2 pt-1">
-                    {/* WhatsApp receipt */}
-                    <button
-                      onClick={sendReceiptWhatsApp}
-                      className="flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-2.5 py-1 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      إيصال واتساب
-                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={() => setOpenMessageMenuId(openMessageMenuId === b.id ? null : b.id)}
+                        className="flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-2.5 py-1 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        إرسال عبر الواتساب
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                      {openMessageMenuId === b.id && (
+                        <div className="absolute right-0 top-full mt-1 z-20 min-w-56 rounded-xl border border-border bg-card shadow-lg p-1.5">
+                          {messageTemplates.length > 0 ? (
+                            messageTemplates.map((tpl) => (
+                              <button
+                                key={tpl.id}
+                                type="button"
+                                onClick={() => sendManualWhatsAppTemplate(tpl.body)}
+                                className="w-full text-right px-3 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                              >
+                                {tpl.title}
+                              </button>
+                            ))
+                          ) : (
+                            <p className="px-3 py-2 text-xs text-muted-foreground">أضف قالباً من إعدادات الرسائل</p>
+                          )}
+                          <div className="h-px bg-border my-1" />
+                          <button
+                            type="button"
+                            onClick={sendReceiptWhatsApp}
+                            className="w-full text-right px-3 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                          >
+                            إيصال واتساب مفصل
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     {/* Request Review */}
                     {activeChaletId && (
                       b.ratedAt ? (
@@ -11725,8 +11802,6 @@ function OwnerMessageSettingsTab() {
   const { toast } = useToast();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const [form, setForm] = useState<OwnerMessageSettings>(DEFAULT_OWNER_MESSAGE_SETTINGS);
-  const [showToken, setShowToken] = useState(false);
-  const [showGuide, setShowGuide] = useState(false);
 
   const { data, isLoading } = useQuery<OwnerMessageSettings>({
     queryKey: ["owner", "message-settings"],
@@ -11745,27 +11820,24 @@ function OwnerMessageSettingsTab() {
     mutationFn: async () => {
       const r = await apiFetch("/owner/message-settings", {
         method: "PUT",
-        body: JSON.stringify({
-          ...form,
-          arrivalReminderOffsetHours: Number(form.arrivalReminderOffsetHours) || 24,
-        }),
+        body: JSON.stringify(form),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => null);
-        throw new Error(err?.code === "INVALID_WA_CREDENTIALS" ? "بيانات الربط غير صحيحة، يرجى التأكد والمحاولة مرة أخرى" : err?.error || "تعذر حفظ الإعدادات");
+        throw new Error(err?.error || "تعذر حفظ الإعدادات");
       }
       return r.json();
     },
     onSuccess: (saved) => {
       setForm({ ...DEFAULT_OWNER_MESSAGE_SETTINGS, ...saved });
       qc.invalidateQueries({ queryKey: ["owner", "message-settings"] });
-      toast({ title: "تم حفظ إعدادات الرسائل", description: "سيتم إرسال تأكيد الحجز تلقائياً عند تفعيل القالب وبيانات واتساب." });
+      toast({ title: "تم حفظ إعدادات الرسائل", description: "يمكنك الآن اختيار القالب من بطاقة الحجز وفتحه في واتساب يدوياً." });
     },
     onError: (err: any) => {
       const message = err?.message ?? "حدث خطأ غير متوقع";
       toast({
-        title: message.includes("بيانات الربط غير صحيحة") ? message : "تعذر الحفظ",
-        description: message.includes("بيانات الربط غير صحيحة") ? "تأكد من رقم معرف الجهاز ومفتاح الربط ثم أعد المحاولة." : message,
+        title: "تعذر الحفظ",
+        description: message,
         variant: "destructive",
       });
     },
@@ -11775,11 +11847,27 @@ function OwnerMessageSettingsTab() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function insertVariable(key: "bookingConfirmationTemplate" | "arrivalReminderTemplate" | "changeNoticeTemplate", variable: string) {
+  function insertVariable(key: "bookingConfirmationTemplate" | "cancellationTemplate" | "modificationTemplate", variable: string) {
     setForm((prev) => ({ ...prev, [key]: `${prev[key] || ""} ${variable}`.trim() }));
   }
 
-  const channelReady = form.waEnabled && form.waInstanceId.trim() && form.waToken.trim();
+  function addCustomTemplate() {
+    setForm((prev) => ({
+      ...prev,
+      customTemplates: [...(prev.customTemplates ?? []), { id: String(Date.now()), title: "رسالة إضافية", body: "مرحباً {اسم_العميل}، بخصوص حجزك في {اسم_العقار} بتاريخ {التاريخ}." }],
+    }));
+  }
+
+  function updateCustomTemplate(id: string, patch: Partial<{ title: string; body: string }>) {
+    setForm((prev) => ({
+      ...prev,
+      customTemplates: (prev.customTemplates ?? []).map((tpl) => tpl.id === id ? { ...tpl, ...patch } : tpl),
+    }));
+  }
+
+  function removeCustomTemplate(id: string) {
+    setForm((prev) => ({ ...prev, customTemplates: (prev.customTemplates ?? []).filter((tpl) => tpl.id !== id) }));
+  }
 
   if (isLoading) {
     return (
@@ -11791,62 +11879,6 @@ function OwnerMessageSettingsTab() {
 
   return (
     <div className="space-y-6">
-      <Dialog open={showGuide} onOpenChange={setShowGuide}>
-        <DialogContent className="max-w-3xl" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-xl">
-              <BookOpen className="w-5 h-5 text-primary" />
-              طريقة الحصول على بيانات ربط واتساب
-            </DialogTitle>
-            <DialogDescription>
-              اتبع الخطوات التالية من حساب مزوّد خدمة واتساب، ثم انسخ القيم كما هي إلى الحقول.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-2">
-            {[
-              {
-                title: "١. افتح لوحة الخدمة",
-                text: "سجّل الدخول في UltraMsg ثم اختر الجهاز أو الرقم المرتبط بواتساب.",
-                image: "الجهاز المتصل",
-              },
-              {
-                title: "٢. انسخ رقم معرف الجهاز",
-                text: "ابحث عن رقم معرف الجهاز في لوحة الخدمة، وسيظهر غالباً مثل: instance12345.",
-                image: "instance12345",
-              },
-              {
-                title: "٣. انسخ مفتاح الربط",
-                text: "افتح صفحة API أو Token وانسخ المفتاح السري كاملاً بدون مسافات.",
-                image: "Token •••••••••",
-              },
-            ].map((step) => (
-              <div key={step.title} className="rounded-2xl border border-border bg-card overflow-hidden">
-                <div className="h-28 bg-gradient-to-br from-emerald-50 to-primary/10 dark:from-emerald-950/30 dark:to-primary/10 flex items-center justify-center p-4">
-                  <div className="w-full max-w-[11rem] rounded-xl bg-background border border-border shadow-sm p-3 text-center">
-                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto mb-2">
-                      <MessageSquare className="w-4 h-4" />
-                    </div>
-                    <p className="text-xs font-mono text-foreground" dir="ltr">{step.image}</p>
-                  </div>
-                </div>
-                <div className="p-4 space-y-1.5">
-                  <h4 className="font-bold text-foreground">{step.title}</h4>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{step.text}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-4 text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
-            تأكد أن حالة الجهاز في مزود الخدمة “Connected” أو “متصل”. إذا تغيّر الرقم أو أعيد ربط الجهاز، قد تحتاج إلى نسخ بيانات الربط الجديدة.
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setShowGuide(false)} className="rounded-xl">
-              فهمت، سأكمل الإعداد
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="space-y-1">
@@ -11854,14 +11886,14 @@ function OwnerMessageSettingsTab() {
               <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
                 <Send className="w-5 h-5" />
               </div>
-              <h2 className="text-xl font-extrabold text-foreground">إعدادات الرسائل الآلية</h2>
+              <h2 className="text-xl font-extrabold text-foreground">إعدادات رسائل واتساب المجانية</h2>
             </div>
             <p className="text-sm text-muted-foreground">
-              اربط رقم واتساب الخاص بك عبر UltraMsg أو خدمة مشابهة، وعدّل القوالب التي تُرسل للضيف باسم رقمك.
+              عدّل القوالب ثم اخترها من بطاقة الحجز لفتح واتساب برسالة جاهزة عبر رابط wa.me بدون أي خدمة مدفوعة.
             </p>
           </div>
-          <div className={`px-3 py-1.5 rounded-full text-xs font-bold ${channelReady ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-            {channelReady ? "الاتصال جاهز" : "أكمل بيانات الربط"}
+          <div className="px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
+            مجاني ويدوي
           </div>
         </div>
       </div>
@@ -11869,59 +11901,13 @@ function OwnerMessageSettingsTab() {
       <div className="rounded-3xl border border-border bg-card p-6 shadow-sm space-y-5">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-base font-bold text-foreground">ربط رقم واتساب الخاص بالمالك</h3>
-            <p className="text-xs text-muted-foreground mt-1">هذه البيانات تُستخدم لإرسال الرسائل من رقمك أنت، وليس من رقم المنصة.</p>
+            <h3 className="text-base font-bold text-foreground">تشغيل قوالب الرسائل</h3>
+            <p className="text-xs text-muted-foreground mt-1">عند التشغيل تظهر القوالب في قائمة “إرسال عبر الواتساب” داخل كل حجز.</p>
           </div>
           <Switch checked={form.waEnabled} onCheckedChange={(v) => setField("waEnabled", v)} disabled={isReadOnly} />
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setShowGuide(true)}
-          className="rounded-xl border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-300"
-        >
-          <BookOpen className="w-4 h-4 ms-1" />
-          اضغط هنا لمعرفة طريقة الحصول على بيانات الربط
-        </Button>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-foreground">رقم واتساب المرتبط</label>
-            <Input
-              value={form.waPhone}
-              onChange={(e) => setField("waPhone", e.target.value)}
-              placeholder="مثال: 9665XXXXXXXX"
-              dir="ltr"
-              disabled={isReadOnly}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-foreground">رقم معرف الجهاز</label>
-            <Input
-              value={form.waInstanceId}
-              onChange={(e) => setField("waInstanceId", e.target.value)}
-              placeholder="مثال: instance12345"
-              dir="ltr"
-              disabled={isReadOnly}
-            />
-          </div>
-          <div className="space-y-1.5 md:col-span-2">
-            <label className="text-sm font-semibold text-foreground">مفتاح الربط (Token)</label>
-            <div className="relative">
-              <Input
-                type={showToken ? "text" : "password"}
-                value={form.waToken}
-                onChange={(e) => setField("waToken", e.target.value)}
-                placeholder="ألصق مفتاح الربط هنا"
-                dir="ltr"
-                className="pl-10"
-                disabled={isReadOnly}
-              />
-              <button type="button" onClick={() => setShowToken((v) => !v)} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" tabIndex={-1}>
-                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
+        <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 p-4 text-sm text-emerald-800 dark:text-emerald-200 leading-relaxed">
+          لا توجد حقول Instance ID أو Token. عند اختيار قالب من بطاقة الحجز يفتح واتساب مباشرة برسالة جاهزة، ويمكنك مراجعتها وإرفاق الصور يدوياً قبل الإرسال.
         </div>
       </div>
 
@@ -11939,7 +11925,7 @@ function OwnerMessageSettingsTab() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h4 className="font-bold text-foreground">تأكيد الحجز الفوري</h4>
-              <p className="text-xs text-muted-foreground mt-0.5">تُرسل مباشرة للضيف عند إضافة حجز جديد.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">قالب يدوي لتأكيد الحجز من بطاقة الحجز.</p>
             </div>
             <Switch checked={form.bookingConfirmationEnabled} onCheckedChange={(v) => setField("bookingConfirmationEnabled", v)} disabled={isReadOnly} />
           </div>
@@ -11962,33 +11948,21 @@ function OwnerMessageSettingsTab() {
         <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h4 className="font-bold text-foreground">تذكير الوصول</h4>
-              <p className="text-xs text-muted-foreground mt-0.5">يُرسل تلقائياً للضيف قبل موعد الوصول حسب الوقت الذي تحدده.</p>
+              <h4 className="font-bold text-foreground">إلغاء الحجز</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">قالب يدوي لإشعار العميل بالإلغاء وسبب الإلغاء.</p>
             </div>
-            <Switch checked={form.arrivalReminderEnabled} onCheckedChange={(v) => setField("arrivalReminderEnabled", v)} disabled={isReadOnly} />
-          </div>
-          <div className="max-w-xs space-y-1.5">
-            <label className="text-sm font-semibold text-foreground">قبل الوصول بـ</label>
-            <div className="flex items-center gap-2">
-              <Input
-                value={toAr(form.arrivalReminderOffsetHours)}
-                onChange={(e) => setField("arrivalReminderOffsetHours", Number(fromAr(e.target.value).replace(/\D/g, "")) || 1)}
-                inputMode="numeric"
-                disabled={isReadOnly}
-              />
-              <span className="text-sm text-muted-foreground shrink-0">ساعة</span>
-            </div>
+            <Switch checked={form.changeNoticeEnabled} onCheckedChange={(v) => setField("changeNoticeEnabled", v)} disabled={isReadOnly} />
           </div>
           <Textarea
-            value={form.arrivalReminderTemplate}
-            onChange={(e) => setField("arrivalReminderTemplate", e.target.value)}
+            value={form.cancellationTemplate}
+            onChange={(e) => setField("cancellationTemplate", e.target.value)}
             rows={4}
             dir="rtl"
             disabled={isReadOnly}
           />
           <div className="flex flex-wrap gap-1.5">
             {MESSAGE_VARIABLES.map((v) => (
-              <button key={v} type="button" onClick={() => insertVariable("arrivalReminderTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
+              <button key={v} type="button" onClick={() => insertVariable("cancellationTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
                 {v}
               </button>
             ))}
@@ -11998,30 +11972,85 @@ function OwnerMessageSettingsTab() {
         <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h4 className="font-bold text-foreground">إشعار الإلغاء أو التعديل</h4>
-              <p className="text-xs text-muted-foreground mt-0.5">يُرسل تلقائياً عند إلغاء الحجز أو تعديل موعده مع سبب التغيير.</p>
+              <h4 className="font-bold text-foreground">تعديل الحجز</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">قالب يدوي لإشعار العميل بتعديل التاريخ أو تفاصيل الحجز.</p>
             </div>
-            <Switch checked={form.changeNoticeEnabled} onCheckedChange={(v) => setField("changeNoticeEnabled", v)} disabled={isReadOnly} />
           </div>
           <Textarea
-            value={form.changeNoticeTemplate}
-            onChange={(e) => setField("changeNoticeTemplate", e.target.value)}
+            value={form.modificationTemplate}
+            onChange={(e) => setField("modificationTemplate", e.target.value)}
             rows={4}
             dir="rtl"
             disabled={isReadOnly}
           />
           <div className="flex flex-wrap gap-1.5">
             {MESSAGE_VARIABLES.map((v) => (
-              <button key={v} type="button" onClick={() => insertVariable("changeNoticeTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
+              <button key={v} type="button" onClick={() => insertVariable("modificationTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
                 {v}
               </button>
             ))}
           </div>
         </div>
 
+        <div className="space-y-3 rounded-2xl border border-border p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h4 className="font-bold text-foreground">رسائل إضافية</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">أضف قوالب خاصة تظهر ضمن قائمة الإرسال في كل حجز.</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => isReadOnly ? onBlockedEdit() : addCustomTemplate()} className="rounded-xl">
+              <Plus className="w-4 h-4 ms-1" />
+              إضافة رسالة
+            </Button>
+          </div>
+          {(form.customTemplates ?? []).length === 0 ? (
+            <p className="text-xs text-muted-foreground border border-dashed border-border rounded-xl p-4 text-center">لا توجد رسائل إضافية بعد</p>
+          ) : (
+            <div className="space-y-3">
+              {form.customTemplates.map((tpl) => (
+                <div key={tpl.id} className="rounded-xl border border-border p-3 space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      value={tpl.title}
+                      onChange={(e) => updateCustomTemplate(tpl.id, { title: e.target.value })}
+                      placeholder="عنوان الرسالة"
+                      disabled={isReadOnly}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => isReadOnly ? onBlockedEdit() : removeCustomTemplate(tpl.id)}
+                      className="text-destructive border border-destructive/30 rounded-lg px-3"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <Textarea
+                    value={tpl.body}
+                    onChange={(e) => updateCustomTemplate(tpl.id, { body: e.target.value })}
+                    rows={3}
+                    dir="rtl"
+                    disabled={isReadOnly}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2 rounded-2xl border border-border p-4">
+          <h4 className="font-bold text-foreground">ملاحظة إرفاق الصور يدوياً</h4>
+          <Textarea
+            value={form.attachmentNote}
+            onChange={(e) => setField("attachmentNote", e.target.value)}
+            rows={3}
+            dir="rtl"
+            disabled={isReadOnly}
+          />
+        </div>
+
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
           <p className="text-xs text-muted-foreground">
-            المتغيرات تُستبدل تلقائياً ببيانات الحجز عند الإرسال.
+            المتغيرات تُستبدل ببيانات الحجز عند فتح واتساب، والإرسال يتم يدوياً بعد مراجعة الرسالة.
           </p>
           <Button
             onClick={() => isReadOnly ? onBlockedEdit() : save.mutate()}
