@@ -36,6 +36,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -6057,7 +6063,7 @@ function ContactInquiriesTab() {
 const ALL_TABS = [
   { id: "overview",                label: "الإحصائيات",            icon: BarChart3 },
   { id: "chalets",                 label: "قائمة العقارات",        icon: Home },
-  { id: "submissions",             label: "طلبات الشاليهات",       icon: Settings },
+  { id: "submissions",             label: "الطلبات",               icon: Settings },
   { id: "partnerApplications",     label: "طلبات الملاك",          icon: Users },
   { id: "platformRevenue",         label: "ميزانية المنصة",        icon: TrendingUp },
   { id: "services",                label: "خدمات المناسبات",       icon: Wrench },
@@ -6078,6 +6084,20 @@ const ALL_TABS = [
 ] as const;
 
 type TabId = typeof ALL_TABS[number]["id"];
+
+const ADMIN_NAV_GROUPS: Array<{
+  id: string;
+  label: string;
+  icon: typeof BarChart3;
+  tabs: TabId[];
+}> = [
+  { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
+  { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "amenities", "locations"] },
+  { id: "users", label: "المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "adminStaff"] },
+  { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "services", "reviews"] },
+  { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
+  { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "communicationSettings", "contactInquiries", "termsManagement"] },
+];
 
 /* ══════════════════════════════════════════════════════════════
    Reviews Tab — generate invitation links, view submitted reviews
@@ -6993,11 +7013,27 @@ export default function Admin() {
     });
   }, [isSuperAdmin, adminPerms]);
 
+  const tabById = useMemo(() => {
+    return Object.fromEntries(tabs.map((tab) => [tab.id, tab])) as Partial<Record<TabId, typeof ALL_TABS[number]>>;
+  }, [tabs]);
+
+  const navGroups = useMemo(() => {
+    return ADMIN_NAV_GROUPS
+      .map((group) => ({
+        ...group,
+        tabs: group.tabs.map((id) => tabById[id]).filter(Boolean) as Array<typeof ALL_TABS[number]>,
+      }))
+      .filter((group) => group.tabs.length > 0);
+  }, [tabById]);
+
+  const visibleTabIds = useMemo(() => new Set(navGroups.flatMap((group) => group.tabs.map((tab) => tab.id))), [navGroups]);
+
   useEffect(() => {
-    if (tabs.length > 0 && !tabs.find((t) => t.id === activeTab)) {
-      setActiveTab(tabs[0].id as TabId);
+    if (tabs.length > 0 && (!tabs.find((t) => t.id === activeTab) || !visibleTabIds.has(activeTab))) {
+      const firstVisible = navGroups[0]?.tabs[0]?.id ?? tabs[0].id;
+      setActiveTab(firstVisible as TabId);
     }
-  }, [tabs, activeTab]);
+  }, [tabs, navGroups, visibleTabIds, activeTab]);
 
   const isLoading = authLoading || staffLoading || checkLoading;
 
@@ -7127,21 +7163,64 @@ export default function Admin() {
 
       {/* Tab Navigation */}
       <nav className="bg-slate-900 border-b border-slate-700 px-6">
-        <div className="flex gap-1 overflow-x-auto">
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActiveTab(id as TabId)}
-              className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === id
-                  ? "border-amber-500 text-amber-400"
-                  : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600"
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-            </button>
-          ))}
+        <div className="flex gap-2 overflow-x-auto py-2">
+          {navGroups.map((group) => {
+            const GroupIcon = group.icon;
+            const isGroupActive = group.tabs.some((tab) => tab.id === activeTab);
+            const firstTab = group.tabs[0];
+
+            if (group.id === "dashboard" && firstTab) {
+              return (
+                <button
+                  key={group.id}
+                  onClick={() => setActiveTab(firstTab.id as TabId)}
+                  className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors whitespace-nowrap ${
+                    isGroupActive
+                      ? "border-amber-500 bg-amber-500/15 text-amber-200"
+                      : "border-slate-700 bg-slate-800/70 text-slate-300 hover:border-slate-500 hover:text-white"
+                  }`}
+                >
+                  <GroupIcon className="w-4 h-4" />
+                  {group.label}
+                </button>
+              );
+            }
+
+            return (
+              <DropdownMenu key={group.id} dir="rtl">
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors whitespace-nowrap outline-none ${
+                      isGroupActive
+                        ? "border-amber-500 bg-amber-500/15 text-amber-200"
+                        : "border-slate-700 bg-slate-800/70 text-slate-300 hover:border-slate-500 hover:text-white"
+                    }`}
+                  >
+                    <GroupIcon className="w-4 h-4" />
+                    {group.label}
+                    <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-56 border-slate-700 bg-slate-900 p-2 text-slate-100 shadow-2xl">
+                  {group.tabs.map(({ id, label, icon: Icon }) => (
+                    <DropdownMenuItem
+                      key={id}
+                      onClick={() => setActiveTab(id as TabId)}
+                      className={`flex cursor-pointer items-center justify-between rounded-lg px-3 py-2.5 text-sm transition-colors focus:bg-slate-800 focus:text-white ${
+                        activeTab === id ? "bg-amber-500/15 text-amber-200" : "text-slate-300"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Icon className="w-4 h-4" />
+                        {label}
+                      </span>
+                      {activeTab === id && <Check className="w-4 h-4 text-amber-300" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          })}
         </div>
       </nav>
 

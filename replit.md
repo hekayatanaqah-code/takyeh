@@ -60,6 +60,7 @@ Arabic-language vacation rental marketplace for chalets in Al-Qassim region, Sau
   - Multi-property booking management: calendar can show one chalet or “عرض الكل”, agenda view supports week/month bulk review, reservation cards show the chalet name, and Add Booking only lists approved active non-paused chalets
   - Owners can temporarily pause a chalet for a date range; paused chalets are hidden from public browsing and blocked from new manual bookings during the pause
   - Admin chalet oversight is available from a dedicated top-menu “قائمة العقارات” tab, separate from “فئات الشاليهات”; it shows active, pending, paused/owner-hidden, and deleted properties with long-pause alerts after more than 7 consecutive paused days, checked hourly on the API server and refreshed when the admin alert endpoint is opened
+  - Admin top navigation is grouped into six smart sections: الإحصائيات, إدارة العقارات, المستخدمين, العمليات, المالية, and الإعدادات, each respecting existing admin permissions
 - **Arabic numerals**: system-wide toAr/fromAr pattern; interceptor in main.tsx for inputMode="numeric" fields
 - **Hijri date utilities** in `src/lib/utils.ts`: `hijriAndGregorian()` and `hijriShort()`
 
