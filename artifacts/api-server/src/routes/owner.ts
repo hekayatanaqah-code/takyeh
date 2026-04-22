@@ -62,12 +62,13 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
   /* ── Path 1: Admin impersonation via owner_temp_session cookie ── */
   const tempToken = (req.cookies as Record<string, string>)?.owner_temp_session;
   if (tempToken) {
-    const rows = await db.execute<{ owner_id: string }>(
+    const r = await db.execute<{ owner_id: string }>(
       sql`SELECT owner_id FROM owner_temp_sessions
           WHERE token = ${tempToken} AND expires_at > now() LIMIT 1`
     );
-    if (rows[0]?.owner_id) {
-      (req as any).user = { id: rows[0].owner_id, isImpersonated: true };
+    const row = ((r as any).rows as Array<{ owner_id: string }>)[0];
+    if (row?.owner_id) {
+      (req as any).user = { id: row.owner_id, isImpersonated: true };
       next(); return;
     }
     /* Token invalid/expired — clear stale cookie and fall through */
@@ -98,13 +99,16 @@ router.get("/enter-session", async (req, res) => {
   const token = String(req.query.token ?? "").trim();
   if (!token) return res.status(400).send("رمز مفقود");
 
-  const rows = await db.execute<{
-    owner_id: string; expires_at: Date;
-  }>(
+  /* Clear any stale old-style impersonation cookies first */
+  res.clearCookie("oidc_impersonate");
+  res.clearCookie("admin_staff_sid");
+
+  const r = await db.execute<{ owner_id: string; expires_at: Date }>(
     sql`SELECT owner_id, expires_at FROM owner_temp_sessions
         WHERE token = ${token} AND expires_at > now() LIMIT 1`
   );
-  if (!rows[0]) return res.status(400).send("الرمز غير صالح أو منتهي الصلاحية");
+  const sessionRow = ((r as any).rows as Array<{ owner_id: string; expires_at: Date }>)[0];
+  if (!sessionRow) return res.status(400).send("الرمز غير صالح أو منتهي الصلاحية");
 
   /* Extend session lifetime to 6 hours from now */
   const newExpiry = new Date(Date.now() + 6 * 60 * 60 * 1000);
@@ -126,23 +130,25 @@ router.get("/impersonation-mode", async (req, res) => {
     return res.json({ active: false });
   }
 
-  const rows = await db.execute<{ owner_id: string; admin_label: string | null }>(
+  const r = await db.execute<{ owner_id: string; admin_label: string | null }>(
     sql`SELECT owner_id, admin_label FROM owner_temp_sessions
         WHERE token = ${tempToken} AND expires_at > now() LIMIT 1`
   );
-  if (!rows[0]) return res.json({ active: false });
+  const sessionRow = ((r as any).rows as Array<{ owner_id: string; admin_label: string | null }>)[0];
+  if (!sessionRow) return res.json({ active: false });
 
   /* Fetch owner display name */
-  const ownerRows = await db.execute<{ name_ar: string }>(
-    sql`SELECT name_ar FROM chalet_submissions WHERE owner_id = ${rows[0].owner_id}
+  const or = await db.execute<{ name_ar: string }>(
+    sql`SELECT name_ar FROM chalet_submissions WHERE owner_id = ${sessionRow.owner_id}
         ORDER BY created_at ASC LIMIT 1`
   );
+  const ownerRow = ((or as any).rows as Array<{ name_ar: string }>)[0];
 
   return res.json({
     active: true,
-    ownerId: rows[0].owner_id,
-    adminLabel: rows[0].admin_label ?? "مشرف",
-    ownerName: ownerRows[0]?.name_ar ?? null,
+    ownerId: sessionRow.owner_id,
+    adminLabel: sessionRow.admin_label ?? "مشرف",
+    ownerName: ownerRow?.name_ar ?? null,
   });
 });
 

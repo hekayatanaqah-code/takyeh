@@ -51,11 +51,12 @@ router.get("/", async (req, res) => {
   /* Path 1: Admin impersonation via owner_temp_session cookie */
   const tempToken = req.cookies?.owner_temp_session;
   if (tempToken) {
-    const rows = await db.execute<{ owner_id: string }>(
+    const r = await db.execute<{ owner_id: string }>(
       sql`SELECT owner_id FROM owner_temp_sessions
           WHERE token = ${tempToken} AND expires_at > now() LIMIT 1`
     );
-    if (rows[0]?.owner_id) resolvedOwnerId = rows[0].owner_id;
+    const row = ((r as any).rows as Array<{ owner_id: string }>)[0];
+    if (row?.owner_id) resolvedOwnerId = row.owner_id;
   }
 
   /* Path 2: Normal owner session */

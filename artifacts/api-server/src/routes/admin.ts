@@ -191,25 +191,26 @@ router.get("/impersonation-status", async (req, res) => {
   const sessionToken = req.cookies?.owner_temp_session;
   if (!sessionToken) return res.json({ impersonating: false });
 
-  const rows = await db.execute<{
+  const r = await db.execute<{
     owner_id: string; admin_label: string | null; expires_at: Date;
   }>(
     sql`SELECT owner_id, admin_label, expires_at FROM owner_temp_sessions
         WHERE token = ${sessionToken} AND expires_at > now() LIMIT 1`
   );
-  const row = rows[0];
+  const row = ((r as any).rows as Array<{ owner_id: string; admin_label: string | null; expires_at: Date }>)[0];
   if (!row) return res.json({ impersonating: false });
 
-  const ownerRows = await db.execute<{ name_ar: string }>(
+  const or = await db.execute<{ name_ar: string }>(
     sql`SELECT name_ar FROM chalet_submissions WHERE owner_id = ${row.owner_id}
         ORDER BY created_at ASC LIMIT 1`
   );
+  const ownerRow = ((or as any).rows as Array<{ name_ar: string }>)[0];
 
   return res.json({
     impersonating: true,
     ownerId: row.owner_id,
     adminName: row.admin_label ?? "مشرف",
-    ownerName: ownerRows[0]?.name_ar ?? null,
+    ownerName: ownerRow?.name_ar ?? null,
   });
 });
 
