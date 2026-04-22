@@ -184,35 +184,52 @@ export async function requireAdminOrAdminStaff(req: Request, res: Response, next
   res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
 }
 
-/* ── Impersonation status — no auth required (reads admin cookie only) ── */
+/* ── Impersonation status — no auth required (reads admin cookies) ── */
 router.get("/impersonation-status", async (req, res) => {
-  const sid = req.cookies?.admin_staff_sid;
-  if (!sid) return res.json({ impersonating: false });
+  let ownerId: string | null = null;
+  let adminName: string | null = null;
 
-  const rows = await db.execute<{ impersonated_owner_id: string | null; name: string }>(
-    sql`
-      SELECT s.impersonated_owner_id, a.name
-      FROM admin_sessions s
-      JOIN admin_staff a ON a.id = s.admin_staff_id
-      WHERE s.sid = ${sid} AND s.expire > now()
-      LIMIT 1
-    `
-  );
-  const row = rows[0];
-  if (!row || !row.impersonated_owner_id) return res.json({ impersonating: false });
+  /* ── Path 1: DB-based admin staff (admin_staff_sid cookie) ── */
+  const sid = req.cookies?.admin_staff_sid;
+  if (sid) {
+    const rows = await db.execute<{ impersonated_owner_id: string | null; name: string }>(
+      sql`
+        SELECT s.impersonated_owner_id, a.name
+        FROM admin_sessions s
+        JOIN admin_staff a ON a.id = s.admin_staff_id
+        WHERE s.sid = ${sid} AND s.expire > now()
+        LIMIT 1
+      `
+    );
+    if (rows[0]?.impersonated_owner_id) {
+      ownerId = rows[0].impersonated_owner_id;
+      adminName = rows[0].name;
+    }
+  }
+
+  /* ── Path 2: OIDC super-admin (oidc_impersonate cookie) ── */
+  if (!ownerId) {
+    const oidcCookie = req.cookies?.oidc_impersonate;
+    if (oidcCookie) {
+      try {
+        const parsed = JSON.parse(oidcCookie);
+        if (parsed?.ownerId) {
+          ownerId = parsed.ownerId;
+          adminName = parsed.adminName ?? "مشرف";
+        }
+      } catch { /* ignore parse errors */ }
+    }
+  }
+
+  if (!ownerId) return res.json({ impersonating: false });
 
   /* Fetch the owner's chalet name for display */
   const ownerRows = await db.execute<{ name_ar: string }>(
-    sql`SELECT name_ar FROM chalet_submissions WHERE owner_id = ${row.impersonated_owner_id} ORDER BY created_at ASC LIMIT 1`
+    sql`SELECT name_ar FROM chalet_submissions WHERE owner_id = ${ownerId} ORDER BY created_at ASC LIMIT 1`
   );
   const ownerName = ownerRows[0]?.name_ar ?? null;
 
-  return res.json({
-    impersonating: true,
-    ownerId: row.impersonated_owner_id,
-    adminName: row.name,
-    ownerName,
-  });
+  return res.json({ impersonating: true, ownerId, adminName, ownerName });
 });
 
 router.use(requireAdminOrAdminStaff);
@@ -1192,6 +1209,14 @@ router.post("/demo-preview", async (req, res) => {
 /* ══════════════════════════════════════════════════════
    Owner Impersonation  (Super-Admin only)
    ══════════════════════════════════════════════════════ */
+const OIDC_IMPERSONATE_COOKIE = "oidc_impersonate";
+const IMPERSONATE_COOKIE_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  maxAge: 6 * 60 * 60 * 1000, /* 6 hours */
+};
+
 router.post("/impersonate", async (req, res) => {
   if (!(req as any).isSuperAdmin) {
     return res.status(403).json({ error: "المشرف العام فقط يملك هذه الصلاحية" });
@@ -1200,21 +1225,32 @@ router.post("/impersonate", async (req, res) => {
   if (!ownerId) return res.status(400).json({ error: "ownerId مطلوب" });
 
   const sid = req.cookies?.admin_staff_sid;
-  if (!sid) return res.status(401).json({ error: "جلسة الإدارة غير موجودة" });
 
-  await db.execute(
-    sql`UPDATE admin_sessions SET impersonated_owner_id = ${ownerId} WHERE sid = ${sid}`
-  );
+  if (sid) {
+    /* ── DB-based admin staff: store in admin_sessions table ── */
+    await db.execute(
+      sql`UPDATE admin_sessions SET impersonated_owner_id = ${ownerId} WHERE sid = ${sid}`
+    );
+  } else {
+    /* ── OIDC super-admin: use a dedicated httpOnly cookie ── */
+    const adminName = (req as any).user?.firstName ?? (req as any).user?.name ?? "مشرف";
+    const payload = JSON.stringify({ ownerId, adminName });
+    res.cookie(OIDC_IMPERSONATE_COOKIE, payload, IMPERSONATE_COOKIE_OPTS);
+  }
+
   return res.json({ ok: true });
 });
 
 router.post("/impersonate/end", async (_req, res) => {
+  /* Clear DB-based session impersonation */
   const sid = (_req as any).cookies?.admin_staff_sid;
   if (sid) {
     await db.execute(
       sql`UPDATE admin_sessions SET impersonated_owner_id = NULL WHERE sid = ${sid}`
     );
   }
+  /* Clear OIDC cookie impersonation */
+  res.clearCookie(OIDC_IMPERSONATE_COOKIE);
   return res.json({ ok: true });
 });
 

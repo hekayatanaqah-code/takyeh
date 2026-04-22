@@ -45,14 +45,39 @@ const SubmissionBodyStrict = CreateSubmissionBody.extend({
 const router = Router();
 
 router.get("/", async (req, res) => {
-  if (!req.isAuthenticated()) {
+  /* ── Resolve owner ID: support admin impersonation ── */
+  let resolvedOwnerId: string | null = null;
+
+  /* Path 1: DB-based admin staff impersonation */
+  const adminSid = req.cookies?.admin_staff_sid;
+  if (adminSid) {
+    const rows = await db.execute<{ impersonated_owner_id: string | null }>(
+      sql`SELECT impersonated_owner_id FROM admin_sessions WHERE sid = ${adminSid} AND expire > now() LIMIT 1`
+    );
+    if (rows[0]?.impersonated_owner_id) resolvedOwnerId = rows[0].impersonated_owner_id;
+  }
+
+  /* Path 2: OIDC super-admin impersonation */
+  if (!resolvedOwnerId) {
+    const oidcCookie = req.cookies?.oidc_impersonate;
+    if (oidcCookie) {
+      try { resolvedOwnerId = JSON.parse(oidcCookie)?.ownerId ?? null; } catch { /* ignore */ }
+    }
+  }
+
+  /* Path 3: Normal owner session */
+  if (!resolvedOwnerId && req.isAuthenticated()) {
+    resolvedOwnerId = req.user.id;
+  }
+
+  if (!resolvedOwnerId) {
     return res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
   }
 
   const submissions = await db
     .select()
     .from(chaletSubmissionsTable)
-    .where(eq(chaletSubmissionsTable.ownerId, req.user.id));
+    .where(eq(chaletSubmissionsTable.ownerId, resolvedOwnerId));
 
   return res.json(submissions);
 });

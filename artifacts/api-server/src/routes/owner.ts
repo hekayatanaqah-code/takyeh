@@ -58,7 +58,7 @@ async function _verifyOtp(email: string, code: string): Promise<boolean> {
 }
 
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  /* ── Admin impersonation takes PRIORITY over Passport session ── */
+  /* ── Path 1: DB-based admin staff impersonation (admin_staff_sid cookie) ── */
   const adminSid = (req.cookies as Record<string, string>)?.admin_staff_sid;
   if (adminSid) {
     const rows = await db.execute<{ impersonated_owner_id: string | null }>(
@@ -71,7 +71,19 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
     }
   }
 
-  /* ── Normal owner Passport session ── */
+  /* ── Path 2: OIDC super-admin impersonation (oidc_impersonate cookie) ── */
+  const oidcCookie = (req.cookies as Record<string, string>)?.oidc_impersonate;
+  if (oidcCookie) {
+    try {
+      const parsed = JSON.parse(oidcCookie);
+      if (parsed?.ownerId) {
+        (req as any).user = { id: parsed.ownerId, claims: { sub: parsed.ownerId } };
+        next(); return;
+      }
+    } catch { /* ignore */ }
+  }
+
+  /* ── Path 3: Normal owner Passport session ── */
   if (req.isAuthenticated()) { next(); return; }
 
   res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
