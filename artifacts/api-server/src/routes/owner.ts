@@ -22,6 +22,7 @@ import {
   ownerNotificationSettingsTable,
   serviceAppointmentsTable,
   serviceProvidersTable,
+  ownerTempSessionsTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
@@ -58,38 +59,105 @@ async function _verifyOtp(email: string, code: string): Promise<boolean> {
 }
 
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  /* ── Path 1: DB-based admin staff impersonation (admin_staff_sid cookie) ── */
-  const adminSid = (req.cookies as Record<string, string>)?.admin_staff_sid;
-  if (adminSid) {
-    const rows = await db.execute<{ impersonated_owner_id: string | null }>(
-      sql`SELECT impersonated_owner_id FROM admin_sessions WHERE sid = ${adminSid} AND expire > now() LIMIT 1`
+  /* ── Path 1: Admin impersonation via owner_temp_session cookie ── */
+  const tempToken = (req.cookies as Record<string, string>)?.owner_temp_session;
+  if (tempToken) {
+    const rows = await db.execute<{ owner_id: string }>(
+      sql`SELECT owner_id FROM owner_temp_sessions
+          WHERE token = ${tempToken} AND expires_at > now() LIMIT 1`
     );
-    const ownerId = rows[0]?.impersonated_owner_id;
-    if (ownerId) {
-      (req as any).user = { id: ownerId, claims: { sub: ownerId } };
+    if (rows[0]?.owner_id) {
+      (req as any).user = { id: rows[0].owner_id, isImpersonated: true };
       next(); return;
     }
+    /* Token invalid/expired — clear stale cookie and fall through */
+    res.clearCookie("owner_temp_session");
   }
 
-  /* ── Path 2: OIDC super-admin impersonation (oidc_impersonate cookie) ── */
-  const oidcCookie = (req.cookies as Record<string, string>)?.oidc_impersonate;
-  if (oidcCookie) {
-    try {
-      const parsed = JSON.parse(oidcCookie);
-      if (parsed?.ownerId) {
-        (req as any).user = { id: parsed.ownerId, claims: { sub: parsed.ownerId } };
-        next(); return;
-      }
-    } catch { /* ignore */ }
-  }
-
-  /* ── Path 3: Normal owner Passport session ── */
+  /* ── Path 2: Normal owner Passport session ── */
   if (req.isAuthenticated()) { next(); return; }
 
   res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Token-based Session Entry  (no auth required — token IS auth)
+   GET /api/owner/enter-session?token=...
+   Validates the one-time token, sets httpOnly cookie, redirects
+   to /dashboard.
+   ───────────────────────────────────────────────────────────── */
+const TEMP_SESSION_COOKIE = "owner_temp_session";
+const TEMP_SESSION_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  maxAge: 6 * 60 * 60 * 1000, /* 6 hours */
+};
+
+router.get("/enter-session", async (req, res) => {
+  const token = String(req.query.token ?? "").trim();
+  if (!token) return res.status(400).send("رمز مفقود");
+
+  const rows = await db.execute<{
+    owner_id: string; expires_at: Date;
+  }>(
+    sql`SELECT owner_id, expires_at FROM owner_temp_sessions
+        WHERE token = ${token} AND expires_at > now() LIMIT 1`
+  );
+  if (!rows[0]) return res.status(400).send("الرمز غير صالح أو منتهي الصلاحية");
+
+  /* Extend session lifetime to 6 hours from now */
+  const newExpiry = new Date(Date.now() + 6 * 60 * 60 * 1000);
+  await db.execute(
+    sql`UPDATE owner_temp_sessions SET expires_at = ${newExpiry} WHERE token = ${token}`
+  );
+
+  res.cookie(TEMP_SESSION_COOKIE, token, TEMP_SESSION_OPTS);
+  const frontendBase = process.env.FRONTEND_URL ?? "";
+  return res.redirect(`${frontendBase}/dashboard`);
+});
+
 router.use(requireAuth);
+
+/* ── Impersonation Mode check (called by Dashboard banner) ── */
+router.get("/impersonation-mode", async (req, res) => {
+  const tempToken = (req.cookies as Record<string, string>)?.owner_temp_session;
+  if (!tempToken || !(req as any).user?.isImpersonated) {
+    return res.json({ active: false });
+  }
+
+  const rows = await db.execute<{ owner_id: string; admin_label: string | null }>(
+    sql`SELECT owner_id, admin_label FROM owner_temp_sessions
+        WHERE token = ${tempToken} AND expires_at > now() LIMIT 1`
+  );
+  if (!rows[0]) return res.json({ active: false });
+
+  /* Fetch owner display name */
+  const ownerRows = await db.execute<{ name_ar: string }>(
+    sql`SELECT name_ar FROM chalet_submissions WHERE owner_id = ${rows[0].owner_id}
+        ORDER BY created_at ASC LIMIT 1`
+  );
+
+  return res.json({
+    active: true,
+    ownerId: rows[0].owner_id,
+    adminLabel: rows[0].admin_label ?? "مشرف",
+    ownerName: ownerRows[0]?.name_ar ?? null,
+  });
+});
+
+/* ── Exit impersonation session ── */
+router.post("/exit-session", async (req, res) => {
+  const tempToken = (req.cookies as Record<string, string>)?.owner_temp_session;
+  if (tempToken) {
+    /* Expire the token immediately in the DB */
+    await db.execute(
+      sql`UPDATE owner_temp_sessions SET expires_at = now() WHERE token = ${tempToken}`
+    );
+  }
+  res.clearCookie(TEMP_SESSION_COOKIE);
+  return res.json({ ok: true });
+});
 
 /* ── Helper: resolve the owner_applications email for the current session ──
    Strategy 1 – direct email from session (owner-login sessions store email).

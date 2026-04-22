@@ -12385,14 +12385,25 @@ export default function Dashboard() {
   const [editEnabled, setEditEnabled] = useState(false);
 
   useEffect(() => {
-    apiFetch("/admin/impersonation-status")
-      .then((r) => r.ok ? r.json() : { impersonating: false })
-      .then(setImpersonation)
+    apiFetch("/owner/impersonation-mode")
+      .then((r) => r.ok ? r.json() : { active: false })
+      .then((d) => {
+        if (d.active) {
+          setImpersonation({
+            impersonating: true,
+            ownerId: d.ownerId,
+            adminName: d.adminLabel,
+            ownerName: d.ownerName,
+          });
+        } else {
+          setImpersonation({ impersonating: false });
+        }
+      })
       .finally(() => setImpersonationLoading(false));
   }, []);
 
   async function endImpersonation() {
-    await apiFetch("/admin/impersonate/end", { method: "POST" });
+    await apiFetch("/owner/exit-session", { method: "POST" });
     window.location.href = `${BASE}/admin`;
   }
 

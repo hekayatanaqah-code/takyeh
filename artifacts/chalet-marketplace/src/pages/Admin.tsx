@@ -609,7 +609,9 @@ function SubmissionsTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       body: JSON.stringify({ ownerId }),
     });
     if (r.ok) {
-      window.location.href = `${BASE}/dashboard`;
+      const { token } = await r.json();
+      /* Navigate directly so the browser receives & stores the httpOnly cookie */
+      window.location.href = `${API}/owner/enter-session?token=${token}`;
     } else {
       const err = await r.json().catch(() => ({}));
       alert(err.error ?? "حدث خطأ");
@@ -1150,7 +1152,8 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       body: JSON.stringify({ ownerId }),
     });
     if (r.ok) {
-      window.location.href = `${BASE}/dashboard`;
+      const { token } = await r.json();
+      window.location.href = `${API}/owner/enter-session?token=${token}`;
     } else {
       const err = await r.json().catch(() => ({}));
       alert(err.error ?? "حدث خطأ");

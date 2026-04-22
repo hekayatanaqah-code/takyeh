@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { chaletSubmissionsTable } from "@workspace/db/schema";
+import { chaletSubmissionsTable, ownerTempSessionsTable } from "@workspace/db/schema";
 import { CreateSubmissionBody } from "@workspace/api-zod";
 import { eq, and, ne, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -45,27 +45,20 @@ const SubmissionBodyStrict = CreateSubmissionBody.extend({
 const router = Router();
 
 router.get("/", async (req, res) => {
-  /* ── Resolve owner ID: support admin impersonation ── */
+  /* ── Resolve owner ID (token session or normal session) ── */
   let resolvedOwnerId: string | null = null;
 
-  /* Path 1: DB-based admin staff impersonation */
-  const adminSid = req.cookies?.admin_staff_sid;
-  if (adminSid) {
-    const rows = await db.execute<{ impersonated_owner_id: string | null }>(
-      sql`SELECT impersonated_owner_id FROM admin_sessions WHERE sid = ${adminSid} AND expire > now() LIMIT 1`
+  /* Path 1: Admin impersonation via owner_temp_session cookie */
+  const tempToken = req.cookies?.owner_temp_session;
+  if (tempToken) {
+    const rows = await db.execute<{ owner_id: string }>(
+      sql`SELECT owner_id FROM owner_temp_sessions
+          WHERE token = ${tempToken} AND expires_at > now() LIMIT 1`
     );
-    if (rows[0]?.impersonated_owner_id) resolvedOwnerId = rows[0].impersonated_owner_id;
+    if (rows[0]?.owner_id) resolvedOwnerId = rows[0].owner_id;
   }
 
-  /* Path 2: OIDC super-admin impersonation */
-  if (!resolvedOwnerId) {
-    const oidcCookie = req.cookies?.oidc_impersonate;
-    if (oidcCookie) {
-      try { resolvedOwnerId = JSON.parse(oidcCookie)?.ownerId ?? null; } catch { /* ignore */ }
-    }
-  }
-
-  /* Path 3: Normal owner session */
+  /* Path 2: Normal owner session */
   if (!resolvedOwnerId && req.isAuthenticated()) {
     resolvedOwnerId = req.user.id;
   }

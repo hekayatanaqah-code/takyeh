@@ -646,6 +646,16 @@ export const serviceInsurancesTable = pgTable("service_insurances", {
 });
 export type ServiceInsurance = typeof serviceInsurancesTable.$inferSelect;
 
+/* ── Owner Temporary Sessions (admin impersonation) ─────────── */
+export const ownerTempSessionsTable = pgTable("owner_temp_sessions", {
+  id: serial("id").primaryKey(),
+  token: text("token").notNull().unique(),
+  ownerId: text("owner_id").notNull(),
+  adminLabel: text("admin_label"), /* admin name for banner display */
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /* ── Contact Inquiries (submitted via Contact Us page) ───────── */
 export const contactInquiriesTable = pgTable("contact_inquiries", {
   id: serial("id").primaryKey(),
