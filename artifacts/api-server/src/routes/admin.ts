@@ -522,7 +522,8 @@ router.patch("/chalets/:id/verify", async (req, res) => {
 /* ── Owners ──────────────────────────────────────────────── */
 
 router.get("/owners", async (_req, res) => {
-  const rows = await db
+  /* Owners from existing chalet submissions (legacy + active) */
+  const subRows = await db
     .select({
       ownerId: chaletSubmissionsTable.ownerId,
       whatsappNumber: chaletSubmissionsTable.whatsappNumber,
@@ -533,13 +534,29 @@ router.get("/owners", async (_req, res) => {
     .orderBy(chaletSubmissionsTable.createdAt);
 
   const seen = new Set<string>();
-  const unique = rows.filter((r) => {
-    if (!r.ownerId || seen.has(r.ownerId)) return false;
-    seen.add(r.ownerId);
-    return true;
-  });
+  const result: { ownerId: string; nameAr: string; whatsappNumber: string }[] = [];
 
-  return res.json(unique);
+  for (const r of subRows) {
+    if (!r.ownerId || seen.has(r.ownerId)) continue;
+    seen.add(r.ownerId);
+    result.push({ ownerId: r.ownerId, nameAr: r.nameAr ?? "", whatsappNumber: r.whatsappNumber ?? "" });
+  }
+
+  /* Approved + email-verified owners from partner applications who have NO chalet yet */
+  const appRows = await db.execute<{ id: number; full_name: string; phone: string }>(
+    sql`SELECT id, full_name, phone FROM owner_applications
+        WHERE status = 'approved' AND email_verified = true
+        ORDER BY created_at ASC`
+  );
+
+  for (const a of appRows.rows) {
+    const ownerId = `owner_${a.id}`;
+    if (seen.has(ownerId)) continue;
+    seen.add(ownerId);
+    result.push({ ownerId, nameAr: a.full_name ?? "", whatsappNumber: a.phone ?? "" });
+  }
+
+  return res.json(result);
 });
 
 /* ── Cities ──────────────────────────────────────────────── */

@@ -3934,6 +3934,7 @@ const DOCS_STATUS_BADGE: Record<string, { label: string; icon: string; className
 };
 
 function PartnerApplicationsTab() {
+  const qc = useQueryClient();
   const [apps, setApps]         = useState<PartnerApp[]>([]);
   const [loading, setLoading]   = useState(true);
   const [updating, setUpdating] = useState<number | null>(null);
@@ -3957,6 +3958,10 @@ function PartnerApplicationsTab() {
     });
     setApps((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
     setUpdating(null);
+    /* Refresh owners dropdown in DirectAddTab immediately after approval */
+    if (status === "approved") {
+      qc.invalidateQueries({ queryKey: ["admin", "owners"] });
+    }
   }
 
   async function setDocsStatus(id: number, docs_status: PartnerApp["docs_status"]) {
@@ -3980,6 +3985,8 @@ function PartnerApplicationsTab() {
     });
     setApps((prev) => prev.map((a) => (a.id === id ? { ...a, email_verified: true } : a)));
     setVerifying(null);
+    /* Refresh owners dropdown — a manually-verified + approved owner becomes eligible */
+    qc.invalidateQueries({ queryKey: ["admin", "owners"] });
   }
 
   if (loading) return (
