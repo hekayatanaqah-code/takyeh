@@ -6080,7 +6080,7 @@ const ALL_TABS = [
   { id: "communicationSettings",   label: "إعدادات التواصل",       icon: Mail },
   { id: "termsManagement",         label: "شروط الاستخدام",        icon: FileCheck },
   { id: "adminStaff",              label: "موظفو الإدارة",         icon: Shield },
-  { id: "directAdd",               label: "إضافة وحدة",            icon: Plus },
+  { id: "directAdd",               label: "إضافة شاليه / مالك",   icon: Plus },
 ] as const;
 
 type TabId = typeof ALL_TABS[number]["id"];
@@ -6092,8 +6092,8 @@ const ADMIN_NAV_GROUPS: Array<{
   tabs: TabId[];
 }> = [
   { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
-  { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "amenities", "locations"] },
-  { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "adminStaff"] },
+  { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "amenities", "locations", "directAdd"] },
+  { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "adminStaff", "directAdd"] },
   { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "services", "reviews"] },
   { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
   { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "communicationSettings", "contactInquiries", "termsManagement"] },
@@ -7122,6 +7122,32 @@ export default function Admin() {
             >
               تسجيل الخروج
             </button>
+          )}
+          {isSuperAdmin && (
+            <DropdownMenu dir="rtl">
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm">
+                  <Plus className="w-3.5 h-3.5" />
+                  إضافة جديد
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-52 border-slate-700 bg-slate-900 p-2 text-slate-100 shadow-2xl">
+                <DropdownMenuItem
+                  onClick={() => setActiveTab("directAdd")}
+                  className="flex cursor-pointer items-center gap-2.5 rounded-xl px-3.5 py-3 text-sm text-slate-300 transition-colors focus:bg-slate-800 focus:text-white"
+                >
+                  <Home className="w-4 h-4 text-amber-400" />
+                  إضافة شاليه جديد
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setActiveTab("directAdd")}
+                  className="flex cursor-pointer items-center gap-2.5 rounded-xl px-3.5 py-3 text-sm text-slate-300 transition-colors focus:bg-slate-800 focus:text-white"
+                >
+                  <Users className="w-4 h-4 text-sky-400" />
+                  إضافة مالك جديد
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           <button
             onClick={async () => {
