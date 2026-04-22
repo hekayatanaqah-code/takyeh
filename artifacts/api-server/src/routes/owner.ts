@@ -58,9 +58,7 @@ async function _verifyOtp(email: string, code: string): Promise<boolean> {
 }
 
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (req.isAuthenticated()) { next(); return; }
-
-  /* ── Admin impersonation fallback ── */
+  /* ── Admin impersonation takes PRIORITY over Passport session ── */
   const adminSid = (req.cookies as Record<string, string>)?.admin_staff_sid;
   if (adminSid) {
     const rows = await db.execute<{ impersonated_owner_id: string | null }>(
@@ -72,6 +70,9 @@ async function requireAuth(req: Request, res: Response, next: NextFunction) {
       next(); return;
     }
   }
+
+  /* ── Normal owner Passport session ── */
+  if (req.isAuthenticated()) { next(); return; }
 
   res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
 }

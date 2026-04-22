@@ -12411,6 +12411,9 @@ export default function Dashboard() {
   const isDemo = impersonation.ownerId === "__demo_preview__";
   const isReadOnly = isImpersonating && !editEnabled && !isDemo;
 
+  /* When impersonating an owner, suppress staff-mode so owner dashboard shows fully */
+  const actAsStaff = isStaff && !isImpersonating;
+
   function onBlockedEdit() {
     toast({ title: "وضع القراءة فقط", description: "فعّل وضع التعديل من الشريط العلوي أولاً", variant: "destructive" });
   }
@@ -12453,7 +12456,7 @@ export default function Dashboard() {
       const r = await apiFetch("/providers/my/submissions");
       return r.ok ? r.json() : [];
     },
-    enabled: (isAuthenticated || isImpersonating) && !isStaff,
+    enabled: (isAuthenticated || isImpersonating) && !actAsStaff,
   });
   const { data: myApprovedProviders = [] } = useQuery<{ id: number; isActive: boolean; businessName: string; category: string; city: string }[]>({
     queryKey: ["my-approved-providers"],
@@ -12461,7 +12464,7 @@ export default function Dashboard() {
       const r = await apiFetch("/providers/my/approved");
       return r.ok ? r.json() : [];
     },
-    enabled: (isAuthenticated || isImpersonating) && !isStaff,
+    enabled: (isAuthenticated || isImpersonating) && !actAsStaff,
   });
 
   /* Cross-owner logic: user has BOTH chalets AND service providers */
@@ -12593,14 +12596,14 @@ export default function Dashboard() {
   ] as const;
 
   const tabs = useMemo(() => {
-    if (!isStaff) return allTabs;
+    if (!actAsStaff) return allTabs;
     return allTabs.filter((tab) => {
       const permKey = TAB_PERMISSION[tab.id];
       if (!permKey || permKey === "__owner__") return false;
       return permissions[permKey as PermKey] === true;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStaff, permissions]);
+  }, [actAsStaff, permissions]);
 
   useEffect(() => {
     if (tabs.length > 0 && !tabs.find((t) => t.id === activeTab)) {
@@ -12739,19 +12742,19 @@ export default function Dashboard() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`border border-border rounded-3xl p-6 md:p-8 mb-8 flex flex-col sm:flex-row items-start sm:items-center gap-5 shadow-sm ${isStaff ? "bg-blue-50/60 dark:bg-blue-950/20" : "bg-card"}`}
+          className={`border border-border rounded-3xl p-6 md:p-8 mb-8 flex flex-col sm:flex-row items-start sm:items-center gap-5 shadow-sm ${actAsStaff ? "bg-blue-50/60 dark:bg-blue-950/20" : "bg-card"}`}
         >
-          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 ${isStaff ? "bg-blue-100 dark:bg-blue-900/40" : "bg-primary/10"}`}>
-            {!isStaff && user?.profileImageUrl ? (
+          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 ${actAsStaff ? "bg-blue-100 dark:bg-blue-900/40" : "bg-primary/10"}`}>
+            {!actAsStaff && user?.profileImageUrl ? (
               <img src={user.profileImageUrl} alt={user.firstName ?? ""} className="w-16 h-16 rounded-2xl object-cover" />
-            ) : isStaff ? (
+            ) : actAsStaff ? (
               <UserCheck className="w-8 h-8 text-blue-600" />
             ) : (
               <User className="w-8 h-8 text-primary" />
             )}
           </div>
           <div className="flex-1 min-w-0">
-            {isStaff ? (
+            {actAsStaff ? (
               <>
                 <h1 className="text-2xl font-bold text-foreground">أهلاً، {staffUser?.name ?? "عزيزنا"} 👋</h1>
                 <p className="text-muted-foreground mt-1">أنت مسجّل دخول كموظف — صلاحياتك محددة من قبل صاحب العمل</p>
@@ -12765,13 +12768,15 @@ export default function Dashboard() {
               </>
             ) : (
               <>
-                <h1 className="text-2xl font-bold text-foreground">أهلاً، {user?.firstName ?? "عزيزنا"} 👋</h1>
+                <h1 className="text-2xl font-bold text-foreground">
+                  {isImpersonating ? `عرض حساب: ${impersonation.ownerName ?? "المالك"}` : `أهلاً، ${user?.firstName ?? "عزيزنا"} 👋`}
+                </h1>
                 <p className="text-muted-foreground mt-1">لوحة تحكمك الموحدة — الشاليهات والخدمات في مكان واحد</p>
               </>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            {!isStaff && (
+            {!actAsStaff && !isImpersonating && (
               <>
                 {planLimits && (submissions?.length ?? 0) >= planLimits.chaletLimit ? (
                   <Button variant="outline" className="rounded-xl font-semibold text-sm" onClick={() => setShowHeaderUpgrade("chalet")}>
@@ -12811,7 +12816,7 @@ export default function Dashboard() {
         />
 
         {/* ── Dashboard Mode Switcher (owners only, not staff) ── */}
-        {!isStaff && (
+        {!actAsStaff && (
           <motion.div
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -12873,7 +12878,7 @@ export default function Dashboard() {
         )}
 
         {/* ══ SERVICES MODE — Full ERP ═════════════════════════════════ */}
-        {dashMode === "services" && !isStaff && (
+        {dashMode === "services" && !actAsStaff && (
           <motion.div
             key="services-mode"
             initial={{ opacity: 0, y: 8 }}
@@ -13028,7 +13033,7 @@ export default function Dashboard() {
         )}
 
         {/* ══ ADMIN FINANCE MODE ══════════════════════════════════════ */}
-        {dashMode === "admin-finance" && !isStaff && (() => {
+        {dashMode === "admin-finance" && !actAsStaff && (() => {
           const afTabs = [
             { id: "revenue",       label: "الإيرادات",        icon: <TrendingUp className="w-4 h-4" />,   color: "text-green-600" },
             { id: "expenses",      label: "المصروفات",        icon: <TrendingDown className="w-4 h-4" />, color: "text-red-500" },
@@ -13157,7 +13162,7 @@ export default function Dashboard() {
         })()}
 
         {/* ══ CHALETS MODE ═════════════════════════════════════════════ */}
-        {(dashMode === "chalets" || isStaff) && (
+        {(dashMode === "chalets" || actAsStaff) && (
           <>
 
         {/* Subscription / Account Settings — clickable banner */}
@@ -13208,7 +13213,7 @@ export default function Dashboard() {
         )}
 
         {/* ── My Services Summary Card (in chalets mode only) ── */}
-        {!isStaff && dashMode === "chalets" && (myServiceSubmissions.length > 0 || myApprovedProviders.length > 0) && (
+        {!actAsStaff && dashMode === "chalets" && (myServiceSubmissions.length > 0 || myApprovedProviders.length > 0) && (
           <motion.button
             type="button"
             initial={{ opacity: 0, y: 6 }}
