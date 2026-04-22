@@ -11,6 +11,7 @@ import {
   Building2, CheckCircle, AlertCircle, Clock3, XCircle, Loader2,
 } from "lucide-react";
 import { toAr } from "@/lib/utils";
+import { resolveAmenity } from "@/lib/amenityUtils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -21,41 +22,6 @@ function apiFetch(path: string, opts?: RequestInit) {
     ...opts,
   });
 }
-
-/* ── Amenity / Category maps ── */
-const AMENITY_MAP: Record<string, { ar: string; icon: string }> = {
-  pool: { ar: "مسبح", icon: "🏊" },
-  kids_games: { ar: "ألعاب أطفال", icon: "🎠" },
-  private_majlis: { ar: "مجالس مستقلة", icon: "🛋️" },
-  bbq: { ar: "ركن شواء", icon: "🔥" },
-  kitchen: { ar: "مطبخ مجهز", icon: "🍳" },
-  wifi: { ar: "واي فاي", icon: "📶" },
-  ac: { ar: "مكيف", icon: "❄️" },
-  parking: { ar: "موقف سيارات", icon: "🅿️" },
-  garden: { ar: "حديقة", icon: "🌿" },
-  gym: { ar: "صالة رياضية", icon: "🏋️" },
-  cinema: { ar: "سينما خارجية", icon: "🎬" },
-  jacuzzi: { ar: "جاكوزي", icon: "🛁" },
-  football: { ar: "ملعب كرة قدم", icon: "⚽" },
-  billiards: { ar: "بلياردو", icon: "🎱" },
-  table_tennis: { ar: "تنس طاولة", icon: "🏓" },
-  indoor_pool: { ar: "مسبح داخلي", icon: "🏊" },
-  outdoor_pool: { ar: "مسبح خارجي", icon: "🌊" },
-  sauna: { ar: "ساونا", icon: "🧖" },
-  private_beach: { ar: "شاطئ خاص", icon: "🏖️" },
-  security: { ar: "حراسة أمنية", icon: "🔒" },
-  generator: { ar: "مولد كهربائي", icon: "⚡" },
-  laundry: { ar: "غسالة", icon: "🫧" },
-  bbq_outdoor: { ar: "شواء خارجي", icon: "🍖" },
-  prayer_room: { ar: "غرفة صلاة", icon: "🕌" },
-  baby_items: { ar: "مستلزمات أطفال", icon: "🍼" },
-  fire_pit: { ar: "موقد نار", icon: "🪵" },
-  pets_allowed: { ar: "يسمح بالحيوانات", icon: "🐾" },
-  smart_tv: { ar: "شاشة ذكية", icon: "📺" },
-  game_room: { ar: "غرفة ألعاب", icon: "🎮" },
-  large_garden: { ar: "حديقة واسعة", icon: "🌳" },
-  other: { ar: "مرافق إضافية", icon: "✨" },
-};
 
 const CATEGORY_MAP: Record<string, string> = {
   villa: "🏰 فيلا",
@@ -73,14 +39,6 @@ const SECTIONS_MAP: Record<string, string> = {
   women: "👩 نساء",
 };
 
-function resolveAmenity(raw: string): { ar: string; icon: string } {
-  const t = raw.trim();
-  if (AMENITY_MAP[t]) return AMENITY_MAP[t];
-  const ci = t.indexOf(":");
-  if (ci !== -1) { const after = t.slice(ci + 1).trim(); if (after) return { ar: after, icon: "✨" }; }
-  if (/[\u0600-\u06FF]/.test(t)) return { ar: t, icon: "✨" };
-  return { ar: t.replace(/_/g, " "), icon: "✨" };
-}
 
 function statusBadge(status: string) {
   const map: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
@@ -194,6 +152,15 @@ export default function OwnerChaletDetail() {
       return r.json();
     },
     enabled: !!submissionId,
+  });
+
+  const { data: amenitiesCatalog = [] } = useQuery<Array<{ key: string; labelAr: string }>>({
+    queryKey: ["catalog", "amenities"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/amenities`, { credentials: "include" });
+      return r.ok ? r.json() : [];
+    },
+    staleTime: 10 * 60 * 1000,
   });
 
   const storageBase = BASE;
@@ -418,7 +385,7 @@ export default function OwnerChaletDetail() {
             <Section title={`المرافق والخدمات (${toAr(amenities.length)})`}>
               <div className="flex flex-wrap gap-2">
                 {amenities.map((a) => {
-                  const { ar, icon } = resolveAmenity(a);
+                  const { ar, icon } = resolveAmenity(a, amenitiesCatalog);
                   return (
                     <span key={a} className="inline-flex items-center gap-1.5 text-sm bg-primary/8 text-primary rounded-full px-3 py-1.5 font-medium border border-primary/15">
                       <span>{icon}</span>{ar}

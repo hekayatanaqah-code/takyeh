@@ -4,40 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
+import { resolveAmenity } from "@/lib/amenityUtils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-const AMENITY_MAP: Record<string, { ar: string; icon: string }> = {
-  pool:           { ar: "مسبح",              icon: "🏊" },
-  kids_games:     { ar: "ألعاب أطفال",        icon: "🎠" },
-  private_majlis: { ar: "مجالس مستقلة",       icon: "🛋️" },
-  bbq:            { ar: "ركن شواء",            icon: "🔥" },
-  kitchen:        { ar: "مطبخ مجهز",           icon: "🍳" },
-  wifi:           { ar: "واي فاي",             icon: "📶" },
-  ac:             { ar: "مكيف",                icon: "❄️" },
-  parking:        { ar: "موقف سيارات",         icon: "🅿️" },
-  garden:         { ar: "حديقة",               icon: "🌿" },
-  gym:            { ar: "صالة رياضية",         icon: "🏋️" },
-  cinema:         { ar: "سينما خارجية",        icon: "🎬" },
-  jacuzzi:        { ar: "جاكوزي",              icon: "🛁" },
-  football:       { ar: "ملعب كرة قدم",        icon: "⚽" },
-  billiards:      { ar: "بلياردو",             icon: "🎱" },
-  table_tennis:   { ar: "تنس طاولة",           icon: "🏓" },
-  indoor_pool:    { ar: "مسبح داخلي",          icon: "🏊" },
-  outdoor_pool:   { ar: "مسبح خارجي",          icon: "🌊" },
-  sauna:          { ar: "ساونا",               icon: "🧖" },
-  private_beach:  { ar: "شاطئ خاص",            icon: "🏖️" },
-  security:       { ar: "حراسة أمنية",         icon: "🔒" },
-  generator:      { ar: "مولد كهربائي",        icon: "⚡" },
-  laundry:        { ar: "غسالة",               icon: "🫧" },
-  bbq_outdoor:    { ar: "شواء خارجي",          icon: "🍖" },
-  prayer_room:    { ar: "غرفة صلاة",           icon: "🕌" },
-  baby_items:     { ar: "مستلزمات أطفال",      icon: "🍼" },
-  fire_pit:       { ar: "موقد نار",             icon: "🪵" },
-  pets_allowed:   { ar: "يسمح بالحيوانات",     icon: "🐾" },
-  smart_tv:       { ar: "شاشة ذكية",           icon: "📺" },
-  game_room:      { ar: "غرفة ألعاب",          icon: "🎮" },
-};
 
 function fmt(v: string | number | null | undefined) {
   if (v == null || v === "") return null;
@@ -94,6 +63,15 @@ export default function ChaletMasterView() {
     },
     staleTime: 0,
     refetchOnMount: true,
+  });
+
+  const { data: amenitiesCatalog = [] } = useQuery<Array<{ key: string; labelAr: string }>>({
+    queryKey: ["catalog", "amenities"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/amenities`, { credentials: "include" });
+      return r.ok ? r.json() : [];
+    },
+    staleTime: 10 * 60 * 1000,
   });
 
   /* ── loading ── */
@@ -273,11 +251,11 @@ export default function ChaletMasterView() {
                 <h2 style={SEC}>المرافق والخدمات</h2>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(155px,1fr))",gap:12}}>
                   {amenities.map((key,i)=>{
-                    const info = AMENITY_MAP[key];
+                    const { ar, icon } = resolveAmenity(key, amenitiesCatalog);
                     return (
                       <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderRadius:14,border:"1.5px solid #e5e7eb",background:"#fafafa",fontSize:13,color:"#374151",fontWeight:600}}>
-                        <span style={{fontSize:22,lineHeight:1}}>{info?.icon??"✓"}</span>
-                        <span>{info?.ar??key}</span>
+                        <span style={{fontSize:22,lineHeight:1}}>{icon}</span>
+                        <span>{ar}</span>
                       </div>
                     );
                   })}

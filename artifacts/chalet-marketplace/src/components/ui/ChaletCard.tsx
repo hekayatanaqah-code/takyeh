@@ -3,6 +3,7 @@ import { MapPin, Bed, Star, ShieldCheck } from "lucide-react";
 import { Chalet } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { resolveAmenity } from "@/lib/amenityUtils";
 
 type Period = "morning" | "evening" | "full_day";
 
@@ -188,11 +189,14 @@ export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardPro
           </div>
 
           <div className="mt-4 pt-4 border-t border-border/50 flex flex-wrap gap-2">
-            {chalet.amenities.slice(0, 3).map((amenity: string, idx: number) => (
-              <span key={idx} className="text-xs text-muted-foreground bg-background border px-2 py-1 rounded-full">
-                {amenity}
-              </span>
-            ))}
+            {chalet.amenities.slice(0, 3).map((amenity: string, idx: number) => {
+              const { ar, icon } = resolveAmenity(amenity);
+              return (
+                <span key={idx} className="text-xs text-muted-foreground bg-background border px-2 py-1 rounded-full">
+                  {icon} {ar}
+                </span>
+              );
+            })}
             {chalet.amenities.length > 3 && (
               <span className="text-xs text-muted-foreground bg-background border px-2 py-1 rounded-full">
                 +{chalet.amenities.length - 3}

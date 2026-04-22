@@ -6,61 +6,9 @@ import { Footer } from "@/components/layout/Footer";
 import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
 import { toAr } from "@/lib/utils";
 import { toHijri } from "@/lib/hijri";
+import { resolveAmenity } from "@/lib/amenityUtils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-/* ─────────────────── Amenity catalogue ─────────────────── */
-const AMENITY_MAP: Record<string, { ar: string; icon: string }> = {
-  pool:           { ar: "مسبح",              icon: "🏊" },
-  kids_games:     { ar: "ألعاب أطفال",       icon: "🎠" },
-  private_majlis: { ar: "مجالس مستقلة",      icon: "🛋️" },
-  bbq:            { ar: "ركن شواء",           icon: "🔥" },
-  kitchen:        { ar: "مطبخ مجهز",          icon: "🍳" },
-  wifi:           { ar: "واي فاي",            icon: "📶" },
-  ac:             { ar: "مكيف",               icon: "❄️" },
-  parking:        { ar: "موقف سيارات",        icon: "🅿️" },
-  garden:         { ar: "حديقة",              icon: "🌿" },
-  gym:            { ar: "صالة رياضية",        icon: "🏋️" },
-  cinema:         { ar: "سينما خارجية",       icon: "🎬" },
-  jacuzzi:        { ar: "جاكوزي",             icon: "🛁" },
-  football:       { ar: "ملعب كرة قدم",       icon: "⚽" },
-  billiards:      { ar: "بلياردو",            icon: "🎱" },
-  table_tennis:   { ar: "تنس طاولة",          icon: "🏓" },
-  indoor_pool:    { ar: "مسبح داخلي",         icon: "🏊" },
-  outdoor_pool:   { ar: "مسبح خارجي",         icon: "🌊" },
-  sauna:          { ar: "ساونا",              icon: "🧖" },
-  private_beach:  { ar: "شاطئ خاص",           icon: "🏖️" },
-  security:       { ar: "حراسة أمنية",        icon: "🔒" },
-  generator:      { ar: "مولد كهربائي",       icon: "⚡" },
-  laundry:        { ar: "غسالة",              icon: "🫧" },
-  bbq_outdoor:    { ar: "شواء خارجي",         icon: "🍖" },
-  prayer_room:    { ar: "غرفة صلاة",          icon: "🕌" },
-  baby_items:     { ar: "مستلزمات أطفال",     icon: "🍼" },
-  fire_pit:       { ar: "موقد نار",            icon: "🪵" },
-  pets_allowed:   { ar: "يسمح بالحيوانات",    icon: "🐾" },
-  smart_tv:       { ar: "شاشة ذكية",          icon: "📺" },
-  game_room:      { ar: "غرفة ألعاب",         icon: "🎮" },
-  large_garden:   { ar: "حديقة واسعة",        icon: "🌳" },
-  other:          { ar: "مرافق إضافية",        icon: "✨" },
-};
-
-/* Resolve an amenity key/text → display label + icon */
-function resolveAmenity(raw: string): { ar: string; icon: string } {
-  const trimmed = raw.trim();
-  // 1. direct catalogue match
-  if (AMENITY_MAP[trimmed]) return AMENITY_MAP[trimmed];
-  // 2. compound format "other:النص" — strip the prefix, keep the Arabic value
-  const colonIdx = trimmed.indexOf(":");
-  if (colonIdx !== -1) {
-    const afterColon = trimmed.slice(colonIdx + 1).trim();
-    if (afterColon) return { ar: afterColon, icon: "✨" };
-  }
-  // 3. if it looks like Arabic text, show it as-is
-  if (/[\u0600-\u06FF]/.test(trimmed)) return { ar: trimmed, icon: "✨" };
-  // 4. convert English key → readable label (replace underscores, capitalise)
-  const fallback = trimmed.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-  return { ar: fallback, icon: "✨" };
-}
 
 /* ─────────────────── Category / sections maps ─────────────────── */
 const CATEGORY_MAP: Record<string, { ar: string; icon: string }> = {
@@ -166,6 +114,16 @@ export default function ChaletDetail() {
     },
     staleTime: 0,
     refetchOnMount: true,
+  });
+
+  /* ── Amenities catalog (DB labels take priority over fallback map) ── */
+  const { data: amenitiesCatalog = [] } = useQuery<Array<{ key: string; labelAr: string }>>({
+    queryKey: ["catalog", "amenities"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/amenities`, { credentials: "include" });
+      return r.ok ? r.json() : [];
+    },
+    staleTime: 10 * 60 * 1000,
   });
 
   /* ── Site settings (for customisable WA template) ── */
@@ -502,7 +460,7 @@ export default function ChaletDetail() {
                 <h2 style={SEC}>المرافق والخدمات</h2>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 10 }}>
                   {amenities.map((raw, i) => {
-                    const { ar, icon } = resolveAmenity(raw);
+                    const { ar, icon } = resolveAmenity(raw, amenitiesCatalog);
                     return (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 14, border: "1.5px solid #e5e7eb", background: "#fafafa", fontSize: 13, color: "#374151", fontWeight: 600 }}>
                         <span style={{ fontSize: 19, flexShrink: 0 }}>{icon}</span>
