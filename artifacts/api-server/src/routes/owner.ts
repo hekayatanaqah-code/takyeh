@@ -413,6 +413,59 @@ router.post("/support-request", requireAuth, async (req, res) => {
   }
 });
 
+/* ── GET /owner/support-requests — list this owner's support messages ── */
+router.get("/support-requests", requireAuth, async (req, res) => {
+  try {
+    const email = await resolveOwnerEmail(req);
+    const ownerId = req.user?.id ?? email ?? "unknown";
+    const result = await db.execute(
+      sql`SELECT id, owner_id, subject, message, status, admin_reply, admin_reply_at, is_read_by_owner, created_at
+          FROM owner_support_requests
+          WHERE owner_id = ${String(ownerId)}
+          ORDER BY created_at DESC`
+    );
+    return res.json((result as any).rows);
+  } catch (err) {
+    console.error("[GET /owner/support-requests]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+/* ── GET /owner/support-requests/unread-count — count unread admin replies ── */
+router.get("/support-requests/unread-count", requireAuth, async (req, res) => {
+  try {
+    const email = await resolveOwnerEmail(req);
+    const ownerId = req.user?.id ?? email ?? "unknown";
+    const result = await db.execute(
+      sql`SELECT COUNT(*) as count FROM owner_support_requests
+          WHERE owner_id = ${String(ownerId)} AND admin_reply IS NOT NULL AND is_read_by_owner = false`
+    );
+    const count = Number(((result as any).rows)[0]?.count ?? 0);
+    return res.json({ count });
+  } catch (err) {
+    console.error("[GET /owner/support-requests/unread-count]", err);
+    return res.status(500).json({ count: 0 });
+  }
+});
+
+/* ── POST /owner/support-requests/:id/mark-read — owner reads admin reply ── */
+router.post("/support-requests/:id/mark-read", requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const email = await resolveOwnerEmail(req);
+    const ownerId = req.user?.id ?? email ?? "unknown";
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "معرّف غير صحيح" });
+    await db.execute(
+      sql`UPDATE owner_support_requests SET is_read_by_owner = true
+          WHERE id = ${id} AND owner_id = ${String(ownerId)}`
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[POST /owner/support-requests/:id/mark-read]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
 /* ── POST /owner/profile/request-change — verify password & send OTP ── */
 router.post("/profile/request-change", async (req, res) => {
   try {

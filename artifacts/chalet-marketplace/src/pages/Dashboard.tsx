@@ -12504,6 +12504,19 @@ export default function Dashboard() {
   });
   const unreadNotifCount = notifSummary.filter((n) => !n.isRead).length;
 
+  /* ── Unread admin replies count (support badge) ── */
+  const { data: supportUnread } = useQuery<{ count: number }>({
+    queryKey: ["owner", "support-unread-count"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/support-requests/unread-count");
+      if (!r.ok) return { count: 0 };
+      return r.json();
+    },
+    enabled: isAuthenticated || isImpersonating,
+    refetchInterval: 30_000,
+  });
+  const unreadSupportCount = supportUnread?.count ?? 0;
+
   /* ── Audio ping helper (Web Audio API — no external file needed) ── */
   const playPing = useCallback((type: "booking" | "review" | "cancel") => {
     try {
@@ -13276,6 +13289,11 @@ export default function Dashboard() {
                   {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
                 </span>
               )}
+              {tab.id === "support" && unreadSupportCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
+                  {unreadSupportCount > 9 ? "9+" : unreadSupportCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -13317,8 +13335,26 @@ export default function Dashboard() {
 }
 
 /* ── Owner Support Center Tab ────────────────────────────── */
+interface OwnerSupportMsg {
+  id: number;
+  subject: string;
+  message: string;
+  status: string;
+  admin_reply: string | null;
+  admin_reply_at: string | null;
+  is_read_by_owner: boolean;
+  created_at: string;
+}
+
+const SUPPORT_STATUS_AR: Record<string, { label: string; color: string }> = {
+  new:         { label: "قيد المراجعة", color: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700/40" },
+  in_progress: { label: "تم الرد",      color: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/40" },
+  resolved:    { label: "مُغلق",         color: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/40" },
+};
+
 function OwnerSupportTab() {
   const { toast } = useToast();
+  const qc = useQueryClient();
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
   function apiFetch(path: string, opts?: RequestInit) {
     return fetch(`${BASE}/api${path}`, { credentials: "include", headers: { "Content-Type": "application/json", ...(opts?.headers ?? {}) }, ...opts });
@@ -13338,6 +13374,25 @@ function OwnerSupportTab() {
   const [submitting,  setSubmitting]  = useState(false);
   const [submitted,   setSubmitted]   = useState(false);
   const [error,       setError]       = useState("");
+  const [expandedId,  setExpandedId]  = useState<number | null>(null);
+  const [showForm,    setShowForm]    = useState(false);
+
+  /* Fetch message history */
+  const { data: history = [], isLoading: histLoading } = useQuery<OwnerSupportMsg[]>({
+    queryKey: ["owner", "support-requests"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/support-requests");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    refetchInterval: 30_000,
+  });
+
+  async function markRead(id: number) {
+    await apiFetch(`/owner/support-requests/${id}/mark-read`, { method: "POST" });
+    qc.invalidateQueries({ queryKey: ["owner", "support-requests"] });
+    qc.invalidateQueries({ queryKey: ["owner", "support-unread-count"] });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -13353,35 +13408,51 @@ function OwnerSupportTab() {
       const d = await r.json().catch(() => null);
       if (!r.ok) { setError(d?.error ?? "حدث خطأ، يرجى المحاولة مرة أخرى"); return; }
       setSubmitted(true);
+      setShowForm(false);
+      qc.invalidateQueries({ queryKey: ["owner", "support-requests"] });
       toast({ title: "تم الإرسال ✓", description: "سيتواصل معك فريق الدعم في أقرب وقت" });
     } catch { setError("تعذّر الاتصال بالخادم"); }
     finally { setSubmitting(false); }
   }
 
+  const unreadReplies = history.filter((m) => m.admin_reply && !m.is_read_by_owner).length;
+
   return (
-    <div className="max-w-lg mx-auto space-y-5 py-4">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-          <MessageSquare className="w-5 h-5 text-primary" />
+    <div className="max-w-2xl mx-auto space-y-5 py-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+            <MessageSquare className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-foreground">مركز الدعم والطلبات</h2>
+            <p className="text-xs text-muted-foreground">أرسل طلبك التقني أو اقتراحك مباشرةً لفريق تكية</p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-base font-bold text-foreground">مركز الدعم والطلبات</h2>
-          <p className="text-xs text-muted-foreground">أرسل طلبك التقني أو اقتراحك مباشرةً لفريق تكية</p>
-        </div>
+        <Button
+          size="sm"
+          onClick={() => { setShowForm(!showForm); setSubmitted(false); setSubject(""); setMessage(""); setError(""); }}
+          className="gap-1.5"
+        >
+          <Send className="w-3.5 h-3.5" />
+          طلب جديد
+        </Button>
       </div>
 
-      {submitted ? (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-2xl p-10 text-center space-y-4">
-          <CheckCircle className="w-14 h-14 text-green-500 mx-auto" />
-          <h2 className="text-xl font-bold text-green-700 dark:text-green-400">تم إرسال طلبك بنجاح!</h2>
-          <p className="text-muted-foreground text-sm">سيتواصل معك فريق دعم تكية في أقرب وقت ممكن. شكراً لتواصلك.</p>
-          <Button variant="outline" onClick={() => { setSubmitted(false); setSubject(""); setMessage(""); setError(""); }}>
-            إرسال طلب آخر
-          </Button>
+      {/* Unread notification */}
+      {unreadReplies > 0 && (
+        <div className="flex items-center gap-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/40 rounded-xl px-4 py-2.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse shrink-0" />
+          <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+            لديك {unreadReplies === 1 ? "رد جديد" : `${unreadReplies} ردود جديدة`} من فريق تكية
+          </p>
         </div>
-      ) : (
+      )}
+
+      {/* Send form */}
+      {showForm && !submitted && (
         <form onSubmit={handleSubmit} className="bg-card border border-border rounded-2xl p-6 space-y-5">
-          {/* Subject */}
           <div className="space-y-2">
             <label className="text-sm font-semibold">الموضوع <span className="text-destructive">*</span></label>
             <div className="flex flex-wrap gap-2">
@@ -13395,14 +13466,10 @@ function OwnerSupportTab() {
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-muted text-muted-foreground border-border hover:border-primary hover:text-primary"
                   }`}
-                >
-                  {s}
-                </button>
+                >{s}</button>
               ))}
             </div>
           </div>
-
-          {/* Message */}
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">
               تفاصيل الطلب <span className="text-destructive">*</span>
@@ -13418,15 +13485,89 @@ function OwnerSupportTab() {
             />
             <p className="text-xs text-muted-foreground text-left">{message.length} حرف</p>
           </div>
-
           {error && <p className="text-sm text-destructive font-medium">{error}</p>}
-
-          <Button type="submit" className="w-full gap-2" disabled={submitting}>
-            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            إرسال الطلب
-          </Button>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>إلغاء</Button>
+            <Button type="submit" className="flex-1 gap-2" disabled={submitting}>
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              إرسال الطلب
+            </Button>
+          </div>
         </form>
       )}
+
+      {submitted && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-2xl p-6 text-center space-y-3">
+          <CheckCircle className="w-12 h-12 text-green-500 mx-auto" />
+          <p className="font-bold text-green-700 dark:text-green-400">تم إرسال طلبك بنجاح!</p>
+          <p className="text-muted-foreground text-sm">سيتواصل معك فريق دعم تكية قريباً.</p>
+          <Button variant="outline" size="sm" onClick={() => { setSubmitted(false); setShowForm(false); }}>حسناً</Button>
+        </div>
+      )}
+
+      {/* Message history */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-bold text-foreground">سجل المراسلات</h3>
+        {histLoading ? (
+          <div className="text-center py-8 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
+        ) : history.length === 0 ? (
+          <div className="text-center py-10 bg-muted/30 border border-border rounded-xl">
+            <MessageSquare className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+            <p className="text-muted-foreground text-sm">لا توجد رسائل سابقة</p>
+            <p className="text-muted-foreground/60 text-xs mt-1">أرسل طلبك الأول عبر زر "طلب جديد" أعلاه</p>
+          </div>
+        ) : (
+          history.map((msg) => {
+            const isExp = expandedId === msg.id;
+            const statusInfo = SUPPORT_STATUS_AR[msg.status] ?? { label: msg.status, color: "text-muted-foreground bg-muted border-border" };
+            const hasUnread = msg.admin_reply && !msg.is_read_by_owner;
+            return (
+              <div
+                key={msg.id}
+                className={`border rounded-xl overflow-hidden transition-all ${hasUnread ? "border-blue-400 dark:border-blue-600" : "border-border"}`}
+              >
+                <div
+                  className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors"
+                  onClick={() => {
+                    setExpandedId(isExp ? null : msg.id);
+                    if (!isExp && hasUnread) markRead(msg.id);
+                  }}
+                >
+                  {hasUnread && <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0 animate-pulse" />}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{msg.subject}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{new Date(msg.created_at).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })}</p>
+                  </div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0 ${statusInfo.color}`}>{statusInfo.label}</span>
+                  {msg.admin_reply && <span className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700/40 px-2 py-0.5 rounded-full shrink-0">رد متاح</span>}
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${isExp ? "rotate-180" : ""}`} />
+                </div>
+                {isExp && (
+                  <div className="border-t border-border bg-muted/20 px-4 py-4 space-y-4">
+                    {/* Owner message */}
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1.5 font-medium">رسالتك:</p>
+                      <div className="bg-background border border-border rounded-lg p-3 text-sm text-foreground leading-relaxed whitespace-pre-wrap">{msg.message}</div>
+                    </div>
+                    {/* Admin reply */}
+                    {msg.admin_reply && (
+                      <div>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mb-1.5 font-medium flex items-center gap-1.5">
+                          <Send className="w-3 h-3" /> رد فريق تكية {msg.admin_reply_at ? `— ${new Date(msg.admin_reply_at).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })}` : ""}:
+                        </p>
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600/30 rounded-lg p-3 text-sm text-blue-900 dark:text-blue-200 leading-relaxed whitespace-pre-wrap">{msg.admin_reply}</div>
+                      </div>
+                    )}
+                    {!msg.admin_reply && (
+                      <p className="text-xs text-muted-foreground italic">لم يتم الرد بعد. سيتواصل فريق تكية معك في أقرب وقت.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
 
       {/* Info note */}
       <div className="bg-muted/50 border border-border rounded-xl px-4 py-3 text-xs text-muted-foreground leading-relaxed">

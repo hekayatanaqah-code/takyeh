@@ -663,7 +663,10 @@ export const ownerSupportRequestsTable = pgTable("owner_support_requests", {
   ownerName: text("owner_name"),
   subject: text("subject").notNull(),
   message: text("message").notNull(),
-  status: text("status").notNull().default("new"), /* new | read | resolved */
+  status: text("status").notNull().default("new"), /* new | in_progress | resolved */
+  adminReply: text("admin_reply"),
+  adminReplyAt: timestamp("admin_reply_at", { withTimezone: true }),
+  isReadByOwner: boolean("is_read_by_owner").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type OwnerSupportRequest = typeof ownerSupportRequestsTable.$inferSelect;

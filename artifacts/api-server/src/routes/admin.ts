@@ -1048,13 +1048,15 @@ router.patch("/contact-inquiries/:id/status", async (req, res) => {
 });
 
 /* ── Owner Support Requests ──────────────────────────────── */
-router.get("/support-requests", async (_req, res) => {
+router.get("/support-requests", async (req, res) => {
   try {
+    const ownerId = req.query.ownerId as string | undefined;
     const result = await db.execute(
-      sql`SELECT id, owner_id, owner_name, subject, message, status, created_at
-          FROM owner_support_requests
-          ORDER BY created_at DESC
-          LIMIT 300`
+      ownerId
+        ? sql`SELECT id, owner_id, owner_name, subject, message, status, admin_reply, admin_reply_at, is_read_by_owner, created_at
+              FROM owner_support_requests WHERE owner_id = ${ownerId} ORDER BY created_at DESC LIMIT 300`
+        : sql`SELECT id, owner_id, owner_name, subject, message, status, admin_reply, admin_reply_at, is_read_by_owner, created_at
+              FROM owner_support_requests ORDER BY created_at DESC LIMIT 300`
     );
     return res.json((result as any).rows);
   } catch (err) {
@@ -1065,12 +1067,32 @@ router.get("/support-requests", async (_req, res) => {
 
 router.patch("/support-requests/:id/status", async (req, res) => {
   const id = Number(req.params.id);
-  const body = z.object({ status: z.enum(["new", "read", "resolved"]) }).safeParse(req.body);
+  const body = z.object({ status: z.enum(["new", "in_progress", "resolved"]) }).safeParse(req.body);
   if (!body.success || !Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
   await db.execute(
     sql`UPDATE owner_support_requests SET status = ${body.data.status} WHERE id = ${id}`
   );
   return res.json({ ok: true });
+});
+
+router.post("/support-requests/:id/reply", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({ reply: z.string().min(1).max(2000) }).safeParse(req.body);
+  if (!body.success || !Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  try {
+    await db.execute(
+      sql`UPDATE owner_support_requests
+          SET admin_reply = ${body.data.reply},
+              admin_reply_at = NOW(),
+              status = 'in_progress',
+              is_read_by_owner = false
+          WHERE id = ${id}`
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[POST /admin/support-requests/:id/reply]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
 });
 
 /* ── Subscription Plans Management ──────────────────────── */

@@ -1162,6 +1162,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [districtFilter, setDistrictFilter] = useState("");
   const [typeFilter, setTypeFilter]       = useState("all");
   const [selected, setSelected]           = useState<Set<string>>(new Set());
+  const [archiveOwner, setArchiveOwner]   = useState<{ id: string; name: string } | null>(null);
 
   /* ── Fetch owners ── */
   const { data: owners = [], isLoading } = useQuery({
@@ -1394,7 +1395,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
               <TableHead className="text-slate-300 text-right font-semibold">العقار الرئيسي</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">الجوال / واتساب</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">تاريخ الانضمام</TableHead>
-              {isSuperAdmin && <TableHead className="text-slate-300 text-right font-semibold">إجراءات</TableHead>}
+              <TableHead className="text-slate-300 text-right font-semibold">إجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1489,25 +1490,51 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                 </TableCell>
 
                 {/* Actions */}
-                {isSuperAdmin && (
-                  <TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2 flex-wrap">
                     <button
-                      onClick={() => handleImpersonate(owner.ownerId)}
-                      disabled={impersonating === owner.ownerId}
-                      className="flex items-center gap-1.5 text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
+                      onClick={() => setArchiveOwner({ id: owner.ownerId, name: owner.ownerName })}
+                      className="flex items-center gap-1.5 text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
                     >
-                      {impersonating === owner.ownerId
-                        ? <Loader2 className="w-3 h-3 animate-spin" />
-                        : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
-                      دخول للحساب
+                      <Inbox className="w-3.5 h-3.5" />
+                      أرشيف المراسلات
                     </button>
-                  </TableCell>
-                )}
+                    {isSuperAdmin && (
+                      <button
+                        onClick={() => handleImpersonate(owner.ownerId)}
+                        disabled={impersonating === owner.ownerId}
+                        className="flex items-center gap-1.5 text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {impersonating === owner.ownerId
+                          ? <Loader2 className="w-3 h-3 animate-spin" />
+                          : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+                        دخول للحساب
+                      </button>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+
+      {/* Owner Archive Dialog */}
+      {archiveOwner && (
+        <Dialog open onOpenChange={() => setArchiveOwner(null)}>
+          <DialogContent className="bg-slate-900 border border-slate-700 text-slate-100 max-w-2xl w-full max-h-[85vh] overflow-y-auto" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-slate-100">
+                <Inbox className="w-5 h-5 text-amber-400" />
+                أرشيف المراسلات — {archiveOwner.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="mt-2">
+              <OwnerInboxTab ownerIdFilter={archiveOwner.id} />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -6365,6 +6392,9 @@ interface OwnerSupportRequest {
   subject: string;
   message: string;
   status: string;
+  admin_reply: string | null;
+  admin_reply_at: string | null;
+  is_read_by_owner: boolean;
   created_at: string;
 }
 
@@ -6374,15 +6404,25 @@ const SUPPORT_STATUS_LABELS: Record<string, { label: string; className: string }
   resolved:    { label: "تم الحل",       className: "bg-green-900/40 text-green-300 border border-green-700/40" },
 };
 
-function OwnerInboxTab() {
+function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [updating, setUpdating] = useState<number | null>(null);
+  const [replyingId, setReplyingId] = useState<number | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replySending, setReplySending] = useState(false);
   const qc = useQueryClient();
 
+  const queryKey = ownerIdFilter
+    ? ["admin", "support-requests", ownerIdFilter]
+    : ["admin", "support-requests"];
+
   const { data: requests = [], isLoading } = useQuery<OwnerSupportRequest[]>({
-    queryKey: ["admin", "support-requests"],
+    queryKey,
     queryFn: async () => {
-      const r = await apiFetch("/admin/support-requests");
+      const url = ownerIdFilter
+        ? `/admin/support-requests?ownerId=${encodeURIComponent(ownerIdFilter)}`
+        : "/admin/support-requests";
+      const r = await apiFetch(url);
       if (!r.ok) throw new Error("فشل التحميل");
       return r.json();
     },
@@ -6403,52 +6443,75 @@ function OwnerInboxTab() {
     }
   }
 
-  const newCount  = requests.filter((r) => r.status === "new").length;
+  async function sendReply(id: number) {
+    if (!replyText.trim()) return;
+    setReplySending(true);
+    try {
+      const r = await apiFetch(`/admin/support-requests/${id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reply: replyText.trim() }),
+      });
+      if (r.ok) {
+        setReplyingId(null);
+        setReplyText("");
+        qc.invalidateQueries({ queryKey: ["admin", "support-requests"] });
+        qc.invalidateQueries({ queryKey: ["admin", "support-requests", ownerIdFilter ?? ""] });
+      }
+    } finally {
+      setReplySending(false);
+    }
+  }
+
+  const newCount   = requests.filter((r) => r.status === "new").length;
   const totalCount = requests.length;
 
   return (
     <div className="space-y-6" dir="rtl">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-            <Inbox className="w-5 h-5 text-amber-400" />
-            صندوق الوارد / طلبات الملاك
-          </h2>
-          <p className="text-slate-400 text-sm mt-0.5">الرسائل المُرسلة من مركز الدعم في لوحة تحكم الملاك</p>
-        </div>
-        <div className="flex gap-3 flex-wrap">
-          <span className="bg-slate-800 border border-slate-700 text-slate-300 text-sm px-3 py-1.5 rounded-lg">
-            الإجمالي: <span className="font-bold text-white">{toAr(totalCount)}</span>
-          </span>
-          {newCount > 0 && (
-            <span className="bg-red-900/40 border border-red-700/40 text-red-300 text-sm px-3 py-1.5 rounded-lg flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-              جديد: <span className="font-bold">{toAr(newCount)}</span>
+      {!ownerIdFilter && (
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+              <Inbox className="w-5 h-5 text-amber-400" />
+              صندوق الوارد / طلبات الملاك
+            </h2>
+            <p className="text-slate-400 text-sm mt-0.5">الرسائل المُرسلة من مركز الدعم في لوحة تحكم الملاك</p>
+          </div>
+          <div className="flex gap-3 flex-wrap">
+            <span className="bg-slate-800 border border-slate-700 text-slate-300 text-sm px-3 py-1.5 rounded-lg">
+              الإجمالي: <span className="font-bold text-white">{toAr(totalCount)}</span>
             </span>
-          )}
+            {newCount > 0 && (
+              <span className="bg-red-900/40 border border-red-700/40 text-red-300 text-sm px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                جديد: <span className="font-bold">{toAr(newCount)}</span>
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {isLoading ? (
         <div className="text-center py-16 text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
       ) : requests.length === 0 ? (
-        <div className="text-center py-16 bg-slate-800 rounded-xl border border-slate-700">
+        <div className="text-center py-12 bg-slate-800/50 rounded-xl border border-slate-700">
           <Inbox className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400">لا توجد طلبات حتى الآن</p>
-          <p className="text-slate-500 text-sm mt-1">ستظهر هنا الرسائل المُرسلة من الملاك عبر مركز الدعم</p>
+          <p className="text-slate-400">لا توجد رسائل حتى الآن</p>
+          {!ownerIdFilter && <p className="text-slate-500 text-sm mt-1">ستظهر هنا الرسائل المُرسلة من الملاك عبر مركز الدعم</p>}
         </div>
       ) : (
         <div className="space-y-3">
           {requests.map((req) => {
             const isExpanded = expandedId === req.id;
+            const isReplying = replyingId === req.id;
             const statusInfo = SUPPORT_STATUS_LABELS[req.status] ?? { label: req.status, className: "bg-slate-800 text-slate-400 border border-slate-600" };
             return (
               <div key={req.id} className={`bg-slate-800 border rounded-xl overflow-hidden transition-all ${req.status === "new" ? "border-red-700/50" : "border-slate-700"}`}>
                 {/* Row header */}
                 <div
                   className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-slate-700/40 transition-colors"
-                  onClick={() => setExpandedId(isExpanded ? null : req.id)}
+                  onClick={() => { setExpandedId(isExpanded ? null : req.id); if (!isExpanded) setReplyingId(null); }}
                 >
                   {req.status === "new" && <span className="w-2 h-2 rounded-full bg-red-400 shrink-0 animate-pulse" />}
                   <div className="flex-1 min-w-0">
@@ -6456,6 +6519,9 @@ function OwnerInboxTab() {
                       <span className="font-semibold text-slate-100 text-sm">{req.owner_name || req.owner_id}</span>
                       <span className="text-slate-500 text-xs">—</span>
                       <span className="text-slate-300 text-sm truncate">{req.subject}</span>
+                      {req.admin_reply && (
+                        <span className="text-[10px] bg-green-900/30 text-green-400 border border-green-700/30 px-1.5 py-0.5 rounded-full shrink-0">تم الرد</span>
+                      )}
                     </div>
                     <p className="text-slate-500 text-xs mt-0.5">{fmtDate(req.created_at)}</p>
                   </div>
@@ -6466,24 +6532,80 @@ function OwnerInboxTab() {
                 {/* Expanded detail */}
                 {isExpanded && (
                   <div className="border-t border-slate-700 bg-slate-900/50 px-4 py-4 space-y-4">
-                    <div className="bg-slate-800/80 rounded-lg p-3 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{req.message}</div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-slate-400 text-xs">تغيير الحالة:</span>
-                      {(["new", "in_progress", "resolved"] as const).map((s) => (
-                        <button
-                          key={s}
-                          disabled={req.status === s || updating === req.id}
-                          onClick={() => updateStatus(req.id, s)}
-                          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
-                            req.status === s
-                              ? "bg-amber-500/20 border-amber-600 text-amber-200 cursor-default"
-                              : "bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600"
-                          }`}
-                        >
-                          {updating === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : SUPPORT_STATUS_LABELS[s]?.label}
-                        </button>
-                      ))}
+                    {/* Original message */}
+                    <div>
+                      <p className="text-xs text-slate-500 mb-1.5 font-medium">رسالة المالك:</p>
+                      <div className="bg-slate-800/80 rounded-lg p-3 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{req.message}</div>
                     </div>
+
+                    {/* Existing reply */}
+                    {req.admin_reply && (
+                      <div>
+                        <p className="text-xs text-green-500 mb-1.5 font-medium flex items-center gap-1.5">
+                          <Send className="w-3 h-3" /> ردّ الإدارة — {req.admin_reply_at ? fmtDate(req.admin_reply_at) : ""}:
+                        </p>
+                        <div className="bg-green-900/20 border border-green-700/30 rounded-lg p-3 text-green-200 text-sm leading-relaxed whitespace-pre-wrap">{req.admin_reply}</div>
+                      </div>
+                    )}
+
+                    {/* Reply form */}
+                    {isReplying ? (
+                      <div className="space-y-2">
+                        <p className="text-xs text-amber-400 font-medium">{req.admin_reply ? "تعديل الرد:" : "كتابة رد:"}</p>
+                        <textarea
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          placeholder="اكتب ردّك هنا..."
+                          rows={4}
+                          dir="rtl"
+                          className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-amber-500 placeholder:text-slate-500"
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={() => { setReplyingId(null); setReplyText(""); }}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600"
+                          >إلغاء</button>
+                          <button
+                            onClick={() => sendReply(req.id)}
+                            disabled={!replyText.trim() || replySending}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40 flex items-center gap-1.5"
+                          >
+                            {replySending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                            إرسال الرد
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReplyingId(req.id);
+                            setReplyText(req.admin_reply ?? "");
+                          }}
+                          className="text-xs px-3 py-1.5 rounded-lg bg-amber-600/20 border border-amber-600/40 text-amber-300 hover:bg-amber-600/30 flex items-center gap-1.5"
+                        >
+                          <Send className="w-3 h-3" />
+                          {req.admin_reply ? "تعديل الرد" : "رد"}
+                        </button>
+                        <span className="text-slate-600 text-xs">|</span>
+                        <span className="text-slate-400 text-xs">الحالة:</span>
+                        {(["new", "in_progress", "resolved"] as const).map((s) => (
+                          <button
+                            key={s}
+                            disabled={req.status === s || updating === req.id}
+                            onClick={(e) => { e.stopPropagation(); updateStatus(req.id, s); }}
+                            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+                              req.status === s
+                                ? "bg-amber-500/20 border-amber-600 text-amber-200 cursor-default"
+                                : "bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600"
+                            }`}
+                          >
+                            {updating === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : SUPPORT_STATUS_LABELS[s]?.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
