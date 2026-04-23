@@ -211,6 +211,20 @@ async function resolveOwnerEmail(req: Request): Promise<string | null> {
     if (hit) return hit.email;
   }
 
+  /* Strategy 4 — admin-assigned "owner_N" key → owner_applications by numeric id
+   * When admin adds a property for an owner, chalet_submissions.owner_id = "owner_N"
+   * (where N = owner_applications.id). We parse N and look up directly. */
+  if (userId && /^owner_\d+$/.test(String(userId))) {
+    const n = parseInt(String(userId).replace("owner_", ""), 10);
+    if (!isNaN(n)) {
+      const r = await db.execute(
+        sql`SELECT email FROM owner_applications WHERE id = ${n} LIMIT 1`
+      );
+      const hit = ((r as any).rows as Array<{ email: string }>)[0];
+      if (hit?.email) return hit.email;
+    }
+  }
+
   return null;
 }
 
@@ -1125,10 +1139,28 @@ router.delete("/bookings/:id", async (req, res) => {
 router.get("/chalets", async (req, res) => {
   const ownerId = req.user!.id;
 
+  /* Build full list of owner IDs to query:
+   *  1. The direct session user ID (Replit ID or "owner_N" for impersonation)
+   *  2. The "owner_N" key derived from owner_applications (for Replit-OAuth owners
+   *     whose admin-added properties were stored under the "owner_N" key) */
+  const ownerIds = new Set<string>([ownerId]);
+  try {
+    const email = await resolveOwnerEmail(req);
+    if (email) {
+      const r = await db.execute(
+        sql`SELECT id FROM owner_applications WHERE LOWER(email) = LOWER(${email}) LIMIT 1`
+      );
+      const appId = ((r as any).rows as Array<{ id: number }>)[0]?.id;
+      if (appId) ownerIds.add(`owner_${appId}`);
+    }
+  } catch { /* non-fatal */ }
+
+  const allOwnerIds = [...ownerIds];
+
   const subs = await db
     .select({ id: chaletSubmissionsTable.id })
     .from(chaletSubmissionsTable)
-    .where(eq(chaletSubmissionsTable.ownerId, ownerId));
+    .where(inArray(chaletSubmissionsTable.ownerId, allOwnerIds));
 
   const subIds = subs.map((s) => s.id);
   if (subIds.length === 0) return res.json([]);

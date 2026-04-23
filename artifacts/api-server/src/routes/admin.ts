@@ -1590,8 +1590,28 @@ router.post("/direct-add-chalet", requireSuperAdmin, async (req, res) => {
     return res.status(409).json({ error: "هذا الاسم مستخدم مسبقاً في هذه المدينة" });
   }
 
+  /* Resolve the most specific owner ID:
+   * If admin selected "owner_N", check if that owner has a Replit account
+   * (owner_applications.email → users.id). If found, use the Replit user ID
+   * so the owner sees the property in their own dashboard without needing
+   * impersonation. Fall back to "owner_N" if no Replit account exists. */
+  let effectiveOwnerId = data.ownerId;
+  if (/^owner_\d+$/.test(data.ownerId)) {
+    try {
+      const n = parseInt(data.ownerId.replace("owner_", ""), 10);
+      const r = await db.execute(
+        sql`SELECT u.id FROM owner_applications oa
+            JOIN users u ON LOWER(u.email) = LOWER(oa.email)
+            WHERE oa.id = ${n}
+            LIMIT 1`
+      );
+      const userId = ((r as any).rows as Array<{ id: string }>)[0]?.id;
+      if (userId) effectiveOwnerId = String(userId);
+    } catch { /* keep original "owner_N" if lookup fails */ }
+  }
+
   const vals = {
-    ownerId: data.ownerId,
+    ownerId: effectiveOwnerId,
     nameAr: data.nameAr,
     location: data.location,
     district: data.district,
