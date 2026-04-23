@@ -393,14 +393,32 @@ router.post("/support-request", requireAuth, async (req, res) => {
     if (!subject?.trim()) return res.status(400).json({ error: "الموضوع مطلوب" });
     if (!message?.trim()) return res.status(400).json({ error: "نص الطلب مطلوب" });
 
-    /* Resolve owner identity */
+    /* Resolve owner identity — use user ID as primary key */
+    const ownerId = String(req.user?.id ?? (await resolveOwnerEmail(req)) ?? "unknown");
+
+    /* Resolve name:
+     *  1. Try owner_applications via email (works when owner_id IS an email)
+     *  2. Try chalet_submissions.owner_id → whatsapp_number → owner_applications.phone
+     *     (works when owner_id is a Replit numeric user ID or "owner_N" key)
+     */
     let ownerName: string | null = null;
-    const email = await resolveOwnerEmail(req);
-    if (email) {
-      const r = await db.execute(sql`SELECT full_name FROM owner_applications WHERE email = ${email} LIMIT 1`);
-      ownerName = ((r as any).rows as Array<{ full_name: string }>)[0]?.full_name ?? null;
-    }
-    const ownerId = req.user?.id ?? email ?? "unknown";
+    try {
+      // Strategy 1 — owner_id is email-shaped
+      if (ownerId.includes("@")) {
+        const r = await db.execute(sql`SELECT full_name FROM owner_applications WHERE LOWER(email) = LOWER(${ownerId}) LIMIT 1`);
+        ownerName = ((r as any).rows as Array<{ full_name: string }>)[0]?.full_name ?? null;
+      }
+      // Strategy 2 — owner_id is Replit user ID or "owner_N" → join via chalet_submissions
+      if (!ownerName) {
+        const r = await db.execute(
+          sql`SELECT oa.full_name FROM chalet_submissions cs
+              JOIN owner_applications oa ON oa.phone = cs.whatsapp_number
+              WHERE cs.owner_id = ${ownerId}
+              LIMIT 1`
+        );
+        ownerName = ((r as any).rows as Array<{ full_name: string }>)[0]?.full_name ?? null;
+      }
+    } catch { /* ignore — name will be null, resolved at display time */ }
 
     await db.execute(
       sql`INSERT INTO owner_support_requests (owner_id, owner_name, subject, message, status, created_at)

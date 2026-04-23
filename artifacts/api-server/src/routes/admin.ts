@@ -1051,21 +1051,38 @@ router.patch("/contact-inquiries/:id/status", async (req, res) => {
 router.get("/support-requests", async (req, res) => {
   try {
     const ownerId = req.query.ownerId as string | undefined;
-    /* JOIN owner_applications so we always show a real name even if owner_name column is NULL */
+    /*
+     * Multi-strategy name resolution (owner_id may be a Replit user ID like "56719001"
+     * or a custom key like "owner_4" — neither maps directly to owner_applications.email).
+     *
+     * Correct path:  owner_id → chalet_submissions.owner_id → whatsapp_number
+     *                         → owner_applications.phone → full_name
+     *
+     * COALESCE priority:
+     *   1. owner_name stored on the record (set at insert time when possible)
+     *   2. full_name from owner_applications via whatsapp/chalet join
+     *   3. Raw owner_id as last-resort fallback
+     */
     const result = await db.execute(
       ownerId
         ? sql`SELECT s.id, s.owner_id,
                 COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
                 s.subject, s.message, s.status, s.admin_reply, s.admin_reply_at, s.is_read_by_owner, s.created_at
               FROM owner_support_requests s
-              LEFT JOIN owner_applications oa ON LOWER(oa.email) = LOWER(s.owner_id)
+              LEFT JOIN LATERAL (
+                SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
+              ) cs ON true
+              LEFT JOIN owner_applications oa ON oa.phone = cs.whatsapp_number
               WHERE s.owner_id = ${ownerId}
               ORDER BY s.created_at DESC LIMIT 300`
         : sql`SELECT s.id, s.owner_id,
                 COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
                 s.subject, s.message, s.status, s.admin_reply, s.admin_reply_at, s.is_read_by_owner, s.created_at
               FROM owner_support_requests s
-              LEFT JOIN owner_applications oa ON LOWER(oa.email) = LOWER(s.owner_id)
+              LEFT JOIN LATERAL (
+                SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
+              ) cs ON true
+              LEFT JOIN owner_applications oa ON oa.phone = cs.whatsapp_number
               ORDER BY s.created_at DESC LIMIT 300`
     );
     return res.json((result as any).rows);
