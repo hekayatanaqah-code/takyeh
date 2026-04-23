@@ -4973,6 +4973,108 @@ async function daUploadFile(file: File, type: "image" | "video"): Promise<string
   return d.url ?? d.originalUrl ?? null;
 }
 
+/* ── Searchable owner picker (replaces plain Select) ───────── */
+interface OwnerOption { ownerId: string; ownerName: string; whatsappNumber: string; }
+
+function OwnerPickerInput({
+  owners,
+  value,
+  onChange,
+}: {
+  owners: OwnerOption[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [query, setQuery]   = useState("");
+  const [open, setOpen]     = useState(false);
+  const containerRef        = useRef<HTMLDivElement>(null);
+
+  const selected = owners.find((o) => o.ownerId === value);
+
+  /* Alphabetically sorted + filtered */
+  const options = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return owners
+      .filter((o) =>
+        !q ||
+        o.ownerName.toLowerCase().includes(q) ||
+        o.whatsappNumber.includes(q)
+      )
+      .sort((a, b) => a.ownerName.localeCompare(b.ownerName, "ar"));
+  }, [owners, query]);
+
+  /* Close on outside click */
+  useEffect(() => {
+    function onOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, []);
+
+  function pick(owner: OwnerOption) {
+    onChange(owner.ownerId);
+    setQuery("");
+    setOpen(false);
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      {/* Input shows selected label or search query */}
+      <div className="relative">
+        <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+        </svg>
+        <input
+          value={open ? query : selected ? `${selected.ownerName} — ${toAr(selected.whatsappNumber)}` : ""}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => { setQuery(""); setOpen(true); }}
+          placeholder="ابحث باسم المالك أو رقم الجوال..."
+          className="w-full bg-slate-900 border border-slate-600 rounded-lg text-sm text-white pr-9 pl-9 py-2.5 placeholder:text-slate-500 focus:outline-none focus:border-amber-500/60"
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => { onChange(""); setQuery(""); setOpen(false); }}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute z-50 top-full mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-xl overflow-hidden">
+          <div className="max-h-60 overflow-y-auto">
+            {options.length === 0 && (
+              <div className="px-4 py-3 text-slate-400 text-sm text-center">لا توجد نتائج</div>
+            )}
+            {options.map((o) => (
+              <button
+                key={o.ownerId}
+                type="button"
+                onClick={() => pick(o)}
+                className={`w-full text-right flex items-center justify-between px-4 py-2.5 text-sm hover:bg-slate-800 transition-colors ${
+                  o.ownerId === value ? "bg-amber-500/10 text-amber-300" : "text-white"
+                }`}
+              >
+                <span className="font-medium">{o.ownerName}</span>
+                <span className="text-slate-400 text-xs font-mono ltr">{toAr(o.whatsappNumber)}</span>
+              </button>
+            ))}
+          </div>
+          <div className="border-t border-slate-700 px-3 py-1.5 text-[10px] text-slate-500 text-left">
+            {toAr(options.length)} نتيجة
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DirectAddTab() {
   const qc = useQueryClient();
   const photoInputRef    = useRef<HTMLInputElement>(null);
@@ -5057,7 +5159,7 @@ function DirectAddTab() {
   const [success,    setSuccess]    = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const { data: owners = [] } = useQuery<{ ownerId: string; nameAr: string; whatsappNumber: string }[]>({
+  const { data: owners = [] } = useQuery<OwnerOption[]>({
     queryKey: ["admin", "owners"],
     queryFn: async () => {
       const r = await apiFetch("/admin/owners");
@@ -5251,18 +5353,15 @@ function DirectAddTab() {
           <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">المالك</h3>
           <div className="space-y-1.5">
             <label className="text-sm text-slate-300 font-medium">اختر مالكاً موجوداً</label>
-            <Select value={ownerId} onValueChange={setOwnerId}>
-              <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر المالك..." /></SelectTrigger>
-              <SelectContent className="bg-slate-900 border-slate-700 max-h-64 overflow-y-auto">
-                {owners.length === 0 && <SelectItem value="__none__" disabled className="text-slate-500">لا يوجد ملاك مسجّلون بعد</SelectItem>}
-                {owners.map(o => (
-                  <SelectItem key={o.ownerId} value={o.ownerId} className="text-white focus:bg-slate-700">
-                    <span className="font-medium">{o.nameAr}</span>
-                    <span className="text-slate-400 text-xs mr-2">{o.whatsappNumber}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {owners.length === 0
+              ? <p className="text-slate-500 text-sm py-2">لا يوجد ملاك مسجّلون بعد</p>
+              : <OwnerPickerInput owners={owners} value={ownerId} onChange={setOwnerId} />
+            }
+            {ownerId && (
+              <p className="text-emerald-400 text-xs mt-1">
+                ✓ تم اختيار: {owners.find(o => o.ownerId === ownerId)?.ownerName ?? ownerId}
+              </p>
+            )}
           </div>
           {ownerRegOk && <div className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 text-sm">{ownerRegOk}</div>}
           <button type="button" onClick={() => setShowNewOwner(v => !v)} className="text-amber-400 text-sm hover:underline underline-offset-2">
