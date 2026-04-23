@@ -521,38 +521,72 @@ router.patch("/chalets/:id/verify", async (req, res) => {
 /* ── Owners ──────────────────────────────────────────────── */
 
 router.get("/owners", async (_req, res) => {
-  /* Owners from existing chalet submissions (legacy + active) */
+  /* ── Step 1: pull all submissions with enrichment data ── */
   const subRows = await db
     .select({
-      ownerId: chaletSubmissionsTable.ownerId,
+      ownerId:       chaletSubmissionsTable.ownerId,
       whatsappNumber: chaletSubmissionsTable.whatsappNumber,
-      nameAr: chaletSubmissionsTable.nameAr,
-      createdAt: chaletSubmissionsTable.createdAt,
+      nameAr:        chaletSubmissionsTable.nameAr,
+      location:      chaletSubmissionsTable.location,
+      propertyType:  chaletSubmissionsTable.propertyType,
+      createdAt:     chaletSubmissionsTable.createdAt,
     })
     .from(chaletSubmissionsTable)
     .orderBy(chaletSubmissionsTable.createdAt);
 
+  /* ── Step 2: pull owner_applications for full names / phones ── */
+  const appRows = await db.execute<{
+    id: number; full_name: string; phone: string; created_at: string;
+  }>(
+    sql`SELECT id, full_name, phone, created_at FROM owner_applications ORDER BY created_at ASC`
+  );
+  const appByOwnerId = new Map<string, { fullName: string; phone: string; createdAt: string }>();
+  for (const a of (appRows as any).rows) {
+    appByOwnerId.set(`owner_${a.id}`, {
+      fullName: a.full_name ?? "",
+      phone: a.phone ?? "",
+      createdAt: a.created_at ?? "",
+    });
+  }
+
+  type OwnerRow = {
+    ownerId: string; ownerName: string; primaryProperty: string;
+    whatsappNumber: string; location: string; propertyType: string | null;
+    createdAt: string | null;
+  };
+
   const seen = new Set<string>();
-  const result: { ownerId: string; nameAr: string; whatsappNumber: string }[] = [];
+  const result: OwnerRow[] = [];
 
   for (const r of subRows) {
     if (!r.ownerId || seen.has(r.ownerId)) continue;
     seen.add(r.ownerId);
-    result.push({ ownerId: r.ownerId, nameAr: r.nameAr ?? "", whatsappNumber: r.whatsappNumber ?? "" });
+    const app = appByOwnerId.get(r.ownerId);
+    result.push({
+      ownerId:         r.ownerId,
+      ownerName:       app?.fullName || r.ownerId,
+      primaryProperty: r.nameAr ?? "",
+      whatsappNumber:  r.whatsappNumber ?? "",
+      location:        r.location ?? "",
+      propertyType:    r.propertyType ?? null,
+      createdAt:       r.createdAt?.toISOString() ?? null,
+    });
   }
 
-  /* Approved + email-verified owners from partner applications who have NO chalet yet */
-  const appRows = await db.execute<{ id: number; full_name: string; phone: string }>(
-    sql`SELECT id, full_name, phone FROM owner_applications
-        WHERE status = 'approved' AND email_verified = true
-        ORDER BY created_at ASC`
-  );
-
-  for (const a of appRows.rows) {
+  /* Approved owners with NO chalet yet */
+  for (const a of (appRows as any).rows) {
     const ownerId = `owner_${a.id}`;
     if (seen.has(ownerId)) continue;
     seen.add(ownerId);
-    result.push({ ownerId, nameAr: a.full_name ?? "", whatsappNumber: a.phone ?? "" });
+    result.push({
+      ownerId,
+      ownerName:       a.full_name ?? ownerId,
+      primaryProperty: "—",
+      whatsappNumber:  a.phone ?? "",
+      location:        "",
+      propertyType:    null,
+      createdAt:       a.created_at ?? null,
+    });
   }
 
   return res.json(result);

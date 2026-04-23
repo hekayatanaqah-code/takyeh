@@ -160,9 +160,12 @@ interface Amenity {
 
 interface Owner {
   ownerId: string;
-  nameAr: string;
+  ownerName: string;
+  primaryProperty: string;
   whatsappNumber: string;
-  createdAt: string;
+  location: string;
+  propertyType: string | null;
+  createdAt: string | null;
 }
 
 interface Service {
@@ -1133,17 +1136,65 @@ function AmenitiesTab() {
 }
 
 /* ── Owners Tab ───────────────────────────────── */
+const PROPERTY_TYPE_LABELS: Record<string, string> = {
+  chalet: "شاليه",
+  farm: "مزرعة",
+  resort: "منتجع",
+};
+
 function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [impersonating, setImpersonating] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "chalet" | "farm" | "resort">("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data: owners = [], isLoading } = useQuery({
     queryKey: ["admin", "owners"],
     queryFn: async () => {
       const r = await apiFetch("/admin/owners");
       if (!r.ok) throw new Error("فشل التحميل");
-      return r.json();
+      return r.json() as Promise<Owner[]>;
     },
   });
+
+  /* Unique cities for the dropdown */
+  const cities = useMemo(() => {
+    const set = new Set<string>();
+    for (const o of owners) if (o.location) set.add(o.location);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "ar"));
+  }, [owners]);
+
+  /* Apply filters */
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return owners.filter((o) => {
+      if (q && !o.ownerName.toLowerCase().includes(q) && !o.whatsappNumber.includes(q)) return false;
+      if (cityFilter && o.location !== cityFilter) return false;
+      if (typeFilter !== "all" && (o.propertyType ?? "chalet") !== typeFilter) return false;
+      return true;
+    });
+  }, [owners, search, cityFilter, typeFilter]);
+
+  const allSelected = filtered.length > 0 && filtered.every((o) => selected.has(o.ownerId));
+
+  function toggleAll() {
+    if (allSelected) {
+      const next = new Set(selected);
+      filtered.forEach((o) => next.delete(o.ownerId));
+      setSelected(next);
+    } else {
+      const next = new Set(selected);
+      filtered.forEach((o) => next.add(o.ownerId));
+      setSelected(next);
+    }
+  }
+
+  function toggleOne(id: string) {
+    const next = new Set(selected);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSelected(next);
+  }
 
   async function handleImpersonate(ownerId: string) {
     setImpersonating(ownerId);
@@ -1165,58 +1216,184 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
     return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-slate-400 w-8 h-8" /></div>;
   }
 
+  const colSpan = isSuperAdmin ? 6 : 5;
+
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-white">إدارة الملاك</h2>
-          <p className="text-slate-400 text-sm mt-1">انقر زر الدخول بصلاحية المالك لمراجعة لوحة تحكمه — هذا الخيار متاح للمشرف العام فقط.</p>
+          <p className="text-slate-400 text-sm mt-1">
+            {owners.length > 0 ? `${toAr(owners.length)} مالك مسجّل` : "لا يوجد ملاك مسجلون بعد"}
+            {selected.size > 0 && <span className="mr-2 text-amber-400">— {toAr(selected.size)} محدّد</span>}
+          </p>
         </div>
-        <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-full font-semibold">
-          مشرف عام فقط
-        </span>
+        {isSuperAdmin && (
+          <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-full font-semibold">
+            مشرف عام فقط
+          </span>
+        )}
       </div>
-      <div className="rounded-lg border border-slate-700 overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="border-slate-700 bg-slate-800">
-            <TableHead className="text-slate-300 text-right">معرف المالك</TableHead>
-            <TableHead className="text-slate-300 text-right">اسم الشاليه الأول</TableHead>
-            <TableHead className="text-slate-300 text-right">واتساب</TableHead>
-            <TableHead className="text-slate-300 text-right">تاريخ الانضمام</TableHead>
-            {isSuperAdmin && <TableHead className="text-slate-300 text-right">إجراءات</TableHead>}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {owners.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={isSuperAdmin ? 5 : 4} className="text-center text-slate-400 py-12">لا يوجد ملاك مسجلون بعد — ستظهر هنا عند تسجيل الملاك للدخول</TableCell>
-            </TableRow>
-          )}
-          {owners.map((owner: Owner) => (
-            <TableRow key={owner.ownerId} className="border-slate-700 hover:bg-slate-800/50">
-              <TableCell className="font-mono text-xs text-slate-400 max-w-[150px] truncate">{toAr(owner.ownerId)}</TableCell>
-              <TableCell className="text-white font-medium">{owner.nameAr}</TableCell>
-              <TableCell className="text-slate-300 font-mono text-sm">{toAr(owner.whatsappNumber)}</TableCell>
-              <TableCell className="text-slate-400 text-sm">{fmtDate(owner.createdAt)}</TableCell>
-              {isSuperAdmin && (
-              <TableCell>
-                <button
-                  onClick={() => handleImpersonate(owner.ownerId)}
-                  disabled={impersonating === owner.ownerId}
-                  className="flex items-center gap-1.5 text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
-                >
-                  {impersonating === owner.ownerId
-                    ? <Loader2 className="w-3 h-3 animate-spin" />
-                    : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
-                  دخول للحساب
-                </button>
-              </TableCell>
-              )}
-            </TableRow>
+
+      {/* ── Filter bar ── */}
+      <div className="flex flex-wrap gap-3 items-center p-3 bg-slate-800/60 rounded-lg border border-slate-700">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[180px]">
+          <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="بحث بالاسم أو الجوال..."
+            className="w-full bg-slate-900 border border-slate-600 rounded-lg text-sm text-white pr-9 pl-3 py-2 placeholder:text-slate-500 focus:outline-none focus:border-amber-500/60"
+          />
+        </div>
+
+        {/* City dropdown */}
+        <select
+          value={cityFilter}
+          onChange={(e) => setCityFilter(e.target.value)}
+          className="bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200 px-3 py-2 focus:outline-none focus:border-amber-500/60 min-w-[130px]"
+        >
+          <option value="">كل المدن</option>
+          {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+
+        {/* Property type tabs */}
+        <div className="flex rounded-lg overflow-hidden border border-slate-600">
+          {(["all", "chalet", "farm", "resort"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t)}
+              className={`px-3 py-2 text-xs font-semibold transition-colors ${
+                typeFilter === t
+                  ? "bg-amber-500 text-slate-900"
+                  : "bg-slate-900 text-slate-300 hover:bg-slate-700"
+              }`}
+            >
+              {t === "all" ? "الكل" : PROPERTY_TYPE_LABELS[t]}
+            </button>
           ))}
-        </TableBody>
-      </Table>
+        </div>
+
+        {/* Clear filters */}
+        {(search || cityFilter || typeFilter !== "all") && (
+          <button
+            onClick={() => { setSearch(""); setCityFilter(""); setTypeFilter("all"); }}
+            className="text-xs text-slate-400 hover:text-white transition-colors px-2 py-1"
+          >
+            مسح الفلاتر ✕
+          </button>
+        )}
+      </div>
+
+      {/* ── Table ── */}
+      <div className="rounded-lg border border-slate-700 overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-slate-700 bg-slate-800">
+              {/* Checkbox select-all */}
+              <TableHead className="w-10 text-center">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  className="w-4 h-4 rounded accent-amber-400 cursor-pointer"
+                />
+              </TableHead>
+              <TableHead className="text-slate-300 text-right font-semibold">اسم المالك</TableHead>
+              <TableHead className="text-slate-300 text-right font-semibold">العقار الرئيسي</TableHead>
+              <TableHead className="text-slate-300 text-right font-semibold">الجوال / واتساب</TableHead>
+              <TableHead className="text-slate-300 text-right font-semibold">تاريخ الانضمام</TableHead>
+              {isSuperAdmin && <TableHead className="text-slate-300 text-right font-semibold">إجراءات</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={colSpan} className="text-center text-slate-400 py-12">
+                  {owners.length === 0
+                    ? "لا يوجد ملاك مسجلون بعد — ستظهر هنا عند تسجيل الملاك"
+                    : "لا توجد نتائج تطابق الفلاتر المحددة"}
+                </TableCell>
+              </TableRow>
+            )}
+            {filtered.map((owner) => (
+              <TableRow
+                key={owner.ownerId}
+                className={`border-slate-700 transition-colors ${
+                  selected.has(owner.ownerId) ? "bg-amber-500/5" : "hover:bg-slate-800/50"
+                }`}
+              >
+                {/* Checkbox */}
+                <TableCell className="text-center">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(owner.ownerId)}
+                    onChange={() => toggleOne(owner.ownerId)}
+                    className="w-4 h-4 rounded accent-amber-400 cursor-pointer"
+                  />
+                </TableCell>
+
+                {/* Owner Name (ID on hover) */}
+                <TableCell>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-white font-medium text-sm">{owner.ownerName}</span>
+                    <span
+                      className="font-mono text-[10px] text-slate-500 max-w-[160px] truncate cursor-default"
+                      title={owner.ownerId}
+                    >
+                      {owner.ownerId}
+                    </span>
+                  </div>
+                </TableCell>
+
+                {/* Primary property + type badge */}
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-200 text-sm">{owner.primaryProperty || "—"}</span>
+                    {owner.propertyType && (
+                      <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
+                        {PROPERTY_TYPE_LABELS[owner.propertyType] ?? owner.propertyType}
+                      </span>
+                    )}
+                  </div>
+                  {owner.location && (
+                    <span className="text-slate-500 text-xs">{owner.location}</span>
+                  )}
+                </TableCell>
+
+                {/* Phone */}
+                <TableCell className="text-slate-300 font-mono text-sm dir-ltr text-right">
+                  {toAr(owner.whatsappNumber) || "—"}
+                </TableCell>
+
+                {/* Join date */}
+                <TableCell className="text-slate-400 text-sm whitespace-nowrap">
+                  {owner.createdAt ? fmtDate(owner.createdAt) : "—"}
+                </TableCell>
+
+                {/* Actions */}
+                {isSuperAdmin && (
+                  <TableCell>
+                    <button
+                      onClick={() => handleImpersonate(owner.ownerId)}
+                      disabled={impersonating === owner.ownerId}
+                      className="flex items-center gap-1.5 text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {impersonating === owner.ownerId
+                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                        : <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}
+                      دخول للحساب
+                    </button>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
