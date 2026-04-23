@@ -1051,12 +1051,22 @@ router.patch("/contact-inquiries/:id/status", async (req, res) => {
 router.get("/support-requests", async (req, res) => {
   try {
     const ownerId = req.query.ownerId as string | undefined;
+    /* JOIN owner_applications so we always show a real name even if owner_name column is NULL */
     const result = await db.execute(
       ownerId
-        ? sql`SELECT id, owner_id, owner_name, subject, message, status, admin_reply, admin_reply_at, is_read_by_owner, created_at
-              FROM owner_support_requests WHERE owner_id = ${ownerId} ORDER BY created_at DESC LIMIT 300`
-        : sql`SELECT id, owner_id, owner_name, subject, message, status, admin_reply, admin_reply_at, is_read_by_owner, created_at
-              FROM owner_support_requests ORDER BY created_at DESC LIMIT 300`
+        ? sql`SELECT s.id, s.owner_id,
+                COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
+                s.subject, s.message, s.status, s.admin_reply, s.admin_reply_at, s.is_read_by_owner, s.created_at
+              FROM owner_support_requests s
+              LEFT JOIN owner_applications oa ON LOWER(oa.email) = LOWER(s.owner_id)
+              WHERE s.owner_id = ${ownerId}
+              ORDER BY s.created_at DESC LIMIT 300`
+        : sql`SELECT s.id, s.owner_id,
+                COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
+                s.subject, s.message, s.status, s.admin_reply, s.admin_reply_at, s.is_read_by_owner, s.created_at
+              FROM owner_support_requests s
+              LEFT JOIN owner_applications oa ON LOWER(oa.email) = LOWER(s.owner_id)
+              ORDER BY s.created_at DESC LIMIT 300`
     );
     return res.json((result as any).rows);
   } catch (err) {

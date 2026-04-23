@@ -12363,11 +12363,11 @@ function OwnerMessageSettingsTab() {
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
-  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "insurance">("revenue");
+  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "insurance" | "support">("revenue");
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "profile" | "support">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "profile">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const [serviceFinanceMode, setServiceFinanceMode] = useState<"separate" | "consolidated">(() => (localStorage.getItem("svc_finance_mode") as any) ?? "separate");
   const [clientListMode, setClientListMode] = useState<"unified" | "separate">(() => (localStorage.getItem("svc_client_mode") as any) ?? "unified");
@@ -12616,7 +12616,6 @@ export default function Dashboard() {
     { id: "deposits",  label: "إدارة التأمينات",       icon: <Lock className="w-4 h-4" /> },
     { id: "services",  label: "الخدمات الإضافية",    icon: <MessageSquare className="w-4 h-4" /> },
     { id: "messageSettings", label: "إعدادات الرسائل الآلية", icon: <Send className="w-4 h-4" /> },
-    { id: "support",   label: "مركز الدعم والطلبات",  icon: <MessageSquare className="w-4 h-4" /> },
     { id: "profile",   label: "إعدادات الحساب",      icon: <Settings className="w-4 h-4" /> },
   ] as const;
 
@@ -12893,9 +12892,9 @@ export default function Dashboard() {
             >
               <Briefcase className="w-4 h-4" />
               الشؤون المالية والإدارية
-              {unreadNotifCount > 0 && (
+              {(unreadNotifCount + unreadSupportCount) > 0 && (
                 <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full px-2 py-0.5 font-semibold">
-                  {unreadNotifCount}
+                  {unreadNotifCount + unreadSupportCount}
                 </span>
               )}
             </button>
@@ -13067,6 +13066,7 @@ export default function Dashboard() {
             { id: "notifications", label: "الإشعارات",        icon: <Bell className="w-4 h-4" />,         color: "text-amber-600" },
             { id: "insurance",     label: "التأمينات",        icon: <Shield className="w-4 h-4" />,       color: "text-slate-600" },
             { id: "reports",       label: "التقارير المالية", icon: <BarChart2 className="w-4 h-4" />,    color: "text-indigo-600" },
+            { id: "support",       label: "مركز الدعم",       icon: <MessageSquare className="w-4 h-4" />, color: "text-primary" },
           ] as const;
           return (
             <motion.div key="admin-finance-mode" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
@@ -13106,6 +13106,11 @@ export default function Dashboard() {
                     {tab.id === "notifications" && unreadNotifCount > 0 && (
                       <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
                         {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+                      </span>
+                    )}
+                    {tab.id === "support" && unreadSupportCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
+                        {unreadSupportCount > 9 ? "9+" : unreadSupportCount}
                       </span>
                     )}
                   </button>
@@ -13180,6 +13185,7 @@ export default function Dashboard() {
                 {adminFinanceTab === "notifications" && <NotificationsTab />}
                 {adminFinanceTab === "insurance"     && <ServiceInsurancesTab />}
                 {adminFinanceTab === "reports"       && <ReportsTab />}
+                {adminFinanceTab === "support"       && <OwnerSupportTab />}
               </div>
               </AdminFinanceCtx.Provider>
             </motion.div>
@@ -13289,11 +13295,6 @@ export default function Dashboard() {
                   {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
                 </span>
               )}
-              {tab.id === "support" && unreadSupportCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
-                  {unreadSupportCount > 9 ? "9+" : unreadSupportCount}
-                </span>
-              )}
             </button>
           ))}
         </div>
@@ -13319,9 +13320,6 @@ export default function Dashboard() {
         )}
         {activeTab === "messageSettings" && (
           <OwnerMessageSettingsTab />
-        )}
-        {activeTab === "support" && (
-          <OwnerSupportTab />
         )}
         {activeTab === "profile" && (
           <OwnerProfileTab />
