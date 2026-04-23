@@ -51,7 +51,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, Check, Video, Mail, MessageSquare, Send } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, Check, Video, Mail, MessageSquare, Send, Inbox } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -6355,6 +6355,149 @@ interface ContactInquiryRow {
   created_at: string;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Owner Inbox Tab — messages from owner support center
+   ══════════════════════════════════════════════════════════════ */
+interface OwnerSupportRequest {
+  id: number;
+  owner_id: string;
+  owner_name: string;
+  subject: string;
+  message: string;
+  status: string;
+  created_at: string;
+}
+
+const SUPPORT_STATUS_LABELS: Record<string, { label: string; className: string }> = {
+  new:         { label: "جديد",          className: "bg-red-900/40 text-red-300 border border-red-700/40" },
+  in_progress: { label: "قيد المعالجة", className: "bg-amber-900/40 text-amber-300 border border-amber-700/40" },
+  resolved:    { label: "تم الحل",       className: "bg-green-900/40 text-green-300 border border-green-700/40" },
+};
+
+function OwnerInboxTab() {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [updating, setUpdating] = useState<number | null>(null);
+  const qc = useQueryClient();
+
+  const { data: requests = [], isLoading } = useQuery<OwnerSupportRequest[]>({
+    queryKey: ["admin", "support-requests"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/support-requests");
+      if (!r.ok) throw new Error("فشل التحميل");
+      return r.json();
+    },
+    refetchInterval: 30_000,
+  });
+
+  async function updateStatus(id: number, status: string) {
+    setUpdating(id);
+    try {
+      await apiFetch(`/admin/support-requests/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      qc.invalidateQueries({ queryKey: ["admin", "support-requests"] });
+    } finally {
+      setUpdating(null);
+    }
+  }
+
+  const newCount  = requests.filter((r) => r.status === "new").length;
+  const totalCount = requests.length;
+
+  return (
+    <div className="space-y-6" dir="rtl">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+            <Inbox className="w-5 h-5 text-amber-400" />
+            صندوق الوارد / طلبات الملاك
+          </h2>
+          <p className="text-slate-400 text-sm mt-0.5">الرسائل المُرسلة من مركز الدعم في لوحة تحكم الملاك</p>
+        </div>
+        <div className="flex gap-3 flex-wrap">
+          <span className="bg-slate-800 border border-slate-700 text-slate-300 text-sm px-3 py-1.5 rounded-lg">
+            الإجمالي: <span className="font-bold text-white">{toAr(totalCount)}</span>
+          </span>
+          {newCount > 0 && (
+            <span className="bg-red-900/40 border border-red-700/40 text-red-300 text-sm px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+              جديد: <span className="font-bold">{toAr(newCount)}</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="text-center py-16 text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
+      ) : requests.length === 0 ? (
+        <div className="text-center py-16 bg-slate-800 rounded-xl border border-slate-700">
+          <Inbox className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+          <p className="text-slate-400">لا توجد طلبات حتى الآن</p>
+          <p className="text-slate-500 text-sm mt-1">ستظهر هنا الرسائل المُرسلة من الملاك عبر مركز الدعم</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {requests.map((req) => {
+            const isExpanded = expandedId === req.id;
+            const statusInfo = SUPPORT_STATUS_LABELS[req.status] ?? { label: req.status, className: "bg-slate-800 text-slate-400 border border-slate-600" };
+            return (
+              <div key={req.id} className={`bg-slate-800 border rounded-xl overflow-hidden transition-all ${req.status === "new" ? "border-red-700/50" : "border-slate-700"}`}>
+                {/* Row header */}
+                <div
+                  className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-slate-700/40 transition-colors"
+                  onClick={() => setExpandedId(isExpanded ? null : req.id)}
+                >
+                  {req.status === "new" && <span className="w-2 h-2 rounded-full bg-red-400 shrink-0 animate-pulse" />}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-slate-100 text-sm">{req.owner_name || req.owner_id}</span>
+                      <span className="text-slate-500 text-xs">—</span>
+                      <span className="text-slate-300 text-sm truncate">{req.subject}</span>
+                    </div>
+                    <p className="text-slate-500 text-xs mt-0.5">{fmtDate(req.created_at)}</p>
+                  </div>
+                  <span className={`text-xs px-2.5 py-1 rounded-full shrink-0 ${statusInfo.className}`}>{statusInfo.label}</span>
+                  <ChevronDown className={`w-4 h-4 text-slate-500 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                </div>
+
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div className="border-t border-slate-700 bg-slate-900/50 px-4 py-4 space-y-4">
+                    <div className="bg-slate-800/80 rounded-lg p-3 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{req.message}</div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-slate-400 text-xs">تغيير الحالة:</span>
+                      {(["new", "in_progress", "resolved"] as const).map((s) => (
+                        <button
+                          key={s}
+                          disabled={req.status === s || updating === req.id}
+                          onClick={() => updateStatus(req.id, s)}
+                          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+                            req.status === s
+                              ? "bg-amber-500/20 border-amber-600 text-amber-200 cursor-default"
+                              : "bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600"
+                          }`}
+                        >
+                          {updating === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : SUPPORT_STATUS_LABELS[s]?.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Contact Inquiries Tab
+   ══════════════════════════════════════════════════════════════ */
 function ContactInquiriesTab() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [statusUpdating, setStatusUpdating] = useState<number | null>(null);
@@ -6474,6 +6617,7 @@ const ALL_TABS = [
   { id: "owners",                  label: "الملاك",                 icon: Users },
   { id: "plans",                   label: "خطط الاشتراك",          icon: CreditCard },
   { id: "reviews",                 label: "التقييمات",             icon: Star },
+  { id: "ownerInbox",              label: "صندوق الوارد / طلبات الملاك", icon: Inbox },
   { id: "contactInquiries",        label: "رسائل التواصل",         icon: Mail },
   { id: "siteSettings",            label: "إعدادات الموقع",        icon: Settings },
   { id: "communicationSettings",   label: "إعدادات التواصل",       icon: Mail },
@@ -6493,7 +6637,7 @@ const ADMIN_NAV_GROUPS: Array<{
   { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
   { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "amenities", "locations", "directAdd"] },
   { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "adminStaff", "directAdd"] },
-  { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "services", "reviews"] },
+  { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "services", "reviews", "ownerInbox"] },
   { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
   { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "communicationSettings", "contactInquiries", "termsManagement"] },
 ];
@@ -7403,6 +7547,19 @@ export default function Admin() {
 
   const isSuperAdmin = accessCheck?.role === "superAdmin";
 
+  /* ── New support-request count for badge ── */
+  const { data: supportRequests = [] } = useQuery<OwnerSupportRequest[]>({
+    queryKey: ["admin", "support-requests"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/support-requests");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    refetchInterval: 60_000,
+    enabled: isAuthenticated || isAdminStaff,
+  });
+  const newSupportCount = supportRequests.filter((r) => r.status === "new").length;
+
   const tabs = useMemo(() => {
     if (isSuperAdmin) return ALL_TABS;
     return ALL_TABS.filter((tab) => {
@@ -7611,11 +7768,14 @@ export default function Admin() {
               );
             }
 
+            const isOperations = group.id === "operations";
+            const operationsBadge = isOperations && newSupportCount > 0 ? newSupportCount : 0;
+
             return (
               <DropdownMenu key={group.id} dir="rtl">
                 <DropdownMenuTrigger asChild>
                   <button
-                    className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors whitespace-nowrap outline-none ${
+                    className={`relative flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm transition-colors whitespace-nowrap outline-none ${
                       isGroupActive
                         ? "border-amber-500 bg-amber-500/20 text-amber-100 font-extrabold shadow-sm shadow-amber-900/20"
                         : "border-slate-700 bg-slate-800/70 text-slate-300 font-bold hover:border-slate-500 hover:text-white"
@@ -7623,6 +7783,11 @@ export default function Admin() {
                   >
                     <GroupIcon className={`w-4 h-4 ${isGroupActive ? "text-amber-300" : "text-slate-400"}`} />
                     {group.label}
+                    {operationsBadge > 0 && (
+                      <span className="absolute -top-1.5 -left-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 shadow-md">
+                        {operationsBadge}
+                      </span>
+                    )}
                     <ChevronDown className={`w-3.5 h-3.5 ${isGroupActive ? "text-amber-300" : "opacity-70"}`} />
                   </button>
                 </DropdownMenuTrigger>
@@ -7638,6 +7803,11 @@ export default function Admin() {
                       <span className="flex items-center gap-2">
                         <Icon className="w-4 h-4" />
                         {label}
+                        {id === "ownerInbox" && newSupportCount > 0 && (
+                          <span className="min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">
+                            {newSupportCount}
+                          </span>
+                        )}
                       </span>
                       {activeTab === id && <Check className="w-4 h-4 text-amber-300" />}
                     </DropdownMenuItem>
@@ -7665,6 +7835,7 @@ export default function Admin() {
         {activeTab === "owners"              && <OwnersTab isSuperAdmin={isSuperAdmin} />}
         {activeTab === "plans"               && <PlansTab />}
         {activeTab === "reviews"             && <ReviewsTab />}
+        {activeTab === "ownerInbox"          && <OwnerInboxTab />}
         {activeTab === "contactInquiries"      && <ContactInquiriesTab />}
         {activeTab === "siteSettings"          && <SettingsTab />}
         {activeTab === "communicationSettings" && <CommunicationSettingsTab />}
