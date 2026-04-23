@@ -1142,6 +1142,16 @@ const PROPERTY_TYPE_LABELS: Record<string, string> = {
   resort: "منتجع",
 };
 
+/* Normalise whatever is stored in the DB (Arabic, English, typos) → canonical key */
+function normalisePropertyType(raw: string | null | undefined): "chalet" | "farm" | "resort" | "unknown" {
+  if (!raw) return "chalet"; /* default — most entries are chalets */
+  const v = raw.trim().toLowerCase();
+  if (["chalet", "شاليه", "شالية", "شاليهات"].includes(v)) return "chalet";
+  if (["farm", "مزرعة", "مزارع"].includes(v)) return "farm";
+  if (["resort", "منتجع", "منتجعات"].includes(v)) return "resort";
+  return "chalet"; /* safe fallback */
+}
+
 function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [impersonating, setImpersonating] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -1171,7 +1181,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
     return owners.filter((o) => {
       if (q && !o.ownerName.toLowerCase().includes(q) && !o.whatsappNumber.includes(q)) return false;
       if (cityFilter && o.location !== cityFilter) return false;
-      if (typeFilter !== "all" && (o.propertyType ?? "chalet") !== typeFilter) return false;
+      if (typeFilter !== "all" && normalisePropertyType(o.propertyType) !== typeFilter) return false;
       return true;
     });
   }, [owners, search, cityFilter, typeFilter]);
@@ -1354,9 +1364,9 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <span className="text-slate-200 text-sm">{owner.primaryProperty || "—"}</span>
-                    {owner.propertyType && (
+                    {owner.primaryProperty && owner.primaryProperty !== "—" && (
                       <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
-                        {PROPERTY_TYPE_LABELS[owner.propertyType] ?? owner.propertyType}
+                        {PROPERTY_TYPE_LABELS[normalisePropertyType(owner.propertyType)] ?? "شاليه"}
                       </span>
                     )}
                   </div>
