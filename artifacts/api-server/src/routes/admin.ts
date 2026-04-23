@@ -528,6 +528,7 @@ router.get("/owners", async (_req, res) => {
       whatsappNumber: chaletSubmissionsTable.whatsappNumber,
       nameAr:        chaletSubmissionsTable.nameAr,
       location:      chaletSubmissionsTable.location,
+      district:      chaletSubmissionsTable.district,
       propertyType:  chaletSubmissionsTable.propertyType,
       createdAt:     chaletSubmissionsTable.createdAt,
     })
@@ -568,6 +569,7 @@ router.get("/owners", async (_req, res) => {
       primaryProperty: r.nameAr ?? "",
       whatsappNumber:  r.whatsappNumber ?? "",
       location:        r.location ?? "",
+      district:        r.district ?? "",
       propertyType:    r.propertyType ?? null,
       createdAt:       r.createdAt?.toISOString() ?? null,
     });

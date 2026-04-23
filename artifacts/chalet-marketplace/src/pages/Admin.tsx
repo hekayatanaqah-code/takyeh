@@ -164,6 +164,7 @@ interface Owner {
   primaryProperty: string;
   whatsappNumber: string;
   location: string;
+  district: string;
   propertyType: string | null;
   createdAt: string | null;
 }
@@ -1154,11 +1155,13 @@ function normalisePropertyType(raw: string | null | undefined): "chalet" | "farm
 
 function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [impersonating, setImpersonating] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [cityFilter, setCityFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "chalet" | "farm" | "resort">("all");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [search, setSearch]               = useState("");
+  const [cityFilter, setCityFilter]       = useState("");
+  const [districtFilter, setDistrictFilter] = useState("");
+  const [typeFilter, setTypeFilter]       = useState("all");
+  const [selected, setSelected]           = useState<Set<string>>(new Set());
 
+  /* ── Fetch owners ── */
   const { data: owners = [], isLoading } = useQuery({
     queryKey: ["admin", "owners"],
     queryFn: async () => {
@@ -1168,38 +1171,76 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
     },
   });
 
-  /* Unique cities for the dropdown */
-  const cities = useMemo(() => {
-    const set = new Set<string>();
-    for (const o of owners) if (o.location) set.add(o.location);
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "ar"));
+  /* ── Fetch cities catalog ── */
+  const { data: citiesCatalog = [] } = useQuery({
+    queryKey: ["admin", "cities"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/cities");
+      if (!r.ok) return [];
+      return r.json() as Promise<{ id: number; name: string }[]>;
+    },
+  });
+
+  /* ── Fetch all districts (used for hierarchical filtering) ── */
+  const { data: allDistricts = [] } = useQuery({
+    queryKey: ["admin", "districts"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/districts");
+      if (!r.ok) return [];
+      return r.json() as Promise<{ id: number; name: string; cityId: number }[]>;
+    },
+  });
+
+  /* ── Dynamic categories from owners data ── */
+  const dynamicCategories = useMemo(() => {
+    const seen = new Set<string>();
+    const cats: { key: string; label: string }[] = [{ key: "all", label: "الكل" }];
+    for (const o of owners) {
+      const k = normalisePropertyType(o.propertyType);
+      if (!seen.has(k)) {
+        seen.add(k);
+        cats.push({ key: k, label: PROPERTY_TYPE_LABELS[k] ?? k });
+      }
+    }
+    cats.push({ key: "service", label: "الخدمات" });
+    return cats;
   }, [owners]);
 
-  /* Apply filters */
+  /* ── Districts filtered by selected city ── */
+  const availableDistricts = useMemo(() => {
+    if (!cityFilter) return [];
+    const city = citiesCatalog.find((c) => c.name === cityFilter);
+    if (!city) return [];
+    return allDistricts.filter((d) => d.cityId === city.id);
+  }, [cityFilter, citiesCatalog, allDistricts]);
+
+  /* Reset district when city changes */
+  useEffect(() => { setDistrictFilter(""); }, [cityFilter]);
+
+  /* ── Apply filters ── */
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return owners.filter((o) => {
       if (q && !o.ownerName.toLowerCase().includes(q) && !o.whatsappNumber.includes(q)) return false;
       if (cityFilter && o.location !== cityFilter) return false;
-      if (typeFilter !== "all" && normalisePropertyType(o.propertyType) !== typeFilter) return false;
+      if (districtFilter && (o.district ?? "") !== districtFilter) return false;
+      if (typeFilter !== "all") {
+        if (typeFilter === "service") return false; /* placeholder — no service owners yet */
+        if (normalisePropertyType(o.propertyType) !== typeFilter) return false;
+      }
       return true;
     });
-  }, [owners, search, cityFilter, typeFilter]);
+  }, [owners, search, cityFilter, districtFilter, typeFilter]);
 
   const allSelected = filtered.length > 0 && filtered.every((o) => selected.has(o.ownerId));
+  const hasFilters  = search || cityFilter || districtFilter || typeFilter !== "all";
 
   function toggleAll() {
-    if (allSelected) {
-      const next = new Set(selected);
-      filtered.forEach((o) => next.delete(o.ownerId));
-      setSelected(next);
-    } else {
-      const next = new Set(selected);
-      filtered.forEach((o) => next.add(o.ownerId));
-      setSelected(next);
-    }
+    const next = new Set(selected);
+    if (allSelected) filtered.forEach((o) => next.delete(o.ownerId));
+    else             filtered.forEach((o) => next.add(o.ownerId));
+    setSelected(next);
   }
-
   function toggleOne(id: string) {
     const next = new Set(selected);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -1209,8 +1250,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   async function handleImpersonate(ownerId: string) {
     setImpersonating(ownerId);
     const r = await apiFetch("/admin/impersonate", {
-      method: "POST",
-      body: JSON.stringify({ ownerId }),
+      method: "POST", body: JSON.stringify({ ownerId }),
     });
     if (r.ok) {
       const { token } = await r.json();
@@ -1230,12 +1270,12 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-white">إدارة الملاك</h2>
           <p className="text-slate-400 text-sm mt-1">
-            {owners.length > 0 ? `${toAr(owners.length)} مالك مسجّل` : "لا يوجد ملاك مسجلون بعد"}
+            {owners.length > 0 ? `${toAr(owners.length)} مالك مسجّل` : "لا يوجد ملاك بعد"}
             {selected.size > 0 && <span className="mr-2 text-amber-400">— {toAr(selected.size)} محدّد</span>}
           </p>
         </div>
@@ -1246,10 +1286,36 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
         )}
       </div>
 
+      {/* ── Category tabs (dynamic) ── */}
+      <div className="flex flex-wrap gap-1.5">
+        {dynamicCategories.map((cat) => (
+          <button
+            key={cat.key}
+            onClick={() => setTypeFilter(cat.key)}
+            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors border ${
+              typeFilter === cat.key
+                ? "bg-amber-500 text-slate-900 border-amber-400"
+                : "bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-500 hover:text-white"
+            }`}
+          >
+            {cat.label}
+            {cat.key !== "all" && (
+              <span className={`mr-1.5 text-xs px-1.5 py-0.5 rounded-full ${
+                typeFilter === cat.key ? "bg-slate-900/30" : "bg-slate-700 text-slate-400"
+              }`}>
+                {cat.key === "service"
+                  ? toAr(0)
+                  : toAr(owners.filter((o) => normalisePropertyType(o.propertyType) === cat.key).length)}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {/* ── Filter bar ── */}
-      <div className="flex flex-wrap gap-3 items-center p-3 bg-slate-800/60 rounded-lg border border-slate-700">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-800/60 rounded-lg border border-slate-700">
         {/* Search */}
-        <div className="relative flex-1 min-w-[180px]">
+        <div className="relative sm:col-span-1">
           <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
           </svg>
@@ -1261,57 +1327,66 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
           />
         </div>
 
-        {/* City dropdown */}
+        {/* City dropdown (from catalog) */}
         <select
           value={cityFilter}
           onChange={(e) => setCityFilter(e.target.value)}
-          className="bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200 px-3 py-2 focus:outline-none focus:border-amber-500/60 min-w-[130px]"
+          className="bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200 px-3 py-2 focus:outline-none focus:border-amber-500/60"
         >
           <option value="">كل المدن</option>
-          {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+          {citiesCatalog.map((c) => (
+            <option key={c.id} value={c.name}>{c.name}</option>
+          ))}
         </select>
 
-        {/* Property type tabs */}
-        <div className="flex rounded-lg overflow-hidden border border-slate-600">
-          {(["all", "chalet", "farm", "resort"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTypeFilter(t)}
-              className={`px-3 py-2 text-xs font-semibold transition-colors ${
-                typeFilter === t
-                  ? "bg-amber-500 text-slate-900"
-                  : "bg-slate-900 text-slate-300 hover:bg-slate-700"
-              }`}
-            >
-              {t === "all" ? "الكل" : PROPERTY_TYPE_LABELS[t]}
-            </button>
+        {/* District dropdown — dependent on city */}
+        <select
+          value={districtFilter}
+          onChange={(e) => setDistrictFilter(e.target.value)}
+          disabled={!cityFilter || availableDistricts.length === 0}
+          className="bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200 px-3 py-2 focus:outline-none focus:border-amber-500/60 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <option value="">
+            {!cityFilter ? "اختر المدينة أولاً" : availableDistricts.length === 0 ? "لا توجد أحياء" : "كل الأحياء"}
+          </option>
+          {availableDistricts.map((d) => (
+            <option key={d.id} value={d.name}>{d.name}</option>
           ))}
-        </div>
-
-        {/* Clear filters */}
-        {(search || cityFilter || typeFilter !== "all") && (
-          <button
-            onClick={() => { setSearch(""); setCityFilter(""); setTypeFilter("all"); }}
-            className="text-xs text-slate-400 hover:text-white transition-colors px-2 py-1"
-          >
-            مسح الفلاتر ✕
-          </button>
-        )}
+        </select>
       </div>
+
+      {/* Active filter summary + clear */}
+      {hasFilters && (
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <span>الفلاتر النشطة:</span>
+          {typeFilter !== "all" && <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">{dynamicCategories.find((c) => c.key === typeFilter)?.label}</span>}
+          {cityFilter && <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">{cityFilter}</span>}
+          {districtFilter && <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">{districtFilter}</span>}
+          {search && <span className="bg-slate-700 px-2 py-0.5 rounded-full">"{search}"</span>}
+          <button
+            onClick={() => { setSearch(""); setCityFilter(""); setDistrictFilter(""); setTypeFilter("all"); }}
+            className="mr-auto text-slate-500 hover:text-white transition-colors"
+          >
+            مسح الكل ✕
+          </button>
+        </div>
+      )}
+
+      {/* Results count */}
+      {hasFilters && (
+        <p className="text-xs text-slate-500">
+          عرض <span className="text-white font-semibold">{toAr(filtered.length)}</span> من أصل <span className="text-white font-semibold">{toAr(owners.length)}</span> مالك
+        </p>
+      )}
 
       {/* ── Table ── */}
       <div className="rounded-lg border border-slate-700 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700 bg-slate-800">
-              {/* Checkbox select-all */}
               <TableHead className="w-10 text-center">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  className="w-4 h-4 rounded accent-amber-400 cursor-pointer"
-                />
+                <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                  className="w-4 h-4 rounded accent-amber-400 cursor-pointer" />
               </TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">اسم المالك</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">العقار الرئيسي</TableHead>
@@ -1323,60 +1398,59 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
           <TableBody>
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={colSpan} className="text-center text-slate-400 py-12">
-                  {owners.length === 0
-                    ? "لا يوجد ملاك مسجلون بعد — ستظهر هنا عند تسجيل الملاك"
-                    : "لا توجد نتائج تطابق الفلاتر المحددة"}
+                <TableCell colSpan={colSpan} className="text-center py-14">
+                  <div className="flex flex-col items-center gap-2 text-slate-400">
+                    <svg className="w-8 h-8 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" /></svg>
+                    <p>{owners.length === 0 ? "لا يوجد ملاك مسجلون بعد" : "لا توجد نتائج تطابق الفلاتر"}</p>
+                    {hasFilters && owners.length > 0 && (
+                      <button onClick={() => { setSearch(""); setCityFilter(""); setDistrictFilter(""); setTypeFilter("all"); }}
+                        className="text-amber-400 hover:text-amber-300 text-sm mt-1">
+                        مسح الفلاتر والعرض الكامل
+                      </button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             )}
             {filtered.map((owner) => (
               <TableRow
                 key={owner.ownerId}
-                className={`border-slate-700 transition-colors ${
-                  selected.has(owner.ownerId) ? "bg-amber-500/5" : "hover:bg-slate-800/50"
-                }`}
+                className={`border-slate-700 transition-colors ${selected.has(owner.ownerId) ? "bg-amber-500/5" : "hover:bg-slate-800/50"}`}
               >
-                {/* Checkbox */}
                 <TableCell className="text-center">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(owner.ownerId)}
-                    onChange={() => toggleOne(owner.ownerId)}
-                    className="w-4 h-4 rounded accent-amber-400 cursor-pointer"
-                  />
+                  <input type="checkbox" checked={selected.has(owner.ownerId)} onChange={() => toggleOne(owner.ownerId)}
+                    className="w-4 h-4 rounded accent-amber-400 cursor-pointer" />
                 </TableCell>
 
-                {/* Owner Name (ID on hover) */}
+                {/* Owner Name */}
                 <TableCell>
                   <div className="flex flex-col gap-0.5">
                     <span className="text-white font-medium text-sm">{owner.ownerName}</span>
-                    <span
-                      className="font-mono text-[10px] text-slate-500 max-w-[160px] truncate cursor-default"
-                      title={owner.ownerId}
-                    >
+                    <span className="font-mono text-[10px] text-slate-500 max-w-[160px] truncate cursor-default" title={owner.ownerId}>
                       {owner.ownerId}
                     </span>
                   </div>
                 </TableCell>
 
-                {/* Primary property + type badge */}
+                {/* Primary property */}
                 <TableCell>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-slate-200 text-sm">{owner.primaryProperty || "—"}</span>
                     {owner.primaryProperty && owner.primaryProperty !== "—" && (
-                      <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded whitespace-nowrap">
                         {PROPERTY_TYPE_LABELS[normalisePropertyType(owner.propertyType)] ?? "شاليه"}
                       </span>
                     )}
                   </div>
-                  {owner.location && (
-                    <span className="text-slate-500 text-xs">{owner.location}</span>
-                  )}
+                  <div className="flex items-center gap-1 mt-0.5">
+                    {owner.location && <span className="text-slate-500 text-xs">{owner.location}</span>}
+                    {owner.location && owner.district && <span className="text-slate-600 text-xs">←</span>}
+                    {owner.district && <span className="text-slate-500 text-xs">{owner.district}</span>}
+                  </div>
                 </TableCell>
 
                 {/* Phone */}
-                <TableCell className="text-slate-300 font-mono text-sm dir-ltr text-right">
+                <TableCell className="text-slate-300 font-mono text-sm ltr text-right">
                   {toAr(owner.whatsappNumber) || "—"}
                 </TableCell>
 
