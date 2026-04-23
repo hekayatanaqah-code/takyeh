@@ -12367,7 +12367,7 @@ export default function Dashboard() {
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "profile">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "profile" | "support">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const [serviceFinanceMode, setServiceFinanceMode] = useState<"separate" | "consolidated">(() => (localStorage.getItem("svc_finance_mode") as any) ?? "separate");
   const [clientListMode, setClientListMode] = useState<"unified" | "separate">(() => (localStorage.getItem("svc_client_mode") as any) ?? "unified");
@@ -12603,6 +12603,7 @@ export default function Dashboard() {
     { id: "deposits",  label: "إدارة التأمينات",       icon: <Lock className="w-4 h-4" /> },
     { id: "services",  label: "الخدمات الإضافية",    icon: <MessageSquare className="w-4 h-4" /> },
     { id: "messageSettings", label: "إعدادات الرسائل الآلية", icon: <Send className="w-4 h-4" /> },
+    { id: "support",   label: "مركز الدعم والطلبات",  icon: <MessageSquare className="w-4 h-4" /> },
     { id: "profile",   label: "إعدادات الحساب",      icon: <Settings className="w-4 h-4" /> },
   ] as const;
 
@@ -13301,6 +13302,9 @@ export default function Dashboard() {
         {activeTab === "messageSettings" && (
           <OwnerMessageSettingsTab />
         )}
+        {activeTab === "support" && (
+          <OwnerSupportTab />
+        )}
         {activeTab === "profile" && (
           <OwnerProfileTab />
         )}
@@ -13309,6 +13313,127 @@ export default function Dashboard() {
       </div>
     </div>
     </ImpersonationCtx.Provider>
+  );
+}
+
+/* ── Owner Support Center Tab ────────────────────────────── */
+function OwnerSupportTab() {
+  const { toast } = useToast();
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+  function apiFetch(path: string, opts?: RequestInit) {
+    return fetch(`${BASE}/api${path}`, { credentials: "include", headers: { "Content-Type": "application/json", ...(opts?.headers ?? {}) }, ...opts });
+  }
+
+  const SUBJECTS = [
+    "طلب تعديل تقني",
+    "مشكلة في لوحة التحكم",
+    "اقتراح ميزة جديدة",
+    "طلب تحديث بيانات العقار",
+    "استفسار عن الاشتراك",
+    "أخرى",
+  ];
+
+  const [subject,     setSubject]     = useState("");
+  const [message,     setMessage]     = useState("");
+  const [submitting,  setSubmitting]  = useState(false);
+  const [submitted,   setSubmitted]   = useState(false);
+  const [error,       setError]       = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (!subject) { setError("اختر الموضوع"); return; }
+    if (!message.trim() || message.trim().length < 10) { setError("الرجاء كتابة وصف مفصّل (١٠ أحرف على الأقل)"); return; }
+    setSubmitting(true);
+    try {
+      const r = await apiFetch("/owner/support-request", {
+        method: "POST",
+        body: JSON.stringify({ subject, message: message.trim() }),
+      });
+      const d = await r.json().catch(() => null);
+      if (!r.ok) { setError(d?.error ?? "حدث خطأ، يرجى المحاولة مرة أخرى"); return; }
+      setSubmitted(true);
+      toast({ title: "تم الإرسال ✓", description: "سيتواصل معك فريق الدعم في أقرب وقت" });
+    } catch { setError("تعذّر الاتصال بالخادم"); }
+    finally { setSubmitting(false); }
+  }
+
+  return (
+    <div className="max-w-lg mx-auto space-y-5 py-4">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+          <MessageSquare className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-base font-bold text-foreground">مركز الدعم والطلبات</h2>
+          <p className="text-xs text-muted-foreground">أرسل طلبك التقني أو اقتراحك مباشرةً لفريق تكية</p>
+        </div>
+      </div>
+
+      {submitted ? (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-2xl p-10 text-center space-y-4">
+          <CheckCircle className="w-14 h-14 text-green-500 mx-auto" />
+          <h2 className="text-xl font-bold text-green-700 dark:text-green-400">تم إرسال طلبك بنجاح!</h2>
+          <p className="text-muted-foreground text-sm">سيتواصل معك فريق دعم تكية في أقرب وقت ممكن. شكراً لتواصلك.</p>
+          <Button variant="outline" onClick={() => { setSubmitted(false); setSubject(""); setMessage(""); setError(""); }}>
+            إرسال طلب آخر
+          </Button>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="bg-card border border-border rounded-2xl p-6 space-y-5">
+          {/* Subject */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">الموضوع <span className="text-destructive">*</span></label>
+            <div className="flex flex-wrap gap-2">
+              {SUBJECTS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSubject(s)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    subject === s
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted text-muted-foreground border-border hover:border-primary hover:text-primary"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Message */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">
+              تفاصيل الطلب <span className="text-destructive">*</span>
+              <span className="text-xs text-muted-foreground font-normal mr-2">صِف المشكلة أو الطلب بوضوح</span>
+            </label>
+            <Textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="مثال: لاحظت أن لوحة التقويم لا تحفظ الأيام المغلقة بشكل صحيح عند..."
+              rows={5}
+              dir="rtl"
+              className="resize-none"
+            />
+            <p className="text-xs text-muted-foreground text-left">{message.length} حرف</p>
+          </div>
+
+          {error && <p className="text-sm text-destructive font-medium">{error}</p>}
+
+          <Button type="submit" className="w-full gap-2" disabled={submitting}>
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            إرسال الطلب
+          </Button>
+        </form>
+      )}
+
+      {/* Info note */}
+      <div className="bg-muted/50 border border-border rounded-xl px-4 py-3 text-xs text-muted-foreground leading-relaxed">
+        <p className="font-semibold text-foreground mb-1">ملاحظة</p>
+        <p>يتم مراجعة الطلبات خلال ٢٤–٤٨ ساعة. للاستفسارات العاجلة تواصل معنا مباشرةً عبر الواتساب من صفحة "اتصل بنا".</p>
+      </div>
+    </div>
   );
 }
 
@@ -13349,6 +13474,10 @@ function OwnerProfileTab() {
   const [sendingOtp, setSendingOtp]     = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
 
+  /* ── WhatsApp news subscribe toggle ── */
+  const [waSubscribe,     setWaSubscribe]     = useState(false);
+  const [savingSubscribe, setSavingSubscribe] = useState(false);
+
   /* ── page-level state ── */
   const [loading,    setLoading]    = useState(true);
   const [saving,     setSaving]     = useState(false);
@@ -13367,12 +13496,26 @@ function OwnerProfileTab() {
           setFullName(n); setInitName(n);
           setPhone(ph);   setInitPhone(ph);
           setEmail(em);   setInitEmail(em);
+          setWaSubscribe(!!d.whatsappNewsSubscribe);
         }
       })
       .catch(() => setFetchError("تعذّر الاتصال بالخادم"))
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function toggleWaSubscribe(checked: boolean) {
+    setSavingSubscribe(true);
+    setWaSubscribe(checked);
+    try {
+      const r = await apiFetch("/owner/profile/whatsapp-subscribe", {
+        method: "PATCH",
+        body: JSON.stringify({ subscribe: checked }),
+      });
+      if (!r.ok) { setWaSubscribe(!checked); toast({ title: "خطأ", description: "تعذّر حفظ التفضيل", variant: "destructive" }); }
+      else { toast({ title: checked ? "تم الاشتراك ✓" : "تم إلغاء الاشتراك", description: checked ? "سنتواصل معك عبر الواتساب بآخر أخبار تكية" : "لن تصلك رسائل أخبار تكية" }); }
+    } finally { setSavingSubscribe(false); }
+  }
 
   /* dirty-detection */
   const nameChanged  = fullName.trim() !== initName.trim();
@@ -13567,6 +13710,38 @@ function OwnerProfileTab() {
               {sensitiveChanged ? "التحقق من الهوية وحفظ" : "حفظ التغييرات"}
             </Button>
           </>
+        )}
+
+        {/* ══════════ WhatsApp News Subscribe ══════════ */}
+        {secureStep === "idle" && (
+          <div className="border-t border-border pt-5">
+            <label className="flex items-start gap-3 cursor-pointer select-none group">
+              <div className="relative mt-0.5 flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={waSubscribe}
+                  disabled={savingSubscribe}
+                  onChange={(e) => toggleWaSubscribe(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className={`w-10 h-6 rounded-full transition-colors ${waSubscribe ? "bg-green-500" : "bg-muted-foreground/30"} peer-focus-visible:ring-2 ring-ring relative`}>
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${waSubscribe ? "right-1" : "left-1"}`} />
+                </div>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                  </svg>
+                  الاشتراك في أخبار تكيّة عبر الواتساب
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  أوافق على تلقّي تحديثات المنصة وتذكيرات التجديد وعروض الأشتراك عبر واتساب.
+                </p>
+                {savingSubscribe && <p className="text-xs text-primary mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> جاري الحفظ...</p>}
+              </div>
+            </label>
+          </div>
         )}
 
         {/* ══════════ Step 1: Password verification ══════════ */}

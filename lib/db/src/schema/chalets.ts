@@ -656,6 +656,18 @@ export const ownerTempSessionsTable = pgTable("owner_temp_sessions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/* ── Owner Support Requests ───────────────────────────────── */
+export const ownerSupportRequestsTable = pgTable("owner_support_requests", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  ownerName: text("owner_name"),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("new"), /* new | read | resolved */
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OwnerSupportRequest = typeof ownerSupportRequestsTable.$inferSelect;
+
 /* ── Contact Inquiries (submitted via Contact Us page) ───────── */
 export const contactInquiriesTable = pgTable("contact_inquiries", {
   id: serial("id").primaryKey(),

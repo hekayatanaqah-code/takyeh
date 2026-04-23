@@ -550,10 +550,19 @@ router.get("/owners", async (_req, res) => {
     });
   }
 
+  /* ── Step 3: pull subscription data ── */
+  const subData = await db.execute<{ owner_id: string; expires_at: string | null; status: string }>(
+    sql`SELECT owner_id, expires_at, status FROM owner_subscriptions`
+  );
+  const subsByOwnerId = new Map<string, { expiresAt: string | null; subscriptionStatus: string }>();
+  for (const s of (subData as any).rows) {
+    subsByOwnerId.set(s.owner_id, { expiresAt: s.expires_at ?? null, subscriptionStatus: s.status ?? "" });
+  }
+
   type OwnerRow = {
     ownerId: string; ownerName: string; primaryProperty: string;
-    whatsappNumber: string; location: string; propertyType: string | null;
-    createdAt: string | null;
+    whatsappNumber: string; location: string; district?: string; propertyType: string | null;
+    createdAt: string | null; expiresAt: string | null; subscriptionStatus: string;
   };
 
   const seen = new Set<string>();
@@ -563,15 +572,18 @@ router.get("/owners", async (_req, res) => {
     if (!r.ownerId || seen.has(r.ownerId)) continue;
     seen.add(r.ownerId);
     const app = appByOwnerId.get(r.ownerId);
+    const sub = subsByOwnerId.get(r.ownerId);
     result.push({
-      ownerId:         r.ownerId,
-      ownerName:       app?.fullName || r.ownerId,
-      primaryProperty: r.nameAr ?? "",
-      whatsappNumber:  r.whatsappNumber ?? "",
-      location:        r.location ?? "",
-      district:        r.district ?? "",
-      propertyType:    r.propertyType ?? null,
-      createdAt:       r.createdAt?.toISOString() ?? null,
+      ownerId:            r.ownerId,
+      ownerName:          app?.fullName || r.ownerId,
+      primaryProperty:    r.nameAr ?? "",
+      whatsappNumber:     r.whatsappNumber ?? "",
+      location:           r.location ?? "",
+      district:           r.district ?? "",
+      propertyType:       r.propertyType ?? null,
+      createdAt:          r.createdAt?.toISOString() ?? null,
+      expiresAt:          sub?.expiresAt ?? null,
+      subscriptionStatus: sub?.subscriptionStatus ?? "",
     });
   }
 
@@ -580,14 +592,17 @@ router.get("/owners", async (_req, res) => {
     const ownerId = `owner_${a.id}`;
     if (seen.has(ownerId)) continue;
     seen.add(ownerId);
+    const sub = subsByOwnerId.get(ownerId);
     result.push({
       ownerId,
-      ownerName:       a.full_name ?? ownerId,
-      primaryProperty: "—",
-      whatsappNumber:  a.phone ?? "",
-      location:        "",
-      propertyType:    null,
-      createdAt:       a.created_at ?? null,
+      ownerName:          a.full_name ?? ownerId,
+      primaryProperty:    "—",
+      whatsappNumber:     a.phone ?? "",
+      location:           "",
+      propertyType:       null,
+      createdAt:          a.created_at ?? null,
+      expiresAt:          sub?.expiresAt ?? null,
+      subscriptionStatus: sub?.subscriptionStatus ?? "",
     });
   }
 
@@ -1029,6 +1044,32 @@ router.patch("/contact-inquiries/:id/status", async (req, res) => {
   const body = z.object({ status: z.enum(["new", "read", "replied"]) }).safeParse(req.body);
   if (!body.success || !Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
   await db.update(contactInquiriesTable).set({ status: body.data.status }).where(eq(contactInquiriesTable.id, id));
+  return res.json({ ok: true });
+});
+
+/* ── Owner Support Requests ──────────────────────────────── */
+router.get("/support-requests", async (_req, res) => {
+  try {
+    const result = await db.execute(
+      sql`SELECT id, owner_id, owner_name, subject, message, status, created_at
+          FROM owner_support_requests
+          ORDER BY created_at DESC
+          LIMIT 300`
+    );
+    return res.json((result as any).rows);
+  } catch (err) {
+    console.error("[GET /admin/support-requests]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+router.patch("/support-requests/:id/status", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({ status: z.enum(["new", "read", "resolved"]) }).safeParse(req.body);
+  if (!body.success || !Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  await db.execute(
+    sql`UPDATE owner_support_requests SET status = ${body.data.status} WHERE id = ${id}`
+  );
   return res.json({ ok: true });
 });
 

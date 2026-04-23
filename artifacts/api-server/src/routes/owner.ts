@@ -226,9 +226,9 @@ router.get("/profile", async (req, res) => {
          for the same owner (matching by userId in chalet_submissions) */
       let phone = "";
       const oaResult = await db.execute(
-        sql`SELECT full_name, phone, email FROM owner_applications WHERE email = ${email} LIMIT 1`
+        sql`SELECT full_name, phone, email, whatsapp_news_subscribe FROM owner_applications WHERE email = ${email} LIMIT 1`
       );
-      const oaRow = ((oaResult as any).rows as Array<{ full_name: string; phone: string; email: string }>)[0];
+      const oaRow = ((oaResult as any).rows as Array<{ full_name: string; phone: string; email: string; whatsapp_news_subscribe: boolean }>)[0];
       if (!oaRow) {
         return res.json({ fullName: req.user?.firstName ?? "", phone: "", email: email, noApplication: true });
       }
@@ -241,7 +241,7 @@ router.get("/profile", async (req, res) => {
         phone = ((csResult as any).rows as Array<{ whatsapp_number: string }>)[0]?.whatsapp_number ?? "";
       }
       console.log(`[GET /owner/profile] owner_applications path: email=${email} phone=${phone}`);
-      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email });
+      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email, whatsappNewsSubscribe: oaRow.whatsapp_news_subscribe ?? false });
     }
 
     /* ── Path 2: Replit OIDC owner — look up via chalet_submissions ── */
@@ -367,6 +367,49 @@ router.put("/profile", async (req, res) => {
   } catch (err) {
     console.error("[PUT /owner/profile]", err);
     return res.status(500).json({ error: "حدث خطأ أثناء حفظ البيانات" });
+  }
+});
+
+/* ── PATCH /owner/profile/whatsapp-subscribe — toggle WA news opt-in ── */
+router.patch("/profile/whatsapp-subscribe", requireAuth, async (req, res) => {
+  try {
+    const currentEmail = await resolveOwnerEmail(req);
+    if (!currentEmail) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
+    const { subscribe } = req.body as { subscribe: boolean };
+    await db.execute(
+      sql`UPDATE owner_applications SET whatsapp_news_subscribe = ${!!subscribe} WHERE email = ${currentEmail}`
+    );
+    return res.json({ ok: true, subscribe: !!subscribe });
+  } catch (err) {
+    console.error("[PATCH /owner/profile/whatsapp-subscribe]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+/* ── POST /owner/support-request — submit a support/feature request ── */
+router.post("/support-request", requireAuth, async (req, res) => {
+  try {
+    const { subject, message } = req.body as { subject?: string; message?: string };
+    if (!subject?.trim()) return res.status(400).json({ error: "الموضوع مطلوب" });
+    if (!message?.trim()) return res.status(400).json({ error: "نص الطلب مطلوب" });
+
+    /* Resolve owner identity */
+    let ownerName: string | null = null;
+    const email = await resolveOwnerEmail(req);
+    if (email) {
+      const r = await db.execute(sql`SELECT full_name FROM owner_applications WHERE email = ${email} LIMIT 1`);
+      ownerName = ((r as any).rows as Array<{ full_name: string }>)[0]?.full_name ?? null;
+    }
+    const ownerId = req.user?.id ?? email ?? "unknown";
+
+    await db.execute(
+      sql`INSERT INTO owner_support_requests (owner_id, owner_name, subject, message, status, created_at)
+          VALUES (${String(ownerId)}, ${ownerName}, ${subject.trim()}, ${message.trim()}, 'new', now())`
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[POST /owner/support-request]", err);
+    return res.status(500).json({ error: "حدث خطأ أثناء إرسال الطلب" });
   }
 });
 
