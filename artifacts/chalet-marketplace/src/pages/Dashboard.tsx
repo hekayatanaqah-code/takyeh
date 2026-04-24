@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useAuth } from "@workspace/replit-auth-web";
-import { useGetMySubmissions } from "@workspace/api-client-react";
+// useGetMySubmissions replaced by inline apiFetch query (see line ~12593)
 import { useStaffAuth } from "@/lib/useStaffAuth";
 import { TAB_PERMISSION, ALL_PERM_KEYS, PERM_LABELS } from "@/lib/staffPermissions";
 import type { PermKey, StaffPermissions } from "@/lib/staffPermissions";
@@ -12590,7 +12590,17 @@ export default function Dashboard() {
     toast({ title: "وضع القراءة فقط", description: "فعّل وضع التعديل من الشريط العلوي أولاً", variant: "destructive" });
   }
 
-  const { data: submissions, isLoading: submissionsLoading } = useGetMySubmissions();
+  /* ── Submissions: use apiFetch (credentials: include) + wait for auth ── */
+  const { data: submissions, isLoading: submissionsLoading } = useQuery<any[]>({
+    queryKey: ["/api/submissions"],
+    queryFn: async () => {
+      const r = await apiFetch("/submissions");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    /* Don't fire until we know the auth state; prevents spurious 401 on mount */
+    enabled: isAuthenticated || isStaff || isImpersonating,
+  });
 
   const { data: ownerChalets = [] } = useQuery<any[]>({
     queryKey: ["owner", "chalets"],
@@ -13462,7 +13472,11 @@ export default function Dashboard() {
 
         {/* Tab Content */}
         {activeTab === "chalets" && (
-          <ChaletsTab submissions={submissions as any[]} isLoading={submissionsLoading} ownerChalets={ownerChalets} />
+          <ChaletsTab
+            submissions={submissions as any[]}
+            isLoading={submissionsLoading || authLoading || impersonationLoading}
+            ownerChalets={ownerChalets}
+          />
         )}
         {activeTab === "seasons" && (
           <SeasonsTab ownerChalets={ownerChalets} />
