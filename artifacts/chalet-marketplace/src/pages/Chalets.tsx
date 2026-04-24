@@ -582,25 +582,21 @@ export default function Chalets() {
                   ══════════════════════════════════════════════════ */}
                   {filterCity !== "all" && filterDate && !cityIsEmpty && (
                     <>
-                      <div className="bg-card rounded-2xl border border-amber-200 dark:border-amber-800/40 p-8 text-center flex flex-col items-center mb-8 bg-amber-50/30 dark:bg-amber-950/10">
-                        <div className="w-16 h-16 bg-amber-100 dark:bg-amber-950/40 rounded-full flex items-center justify-center mb-4">
-                          <CalendarDays className="w-8 h-8 text-amber-500" />
+                      {/* Compact banner — no button, results follow immediately */}
+                      <div className="flex items-start gap-4 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl px-5 py-4 mb-6">
+                        <div className="w-10 h-10 bg-amber-100 dark:bg-amber-950/50 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                          <CalendarDays className="w-5 h-5 text-amber-500" />
                         </div>
-                        <h3 className="text-xl font-bold mb-2">
-                          عفواً، التاريخ المحدد محجوز بالكامل في {filterCity}
-                        </h3>
-                        <p className="text-muted-foreground mb-5">
-                          {nextAvailChalets.length > 0
-                            ? "إليك الشاليهات المتاحة في أقرب تاريخ ممكن:"
-                            : "لم نجد تواريخ متاحة في الـ٤٥ يوماً القادمة — جرّب تاريخاً أبعد أو عرض جميع الشاليهات."}
-                        </p>
-                        <Button
-                          onClick={() => setFilterDate("")}
-                          className="gap-2"
-                        >
-                          <FilterX className="w-4 h-4" />
-                          عرض كل شاليهات {filterCity} (المتاحة أولاً)
-                        </Button>
+                        <div className="text-right flex-1">
+                          <p className="font-bold text-amber-800 dark:text-amber-300 text-base leading-snug mb-1">
+                            عفواً، التاريخ المحدد محجوز بالكامل في {filterCity}
+                          </p>
+                          <p className="text-sm text-amber-700/80 dark:text-amber-400/80">
+                            {nextAvailGroups.length > 0
+                              ? "إليك الشاليهات المتاحة في أقرب تاريخ ممكن:"
+                              : "لم نجد تواريخ متاحة في الـ٤٥ يوماً القادمة — جرّب تاريخاً مختلفاً."}
+                          </p>
+                        </div>
                       </div>
 
                       {/* Next available chalets — grouped by date (pre-computed above) */}
@@ -612,7 +608,7 @@ export default function Chalets() {
                                 <div className="flex-1 h-px bg-border" />
                                 <span className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-4 py-2 rounded-full whitespace-nowrap">
                                   <CalendarDays className="w-4 h-4" />
-                                  متاح بتاريخ: {hijriAndGregorian(date)}
+                                  متاح بتاريخ: {hijriAndGregorian(date + "T12:00:00")}
                                 </span>
                                 <div className="flex-1 h-px bg-border" />
                               </div>
@@ -628,6 +624,16 @@ export default function Chalets() {
                               </div>
                             </div>
                           ))}
+                        </div>
+                      )}
+
+                      {/* No upcoming dates found — offer manual clear */}
+                      {nextAvailGroups.length === 0 && (
+                        <div className="text-center py-4">
+                          <Button variant="outline" onClick={() => setFilterDate("")} className="gap-2">
+                            <FilterX className="w-4 h-4" />
+                            عرض كل شاليهات {filterCity}
+                          </Button>
                         </div>
                       )}
                     </>
