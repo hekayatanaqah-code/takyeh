@@ -113,6 +113,22 @@ export default function Chalets() {
     refetch();
   }, [filterCity, filterDate, filterPeriod, refetch]);
 
+  /* ── Alternate chalets: same city, no date filter ── */
+  /* Only activated when main results are empty AND a specific city + date are set */
+  const needsAlternate = filterCity !== "all" && !!filterDate;
+  const { data: alternateChalets = [] } = useQuery<any[]>({
+    queryKey: ["chalets-alternate", filterCity],
+    enabled: needsAlternate,
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("location", filterCity);
+      const r = await fetch(`${BASE}/api/chalets?${params.toString()}`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
   const filteredChalets = (chalets ?? []).filter((c) => {
     if (filterDistrict && filterDistrict !== "all" && (c as any).district !== filterDistrict) return false;
     if (filterCategory && filterCategory !== "all") {
@@ -446,14 +462,70 @@ export default function Chalets() {
                   ))}
                 </div>
               ) : filteredChalets.length === 0 ? (
-                <div className="bg-card rounded-2xl border border-border/50 p-12 text-center flex flex-col items-center">
-                  <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-4">
-                    <FilterX className="w-10 h-10 text-muted-foreground" />
+                <>
+                  {/* ── No results for this date ── */}
+                  <div className="bg-card rounded-2xl border border-border/50 p-8 text-center flex flex-col items-center mb-8">
+                    <div className="w-16 h-16 bg-amber-50 dark:bg-amber-950/30 rounded-full flex items-center justify-center mb-4">
+                      <CalendarDays className="w-8 h-8 text-amber-500" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-2">
+                      {filterCity !== "all" && filterDate
+                        ? `لا تتوفر شاليهات في ${filterCity} بهذا التاريخ`
+                        : "لا توجد نتائج مطابقة"}
+                    </h3>
+                    <p className="text-muted-foreground mb-5">
+                      {filterCity !== "all" && filterDate
+                        ? "التاريخ المحدد محجوز بالكامل — اطّلع على الشاليهات المتاحة في أيام أخرى أدناه."
+                        : "حاول تغيير خيارات البحث للوصول لنتائج أفضل."}
+                    </p>
+                    {filterCity !== "all" && filterDate ? (
+                      /* City-specific: clear date only, keep city */
+                      <Button
+                        onClick={() => setFilterDate("")}
+                        className="gap-2"
+                      >
+                        <FilterX className="w-4 h-4" />
+                        عرض كل شاليهات {filterCity}
+                      </Button>
+                    ) : (
+                      /* Generic: clear everything */
+                      <Button onClick={resetFilters} className="gap-2">
+                        <FilterX className="w-4 h-4" />
+                        مسح جميع الفلاتر
+                      </Button>
+                    )}
                   </div>
-                  <h3 className="text-xl font-bold mb-2">لا توجد نتائج مطابقة</h3>
-                  <p className="text-muted-foreground mb-6">حاول تغيير خيارات البحث للوصول لنتائج أفضل.</p>
-                  <Button onClick={resetFilters}>عرض جميع الشاليهات</Button>
-                </div>
+
+                  {/* ── Alternate dates: same city, any date ── */}
+                  {filterCity !== "all" && filterDate && alternateChalets.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-3 mb-5">
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="flex items-center gap-2 text-sm font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-4 py-2 rounded-full whitespace-nowrap">
+                          <CalendarDays className="w-4 h-4" />
+                          شاليهات متاحة في أيام أخرى في نفس المدينة
+                        </span>
+                        <div className="flex-1 h-px bg-border" />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        {alternateChalets.map((chalet) => (
+                          <ChaletCard
+                            key={chalet.id}
+                            chalet={chalet}
+                            selectedPeriod={filterPeriod !== "all" ? (filterPeriod as "morning" | "evening" | "full_day") : undefined}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* City + date but no alternates at all */}
+                  {filterCity !== "all" && filterDate && alternateChalets.length === 0 && (
+                    <div className="text-center py-6 text-muted-foreground text-sm">
+                      لا توجد شاليهات مسجّلة في {filterCity} حالياً
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {filteredChalets.map((chalet) => (
