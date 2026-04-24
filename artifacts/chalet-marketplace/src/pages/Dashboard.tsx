@@ -425,6 +425,147 @@ function EditChaletDialog({
   );
 }
 
+/* ── ResubmitDialog — owner edits a needs_revision submission ── */
+function ResubmitDialog({
+  open, sub, onClose, onSaved,
+}: {
+  open: boolean;
+  sub: any | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [descriptionAr, setDescriptionAr] = useState("");
+  const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [priceMorning, setPriceMorning]     = useState("");
+  const [priceEvening, setPriceEvening]     = useState("");
+  const [priceFullDay, setPriceFullDay]     = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (sub && open) {
+      setDescriptionAr(sub.descriptionAr ?? "");
+      setWhatsappNumber(sub.whatsappNumber ?? "");
+      setPriceMorning(sub.priceMorning ? String(Number(sub.priceMorning)) : "");
+      setPriceEvening(sub.priceEvening ? String(Number(sub.priceEvening)) : "");
+      setPriceFullDay(sub.priceFullDay ? String(Number(sub.priceFullDay)) : "");
+    }
+  }, [sub, open]);
+
+  function normNum(v: string) {
+    return v.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/\D/g, "");
+  }
+
+  async function handleResubmit() {
+    if (!sub) return;
+    setSaving(true);
+    try {
+      const body: Record<string, unknown> = {};
+      if (descriptionAr.trim()) body.descriptionAr = descriptionAr.trim();
+      if (whatsappNumber.trim()) body.whatsappNumber = whatsappNumber.trim();
+      if (priceMorning) body.priceMorning = Number(priceMorning);
+      if (priceEvening) body.priceEvening = Number(priceEvening);
+      if (priceFullDay) body.priceFullDay = Number(priceFullDay);
+
+      const r = await apiFetch(`/submissions/${sub.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      const data = await r.json().catch(() => null);
+      if (!r.ok) {
+        toast({ title: "حدث خطأ", description: data?.error ?? "فشل الإرسال", variant: "destructive" });
+        return;
+      }
+      toast({ title: "✅ تمت إعادة التقديم", description: "سيراجع الفريق طلبك قريباً وسيتم التواصل معك" });
+      onSaved();
+      onClose();
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent dir="rtl" className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <RotateCcw className="w-4 h-4 text-orange-500" />
+            تعديل وإعادة التقديم
+          </DialogTitle>
+          <DialogDescription>
+            {sub?.nameAr} — راجع ملاحظات الإدارة وأجرِ التعديلات المطلوبة
+          </DialogDescription>
+        </DialogHeader>
+
+        {sub?.adminNote && (
+          <div className="flex items-start gap-2.5 rounded-xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/40 px-3.5 py-3">
+            <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-bold text-orange-700 dark:text-orange-400 mb-0.5">ملاحظات الإدارة</p>
+              <p className="text-xs text-orange-800 dark:text-orange-300 leading-relaxed">{sub.adminNote}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-4 py-1">
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">الوصف</label>
+            <textarea
+              value={descriptionAr}
+              onChange={(e) => setDescriptionAr(e.target.value)}
+              placeholder="وصف مختصر للشاليه..."
+              rows={3}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">رقم الواتساب</label>
+            <Input
+              value={whatsappNumber}
+              onChange={(e) => setWhatsappNumber(e.target.value)}
+              placeholder="05XXXXXXXX"
+              dir="ltr"
+              inputMode="tel"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">الأسعار (ر.س)</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { label: "☀️ صباحي",    val: priceMorning, set: setPriceMorning },
+                { label: "🌙 مسائي",    val: priceEvening, set: setPriceEvening },
+                { label: "📅 يوم كامل", val: priceFullDay, set: setPriceFullDay },
+              ] as const).map(({ label, val, set }) => (
+                <div key={label} className="space-y-1">
+                  <label className="text-[11px] font-medium text-muted-foreground">{label}</label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={val}
+                    onChange={(e) => set(normNum(e.target.value))}
+                    placeholder="٠"
+                    className="text-right text-sm h-9"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button
+            disabled={saving}
+            onClick={handleResubmit}
+            className="gap-1.5 bg-orange-600 hover:bg-orange-700 text-white"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+            إعادة التقديم للمراجعة
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function BlockDatesDialog({
   open, chalet, onClose, onBlocked,
 }: {
@@ -613,6 +754,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
   const [blockTarget, setBlockTarget] = useState<{ id: number; nameAr: string } | null>(null);
   const [pauseTarget, setPauseTarget] = useState<any | null>(null);
   const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [resubmitTarget, setResubmitTarget] = useState<any | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
@@ -750,6 +892,15 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
         onClose={() => setEditTarget(null)}
         onSaved={() => qc.invalidateQueries({ queryKey: ["submissions"] })}
       />
+      <ResubmitDialog
+        open={!!resubmitTarget}
+        sub={resubmitTarget}
+        onClose={() => setResubmitTarget(null)}
+        onSaved={() => {
+          qc.invalidateQueries({ queryKey: ["/api/submissions"] });
+          qc.invalidateQueries({ queryKey: ["submissions"] });
+        }}
+      />
       {submissions.map((sub: any, idx: number) => {
         const status = statusConfig[sub.status as keyof typeof statusConfig] ?? statusConfig.pending;
         const approvedChalet = ownerChalets.find((c: any) => c.submissionId === sub.id);
@@ -875,6 +1026,16 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                       تفاصيل الشاليه
                     </Button>
                   </Link>
+                  {sub.status === "needs_revision" && (
+                    <Button
+                      size="sm"
+                      className="gap-1.5 rounded-xl text-xs h-8 bg-orange-600 hover:bg-orange-700 text-white border-0"
+                      onClick={() => setResubmitTarget(sub)}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      تعديل وإعادة التقديم
+                    </Button>
+                  )}
                   {isApproved && (
                     <>
                       <Link href={`/chalets/${approvedChalet.id}`} target="_blank">

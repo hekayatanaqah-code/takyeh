@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { chaletSubmissionsTable, ownerTempSessionsTable } from "@workspace/db/schema";
 import { CreateSubmissionBody } from "@workspace/api-zod";
-import { eq, and, ne, sql } from "drizzle-orm";
+import { eq, and, ne, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { sendAdminNewSubmissionEmail } from "../lib/email";
 
@@ -68,10 +68,45 @@ router.get("/", async (req, res) => {
     return res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
   }
 
+  /* ── Expand to include "owner_N" aliases ──────────────────
+   * Admin-added properties are stored with owner_id = "owner_N"
+   * (from owner_applications.id). Replit-OAuth owners need to see
+   * these too, so we resolve the alias from their email.             */
+  const ownerIds = new Set<string>([resolvedOwnerId]);
+  try {
+    /* 1. If this IS already an "owner_N" key, also find the Replit user id */
+    if (/^owner_\d+$/.test(resolvedOwnerId)) {
+      const n = parseInt(resolvedOwnerId.replace("owner_", ""), 10);
+      const r = await db.execute(
+        sql`SELECT u.id FROM owner_applications oa
+            JOIN users u ON LOWER(u.email) = LOWER(oa.email)
+            WHERE oa.id = ${n} LIMIT 1`
+      );
+      const uid = ((r as any).rows as Array<{ id: string }>)[0]?.id;
+      if (uid) ownerIds.add(String(uid));
+    }
+    /* 2. Also find the "owner_N" alias for a Replit-ID session */
+    else {
+      const emailR = await db.execute(
+        sql`SELECT email FROM users WHERE id = ${resolvedOwnerId} LIMIT 1`
+      );
+      const email = ((emailR as any).rows as Array<{ email: string }>)[0]?.email;
+      if (email) {
+        const appR = await db.execute(
+          sql`SELECT id FROM owner_applications WHERE LOWER(email) = LOWER(${email}) LIMIT 1`
+        );
+        const appId = ((appR as any).rows as Array<{ id: number }>)[0]?.id;
+        if (appId) ownerIds.add(`owner_${appId}`);
+      }
+    }
+  } catch { /* non-fatal — fall back to single ID */ }
+
+  const allOwnerIds = [...ownerIds];
+
   const submissions = await db
     .select()
     .from(chaletSubmissionsTable)
-    .where(eq(chaletSubmissionsTable.ownerId, resolvedOwnerId));
+    .where(inArray(chaletSubmissionsTable.ownerId, allOwnerIds));
 
   return res.json(submissions);
 });
@@ -159,6 +194,106 @@ router.post("/", async (req, res) => {
     id: submission.id,
     message: "تم استلام طلبك، سيتم مراجعته وتفعيله قريباً",
   });
+});
+
+/* ── PATCH /:id — owner edits a needs_revision submission and resubmits ── */
+router.patch("/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: "معرّف غير صالح" });
+
+  /* Resolve owner ID */
+  let resolvedOwnerId: string | null = null;
+  const tempToken = req.cookies?.owner_temp_session;
+  if (tempToken) {
+    const r = await db.execute<{ owner_id: string }>(
+      sql`SELECT owner_id FROM owner_temp_sessions
+          WHERE token = ${tempToken} AND expires_at > now() LIMIT 1`
+    );
+    const row = ((r as any).rows as Array<{ owner_id: string }>)[0];
+    if (row?.owner_id) resolvedOwnerId = row.owner_id;
+  }
+  if (!resolvedOwnerId && req.isAuthenticated()) resolvedOwnerId = req.user.id;
+  if (!resolvedOwnerId) return res.status(401).json({ error: "يجب تسجيل الدخول" });
+
+  /* Build set of valid owner IDs */
+  const ownerIds = new Set<string>([resolvedOwnerId]);
+  try {
+    if (/^owner_\d+$/.test(resolvedOwnerId)) {
+      const n = parseInt(resolvedOwnerId.replace("owner_", ""), 10);
+      const r = await db.execute(
+        sql`SELECT u.id FROM owner_applications oa JOIN users u ON LOWER(u.email)=LOWER(oa.email) WHERE oa.id=${n} LIMIT 1`
+      );
+      const uid = ((r as any).rows as Array<{ id: string }>)[0]?.id;
+      if (uid) ownerIds.add(String(uid));
+    } else {
+      const emailR = await db.execute(sql`SELECT email FROM users WHERE id=${resolvedOwnerId} LIMIT 1`);
+      const email = ((emailR as any).rows as Array<{ email: string }>)[0]?.email;
+      if (email) {
+        const appR = await db.execute(sql`SELECT id FROM owner_applications WHERE LOWER(email)=LOWER(${email}) LIMIT 1`);
+        const appId = ((appR as any).rows as Array<{ id: number }>)[0]?.id;
+        if (appId) ownerIds.add(`owner_${appId}`);
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  /* Verify ownership + status eligibility */
+  const allOwnerIds = [...ownerIds];
+  const [sub] = await db.select().from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, id)).limit(1);
+  if (!sub) return res.status(404).json({ error: "الطلب غير موجود" });
+  if (!allOwnerIds.includes(sub.ownerId ?? "")) return res.status(403).json({ error: "غير مصرح" });
+  if (sub.status !== "needs_revision") return res.status(409).json({ error: "لا يمكن تعديل هذا الطلب في حالته الحالية" });
+
+  const body = z.object({
+    nameAr: z.string().trim().min(2).optional(),
+    descriptionAr: z.string().trim().min(3).optional(),
+    whatsappNumber: z.string().trim().min(9).optional(),
+    location: z.string().trim().min(2).optional(),
+    district: z.string().trim().nullable().optional(),
+    pricePerNight: z.number().min(0).optional(),
+    priceMorning: z.number().nullable().optional(),
+    priceEvening: z.number().nullable().optional(),
+    priceFullDay: z.number().nullable().optional(),
+    photos: z.array(z.string()).max(15).optional(),
+    amenities: z.array(z.string()).optional(),
+    mapsUrl: z.string().nullable().optional(),
+    videoUrl: z.string().nullable().optional(),
+    maxGuests: z.number().int().min(1).nullable().optional(),
+    bedrooms: z.number().int().min(0).nullable().optional(),
+    termsAndConditions: z.string().nullable().optional(),
+  }).safeParse(req.body);
+
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const d = body.data;
+
+  /* Build the update object — always reset to pending and clear adminNote */
+  const updateSet: Partial<typeof chaletSubmissionsTable.$inferInsert> & { status: "pending"; adminNote: null } = {
+    status: "pending",
+    adminNote: null,
+  };
+  if (d.nameAr        !== undefined) updateSet.nameAr = d.nameAr;
+  if (d.descriptionAr !== undefined) updateSet.descriptionAr = d.descriptionAr;
+  if (d.whatsappNumber!== undefined) updateSet.whatsappNumber = d.whatsappNumber;
+  if (d.location      !== undefined) updateSet.location = d.location;
+  if (d.district      !== undefined) updateSet.district = d.district ?? null;
+  if (d.pricePerNight !== undefined) updateSet.pricePerNight = String(d.pricePerNight);
+  if (d.priceMorning  !== undefined) updateSet.priceMorning = d.priceMorning != null ? String(d.priceMorning) : null;
+  if (d.priceEvening  !== undefined) updateSet.priceEvening = d.priceEvening != null ? String(d.priceEvening) : null;
+  if (d.priceFullDay  !== undefined) updateSet.priceFullDay = d.priceFullDay != null ? String(d.priceFullDay) : null;
+  if (d.photos        !== undefined) updateSet.photos = d.photos ?? [];
+  if (d.amenities     !== undefined) updateSet.amenities = d.amenities ?? [];
+  if (d.mapsUrl       !== undefined) updateSet.mapsUrl = d.mapsUrl ?? null;
+  if (d.videoUrl      !== undefined) updateSet.videoUrl = d.videoUrl ?? null;
+  if (d.maxGuests     !== undefined) updateSet.maxGuests = d.maxGuests ?? null;
+  if (d.bedrooms      !== undefined) updateSet.bedrooms = d.bedrooms ?? null;
+  if (d.termsAndConditions !== undefined) updateSet.termsAndConditions = d.termsAndConditions ?? null;
+
+  await db
+    .update(chaletSubmissionsTable)
+    .set(updateSet as any)
+    .where(eq(chaletSubmissionsTable.id, id));
+
+  return res.json({ ok: true, message: "تم إعادة تقديم الطلب للمراجعة" });
 });
 
 export default router;
