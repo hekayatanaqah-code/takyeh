@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { SlidersHorizontal, FilterX, CheckSquare, Square, CalendarDays, LayoutGrid, Map, MapPin } from "lucide-react";
+import { SlidersHorizontal, FilterX, CheckSquare, Square, CalendarDays, LayoutGrid, Map as MapIcon, MapPin } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { hijriAndGregorian } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -229,6 +229,20 @@ export default function Chalets() {
     setFilterDate("");
   };
 
+  /* ── Pre-compute next-available grouped by date (outside JSX to avoid Map shadowing) ── */
+  const nextAvailGroups: Array<{ date: string; chalets: any[] }> = (() => {
+    if (!nextAvailChalets.length) return [];
+    const acc: Record<string, any[]> = {};
+    for (const c of nextAvailChalets) {
+      const d = String(c.nextAvailableDate);
+      if (!acc[d]) acc[d] = [];
+      acc[d].push(c);
+    }
+    return Object.keys(acc)
+      .sort()
+      .map((date) => ({ date, chalets: acc[date] }));
+  })();
+
   const FilterControls = () => (
     <div className="space-y-8">
 
@@ -445,7 +459,7 @@ export default function Chalets() {
                   onClick={() => setViewMode("map")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === "map" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                 >
-                  <Map className="w-4 h-4" />
+                  <MapIcon className="w-4 h-4" />
                   <span className="hidden sm:inline">خريطة</span>
                 </button>
               </div>
@@ -589,41 +603,33 @@ export default function Chalets() {
                         </Button>
                       </div>
 
-                      {/* Next available chalets — grouped by date */}
-                      {nextAvailChalets.length > 0 && (() => {
-                        const groups = new Map<string, any[]>();
-                        for (const c of nextAvailChalets) {
-                          const d = c.nextAvailableDate as string;
-                          if (!groups.has(d)) groups.set(d, []);
-                          groups.get(d)!.push(c);
-                        }
-                        return (
-                          <div className="space-y-8">
-                            {[...groups.entries()].map(([date, groupChalets]) => (
-                              <div key={date}>
-                                <div className="flex items-center gap-3 mb-4">
-                                  <div className="flex-1 h-px bg-border" />
-                                  <span className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-4 py-2 rounded-full whitespace-nowrap">
-                                    <CalendarDays className="w-4 h-4" />
-                                    متاح بتاريخ: {hijriAndGregorian(date)}
-                                  </span>
-                                  <div className="flex-1 h-px bg-border" />
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                  {groupChalets.map((chalet: any) => (
-                                    <ChaletCard
-                                      key={chalet.id}
-                                      chalet={chalet}
-                                      selectedPeriod={filterPeriod !== "all" ? (filterPeriod as "morning" | "evening" | "full_day") : undefined}
-                                      searchDate={date}
-                                    />
-                                  ))}
-                                </div>
+                      {/* Next available chalets — grouped by date (pre-computed above) */}
+                      {nextAvailGroups.length > 0 && (
+                        <div className="space-y-8">
+                          {nextAvailGroups.map(({ date, chalets: groupChalets }) => (
+                            <div key={date}>
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="flex-1 h-px bg-border" />
+                                <span className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 px-4 py-2 rounded-full whitespace-nowrap">
+                                  <CalendarDays className="w-4 h-4" />
+                                  متاح بتاريخ: {hijriAndGregorian(date)}
+                                </span>
+                                <div className="flex-1 h-px bg-border" />
                               </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                {groupChalets.map((chalet: any) => (
+                                  <ChaletCard
+                                    key={chalet.id}
+                                    chalet={chalet}
+                                    selectedPeriod={filterPeriod !== "all" ? (filterPeriod as "morning" | "evening" | "full_day") : undefined}
+                                    searchDate={date}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </>
                   )}
 
