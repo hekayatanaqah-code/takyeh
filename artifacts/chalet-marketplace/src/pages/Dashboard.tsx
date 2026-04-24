@@ -502,9 +502,11 @@ function ResubmitDialog({
 
   async function handleResubmit() {
     if (!sub) return;
-    if (!nameAr.trim())        { toast({ title: "اسم الشاليه مطلوب",   variant: "destructive" }); return; }
-    if (!descriptionAr.trim()) { toast({ title: "الوصف مطلوب",          variant: "destructive" }); return; }
-    if (!whatsappNumber.trim()){ toast({ title: "رقم الواتساب مطلوب",  variant: "destructive" }); return; }
+    if (!nameAr.trim())        { toast({ title: "اسم الشاليه مطلوب",          variant: "destructive" }); return; }
+    if (!descriptionAr.trim()) { toast({ title: "الوصف مطلوب",                 variant: "destructive" }); return; }
+    if (!whatsappNumber.trim()){ toast({ title: "رقم الواتساب مطلوب",         variant: "destructive" }); return; }
+    if (!mapsUrl.trim())       { toast({ title: "رابط الخرائط مطلوب",         variant: "destructive" }); return; }
+    if (!socialLink.trim())    { toast({ title: "حساب إنستقرام / سناب شات مطلوب", variant: "destructive" }); return; }
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
@@ -597,7 +599,7 @@ function ResubmitDialog({
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold">رقم الواتساب *</label>
-              <Input value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} placeholder="05XXXXXXXX" dir="ltr" inputMode="tel" />
+              <Input value={whatsappNumber ? toAr(whatsappNumber) : ""} onChange={(e) => setWhatsappNumber(normNum(e.target.value))} placeholder="٠٥XXXXXXXX" dir="ltr" inputMode="tel" className="text-right" />
             </div>
           </div>
 
@@ -636,11 +638,11 @@ function ResubmitDialog({
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">رابط الخرائط (اختياري)</label>
+              <label className="text-xs font-semibold">رابط الخرائط *</label>
               <Input value={mapsUrl} onChange={(e) => setMapsUrl(e.target.value)} placeholder="https://maps.google.com/..." dir="ltr" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">حساب إنستقرام / سناب شات (اختياري)</label>
+              <label className="text-xs font-semibold">حساب إنستقرام / سناب شات *</label>
               <Input value={socialLink} onChange={(e) => setSocialLink(e.target.value)} placeholder="https://instagram.com/..." dir="ltr" />
             </div>
           </div>
