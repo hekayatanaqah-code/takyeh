@@ -257,6 +257,7 @@ router.patch("/:id", async (req, res) => {
     amenities: z.array(z.string()).optional(),
     mapsUrl: z.string().nullable().optional(),
     videoUrl: z.string().nullable().optional(),
+    socialLink: z.string().nullable().optional(),
     maxGuests: z.number().int().min(1).nullable().optional(),
     bedrooms: z.number().int().min(0).nullable().optional(),
     termsAndConditions: z.string().nullable().optional(),
@@ -284,6 +285,7 @@ router.patch("/:id", async (req, res) => {
   if (d.amenities     !== undefined) updateSet.amenities = d.amenities ?? [];
   if (d.mapsUrl       !== undefined) updateSet.mapsUrl = d.mapsUrl ?? null;
   if (d.videoUrl      !== undefined) updateSet.videoUrl = d.videoUrl ?? null;
+  if (d.socialLink    !== undefined) updateSet.socialLink = d.socialLink ?? null;
   if (d.maxGuests     !== undefined) updateSet.maxGuests = d.maxGuests ?? null;
   if (d.bedrooms      !== undefined) updateSet.bedrooms = d.bedrooms ?? null;
   if (d.termsAndConditions !== undefined) updateSet.termsAndConditions = d.termsAndConditions ?? null;

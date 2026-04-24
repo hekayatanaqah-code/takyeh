@@ -449,6 +449,7 @@ function ResubmitDialog({
   const [maxGuests, setMaxGuests]                 = useState("");
   const [bedrooms, setBedrooms]                   = useState("");
   const [mapsUrl, setMapsUrl]                     = useState("");
+  const [socialLink, setSocialLink]               = useState("");
   const [termsAndConditions, setTermsAndConditions] = useState("");
   const [photos, setPhotos]                       = useState<string[]>([]);
   const [amenities, setAmenities]                 = useState<string[]>([]);
@@ -480,6 +481,7 @@ function ResubmitDialog({
       setMaxGuests    (sub.maxGuests  != null ? String(sub.maxGuests)  : "");
       setBedrooms     (sub.bedrooms   != null ? String(sub.bedrooms)   : "");
       setMapsUrl      (sub.mapsUrl    ?? "");
+      setSocialLink   (sub.socialLink ?? "");
       setTermsAndConditions(sub.termsAndConditions ?? "");
       setPhotos  (Array.isArray(sub.photos)    ? [...sub.photos]    : []);
       setAmenities(Array.isArray(sub.amenities) ? [...sub.amenities] : []);
@@ -514,6 +516,7 @@ function ResubmitDialog({
         photos,
         amenities,
         mapsUrl:            mapsUrl.trim()            || null,
+        socialLink:         socialLink.trim()         || null,
         termsAndConditions: termsAndConditions.trim() || null,
       };
       if (pricePerNight) body.pricePerNight = Number(pricePerNight);
@@ -603,7 +606,7 @@ function ResubmitDialog({
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide border-b pb-1.5">الأسعار (ر.س)</p>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold">السعر الأساسي لليلة</label>
-              <Input type="text" inputMode="numeric" dir="ltr" value={pricePerNight} onChange={(e) => setPricePerNight(normNum(e.target.value))} placeholder="0" className="text-right" />
+              <Input type="text" inputMode="numeric" dir="ltr" value={pricePerNight ? toAr(pricePerNight) : ""} onChange={(e) => setPricePerNight(normNum(e.target.value))} placeholder="٠" className="text-right" />
             </div>
             <div className="grid grid-cols-3 gap-2">
               {([
@@ -613,7 +616,7 @@ function ResubmitDialog({
               ] as const).map(({ label, val, set }) => (
                 <div key={label} className="space-y-1">
                   <label className="text-[11px] font-medium text-muted-foreground">{label}</label>
-                  <Input type="text" inputMode="numeric" dir="ltr" value={val} onChange={(e) => set(normNum(e.target.value))} placeholder="0" className="text-right text-sm h-9" />
+                  <Input type="text" inputMode="numeric" dir="ltr" value={val ? toAr(val) : ""} onChange={(e) => set(normNum(e.target.value))} placeholder="٠" className="text-right text-sm h-9" />
                 </div>
               ))}
             </div>
@@ -625,16 +628,20 @@ function ResubmitDialog({
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">عدد الضيوف</label>
-                <Input type="text" inputMode="numeric" dir="ltr" value={maxGuests} onChange={(e) => setMaxGuests(normNum(e.target.value))} placeholder="0" className="text-right h-9" />
+                <Input type="text" inputMode="numeric" dir="ltr" value={maxGuests ? toAr(maxGuests) : ""} onChange={(e) => setMaxGuests(normNum(e.target.value))} placeholder="٠" className="text-right h-9" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">غرف النوم</label>
-                <Input type="text" inputMode="numeric" dir="ltr" value={bedrooms} onChange={(e) => setBedrooms(normNum(e.target.value))} placeholder="0" className="text-right h-9" />
+                <Input type="text" inputMode="numeric" dir="ltr" value={bedrooms ? toAr(bedrooms) : ""} onChange={(e) => setBedrooms(normNum(e.target.value))} placeholder="٠" className="text-right h-9" />
               </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold">رابط الخرائط (اختياري)</label>
               <Input value={mapsUrl} onChange={(e) => setMapsUrl(e.target.value)} placeholder="https://maps.google.com/..." dir="ltr" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">حساب إنستقرام / سناب شات (اختياري)</label>
+              <Input value={socialLink} onChange={(e) => setSocialLink(e.target.value)} placeholder="https://instagram.com/..." dir="ltr" />
             </div>
           </div>
 
