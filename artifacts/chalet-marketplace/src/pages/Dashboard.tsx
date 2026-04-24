@@ -435,20 +435,54 @@ function ResubmitDialog({
   onSaved: () => void;
 }) {
   const { toast } = useToast();
-  const [descriptionAr, setDescriptionAr] = useState("");
-  const [whatsappNumber, setWhatsappNumber] = useState("");
-  const [priceMorning, setPriceMorning]     = useState("");
-  const [priceEvening, setPriceEvening]     = useState("");
-  const [priceFullDay, setPriceFullDay]     = useState("");
-  const [saving, setSaving] = useState(false);
 
+  /* ── All editable fields, pre-populated from submission ── */
+  const [nameAr, setNameAr]                       = useState("");
+  const [location, setLocation]                   = useState("");
+  const [district, setDistrict]                   = useState("");
+  const [descriptionAr, setDescriptionAr]         = useState("");
+  const [whatsappNumber, setWhatsappNumber]       = useState("");
+  const [pricePerNight, setPricePerNight]         = useState("");
+  const [priceMorning, setPriceMorning]           = useState("");
+  const [priceEvening, setPriceEvening]           = useState("");
+  const [priceFullDay, setPriceFullDay]           = useState("");
+  const [maxGuests, setMaxGuests]                 = useState("");
+  const [bedrooms, setBedrooms]                   = useState("");
+  const [mapsUrl, setMapsUrl]                     = useState("");
+  const [termsAndConditions, setTermsAndConditions] = useState("");
+  const [photos, setPhotos]                       = useState<string[]>([]);
+  const [amenities, setAmenities]                 = useState<string[]>([]);
+  const [saving, setSaving]                       = useState(false);
+
+  /* Amenities catalog (public endpoint — no auth needed) */
+  const { data: amenitiesCatalog = [] } = useQuery<Array<{ id: number; key: string; labelAr: string; isActive: boolean }>>({
+    queryKey: ["amenities-catalog-resubmit"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/amenities`);
+      return r.ok ? r.json() : [];
+    },
+    staleTime: 1000 * 60 * 5,
+    enabled: open,
+  });
+
+  /* Pre-populate ALL fields when dialog opens */
   useEffect(() => {
     if (sub && open) {
+      setNameAr(sub.nameAr ?? "");
+      setLocation(sub.location ?? "");
+      setDistrict(sub.district ?? "");
       setDescriptionAr(sub.descriptionAr ?? "");
       setWhatsappNumber(sub.whatsappNumber ?? "");
-      setPriceMorning(sub.priceMorning ? String(Number(sub.priceMorning)) : "");
-      setPriceEvening(sub.priceEvening ? String(Number(sub.priceEvening)) : "");
-      setPriceFullDay(sub.priceFullDay ? String(Number(sub.priceFullDay)) : "");
+      setPricePerNight(sub.pricePerNight  ? String(Number(sub.pricePerNight))  : "");
+      setPriceMorning (sub.priceMorning   ? String(Number(sub.priceMorning))   : "");
+      setPriceEvening (sub.priceEvening   ? String(Number(sub.priceEvening))   : "");
+      setPriceFullDay (sub.priceFullDay   ? String(Number(sub.priceFullDay))   : "");
+      setMaxGuests    (sub.maxGuests  != null ? String(sub.maxGuests)  : "");
+      setBedrooms     (sub.bedrooms   != null ? String(sub.bedrooms)   : "");
+      setMapsUrl      (sub.mapsUrl    ?? "");
+      setTermsAndConditions(sub.termsAndConditions ?? "");
+      setPhotos  (Array.isArray(sub.photos)    ? [...sub.photos]    : []);
+      setAmenities(Array.isArray(sub.amenities) ? [...sub.amenities] : []);
     }
   }, [sub, open]);
 
@@ -456,16 +490,38 @@ function ResubmitDialog({
     return v.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/\D/g, "");
   }
 
+  function removePhoto(url: string) {
+    setPhotos(prev => prev.filter(p => p !== url));
+  }
+
+  function toggleAmenity(key: string) {
+    setAmenities(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  }
+
   async function handleResubmit() {
     if (!sub) return;
+    if (!nameAr.trim())        { toast({ title: "اسم الشاليه مطلوب",   variant: "destructive" }); return; }
+    if (!descriptionAr.trim()) { toast({ title: "الوصف مطلوب",          variant: "destructive" }); return; }
+    if (!whatsappNumber.trim()){ toast({ title: "رقم الواتساب مطلوب",  variant: "destructive" }); return; }
     setSaving(true);
     try {
-      const body: Record<string, unknown> = {};
-      if (descriptionAr.trim()) body.descriptionAr = descriptionAr.trim();
-      if (whatsappNumber.trim()) body.whatsappNumber = whatsappNumber.trim();
-      if (priceMorning) body.priceMorning = Number(priceMorning);
-      if (priceEvening) body.priceEvening = Number(priceEvening);
-      if (priceFullDay) body.priceFullDay = Number(priceFullDay);
+      const body: Record<string, unknown> = {
+        nameAr:         nameAr.trim(),
+        descriptionAr:  descriptionAr.trim(),
+        whatsappNumber: whatsappNumber.trim(),
+        location:       location.trim() || sub.location,
+        district:       district.trim() || null,
+        photos,
+        amenities,
+        mapsUrl:            mapsUrl.trim()            || null,
+        termsAndConditions: termsAndConditions.trim() || null,
+      };
+      if (pricePerNight) body.pricePerNight = Number(pricePerNight);
+      if (priceMorning)  body.priceMorning  = Number(priceMorning);
+      if (priceEvening)  body.priceEvening  = Number(priceEvening);
+      if (priceFullDay)  body.priceFullDay  = Number(priceFullDay);
+      if (maxGuests)     body.maxGuests     = Number(maxGuests);
+      if (bedrooms !== "") body.bedrooms    = Number(bedrooms);
 
       const r = await apiFetch(`/submissions/${sub.id}`, {
         method: "PATCH",
@@ -484,8 +540,8 @@ function ResubmitDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent dir="rtl" className="max-w-md">
-        <DialogHeader>
+      <DialogContent dir="rtl" className="max-w-2xl flex flex-col" style={{ maxHeight: "90vh" }}>
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <RotateCcw className="w-4 h-4 text-orange-500" />
             تعديل وإعادة التقديم
@@ -495,39 +551,60 @@ function ResubmitDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {sub?.adminNote && (
-          <div className="flex items-start gap-2.5 rounded-xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/40 px-3.5 py-3">
-            <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-bold text-orange-700 dark:text-orange-400 mb-0.5">ملاحظات الإدارة</p>
-              <p className="text-xs text-orange-800 dark:text-orange-300 leading-relaxed">{sub.adminNote}</p>
+        {/* ── Scrollable form body ── */}
+        <div className="overflow-y-auto flex-1 space-y-5 pe-1 py-1">
+
+          {/* Admin note banner */}
+          {sub?.adminNote && (
+            <div className="flex items-start gap-2.5 rounded-xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/40 px-3.5 py-3">
+              <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-bold text-orange-700 dark:text-orange-400 mb-0.5">ملاحظات الإدارة</p>
+                <p className="text-xs text-orange-800 dark:text-orange-300 leading-relaxed">{sub.adminNote}</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Section: Core info ── */}
+          <div className="space-y-3">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide border-b pb-1.5">المعلومات الأساسية</p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">اسم الشاليه *</label>
+              <Input value={nameAr} onChange={(e) => setNameAr(e.target.value)} placeholder="اسم الشاليه" className="text-right" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">المدينة / المنطقة *</label>
+                <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="مثال: بريدة" className="text-right" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">الحي / المجمع</label>
+                <Input value={district} onChange={(e) => setDistrict(e.target.value)} placeholder="اختياري" className="text-right" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">الوصف *</label>
+              <textarea
+                value={descriptionAr}
+                onChange={(e) => setDescriptionAr(e.target.value)}
+                placeholder="وصف مختصر للشاليه..."
+                rows={3}
+                className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">رقم الواتساب *</label>
+              <Input value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} placeholder="05XXXXXXXX" dir="ltr" inputMode="tel" />
             </div>
           </div>
-        )}
 
-        <div className="space-y-4 py-1">
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold">الوصف</label>
-            <textarea
-              value={descriptionAr}
-              onChange={(e) => setDescriptionAr(e.target.value)}
-              placeholder="وصف مختصر للشاليه..."
-              rows={3}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold">رقم الواتساب</label>
-            <Input
-              value={whatsappNumber}
-              onChange={(e) => setWhatsappNumber(e.target.value)}
-              placeholder="05XXXXXXXX"
-              dir="ltr"
-              inputMode="tel"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold">الأسعار (ر.س)</label>
+          {/* ── Section: Pricing ── */}
+          <div className="space-y-3">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide border-b pb-1.5">الأسعار (ر.س)</p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">السعر الأساسي لليلة</label>
+              <Input type="text" inputMode="numeric" dir="ltr" value={pricePerNight} onChange={(e) => setPricePerNight(normNum(e.target.value))} placeholder="0" className="text-right" />
+            </div>
             <div className="grid grid-cols-3 gap-2">
               {([
                 { label: "☀️ صباحي",    val: priceMorning, set: setPriceMorning },
@@ -536,21 +613,100 @@ function ResubmitDialog({
               ] as const).map(({ label, val, set }) => (
                 <div key={label} className="space-y-1">
                   <label className="text-[11px] font-medium text-muted-foreground">{label}</label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    value={val}
-                    onChange={(e) => set(normNum(e.target.value))}
-                    placeholder="٠"
-                    className="text-right text-sm h-9"
-                  />
+                  <Input type="text" inputMode="numeric" dir="ltr" value={val} onChange={(e) => set(normNum(e.target.value))} placeholder="0" className="text-right text-sm h-9" />
                 </div>
               ))}
             </div>
           </div>
-        </div>
 
-        <DialogFooter className="gap-2">
+          {/* ── Section: Details ── */}
+          <div className="space-y-3">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide border-b pb-1.5">التفاصيل</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">عدد الضيوف</label>
+                <Input type="text" inputMode="numeric" dir="ltr" value={maxGuests} onChange={(e) => setMaxGuests(normNum(e.target.value))} placeholder="0" className="text-right h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">غرف النوم</label>
+                <Input type="text" inputMode="numeric" dir="ltr" value={bedrooms} onChange={(e) => setBedrooms(normNum(e.target.value))} placeholder="0" className="text-right h-9" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">رابط الخرائط (اختياري)</label>
+              <Input value={mapsUrl} onChange={(e) => setMapsUrl(e.target.value)} placeholder="https://maps.google.com/..." dir="ltr" />
+            </div>
+          </div>
+
+          {/* ── Section: Photos ── */}
+          {photos.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide border-b pb-1.5">
+                الصور الحالية — {toAr(photos.length)} صورة
+              </p>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {photos.map((url, i) => (
+                  <div key={i} className="relative group rounded-xl overflow-hidden border border-border" style={{ aspectRatio: "1" }}>
+                    <img src={url} alt={`صورة ${toAr(i + 1)}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(url)}
+                      title="حذف الصورة"
+                      className="absolute top-1 inset-inline-start-1 w-6 h-6 rounded-full bg-destructive/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">مرّر على الصورة واضغط (×) لإزالتها. لا يمكن استرجاع الصور المحذوفة.</p>
+            </div>
+          )}
+
+          {/* ── Section: Amenities ── */}
+          {amenitiesCatalog.filter(a => a.isActive).length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide border-b pb-1.5">المرافق والخدمات</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {amenitiesCatalog.filter(a => a.isActive).map((item) => {
+                  const checked = amenities.includes(item.key);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => toggleAmenity(item.key)}
+                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium text-right transition-colors ${
+                        checked
+                          ? "border-primary/50 bg-primary/10 text-primary"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                      }`}
+                    >
+                      <div className={`w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors ${checked ? "border-primary bg-primary" : "border-muted-foreground/40"}`}>
+                        {checked && <CheckCircle className="w-2.5 h-2.5 text-white" />}
+                      </div>
+                      {item.labelAr}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Section: Terms ── */}
+          <div className="space-y-3">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide border-b pb-1.5">شروط وأحكام الحجز (اختياري)</p>
+            <textarea
+              value={termsAndConditions}
+              onChange={(e) => setTermsAndConditions(e.target.value)}
+              placeholder="أدخل شروط الحجز هنا..."
+              rows={3}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+
+        </div>{/* end scrollable area */}
+
+        <DialogFooter className="gap-2 shrink-0 pt-3 border-t">
           <Button variant="outline" onClick={onClose}>إلغاء</Button>
           <Button
             disabled={saving}
@@ -13031,7 +13187,7 @@ export default function Dashboard() {
               إدارة شاليهاتي
               {(submissions?.length ?? 0) > 0 && (
                 <span className="text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5 font-semibold">
-                  {submissions?.length}
+                  {toAr(submissions?.length ?? 0)}
                 </span>
               )}
             </button>
@@ -13048,7 +13204,7 @@ export default function Dashboard() {
               إدارة خدماتي
               {(myApprovedProviders.length + myServiceSubmissions.filter(s => s.status === "pending").length) > 0 && (
                 <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full px-2 py-0.5 font-semibold">
-                  {myApprovedProviders.length + myServiceSubmissions.length}
+                  {toAr(myApprovedProviders.length + myServiceSubmissions.length)}
                 </span>
               )}
             </button>
@@ -13430,13 +13586,13 @@ export default function Dashboard() {
               <p className="font-bold text-foreground">خدماتي المستقلة</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {myApprovedProviders.length > 0 && (
-                  <span className="text-green-600 dark:text-green-400 font-semibold">{myApprovedProviders.filter(p => p.isActive).length} نشط </span>
+                  <span className="text-green-600 dark:text-green-400 font-semibold">{toAr(myApprovedProviders.filter(p => p.isActive).length)} نشط </span>
                 )}
                 {myServiceSubmissions.filter(s => s.status === "pending").length > 0 && (
-                  <span className="text-amber-600 font-semibold">{myServiceSubmissions.filter(s => s.status === "pending").length} قيد المراجعة</span>
+                  <span className="text-amber-600 font-semibold">{toAr(myServiceSubmissions.filter(s => s.status === "pending").length)} قيد المراجعة</span>
                 )}
                 {myApprovedProviders.length === 0 && myServiceSubmissions.filter(s => s.status === "pending").length === 0 && (
-                  <span>{myServiceSubmissions.length} خدمة مسجلة</span>
+                  <span>{toAr(myServiceSubmissions.length)} خدمة مسجلة</span>
                 )}
               </p>
             </div>

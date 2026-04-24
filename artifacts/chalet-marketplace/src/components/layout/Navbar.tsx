@@ -6,6 +6,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useQuery } from "@tanstack/react-query";
+import { useStaffAuth } from "@/lib/useStaffAuth";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -13,6 +14,7 @@ export function Navbar() {
   const [location, navigate] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
+  const { isStaff } = useStaffAuth();
 
   const { data: settings = {} } = useQuery<Record<string, string>>({
     queryKey: ["page-content"],
@@ -86,11 +88,14 @@ export function Navbar() {
                       لوحة التحكم
                     </Button>
                   </Link>
-                  <Link href="/admin">
-                    <Button size="sm" variant="ghost" className="rounded-full w-9 h-9 p-0 text-muted-foreground hover:text-foreground" title="لوحة الإدارة">
-                      <Settings className="w-4 h-4" />
-                    </Button>
-                  </Link>
+                  {/* Admin panel button — visible to staff/admin only */}
+                  {isStaff && (
+                    <Link href="/admin">
+                      <Button size="sm" variant="ghost" className="rounded-full w-9 h-9 p-0 text-muted-foreground hover:text-foreground" title="لوحة الإدارة">
+                        <Settings className="w-4 h-4" />
+                      </Button>
+                    </Link>
+                  )}
                 </div>
               ) : (
                 <Button
