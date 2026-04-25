@@ -5335,6 +5335,16 @@ function OwnerPickerInput({
 
 function DirectAddTab() {
   const qc = useQueryClient();
+
+  const { data: daCategories = [] } = useQuery<{ id: number; nameAr: string; emoji: string }[]>({
+    queryKey: ["categories"],
+    queryFn: async () => {
+      const r = await fetch(`${API}/categories`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
   const photoInputRef    = useRef<HTMLInputElement>(null);
   const videoInputRef    = useRef<HTMLInputElement>(null);
   const logoInputRef     = useRef<HTMLInputElement>(null);
@@ -5674,7 +5684,16 @@ function DirectAddTab() {
                 <Select value={propertyType} onValueChange={setPropertyType}>
                   <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر..." /></SelectTrigger>
                   <SelectContent className="bg-slate-900 border-slate-700">
-                    {DA_PROPERTY_TYPES.map(pt => <SelectItem key={pt.value} value={pt.value} className="text-white focus:bg-slate-700">{pt.label}</SelectItem>)}
+                    {daCategories.length > 0
+                      ? daCategories.map(cat => (
+                          <SelectItem key={cat.id} value={cat.nameAr} className="text-white focus:bg-slate-700">
+                            {cat.emoji} {cat.nameAr}
+                          </SelectItem>
+                        ))
+                      : DA_PROPERTY_TYPES.map(pt => (
+                          <SelectItem key={pt.value} value={pt.value} className="text-white focus:bg-slate-700">{pt.label}</SelectItem>
+                        ))
+                    }
                   </SelectContent>
                 </Select>
               </div>
