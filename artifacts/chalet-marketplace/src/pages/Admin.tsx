@@ -95,6 +95,9 @@ interface Submission {
   propertyType?: string | null;
   sections?: string | null;
   adminNote?: string | null;
+  ownerRevisionNote?: string | null;
+  suggestedCategoryName?: string | null;
+  pendingCategoryApproval?: boolean;
   category?: string | null;
   ownerId?: string | null;
   /* extended pricing + terms fields (returned by API if submitted) */
@@ -364,6 +367,61 @@ function SubmissionReviewModal({
   const [reason, setReason] = useState("");
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
+  /* ── Category approval state ── */
+  const [showCatApprove, setShowCatApprove] = useState(false);
+  const [catNameOverride, setCatNameOverride] = useState("");
+  const [catEmoji, setCatEmoji] = useState("🏠");
+  const [showCatReassign, setShowCatReassign] = useState(false);
+  const [reassignCat, setReassignCat] = useState("");
+  const [reassignNote, setReassignNote] = useState("");
+
+  const qc = useQueryClient();
+
+  const { data: existingCategories = [] } = useQuery<{ id: number; nameAr: string; emoji: string }[]>({
+    queryKey: ["admin", "categories"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/categories");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: showCatReassign,
+  });
+
+  const approveCatMutation = useMutation({
+    mutationFn: async () => {
+      if (!submission) return;
+      const r = await apiFetch(`/admin/submissions/${submission.id}/approve-category`, {
+        method: "POST",
+        body: JSON.stringify({ nameOverride: catNameOverride.trim() || undefined, emoji: catEmoji }),
+      });
+      if (!r.ok) throw new Error("فشل");
+    },
+    onSuccess: () => {
+      setShowCatApprove(false);
+      setCatNameOverride("");
+      qc.invalidateQueries({ queryKey: ["admin", "submissions"] });
+      onClose();
+    },
+  });
+
+  const reassignCatMutation = useMutation({
+    mutationFn: async () => {
+      if (!submission) return;
+      const r = await apiFetch(`/admin/submissions/${submission.id}/reassign-category`, {
+        method: "POST",
+        body: JSON.stringify({ categoryName: reassignCat, ownerNote: reassignNote.trim() || undefined }),
+      });
+      if (!r.ok) throw new Error("فشل");
+    },
+    onSuccess: () => {
+      setShowCatReassign(false);
+      setReassignCat("");
+      setReassignNote("");
+      qc.invalidateQueries({ queryKey: ["admin", "submissions"] });
+      onClose();
+    },
+  });
+
   const resetAction = () => { setPendingAction(null); setReason(""); };
 
   const handleClose = () => { resetAction(); onClose(); };
@@ -528,6 +586,27 @@ function SubmissionReviewModal({
                   </div>
                 </div>
               )}
+              {s.pendingCategoryApproval && s.suggestedCategoryName && (
+                <div className="bg-yellow-950/40 border border-yellow-600/50 rounded-xl p-4">
+                  <div className="flex items-start gap-3 mb-3">
+                    <Tag className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-yellow-300 text-sm font-bold mb-1">الفئة مقترحة من المالك — تحتاج موافقة</p>
+                      <p className="text-slate-200 text-base font-semibold">«{s.suggestedCategoryName}»</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => { setCatNameOverride(s.suggestedCategoryName ?? ""); setShowCatApprove(true); }}
+                      className="bg-green-700 hover:bg-green-600 text-white text-xs font-bold flex-1">
+                      ✅ إضافة الفئة وقبولها
+                    </Button>
+                    <Button size="sm" onClick={() => setShowCatReassign(true)}
+                      className="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold flex-1">
+                      🔄 إعادة التعيين لفئة موجودة
+                    </Button>
+                  </div>
+                </div>
+              )}
               {pendingAction && needsReason && (
                 <div className="bg-slate-800/80 border border-slate-600 rounded-xl p-4 space-y-2">
                   <label className="text-slate-300 text-sm font-semibold flex items-center gap-2">
@@ -605,6 +684,91 @@ function SubmissionReviewModal({
                 </Button>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Approve Category Dialog ── */}
+      <Dialog open={showCatApprove} onOpenChange={setShowCatApprove}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-right text-slate-100">إضافة الفئة المقترحة</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-slate-400 text-sm text-right">يمكنك تعديل اسم الفئة قبل إضافتها، أو إبقاؤه كما هو.</p>
+            <div className="space-y-2">
+              <label className="text-slate-300 text-sm font-medium">اسم الفئة</label>
+              <input
+                value={catNameOverride}
+                onChange={(e) => setCatNameOverride(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                placeholder="اسم الفئة"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-slate-300 text-sm font-medium">الإيموجي</label>
+              <input
+                value={catEmoji}
+                onChange={(e) => setCatEmoji(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                placeholder="🏠"
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1 border-slate-600 text-slate-300" onClick={() => setShowCatApprove(false)}>إلغاء</Button>
+              <Button
+                className="flex-1 bg-green-700 hover:bg-green-600"
+                disabled={!catNameOverride.trim() || approveCatMutation.isPending}
+                onClick={() => approveCatMutation.mutate()}
+              >
+                {approveCatMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "إضافة وقبول"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Reassign Category Dialog ── */}
+      <Dialog open={showCatReassign} onOpenChange={setShowCatReassign}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-right text-slate-100">إعادة تعيين الفئة</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-slate-400 text-sm text-right">اختر فئة موجودة لتعيين هذا الطلب إليها.</p>
+            <div className="space-y-2">
+              <label className="text-slate-300 text-sm font-medium">الفئة</label>
+              <select
+                value={reassignCat}
+                onChange={(e) => setReassignCat(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+              >
+                <option value="">— اختر فئة —</option>
+                {existingCategories.map((c) => (
+                  <option key={c.id} value={c.nameAr}>{c.emoji} {c.nameAr}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-slate-300 text-sm font-medium">ملاحظة للمالك (اختياري)</label>
+              <textarea
+                value={reassignNote}
+                onChange={(e) => setReassignNote(e.target.value)}
+                rows={2}
+                className="w-full bg-slate-800 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                placeholder="مثال: تم تعيينك ضمن فئة استراحة بدلاً من الفئة المقترحة"
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1 border-slate-600 text-slate-300" onClick={() => setShowCatReassign(false)}>إلغاء</Button>
+              <Button
+                className="flex-1 bg-amber-700 hover:bg-amber-600"
+                disabled={!reassignCat || reassignCatMutation.isPending}
+                onClick={() => reassignCatMutation.mutate()}
+              >
+                {reassignCatMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "تعيين الفئة"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -1865,9 +2029,10 @@ function ServicesTab() {
 function CategoriesTab() {
   const qc = useQueryClient();
   const [newName, setNewName] = useState("");
+  const [newEmoji, setNewEmoji] = useState("🏠");
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  interface Category { id: number; nameAr: string; isActive: boolean; showSectionFilter: boolean }
+  interface Category { id: number; nameAr: string; emoji: string; isActive: boolean; showSectionFilter: boolean }
 
   const { data: categories = [], isLoading } = useQuery<Category[]>({
     queryKey: ["admin", "categories"],
@@ -1879,11 +2044,19 @@ function CategoriesTab() {
   });
 
   const addCategory = useMutation({
-    mutationFn: async (nameAr: string) => {
-      const r = await apiFetch("/admin/categories", { method: "POST", body: JSON.stringify({ nameAr }) });
+    mutationFn: async ({ nameAr, emoji }: { nameAr: string; emoji: string }) => {
+      const r = await apiFetch("/admin/categories", { method: "POST", body: JSON.stringify({ nameAr, emoji }) });
       if (!r.ok) throw new Error("فشل الإضافة");
     },
-    onSuccess: () => { setNewName(""); qc.invalidateQueries({ queryKey: ["admin", "categories"] }); },
+    onSuccess: () => { setNewName(""); setNewEmoji("🏠"); qc.invalidateQueries({ queryKey: ["admin", "categories"] }); },
+  });
+
+  const updateEmoji = useMutation({
+    mutationFn: async ({ id, emoji }: { id: number; emoji: string }) => {
+      const r = await apiFetch(`/admin/categories/${id}`, { method: "PATCH", body: JSON.stringify({ emoji }) });
+      if (!r.ok) throw new Error("فشل");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "categories"] }),
   });
 
   const toggleActive = useMutation({
@@ -1916,14 +2089,20 @@ function CategoriesTab() {
         <h3 className="text-slate-200 font-semibold mb-4">إضافة فئة جديدة</h3>
         <div className="flex gap-3">
           <Input
+            value={newEmoji}
+            onChange={(e) => setNewEmoji(e.target.value)}
+            placeholder="🏠"
+            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 w-16 text-center text-xl shrink-0"
+          />
+          <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="مثال: شالية، مزرعة، استراحة"
             className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 flex-1"
-            onKeyDown={(e) => { if (e.key === "Enter" && newName.trim()) addCategory.mutate(newName.trim()); }}
+            onKeyDown={(e) => { if (e.key === "Enter" && newName.trim()) addCategory.mutate({ nameAr: newName.trim(), emoji: newEmoji }); }}
           />
           <Button
-            onClick={() => newName.trim() && addCategory.mutate(newName.trim())}
+            onClick={() => newName.trim() && addCategory.mutate({ nameAr: newName.trim(), emoji: newEmoji })}
             disabled={addCategory.isPending || !newName.trim()}
             className="bg-amber-600 hover:bg-amber-700"
           >
@@ -1942,6 +2121,7 @@ function CategoriesTab() {
           <Table>
             <TableHeader>
               <TableRow className="border-slate-700 bg-slate-800">
+                <TableHead className="text-slate-300 text-right w-14">إيموجي</TableHead>
                 <TableHead className="text-slate-300 text-right">اسم الفئة</TableHead>
                 <TableHead className="text-slate-300 text-right">الحالة</TableHead>
                 <TableHead className="text-slate-300 text-right">فلتر الأقسام</TableHead>
@@ -1951,6 +2131,17 @@ function CategoriesTab() {
             <TableBody>
               {categories.map((cat) => (
                 <TableRow key={cat.id} className="border-slate-700 hover:bg-slate-800/50">
+                  <TableCell>
+                    <input
+                      defaultValue={cat.emoji || "🏠"}
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        if (val && val !== cat.emoji) updateEmoji.mutate({ id: cat.id, emoji: val });
+                      }}
+                      className="w-10 text-center text-xl bg-transparent border border-transparent hover:border-slate-600 focus:border-amber-500 rounded px-1 outline-none transition-colors"
+                      title="انقر لتعديل الإيموجي"
+                    />
+                  </TableCell>
                   <TableCell className="text-white font-medium">{cat.nameAr}</TableCell>
                   <TableCell>
                     <button

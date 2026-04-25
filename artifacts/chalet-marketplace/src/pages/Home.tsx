@@ -135,7 +135,7 @@ export default function Home() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const { data: categories = [] } = useQuery<{ id: number; nameAr: string; showSectionFilter: boolean }[]>({
+  const { data: categories = [] } = useQuery<{ id: number; nameAr: string; emoji: string; showSectionFilter: boolean }[]>({
     queryKey: ["catalog", "categories"],
     queryFn: async () => {
       const r = await fetch(`${BASE}/api/categories`, { credentials: "include" });
@@ -349,7 +349,7 @@ export default function Home() {
                           </>
                         )}
                         {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.nameAr}>{cat.nameAr}</SelectItem>
+                          <SelectItem key={cat.id} value={cat.nameAr}>{cat.emoji || "🏠"} {cat.nameAr}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

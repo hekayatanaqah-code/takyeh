@@ -31,6 +31,7 @@ const SubmissionBodyStrict = CreateSubmissionBody.extend({
   maxGuests: z.number().int().min(1).nullable().optional(),
   bedrooms: z.number().int().min(0).nullable().optional(),
   propertyType: z.string().trim().optional().nullable(),
+  suggestedCategoryName: z.string().trim().optional().nullable(),
   sections: z.string().trim().optional().nullable(),
   checkInTime: z.string().optional().nullable(),
   checkOutTime: z.string().optional().nullable(),
@@ -167,7 +168,9 @@ router.post("/", async (req, res) => {
       termsAndConditions: data.termsAndConditions || null,
       maxGuests: data.maxGuests ?? null,
       bedrooms: data.bedrooms ?? null,
-      propertyType: data.propertyType || null,
+      propertyType: data.propertyType === "__other__" ? null : (data.propertyType || null),
+      suggestedCategoryName: data.propertyType === "__other__" ? (data.suggestedCategoryName || null) : null,
+      pendingCategoryApproval: data.propertyType === "__other__" && !!data.suggestedCategoryName,
       sections: data.sections || null,
       checkInTime: data.checkInTime || null,
       checkOutTime: data.checkOutTime || null,
@@ -262,6 +265,7 @@ router.patch("/:id", async (req, res) => {
     bedrooms: z.number().int().min(0).nullable().optional(),
     termsAndConditions: z.string().nullable().optional(),
     ownerRevisionNote: z.string().nullable().optional(),
+    suggestedCategoryName: z.string().nullable().optional(),
   }).safeParse(req.body);
 
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
@@ -290,6 +294,20 @@ router.patch("/:id", async (req, res) => {
   if (d.bedrooms      !== undefined) updateSet.bedrooms = d.bedrooms ?? null;
   if (d.termsAndConditions !== undefined) updateSet.termsAndConditions = d.termsAndConditions ?? null;
   if (d.ownerRevisionNote !== undefined) updateSet.ownerRevisionNote = d.ownerRevisionNote ?? null;
+  if (d.propertyType !== undefined) {
+    if (d.propertyType === "__other__") {
+      (updateSet as any).propertyType = null;
+      if (d.suggestedCategoryName) {
+        (updateSet as any).suggestedCategoryName = d.suggestedCategoryName;
+        (updateSet as any).pendingCategoryApproval = true;
+      }
+    } else {
+      (updateSet as any).suggestedCategoryName = null;
+      (updateSet as any).pendingCategoryApproval = false;
+    }
+  } else if (d.suggestedCategoryName !== undefined) {
+    (updateSet as any).suggestedCategoryName = d.suggestedCategoryName ?? null;
+  }
 
   await db
     .update(chaletSubmissionsTable)

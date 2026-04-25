@@ -76,7 +76,17 @@ function useCatalog(selectedCityId: number | null) {
     staleTime: 1000 * 60 * 5,
   });
 
-  return { cities, districts, amenities };
+  const { data: propertyCategories = [] } = useQuery<{ id: number; nameAr: string; emoji: string }[]>({
+    queryKey: ["catalog", "categories"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/categories`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  return { cities, districts, amenities, propertyCategories };
 }
 
 const MAX_PHOTOS = 15;
@@ -116,7 +126,7 @@ async function uploadFile(file: File): Promise<string | null> {
 export default function AddChalet() {
   const qc = useQueryClient();
   const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
-  const { cities, districts, amenities } = useCatalog(selectedCityId);
+  const { cities, districts, amenities, propertyCategories } = useCatalog(selectedCityId);
   const [submitted, setSubmitted] = useState(false);
   const [photos, setPhotos] = useState<UploadedPhoto[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -147,6 +157,7 @@ export default function AddChalet() {
     termsAndConditions: TERMS_PLACEHOLDER,
   });
   const [propertyType, setPropertyType] = useState("");
+  const [suggestedCategoryName, setSuggestedCategoryName] = useState("");
   const [sections, setSections] = useState("");
   const [legalAccepted, setLegalAccepted] = useState(false);
 
@@ -447,6 +458,7 @@ export default function AddChalet() {
       location: locationOverride ?? form.location,
       district: finalDistrict,
       propertyType: propertyType || undefined,
+      suggestedCategoryName: propertyType === "__other__" ? (suggestedCategoryName.trim() || undefined) : undefined,
       sections: sections || undefined,
       mapsUrl: form.mapsUrl || undefined,
       socialLink: form.socialLink,
@@ -540,6 +552,13 @@ export default function AddChalet() {
     } else {
       resolvedDistrict = selectedDistrict || undefined;
     }
+
+    /* ── Validate category suggestion when "other" is selected ── */
+    if (propertyType === "__other__" && !suggestedCategoryName.trim()) {
+      setFieldErrors({ propertyType: ["يرجى كتابة اسم الفئة المقترحة"] });
+      return;
+    }
+
 
     /* ── District is required ── */
     if (!resolvedDistrict) {
@@ -821,17 +840,41 @@ export default function AddChalet() {
                         <Label className="text-base font-medium">
                           نوع العقار <span className="text-destructive">*</span>
                         </Label>
-                        <Select value={propertyType} onValueChange={setPropertyType} required>
+                        <Select value={propertyType} onValueChange={(v) => { setPropertyType(v); if (v !== "__other__") setSuggestedCategoryName(""); }} required>
                           <SelectTrigger className="h-12 text-base">
                             <SelectValue placeholder="اختر نوع العقار" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="شالية">🏕️ شالية</SelectItem>
-                            <SelectItem value="مزرعة">🌿 مزرعة</SelectItem>
-                            <SelectItem value="استراحة">🏡 استراحة</SelectItem>
-                            <SelectItem value="مخيم">⛺ مخيم</SelectItem>
+                            {propertyCategories.length === 0 ? (
+                              <>
+                                <SelectItem value="شالية">🏕️ شالية</SelectItem>
+                                <SelectItem value="مزرعة">🌿 مزرعة</SelectItem>
+                                <SelectItem value="استراحة">🏡 استراحة</SelectItem>
+                                <SelectItem value="مخيم">⛺ مخيم</SelectItem>
+                              </>
+                            ) : (
+                              propertyCategories.map((cat) => (
+                                <SelectItem key={cat.id} value={cat.nameAr}>{cat.emoji || "🏠"} {cat.nameAr}</SelectItem>
+                              ))
+                            )}
+                            <SelectItem value="__other__">➕ فئة غير موجودة (اقتراح للإدارة)</SelectItem>
                           </SelectContent>
                         </Select>
+                        {propertyType === "__other__" && (
+                          <div className="mt-2 space-y-1">
+                            <Label className="text-sm text-muted-foreground">اسم الفئة المقترحة <span className="text-destructive">*</span></Label>
+                            <input
+                              value={suggestedCategoryName}
+                              onChange={(e) => setSuggestedCategoryName(e.target.value)}
+                              placeholder="مثال: شاليه مائي، بيت شعر..."
+                              className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                            <p className="text-xs text-muted-foreground">سيتحقق الفريق من اقتراحك ويضيف الفئة إذا كانت مناسبة.</p>
+                          </div>
+                        )}
+                        {fieldErrors.propertyType && (
+                          <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.propertyType[0]}</p>
+                        )}
                       </div>
 
                       <div className="space-y-2">

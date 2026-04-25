@@ -114,6 +114,8 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   status: submissionStatusEnum("status").notNull().default("pending"),
   adminNote: text("admin_note"),
   ownerRevisionNote: text("owner_revision_note"),
+  suggestedCategoryName: text("suggested_category_name"),
+  pendingCategoryApproval: boolean("pending_category_approval").notNull().default(false),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -174,6 +176,7 @@ export type ExternalService = typeof externalServicesTable.$inferSelect;
 export const chaletCategoriesTable = pgTable("chalet_categories", {
   id: serial("id").primaryKey(),
   nameAr: text("name_ar").notNull(),
+  emoji: text("emoji").notNull().default("🏠"),
   isActive: boolean("is_active").notNull().default(true),
   showSectionFilter: boolean("show_section_filter").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

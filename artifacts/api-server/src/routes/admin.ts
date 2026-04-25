@@ -417,6 +417,59 @@ router.delete("/submissions/:id", async (req, res) => {
   return res.json({ ok: true });
 });
 
+/* ── Approve a suggested category ───────────────────────────── */
+router.post("/submissions/:id/approve-category", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({ nameOverride: z.string().trim().min(1).optional(), emoji: z.string().optional().default("🏠") }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const [sub] = await db.select().from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, id)).limit(1);
+  if (!sub) return res.status(404).json({ error: "الطلب غير موجود" });
+
+  const categoryName = (body.data.nameOverride || sub.suggestedCategoryName || "").trim();
+  if (!categoryName) return res.status(400).json({ error: "اسم الفئة مطلوب" });
+
+  /* Create the new category (or reuse if it already exists) */
+  const existing = await db.select({ id: chaletCategoriesTable.id, nameAr: chaletCategoriesTable.nameAr })
+    .from(chaletCategoriesTable)
+    .where(sql`LOWER(${chaletCategoriesTable.nameAr}) = LOWER(${categoryName})`)
+    .limit(1);
+  if (existing.length === 0) {
+    await db.insert(chaletCategoriesTable).values({ nameAr: categoryName, emoji: body.data.emoji });
+  }
+
+  /* Update the submission */
+  await db.update(chaletSubmissionsTable)
+    .set({ propertyType: categoryName, suggestedCategoryName: null, pendingCategoryApproval: false } as any)
+    .where(eq(chaletSubmissionsTable.id, id));
+
+  return res.json({ ok: true, categoryName });
+});
+
+/* ── Reassign a pending-category submission to an existing category ── */
+router.post("/submissions/:id/reassign-category", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({
+    categoryName: z.string().trim().min(1),
+    ownerNote: z.string().trim().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  const [sub] = await db.select().from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, id)).limit(1);
+  if (!sub) return res.status(404).json({ error: "الطلب غير موجود" });
+
+  const updateObj: Record<string, unknown> = {
+    propertyType: body.data.categoryName,
+    suggestedCategoryName: null,
+    pendingCategoryApproval: false,
+  };
+  if (body.data.ownerNote) updateObj.adminNote = body.data.ownerNote;
+
+  await db.update(chaletSubmissionsTable).set(updateObj as any).where(eq(chaletSubmissionsTable.id, id));
+
+  return res.json({ ok: true });
+});
+
 /* ── Chalets Verification ────────────────────────────────── */
 
 router.get("/chalets", async (req, res) => {
@@ -794,9 +847,12 @@ router.get("/categories", async (_req, res) => {
 });
 
 router.post("/categories", async (req, res) => {
-  const body = z.object({ nameAr: z.string().min(1) }).safeParse(req.body);
+  const body = z.object({
+    nameAr: z.string().min(1),
+    emoji: z.string().optional().default("🏠"),
+  }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "الاسم مطلوب" });
-  const [row] = await db.insert(chaletCategoriesTable).values({ nameAr: body.data.nameAr }).returning();
+  const [row] = await db.insert(chaletCategoriesTable).values({ nameAr: body.data.nameAr, emoji: body.data.emoji }).returning();
   return res.status(201).json(row);
 });
 
@@ -804,6 +860,7 @@ router.patch("/categories/:id", async (req, res) => {
   const id = Number(req.params.id);
   const body = z.object({
     nameAr: z.string().min(1).optional(),
+    emoji: z.string().optional(),
     isActive: z.boolean().optional(),
     showSectionFilter: z.boolean().optional(),
   }).safeParse(req.body);
@@ -812,6 +869,27 @@ router.patch("/categories/:id", async (req, res) => {
   return res.json({ ok: true });
 });
 
+/* ── Contact Inquiries ───────────────────────────────────── */
+router.get("/contact-inquiries", async (_req, res) => {
+  try {
+    const result = await db.execute(
+      sql`SELECT id, name, phone, email, message, status, created_at FROM contact_inquiries ORDER BY created_at DESC LIMIT 500`
+    );
+    return res.json((result as any).rows);
+  } catch (err) {
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+router.patch("/contact-inquiries/:id/status", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({ status: z.enum(["new", "read", "replied"]) }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "حالة غير صالحة" });
+  await db.execute(sql`UPDATE contact_inquiries SET status = ${body.data.status} WHERE id = ${id}`);
+  return res.json({ ok: true });
+});
+
+/* ── Chalet Categories ───────────────────────────────────── */
 router.delete("/categories/:id", async (req, res) => {
   const id = Number(req.params.id);
   await db.delete(chaletCategoriesTable).where(eq(chaletCategoriesTable.id, id));
