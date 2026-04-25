@@ -511,8 +511,10 @@ function SubmissionReviewModal({
               {s.adminNote && (
                 <div className="bg-orange-950/40 border border-orange-700/50 rounded-xl p-4 flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-orange-300 text-sm font-bold mb-1">ملاحظة الإدارة السابقة</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-orange-300 text-sm font-bold mb-1">
+                      {s.ownerRevisionNote ? "طلب التعديل المُرسَل للمالك" : "ملاحظة الإدارة السابقة"}
+                    </p>
                     <p className="text-slate-300 text-sm">{s.adminNote}</p>
                   </div>
                 </div>
@@ -520,8 +522,8 @@ function SubmissionReviewModal({
               {s.ownerRevisionNote && (
                 <div className="bg-blue-950/40 border border-blue-700/50 rounded-xl p-4 flex items-start gap-3">
                   <MessageSquare className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-blue-300 text-sm font-bold mb-1">ملاحظة من المالك</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-blue-300 text-sm font-bold mb-1">رد المالك على طلب التعديل</p>
                     <p className="text-slate-300 text-sm">{s.ownerRevisionNote}</p>
                   </div>
                 </div>

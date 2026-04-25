@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { fromAr, toAr } from "@/lib/utils";
 import { useSearch, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCreateSubmission } from "@workspace/api-client-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
@@ -114,6 +114,7 @@ async function uploadFile(file: File): Promise<string | null> {
 }
 
 export default function AddChalet() {
+  const qc = useQueryClient();
   const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
   const { cities, districts, amenities } = useCatalog(selectedCityId);
   const [submitted, setSubmitted] = useState(false);
@@ -571,7 +572,10 @@ export default function AddChalet() {
     mutation.mutate(
       { data: buildPayload(resolvedLocation, resolvedDistrict) as any },
       {
-        onSuccess: () => setSubmitted(true),
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: ["owner", "plan-limits"] });
+          setSubmitted(true);
+        },
         onError: (err: unknown) => {
           try {
             const apiErr = err as { data?: { details?: Record<string, string[]> } };

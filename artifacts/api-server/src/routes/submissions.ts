@@ -268,10 +268,9 @@ router.patch("/:id", async (req, res) => {
 
   const d = body.data;
 
-  /* Build the update object — always reset to pending and clear adminNote */
-  const updateSet: Partial<typeof chaletSubmissionsTable.$inferInsert> & { status: "pending"; adminNote: null } = {
+  /* Build the update object — reset to pending but PRESERVE adminNote for admin context */
+  const updateSet: Partial<typeof chaletSubmissionsTable.$inferInsert> & { status: "pending" } = {
     status: "pending",
-    adminNote: null,
   };
   if (d.nameAr        !== undefined) updateSet.nameAr = d.nameAr;
   if (d.descriptionAr !== undefined) updateSet.descriptionAr = d.descriptionAr;
