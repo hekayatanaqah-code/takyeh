@@ -182,7 +182,11 @@ export default function Chalets() {
   });
 
   const filteredChalets = (chalets ?? []).filter((c) => {
-    if (filterDistrict && filterDistrict !== "all" && (c as any).district !== filterDistrict) return false;
+    if (filterCity && filterCity !== "all" && (c as any).location !== filterCity) return false;
+    if (filterDistrict && filterDistrict !== "all") {
+      const chaletDistrict = ((c as any).district ?? "").trim();
+      if (!chaletDistrict || chaletDistrict !== filterDistrict.trim()) return false;
+    }
     if (filterCategory && filterCategory !== "all") {
       /* Properties with no category are unclassified — include them in every category search */
       const chaletCat = (c as any).category;

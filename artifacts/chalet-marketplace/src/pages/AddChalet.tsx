@@ -207,6 +207,17 @@ export default function AddChalet() {
   const editId = editIdParam ? Number(editIdParam) : null;
   const isEditMode = !!editId;
 
+  const { data: planLimits } = useQuery<{ chaletLimit: number; chaletCount: number; serviceLimit: number; serviceCount: number }>({
+    queryKey: ["owner", "plan-limits"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/owner/plan-limits`, { credentials: "include" });
+      if (!r.ok) return null;
+      return r.json();
+    },
+    staleTime: 1000 * 60,
+    enabled: !isEditMode,
+  });
+
   const { data: editSub } = useQuery({
     queryKey: ["owner", "submission", editId],
     queryFn: async () => {
@@ -632,9 +643,19 @@ export default function AddChalet() {
                 <p className="text-sm text-muted-foreground mt-4">
                   سيتم التواصل معك عبر واتساب بعد المراجعة
                 </p>
-                <Button className="mt-8" onClick={resetForm}>
-                  إضافة شاليه آخر
-                </Button>
+                {planLimits && planLimits.chaletCount >= planLimits.chaletLimit ? (
+                  <div className="mt-8 text-center space-y-3">
+                    <div className="inline-flex items-center gap-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-xl px-5 py-3 text-sm text-orange-700 dark:text-orange-300">
+                      <Info className="w-4 h-4 shrink-0" />
+                      <span>وصلت إلى الحد الأقصى لعدد الشاليهات في خطتك الحالية</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">تواصل مع الإدارة لترقية خطتك وإضافة المزيد</p>
+                  </div>
+                ) : (
+                  <Button className="mt-8" onClick={resetForm}>
+                    إضافة شاليه آخر
+                  </Button>
+                )}
               </>
             )}
           </motion.div>

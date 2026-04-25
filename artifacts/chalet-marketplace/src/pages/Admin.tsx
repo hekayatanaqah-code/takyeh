@@ -517,6 +517,15 @@ function SubmissionReviewModal({
                   </div>
                 </div>
               )}
+              {s.ownerRevisionNote && (
+                <div className="bg-blue-950/40 border border-blue-700/50 rounded-xl p-4 flex items-start gap-3">
+                  <MessageSquare className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-blue-300 text-sm font-bold mb-1">ملاحظة من المالك</p>
+                    <p className="text-slate-300 text-sm">{s.ownerRevisionNote}</p>
+                  </div>
+                </div>
+              )}
               {pendingAction && needsReason && (
                 <div className="bg-slate-800/80 border border-slate-600 rounded-xl p-4 space-y-2">
                   <label className="text-slate-300 text-sm font-semibold flex items-center gap-2">

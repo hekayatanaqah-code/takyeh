@@ -117,7 +117,7 @@ interface OwnerMessageSettings {
   attachmentNote: string;
 }
 
-const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}"];
+const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}"];
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   waEnabled: false,
@@ -126,7 +126,7 @@ const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   bookingConfirmationTemplate: "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.",
   changeNoticeEnabled: true,
   cancellationTemplate: "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}. السبب: {سبب_الإلغاء}.",
-  modificationTemplate: "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار}. التاريخ الجديد: {التاريخ}. السبب: {سبب_الإلغاء}.",
+  modificationTemplate: "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} من يوم {من_التاريخ} الموافق {من_التاريخ_م} إلى يوم {إلى_التاريخ} الموافق {إلى_التاريخ_م}.",
   customTemplates: [],
   attachmentNote: "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
 };
@@ -453,6 +453,7 @@ function ResubmitDialog({
   const [termsAndConditions, setTermsAndConditions] = useState("");
   const [photos, setPhotos]                       = useState<string[]>([]);
   const [amenities, setAmenities]                 = useState<string[]>([]);
+  const [ownerRevisionNote, setOwnerRevisionNote] = useState("");
   const [saving, setSaving]                       = useState(false);
 
   /* Amenities catalog (public endpoint — no auth needed) */
@@ -485,6 +486,7 @@ function ResubmitDialog({
       setTermsAndConditions(sub.termsAndConditions ?? "");
       setPhotos  (Array.isArray(sub.photos)    ? [...sub.photos]    : []);
       setAmenities(Array.isArray(sub.amenities) ? [...sub.amenities] : []);
+      setOwnerRevisionNote(sub.ownerRevisionNote ?? "");
     }
   }, [sub, open]);
 
@@ -502,11 +504,12 @@ function ResubmitDialog({
 
   async function handleResubmit() {
     if (!sub) return;
-    if (!nameAr.trim())        { toast({ title: "اسم الشاليه مطلوب",          variant: "destructive" }); return; }
-    if (!descriptionAr.trim()) { toast({ title: "الوصف مطلوب",                 variant: "destructive" }); return; }
-    if (!whatsappNumber.trim()){ toast({ title: "رقم الواتساب مطلوب",         variant: "destructive" }); return; }
-    if (!mapsUrl.trim())       { toast({ title: "رابط الخرائط مطلوب",         variant: "destructive" }); return; }
-    if (!socialLink.trim())    { toast({ title: "حساب إنستقرام / سناب شات مطلوب", variant: "destructive" }); return; }
+    if (!nameAr.trim())              { toast({ title: "اسم الشاليه مطلوب",          variant: "destructive" }); return; }
+    if (!descriptionAr.trim())       { toast({ title: "الوصف مطلوب",                 variant: "destructive" }); return; }
+    if (!whatsappNumber.trim())      { toast({ title: "رقم الواتساب مطلوب",         variant: "destructive" }); return; }
+    if (whatsappNumber.length < 9)   { toast({ title: "رقم الواتساب يجب أن يكون ٩ أرقام على الأقل", variant: "destructive" }); return; }
+    if (!mapsUrl.trim())             { toast({ title: "رابط الخرائط مطلوب",         variant: "destructive" }); return; }
+    if (!socialLink.trim())          { toast({ title: "حساب إنستقرام / سناب شات مطلوب", variant: "destructive" }); return; }
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
@@ -520,6 +523,7 @@ function ResubmitDialog({
         mapsUrl:            mapsUrl.trim()            || null,
         socialLink:         socialLink.trim()         || null,
         termsAndConditions: termsAndConditions.trim() || null,
+        ownerRevisionNote:  ownerRevisionNote.trim()  || null,
       };
       if (pricePerNight) body.pricePerNight = Number(pricePerNight);
       if (priceMorning)  body.priceMorning  = Number(priceMorning);
@@ -710,6 +714,18 @@ function ResubmitDialog({
               placeholder="أدخل شروط الحجز هنا..."
               rows={3}
               className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+
+          {/* ── Section: Owner Revision Note ── */}
+          <div className="space-y-2 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/30 px-3.5 py-3">
+            <p className="text-xs font-bold text-blue-700 dark:text-blue-400">ملاحظة للمراجع (اختياري)</p>
+            <textarea
+              value={ownerRevisionNote}
+              onChange={(e) => setOwnerRevisionNote(e.target.value)}
+              placeholder="أضف ملاحظة تريد إيصالها للمراجع مع هذا التعديل..."
+              rows={2}
+              className="w-full rounded-xl border border-blue-200 dark:border-blue-700 bg-white dark:bg-blue-950/30 px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-blue-400/40"
             />
           </div>
 
@@ -2912,11 +2928,23 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   };
 
   const openManualWhatsAppTemplate = (b: OwnerBooking, templateBody: string, reason = "") => {
+    const startHijri  = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
+    const startGreg   = formatDualDate(b.bookingDate).gregorian;
+    const dur = Math.max(1, b.durationDays ?? 1);
+    const endD = new Date(b.bookingDate + "T00:00:00");
+    endD.setDate(endD.getDate() + dur - 1);
+    const endStr    = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, "0")}-${String(endD.getDate()).padStart(2, "0")}`;
+    const endHijri  = formatDualDate(endStr).hijri.replace(/\s*هـ\s*$/, "");
+    const endGreg   = formatDualDate(endStr).gregorian;
     const msg = templateBody
       .replace(/\{اسم_العميل\}/g, b.clientName ?? "")
       .replace(/\{اسم_العقار\}/g, getBookingChaletName(b))
       .replace(/\{التاريخ\}/g, getBookingDateText(b))
-      .replace(/\{سبب_الإلغاء\}/g, reason || b.cancelReason || "حسب الاتفاق");
+      .replace(/\{سبب_الإلغاء\}/g, reason || b.cancelReason || "حسب الاتفاق")
+      .replace(/\{من_التاريخ\}/g, startHijri)
+      .replace(/\{من_التاريخ_م\}/g, startGreg)
+      .replace(/\{إلى_التاريخ\}/g, endHijri)
+      .replace(/\{إلى_التاريخ_م\}/g, endGreg);
     const encoded = encodeURIComponent(msg);
     const phone = normalizeGuestPhone(b);
     const waUrl = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
@@ -3058,7 +3086,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
       {/* Day Booking Summary Dialog */}
       {summaryDate && (() => {
-        const sumBkgs = calBookings.filter((b) => {
+        const sumBkgs = bookings.filter((b) => {
           if (!b.bookingDate) return false;
           const end = new Date(b.bookingDate);
           end.setDate(end.getDate() + Math.max(1, b.durationDays ?? 1) - 1);
@@ -3080,6 +3108,32 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   <span className="block text-xs font-normal text-muted-foreground mt-0.5">{sumGreg}</span>
                 </DialogTitle>
               </DialogHeader>
+              {/* Multi-chalet overview — shown only when owner has more than one chalet */}
+              {ownerChalets.length > 1 && (() => {
+                const chaletStatuses = ownerChalets.map((c: any) => {
+                  const isBooked = sumBkgs.some((b) => b.submissionId === c.submissionId);
+                  return { id: c.id, name: c.nameAr ?? "شاليه", booked: isBooked };
+                });
+                return (
+                  <div className="mx-6 mt-3 mb-1 rounded-xl border border-border bg-muted/40 overflow-hidden">
+                    <p className="text-[10px] font-bold text-muted-foreground px-3 pt-2.5 pb-1 uppercase tracking-wide">نظرة عامة على شاليهاتك</p>
+                    <div className="divide-y divide-border">
+                      {chaletStatuses.map((cs) => (
+                        <div key={cs.id} className="flex items-center justify-between px-3 py-2">
+                          <span className="text-xs font-medium text-foreground truncate max-w-[65%]">{cs.name}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            cs.booked
+                              ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                              : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          }`}>
+                            {cs.booked ? "محجوز" : "متاح"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="space-y-3 mt-1">
                 {sumBkgs.map((b, bi) => {
                   const total = b.totalPrice ? Math.round(Number(b.totalPrice)) : null;
@@ -3100,7 +3154,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       b.period === "evening" ? "border-blue-200 bg-blue-50 dark:bg-blue-900/20" :
                       "border-red-200 bg-red-50 dark:bg-red-900/20"
                     }`}>
-                      <p className="text-sm font-bold">{periodName(b.period)}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-bold">{periodName(b.period)}</p>
+                        {ownerChalets.length > 1 && (() => {
+                          const bChaletName = ownerChalets.find((c: any) => c.submissionId === b.submissionId)?.nameAr;
+                          return bChaletName ? (
+                            <span className="text-[10px] font-semibold bg-primary/10 text-primary rounded-full px-2 py-0.5 truncate max-w-[45%]">{bChaletName}</span>
+                          ) : null;
+                        })()}
+                      </div>
                       {/* Duration info row — always shown */}
                       <div className="text-xs text-primary/80 bg-primary/5 rounded-lg px-2.5 py-1.5 leading-relaxed space-y-0.5">
                         {popDur === 1 ? (

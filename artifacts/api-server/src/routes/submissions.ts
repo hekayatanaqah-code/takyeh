@@ -261,6 +261,7 @@ router.patch("/:id", async (req, res) => {
     maxGuests: z.number().int().min(1).nullable().optional(),
     bedrooms: z.number().int().min(0).nullable().optional(),
     termsAndConditions: z.string().nullable().optional(),
+    ownerRevisionNote: z.string().nullable().optional(),
   }).safeParse(req.body);
 
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
@@ -289,6 +290,7 @@ router.patch("/:id", async (req, res) => {
   if (d.maxGuests     !== undefined) updateSet.maxGuests = d.maxGuests ?? null;
   if (d.bedrooms      !== undefined) updateSet.bedrooms = d.bedrooms ?? null;
   if (d.termsAndConditions !== undefined) updateSet.termsAndConditions = d.termsAndConditions ?? null;
+  if (d.ownerRevisionNote !== undefined) updateSet.ownerRevisionNote = d.ownerRevisionNote ?? null;
 
   await db
     .update(chaletSubmissionsTable)

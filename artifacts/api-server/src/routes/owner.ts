@@ -35,7 +35,7 @@ const router = Router();
 
 const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.";
 const DEFAULT_CANCELLATION_TEMPLATE = "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}. السبب: {سبب_الإلغاء}.";
-const DEFAULT_MODIFICATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار}. التاريخ الجديد: {التاريخ}. السبب: {سبب_الإلغاء}.";
+const DEFAULT_MODIFICATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} من يوم {من_التاريخ} الموافق {من_التاريخ_م} إلى يوم {إلى_التاريخ} الموافق {إلى_التاريخ_م}.";
 
 /* ── OTP helpers (mirrors registration.ts helpers) ─────────── */
 function _genCode(): string { return String(randomInt(100000, 999999)); }

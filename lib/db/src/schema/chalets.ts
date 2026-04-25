@@ -113,6 +113,7 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   videoUrl: text("video_url"),
   status: submissionStatusEnum("status").notNull().default("pending"),
   adminNote: text("admin_note"),
+  ownerRevisionNote: text("owner_revision_note"),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
