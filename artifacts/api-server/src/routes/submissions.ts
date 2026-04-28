@@ -121,39 +121,65 @@ router.post("/", async (req, res) => {
   const data = result.data;
   const ownerId = req.isAuthenticated() ? req.user.id : null;
 
-  /* ── Unique name per city check ───────────────────────────── */
-  const [duplicate] = await db
-    .select({ id: chaletSubmissionsTable.id })
-    .from(chaletSubmissionsTable)
-    .where(
-      and(
-        sql`lower(${chaletSubmissionsTable.nameAr}) = lower(${data.nameAr})`,
-        sql`lower(${chaletSubmissionsTable.location}) = lower(${data.location})`,
-        ne(chaletSubmissionsTable.status, "rejected"),
-      )
-    )
-    .limit(1);
-  if (duplicate) {
+  /* ── 1. Name + City (+ Category when supplied) ─────────────── */
+  const hasCategory = !!(data.propertyType && data.propertyType !== "__other__");
+
+  const subNameWhere: Parameters<typeof and>[0][] = [
+    sql`lower(${chaletSubmissionsTable.nameAr}) = lower(${data.nameAr})`,
+    sql`lower(${chaletSubmissionsTable.location}) = lower(${data.location})`,
+    ne(chaletSubmissionsTable.status, "rejected"),
+  ];
+  if (hasCategory) {
+    subNameWhere.push(sql`lower(coalesce(${chaletSubmissionsTable.propertyType}, '')) = lower(${data.propertyType})`);
+  }
+  const [dupSubName] = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
+    .where(and(...subNameWhere)).limit(1);
+
+  const chaletNameWhere: Parameters<typeof and>[0][] = [
+    sql`lower(${chaletsTable.nameAr}) = lower(${data.nameAr})`,
+    sql`lower(${chaletsTable.location}) = lower(${data.location})`,
+  ];
+  if (hasCategory) {
+    chaletNameWhere.push(
+      sql`lower(coalesce(${chaletsTable.category}, coalesce(${chaletsTable.propertyType}, ''))) = lower(${data.propertyType})`
+    );
+  }
+  const [dupChaletName] = await db.select({ id: chaletsTable.id }).from(chaletsTable)
+    .where(and(...chaletNameWhere)).limit(1);
+
+  if (dupSubName || dupChaletName) {
     return res.status(409).json({
-      error: "عذراً، هذا الاسم مستخدم مسبقاً في هذه المدينة. يرجى اختيار اسم مختلف أو إضافة تمييز للحي",
+      error: hasCategory
+        ? "عفواً، يوجد شاليه بنفس هذا الاسم في هذه المدينة والفئة."
+        : "عذراً، هذا الاسم مستخدم مسبقاً في هذه المدينة. يرجى اختيار اسم مختلف أو إضافة تمييز للحي",
     });
   }
 
-  /* ── Duplicate social/website link check ───────────────────── */
-  const LINK_ERR = "عفواً، هذا الرابط مسجل مسبقاً لشاليه آخر. يرجى التأكد من البيانات أو التواصل مع الإدارة.";
+  /* ── 2. WhatsApp number duplicate ──────────────────────────── */
+  {
+    const [dupSubWa] = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
+      .where(and(eq(chaletSubmissionsTable.whatsappNumber, data.whatsappNumber), ne(chaletSubmissionsTable.status, "rejected"))).limit(1);
+    const [dupChaletWa] = await db.select({ id: chaletsTable.id }).from(chaletsTable)
+      .where(eq(chaletsTable.whatsappNumber, data.whatsappNumber)).limit(1);
+    if (dupSubWa || dupChaletWa) return res.status(409).json({ error: "عفواً، رقم الواتساب هذا مسجل مسبقاً." });
+  }
+
+  /* ── 3. Instagram link duplicate ───────────────────────────── */
   if (data.socialLink) {
     const [dupSubSocial] = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
       .where(and(sql`lower(${chaletSubmissionsTable.socialLink}) = lower(${data.socialLink})`, ne(chaletSubmissionsTable.status, "rejected"))).limit(1);
     const [dupChaletSocial] = await db.select({ id: chaletsTable.id }).from(chaletsTable)
       .where(sql`lower(${chaletsTable.socialLink}) = lower(${data.socialLink})`).limit(1);
-    if (dupSubSocial || dupChaletSocial) return res.status(409).json({ error: LINK_ERR });
+    if (dupSubSocial || dupChaletSocial) return res.status(409).json({ error: "عفواً، رابط الإنستقرام هذا مسجل مسبقاً." });
   }
+
+  /* ── 4. Google Maps URL duplicate ──────────────────────────── */
   if (data.mapsUrl) {
     const [dupSubMaps] = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
       .where(and(sql`lower(${chaletSubmissionsTable.mapsUrl}) = lower(${data.mapsUrl})`, ne(chaletSubmissionsTable.status, "rejected"))).limit(1);
     const [dupChaletMaps] = await db.select({ id: chaletsTable.id }).from(chaletsTable)
       .where(sql`lower(${chaletsTable.mapsUrl}) = lower(${data.mapsUrl})`).limit(1);
-    if (dupSubMaps || dupChaletMaps) return res.status(409).json({ error: LINK_ERR });
+    if (dupSubMaps || dupChaletMaps) return res.status(409).json({ error: "عفواً، موقع الشاليه هذا مسجل مسبقاً. يرجى التأكد من الموقع أو التواصل مع الإدارة." });
   }
 
   const [submission] = await db
@@ -289,21 +315,68 @@ router.patch("/:id", async (req, res) => {
 
   const d = body.data;
 
-  /* ── Duplicate social/website link check (excluding this submission) ── */
-  const PATCH_LINK_ERR = "عفواً، هذا الرابط مسجل مسبقاً لشاليه آخر. يرجى التأكد من البيانات أو التواصل مع الإدارة.";
+  /* ── Duplicate checks (excluding this submission) ────────── */
+
+  /* 1. WhatsApp number */
+  if (d.whatsappNumber) {
+    const [dupSubWa] = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
+      .where(and(eq(chaletSubmissionsTable.whatsappNumber, d.whatsappNumber), ne(chaletSubmissionsTable.status, "rejected"), ne(chaletSubmissionsTable.id, id))).limit(1);
+    const [dupChaletWa] = await db.select({ id: chaletsTable.id }).from(chaletsTable)
+      .where(eq(chaletsTable.whatsappNumber, d.whatsappNumber)).limit(1);
+    if (dupSubWa || dupChaletWa) return res.status(409).json({ error: "عفواً، رقم الواتساب هذا مسجل مسبقاً." });
+  }
+
+  /* 2. Instagram link */
   if (d.socialLink) {
     const [dupSubSocial] = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
       .where(and(sql`lower(${chaletSubmissionsTable.socialLink}) = lower(${d.socialLink})`, ne(chaletSubmissionsTable.status, "rejected"), ne(chaletSubmissionsTable.id, id))).limit(1);
     const [dupChaletSocial] = await db.select({ id: chaletsTable.id }).from(chaletsTable)
       .where(sql`lower(${chaletsTable.socialLink}) = lower(${d.socialLink})`).limit(1);
-    if (dupSubSocial || dupChaletSocial) return res.status(409).json({ error: PATCH_LINK_ERR });
+    if (dupSubSocial || dupChaletSocial) return res.status(409).json({ error: "عفواً، رابط الإنستقرام هذا مسجل مسبقاً." });
   }
+
+  /* 3. Google Maps URL */
   if (d.mapsUrl) {
     const [dupSubMaps] = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
       .where(and(sql`lower(${chaletSubmissionsTable.mapsUrl}) = lower(${d.mapsUrl})`, ne(chaletSubmissionsTable.status, "rejected"), ne(chaletSubmissionsTable.id, id))).limit(1);
     const [dupChaletMaps] = await db.select({ id: chaletsTable.id }).from(chaletsTable)
       .where(sql`lower(${chaletsTable.mapsUrl}) = lower(${d.mapsUrl})`).limit(1);
-    if (dupSubMaps || dupChaletMaps) return res.status(409).json({ error: PATCH_LINK_ERR });
+    if (dupSubMaps || dupChaletMaps) return res.status(409).json({ error: "عفواً، موقع الشاليه هذا مسجل مسبقاً. يرجى التأكد من الموقع أو التواصل مع الإدارة." });
+  }
+
+  /* 4. Name + City (+ Category if being updated) */
+  if (d.nameAr || d.location || d.propertyType) {
+    const [currentSub] = await db.select().from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, id)).limit(1);
+    if (currentSub) {
+      const checkName     = d.nameAr     ?? currentSub.nameAr;
+      const checkLocation = d.location   ?? currentSub.location;
+      const checkCat      = d.propertyType !== undefined ? d.propertyType : currentSub.propertyType;
+      const hasEditCat    = !!(checkCat && checkCat !== "__other__");
+
+      const editSubWhere: Parameters<typeof and>[0][] = [
+        sql`lower(${chaletSubmissionsTable.nameAr}) = lower(${checkName})`,
+        sql`lower(${chaletSubmissionsTable.location}) = lower(${checkLocation})`,
+        ne(chaletSubmissionsTable.status, "rejected"),
+        ne(chaletSubmissionsTable.id, id),
+      ];
+      if (hasEditCat) editSubWhere.push(sql`lower(coalesce(${chaletSubmissionsTable.propertyType}, '')) = lower(${checkCat})`);
+      const [dupSN] = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable).where(and(...editSubWhere)).limit(1);
+
+      const editChaletWhere: Parameters<typeof and>[0][] = [
+        sql`lower(${chaletsTable.nameAr}) = lower(${checkName})`,
+        sql`lower(${chaletsTable.location}) = lower(${checkLocation})`,
+      ];
+      if (hasEditCat) editChaletWhere.push(sql`lower(coalesce(${chaletsTable.category}, coalesce(${chaletsTable.propertyType}, ''))) = lower(${checkCat})`);
+      const [dupCN] = await db.select({ id: chaletsTable.id }).from(chaletsTable).where(and(...editChaletWhere)).limit(1);
+
+      if (dupSN || dupCN) {
+        return res.status(409).json({
+          error: hasEditCat
+            ? "عفواً، يوجد شاليه بنفس هذا الاسم في هذه المدينة والفئة."
+            : "عذراً، هذا الاسم مستخدم مسبقاً في هذه المدينة.",
+        });
+      }
+    }
   }
 
   /* Build the update object — reset to pending but PRESERVE adminNote for admin context */
