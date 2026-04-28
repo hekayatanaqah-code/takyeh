@@ -128,6 +128,7 @@ interface AdminChalet {
   location: string;
   district?: string | null;
   category?: string | null;
+  propertyType?: string | null;
   isVerified: boolean;
   isActive?: boolean;
   adminStatus?: "active" | "pending" | "paused" | "deleted";
@@ -3304,6 +3305,8 @@ function SettingsTab() {
 function ChaletsVerifyTab() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<"active" | "pending" | "paused" | "deleted">("active");
+  const [cityFilter, setCityFilter]         = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
 
   const { data: chalets = [], isLoading } = useQuery<AdminChalet[]>({
     queryKey: ["admin", "chalets"],
@@ -3361,7 +3364,22 @@ function ChaletsVerifyTab() {
     paused: chalets.filter((c) => c.adminStatus === "paused").length,
     deleted: chalets.filter((c) => c.adminStatus === "deleted").length,
   };
-  const filteredChalets = chalets.filter((c) => (c.adminStatus ?? "active") === statusFilter);
+  const uniqueLocations = useMemo(() => {
+    const seen = new Set<string>();
+    return chalets.map((c) => c.location).filter((l) => { if (!l || seen.has(l)) return false; seen.add(l); return true; }).sort();
+  }, [chalets]);
+
+  const uniqueCategories = useMemo(() => {
+    const seen = new Set<string>();
+    return chalets.map((c) => c.category || c.propertyType || "").filter((v) => { if (!v || seen.has(v)) return false; seen.add(v); return true; }).sort();
+  }, [chalets]);
+
+  const filteredChalets = useMemo(() => chalets.filter((c) => {
+    if ((c.adminStatus ?? "active") !== statusFilter) return false;
+    if (cityFilter && c.location !== cityFilter) return false;
+    if (categoryFilter && (c.category || c.propertyType || "") !== categoryFilter) return false;
+    return true;
+  }), [chalets, statusFilter, cityFilter, categoryFilter]);
 
   return (
     <div className="space-y-6">
@@ -3391,6 +3409,40 @@ function ChaletsVerifyTab() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* ── City + Category filter row ── */}
+      <div className="flex gap-3 flex-wrap">
+        <select
+          value={cityFilter}
+          onChange={(e) => setCityFilter(e.target.value)}
+          className="bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500"
+          dir="rtl"
+        >
+          <option value="">جميع المدن</option>
+          {uniqueLocations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+        </select>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500"
+          dir="rtl"
+        >
+          <option value="">جميع الفئات</option>
+          {uniqueCategories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+        </select>
+        {(cityFilter || categoryFilter) && (
+          <button
+            type="button"
+            onClick={() => { setCityFilter(""); setCategoryFilter(""); }}
+            className="text-xs text-slate-400 hover:text-amber-400 border border-slate-600 hover:border-amber-500/50 rounded-lg px-3 py-2 transition-colors"
+          >
+            مسح الفلاتر ✕
+          </button>
+        )}
+        <span className="text-slate-500 text-xs self-center">
+          {toAr(filteredChalets.length)} نتيجة
+        </span>
       </div>
 
       {pauseAlerts.length > 0 && (
@@ -3444,7 +3496,7 @@ function ChaletsVerifyTab() {
                   {c.location}
                   {c.district && <span className="text-slate-500"> · {c.district}</span>}
                 </TableCell>
-                <TableCell className="text-slate-400 text-sm">{c.category ?? "—"}</TableCell>
+                <TableCell className="text-slate-400 text-sm">{c.category || c.propertyType || "—"}</TableCell>
                 <TableCell>
                   <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusStyles[adminStatus]}`}>
                     {statusLabels[adminStatus]}

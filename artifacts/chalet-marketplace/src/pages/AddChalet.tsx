@@ -577,7 +577,12 @@ export default function AddChalet() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        if (!r.ok) throw new Error("فشل الحفظ");
+        if (!r.ok) {
+          const errBody = await r.json().catch(() => ({}));
+          const msg = errBody?.error ?? "حدث خطأ أثناء الحفظ، يرجى المحاولة مرة أخرى";
+          setFieldErrors({ general: [msg] });
+          return;
+        }
         setEditSaved(true);
         setTimeout(() => navigate(`/my-chalet/${editId}`), 1200);
       } catch {
@@ -597,9 +602,11 @@ export default function AddChalet() {
         },
         onError: (err: unknown) => {
           try {
-            const apiErr = err as { data?: { details?: Record<string, string[]> } };
+            const apiErr = err as { data?: { details?: Record<string, string[]>; error?: string } };
             if (apiErr?.data?.details && typeof apiErr.data.details === "object") {
               setFieldErrors(apiErr.data.details);
+            } else if (apiErr?.data?.error && typeof apiErr.data.error === "string") {
+              setFieldErrors({ general: [apiErr.data.error] });
             }
           } catch {}
         },
@@ -1509,8 +1516,15 @@ export default function AddChalet() {
                   </label>
                 </div>
 
-                {/* Error message */}
-                {mutation.isError && (
+                {/* General / duplicate-link error (edit mode + new submission) */}
+                {fieldErrors.general && (
+                  <div className="bg-destructive/10 text-destructive rounded-xl p-4">
+                    <p className="text-sm text-center font-medium">{fieldErrors.general[0]}</p>
+                  </div>
+                )}
+
+                {/* Field-level errors (new submission mode only) */}
+                {!fieldErrors.general && mutation.isError && (
                   <div className="bg-destructive/10 text-destructive rounded-xl p-4 space-y-2">
                     <p className="font-semibold text-center">حدث خطأ أثناء إرسال البيانات</p>
                     {Object.keys(fieldErrors).length > 0 ? (

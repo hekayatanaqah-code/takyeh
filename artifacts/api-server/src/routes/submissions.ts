@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { chaletSubmissionsTable, ownerTempSessionsTable } from "@workspace/db/schema";
+import { chaletSubmissionsTable, chaletsTable, ownerTempSessionsTable } from "@workspace/db/schema";
 import { CreateSubmissionBody } from "@workspace/api-zod";
 import { eq, and, ne, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -139,6 +139,23 @@ router.post("/", async (req, res) => {
     });
   }
 
+  /* ── Duplicate social/website link check ───────────────────── */
+  const LINK_ERR = "عفواً، هذا الرابط مسجل مسبقاً لشاليه آخر. يرجى التأكد من البيانات أو التواصل مع الإدارة.";
+  if (data.socialLink) {
+    const [dupSubSocial] = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
+      .where(and(sql`lower(${chaletSubmissionsTable.socialLink}) = lower(${data.socialLink})`, ne(chaletSubmissionsTable.status, "rejected"))).limit(1);
+    const [dupChaletSocial] = await db.select({ id: chaletsTable.id }).from(chaletsTable)
+      .where(sql`lower(${chaletsTable.socialLink}) = lower(${data.socialLink})`).limit(1);
+    if (dupSubSocial || dupChaletSocial) return res.status(409).json({ error: LINK_ERR });
+  }
+  if (data.mapsUrl) {
+    const [dupSubMaps] = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
+      .where(and(sql`lower(${chaletSubmissionsTable.mapsUrl}) = lower(${data.mapsUrl})`, ne(chaletSubmissionsTable.status, "rejected"))).limit(1);
+    const [dupChaletMaps] = await db.select({ id: chaletsTable.id }).from(chaletsTable)
+      .where(sql`lower(${chaletsTable.mapsUrl}) = lower(${data.mapsUrl})`).limit(1);
+    if (dupSubMaps || dupChaletMaps) return res.status(409).json({ error: LINK_ERR });
+  }
+
   const [submission] = await db
     .insert(chaletSubmissionsTable)
     .values({
@@ -271,6 +288,23 @@ router.patch("/:id", async (req, res) => {
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
   const d = body.data;
+
+  /* ── Duplicate social/website link check (excluding this submission) ── */
+  const PATCH_LINK_ERR = "عفواً، هذا الرابط مسجل مسبقاً لشاليه آخر. يرجى التأكد من البيانات أو التواصل مع الإدارة.";
+  if (d.socialLink) {
+    const [dupSubSocial] = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
+      .where(and(sql`lower(${chaletSubmissionsTable.socialLink}) = lower(${d.socialLink})`, ne(chaletSubmissionsTable.status, "rejected"), ne(chaletSubmissionsTable.id, id))).limit(1);
+    const [dupChaletSocial] = await db.select({ id: chaletsTable.id }).from(chaletsTable)
+      .where(sql`lower(${chaletsTable.socialLink}) = lower(${d.socialLink})`).limit(1);
+    if (dupSubSocial || dupChaletSocial) return res.status(409).json({ error: PATCH_LINK_ERR });
+  }
+  if (d.mapsUrl) {
+    const [dupSubMaps] = await db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
+      .where(and(sql`lower(${chaletSubmissionsTable.mapsUrl}) = lower(${d.mapsUrl})`, ne(chaletSubmissionsTable.status, "rejected"), ne(chaletSubmissionsTable.id, id))).limit(1);
+    const [dupChaletMaps] = await db.select({ id: chaletsTable.id }).from(chaletsTable)
+      .where(sql`lower(${chaletsTable.mapsUrl}) = lower(${d.mapsUrl})`).limit(1);
+    if (dupSubMaps || dupChaletMaps) return res.status(409).json({ error: PATCH_LINK_ERR });
+  }
 
   /* Build the update object — reset to pending but PRESERVE adminNote for admin context */
   const updateSet: Partial<typeof chaletSubmissionsTable.$inferInsert> & { status: "pending" } = {
