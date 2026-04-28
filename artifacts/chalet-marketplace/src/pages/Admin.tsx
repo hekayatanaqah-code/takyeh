@@ -3338,6 +3338,23 @@ function ChaletsVerifyTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "chalets"] }),
   });
 
+  const uniqueLocations = useMemo(() => {
+    const seen = new Set<string>();
+    return chalets.map((c) => c.location).filter((l) => { if (!l || seen.has(l)) return false; seen.add(l); return true; }).sort();
+  }, [chalets]);
+
+  const uniqueCategories = useMemo(() => {
+    const seen = new Set<string>();
+    return chalets.map((c) => c.category || c.propertyType || "").filter((v) => { if (!v || seen.has(v)) return false; seen.add(v); return true; }).sort();
+  }, [chalets]);
+
+  const filteredChalets = useMemo(() => chalets.filter((c) => {
+    if ((c.adminStatus ?? "active") !== statusFilter) return false;
+    if (cityFilter && c.location !== cityFilter) return false;
+    if (categoryFilter && (c.category || c.propertyType || "") !== categoryFilter) return false;
+    return true;
+  }), [chalets, statusFilter, cityFilter, categoryFilter]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -3364,22 +3381,6 @@ function ChaletsVerifyTab() {
     paused: chalets.filter((c) => c.adminStatus === "paused").length,
     deleted: chalets.filter((c) => c.adminStatus === "deleted").length,
   };
-  const uniqueLocations = useMemo(() => {
-    const seen = new Set<string>();
-    return chalets.map((c) => c.location).filter((l) => { if (!l || seen.has(l)) return false; seen.add(l); return true; }).sort();
-  }, [chalets]);
-
-  const uniqueCategories = useMemo(() => {
-    const seen = new Set<string>();
-    return chalets.map((c) => c.category || c.propertyType || "").filter((v) => { if (!v || seen.has(v)) return false; seen.add(v); return true; }).sort();
-  }, [chalets]);
-
-  const filteredChalets = useMemo(() => chalets.filter((c) => {
-    if ((c.adminStatus ?? "active") !== statusFilter) return false;
-    if (cityFilter && c.location !== cityFilter) return false;
-    if (categoryFilter && (c.category || c.propertyType || "") !== categoryFilter) return false;
-    return true;
-  }), [chalets, statusFilter, cityFilter, categoryFilter]);
 
   return (
     <div className="space-y-6">
