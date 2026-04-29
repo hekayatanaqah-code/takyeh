@@ -51,7 +51,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, Check, Video, Mail, MessageSquare, Send, Inbox } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, Check, Video, Mail, MessageSquare, Send, Inbox, Smartphone, Download } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -6998,6 +6998,222 @@ function ContactInquiriesTab() {
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   WA Subscribers Tab — WhatsApp news opt-in list
+   ══════════════════════════════════════════════════════════════ */
+interface WaSubscriberRow {
+  id: number;
+  full_name: string | null;
+  email: string | null;
+  whatsapp_number: string | null;
+  chalet_name: string | null;
+  whatsapp_news_subscribe: boolean;
+  whatsapp_subscribed_at: string | null;
+  created_at: string;
+}
+
+function WaSubscribersTab() {
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "cancelled">("active");
+  const [search, setSearch] = useState("");
+
+  const { data: rows = [], isLoading, refetch } = useQuery<WaSubscriberRow[]>({
+    queryKey: ["admin", "wa-subscribers"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/wa-subscribers");
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    },
+  });
+
+  const filtered = useMemo(() => rows.filter((r) => {
+    if (statusFilter === "active"    && !r.whatsapp_news_subscribe) return false;
+    if (statusFilter === "cancelled" && r.whatsapp_news_subscribe)  return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (
+        (r.full_name    ?? "").toLowerCase().includes(q) ||
+        (r.chalet_name  ?? "").toLowerCase().includes(q) ||
+        (r.whatsapp_number ?? "").includes(q)
+      );
+    }
+    return true;
+  }), [rows, statusFilter, search]);
+
+  const activeCount    = rows.filter(r => r.whatsapp_news_subscribe).length;
+  const cancelledCount = rows.filter(r => !r.whatsapp_news_subscribe).length;
+
+  function exportCSV() {
+    const bom = "\uFEFF";
+    const header = "الاسم,اسم الشاليه,رقم الواتساب,تاريخ الاشتراك,الحالة";
+    const lines = filtered.map(r => {
+      const name    = `"${(r.full_name   ?? "").replace(/"/g, '""')}"`;
+      const chalet  = `"${(r.chalet_name ?? "").replace(/"/g, '""')}"`;
+      const phone   = r.whatsapp_number ?? "";
+      const date    = r.whatsapp_subscribed_at
+        ? new Date(r.whatsapp_subscribed_at).toLocaleDateString("ar-SA")
+        : new Date(r.created_at).toLocaleDateString("ar-SA");
+      const status  = r.whatsapp_news_subscribe ? "نشط" : "ملغى";
+      return [name, chalet, phone, date, status].join(",");
+    });
+    const csv  = bom + [header, ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `wa-subscribers-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function openWA(phone: string) {
+    const clean = phone.replace(/\D/g, "");
+    const intl  = clean.startsWith("0") ? "966" + clean.slice(1) : clean.startsWith("966") ? clean : "966" + clean;
+    window.open(`https://wa.me/${intl}`, "_blank", "noopener");
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="animate-spin text-amber-400 w-8 h-8" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Smartphone className="w-5 h-5 text-green-400" />
+            قائمة مشتركي أخبار الواتساب
+          </h2>
+          <p className="text-slate-400 text-sm mt-1">
+            {toAr(activeCount)} نشط · {toAr(cancelledCount)} ملغى · {toAr(rows.length)} إجمالي
+          </p>
+        </div>
+        <button
+          onClick={exportCSV}
+          className="flex items-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-600 text-white rounded-xl text-sm font-medium transition-colors"
+        >
+          <Download className="w-4 h-4" />
+          تصدير CSV
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-3 flex-wrap items-center">
+        {/* Status pills */}
+        <div className="flex gap-2 bg-slate-800/60 rounded-xl p-1">
+          {([["all", "الكل"], ["active", "نشط"], ["cancelled", "ملغى"]] as const).map(([v, label]) => (
+            <button
+              key={v}
+              onClick={() => setStatusFilter(v)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === v
+                  ? "bg-green-600 text-white"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Search */}
+        <input
+          type="text"
+          placeholder="بحث بالاسم أو الواتساب..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="flex-1 min-w-[200px] bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-green-500 transition-colors"
+          dir="rtl"
+        />
+
+        <button
+          onClick={() => refetch()}
+          className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-white text-sm transition-colors"
+        >
+          تحديث
+        </button>
+      </div>
+
+      {/* Table */}
+      {filtered.length === 0 ? (
+        <div className="text-center py-16 text-slate-500">
+          <Smartphone className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p>لا يوجد مشتركون</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-slate-700/50">
+          <table className="w-full text-sm text-right" dir="rtl">
+            <thead>
+              <tr className="border-b border-slate-700/50 bg-slate-800/60">
+                <th className="px-4 py-3 text-slate-300 font-semibold">اسم المشترك / الشاليه</th>
+                <th className="px-4 py-3 text-slate-300 font-semibold">رقم الواتساب</th>
+                <th className="px-4 py-3 text-slate-300 font-semibold">تاريخ الاشتراك</th>
+                <th className="px-4 py-3 text-slate-300 font-semibold">الحالة</th>
+                <th className="px-4 py-3 text-slate-300 font-semibold text-center">تواصل</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-700/30">
+              {filtered.map((row) => {
+                const subscribedDate = row.whatsapp_subscribed_at
+                  ? new Date(row.whatsapp_subscribed_at).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })
+                  : new Date(row.created_at).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" });
+                const isActive = row.whatsapp_news_subscribe;
+                return (
+                  <tr key={row.id} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-white">{row.full_name ?? "—"}</div>
+                      {row.chalet_name && row.chalet_name !== row.full_name && (
+                        <div className="text-xs text-slate-400 mt-0.5">{row.chalet_name}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="font-mono text-slate-200 text-sm" dir="ltr">
+                        {row.whatsapp_number ?? "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-300 text-sm">{subscribedDate}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                        isActive
+                          ? "bg-green-900/30 text-green-300 border-green-800"
+                          : "bg-red-900/30 text-red-300 border-red-800"
+                      }`}>
+                        {isActive ? "نشط" : "ملغى"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {row.whatsapp_number ? (
+                        <button
+                          onClick={() => openWA(row.whatsapp_number!)}
+                          title="فتح محادثة واتساب"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-700/80 hover:bg-green-600 text-white rounded-lg text-xs font-medium transition-colors"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          واتساب
+                        </button>
+                      ) : (
+                        <span className="text-slate-600">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p className="text-xs text-slate-600 text-center">
+        {toAr(filtered.length)} نتيجة من أصل {toAr(rows.length)} · مرتّب حسب الأحدث أولاً
+      </p>
+    </div>
+  );
+}
+
 const ALL_TABS = [
   { id: "overview",                label: "الإحصائيات",            icon: BarChart3 },
   { id: "chalets",                 label: "قائمة العقارات",        icon: Home },
@@ -7015,6 +7231,7 @@ const ALL_TABS = [
   { id: "reviews",                 label: "التقييمات",             icon: Star },
   { id: "ownerInbox",              label: "صندوق الوارد / طلبات الملاك", icon: Inbox },
   { id: "contactInquiries",        label: "رسائل التواصل",         icon: Mail },
+  { id: "waSubscribers",           label: "قائمة المشتركين",       icon: Smartphone },
   { id: "siteSettings",            label: "إعدادات الموقع",        icon: Settings },
   { id: "communicationSettings",   label: "إعدادات التواصل",       icon: Mail },
   { id: "termsManagement",         label: "شروط الاستخدام",        icon: FileCheck },
@@ -7033,7 +7250,7 @@ const ADMIN_NAV_GROUPS: Array<{
   { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
   { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "amenities", "locations", "directAdd"] },
   { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "adminStaff", "directAdd"] },
-  { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "services", "reviews", "ownerInbox"] },
+  { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "services", "reviews", "ownerInbox", "waSubscribers"] },
   { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
   { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "communicationSettings", "contactInquiries", "termsManagement"] },
 ];
@@ -8233,6 +8450,7 @@ export default function Admin() {
         {activeTab === "reviews"             && <ReviewsTab />}
         {activeTab === "ownerInbox"          && <OwnerInboxTab />}
         {activeTab === "contactInquiries"      && <ContactInquiriesTab />}
+        {activeTab === "waSubscribers"         && <WaSubscribersTab />}
         {activeTab === "siteSettings"          && <SettingsTab />}
         {activeTab === "communicationSettings" && <CommunicationSettingsTab />}
         {activeTab === "termsManagement"     && <TermsManagementTab />}

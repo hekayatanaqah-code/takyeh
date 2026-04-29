@@ -390,9 +390,15 @@ router.patch("/profile/whatsapp-subscribe", requireAuth, async (req, res) => {
     const currentEmail = await resolveOwnerEmail(req);
     if (!currentEmail) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
     const { subscribe } = req.body as { subscribe: boolean };
-    await db.execute(
-      sql`UPDATE owner_applications SET whatsapp_news_subscribe = ${!!subscribe} WHERE email = ${currentEmail}`
-    );
+    if (!!subscribe) {
+      await db.execute(
+        sql`UPDATE owner_applications SET whatsapp_news_subscribe = true, whatsapp_subscribed_at = COALESCE(whatsapp_subscribed_at, NOW()) WHERE email = ${currentEmail}`
+      );
+    } else {
+      await db.execute(
+        sql`UPDATE owner_applications SET whatsapp_news_subscribe = false WHERE email = ${currentEmail}`
+      );
+    }
     return res.json({ ok: true, subscribe: !!subscribe });
   } catch (err) {
     console.error("[PATCH /owner/profile/whatsapp-subscribe]", err);

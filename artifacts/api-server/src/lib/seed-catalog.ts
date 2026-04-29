@@ -1,5 +1,6 @@
 import { db } from "@workspace/db";
 import { citiesCatalogTable, amenitiesCatalogTable, siteSettingsTable } from "@workspace/db/schema";
+import { sql } from "drizzle-orm";
 
 const INITIAL_CITIES = [
   "بريدة", "عنيزة", "الرس", "الخبراء",
@@ -37,6 +38,12 @@ const INITIAL_SITE_SETTINGS = [
 ];
 
 export async function seedCatalogIfEmpty() {
+  /* Safe column migrations — idempotent, ignored if column already exists */
+  await db.execute(sql`
+    ALTER TABLE owner_applications
+    ADD COLUMN IF NOT EXISTS whatsapp_subscribed_at TIMESTAMPTZ
+  `);
+
   const existingCities = await db.select().from(citiesCatalogTable);
   if (existingCities.length === 0) {
     await db.insert(citiesCatalogTable).values(

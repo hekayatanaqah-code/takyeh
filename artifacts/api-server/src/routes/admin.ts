@@ -1883,4 +1883,74 @@ export async function runSubscriptionExpiryJob() {
   }
 }
 
+/* ── GET /admin/contact-inquiries — list contact form submissions ── */
+router.get("/contact-inquiries", async (_req, res) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT id, name, phone, email, message, status, created_at
+      FROM contact_inquiries
+      ORDER BY created_at DESC
+      LIMIT 200
+    `);
+    return res.json((result as any).rows ?? []);
+  } catch (err) {
+    console.error("[GET /admin/contact-inquiries]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+/* ── PATCH /admin/contact-inquiries/:id/status ── */
+router.patch("/contact-inquiries/:id/status", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body as { status: string };
+    if (!["new", "read", "replied"].includes(status)) {
+      return res.status(400).json({ error: "حالة غير صالحة" });
+    }
+    await db.execute(sql`UPDATE contact_inquiries SET status = ${status} WHERE id = ${parseInt(id, 10)}`);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[PATCH /admin/contact-inquiries/:id/status]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+/* ── GET /admin/wa-subscribers — WhatsApp news subscribers list ── */
+router.get("/wa-subscribers", async (_req, res) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT
+        oa.id,
+        oa.full_name,
+        oa.email,
+        oa.whatsapp_news_subscribe,
+        oa.whatsapp_subscribed_at,
+        oa.created_at,
+        COALESCE(
+          (SELECT cs.whatsapp_number FROM chalet_submissions cs
+           WHERE cs.owner_id = oa.email
+             AND cs.whatsapp_number IS NOT NULL AND cs.whatsapp_number != ''
+           ORDER BY cs.created_at DESC LIMIT 1),
+          oa.phone
+        ) AS whatsapp_number,
+        COALESCE(
+          (SELECT cs.name_ar FROM chalet_submissions cs
+           WHERE cs.owner_id = oa.email
+           ORDER BY cs.created_at DESC LIMIT 1),
+          oa.full_name
+        ) AS chalet_name
+      FROM owner_applications oa
+      WHERE oa.whatsapp_subscribed_at IS NOT NULL
+         OR oa.whatsapp_news_subscribe = true
+      ORDER BY
+        oa.whatsapp_news_subscribe DESC,
+        COALESCE(oa.whatsapp_subscribed_at, oa.created_at) DESC
+    `);
+    return res.json((result as any).rows ?? []);
+  } catch (err) {
+    console.error("[GET /admin/wa-subscribers]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
 export default router;
