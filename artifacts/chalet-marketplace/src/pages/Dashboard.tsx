@@ -6886,31 +6886,38 @@ function RevenueTab() {
   const { toast } = useToast();
 
   const monthOptions = useMemo(() => {
-    const opts: { val: string; label: string }[] = [];
-    for (let i = 11; i >= 0; i--) {
+    const opts: { val: string; label: string; isFuture?: boolean }[] = [];
+    // Past 12 months + current + next 5 months = 18 total
+    for (let i = 11; i >= -5; i--) {
       const d = new Date();
       d.setDate(1);
       d.setMonth(d.getMonth() - i);
       const val = d.toISOString().slice(0, 7);
       const hijriPart = new Date(d.getFullYear(), d.getMonth(), 15).toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
       const gregPart = d.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" });
-      const label = `${hijriPart} · ${gregPart}`;
-      opts.push({ val, label });
+      const isFuture = i < 0;
+      const label = isFuture ? `🔮 ${hijriPart} · ${gregPart}` : `${hijriPart} · ${gregPart}`;
+      opts.push({ val, label, isFuture });
     }
     return opts.reverse();
   }, []);
 
-  /* ── Hijri month options (last 15 Hijri months) ── */
+  /* ── Hijri month options (past 14 + current + next 6 Hijri months) ── */
   const hijriMonthOptions = useMemo(() => {
     const seen = new Set<string>();
-    const opts: { key: string; label: string }[] = [];
-    // Generate dates from -14 months to +1, capture their hijri month
-    for (let i = 14; i >= -1; i--) {
+    const opts: { key: string; label: string; isFuture?: boolean }[] = [];
+    const nowKey = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(new Date());
+    // Generate dates from -14 months to +6, capture their hijri month
+    for (let i = 14; i >= -6; i--) {
       const d = new Date();
       d.setDate(15);
       d.setMonth(d.getMonth() - i);
       const key = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(d);
-      if (!seen.has(key)) { seen.add(key); opts.push({ key, label: key }); }
+      if (!seen.has(key)) {
+        seen.add(key);
+        const isFuture = i < 0 && key !== nowKey;
+        opts.push({ key, label: isFuture ? `🔮 ${key}` : key, isFuture });
+      }
     }
     return opts;
   }, []);
@@ -6989,6 +6996,8 @@ function RevenueTab() {
 
   const { data: futureSummary, isLoading: futureLoading } = useQuery<{
     globalTotalCashCollected: number;
+    totalCancellationIncome: number;
+    totalRefundedToClients: number;
     futureCashInHand: number;
     futureRemainingBalance: number;
     futureCount: number;
@@ -7000,7 +7009,7 @@ function RevenueTab() {
       if (!r.ok) throw new Error("failed");
       return r.json();
     },
-    enabled: showAllFuture,
+    staleTime: 60_000,
   });
 
   const serviceProviderId = unit.type === "service" ? (unit as any).id : null;
@@ -7330,6 +7339,54 @@ function RevenueTab() {
             </Select>
           ))}
         </div>
+      </div>
+
+      {/* ══════════════ ALWAYS VISIBLE: Global Cash Position ══════════════ */}
+      <div className="bg-gradient-to-l from-emerald-600/10 to-teal-500/10 border-2 border-emerald-500/30 rounded-2xl p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span className="text-sm font-bold text-foreground">إجمالي السيولة المحصلة</span>
+            </div>
+            {futureLoading ? <Skeleton className="h-9 w-40" /> : (
+              <div className="text-3xl font-extrabold text-emerald-700 tabular-nums leading-tight">
+                {fmtN(futureSummary?.globalTotalCashCollected ?? 0)}
+                <span className="text-base font-normal text-muted-foreground ms-2">ر.س</span>
+              </div>
+            )}
+            <div className="text-[11px] text-muted-foreground mt-0.5">مجموع جميع المدفوعات المحصّلة (عربون + متبقٍ) عبر كل الحجوزات النشطة</div>
+          </div>
+          <div className="flex flex-wrap gap-3 sm:gap-4 shrink-0">
+            <div className="text-center min-w-[80px]">
+              <div className="text-[11px] text-muted-foreground mb-0.5">مبالغ محصلة (مستقبل)</div>
+              {futureLoading ? <Skeleton className="h-6 w-16 mx-auto" /> : (
+                <div className="text-lg font-bold text-blue-600 tabular-nums">{fmtN(futureSummary?.futureCashInHand ?? 0)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></div>
+              )}
+            </div>
+            <div className="text-center min-w-[80px]">
+              <div className="text-[11px] text-muted-foreground mb-0.5">متبقٍ عند الدخول</div>
+              {futureLoading ? <Skeleton className="h-6 w-16 mx-auto" /> : (
+                <div className="text-lg font-bold text-amber-600 tabular-nums">{fmtN(futureSummary?.futureRemainingBalance ?? 0)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></div>
+              )}
+            </div>
+            <div className="text-center min-w-[80px]">
+              <div className="text-[11px] text-muted-foreground mb-0.5">إيراد الإلغاءات</div>
+              {futureLoading ? <Skeleton className="h-6 w-16 mx-auto" /> : (
+                <div className="text-lg font-bold text-orange-600 tabular-nums">{fmtN(futureSummary?.totalCancellationIncome ?? 0)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></div>
+              )}
+            </div>
+          </div>
+        </div>
+        {/* Quick link to future bookings */}
+        {!showAllFuture && (futureSummary?.futureCount ?? 0) > 0 && (
+          <button
+            onClick={() => setShowAllFuture(true)}
+            className="mt-3 text-xs text-emerald-700 dark:text-emerald-400 font-semibold underline underline-offset-2 hover:no-underline"
+          >
+            عرض {futureSummary!.futureCount} حجز قادم ←
+          </button>
+        )}
       </div>
 
       {/* ══════════════ FUTURE CASH FLOW VIEW ══════════════ */}

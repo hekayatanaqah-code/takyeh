@@ -2640,8 +2640,24 @@ router.get("/future-cash-summary", async (req, res) => {
     for (const s of subs) submissionNames[s.id] = s.nameAr;
   }
 
+  // Include cancellation income (retained deposit) from ALL cancelled bookings
+  const cancelledRows = await db
+    .select({
+      cancelIncome: ownerBookingsTable.cancelIncome,
+      cancelRefundAmount: ownerBookingsTable.cancelRefundAmount,
+    })
+    .from(ownerBookingsTable)
+    .where(and(eq(ownerBookingsTable.ownerId, ownerId), isNotNull(ownerBookingsTable.cancelledAt)));
+
+  const totalCancellationIncome = Math.round(
+    cancelledRows.reduce((s, b) => s + Number(b.cancelIncome ?? 0), 0)
+  );
+  const totalRefundedToClients = Math.round(
+    cancelledRows.reduce((s, b) => s + Number(b.cancelRefundAmount ?? 0), 0)
+  );
+
   // Compute checkout date and split into future vs past
-  let globalTotalCashCollected = 0;
+  let globalTotalCashCollected = totalCancellationIncome; // retained cancellation income is real cash held
   let futureCashInHand = 0;
   let futureRemainingBalance = 0;
   const futureBookings: {
@@ -2698,6 +2714,8 @@ router.get("/future-cash-summary", async (req, res) => {
     futureRemainingBalance:   Math.round(futureRemainingBalance),
     futureCount:              futureBookings.length,
     futureBookings,
+    totalCancellationIncome,
+    totalRefundedToClients,
   });
 });
 
