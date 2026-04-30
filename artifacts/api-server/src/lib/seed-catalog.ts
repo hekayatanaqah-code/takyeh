@@ -43,6 +43,9 @@ export async function seedCatalogIfEmpty() {
     ALTER TABLE owner_applications
     ADD COLUMN IF NOT EXISTS whatsapp_subscribed_at TIMESTAMPTZ
   `);
+  await db.execute(sql`ALTER TABLE owner_bookings ADD COLUMN IF NOT EXISTS cancel_reason_code TEXT`);
+  await db.execute(sql`ALTER TABLE owner_bookings ADD COLUMN IF NOT EXISTS cancel_refund_amount NUMERIC(10,2)`);
+  await db.execute(sql`ALTER TABLE owner_bookings ADD COLUMN IF NOT EXISTS cancel_income NUMERIC(10,2)`);
 
   const existingCities = await db.select().from(citiesCatalogTable);
   if (existingCities.length === 0) {

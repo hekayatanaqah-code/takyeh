@@ -31,7 +31,7 @@ import {
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
-  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks,
+  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -94,6 +94,9 @@ interface OwnerBooking {
   createdAt: string;
   cancelledAt?: string | null;
   cancelReason?: string | null;
+  cancelReasonCode?: string | null;
+  cancelRefundAmount?: string | null;
+  cancelIncome?: string | null;
   ratedAt?: string | null;
 }
 
@@ -2349,45 +2352,149 @@ function MiniCalendar({
   );
 }
 
-/* ── Delete Confirm Dialog ───────────────────── */
+/* ── Cancellation Management Dialog ─────────── */
+const CANCEL_REASONS = [
+  { code: "client_request", label: "طلب العميل" },
+  { code: "maintenance",    label: "صيانة" },
+  { code: "double_booking", label: "تعارض حجوزات" },
+  { code: "other",          label: "أخرى" },
+] as const;
+
 function DeleteConfirmDialog({
   open, booking, onClose, onConfirm,
 }: {
   open: boolean;
   booking: OwnerBooking | null;
   onClose: () => void;
-  onConfirm: (id: number, reason: string) => void;
+  onConfirm: (id: number, reason: string, reasonCode?: string, refundAmount?: number) => void;
 }) {
-  const [reason, setReason] = useState("");
-  useEffect(() => { if (!open) setReason(""); }, [open]);
+  const [reasonCode, setReasonCode]     = useState<string>("");
+  const [customReason, setCustomReason] = useState("");
+  const [refundAmount, setRefundAmount] = useState<string>("");
+
+  useEffect(() => {
+    if (!open) { setReasonCode(""); setCustomReason(""); setRefundAmount(""); }
+  }, [open]);
+
   if (!booking) return null;
+
+  const depositPaid    = Math.round(Number(booking.depositPaid ?? booking.revenueAmount ?? 0));
+  const refundNum      = Math.max(0, Math.min(depositPaid, Number(refundAmount) || 0));
+  const cancelIncome   = Math.max(0, depositPaid - refundNum);
+  const selectedLabel  = CANCEL_REASONS.find(r => r.code === reasonCode)?.label ?? "";
+  const finalReason    = reasonCode === "other" ? customReason.trim() : selectedLabel + (customReason.trim() ? ` — ${customReason.trim()}` : "");
+  const canSubmit      = !!reasonCode && (reasonCode !== "other" || !!customReason.trim());
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent dir="rtl" className="max-w-sm">
+      <DialogContent dir="rtl" className="max-w-md">
         <DialogHeader>
-          <DialogTitle>إلغاء الحجز</DialogTitle>
-          <DialogDescription>
-            سيتم إلغاء حجز <strong>{booking.clientName}</strong>. يمكنك استعادته من قسم "الحجوزات الملغاة" في أي وقت.
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <span className="text-xl">📋</span>
+            إدارة مستحقات الإلغاء
+          </DialogTitle>
+          <DialogDescription className="text-right text-sm">
+            إلغاء حجز <strong>{booking.clientName}</strong> — {booking.bookingDate}
+            {depositPaid > 0 && (
+              <span className="block mt-0.5 text-xs text-amber-600 font-medium">
+                العربون المسجّل: {depositPaid.toLocaleString("ar-SA")} ر.س
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 mt-1">
+
+        <div className="space-y-4 mt-1">
+          {/* Reason dropdown */}
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold">سبب الإلغاء *</label>
-            <Textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="مثال: طلب العميل الإلغاء، تعارض في المواعيد..."
-              rows={3}
-            />
+            <label className="text-sm font-semibold">سبب الإلغاء <span className="text-destructive">*</span></label>
+            <Select value={reasonCode} onValueChange={setReasonCode}>
+              <SelectTrigger dir="rtl" className="text-right">
+                <SelectValue placeholder="اختر سبب الإلغاء..." />
+              </SelectTrigger>
+              <SelectContent dir="rtl">
+                {CANCEL_REASONS.map(r => (
+                  <SelectItem key={r.code} value={r.code}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+
+          {/* Optional custom note */}
+          {reasonCode && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-muted-foreground">
+                {reasonCode === "other" ? "وصف السبب *" : "ملاحظة إضافية (اختياري)"}
+              </label>
+              <Textarea
+                value={customReason}
+                onChange={(e) => setCustomReason(e.target.value)}
+                placeholder={reasonCode === "other" ? "اكتب السبب..." : "تفاصيل إضافية..."}
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+          )}
+
+          {/* Refund amount */}
+          {depositPaid > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">المبلغ المسترد للعميل (ر.س)</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0}
+                  max={depositPaid}
+                  step={1}
+                  value={refundAmount}
+                  data-no-arabic
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  placeholder={`الحد الأقصى: ${depositPaid.toLocaleString("ar-SA")} ر.س`}
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-background outline-none focus:border-primary transition-colors"
+                  dir="ltr"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">اترك الحقل فارغاً إذا لم يُسترد أي مبلغ</p>
+            </div>
+          )}
+
+          {/* Financial summary */}
+          {depositPaid > 0 && (
+            <div className="bg-muted/50 rounded-xl p-3 space-y-2 text-sm border border-border">
+              <p className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">ملخص مالي للإلغاء</p>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">العربون المحصّل:</span>
+                <span className="font-bold">{depositPaid.toLocaleString("ar-SA")} ر.س</span>
+              </div>
+              <div className="flex justify-between text-red-600">
+                <span>المبلغ المسترد للعميل:</span>
+                <span className="font-bold">− {refundNum.toLocaleString("ar-SA")} ر.س</span>
+              </div>
+              <div className="flex justify-between border-t border-border pt-2 font-bold text-green-700 dark:text-green-400">
+                <span>إيراد الإلغاء المحقّق:</span>
+                <span>{cancelIncome.toLocaleString("ar-SA")} ر.س</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                💡 إيراد الإلغاء = عربون − مبلغ مسترد. يُضاف تلقائياً إلى تقرير الإيرادات.
+              </p>
+            </div>
+          )}
         </div>
-        <DialogFooter className="flex gap-2">
+
+        <DialogFooter className="flex gap-2 mt-1">
           <Button variant="outline" size="sm" onClick={onClose}>تراجع</Button>
           <Button
             variant="destructive"
             size="sm"
-            disabled={!reason.trim()}
-            onClick={() => { onConfirm(booking.id, reason.trim()); onClose(); }}
+            disabled={!canSubmit}
+            onClick={() => {
+              onConfirm(
+                booking.id,
+                finalReason,
+                reasonCode,
+                refundNum > 0 ? refundNum : undefined,
+              );
+              onClose();
+            }}
           >
             تأكيد الإلغاء
           </Button>
@@ -2817,13 +2924,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   });
 
   const deleteBooking = useMutation({
-    mutationFn: async ({ id, reason }: { id: number; reason: string }) => {
-      await apiFetch(`/owner/bookings/${id}`, { method: "DELETE", body: JSON.stringify({ reason }) });
+    mutationFn: async ({ id, reason, reasonCode, refundAmount }: { id: number; reason: string; reasonCode?: string; refundAmount?: number }) => {
+      await apiFetch(`/owner/bookings/${id}`, { method: "DELETE", body: JSON.stringify({ reason, reasonCode, refundAmount }) });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
       qc.invalidateQueries({ queryKey: ["owner", "bookings", "cancelled"] });
       qc.invalidateQueries({ queryKey: ["owner", "bookings", "stats"] });
+      qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
       toast({ title: "تم إلغاء الحجز", description: "تم نقل الحجز إلى الأرشيف بنجاح." });
     },
   });
@@ -4302,7 +4410,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         open={!!deleteDialogBooking}
         booking={deleteDialogBooking}
         onClose={() => setDeleteDialogBooking(null)}
-        onConfirm={(id, reason) => { if (isReadOnly) { onBlockedEdit(); return; } deleteBooking.mutate({ id, reason }); }}
+        onConfirm={(id, reason, reasonCode, refundAmount) => { if (isReadOnly) { onBlockedEdit(); return; } deleteBooking.mutate({ id, reason, reasonCode, refundAmount }); }}
       />
 
       {/* Reschedule Dialog */}
@@ -6756,11 +6864,20 @@ function ServiceInsurancesTab() {
 }
 
 /* ── Revenue Tab ─────────────────────────────── */
+/* ── Hijri month helpers ── */
+function getHijriMonthKey(dateStr: string): string {
+  try {
+    return new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(new Date(dateStr + "T00:00:00"));
+  } catch { return ""; }
+}
+
 function RevenueTab() {
   const { unit } = useAdminFinance();
   const currentMonth = new Date().toISOString().slice(0, 7);
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
-  const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
+  const [selectedMonth, setSelectedMonth]     = useState(currentMonth);
+  const [calType, setCalType]                 = useState<"gregorian" | "hijri">("gregorian");
+  const [selectedHijriMonth, setSelectedHijriMonth] = useState<string>("");
+  const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage" | "cancellation">("all");
   const [svcFilter, setSvcFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
   const [reviewSentRevIds, setReviewSentRevIds] = useState<Set<number>>(new Set());
@@ -6781,6 +6898,30 @@ function RevenueTab() {
     }
     return opts.reverse();
   }, []);
+
+  /* ── Hijri month options (last 15 Hijri months) ── */
+  const hijriMonthOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const opts: { key: string; label: string }[] = [];
+    // Generate dates from -14 months to +1, capture their hijri month
+    for (let i = 14; i >= -1; i--) {
+      const d = new Date();
+      d.setDate(15);
+      d.setMonth(d.getMonth() - i);
+      const key = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(d);
+      if (!seen.has(key)) { seen.add(key); opts.push({ key, label: key }); }
+    }
+    return opts;
+  }, []);
+
+  /* Default selectedHijriMonth to current Hijri month */
+  useEffect(() => {
+    if (!selectedHijriMonth && hijriMonthOptions.length > 0) {
+      const currentKey = getHijriMonthKey(new Date().toISOString().slice(0, 10));
+      const match = hijriMonthOptions.find(o => o.key === currentKey);
+      setSelectedHijriMonth(match?.key ?? hijriMonthOptions[hijriMonthOptions.length - 1].key);
+    }
+  }, [hijriMonthOptions, selectedHijriMonth]);
 
   const { data: revOwnerChalets = [] } = useQuery<{ id: number; submissionId: number | null; nameAr: string; waReviewTemplate?: string | null }[]>({
     queryKey: ["owner", "chalets"],
@@ -6808,6 +6949,8 @@ function RevenueTab() {
   const { data: financial, isLoading: finLoading } = useQuery<{
     totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
     totalInsuranceHeld: number; totalInsuranceDeducted: number;
+    pendingRevenue?: number; realizedRevenue?: number;
+    totalCancellationIncome?: number; totalRefundedToClients?: number;
   }>({
     queryKey: ["owner", "financial-summary-rev", selectedMonth],
     queryFn: async () => {
@@ -6821,6 +6964,15 @@ function RevenueTab() {
     queryKey: ["owner", "bookings-revenue"],
     queryFn: async () => {
       const r = await apiFetch("/owner/bookings");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
+    queryKey: ["owner", "bookings", "cancelled"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/bookings/cancelled");
       if (!r.ok) return [];
       return r.json();
     },
@@ -6848,10 +7000,15 @@ function RevenueTab() {
 
   // Filter bookings to selected month + optional chalet unit filter
   const monthBookings = useMemo(() => {
-    let filtered = allBookings.filter(b => b.bookingDate?.startsWith(selectedMonth));
+    let filtered: OwnerBooking[];
+    if (calType === "hijri" && selectedHijriMonth) {
+      filtered = allBookings.filter(b => b.bookingDate && getHijriMonthKey(b.bookingDate) === selectedHijriMonth);
+    } else {
+      filtered = allBookings.filter(b => b.bookingDate?.startsWith(selectedMonth));
+    }
     if (unit.type === "chalet") filtered = filtered.filter(b => (b as any).chaletId === (unit as any).id);
     return filtered;
-  }, [allBookings, selectedMonth, unit]);
+  }, [allBookings, selectedMonth, selectedHijriMonth, calType, unit]);
 
   // Service-unit: filter service appointments to selected month
   const monthSvcAppts = useMemo(() =>
@@ -6863,30 +7020,53 @@ function RevenueTab() {
     bookingId: number;
     clientName: string;
     bookingDate: string;
-    type: "deposit" | "balance" | "damage";
+    type: "deposit" | "balance" | "damage" | "cancellation";
     amount: number;
     reason?: string;
     proofImages?: string | null;
     booking: OwnerBooking;
+    isPending?: boolean;
   }
+
+  /* Cancelled bookings with income, filtered to the selected period */
+  const allCancelledBookings = useMemo(() => {
+    let cancelled = cancelledBookings.filter(b => b.cancelledAt && b.cancelIncome && Number(b.cancelIncome) > 0);
+    // Filter by cancellation date in the selected month
+    if (calType === "hijri" && selectedHijriMonth) {
+      cancelled = cancelled.filter(b => b.cancelledAt && getHijriMonthKey(b.cancelledAt.slice(0, 10)) === selectedHijriMonth);
+    } else {
+      cancelled = cancelled.filter(b => b.cancelledAt?.startsWith(selectedMonth));
+    }
+    if (unit.type === "chalet") cancelled = cancelled.filter(b => (b as any).chaletId === (unit as any).id);
+    return cancelled;
+  }, [cancelledBookings, selectedMonth, selectedHijriMonth, calType, unit]);
+
+  const today = getLocalDateStr();
 
   const rows = useMemo<RevenueRow[]>(() => {
     const result: RevenueRow[] = [];
     for (const b of monthBookings) {
+      if (b.cancelledAt) continue; // cancelled bookings shown as cancellation rows, not regular rows
       const dep = Math.round(Number(b.depositPaid ?? 0));
       const total = b.totalPrice ? Math.round(Number(b.totalPrice)) : null;
 
+      // Calculate checkout date for pending/realized distinction
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      const checkoutDate = new Date(sy, sm - 1, sd + (b.durationDays ?? 1));
+      const checkoutStr = `${checkoutDate.getFullYear()}-${String(checkoutDate.getMonth() + 1).padStart(2, "0")}-${String(checkoutDate.getDate()).padStart(2, "0")}`;
+      const isPending = checkoutStr > today;
+
       // Deposit row (always, if deposit recorded)
       if (dep > 0) {
-        result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "deposit", amount: dep, booking: b });
+        result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "deposit", amount: dep, booking: b, isPending });
       } else if (b.revenueAmount && !b.totalPrice) {
-        result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "deposit", amount: Math.round(Number(b.revenueAmount)), booking: b });
+        result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "deposit", amount: Math.round(Number(b.revenueAmount)), booking: b, isPending });
       }
 
       // Remaining / balance row (only if collected)
       if (total !== null && dep > 0 && b.balanceCollected) {
         const rem = Math.max(0, total - dep);
-        if (rem > 0) result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "balance", amount: rem, booking: b });
+        if (rem > 0) result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "balance", amount: rem, booking: b, isPending });
       }
 
       // Damage deduction row
@@ -6899,15 +7079,28 @@ function RevenueTab() {
         });
       }
     }
+    // Cancellation income rows
+    for (const b of allCancelledBookings) {
+      result.push({
+        bookingId: b.id, clientName: b.clientName,
+        bookingDate: b.cancelledAt?.slice(0, 10) ?? b.bookingDate,
+        type: "cancellation",
+        amount: Math.round(Number(b.cancelIncome ?? 0)),
+        reason: b.cancelReason ?? undefined,
+        booking: b,
+        isPending: false,
+      });
+    }
     return result;
-  }, [monthBookings]);
+  }, [monthBookings, allCancelledBookings, today]);
 
   const filteredRows = filter === "all" ? rows : rows.filter(r => r.type === filter);
 
   const TYPE_META = {
-    deposit: { label: "عربون",       emoji: "💵", cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
-    balance: { label: "متبقي محصّل", emoji: "✅", cls: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
-    damage:  { label: "خصم تلفيات", emoji: "✂️", cls: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
+    deposit:      { label: "عربون",        emoji: "💵", cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+    balance:      { label: "متبقي محصّل",  emoji: "✅", cls: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+    damage:       { label: "خصم تلفيات",  emoji: "✂️", cls: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
+    cancellation: { label: "إيراد إلغاء", emoji: "❌", cls: "bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
   } as const;
 
   const loading = finLoading || bkLoading;
@@ -7069,19 +7262,40 @@ function RevenueTab() {
 
   return (
     <div className="space-y-5" dir="rtl">
-      {/* Month selector */}
+      {/* Month selector + Calendar type toggle */}
       <div className="flex items-center gap-3 flex-wrap">
         <TrendingUp className="w-5 h-5 text-primary shrink-0" />
         <h2 className="text-lg font-bold text-foreground">
           {unit.type === "chalet" ? `إيرادات: ${(unit as any).name}` : "الإيرادات"}
         </h2>
-        <div className="ms-auto w-48">
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {monthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="ms-auto flex items-center gap-2">
+          {/* Calendar toggle */}
+          <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+            <button
+              onClick={() => setCalType("gregorian")}
+              className={`px-3 py-1.5 font-medium transition-colors ${calType === "gregorian" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+            >م</button>
+            <button
+              onClick={() => setCalType("hijri")}
+              className={`px-3 py-1.5 font-medium transition-colors ${calType === "hijri" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+            >هـ</button>
+          </div>
+          {/* Month selector */}
+          {calType === "gregorian" ? (
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="h-9 text-sm w-52"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {monthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Select value={selectedHijriMonth} onValueChange={setSelectedHijriMonth}>
+              <SelectTrigger className="h-9 text-sm w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {hijriMonthOptions.map(o => <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 
@@ -7120,27 +7334,51 @@ function RevenueTab() {
 
       {/* ── Chalet KPI Cards ── */}
       {unit.type === "all" && <div className="flex items-center gap-2 px-1"><Home className="w-4 h-4 text-primary shrink-0" /><span className="text-sm font-bold text-foreground">تفاصيل إيرادات الشاليهات</span></div>}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Total Monthly Revenue */}
-        <div className="bg-card border border-border rounded-2xl p-4 space-y-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {/* Realized Revenue */}
+        <div className="bg-card border border-green-200 rounded-2xl p-4 space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-            <DollarSign className="w-3.5 h-3.5 text-green-500" />
-            {unit.type === "all" ? "إيرادات الشاليهات المحصّلة" : "إجمالي إيرادات الشهر"}
+            <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+            إيرادات محقّقة
           </div>
           {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-2xl font-bold text-green-600">{fmtN(financial?.totalRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+            <div className="text-2xl font-bold text-green-600">{fmtN(financial?.realizedRevenue ?? financial?.totalRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
           )}
-          <div className="text-[11px] text-muted-foreground">عربون + متبقي محصّل + تلفيات</div>
+          <div className="text-[11px] text-muted-foreground">حجوزات انتهت فعلياً</div>
+        </div>
+
+        {/* Pending Revenue */}
+        <div className="bg-card border border-blue-200 rounded-2xl p-4 space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+            <Clock className="w-3.5 h-3.5 text-blue-500" />
+            إيرادات متوقّعة
+          </div>
+          {loading ? <Skeleton className="h-7 w-24" /> : (
+            <div className="text-2xl font-bold text-blue-600">{fmtN(financial?.pendingRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+          )}
+          <div className="text-[11px] text-muted-foreground">حجوزات لم تنته بعد</div>
+        </div>
+
+        {/* Cancellation Income */}
+        <div className="bg-card border border-orange-200 rounded-2xl p-4 space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+            <Ban className="w-3.5 h-3.5 text-orange-500" />
+            إيراد الإلغاءات
+          </div>
+          {loading ? <Skeleton className="h-7 w-24" /> : (
+            <div className="text-2xl font-bold text-orange-600">{fmtN(financial?.totalCancellationIncome ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+          )}
+          <div className="text-[11px] text-muted-foreground">عربون محتجز من الإلغاءات</div>
         </div>
 
         {/* Insurance Held */}
-        <div className="bg-card border border-orange-200 rounded-2xl p-4 space-y-1">
+        <div className="bg-card border border-slate-200 rounded-2xl p-4 space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-            <Lock className="w-3.5 h-3.5 text-orange-500" />
-            تأمينات محتجزة حالياً
+            <Lock className="w-3.5 h-3.5 text-slate-500" />
+            تأمينات محتجزة
           </div>
           {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-2xl font-bold text-orange-600">{fmtN(financial?.totalInsuranceHeld ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+            <div className="text-2xl font-bold text-slate-600">{fmtN(financial?.totalInsuranceHeld ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
           )}
           <div className="text-[11px] text-muted-foreground">غير محتسبة في الأرباح</div>
         </div>
@@ -7149,7 +7387,7 @@ function RevenueTab() {
         <div className="bg-card border border-amber-200 rounded-2xl p-4 space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
             <Clock className="w-3.5 h-3.5 text-amber-500" />
-            مبالغ متبقية لم تُحصَّل
+            متبقٍ لم يُحصَّل
           </div>
           {loading ? <Skeleton className="h-7 w-24" /> : (
             <div className="text-2xl font-bold text-amber-600">{fmtN(financial?.totalPendingBalance ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
@@ -7232,7 +7470,7 @@ function RevenueTab() {
           <Receipt className="w-4 h-4 text-primary" />
           <h3 className="font-bold text-sm text-foreground">سجل الإيرادات</h3>
           <div className="ms-auto flex gap-1 flex-wrap">
-            {([["all", "الكل"], ["deposit", "عربون"], ["balance", "متبقي"], ["damage", "تلفيات"]] as const).map(([v, l]) => (
+            {([["all", "الكل"], ["deposit", "عربون"], ["balance", "متبقي"], ["damage", "تلفيات"], ["cancellation", "إلغاءات"]] as const).map(([v, l]) => (
               <button
                 key={v}
                 onClick={() => setFilter(v)}
@@ -7268,9 +7506,13 @@ function RevenueTab() {
                   const chaletId = revOwnerChalets.find((c) => c.submissionId === row.booking.submissionId)?.id ?? null;
                   const revSent = reviewSentRevIds.has(row.bookingId);
                   const revPending = reviewPendingRevId === row.bookingId;
+                  const amtColor = row.type === "damage" ? "text-red-600" : row.type === "balance" ? "text-green-600" : row.type === "cancellation" ? "text-orange-600" : "text-blue-600";
                   return (
-                    <tr key={`${row.bookingId}-${row.type}-${i}`} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                      <td className="py-2.5 px-3 font-medium">{row.clientName}</td>
+                    <tr key={`${row.bookingId}-${row.type}-${i}`} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${row.isPending ? "opacity-70" : ""}`}>
+                      <td className="py-2.5 px-3 font-medium">
+                        {row.clientName}
+                        {row.isPending && <span className="ms-1 text-[10px] font-semibold text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded-full">متوقّع</span>}
+                      </td>
                       <td className="py-2.5 px-3 text-xs">
                         <div className="font-medium">{hijri}</div>
                         <div className="text-muted-foreground">{gregorian}</div>
@@ -7289,7 +7531,7 @@ function RevenueTab() {
                         )}
                       </td>
                       <td className="py-2.5 px-3 text-left font-bold text-base tabular-nums">
-                        <span className={row.type === "damage" ? "text-red-600" : row.type === "balance" ? "text-green-600" : "text-blue-600"}>
+                        <span className={amtColor}>
                           {fmtN(row.amount)}
                         </span>
                         <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>

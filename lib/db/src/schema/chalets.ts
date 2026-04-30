@@ -209,6 +209,9 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   cancelReason: text("cancel_reason"),
+  cancelReasonCode: text("cancel_reason_code"), /* طلب_عميل | صيانة | تعارض | أخرى */
+  cancelRefundAmount: numeric("cancel_refund_amount", { precision: 10, scale: 2 }), /* amount returned to client */
+  cancelIncome: numeric("cancel_income", { precision: 10, scale: 2 }), /* deposit - refund = realized profit */
   ratedAt: timestamp("rated_at", { withTimezone: true }),
 });
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;

@@ -1087,7 +1087,12 @@ router.get("/bookings/lookup", async (req, res) => {
 router.delete("/bookings/:id", async (req, res) => {
   const ownerId = req.user!.id;
   const id = Number(req.params.id);
-  const { reason } = z.object({ reason: z.string().optional() }).parse(req.body ?? {});
+  const parsed = z.object({
+    reason:        z.string().optional(),
+    reasonCode:    z.string().optional(),
+    refundAmount:  z.number().nonnegative().optional(),
+  }).parse(req.body ?? {});
+  const { reason, reasonCode, refundAmount } = parsed;
 
   // Fetch booking before soft-delete so we can sync the freed dates
   const [target] = await db
@@ -1095,9 +1100,20 @@ router.delete("/bookings/:id", async (req, res) => {
     .from(ownerBookingsTable)
     .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)));
 
+  // Compute cancellation income: deposit collected minus refund returned to client
+  const depositPaid   = Number(target?.depositPaid ?? 0);
+  const refund        = refundAmount ?? 0;
+  const cancelIncome  = Math.max(0, depositPaid - refund);
+
   await db
     .update(ownerBookingsTable)
-    .set({ cancelledAt: new Date(), cancelReason: reason ?? null })
+    .set({
+      cancelledAt:        new Date(),
+      cancelReason:       reason ?? null,
+      cancelReasonCode:   reasonCode ?? null,
+      cancelRefundAmount: refund > 0 ? String(refund) : null,
+      cancelIncome:       cancelIncome > 0 ? String(cancelIncome) : null,
+    })
     .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)));
 
   // Sync availability after cancellation (booking no longer blocks these dates)
@@ -2535,6 +2551,38 @@ router.get("/financial-summary", async (req, res) => {
     return s + Math.max(0, Number(b.totalPrice) - Number(b.depositPaid ?? 0));
   }, 0));
 
+  // ── Pending vs Realized revenue (based on checkout date) ──────────
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const activeBookings = monthBookings.filter(b => !b.cancelledAt);
+  let pendingRevenue = 0;
+  let realizedRevenue = 0;
+  for (const b of activeBookings) {
+    const rev = calcBookingRevenue(b);
+    // checkout = bookingDate + durationDays days (day after last night)
+    const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+    const dur = Math.max(1, b.durationDays ?? 1);
+    const checkout = new Date(sy, sm - 1, sd + dur);
+    checkout.setHours(0, 0, 0, 0);
+    if (checkout > today) {
+      pendingRevenue += rev;
+    } else {
+      realizedRevenue += rev;
+    }
+  }
+
+  // ── Cancellation income for this month (by cancelledAt date) ──────
+  const cancelledThisMonth = await db
+    .select({ cancelIncome: ownerBookingsTable.cancelIncome, cancelRefundAmount: ownerBookingsTable.cancelRefundAmount })
+    .from(ownerBookingsTable)
+    .where(and(
+      eq(ownerBookingsTable.ownerId, ownerId),
+      gte(ownerBookingsTable.cancelledAt, new Date(`${selectedMonth}-01T00:00:00Z`)),
+      lte(ownerBookingsTable.cancelledAt, new Date(`${selectedMonth}-31T23:59:59Z`)),
+    ));
+  const totalCancellationIncome = Math.round(cancelledThisMonth.reduce((s, b) => s + Number(b.cancelIncome ?? 0), 0));
+  const totalRefundedToClients  = Math.round(cancelledThisMonth.reduce((s, b) => s + Number(b.cancelRefundAmount ?? 0), 0));
+
   return res.json({
     month: selectedMonth,
     totalRevenue,
@@ -2547,6 +2595,11 @@ router.get("/financial-summary", async (req, res) => {
     categoryTotals,
     insuranceRevenueTotals,
     trend,
+    // ── New fields ──
+    pendingRevenue:          Math.round(pendingRevenue),
+    realizedRevenue:         Math.round(realizedRevenue),
+    totalCancellationIncome,
+    totalRefundedToClients,
   });
 });
 
