@@ -31,7 +31,7 @@ import {
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
-  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban,
+  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -6879,6 +6879,7 @@ function RevenueTab() {
   const [selectedHijriMonth, setSelectedHijriMonth] = useState<string>("");
   const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage" | "cancellation">("all");
   const [svcFilter, setSvcFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
+  const [showAllFuture, setShowAllFuture] = useState(false);
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
   const [reviewSentRevIds, setReviewSentRevIds] = useState<Set<number>>(new Set());
   const [reviewPendingRevId, setReviewPendingRevId] = useState<number | null>(null);
@@ -6976,6 +6977,30 @@ function RevenueTab() {
       if (!r.ok) return [];
       return r.json();
     },
+  });
+
+  interface FutureBookingEntry {
+    id: number; clientName: string; clientPhone: string | null;
+    bookingDate: string; checkoutDate: string; durationDays: number;
+    period: string | null; depositPaid: number; totalPrice: number | null;
+    balanceCollected: boolean; insuranceFee: number; remainingBalance: number;
+    chaletName: string; submissionId: number | null;
+  }
+
+  const { data: futureSummary, isLoading: futureLoading } = useQuery<{
+    globalTotalCashCollected: number;
+    futureCashInHand: number;
+    futureRemainingBalance: number;
+    futureCount: number;
+    futureBookings: FutureBookingEntry[];
+  }>({
+    queryKey: ["owner", "future-cash-summary"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/future-cash-summary");
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    },
+    enabled: showAllFuture,
   });
 
   const serviceProviderId = unit.type === "service" ? (unit as any).id : null;
@@ -7268,9 +7293,17 @@ function RevenueTab() {
         <h2 className="text-lg font-bold text-foreground">
           {unit.type === "chalet" ? `إيرادات: ${(unit as any).name}` : "الإيرادات"}
         </h2>
-        <div className="ms-auto flex items-center gap-2">
-          {/* Calendar toggle */}
-          <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+        <div className="ms-auto flex items-center gap-2 flex-wrap justify-end">
+          {/* All-future toggle */}
+          <button
+            onClick={() => setShowAllFuture(v => !v)}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors flex items-center gap-1.5 ${showAllFuture ? "bg-emerald-600 text-white border-emerald-600" : "bg-background border-border text-muted-foreground hover:bg-muted"}`}
+          >
+            <TrendingUp className="w-3 h-3" />
+            {showAllFuture ? "← تصفية شهرية" : "عرض كل المستقبليات"}
+          </button>
+          {/* Calendar toggle — hidden in all-future mode */}
+          {!showAllFuture && <div className="flex rounded-lg border border-border overflow-hidden text-xs">
             <button
               onClick={() => setCalType("gregorian")}
               className={`px-3 py-1.5 font-medium transition-colors ${calType === "gregorian" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
@@ -7279,9 +7312,9 @@ function RevenueTab() {
               onClick={() => setCalType("hijri")}
               className={`px-3 py-1.5 font-medium transition-colors ${calType === "hijri" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
             >هـ</button>
-          </div>
-          {/* Month selector */}
-          {calType === "gregorian" ? (
+          </div>}
+          {/* Month selector — hidden in all-future mode */}
+          {!showAllFuture && (calType === "gregorian" ? (
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
               <SelectTrigger className="h-9 text-sm w-52"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -7295,9 +7328,174 @@ function RevenueTab() {
                 {hijriMonthOptions.map(o => <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>)}
               </SelectContent>
             </Select>
-          )}
+          ))}
         </div>
       </div>
+
+      {/* ══════════════ FUTURE CASH FLOW VIEW ══════════════ */}
+      {showAllFuture && (
+        <div className="space-y-5">
+          {/* Primary metric card */}
+          <div className="bg-gradient-to-l from-emerald-600/10 to-teal-500/10 border-2 border-emerald-500/30 rounded-2xl p-5">
+            <div className="flex items-center gap-3 mb-2">
+              <DollarSign className="w-5 h-5 text-emerald-600" />
+              <span className="text-sm font-bold text-foreground">إجمالي السيولة المحصلة</span>
+              <span className="text-xs text-muted-foreground ms-auto">من جميع الحجوزات النشطة</span>
+            </div>
+            {futureLoading ? <Skeleton className="h-10 w-40" /> : (
+              <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">
+                {fmtN(futureSummary?.globalTotalCashCollected ?? 0)}
+                <span className="text-lg font-normal text-muted-foreground ms-2">ر.س</span>
+              </div>
+            )}
+            <div className="text-xs text-muted-foreground mt-1">مجموع العربون + المتبقي المحصّل لجميع الحجوزات الماضية والقادمة</div>
+          </div>
+
+          {/* Summary cards by status */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Cash in hand for future */}
+            <div className="bg-card border border-blue-200 rounded-2xl p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+                <Wallet className="w-3.5 h-3.5 text-blue-500" />
+                مبالغ محصلة
+              </div>
+              {futureLoading ? <Skeleton className="h-7 w-24" /> : (
+                <div className="text-2xl font-bold text-blue-600 tabular-nums">
+                  {fmtN(futureSummary?.futureCashInHand ?? 0)}
+                  <span className="text-sm font-normal text-muted-foreground ms-1">ر.س</span>
+                </div>
+              )}
+              <div className="text-[11px] text-muted-foreground">عربون محصّل لحجوزات لم تبدأ بعد</div>
+            </div>
+
+            {/* Remaining balance to collect */}
+            <div className="bg-card border border-amber-200 rounded-2xl p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+                <Clock className="w-3.5 h-3.5 text-amber-500" />
+                مبالغ متبقية
+              </div>
+              {futureLoading ? <Skeleton className="h-7 w-24" /> : (
+                <div className="text-2xl font-bold text-amber-600 tabular-nums">
+                  {fmtN(futureSummary?.futureRemainingBalance ?? 0)}
+                  <span className="text-sm font-normal text-muted-foreground ms-1">ر.س</span>
+                </div>
+              )}
+              <div className="text-[11px] text-muted-foreground">يُحصَّل عند وصول العميل</div>
+            </div>
+
+            {/* Future bookings count */}
+            <div className="bg-card border border-purple-200 rounded-2xl p-4 space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+                <CalendarDays className="w-3.5 h-3.5 text-purple-500" />
+                حجوزات قادمة
+              </div>
+              {futureLoading ? <Skeleton className="h-7 w-16" /> : (
+                <div className="text-2xl font-bold text-purple-600 tabular-nums">
+                  {futureSummary?.futureCount ?? 0}
+                  <span className="text-sm font-normal text-muted-foreground ms-1">حجز</span>
+                </div>
+              )}
+              <div className="text-[11px] text-muted-foreground">إجمالي الحجوزات المؤكدة القادمة</div>
+            </div>
+          </div>
+
+          {/* Future bookings unified table */}
+          <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-emerald-600" />
+              <h3 className="font-bold text-sm text-foreground">الحجوزات المؤكدة القادمة</h3>
+              {!futureLoading && futureSummary && (
+                <span className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 px-2 py-0.5 rounded-full ms-auto font-semibold">
+                  {futureSummary.futureCount} حجز
+                </span>
+              )}
+            </div>
+            {futureLoading ? (
+              <div className="space-y-2">{[1,2,3,4].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+            ) : !futureSummary?.futureBookings?.length ? (
+              <div className="text-center text-muted-foreground text-sm py-10">لا توجد حجوزات قادمة</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[620px]">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-muted-foreground">العميل</th>
+                      {unit.type === "all" && <th className="text-right py-2.5 px-3 text-xs font-semibold text-muted-foreground">الشاليه</th>}
+                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-muted-foreground">تاريخ الدخول</th>
+                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-muted-foreground">تاريخ الخروج</th>
+                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-muted-foreground">محصّل (عربون)</th>
+                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-muted-foreground">متبقي</th>
+                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-muted-foreground">الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {futureSummary.futureBookings.map((fb) => {
+                      const { hijri: checkInHijri, gregorian: checkInGreg } = formatDualDate(fb.bookingDate);
+                      const { hijri: checkOutHijri, gregorian: checkOutGreg } = formatDualDate(fb.checkoutDate);
+                      const isFullyPaid = fb.balanceCollected || fb.remainingBalance === 0;
+                      return (
+                        <tr key={fb.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                          <td className="py-2.5 px-3">
+                            <div className="font-medium text-foreground">{fb.clientName}</div>
+                            {fb.period && <div className="text-[10px] text-muted-foreground">{fb.period === "morning" ? "صباحي" : fb.period === "evening" ? "مسائي" : "يومي"}</div>}
+                          </td>
+                          {unit.type === "all" && <td className="py-2.5 px-3 text-xs text-muted-foreground">{fb.chaletName || "—"}</td>}
+                          <td className="py-2.5 px-3 text-xs">
+                            <div className="font-medium">{checkInHijri}</div>
+                            <div className="text-muted-foreground">{checkInGreg}</div>
+                          </td>
+                          <td className="py-2.5 px-3 text-xs">
+                            <div className="font-medium">{checkOutHijri}</div>
+                            <div className="text-muted-foreground">{checkOutGreg}</div>
+                          </td>
+                          <td className="py-2.5 px-3 text-left">
+                            <span className="font-bold text-blue-600 tabular-nums">{fmtN(fb.depositPaid)}</span>
+                            <span className="text-[10px] text-muted-foreground ms-1">ر.س</span>
+                          </td>
+                          <td className="py-2.5 px-3 text-left">
+                            {fb.remainingBalance > 0 ? (
+                              <>
+                                <span className="font-bold text-amber-600 tabular-nums">{fmtN(fb.remainingBalance)}</span>
+                                <span className="text-[10px] text-muted-foreground ms-1">ر.س</span>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-green-600 font-semibold">مكتمل</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            {isFullyPaid ? (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">✅ محصّل بالكامل</span>
+                            ) : (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">⏳ متبقي عند الدخول</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-muted/30 border-t-2 border-border">
+                      <td colSpan={unit.type === "all" ? 4 : 3} className="py-2.5 px-3 text-xs font-bold text-muted-foreground">المجموع</td>
+                      <td className="py-2.5 px-3 text-left">
+                        <span className="font-extrabold text-blue-600 tabular-nums">{fmtN(futureSummary.futureCashInHand)}</span>
+                        <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
+                      </td>
+                      <td className="py-2.5 px-3 text-left">
+                        <span className="font-extrabold text-amber-600 tabular-nums">{fmtN(futureSummary.futureRemainingBalance)}</span>
+                        <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════ MONTHLY VIEW (hidden when all-future active) ══════════════ */}
+      {!showAllFuture && <>
 
       {/* ── MASTER VIEW: Unified Net Profit Card ── */}
       {unit.type === "all" && (
@@ -7648,6 +7846,8 @@ function RevenueTab() {
           </div>
         </div>
       )}
+
+      </>}
 
       <ProofViewerDialog booking={proofTarget} open={!!proofTarget} onClose={() => setProofTarget(null)} />
     </div>

@@ -2603,6 +2603,104 @@ router.get("/financial-summary", async (req, res) => {
   });
 });
 
+/* ── Future Cash Flow Summary ──────────────────────────────── */
+
+router.get("/future-cash-summary", async (req, res) => {
+  const ownerId = req.user!.id;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().slice(0, 10);
+
+  // Fetch all active (non-cancelled) bookings
+  const allActive = await db
+    .select({
+      id: ownerBookingsTable.id,
+      clientName: ownerBookingsTable.clientName,
+      clientPhone: ownerBookingsTable.clientPhone,
+      bookingDate: ownerBookingsTable.bookingDate,
+      durationDays: ownerBookingsTable.durationDays,
+      period: ownerBookingsTable.period,
+      depositPaid: ownerBookingsTable.depositPaid,
+      totalPrice: ownerBookingsTable.totalPrice,
+      balanceCollected: ownerBookingsTable.balanceCollected,
+      insuranceFee: ownerBookingsTable.insuranceFee,
+      submissionId: ownerBookingsTable.submissionId,
+    })
+    .from(ownerBookingsTable)
+    .where(and(eq(ownerBookingsTable.ownerId, ownerId), isNull(ownerBookingsTable.cancelledAt)));
+
+  // Enrich with chalet name via left join on submissions
+  const submissionIds = [...new Set(allActive.map(b => b.submissionId).filter(Boolean))] as number[];
+  const submissionNames: Record<number, string> = {};
+  if (submissionIds.length > 0) {
+    const subs = await db
+      .select({ id: chaletSubmissionsTable.id, nameAr: chaletSubmissionsTable.nameAr })
+      .from(chaletSubmissionsTable)
+      .where(inArray(chaletSubmissionsTable.id, submissionIds));
+    for (const s of subs) submissionNames[s.id] = s.nameAr;
+  }
+
+  // Compute checkout date and split into future vs past
+  let globalTotalCashCollected = 0;
+  let futureCashInHand = 0;
+  let futureRemainingBalance = 0;
+  const futureBookings: {
+    id: number; clientName: string; clientPhone: string | null;
+    bookingDate: string; checkoutDate: string; durationDays: number;
+    period: string | null; depositPaid: number; totalPrice: number | null;
+    balanceCollected: boolean; insuranceFee: number; remainingBalance: number;
+    chaletName: string; submissionId: number | null;
+  }[] = [];
+
+  for (const b of allActive) {
+    const dep = Math.round(Number(b.depositPaid ?? 0));
+    const total = b.totalPrice ? Math.round(Number(b.totalPrice)) : null;
+    const collectedBalance = (total !== null && b.balanceCollected) ? Math.max(0, total - dep) : 0;
+    const cashCollected = dep + collectedBalance;
+
+    globalTotalCashCollected += cashCollected;
+
+    // Compute checkout date string
+    const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+    const dur = Math.max(1, b.durationDays ?? 1);
+    const checkout = new Date(sy, sm - 1, sd + dur);
+    const checkoutStr = `${checkout.getFullYear()}-${String(checkout.getMonth() + 1).padStart(2, "0")}-${String(checkout.getDate()).padStart(2, "0")}`;
+
+    if (checkoutStr > todayStr) {
+      futureCashInHand += dep;
+      const rem = (total !== null && !b.balanceCollected) ? Math.max(0, total - dep) : 0;
+      futureRemainingBalance += rem;
+      futureBookings.push({
+        id: b.id,
+        clientName: b.clientName,
+        clientPhone: b.clientPhone ?? null,
+        bookingDate: b.bookingDate,
+        checkoutDate: checkoutStr,
+        durationDays: dur,
+        period: b.period ?? null,
+        depositPaid: dep,
+        totalPrice: total,
+        balanceCollected: b.balanceCollected,
+        insuranceFee: Math.round(Number(b.insuranceFee ?? 0)),
+        remainingBalance: (total !== null && !b.balanceCollected) ? Math.max(0, total - dep) : 0,
+        chaletName: b.submissionId ? (submissionNames[b.submissionId] ?? "") : "",
+        submissionId: b.submissionId ?? null,
+      });
+    }
+  }
+
+  // Sort by bookingDate ascending
+  futureBookings.sort((a, b) => a.bookingDate.localeCompare(b.bookingDate));
+
+  return res.json({
+    globalTotalCashCollected: Math.round(globalTotalCashCollected),
+    futureCashInHand:         Math.round(futureCashInHand),
+    futureRemainingBalance:   Math.round(futureRemainingBalance),
+    futureCount:              futureBookings.length,
+    futureBookings,
+  });
+});
+
 /* ── Service Revenue Summary (all providers combined) ────────── */
 
 router.get("/service-revenue-summary", async (req, res) => {
