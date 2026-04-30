@@ -6954,15 +6954,18 @@ function RevenueTab() {
 
   const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
 
+  const financialSubmissionId = unit.type === "chalet" ? (unit as any).submissionId : undefined;
   const { data: financial, isLoading: finLoading } = useQuery<{
     totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
     totalInsuranceHeld: number; totalInsuranceDeducted: number;
-    pendingRevenue?: number; realizedRevenue?: number;
+    pendingRevenue?: number; realizedRevenue?: number; totalFutureValue?: number;
     totalCancellationIncome?: number; totalRefundedToClients?: number;
   }>({
-    queryKey: ["owner", "financial-summary-rev", selectedMonth],
+    queryKey: ["owner", "financial-summary-rev", selectedMonth, financialSubmissionId ?? "all"],
     queryFn: async () => {
-      const r = await apiFetch(`/owner/financial-summary?month=${selectedMonth}`);
+      const params = new URLSearchParams({ month: selectedMonth });
+      if (financialSubmissionId) params.set("submissionId", String(financialSubmissionId));
+      const r = await apiFetch(`/owner/financial-summary?${params}`);
       if (!r.ok) throw new Error("failed");
       return r.json();
     },
@@ -7077,9 +7080,29 @@ function RevenueTab() {
 
   const today = getLocalDateStr();
 
+  // For chalet-specific view: show ALL bookings for that chalet (past + future),
+  // so deposited amounts from future months are always visible in the log.
+  const revenueLogBookings = useMemo(() => {
+    if (unit.type === "chalet") {
+      return allBookings.filter(b => (b as any).chaletId === (unit as any).id || b.submissionId === (unit as any).submissionId);
+    }
+    return monthBookings;
+  }, [unit, allBookings, monthBookings]);
+
+  // For chalet view: all cancelled bookings with income (not just selected month)
+  const revenueLogCancelled = useMemo(() => {
+    if (unit.type === "chalet") {
+      return cancelledBookings.filter(b =>
+        ((b as any).chaletId === (unit as any).id || b.submissionId === (unit as any).submissionId) &&
+        b.cancelIncome && Number(b.cancelIncome) > 0
+      );
+    }
+    return allCancelledBookings;
+  }, [unit, cancelledBookings, allCancelledBookings]);
+
   const rows = useMemo<RevenueRow[]>(() => {
     const result: RevenueRow[] = [];
-    for (const b of monthBookings) {
+    for (const b of revenueLogBookings) {
       if (b.cancelledAt) continue; // cancelled bookings shown as cancellation rows, not regular rows
       const dep = Math.round(Number(b.depositPaid ?? 0));
       const total = b.totalPrice ? Math.round(Number(b.totalPrice)) : null;
@@ -7114,7 +7137,7 @@ function RevenueTab() {
       }
     }
     // Cancellation income rows
-    for (const b of allCancelledBookings) {
+    for (const b of revenueLogCancelled) {
       result.push({
         bookingId: b.id, clientName: b.clientName,
         bookingDate: b.cancelledAt?.slice(0, 10) ?? b.bookingDate,
@@ -7126,7 +7149,7 @@ function RevenueTab() {
       });
     }
     return result;
-  }, [monthBookings, allCancelledBookings, today]);
+  }, [revenueLogBookings, revenueLogCancelled, today]);
 
   const filteredRows = filter === "all" ? rows : rows.filter(r => r.type === filter);
 
@@ -7590,28 +7613,32 @@ function RevenueTab() {
       {/* ── Chalet KPI Cards ── */}
       {unit.type === "all" && <div className="flex items-center gap-2 px-1"><Home className="w-4 h-4 text-primary shrink-0" /><span className="text-sm font-bold text-foreground">تفاصيل إيرادات الشاليهات</span></div>}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {/* Realized Revenue */}
+        {/* Total Collected (deposits + collected balances, regardless of checkout date) */}
         <div className="bg-card border border-green-200 rounded-2xl p-4 space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
             <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-            إيرادات محقّقة
+            إجمالي المحصّل
           </div>
           {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-2xl font-bold text-green-600">{fmtN(financial?.realizedRevenue ?? financial?.totalRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+            <div className="text-2xl font-bold text-green-600">{fmtN(financial?.totalRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
           )}
-          <div className="text-[11px] text-muted-foreground">حجوزات انتهت فعلياً</div>
+          <div className="text-[11px] text-muted-foreground">
+            {financial?.realizedRevenue != null && financial.realizedRevenue > 0
+              ? `${fmtN(financial.realizedRevenue)} منجزة · ${fmtN((financial.totalRevenue ?? 0) - financial.realizedRevenue)} مسبقة`
+              : "عربون + متبقي محصّل"}
+          </div>
         </div>
 
-        {/* Pending Revenue */}
+        {/* Expected Revenue: full contracted value of upcoming bookings */}
         <div className="bg-card border border-blue-200 rounded-2xl p-4 space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
             <Clock className="w-3.5 h-3.5 text-blue-500" />
             إيرادات متوقّعة
           </div>
           {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-2xl font-bold text-blue-600">{fmtN(financial?.pendingRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+            <div className="text-2xl font-bold text-blue-600">{fmtN(financial?.totalFutureValue ?? financial?.pendingRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
           )}
-          <div className="text-[11px] text-muted-foreground">حجوزات لم تنته بعد</div>
+          <div className="text-[11px] text-muted-foreground">إجمالي قيمة الحجوزات القادمة</div>
         </div>
 
         {/* Cancellation Income */}
@@ -7724,6 +7751,9 @@ function RevenueTab() {
         <div className="flex items-center gap-2 flex-wrap">
           <Receipt className="w-4 h-4 text-primary" />
           <h3 className="font-bold text-sm text-foreground">سجل الإيرادات</h3>
+          {unit.type === "chalet" && (
+            <span className="text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">كل الحجوزات</span>
+          )}
           <div className="ms-auto flex gap-1 flex-wrap">
             {([["all", "الكل"], ["deposit", "عربون"], ["balance", "متبقي"], ["damage", "تلفيات"], ["cancellation", "إلغاءات"]] as const).map(([v, l]) => (
               <button

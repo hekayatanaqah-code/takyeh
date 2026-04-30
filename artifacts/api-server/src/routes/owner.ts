@@ -2557,6 +2557,7 @@ router.get("/financial-summary", async (req, res) => {
   const activeBookings = monthBookings.filter(b => !b.cancelledAt);
   let pendingRevenue = 0;
   let realizedRevenue = 0;
+  let totalFutureValue = 0; // full contracted value of future bookings (not just deposit)
   for (const b of activeBookings) {
     const rev = calcBookingRevenue(b);
     // checkout = bookingDate + durationDays days (day after last night)
@@ -2566,6 +2567,8 @@ router.get("/financial-summary", async (req, res) => {
     checkout.setHours(0, 0, 0, 0);
     if (checkout > today) {
       pendingRevenue += rev;
+      // full contracted booking value (for "Expected Revenue" card)
+      totalFutureValue += b.totalPrice ? Number(b.totalPrice) : (b.revenueAmount ? Number(b.revenueAmount) : rev);
     } else {
       realizedRevenue += rev;
     }
@@ -2598,6 +2601,7 @@ router.get("/financial-summary", async (req, res) => {
     // ── New fields ──
     pendingRevenue:          Math.round(pendingRevenue),
     realizedRevenue:         Math.round(realizedRevenue),
+    totalFutureValue:        Math.round(totalFutureValue),
     totalCancellationIncome,
     totalRefundedToClients,
   });
