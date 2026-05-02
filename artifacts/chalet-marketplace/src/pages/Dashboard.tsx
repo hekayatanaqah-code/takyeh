@@ -453,7 +453,10 @@ function ResubmitDialog({
   const [bedrooms, setBedrooms]                   = useState("");
   const [mapsUrl, setMapsUrl]                     = useState("");
   const [socialLink, setSocialLink]               = useState("");
-  const [termsAndConditions, setTermsAndConditions] = useState("");
+  const [termsAndConditions, setTermsAndConditions]         = useState("");
+  const [cancellationWindowEnabled, setCancellationWindowEnabled] = useState(false);
+  const [cancellationWindowHours, setCancellationWindowHours]     = useState("24");
+  const [bookingPolicyText, setBookingPolicyText]                 = useState("");
   const [photos, setPhotos]                       = useState<string[]>([]);
   const [amenities, setAmenities]                 = useState<string[]>([]);
   const [ownerRevisionNote, setOwnerRevisionNote] = useState("");
@@ -487,6 +490,9 @@ function ResubmitDialog({
       setMapsUrl      (sub.mapsUrl    ?? "");
       setSocialLink   (sub.socialLink ?? "");
       setTermsAndConditions(sub.termsAndConditions ?? "");
+      setCancellationWindowEnabled(!!(sub as any).cancellationWindowEnabled);
+      setCancellationWindowHours(String((sub as any).cancellationWindowHours ?? 24));
+      setBookingPolicyText((sub as any).bookingPolicyText ?? "");
       setPhotos  (Array.isArray(sub.photos)    ? [...sub.photos]    : []);
       setAmenities(Array.isArray(sub.amenities) ? [...sub.amenities] : []);
       setOwnerRevisionNote(sub.ownerRevisionNote ?? "");
@@ -527,6 +533,9 @@ function ResubmitDialog({
         socialLink:         socialLink.trim()         || null,
         termsAndConditions: termsAndConditions.trim() || null,
         ownerRevisionNote:  ownerRevisionNote.trim()  || null,
+        cancellationWindowEnabled,
+        cancellationWindowHours: cancellationWindowHours ? Number(cancellationWindowHours) : 24,
+        bookingPolicyText: bookingPolicyText.trim() || null,
       };
       if (pricePerNight) body.pricePerNight = Number(pricePerNight);
       if (priceMorning)  body.priceMorning  = Number(priceMorning);
@@ -718,6 +727,47 @@ function ResubmitDialog({
               rows={3}
               className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
+          </div>
+
+          {/* ── Section: Cancellation Policy ── */}
+          <div className="space-y-3">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide border-b pb-1.5">سياسة الإلغاء (اختياري)</p>
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 px-3.5 py-3">
+              <div>
+                <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">تفعيل نافذة الإلغاء المجاني</p>
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">يُتيح للعميل إلغاء حجزه واسترداد العربون كاملاً خلال المهلة المحددة</p>
+              </div>
+              <Switch
+                checked={cancellationWindowEnabled}
+                onCheckedChange={setCancellationWindowEnabled}
+              />
+            </div>
+            {cancellationWindowEnabled && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">مدة نافذة الإلغاء (بالساعات)</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={168}
+                  value={cancellationWindowHours}
+                  onChange={(e) => setCancellationWindowHours(e.target.value)}
+                  placeholder="24"
+                  dir="ltr"
+                  className="text-right h-9 w-32"
+                />
+                <p className="text-[11px] text-muted-foreground">مثال: ٢٤ ساعة = يوم كامل من وقت الحجز</p>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">نص سياسة الحجز الظاهر للعملاء (اختياري)</label>
+              <textarea
+                value={bookingPolicyText}
+                onChange={(e) => setBookingPolicyText(e.target.value)}
+                placeholder="مثال: الإلغاء مجاني خلال ٢٤ ساعة من الحجز. بعدها يُحتجز العربون."
+                rows={2}
+                className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
           </div>
 
           {/* ── Section: Owner Revision Note ── */}
@@ -6960,15 +7010,31 @@ function RevenueTab() {
   const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
 
   const financialSubmissionId = unit.type === "chalet" ? (unit as any).submissionId : undefined;
-  const { data: financial, isLoading: finLoading } = useQuery<{
+
+  /* Map selected Hijri month key → nearest Gregorian YYYY-MM for API queries */
+  const hijriToGregorianMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (let i = 14; i >= -6; i--) {
+      const d = new Date(); d.setDate(15); d.setMonth(d.getMonth() - i);
+      const key = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(d);
+      if (!map[key]) map[key] = d.toISOString().slice(0, 7);
+    }
+    return map;
+  }, []);
+  const effectiveMonth = calType === "hijri" && selectedHijriMonth
+    ? (hijriToGregorianMap[selectedHijriMonth] ?? selectedMonth) : selectedMonth;
+
+  const { data: financial, isLoading: finLoading, refetch: refetchFinancial } = useQuery<{
     totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
     totalInsuranceHeld: number; totalInsuranceDeducted: number;
     pendingRevenue?: number; realizedRevenue?: number; totalFutureValue?: number;
     totalCancellationIncome?: number; totalRefundedToClients?: number;
+    totalCashCollected?: number; confirmedRevenue?: number; floatingCash?: number;
+    insuranceVault?: number; allTimeRefundsIssued?: number; allTimeCancelIncome?: number;
   }>({
-    queryKey: ["owner", "financial-summary-rev", selectedMonth, financialSubmissionId ?? "all"],
+    queryKey: ["owner", "financial-summary-rev", effectiveMonth, financialSubmissionId ?? "all"],
     queryFn: async () => {
-      const params = new URLSearchParams({ month: selectedMonth });
+      const params = new URLSearchParams({ month: effectiveMonth });
       if (financialSubmissionId) params.set("submissionId", String(financialSubmissionId));
       const r = await apiFetch(`/owner/financial-summary?${params}`);
       if (!r.ok) throw new Error("failed");
@@ -6976,7 +7042,7 @@ function RevenueTab() {
     },
   });
 
-  const { data: allBookings = [], isLoading: bkLoading } = useQuery<OwnerBooking[]>({
+  const { data: allBookings = [], isLoading: bkLoading, refetch: refetchBookings } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings-revenue"],
     queryFn: async () => {
       const r = await apiFetch("/owner/bookings");
@@ -6989,6 +7055,17 @@ function RevenueTab() {
     queryKey: ["owner", "bookings", "cancelled"],
     queryFn: async () => {
       const r = await apiFetch("/owner/bookings/cancelled");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const { data: ownerRefunds = [], refetch: refetchRefunds } = useQuery<Array<{
+    id: number; bookingId: number; amount: string; type: string; reason: string | null; createdAt: string;
+  }>>({
+    queryKey: ["owner", "refunds"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/refunds");
       if (!r.ok) return [];
       return r.json();
     },
@@ -7062,12 +7139,13 @@ function RevenueTab() {
     bookingId: number;
     clientName: string;
     bookingDate: string;
-    type: "deposit" | "balance" | "damage" | "cancellation";
+    type: "deposit" | "balance" | "damage" | "cancellation" | "refund";
     amount: number;
     reason?: string;
     proofImages?: string | null;
     booking: OwnerBooking;
     isPending?: boolean;
+    refundId?: number;
   }
 
   /* Cancelled bookings with income, filtered to the selected period */
@@ -7153,17 +7231,35 @@ function RevenueTab() {
         isPending: false,
       });
     }
+    // Refund rows issued by the owner
+    for (const rf of ownerRefunds) {
+      const booking = revenueLogBookings.find(b => b.id === rf.bookingId)
+        ?? cancelledBookings.find(b => b.id === rf.bookingId);
+      if (!booking) continue;
+      result.push({
+        bookingId: rf.bookingId,
+        clientName: booking.clientName,
+        bookingDate: rf.createdAt.slice(0, 10),
+        type: "refund" as const,
+        amount: -Math.round(Number(rf.amount)),
+        reason: rf.reason ?? undefined,
+        booking,
+        isPending: false,
+        refundId: rf.id,
+      });
+    }
     return result;
-  }, [revenueLogBookings, revenueLogCancelled, today]);
+  }, [revenueLogBookings, revenueLogCancelled, ownerRefunds, cancelledBookings, today]);
 
   const filteredRows = filter === "all" ? rows : rows.filter(r => r.type === filter);
 
-  const TYPE_META = {
+  const TYPE_META: Record<string, { label: string; emoji: string; cls: string }> = {
     deposit:      { label: "عربون",        emoji: "💵", cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
     balance:      { label: "متبقي محصّل",  emoji: "✅", cls: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
     damage:       { label: "خصم تلفيات",  emoji: "✂️", cls: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
     cancellation: { label: "إيراد إلغاء", emoji: "❌", cls: "bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
-  } as const;
+    refund:       { label: "استرداد",      emoji: "↩️", cls: "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300" },
+  };
 
   const loading = finLoading || bkLoading;
 
@@ -7366,6 +7462,16 @@ function RevenueTab() {
               </SelectContent>
             </Select>
           ))}
+          {/* Manual refresh */}
+          {!showAllFuture && (
+            <button
+              onClick={() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }}
+              title="تحديث البيانات"
+              className="h-9 w-9 flex items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -7615,35 +7721,75 @@ function RevenueTab() {
         </div>
       )}
 
-      {/* ── Chalet KPI Cards ── */}
+      {/* ── Chalet KPI Cards — Triple-Layer Cash Flow ── */}
       {unit.type === "all" && <div className="flex items-center gap-2 px-1"><Home className="w-4 h-4 text-primary shrink-0" /><span className="text-sm font-bold text-foreground">تفاصيل إيرادات الشاليهات</span></div>}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {/* Total Collected (deposits + collected balances, regardless of checkout date) */}
-        <div className="bg-card border border-green-200 rounded-2xl p-4 space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-            <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-            إجمالي المحصّل
+
+      {/* Layer 1-3: Triple cash flow */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Layer 1 — Total Cash Collected */}
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20 border-2 border-green-300 dark:border-green-700 rounded-2xl p-4 space-y-1.5">
+          <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-xs font-bold uppercase tracking-wide">
+            <DollarSign className="w-3.5 h-3.5" />
+            إجمالي السيولة المحصّلة
           </div>
-          {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-2xl font-bold text-green-600">{fmtN(financial?.totalRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+          {loading ? <Skeleton className="h-8 w-28" /> : (
+            <div className="text-3xl font-extrabold text-green-700 dark:text-green-400 tabular-nums">
+              {fmtN(financial?.totalCashCollected ?? financial?.totalRevenue ?? 0)}
+              <span className="text-base font-normal text-muted-foreground ms-1.5">ر.س</span>
+            </div>
           )}
-          <div className="text-[11px] text-muted-foreground">
-            {financial?.realizedRevenue != null && financial.realizedRevenue > 0
-              ? `${fmtN(financial.realizedRevenue)} منجزة · ${fmtN((financial.totalRevenue ?? 0) - financial.realizedRevenue)} مسبقة`
-              : "عربون + متبقي محصّل"}
-          </div>
+          <div className="text-[11px] text-green-600 dark:text-green-500 font-medium">كل ما دخل البنك فعلياً — عربون + متبقي + تأمين</div>
+          {financial?.allTimeRefundsIssued != null && financial.allTimeRefundsIssued > 0 && (
+            <div className="flex items-center gap-1 text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+              <RotateCcw className="w-3 h-3" />
+              مسترد: {fmtN(financial.allTimeRefundsIssued)} ر.س
+            </div>
+          )}
         </div>
 
-        {/* Expected Revenue: full contracted value of upcoming bookings */}
-        <div className="bg-card border border-blue-200 rounded-2xl p-4 space-y-1">
+        {/* Layer 2 — Confirmed Revenue */}
+        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 border-2 border-emerald-300 dark:border-emerald-700 rounded-2xl p-4 space-y-1.5">
+          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 text-xs font-bold uppercase tracking-wide">
+            <CheckCircle className="w-3.5 h-3.5" />
+            إيرادات مؤكدة
+          </div>
+          {loading ? <Skeleton className="h-8 w-28" /> : (
+            <div className="text-3xl font-extrabold text-emerald-700 dark:text-emerald-400 tabular-nums">
+              {fmtN(financial?.confirmedRevenue ?? financial?.realizedRevenue ?? 0)}
+              <span className="text-base font-normal text-muted-foreground ms-1.5">ر.س</span>
+            </div>
+          )}
+          <div className="text-[11px] text-emerald-600 dark:text-emerald-500 font-medium">إقامات مكتملة + حجوزات خارج نافذة الإلغاء</div>
+        </div>
+
+        {/* Layer 3 — Floating Cash */}
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 border-2 border-amber-300 dark:border-amber-700 rounded-2xl p-4 space-y-1.5">
+          <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs font-bold uppercase tracking-wide">
+            <Clock className="w-3.5 h-3.5" />
+            سيولة معلّقة
+          </div>
+          {loading ? <Skeleton className="h-8 w-28" /> : (
+            <div className="text-3xl font-extrabold text-amber-700 dark:text-amber-400 tabular-nums">
+              {fmtN(financial?.floatingCash ?? 0)}
+              <span className="text-base font-normal text-muted-foreground ms-1.5">ر.س</span>
+            </div>
+          )}
+          <div className="text-[11px] text-amber-600 dark:text-amber-500 font-medium">عربون حجوزات قادمة ضمن نافذة الإلغاء</div>
+        </div>
+      </div>
+
+      {/* Secondary metrics row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Insurance Vault — isolated */}
+        <div className="bg-card border border-slate-200 rounded-2xl p-4 space-y-1">
           <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-            <Clock className="w-3.5 h-3.5 text-blue-500" />
-            إيرادات متوقّعة
+            <Lock className="w-3.5 h-3.5 text-slate-500" />
+            خزنة التأمين
           </div>
           {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-2xl font-bold text-blue-600">{fmtN(financial?.totalFutureValue ?? financial?.pendingRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+            <div className="text-xl font-bold text-slate-600">{fmtN(financial?.insuranceVault ?? financial?.totalInsuranceHeld ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
           )}
-          <div className="text-[11px] text-muted-foreground">إجمالي قيمة الحجوزات القادمة</div>
+          <div className="text-[10px] text-muted-foreground">معزولة — لا تدخل في الأرباح</div>
         </div>
 
         {/* Cancellation Income */}
@@ -7653,21 +7799,9 @@ function RevenueTab() {
             إيراد الإلغاءات
           </div>
           {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-2xl font-bold text-orange-600">{fmtN(financial?.totalCancellationIncome ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+            <div className="text-xl font-bold text-orange-600">{fmtN(financial?.totalCancellationIncome ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
           )}
-          <div className="text-[11px] text-muted-foreground">عربون محتجز من الإلغاءات</div>
-        </div>
-
-        {/* Insurance Held */}
-        <div className="bg-card border border-slate-200 rounded-2xl p-4 space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-            <Lock className="w-3.5 h-3.5 text-slate-500" />
-            تأمينات محتجزة
-          </div>
-          {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-2xl font-bold text-slate-600">{fmtN(financial?.totalInsuranceHeld ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
-          )}
-          <div className="text-[11px] text-muted-foreground">غير محتسبة في الأرباح</div>
+          <div className="text-[10px] text-muted-foreground">هذا الشهر</div>
         </div>
 
         {/* Pending Collections */}
@@ -7677,9 +7811,21 @@ function RevenueTab() {
             متبقٍ لم يُحصَّل
           </div>
           {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-2xl font-bold text-amber-600">{fmtN(financial?.totalPendingBalance ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+            <div className="text-xl font-bold text-amber-600">{fmtN(financial?.totalPendingBalance ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
           )}
-          <div className="text-[11px] text-muted-foreground">مبالغ مستحقة من العملاء</div>
+          <div className="text-[10px] text-muted-foreground">مبالغ مستحقة عند الدخول</div>
+        </div>
+
+        {/* Expected Revenue */}
+        <div className="bg-card border border-blue-200 rounded-2xl p-4 space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+            <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
+            إيرادات متوقّعة
+          </div>
+          {loading ? <Skeleton className="h-7 w-24" /> : (
+            <div className="text-xl font-bold text-blue-600">{fmtN(financial?.totalFutureValue ?? financial?.pendingRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+          )}
+          <div className="text-[10px] text-muted-foreground">قيمة الحجوزات القادمة</div>
         </div>
       </div>
 
@@ -7760,10 +7906,10 @@ function RevenueTab() {
             <span className="text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">كل الحجوزات</span>
           )}
           <div className="ms-auto flex gap-1 flex-wrap">
-            {([["all", "الكل"], ["deposit", "عربون"], ["balance", "متبقي"], ["damage", "تلفيات"], ["cancellation", "إلغاءات"]] as const).map(([v, l]) => (
+            {([["all", "الكل"], ["deposit", "عربون"], ["balance", "متبقي"], ["damage", "تلفيات"], ["cancellation", "إلغاءات"], ["refund", "استرداد"]] as const).map(([v, l]) => (
               <button
                 key={v}
-                onClick={() => setFilter(v)}
+                onClick={() => setFilter(v as any)}
                 className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${filter === v ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
               >
                 {l}
@@ -7796,7 +7942,7 @@ function RevenueTab() {
                   const chaletId = revOwnerChalets.find((c) => c.submissionId === row.booking.submissionId)?.id ?? null;
                   const revSent = reviewSentRevIds.has(row.bookingId);
                   const revPending = reviewPendingRevId === row.bookingId;
-                  const amtColor = row.type === "damage" ? "text-red-600" : row.type === "balance" ? "text-green-600" : row.type === "cancellation" ? "text-orange-600" : "text-blue-600";
+                  const amtColor = row.type === "damage" ? "text-red-600" : row.type === "refund" ? "text-rose-600" : row.type === "balance" ? "text-green-600" : row.type === "cancellation" ? "text-orange-600" : "text-blue-600";
                   return (
                     <tr key={`${row.bookingId}-${row.type}-${i}`} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${row.isPending ? "opacity-70" : ""}`}>
                       <td className="py-2.5 px-3 font-medium">
@@ -7827,7 +7973,23 @@ function RevenueTab() {
                         <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
                       </td>
                       <td className="py-2.5 px-3">
-                        {chaletId && (
+                        <div className="flex flex-col gap-1">
+                          {(row.type === "deposit" || row.type === "balance") && !row.isPending && (() => {
+                            const bk = row.booking;
+                            const dep = Number(bk.depositPaid ?? 0);
+                            const rem = bk.totalPrice ? Math.max(0, Number(bk.totalPrice) - dep) : 0;
+                            const maxAmt = dep + (bk.balanceCollected ? rem : 0);
+                            return maxAmt > 0 ? (
+                              <button
+                                onClick={() => { setRefundModal({ booking: bk, maxAmount: maxAmt }); setRefundAmount(""); setRefundReason(""); setRefundType("partial"); }}
+                                className="flex items-center gap-1 text-[11px] font-medium text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg px-2 py-1 hover:bg-rose-100 transition-colors whitespace-nowrap"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                استرداد
+                              </button>
+                            ) : null;
+                          })()}
+                          {chaletId && (
                           <button
                             disabled={revSent || revPending}
                             onClick={async () => {
@@ -7870,7 +8032,8 @@ function RevenueTab() {
                             {revPending ? <Loader2 className="w-3 h-3 animate-spin" /> : revSent ? <CheckCircle className="w-3 h-3" /> : <Star className="w-3 h-3" />}
                             {revSent ? "تم ✓" : "طلب تقييم"}
                           </button>
-                        )}
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -7942,6 +8105,100 @@ function RevenueTab() {
       </>}
 
       <ProofViewerDialog booking={proofTarget} open={!!proofTarget} onClose={() => setProofTarget(null)} />
+
+      {/* ── Owner Refund Modal ── */}
+      <Dialog open={!!refundModal} onOpenChange={(v) => { if (!v) setRefundModal(null); }}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="w-4 h-4 text-rose-500" />
+              تسجيل استرداد للعميل
+            </DialogTitle>
+            <DialogDescription>
+              {refundModal?.booking?.clientName} — الحد الأقصى للاسترداد: {fmtN(refundModal?.maxAmount ?? 0)} ر.س
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">نوع الاسترداد</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setRefundType("partial"); setRefundAmount(""); }}
+                  className={`flex-1 py-2 text-sm font-medium rounded-lg border transition-colors ${refundType === "partial" ? "bg-rose-600 text-white border-rose-600" : "border-border bg-background text-muted-foreground hover:bg-muted"}`}
+                >
+                  جزئي
+                </button>
+                <button
+                  onClick={() => { setRefundType("full"); setRefundAmount(String(refundModal?.maxAmount ?? "")); }}
+                  className={`flex-1 py-2 text-sm font-medium rounded-lg border transition-colors ${refundType === "full" ? "bg-rose-600 text-white border-rose-600" : "border-border bg-background text-muted-foreground hover:bg-muted"}`}
+                >
+                  كامل ({fmtN(refundModal?.maxAmount ?? 0)} ر.س)
+                </button>
+              </div>
+            </div>
+            {refundType === "partial" && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">المبلغ المسترد (ر.س)</label>
+                <Input
+                  type="number"
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  placeholder="0"
+                  max={refundModal?.maxAmount ?? 0}
+                  className="text-right"
+                />
+                {refundAmount && Number(refundAmount) > (refundModal?.maxAmount ?? 0) && (
+                  <p className="text-[11px] text-destructive">يتجاوز الحد الأقصى المسموح</p>
+                )}
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">سبب الاسترداد (اختياري)</label>
+              <Textarea
+                value={refundReason}
+                onChange={(e) => setRefundReason(e.target.value)}
+                placeholder="مثال: إلغاء بسبب ظروف طارئة..."
+                rows={2}
+                className="text-right resize-none"
+              />
+            </div>
+            {refundAmount && Number(refundAmount) > 0 && (
+              <div className="rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 px-3 py-2 text-sm">
+                سيُسجَّل استرداد بمبلغ <span className="font-bold text-rose-700">{fmtN(Number(refundAmount))} ر.س</span> لـ {refundModal?.booking?.clientName}
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRefundModal(null)}>إلغاء</Button>
+            <Button
+              disabled={refundPending || !refundAmount || Number(refundAmount) <= 0 || Number(refundAmount) > (refundModal?.maxAmount ?? 0)}
+              onClick={async () => {
+                if (!refundModal) return;
+                setRefundPending(true);
+                try {
+                  const r = await apiFetch(`/owner/bookings/${refundModal.booking.id}/refund`, {
+                    method: "POST",
+                    body: JSON.stringify({ amount: Number(refundAmount), reason: refundReason || null, type: refundType }),
+                  });
+                  if (!r.ok) {
+                    const err = await r.json().catch(() => null);
+                    toast({ title: "فشل تسجيل الاسترداد", description: err?.error ?? "حاول مجدداً", variant: "destructive" });
+                    return;
+                  }
+                  toast({ title: "✅ تم تسجيل الاسترداد", description: `${fmtN(Number(refundAmount))} ر.س — ${refundModal.booking.clientName}` });
+                  setRefundModal(null);
+                  refetchRefunds();
+                  refetchFinancial();
+                } finally { setRefundPending(false); }
+              }}
+              className="bg-rose-600 hover:bg-rose-700 text-white gap-1.5"
+            >
+              {refundPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+              تأكيد الاسترداد
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
