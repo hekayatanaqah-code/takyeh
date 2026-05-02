@@ -6961,16 +6961,18 @@ function RevenueTab() {
   const hijriMonthOptions = useMemo(() => {
     const seen = new Set<string>();
     const opts: { key: string; label: string; isFuture?: boolean }[] = [];
-    const nowKey = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(new Date());
-    // Generate dates from -14 months to +6, capture their hijri month
-    for (let i = 14; i >= -6; i--) {
-      const d = new Date();
-      d.setDate(15);
-      d.setMonth(d.getMonth() - i);
-      const key = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(d);
+    const fmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
+    const now = new Date();
+    const nowKey = fmt.format(now);
+    const MS = 86_400_000;
+    // Step every 29 days (< shortest Hijri month of 29 days) to guarantee
+    // every Hijri month is sampled. Cover ~15 months back and ~7 months forward.
+    for (let day = -450; day <= 210; day += 29) {
+      const d = new Date(now.getTime() + day * MS);
+      const key = fmt.format(d);
       if (!seen.has(key)) {
         seen.add(key);
-        const isFuture = i < 0 && key !== nowKey;
+        const isFuture = day > 0 && key !== nowKey;
         opts.push({ key, label: isFuture ? `🔮 ${key}` : key, isFuture });
       }
     }
@@ -7014,9 +7016,13 @@ function RevenueTab() {
   /* Map selected Hijri month key → nearest Gregorian YYYY-MM for API queries */
   const hijriToGregorianMap = useMemo(() => {
     const map: Record<string, string> = {};
-    for (let i = 14; i >= -6; i--) {
-      const d = new Date(); d.setDate(15); d.setMonth(d.getMonth() - i);
-      const key = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(d);
+    const fmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
+    const now = new Date();
+    const MS = 86_400_000;
+    // Same 29-day stepping as hijriMonthOptions — must stay in sync
+    for (let day = -450; day <= 210; day += 29) {
+      const d = new Date(now.getTime() + day * MS);
+      const key = fmt.format(d);
       if (!map[key]) map[key] = d.toISOString().slice(0, 7);
     }
     return map;
