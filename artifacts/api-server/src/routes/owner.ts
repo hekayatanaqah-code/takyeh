@@ -23,6 +23,7 @@ import {
   serviceAppointmentsTable,
   serviceProvidersTable,
   ownerTempSessionsTable,
+  ownerRefundsTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
@@ -2586,6 +2587,94 @@ router.get("/financial-summary", async (req, res) => {
   const totalCancellationIncome = Math.round(cancelledThisMonth.reduce((s, b) => s + Number(b.cancelIncome ?? 0), 0));
   const totalRefundedToClients  = Math.round(cancelledThisMonth.reduce((s, b) => s + Number(b.cancelRefundAmount ?? 0), 0));
 
+  // ── ALL-TIME three-layer liquidity model ──────────────────────
+  // Fetch ALL active bookings for this owner (optionally scoped to a submission)
+  const allActiveConds: Parameters<typeof and>[0][] = [
+    eq(ownerBookingsTable.ownerId, ownerId),
+    isNull(ownerBookingsTable.cancelledAt),
+  ];
+  if (submissionId) allActiveConds.push(eq(ownerBookingsTable.submissionId, submissionId));
+  const allActiveBookings = await db.select().from(ownerBookingsTable).where(and(...allActiveConds));
+
+  // Get cancellation-window policy per submissionId
+  const subIds = [...new Set(allActiveBookings.map(b => b.submissionId).filter((x): x is number => x !== null))];
+  const policyMap: Record<number, { enabled: boolean; hours: number }> = {};
+  if (subIds.length > 0) {
+    const policies = await db
+      .select({ id: chaletSubmissionsTable.id, enabled: chaletSubmissionsTable.cancellationWindowEnabled, hours: chaletSubmissionsTable.cancellationWindowHours })
+      .from(chaletSubmissionsTable)
+      .where(inArray(chaletSubmissionsTable.id, subIds));
+    for (const p of policies) policyMap[p.id] = { enabled: p.enabled ?? false, hours: p.hours ?? 24 };
+  }
+
+  // All cancelled bookings → cancel income
+  const allCancelledConds: Parameters<typeof and>[0][] = [
+    eq(ownerBookingsTable.ownerId, ownerId),
+    isNotNull(ownerBookingsTable.cancelledAt),
+  ];
+  if (submissionId) allCancelledConds.push(eq(ownerBookingsTable.submissionId, submissionId));
+  const allCancelledRows = await db
+    .select({ cancelIncome: ownerBookingsTable.cancelIncome })
+    .from(ownerBookingsTable)
+    .where(and(...allCancelledConds));
+  const allTimeCancelIncome = Math.round(allCancelledRows.reduce((s, b) => s + Number(b.cancelIncome ?? 0), 0));
+
+  // All refunds issued by owner
+  const allRefundsConds: Parameters<typeof and>[0][] = [eq(ownerRefundsTable.ownerId, ownerId)];
+  if (submissionId) {
+    // Filter refunds to bookings of this submission
+    const bookingIds = allActiveBookings.map(b => b.id);
+    if (bookingIds.length > 0) allRefundsConds.push(inArray(ownerRefundsTable.bookingId, bookingIds));
+    else allRefundsConds.push(eq(ownerRefundsTable.id, -1)); // no match
+  }
+  const allRefundRows = await db.select({ amount: ownerRefundsTable.amount }).from(ownerRefundsTable).where(and(...allRefundsConds));
+  const allTimeRefundsIssued = Math.round(allRefundRows.reduce((s, r) => s + Number(r.amount), 0));
+
+  // Three-layer calculation
+  let totalCashCollected = allTimeCancelIncome;
+  let confirmedRevenue = allTimeCancelIncome;
+  let floatingCash = 0;
+  let insuranceVault = 0;
+  const nowMs = Date.now();
+
+  for (const b of allActiveBookings) {
+    const deposit = Number(b.depositPaid ?? 0);
+    const remaining = b.totalPrice ? Math.max(0, Number(b.totalPrice) - deposit) : 0;
+    const collectedBalance = b.balanceCollected ? remaining : 0;
+    const insurance = !b.insuranceRefunded && b.insuranceFee ? Number(b.insuranceFee) : 0;
+
+    totalCashCollected += deposit + collectedBalance + insurance;
+    insuranceVault += insurance;
+
+    const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+    const dur = Math.max(1, b.durationDays ?? 1);
+    const checkoutDate = new Date(sy, sm - 1, sd + dur);
+    checkoutDate.setHours(0, 0, 0, 0);
+    const isFutureStay = checkoutDate > today;
+
+    if (!isFutureStay) {
+      // Completed stay — all revenue is confirmed
+      confirmedRevenue += deposit + collectedBalance;
+    } else {
+      const subId = b.submissionId ?? 0;
+      const policy = policyMap[subId];
+      const windowEnabled = policy?.enabled ?? false;
+      const windowHours = policy?.hours ?? 24;
+      const bookingAgeHours = (nowMs - new Date(b.createdAt).getTime()) / 3_600_000;
+
+      if (windowEnabled && bookingAgeHours >= windowHours) {
+        // Past cancellation window → confirmed (non-refundable)
+        confirmedRevenue += deposit;
+        if (collectedBalance > 0) confirmedRevenue += collectedBalance;
+      } else {
+        // Still refundable → floating
+        floatingCash += deposit;
+        if (collectedBalance > 0) confirmedRevenue += collectedBalance; // paid-in-full portion is confirmed
+      }
+    }
+  }
+  totalCashCollected -= allTimeRefundsIssued;
+
   return res.json({
     month: selectedMonth,
     totalRevenue,
@@ -2598,13 +2687,61 @@ router.get("/financial-summary", async (req, res) => {
     categoryTotals,
     insuranceRevenueTotals,
     trend,
-    // ── New fields ──
+    // ── Monthly split ──
     pendingRevenue:          Math.round(pendingRevenue),
     realizedRevenue:         Math.round(realizedRevenue),
     totalFutureValue:        Math.round(totalFutureValue),
     totalCancellationIncome,
     totalRefundedToClients,
+    // ── All-time three-layer liquidity model ──
+    totalCashCollected:      Math.round(totalCashCollected),
+    confirmedRevenue:        Math.round(confirmedRevenue),
+    floatingCash:            Math.round(floatingCash),
+    insuranceVault:          Math.round(insuranceVault),
+    allTimeRefundsIssued,
+    allTimeCancelIncome,
   });
+});
+
+/* ── Refunds: POST /owner/bookings/:id/refund ──────────────── */
+router.post("/bookings/:id/refund", async (req, res) => {
+  const ownerId = req.user!.id;
+  const bookingId = Number(req.params.id);
+  if (isNaN(bookingId)) return res.status(400).json({ error: "معرّف غير صالح" });
+
+  const { amount, reason, type } = req.body as { amount?: number; reason?: string; type?: string };
+  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: "المبلغ مطلوب" });
+
+  // Verify booking belongs to this owner
+  const [booking] = await db
+    .select({ id: ownerBookingsTable.id, depositPaid: ownerBookingsTable.depositPaid, totalPrice: ownerBookingsTable.totalPrice, balanceCollected: ownerBookingsTable.balanceCollected })
+    .from(ownerBookingsTable)
+    .where(and(eq(ownerBookingsTable.id, bookingId), eq(ownerBookingsTable.ownerId, ownerId)));
+  if (!booking) return res.status(404).json({ error: "الحجز غير موجود" });
+
+  // Max refundable = deposit + collected balance
+  const deposit = Number(booking.depositPaid ?? 0);
+  const remaining = booking.totalPrice ? Math.max(0, Number(booking.totalPrice) - deposit) : 0;
+  const collected = deposit + (booking.balanceCollected ? remaining : 0);
+  if (Number(amount) > collected) return res.status(400).json({ error: "المبلغ يتجاوز ما تم تحصيله" });
+
+  const [refund] = await db
+    .insert(ownerRefundsTable)
+    .values({ ownerId, bookingId, amount: String(amount), type: type ?? "partial", reason: reason ?? null })
+    .returning();
+
+  return res.json(refund);
+});
+
+/* ── Refunds: GET /owner/refunds ───────────────────────────── */
+router.get("/refunds", async (req, res) => {
+  const ownerId = req.user!.id;
+  const rows = await db
+    .select()
+    .from(ownerRefundsTable)
+    .where(eq(ownerRefundsTable.ownerId, ownerId))
+    .orderBy(desc(ownerRefundsTable.createdAt));
+  return res.json(rows);
 });
 
 /* ── Future Cash Flow Summary ──────────────────────────────── */
@@ -3200,6 +3337,9 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
   if (body.propertyType !== undefined) updateData.propertyType = body.propertyType || null;
   if (body.sections !== undefined) updateData.sections = body.sections || null;
   if (body.termsAndConditions !== undefined) updateData.termsAndConditions = body.termsAndConditions || null;
+  if (body.bookingPolicyText !== undefined) updateData.bookingPolicyText = body.bookingPolicyText || null;
+  if (body.cancellationWindowEnabled !== undefined) updateData.cancellationWindowEnabled = !!body.cancellationWindowEnabled;
+  if (body.cancellationWindowHours !== undefined) updateData.cancellationWindowHours = body.cancellationWindowHours ? Math.max(1, Number(body.cancellationWindowHours)) : 24;
   if (body.maxGuests !== undefined) updateData.maxGuests = body.maxGuests ? Number(body.maxGuests) : null;
   if (body.bedrooms !== undefined) updateData.bedrooms = body.bedrooms != null ? Number(body.bedrooms) : null;
   if (body.photos !== undefined) updateData.photos = Array.isArray(body.photos) ? body.photos : [];

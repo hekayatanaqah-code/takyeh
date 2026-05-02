@@ -869,25 +869,6 @@ router.patch("/categories/:id", async (req, res) => {
   return res.json({ ok: true });
 });
 
-/* ── Contact Inquiries ───────────────────────────────────── */
-router.get("/contact-inquiries", async (_req, res) => {
-  try {
-    const result = await db.execute(
-      sql`SELECT id, name, phone, email, message, status, created_at FROM contact_inquiries ORDER BY created_at DESC LIMIT 500`
-    );
-    return res.json((result as any).rows);
-  } catch (err) {
-    return res.status(500).json({ error: "حدث خطأ" });
-  }
-});
-
-router.patch("/contact-inquiries/:id/status", async (req, res) => {
-  const id = Number(req.params.id);
-  const body = z.object({ status: z.enum(["new", "read", "replied"]) }).safeParse(req.body);
-  if (!body.success) return res.status(400).json({ error: "حالة غير صالحة" });
-  await db.execute(sql`UPDATE contact_inquiries SET status = ${body.data.status} WHERE id = ${id}`);
-  return res.json({ ok: true });
-});
 
 /* ── Chalet Categories ───────────────────────────────────── */
 router.delete("/categories/:id", async (req, res) => {

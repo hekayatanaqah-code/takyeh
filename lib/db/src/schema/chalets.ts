@@ -117,6 +117,10 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   suggestedCategoryName: text("suggested_category_name"),
   pendingCategoryApproval: boolean("pending_category_approval").notNull().default(false),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+  /* ── Cancellation Policy (owner-controlled, per-property) ── */
+  cancellationWindowEnabled: boolean("cancellation_window_enabled").notNull().default(false),
+  cancellationWindowHours: integer("cancellation_window_hours").default(24),
+  bookingPolicyText: text("booking_policy_text"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -215,6 +219,18 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   ratedAt: timestamp("rated_at", { withTimezone: true }),
 });
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;
+
+/* ── Owner Refunds (manual refunds issued by owner on any booking) ── */
+export const ownerRefundsTable = pgTable("owner_refunds", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  bookingId: integer("booking_id").references(() => ownerBookingsTable.id, { onDelete: "cascade" }),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  type: text("type").notNull().default("partial"), /* 'partial' | 'full' */
+  reason: text("reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OwnerRefund = typeof ownerRefundsTable.$inferSelect;
 
 /* ── Owner Reschedule Logs ─────────────────────────────────── */
 export const ownerRescheduleLogsTable = pgTable("owner_reschedule_logs", {

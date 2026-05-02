@@ -6877,12 +6877,17 @@ function RevenueTab() {
   const [selectedMonth, setSelectedMonth]     = useState(currentMonth);
   const [calType, setCalType]                 = useState<"gregorian" | "hijri">("gregorian");
   const [selectedHijriMonth, setSelectedHijriMonth] = useState<string>("");
-  const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage" | "cancellation">("all");
+  const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage" | "cancellation" | "refund">("all");
   const [svcFilter, setSvcFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
   const [showAllFuture, setShowAllFuture] = useState(false);
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
   const [reviewSentRevIds, setReviewSentRevIds] = useState<Set<number>>(new Set());
   const [reviewPendingRevId, setReviewPendingRevId] = useState<number | null>(null);
+  const [refundModal, setRefundModal] = useState<{ booking: OwnerBooking; maxAmount: number } | null>(null);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
+  const [refundType, setRefundType] = useState<"partial" | "full">("partial");
+  const [refundPending, setRefundPending] = useState(false);
   const { toast } = useToast();
 
   const monthOptions = useMemo(() => {

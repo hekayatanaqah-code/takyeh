@@ -47,6 +47,37 @@ export async function seedCatalogIfEmpty() {
   await db.execute(sql`ALTER TABLE owner_bookings ADD COLUMN IF NOT EXISTS cancel_refund_amount NUMERIC(10,2)`);
   await db.execute(sql`ALTER TABLE owner_bookings ADD COLUMN IF NOT EXISTS cancel_income NUMERIC(10,2)`);
 
+  /* ── Cancellation Policy columns on chalet_submissions ── */
+  await db.execute(sql`ALTER TABLE chalet_submissions ADD COLUMN IF NOT EXISTS cancellation_window_enabled BOOLEAN NOT NULL DEFAULT false`);
+  await db.execute(sql`ALTER TABLE chalet_submissions ADD COLUMN IF NOT EXISTS cancellation_window_hours INTEGER DEFAULT 24`);
+  await db.execute(sql`ALTER TABLE chalet_submissions ADD COLUMN IF NOT EXISTS booking_policy_text TEXT`);
+
+  /* ── Owner Refunds table ── */
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS owner_refunds (
+      id SERIAL PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      booking_id INTEGER REFERENCES owner_bookings(id) ON DELETE CASCADE,
+      amount NUMERIC(10,2) NOT NULL,
+      type TEXT NOT NULL DEFAULT 'partial',
+      reason TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  /* ── Contact Inquiries table ── */
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS contact_inquiries (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      phone TEXT,
+      email TEXT,
+      message TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'new',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   const existingCities = await db.select().from(citiesCatalogTable);
   if (existingCities.length === 0) {
     await db.insert(citiesCatalogTable).values(
