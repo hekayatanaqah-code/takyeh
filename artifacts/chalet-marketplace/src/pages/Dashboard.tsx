@@ -2431,7 +2431,10 @@ function DeleteConfirmDialog({
   const depositPaid    = Math.round(Number(booking.depositPaid ?? booking.revenueAmount ?? 0));
   const insuranceFee   = Math.round(Number(booking.insuranceFee ?? 0));
   const refundExceedsDeposit = !!refundAmount && Number(refundAmount) > depositPaid;
-  const refundNum      = Math.max(0, Math.min(depositPaid, Number(refundAmount) || 0));
+  /* refundDisplay = exact typed value (shown in summary for real-time sync) */
+  const refundDisplay  = Number(refundAmount) || 0;
+  /* refundNum = clamped safe value (used only for actual submission) */
+  const refundNum      = Math.max(0, Math.min(depositPaid, refundDisplay));
   const cancelIncome   = Math.max(0, depositPaid - refundNum);
   const selectedLabel  = CANCEL_REASONS.find(r => r.code === reasonCode)?.label ?? "";
   const finalReason    = reasonCode === "other" ? customReason.trim() : selectedLabel + (customReason.trim() ? ` — ${customReason.trim()}` : "");
@@ -2526,17 +2529,24 @@ function DeleteConfirmDialog({
                   <span className="font-semibold">{insuranceFee.toLocaleString("ar-SA")} ر.س</span>
                 </div>
               )}
-              <div className="flex justify-between text-red-600">
+              <div className={`flex justify-between ${refundExceedsDeposit ? "text-red-600 font-semibold" : "text-red-600"}`}>
                 <span>المبلغ المسترد للعميل (من العربون):</span>
-                <span className="font-bold">− {refundNum.toLocaleString("ar-SA")} ر.س</span>
+                <span className="font-bold">− {refundDisplay.toLocaleString("ar-SA")} ر.س</span>
               </div>
-              <div className="flex justify-between border-t border-border pt-2 font-bold text-green-700 dark:text-green-400">
-                <span>إيراد الإلغاء المحقّق:</span>
-                <span>{cancelIncome.toLocaleString("ar-SA")} ر.س</span>
-              </div>
-              {insuranceFee > 0 && (
+              {refundExceedsDeposit ? (
+                <div className="flex justify-between border-t border-red-300 pt-2 font-bold text-red-600">
+                  <span>⛔ مبلغ غير صالح</span>
+                  <span>يتجاوز الحد المسموح</span>
+                </div>
+              ) : (
+                <div className="flex justify-between border-t border-border pt-2 font-bold text-green-700 dark:text-green-400">
+                  <span>إيراد الإلغاء المحقّق:</span>
+                  <span>{cancelIncome.toLocaleString("ar-SA")} ر.س</span>
+                </div>
+              )}
+              {insuranceFee > 0 && !refundExceedsDeposit && (
                 <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/30 px-2.5 py-2 text-xs text-blue-700 dark:text-blue-300">
-                  التسوية الكاملة مع العميل: {refundNum.toLocaleString("ar-SA")} ر.س (استرداد عربون) + {insuranceFee.toLocaleString("ar-SA")} ر.س (تأمين) = <strong>{(refundNum + insuranceFee).toLocaleString("ar-SA")} ر.س</strong> إجمالي المُعاد للعميل
+                  التسوية الكاملة مع العميل: {refundDisplay.toLocaleString("ar-SA")} ر.س (استرداد عربون) + {insuranceFee.toLocaleString("ar-SA")} ر.س (تأمين) = <strong>{(refundDisplay + insuranceFee).toLocaleString("ar-SA")} ر.س</strong> إجمالي المُعاد للعميل
                 </div>
               )}
               <p className="text-[11px] text-muted-foreground">
