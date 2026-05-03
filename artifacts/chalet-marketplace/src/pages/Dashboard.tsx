@@ -6927,7 +6927,7 @@ function RevenueTab() {
   const [selectedMonth, setSelectedMonth]     = useState(currentMonth);
   const [calType, setCalType]                 = useState<"gregorian" | "hijri">("gregorian");
   const [selectedHijriMonth, setSelectedHijriMonth] = useState<string>("");
-  const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage" | "cancellation" | "refund">("all");
+  const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage" | "cancellation" | "refund" | "insurance">("all");
   const [svcFilter, setSvcFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
   const [showAllFuture, setShowAllFuture] = useState(false);
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
@@ -7145,7 +7145,7 @@ function RevenueTab() {
     bookingId: number;
     clientName: string;
     bookingDate: string;
-    type: "deposit" | "balance" | "damage" | "cancellation" | "refund";
+    type: "deposit" | "balance" | "damage" | "cancellation" | "refund" | "insurance";
     amount: number;
     reason?: string;
     proofImages?: string | null;
@@ -7215,6 +7215,11 @@ function RevenueTab() {
         if (rem > 0) result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "balance", amount: rem, booking: b, isPending });
       }
 
+      // Insurance fee row — shows actual tamin received in bank
+      if (b.insuranceFee && Number(b.insuranceFee) > 0) {
+        result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "insurance", amount: Math.round(Number(b.insuranceFee)), booking: b, isPending });
+      }
+
       // Damage deduction row
       if (b.insuranceDeducted && Number(b.insuranceDeducted) > 0) {
         result.push({
@@ -7262,6 +7267,7 @@ function RevenueTab() {
   const TYPE_META: Record<string, { label: string; emoji: string; cls: string }> = {
     deposit:      { label: "عربون",        emoji: "💵", cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
     balance:      { label: "متبقي محصّل",  emoji: "✅", cls: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+    insurance:    { label: "تأمين",        emoji: "🔒", cls: "bg-slate-50 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300" },
     damage:       { label: "خصم تلفيات",  emoji: "✂️", cls: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
     cancellation: { label: "إيراد إلغاء", emoji: "❌", cls: "bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
     refund:       { label: "استرداد",      emoji: "↩️", cls: "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300" },
@@ -7444,11 +7450,11 @@ function RevenueTab() {
           {/* Calendar toggle — hidden in all-future mode */}
           {!showAllFuture && <div className="flex rounded-lg border border-border overflow-hidden text-xs">
             <button
-              onClick={() => setCalType("gregorian")}
+              onClick={() => { setCalType("gregorian"); setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50); }}
               className={`px-3 py-1.5 font-medium transition-colors ${calType === "gregorian" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
             >م</button>
             <button
-              onClick={() => setCalType("hijri")}
+              onClick={() => { setCalType("hijri"); setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50); }}
               className={`px-3 py-1.5 font-medium transition-colors ${calType === "hijri" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
             >هـ</button>
           </div>}
@@ -7912,7 +7918,7 @@ function RevenueTab() {
             <span className="text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">كل الحجوزات</span>
           )}
           <div className="ms-auto flex gap-1 flex-wrap">
-            {([["all", "الكل"], ["deposit", "عربون"], ["balance", "متبقي"], ["damage", "تلفيات"], ["cancellation", "إلغاءات"], ["refund", "استرداد"]] as const).map(([v, l]) => (
+            {([["all", "الكل"], ["deposit", "عربون"], ["balance", "متبقي"], ["insurance", "تأمين"], ["damage", "تلفيات"], ["cancellation", "إلغاءات"], ["refund", "استرداد"]] as const).map(([v, l]) => (
               <button
                 key={v}
                 onClick={() => setFilter(v as any)}
@@ -7948,12 +7954,21 @@ function RevenueTab() {
                   const chaletId = revOwnerChalets.find((c) => c.submissionId === row.booking.submissionId)?.id ?? null;
                   const revSent = reviewSentRevIds.has(row.bookingId);
                   const revPending = reviewPendingRevId === row.bookingId;
-                  const amtColor = row.type === "damage" ? "text-red-600" : row.type === "refund" ? "text-rose-600" : row.type === "balance" ? "text-green-600" : row.type === "cancellation" ? "text-orange-600" : "text-blue-600";
+                  const amtColor = row.type === "damage" ? "text-red-600" : row.type === "refund" ? "text-rose-600" : row.type === "balance" ? "text-green-600" : row.type === "cancellation" ? "text-orange-600" : row.type === "insurance" ? "text-slate-600" : "text-blue-600";
                   return (
                     <tr key={`${row.bookingId}-${row.type}-${i}`} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${row.isPending ? "opacity-70" : ""}`}>
                       <td className="py-2.5 px-3 font-medium">
                         {row.clientName}
                         {row.isPending && <span className="ms-1 text-[10px] font-semibold text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded-full">متوقّع</span>}
+                        {row.type === "deposit" && row.isPending && (
+                          <span className="ms-1 text-[10px] font-semibold text-amber-700 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 px-1.5 py-0.5 rounded-full">⏳ عائم</span>
+                        )}
+                        {row.type === "deposit" && !row.isPending && (
+                          <span className="ms-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 px-1.5 py-0.5 rounded-full">✓ مؤكد</span>
+                        )}
+                        {row.type === "insurance" && (
+                          <span className="ms-1 text-[10px] font-semibold text-slate-600 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 px-1.5 py-0.5 rounded-full">معزول</span>
+                        )}
                       </td>
                       <td className="py-2.5 px-3 text-xs">
                         <div className="font-medium">{hijri}</div>
@@ -8154,7 +8169,7 @@ function RevenueTab() {
                   className="text-right"
                 />
                 {refundAmount && Number(refundAmount) > (refundModal?.maxAmount ?? 0) && (
-                  <p className="text-[11px] text-destructive">يتجاوز الحد الأقصى المسموح</p>
+                  <p className="text-[11px] text-destructive font-semibold">⚠️ لا يمكن أن يتجاوز المبلغ المُسترد ما تم تحصيله ({fmtN(refundModal?.maxAmount ?? 0)} ر.س)</p>
                 )}
               </div>
             )}

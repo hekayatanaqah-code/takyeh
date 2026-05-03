@@ -1,0 +1,37 @@
+"Please implement the following updates to the Financial Management System to transition from a simple 'Booking List' to a professional 'Liquidity Management System' [Ref image_868225.png, image_6c119c.png]:
+
+1. Unified Liquidity & Insurance Sync:
+
+Total Collected (إجمالي السيولة المحصلة): This card must now include Security Deposits (Tamin) to reflect the owner's actual bank balance [Ref image_868225.png].
+
+Insurance Handling: Keep Security Deposits visible but separate in the final profit calculation, ensuring they are recognized as refundable liabilities [Ref image_6c119c.png].
+
+2. Implementation of Flexible Cancellation Logic:
+
+Visual Indicators: In the booking table, highlight or tag bookings (e.g., 'أنا', 'أبو محمد') based on whether they have passed the owner’s custom 'Cancellation Deadline'.
+
+Auto-Transition: Fully paid bookings should automatically move from 'Floating Cash' to 'Confirmed Revenue' once the set deadline expires.
+
+3. Manual Refund Override (The 'Human' Factor):
+
+Add a 'Refund Amount' (إرجاع مبلغ) button next to each booking in the table [Ref image_868225.png].
+
+This button must allow owners to manually return funds (partial or full) at any time, even if the system considers the booking non-refundable.
+
+4. Refund Validation & Safety Net [Ref image_6c0d7e.png]:
+
+Strict Validation: Disable the 'Confirm' button if the Refund Amount entered is greater than the Collected Deposit. Show error: "Refund cannot exceed collected amount."
+
+Negative Profit Prevention: Ensure 'Net Cancellation Profit' cannot result in a negative figure.
+
+5. Monthly Settlement & Calendar Integrity [Ref image_86dcb4.png]:
+
+Report Clarity: The 'Monthly Settlement' (تصفية شهرية) report must clearly separate 'Refunds' from 'Operational Expenses' for accurate net profit reporting.
+
+Calendar Fix: Ensure the settlement logic accounts for the 'Muharram 1448' gap to prevent data loss during year transitions.
+
+6. UI Fixes:
+
+Fix the data sync issue where specific properties show 0 values despite active bookings.
+
+Ensure the Hijri/Gregorian toggle triggers a full data refresh across all cards and tables."
