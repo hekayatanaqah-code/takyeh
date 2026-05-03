@@ -2429,11 +2429,13 @@ function DeleteConfirmDialog({
   if (!booking) return null;
 
   const depositPaid    = Math.round(Number(booking.depositPaid ?? booking.revenueAmount ?? 0));
+  const insuranceFee   = Math.round(Number(booking.insuranceFee ?? 0));
+  const refundExceedsDeposit = !!refundAmount && Number(refundAmount) > depositPaid;
   const refundNum      = Math.max(0, Math.min(depositPaid, Number(refundAmount) || 0));
   const cancelIncome   = Math.max(0, depositPaid - refundNum);
   const selectedLabel  = CANCEL_REASONS.find(r => r.code === reasonCode)?.label ?? "";
   const finalReason    = reasonCode === "other" ? customReason.trim() : selectedLabel + (customReason.trim() ? ` — ${customReason.trim()}` : "");
-  const canSubmit      = !!reasonCode && (reasonCode !== "other" || !!customReason.trim());
+  const canSubmit      = !!reasonCode && (reasonCode !== "other" || !!customReason.trim()) && !refundExceedsDeposit;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -2499,11 +2501,14 @@ function DeleteConfirmDialog({
                   data-no-arabic
                   onChange={(e) => setRefundAmount(e.target.value)}
                   placeholder={`الحد الأقصى: ${depositPaid.toLocaleString("ar-SA")} ر.س`}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm bg-background outline-none focus:border-primary transition-colors"
+                  className={`w-full border rounded-xl px-3 py-2 text-sm bg-background outline-none transition-colors ${refundExceedsDeposit ? "border-red-500 focus:border-red-500" : "border-border focus:border-primary"}`}
                   dir="ltr"
                 />
               </div>
-              <p className="text-xs text-muted-foreground">اترك الحقل فارغاً إذا لم يُسترد أي مبلغ</p>
+              {refundExceedsDeposit && (
+                <p className="text-xs font-semibold text-destructive">⚠️ لا يمكن أن يتجاوز المبلغ المُسترد العربون المحصّل ({depositPaid.toLocaleString("ar-SA")} ر.س)</p>
+              )}
+              {!refundExceedsDeposit && <p className="text-xs text-muted-foreground">اترك الحقل فارغاً إذا لم يُسترد أي مبلغ</p>}
             </div>
           )}
 
@@ -2515,14 +2520,25 @@ function DeleteConfirmDialog({
                 <span className="text-muted-foreground">العربون المحصّل:</span>
                 <span className="font-bold">{depositPaid.toLocaleString("ar-SA")} ر.س</span>
               </div>
+              {insuranceFee > 0 && (
+                <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                  <span className="flex items-center gap-1">🔒 مبلغ التأمين <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full font-medium">يُعاد للعميل كاملاً</span></span>
+                  <span className="font-semibold">{insuranceFee.toLocaleString("ar-SA")} ر.س</span>
+                </div>
+              )}
               <div className="flex justify-between text-red-600">
-                <span>المبلغ المسترد للعميل:</span>
+                <span>المبلغ المسترد للعميل (من العربون):</span>
                 <span className="font-bold">− {refundNum.toLocaleString("ar-SA")} ر.س</span>
               </div>
               <div className="flex justify-between border-t border-border pt-2 font-bold text-green-700 dark:text-green-400">
                 <span>إيراد الإلغاء المحقّق:</span>
                 <span>{cancelIncome.toLocaleString("ar-SA")} ر.س</span>
               </div>
+              {insuranceFee > 0 && (
+                <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/30 px-2.5 py-2 text-xs text-blue-700 dark:text-blue-300">
+                  التسوية الكاملة مع العميل: {refundNum.toLocaleString("ar-SA")} ر.س (استرداد عربون) + {insuranceFee.toLocaleString("ar-SA")} ر.س (تأمين) = <strong>{(refundNum + insuranceFee).toLocaleString("ar-SA")} ر.س</strong> إجمالي المُعاد للعميل
+                </div>
+              )}
               <p className="text-[11px] text-muted-foreground">
                 💡 إيراد الإلغاء = عربون − مبلغ مسترد. يُضاف تلقائياً إلى تقرير الإيرادات.
               </p>
@@ -8166,10 +8182,12 @@ function RevenueTab() {
                   onChange={(e) => setRefundAmount(e.target.value)}
                   placeholder="0"
                   max={refundModal?.maxAmount ?? 0}
-                  className="text-right"
+                  className={`text-right ${refundAmount && Number(refundAmount) > (refundModal?.maxAmount ?? 0) ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                 />
                 {refundAmount && Number(refundAmount) > (refundModal?.maxAmount ?? 0) && (
-                  <p className="text-[11px] text-destructive font-semibold">⚠️ لا يمكن أن يتجاوز المبلغ المُسترد ما تم تحصيله ({fmtN(refundModal?.maxAmount ?? 0)} ر.س)</p>
+                  <p className="text-xs font-semibold text-destructive bg-red-50 dark:bg-red-950/20 border border-red-200 rounded-lg px-2.5 py-2">
+                    ⚠️ خطأ: المبلغ المُسترد ({fmtN(Number(refundAmount))} ر.س) يتجاوز الحد المسموح — الحد الأقصى هو {fmtN(refundModal?.maxAmount ?? 0)} ر.س
+                  </p>
                 )}
               </div>
             )}
