@@ -112,6 +112,65 @@ router.get("/", async (req, res) => {
   return res.json(submissions);
 });
 
+/* ── GET /submissions/mine — lightweight list for dropdowns ── */
+router.get("/mine", async (req, res) => {
+  let resolvedOwnerId: string | null = null;
+
+  const tempToken = req.cookies?.owner_temp_session;
+  if (tempToken) {
+    const r = await db.execute<{ owner_id: string }>(
+      sql`SELECT owner_id FROM owner_temp_sessions
+          WHERE token = ${tempToken} AND expires_at > now() LIMIT 1`
+    );
+    const row = ((r as any).rows as Array<{ owner_id: string }>)[0];
+    if (row?.owner_id) resolvedOwnerId = row.owner_id;
+  }
+
+  if (!resolvedOwnerId && req.isAuthenticated()) {
+    resolvedOwnerId = req.user.id;
+  }
+
+  if (!resolvedOwnerId) {
+    return res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
+  }
+
+  const ownerIds = new Set<string>([resolvedOwnerId]);
+  try {
+    if (/^owner_\d+$/.test(resolvedOwnerId)) {
+      const n = parseInt(resolvedOwnerId.replace("owner_", ""), 10);
+      const r = await db.execute(
+        sql`SELECT u.id FROM owner_applications oa
+            JOIN users u ON LOWER(u.email) = LOWER(oa.email)
+            WHERE oa.id = ${n} LIMIT 1`
+      );
+      const uid = ((r as any).rows as Array<{ id: string }>)[0]?.id;
+      if (uid) ownerIds.add(String(uid));
+    } else {
+      const emailR = await db.execute(
+        sql`SELECT email FROM users WHERE id = ${resolvedOwnerId} LIMIT 1`
+      );
+      const email = ((emailR as any).rows as Array<{ email: string }>)[0]?.email;
+      if (email) {
+        const appR = await db.execute(
+          sql`SELECT id FROM owner_applications WHERE LOWER(email) = LOWER(${email}) LIMIT 1`
+        );
+        const appId = ((appR as any).rows as Array<{ id: number }>)[0]?.id;
+        if (appId) ownerIds.add(`owner_${appId}`);
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  const allOwnerIds = [...ownerIds];
+
+  const submissions = await db
+    .select({ id: chaletSubmissionsTable.id, nameAr: chaletSubmissionsTable.nameAr })
+    .from(chaletSubmissionsTable)
+    .where(inArray(chaletSubmissionsTable.ownerId, allOwnerIds))
+    .orderBy(chaletSubmissionsTable.id);
+
+  return res.json(submissions);
+});
+
 router.post("/", async (req, res) => {
   const result = SubmissionBodyStrict.safeParse(req.body);
   if (!result.success) {
