@@ -2429,6 +2429,8 @@ function DeleteConfirmDialog({
   if (!booking) return null;
 
   const depositPaid    = Math.round(Number(booking.depositPaid ?? booking.revenueAmount ?? 0));
+  const totalPrice     = Math.round(Number(booking.totalPrice ?? 0));
+  const isFullPayment  = totalPrice > 0 && depositPaid === totalPrice;
   const insuranceFee   = Math.round(Number(booking.insuranceFee ?? 0));
   const refundExceedsDeposit = !!refundAmount && Number(refundAmount) > depositPaid;
   /* refundDisplay = exact typed value (shown in summary for real-time sync) */
@@ -2452,7 +2454,7 @@ function DeleteConfirmDialog({
             إلغاء حجز <strong>{booking.clientName}</strong> — {booking.bookingDate}
             {depositPaid > 0 && (
               <span className="block mt-0.5 text-xs text-amber-600 font-medium">
-                العربون المسجّل: {depositPaid.toLocaleString("ar-SA")} ر.س
+                {isFullPayment ? "المبلغ الكامل المسجّل:" : "العربون المسجّل:"} {depositPaid.toLocaleString("ar-SA")} ر.س
               </span>
             )}
           </DialogDescription>
@@ -2521,11 +2523,11 @@ function DeleteConfirmDialog({
             <div className="bg-muted/50 rounded-xl p-3 space-y-2 text-sm border border-border">
               <p className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">ملخص مالي للإلغاء</p>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">العربون المحصّل:</span>
+                <span className="text-muted-foreground">{isFullPayment ? "المبلغ الكامل المحصّل:" : "العربون المحصّل:"}</span>
                 <span className="font-bold">{depositPaid.toLocaleString("ar-SA")} ر.س</span>
               </div>
               <div className={`flex justify-between ${refundExceedsDeposit ? "text-red-600 font-semibold" : "text-red-600"}`}>
-                <span>استرداد العربون للعميل:</span>
+                <span>{isFullPayment ? "استرداد المبلغ للعميل:" : "استرداد العربون للعميل:"}</span>
                 <span className="font-bold">− {refundDisplay.toLocaleString("ar-SA")} ر.س</span>
               </div>
               {insuranceFee > 0 && (
@@ -2554,7 +2556,7 @@ function DeleteConfirmDialog({
                 </>
               )}
               <p className="text-[11px] text-muted-foreground">
-                💡 إيراد الإلغاء = عربون − مبلغ مسترد. يُضاف تلقائياً إلى تقرير الإيرادات.
+                💡 إيراد الإلغاء = {isFullPayment ? "المبلغ المحصّل" : "العربون"} − مبلغ مسترد. يُضاف تلقائياً إلى تقرير الإيرادات.
               </p>
             </div>
           )}
@@ -4096,7 +4098,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         <p className="text-xs font-bold text-foreground">{fmtAR(tp)} ر.س</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-muted-foreground">العربون</p>
+                        <p className="text-[10px] text-muted-foreground">{tp !== null && dp !== null && dp === tp ? "كامل المبلغ" : "العربون"}</p>
                         <p className="text-xs font-bold text-green-600 dark:text-green-400">{fmtAR(dp ?? 0)} ر.س</p>
                       </div>
                       <div>
@@ -7182,6 +7184,7 @@ function RevenueTab() {
     booking: OwnerBooking;
     isPending?: boolean;
     refundId?: number;
+    isFullPayment?: boolean;
   }
 
   /* Cancelled bookings with income, filtered to the selected period */
@@ -7234,7 +7237,8 @@ function RevenueTab() {
 
       // Deposit row (always, if deposit recorded)
       if (dep > 0) {
-        result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "deposit", amount: dep, booking: b, isPending });
+        const isFullPayment = total !== null && total > 0 && dep === total;
+        result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "deposit", amount: dep, booking: b, isPending, isFullPayment });
       } else if (b.revenueAmount && !b.totalPrice) {
         result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "deposit", amount: Math.round(Number(b.revenueAmount)), booking: b, isPending });
       }
@@ -7308,13 +7312,13 @@ function RevenueTab() {
   /* ── SERVICE UNIT: render service appointments revenue ── */
   if (unit.type === "service") {
     // Build revenue rows mirroring chalet row structure
-    interface SvcRow { apptId: number; clientName: string; dateStr: string; type: "deposit" | "balance" | "damage"; amount: number; note?: string; }
+    interface SvcRow { apptId: number; clientName: string; dateStr: string; type: "deposit" | "balance" | "damage"; amount: number; note?: string; isFullPayment?: boolean; }
     const svcRows: SvcRow[] = [];
     for (const a of monthSvcAppts) {
       const amt = Math.round(Number(a.amount ?? 0));
       const dep = Math.round(Number(a.deposit ?? 0));
       const insDeduct = Math.round(Number(a.insuranceDeductAmount ?? 0));
-      if (dep > 0) svcRows.push({ apptId: a.id, clientName: a.clientName, dateStr: a.dateStr, type: "deposit", amount: dep });
+      if (dep > 0) svcRows.push({ apptId: a.id, clientName: a.clientName, dateStr: a.dateStr, type: "deposit", amount: dep, isFullPayment: amt > 0 && dep === amt });
       if (amt > dep && amt > 0) svcRows.push({ apptId: a.id, clientName: a.clientName, dateStr: a.dateStr, type: "balance", amount: amt - dep });
       if (insDeduct > 0) svcRows.push({ apptId: a.id, clientName: a.clientName, dateStr: a.dateStr, type: "damage", amount: insDeduct, note: a.insuranceDeductNote ?? undefined });
     }
@@ -7420,7 +7424,8 @@ function RevenueTab() {
                         </td>
                         <td className="py-2.5 px-3">
                           <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${meta.cls}`}>
-                            {meta.emoji} {meta.label}
+                            {row.type === "deposit" && row.isFullPayment ? "💰" : meta.emoji}
+                            {row.type === "deposit" && row.isFullPayment ? "كامل المبلغ" : meta.label}
                           </span>
                           {row.note && <div className="text-[10px] text-muted-foreground mt-0.5">{row.note}</div>}
                         </td>
@@ -8006,7 +8011,8 @@ function RevenueTab() {
                       </td>
                       <td className="py-2.5 px-3">
                         <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${meta.cls}`}>
-                          {meta.emoji} {meta.label}
+                          {row.type === "deposit" && row.isFullPayment ? "💰" : meta.emoji}
+                          {row.type === "deposit" && row.isFullPayment ? "كامل المبلغ" : meta.label}
                         </span>
                         {row.reason && <div className="text-[10px] text-muted-foreground mt-0.5">{row.reason}</div>}
                         {hasProof && (
