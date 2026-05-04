@@ -120,7 +120,7 @@ interface OwnerMessageSettings {
   attachmentNote: string;
 }
 
-const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}"];
+const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}", "{اسم_اليوم_من}", "{اسم_اليوم_إلى}"];
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   waEnabled: false,
@@ -129,7 +129,7 @@ const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   bookingConfirmationTemplate: "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.",
   changeNoticeEnabled: true,
   cancellationTemplate: "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}. السبب: {سبب_الإلغاء}.",
-  modificationTemplate: "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} من يوم {من_التاريخ} الموافق {من_التاريخ_م} إلى يوم {إلى_التاريخ} الموافق {إلى_التاريخ_م}.",
+  modificationTemplate: "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} من يوم {اسم_اليوم_من} الموافق ({من_التاريخ} | {من_التاريخ_م}) إلى يوم {اسم_اليوم_إلى} الموافق ({إلى_التاريخ} | {إلى_التاريخ_م}).",
   customTemplates: [],
   attachmentNote: "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
 };
@@ -3117,6 +3117,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     return hijri && gregorian ? `${hijri} (${gregorian})` : b.bookingDate;
   };
 
+  const getArabicDayName = (dateStr: string) =>
+    new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(dateStr + "T12:00:00"));
+
   const openManualWhatsAppTemplate = (b: OwnerBooking, templateBody: string, reason = "") => {
     const startHijri  = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
     const startGreg   = formatDualDate(b.bookingDate).gregorian;
@@ -3131,6 +3134,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       .replace(/\{اسم_العقار\}/g, getBookingChaletName(b))
       .replace(/\{التاريخ\}/g, getBookingDateText(b))
       .replace(/\{سبب_الإلغاء\}/g, reason || b.cancelReason || "حسب الاتفاق")
+      .replace(/\{اسم_اليوم_من\}/g, getArabicDayName(b.bookingDate))
+      .replace(/\{اسم_اليوم_إلى\}/g, getArabicDayName(endStr))
       .replace(/\{من_التاريخ\}/g, startHijri)
       .replace(/\{من_التاريخ_م\}/g, startGreg)
       .replace(/\{إلى_التاريخ\}/g, endHijri)
@@ -3499,6 +3504,29 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <RotateCcw className="w-3 h-3" />
                           إعادة جدولة
                         </button>
+                        {b.insuranceFee && Number(b.insuranceFee) > 0 && !b.insuranceRefunded && (
+                          <button
+                            onClick={() => { setSummaryDate(null); setInsuranceTarget(b); }}
+                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-700 rounded-lg py-1.5 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+                          >
+                            <Lock className="w-3 h-3" />
+                            إدارة التأمين
+                          </button>
+                        )}
+                        {activeChaletId && !b.ratedAt && (
+                          <button
+                            disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                            onClick={() => { setSummaryDate(null); sendReviewRequest(b); }}
+                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 border border-teal-300 dark:border-teal-700 rounded-lg py-1.5 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-50"
+                          >
+                            {reviewPendingId === b.id
+                              ? <Loader2 className="w-3 h-3 animate-spin" />
+                              : reviewSentIds.has(b.id)
+                                ? <CheckCircle className="w-3 h-3" />
+                                : <Star className="w-3 h-3" />}
+                            {reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "طلب تقييم"}
+                          </button>
+                        )}
                         <button
                           onClick={() => { setSummaryDate(null); setDeleteDialogBooking(b); }}
                           className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg py-1.5 hover:bg-destructive/10 transition-colors"
