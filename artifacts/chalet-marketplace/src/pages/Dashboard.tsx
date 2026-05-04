@@ -10610,18 +10610,30 @@ function ReportsTab() {
           <div className="flex-1 space-y-1">
             <label className="text-xs text-muted-foreground font-medium">العقار</label>
             <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
-              <SelectTrigger className="h-10"><SelectValue placeholder={mySubmissions.length === 1 ? (mySubmissions[0].nameAr || mySubmissions[0].name || "كل العقارات") : "عرض كل العقارات"} /></SelectTrigger>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder={mySubmissions[0]?.nameAr || mySubmissions[0]?.name || "شاليه الربيع"} />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{mySubmissions.length === 1 ? (mySubmissions[0].nameAr || mySubmissions[0].name || "كل العقارات") : "عرض كل العقارات"}</SelectItem>
+                <SelectItem value="all">{mySubmissions[0]?.nameAr || mySubmissions[0]?.name || "شاليه الربيع"}</SelectItem>
                 {mySubmissions.map((s: any) => (
-                  <SelectItem key={s.id} value={String(s.id)}>{s.nameAr ?? `شاليه #${s.id}`}</SelectItem>
+                  <SelectItem key={s.id} value={String(s.id)}>{s.nameAr ?? s.name ?? `شاليه #${s.id}`}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           {viewMode === "monthly" ? (
             <div className="flex-1 space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">الشهر</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-muted-foreground font-medium">الشهر</label>
+                <label htmlFor="hijri-toggle" className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <span className="text-xs text-muted-foreground">التقويم الهجري</span>
+                  <Switch
+                    id="hijri-toggle"
+                    checked={isHijri}
+                    onCheckedChange={setIsHijri}
+                  />
+                </label>
+              </div>
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -10641,19 +10653,6 @@ function ReportsTab() {
             </div>
           )}
         </div>
-        {/* H/G Calendar Toggle */}
-        {viewMode === "monthly" && (
-          <div className="flex items-center justify-between pt-1 border-t border-border">
-            <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 cursor-pointer select-none" htmlFor="hijri-toggle">
-              عرض بالتقويم الهجري
-            </label>
-            <Switch
-              id="hijri-toggle"
-              checked={isHijri}
-              onCheckedChange={setIsHijri}
-            />
-          </div>
-        )}
         {selectedSubmissionId !== "all" && (
           <p className="text-xs text-primary font-medium flex items-center gap-1">
             <Building2 className="w-3.5 h-3.5" />
