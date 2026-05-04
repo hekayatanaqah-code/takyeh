@@ -10142,13 +10142,6 @@ function ReportsTab() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string>("all");
   const [sharePhone, setSharePhone] = useState(() => localStorage.getItem("reportSharePhone") ?? "");
-
-  /* Auto-select the only property when owner has exactly one submission */
-  useEffect(() => {
-    if (mySubmissions.length === 1 && selectedSubmissionId === "all") {
-      setSelectedSubmissionId(String(mySubmissions[0].id));
-    }
-  }, [mySubmissions.length]);
   const [shareEmail, setShareEmail] = useState(() => localStorage.getItem("reportShareEmail") ?? "");
   const [showShare, setShowShare] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
@@ -10168,6 +10161,13 @@ function ReportsTab() {
       return r.json();
     },
   });
+
+  /* Auto-select the only property when owner has exactly one submission */
+  useEffect(() => {
+    if (mySubmissions.length === 1 && selectedSubmissionId === "all") {
+      setSelectedSubmissionId(String(mySubmissions[0].id));
+    }
+  }, [mySubmissions.length]);
 
   const { data: report, isLoading } = useQuery<MonthReport>({
     queryKey: ["owner", "reports", selectedMonth, selectedSubmissionId],
