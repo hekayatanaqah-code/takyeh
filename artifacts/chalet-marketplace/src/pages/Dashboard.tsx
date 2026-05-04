@@ -2679,6 +2679,24 @@ function RescheduleDialog({
     ? newTotalPriceNum - oldTotalPrice
     : null;
 
+  /* ── Insurance summary (derived from booking, no extra fetch needed) ── */
+  const insuranceFeeNum = booking?.insuranceFee ? Number(booking.insuranceFee) : 0;
+  const insuranceStatusAr =
+    booking?.insuranceRefunded ? "مُسترجع" :
+    (booking?.insuranceDeducted && Number(booking.insuranceDeducted) > 0) ? "مخصوم جزئياً" :
+    "محجوز";
+  /* Insurance is still pending (to be collected at arrival) unless already refunded */
+  const pendingInsuranceNum = !booking?.insuranceRefunded ? insuranceFeeNum : 0;
+  /* Total the client must bring on the new arrival day */
+  const totalDueOnArrival =
+    newRemaining !== null && pendingInsuranceNum > 0
+      ? newRemaining + pendingInsuranceNum
+      : newRemaining !== null
+        ? newRemaining
+        : pendingInsuranceNum > 0
+          ? pendingInsuranceNum
+          : null;
+
   useEffect(() => {
     if (open && booking) {
       setNewDate(booking.bookingDate);
@@ -2781,6 +2799,9 @@ function RescheduleDialog({
       let msg = `مرحباً ${booking.clientName ?? ""}، تم تعديل حجزك في ${chaletName ?? "العقار"} بناءً على (${reason.trim()}).\n\nالحجز السابق: يوم ${oldDay} (${oldHijri} | ${oldGreg}) - فترة ${oldPeriodAr}.\n\nالحجز الجديد: يوم ${newDay} (${newHijri} | ${newGreg}) - فترة ${newPeriodAr}.`;
       if (newTotalPriceNum !== null) {
         msg += `\n\nالسعر الإجمالي المتفق عليه: ${newTotalPriceNum.toLocaleString("ar-SA")} ريال.`;
+      }
+      if (insuranceFeeNum > 0) {
+        msg += `\n\nمبلغ التأمين: ${insuranceFeeNum.toLocaleString("ar-SA")} ريال (${insuranceStatusAr}).`;
       }
       setWaConfirmMsg(msg);
       setShowWAConfirm(true);
@@ -2962,6 +2983,37 @@ function RescheduleDialog({
               <DialogDescription>راجع الرسالة أدناه قبل إرسالها للعميل عبر واتساب</DialogDescription>
             </DialogHeader>
             <div className="mt-3 space-y-3">
+              {/* ── Financial summary for owner reference ── */}
+              {(newRemaining !== null || insuranceFeeNum > 0) && (
+                <div className="rounded-xl border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-3 space-y-2">
+                  <p className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">ملخص مالي</p>
+                  {newRemaining !== null && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">المتبقي الجديد</span>
+                      <span className="font-semibold text-foreground">{newRemaining.toLocaleString("ar-SA")} ر.س</span>
+                    </div>
+                  )}
+                  {insuranceFeeNum > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        مبلغ التأمين
+                        <span className={`mr-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                          booking?.insuranceRefunded
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                            : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                        }`}>{insuranceStatusAr}</span>
+                      </span>
+                      <span className="font-semibold text-foreground">{insuranceFeeNum.toLocaleString("ar-SA")} ر.س</span>
+                    </div>
+                  )}
+                  {totalDueOnArrival !== null && (newRemaining !== null && pendingInsuranceNum > 0) && (
+                    <div className="flex justify-between text-sm border-t border-blue-200 dark:border-blue-700 pt-2 mt-1">
+                      <span className="font-bold text-blue-800 dark:text-blue-200">المبلغ المستحق عند الوصول</span>
+                      <span className="font-bold text-blue-700 dark:text-blue-300 text-base">{totalDueOnArrival.toLocaleString("ar-SA")} ر.س</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="rounded-xl border border-border bg-muted/40 p-3">
                 <p className="text-[11px] font-bold text-muted-foreground mb-2 uppercase tracking-wide">نص الرسالة</p>
                 <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed">{waConfirmMsg}</pre>
