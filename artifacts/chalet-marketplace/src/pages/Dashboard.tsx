@@ -2496,16 +2496,17 @@ function DeleteConfirmDialog({
               <label className="text-sm font-semibold">المبلغ المسترد للعميل (ر.س)</label>
               <div className="relative">
                 <input
-                  type="number"
-                  min={0}
-                  max={depositPaid}
-                  step={1}
-                  value={refundAmount}
-                  data-no-arabic
-                  onChange={(e) => setRefundAmount(e.target.value)}
+                  type="text"
+                  inputMode="decimal"
+                  value={refundAmount.replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[+d])}
+                  onChange={(e) => {
+                    const western = e.target.value
+                      .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+                      .replace(/[^\d]/g, "");
+                    setRefundAmount(western);
+                  }}
                   placeholder={`الحد الأقصى: ${depositPaid.toLocaleString("ar-SA")} ر.س`}
-                  className={`w-full border rounded-xl px-3 py-2 text-sm bg-background outline-none transition-colors ${refundExceedsDeposit ? "border-red-500 focus:border-red-500" : "border-border focus:border-primary"}`}
-                  dir="ltr"
+                  className={`w-full border rounded-xl px-3 py-2 text-sm bg-background outline-none transition-colors text-right ${refundExceedsDeposit ? "border-red-500 focus:border-red-500" : "border-border focus:border-primary"}`}
                 />
               </div>
               {refundExceedsDeposit && (
