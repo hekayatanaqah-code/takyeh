@@ -2588,13 +2588,14 @@ function DeleteConfirmDialog({
 
 /* ── Reschedule Dialog ───────────────────────── */
 function RescheduleDialog({
-  open, booking, existingBookings, chaletName, clientPhone, onClose, onRescheduled,
+  open, booking, existingBookings, chaletName, clientPhone, chaletPrices, onClose, onRescheduled,
 }: {
   open: boolean;
   booking: OwnerBooking | null;
   existingBookings: OwnerBooking[];
   chaletName?: string;
   clientPhone?: string;
+  chaletPrices?: { priceMorning?: string | null; priceEvening?: string | null; priceFullDay?: string | null; pricePerNight?: string | null } | null;
   onClose: () => void;
   onRescheduled: () => void;
 }) {
@@ -2607,9 +2608,63 @@ function RescheduleDialog({
   const [showWAConfirm, setShowWAConfirm] = useState(false);
   const [waConfirmMsg, setWaConfirmMsg] = useState("");
   const [oldDateSnap, setOldDateSnap] = useState("");
+  const [oldPeriodSnap, setOldPeriodSnap] = useState<string | null>(null);
 
   const _getArabicDayName = (dateStr: string) =>
     new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(dateStr + "T12:00:00"));
+  const _periodLabel = (p: string | null | undefined) =>
+    p === "morning" ? "صباحي" : p === "evening" ? "مسائي" : p === "full_day" ? "يوم كامل" : "—";
+
+  /* ── Fetch seasons for this booking's chalet ── */
+  const subId = booking?.submissionId ?? null;
+  const { data: dialogSeasons = [] } = useQuery<ChaletSeason[]>({
+    queryKey: ["owner", "seasons", subId, "reschedule-dialog"],
+    queryFn: async () => {
+      if (!subId) return [];
+      const r = await apiFetch(`/owner/seasons?submissionId=${subId}`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: open && !!subId,
+  });
+
+  /* ── Compute price for a given date + period using seasons then base rates ── */
+  const _getPriceForDate = (date: string, period: string): number | null => {
+    const effPeriod = period && period !== "none" ? period : null;
+    if (!effPeriod) return null;
+    const season = dialogSeasons.find(
+      (s) => date >= s.startDate && date <= s.endDate &&
+        (!s.period || s.period === "all" || s.period === effPeriod)
+    );
+    if (season) {
+      const dayDP = (season.dailyPrices as Record<string, { morning?: number; evening?: number; fullDay?: number }> | null)?.[date] ?? null;
+      const sp =
+        effPeriod === "morning"  ? (dayDP?.morning  ?? (season.priceMorning  ? Number(season.priceMorning)  : null)) :
+        effPeriod === "evening"  ? (dayDP?.evening  ?? (season.priceEvening  ? Number(season.priceEvening)  : null)) :
+        effPeriod === "full_day" ? (dayDP?.fullDay  ?? (season.priceFullDay  ? Number(season.priceFullDay)  : null)) :
+        null;
+      if (sp != null) return sp;
+    }
+    if (chaletPrices) {
+      const dp =
+        effPeriod === "morning"  ? chaletPrices.priceMorning :
+        effPeriod === "evening"  ? chaletPrices.priceEvening :
+        effPeriod === "full_day" ? chaletPrices.priceFullDay :
+        null;
+      if (dp) return Math.round(Number(dp));
+    }
+    return null;
+  };
+
+  /* ── Live price diff calculation ── */
+  const newComputedPrice = useMemo(
+    () => (newDate && newPeriod && newPeriod !== "none" ? _getPriceForDate(newDate, newPeriod) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [newDate, newPeriod, dialogSeasons, chaletPrices]
+  );
+  const oldTotalPrice = booking?.totalPrice ? Number(booking.totalPrice) : null;
+  const priceDiff = newComputedPrice !== null && oldTotalPrice !== null
+    ? Math.round(newComputedPrice - oldTotalPrice)
+    : null;
 
   useEffect(() => {
     if (open && booking) {
@@ -2621,6 +2676,7 @@ function RescheduleDialog({
       setShowWAConfirm(false);
       setWaConfirmMsg("");
       setOldDateSnap(booking.bookingDate);
+      setOldPeriodSnap(booking.period ?? null);
     }
   }, [open, booking]);
 
@@ -2678,21 +2734,27 @@ function RescheduleDialog({
     if (hasConflict) { setError(isFullyBlocked ? "هذا اليوم محجوز بالكامل" : "هذه الفترة محجوزة — يرجى اختيار فترة أخرى"); return; }
     setSaving(true); setError("");
     try {
+      const newPeriodForApi = newPeriod && newPeriod !== "none" ? newPeriod : null;
+      const patchBody: Record<string, unknown> = {
+        bookingDate: newDate,
+        durationDays: newDuration,
+        period: newPeriodForApi,
+        rescheduleReason: reason.trim(),
+      };
+      /* If we computed a new price, update totalPrice so المتبقي refreshes */
+      if (newComputedPrice !== null) {
+        patchBody.totalPrice = newComputedPrice;
+      }
       const r = await apiFetch(`/owner/bookings/${booking.id}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          bookingDate: newDate,
-          durationDays: newDuration,
-          period: newPeriod && newPeriod !== "none" ? newPeriod : null,
-          rescheduleReason: reason.trim(),
-        }),
+        body: JSON.stringify(patchBody),
       });
       if (!r.ok) {
         const data = await r.json().catch(() => ({}));
         setError(data?.error ?? "حدث خطأ، يرجى المحاولة");
         return;
       }
-      /* ── Build WA confirmation message (old → new date) ── */
+      /* ── Build WA confirmation message (old → new date, with period + price) ── */
       const snap = oldDateSnap || booking.bookingDate;
       const oldHijri = formatDualDate(snap).hijri.replace(/\s*هـ\s*$/, "");
       const oldGreg  = formatDualDate(snap).gregorian;
@@ -2700,7 +2762,15 @@ function RescheduleDialog({
       const newHijri = formatDualDate(newDate).hijri.replace(/\s*هـ\s*$/, "");
       const newGreg  = formatDualDate(newDate).gregorian;
       const newDay   = _getArabicDayName(newDate);
-      const msg = `مرحباً ${booking.clientName ?? ""}، تم تعديل حجزك في ${chaletName ?? "العقار"} بناءً على (${reason.trim()}).\n\nالموعد السابق: يوم ${oldDay} الموافق (${oldHijri} | ${oldGreg}).\n\nالموعد الجديد: يوم ${newDay} الموافق (${newHijri} | ${newGreg}).`;
+      const oldPeriodAr = _periodLabel(oldPeriodSnap);
+      const newPeriodAr = _periodLabel(newPeriodForApi);
+      let msg = `مرحباً ${booking.clientName ?? ""}، تم تعديل حجزك في ${chaletName ?? "العقار"} بناءً على (${reason.trim()}).\n\nالحجز السابق: يوم ${oldDay} (${oldHijri} | ${oldGreg}) - فترة ${oldPeriodAr}.\n\nالحجز الجديد: يوم ${newDay} (${newHijri} | ${newGreg}) - فترة ${newPeriodAr}.`;
+      if (newComputedPrice !== null && oldTotalPrice !== null && priceDiff !== null && priceDiff !== 0) {
+        const diffLabel = priceDiff > 0 ? "إضافة" : "خصم";
+        const absDiff = Math.abs(priceDiff);
+        const newTotal = Math.round(newComputedPrice);
+        msg += `\n\nتعديل السعر: تم ${diffLabel} مبلغ ${absDiff.toLocaleString("ar-SA")} ريال، ليصبح الإجمالي الجديد ${newTotal.toLocaleString("ar-SA")} ريال.`;
+      }
       setWaConfirmMsg(msg);
       setShowWAConfirm(true);
       onRescheduled();
@@ -2808,6 +2878,28 @@ function RescheduleDialog({
                   className="resize-none text-sm"
                 />
               </div>
+
+              {/* Price difference notice */}
+              {priceDiff !== null && (
+                <div className={[
+                  "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold",
+                  priceDiff === 0
+                    ? "bg-muted/30 border-border text-muted-foreground"
+                    : priceDiff > 0
+                      ? "bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300"
+                      : "bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-800 dark:text-green-300",
+                ].join(" ")}>
+                  <span className="text-base">
+                    {priceDiff === 0 ? "🟰" : priceDiff > 0 ? "⬆️" : "⬇️"}
+                  </span>
+                  <span>
+                    {priceDiff === 0
+                      ? "لا يوجد فارق في السعر"
+                      : `فارق السعر: ${priceDiff > 0 ? "+" : ""}${Math.abs(priceDiff).toLocaleString("ar-SA")} ريال — الإجمالي الجديد: ${Math.round(newComputedPrice!).toLocaleString("ar-SA")} ريال`
+                    }
+                  </span>
+                </div>
+              )}
 
               {error && (
                 <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
@@ -4598,6 +4690,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           ?? "العقار"
         }
         clientPhone={rescheduleBooking?.clientPhone ?? ""}
+        chaletPrices={(() => {
+          const c = ownerChalets.find((ch: any) => ch.submissionId === rescheduleBooking?.submissionId)
+            ?? ownerChalets.find((ch: any) => ch.id === (activeChaletId ?? ownerChalets[0]?.id));
+          return c ? { priceMorning: c.priceMorning, priceEvening: c.priceEvening, priceFullDay: c.priceFullDay, pricePerNight: c.pricePerNight } : null;
+        })()}
         onClose={() => setRescheduleBooking(null)}
         onRescheduled={() => {
           qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
