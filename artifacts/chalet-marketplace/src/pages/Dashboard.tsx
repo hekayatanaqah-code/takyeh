@@ -2588,11 +2588,13 @@ function DeleteConfirmDialog({
 
 /* ── Reschedule Dialog ───────────────────────── */
 function RescheduleDialog({
-  open, booking, existingBookings, onClose, onRescheduled,
+  open, booking, existingBookings, chaletName, clientPhone, onClose, onRescheduled,
 }: {
   open: boolean;
   booking: OwnerBooking | null;
   existingBookings: OwnerBooking[];
+  chaletName?: string;
+  clientPhone?: string;
   onClose: () => void;
   onRescheduled: () => void;
 }) {
@@ -2602,6 +2604,12 @@ function RescheduleDialog({
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showWAConfirm, setShowWAConfirm] = useState(false);
+  const [waConfirmMsg, setWaConfirmMsg] = useState("");
+  const [oldDateSnap, setOldDateSnap] = useState("");
+
+  const _getArabicDayName = (dateStr: string) =>
+    new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(dateStr + "T12:00:00"));
 
   useEffect(() => {
     if (open && booking) {
@@ -2610,6 +2618,9 @@ function RescheduleDialog({
       setNewPeriod(booking.period ?? "none");
       setReason("");
       setError("");
+      setShowWAConfirm(false);
+      setWaConfirmMsg("");
+      setOldDateSnap(booking.bookingDate);
     }
   }, [open, booking]);
 
@@ -2681,116 +2692,169 @@ function RescheduleDialog({
         setError(data?.error ?? "حدث خطأ، يرجى المحاولة");
         return;
       }
+      /* ── Build WA confirmation message (old → new date) ── */
+      const snap = oldDateSnap || booking.bookingDate;
+      const oldHijri = formatDualDate(snap).hijri.replace(/\s*هـ\s*$/, "");
+      const oldGreg  = formatDualDate(snap).gregorian;
+      const oldDay   = _getArabicDayName(snap);
+      const newHijri = formatDualDate(newDate).hijri.replace(/\s*هـ\s*$/, "");
+      const newGreg  = formatDualDate(newDate).gregorian;
+      const newDay   = _getArabicDayName(newDate);
+      const msg = `مرحباً ${booking.clientName ?? ""}، تم تعديل حجزك في ${chaletName ?? "العقار"} بناءً على (${reason.trim()}).\n\nالموعد السابق: يوم ${oldDay} الموافق (${oldHijri} | ${oldGreg}).\n\nالموعد الجديد: يوم ${newDay} الموافق (${newHijri} | ${newGreg}).`;
+      setWaConfirmMsg(msg);
+      setShowWAConfirm(true);
       onRescheduled();
-      onClose();
+      /* intentionally do NOT call onClose() — user must dismiss after reviewing/sending */
     } finally {
       setSaving(false);
     }
   };
 
+  /* ── Send WA helper ── */
+  const sendWhatsApp = () => {
+    let rawPhone = (clientPhone ?? "").replace(/\D/g, "");
+    if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
+    if (rawPhone.startsWith("0"))  rawPhone = "966" + rawPhone.slice(1);
+    if (rawPhone.length === 9 && rawPhone.startsWith("5")) rawPhone = "966" + rawPhone;
+    const url = rawPhone
+      ? `https://wa.me/${rawPhone}?text=${encodeURIComponent(waConfirmMsg)}`
+      : `https://wa.me/?text=${encodeURIComponent(waConfirmMsg)}`;
+    const a = document.createElement("a");
+    a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent dir="rtl" className="max-w-sm max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>إعادة جدولة الحجز</DialogTitle>
-          <DialogDescription>تعديل موعد حجز {booking.clientName}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 mt-2">
-          {/* Date */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold">تاريخ الحجز الجديد</label>
-            <div className="rounded-md border bg-background px-3 py-2 flex items-center">
-              <DualCalendarPicker value={newDate} onChange={setNewDate} placeholder="اختر التاريخ" />
-            </div>
-          </div>
-
-          {/* Duration */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold">عدد الأيام</label>
-            <Input type="number" min={1} value={newDuration} onChange={(e) => setNewDuration(Math.max(1, Number(e.target.value)))} />
-          </div>
-
-          {/* Period — smart radio buttons with conflict badges */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold">الفترة</label>
-
-            {/* Fully-blocked day warning */}
-            {isFullyBlocked && (
-              <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
-                <span className="text-base">⛔</span>
-                <span className="text-xs font-semibold text-red-700 dark:text-red-300">هذا اليوم محجوز بالكامل — لا تتوفر فترات متاحة</span>
+        {!showWAConfirm ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>إعادة جدولة الحجز</DialogTitle>
+              <DialogDescription>تعديل موعد حجز {booking.clientName}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 mt-2">
+              {/* Date */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold">تاريخ الحجز الجديد</label>
+                <div className="rounded-md border bg-background px-3 py-2 flex items-center">
+                  <DualCalendarPicker value={newDate} onChange={setNewDate} placeholder="اختر التاريخ" />
+                </div>
               </div>
-            )}
 
-            <div className="grid grid-cols-2 gap-2">
-              {([
-                { value: "none",     label: "—",         sub: "بدون تحديد",     disabled: false,           icon: ""   },
-                { value: "morning",  label: "صباحي",     sub: "الفترة الصباحية", disabled: morningDisabled,  icon: "🌅" },
-                { value: "evening",  label: "مسائي",     sub: "الفترة المسائية", disabled: eveningDisabled,  icon: "🌙" },
-                { value: "full_day", label: "يوم كامل",  sub: "يوم كامل",       disabled: fullDayDisabled,  icon: "☀️" },
-              ] as const).map(({ value, label, sub, disabled, icon }) => (
-                <button
-                  key={value}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => !disabled && setNewPeriod(value)}
-                  className={[
-                    "relative flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-start transition-all",
-                    "focus:outline-none focus:ring-2 focus:ring-primary/40",
-                    disabled
-                      ? "opacity-50 cursor-not-allowed bg-muted/40 border-border"
-                      : newPeriod === value
-                        ? "border-primary bg-primary/10 shadow-sm"
-                        : "border-border hover:border-primary/50 hover:bg-muted/30",
-                  ].join(" ")}
-                >
-                  <span className="text-sm font-semibold flex items-center gap-1">
-                    {icon && <span>{icon}</span>}
-                    {label}
-                    {disabled && (
-                      <span className="text-[10px] font-bold text-red-500 dark:text-red-400 mr-1">(محجوز)</span>
-                    )}
-                  </span>
-                  {(value as string) !== "none" && (
-                    <span className="text-[10px] text-muted-foreground leading-none">{sub}</span>
-                  )}
-                  {newPeriod === value && !disabled && (
-                    <span className="absolute top-2 left-2 w-1.5 h-1.5 rounded-full bg-primary" />
-                  )}
-                </button>
-              ))}
+              {/* Duration */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold">عدد الأيام</label>
+                <Input type="number" min={1} value={newDuration} onChange={(e) => setNewDuration(Math.max(1, Number(e.target.value)))} />
+              </div>
+
+              {/* Period — smart radio buttons with conflict badges */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold">الفترة</label>
+                {isFullyBlocked && (
+                  <div className="flex items-center gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
+                    <span className="text-base">⛔</span>
+                    <span className="text-xs font-semibold text-red-700 dark:text-red-300">هذا اليوم محجوز بالكامل — لا تتوفر فترات متاحة</span>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { value: "none",     label: "—",         sub: "بدون تحديد",     disabled: false,           icon: ""   },
+                    { value: "morning",  label: "صباحي",     sub: "الفترة الصباحية", disabled: morningDisabled,  icon: "🌅" },
+                    { value: "evening",  label: "مسائي",     sub: "الفترة المسائية", disabled: eveningDisabled,  icon: "🌙" },
+                    { value: "full_day", label: "يوم كامل",  sub: "يوم كامل",       disabled: fullDayDisabled,  icon: "☀️" },
+                  ] as const).map(({ value, label, sub, disabled, icon }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => !disabled && setNewPeriod(value)}
+                      className={[
+                        "relative flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-start transition-all",
+                        "focus:outline-none focus:ring-2 focus:ring-primary/40",
+                        disabled
+                          ? "opacity-50 cursor-not-allowed bg-muted/40 border-border"
+                          : newPeriod === value
+                            ? "border-primary bg-primary/10 shadow-sm"
+                            : "border-border hover:border-primary/50 hover:bg-muted/30",
+                      ].join(" ")}
+                    >
+                      <span className="text-sm font-semibold flex items-center gap-1">
+                        {icon && <span>{icon}</span>}
+                        {label}
+                        {disabled && (
+                          <span className="text-[10px] font-bold text-red-500 dark:text-red-400 mr-1">(محجوز)</span>
+                        )}
+                      </span>
+                      {(value as string) !== "none" && (
+                        <span className="text-[10px] text-muted-foreground leading-none">{sub}</span>
+                      )}
+                      {newPeriod === value && !disabled && (
+                        <span className="absolute top-2 left-2 w-1.5 h-1.5 rounded-full bg-primary" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reason */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold">سبب إعادة الجدولة <span className="text-destructive">*</span></label>
+                <Textarea
+                  placeholder="مثال: طلب العميل تأجيل الموعد بسبب..."
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={3}
+                  className="resize-none text-sm"
+                />
+              </div>
+
+              {error && (
+                <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
+                  <span className="text-base mt-0.5">⛔</span>
+                  <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                </div>
+              )}
             </div>
-          </div>
-
-          {/* Reason */}
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold">سبب إعادة الجدولة <span className="text-destructive">*</span></label>
-            <Textarea
-              placeholder="مثال: طلب العميل تأجيل الموعد بسبب..."
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={3}
-              className="resize-none text-sm"
-            />
-          </div>
-
-          {error && (
-            <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
-              <span className="text-base mt-0.5">⛔</span>
-              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            <DialogFooter className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={onClose}>إلغاء</Button>
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={saving || !reason.trim() || hasConflict || isFullyBlocked}
+              >
+                {saving ? "جاري الحفظ..." : "حفظ التعديل"}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          /* ── WA Confirmation Screen ── */
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                <CheckCircle className="w-5 h-5" />
+                تمت إعادة الجدولة بنجاح ✓
+              </DialogTitle>
+              <DialogDescription>راجع الرسالة أدناه قبل إرسالها للعميل عبر واتساب</DialogDescription>
+            </DialogHeader>
+            <div className="mt-3 space-y-3">
+              <div className="rounded-xl border border-border bg-muted/40 p-3">
+                <p className="text-[11px] font-bold text-muted-foreground mb-2 uppercase tracking-wide">نص الرسالة</p>
+                <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed">{waConfirmMsg}</pre>
+              </div>
+              <Button
+                className="w-full bg-[#25D366] hover:bg-[#1da851] text-white font-bold gap-2"
+                onClick={sendWhatsApp}
+              >
+                <MessageSquare className="w-4 h-4" />
+                إرسال التحديث للعميل عبر واتساب
+              </Button>
             </div>
-          )}
-        </div>
-        <DialogFooter className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onClose}>إلغاء</Button>
-          <Button
-            size="sm"
-            onClick={handleSave}
-            disabled={saving || !reason.trim() || hasConflict || isFullyBlocked}
-          >
-            {saving ? "جاري الحفظ..." : "حفظ التعديل"}
-          </Button>
-        </DialogFooter>
+            <DialogFooter className="mt-2">
+              <Button variant="outline" size="sm" className="w-full" onClick={onClose}>إغلاق</Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -4528,6 +4592,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         open={!!rescheduleBooking}
         booking={rescheduleBooking}
         existingBookings={bookings}
+        chaletName={
+          ownerChalets.find((c: any) => c.submissionId === rescheduleBooking?.submissionId)?.nameAr
+          ?? ownerChalets.find((c: any) => c.id === (activeChaletId ?? ownerChalets[0]?.id))?.nameAr
+          ?? "العقار"
+        }
+        clientPhone={rescheduleBooking?.clientPhone ?? ""}
         onClose={() => setRescheduleBooking(null)}
         onRescheduled={() => {
           qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
