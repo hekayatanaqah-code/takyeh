@@ -2523,31 +2523,34 @@ function DeleteConfirmDialog({
                 <span className="text-muted-foreground">العربون المحصّل:</span>
                 <span className="font-bold">{depositPaid.toLocaleString("ar-SA")} ر.س</span>
               </div>
-              {insuranceFee > 0 && (
-                <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                  <span className="flex items-center gap-1">🔒 مبلغ التأمين <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full font-medium">يُعاد للعميل كاملاً</span></span>
-                  <span className="font-semibold">{insuranceFee.toLocaleString("ar-SA")} ر.س</span>
-                </div>
-              )}
               <div className={`flex justify-between ${refundExceedsDeposit ? "text-red-600 font-semibold" : "text-red-600"}`}>
-                <span>المبلغ المسترد للعميل (من العربون):</span>
+                <span>استرداد العربون للعميل:</span>
                 <span className="font-bold">− {refundDisplay.toLocaleString("ar-SA")} ر.س</span>
               </div>
+              {insuranceFee > 0 && (
+                <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                  <span>🔒 مبلغ التأمين (مسترد بالكامل لعدم الدخول):</span>
+                  <span className="font-semibold">− {insuranceFee.toLocaleString("ar-SA")} ر.س</span>
+                </div>
+              )}
               {refundExceedsDeposit ? (
                 <div className="flex justify-between border-t border-red-300 pt-2 font-bold text-red-600">
                   <span>⛔ مبلغ غير صالح</span>
                   <span>يتجاوز الحد المسموح</span>
                 </div>
               ) : (
-                <div className="flex justify-between border-t border-border pt-2 font-bold text-green-700 dark:text-green-400">
-                  <span>إيراد الإلغاء المحقّق:</span>
-                  <span>{cancelIncome.toLocaleString("ar-SA")} ر.س</span>
-                </div>
-              )}
-              {insuranceFee > 0 && !refundExceedsDeposit && (
-                <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/30 px-2.5 py-2 text-xs text-blue-700 dark:text-blue-300">
-                  التسوية الكاملة مع العميل: {refundDisplay.toLocaleString("ar-SA")} ر.س (استرداد عربون) + {insuranceFee.toLocaleString("ar-SA")} ر.س (تأمين) = <strong>{(refundDisplay + insuranceFee).toLocaleString("ar-SA")} ر.س</strong> إجمالي المُعاد للعميل
-                </div>
+                <>
+                  <div className="flex justify-between border-t border-border pt-2 font-bold text-green-700 dark:text-green-400">
+                    <span>إيراد الإلغاء للمالك:</span>
+                    <span>{cancelIncome.toLocaleString("ar-SA")} ر.س</span>
+                  </div>
+                  {insuranceFee > 0 && (
+                    <div className="flex justify-between border-t border-border pt-2 font-extrabold text-base text-foreground">
+                      <span>💰 إجمالي المُعاد للعميل:</span>
+                      <span>{(refundDisplay + insuranceFee).toLocaleString("ar-SA")} ر.س</span>
+                    </div>
+                  )}
+                </>
               )}
               <p className="text-[11px] text-muted-foreground">
                 💡 إيراد الإلغاء = عربون − مبلغ مسترد. يُضاف تلقائياً إلى تقرير الإيرادات.
