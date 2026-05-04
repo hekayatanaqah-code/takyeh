@@ -10611,12 +10611,18 @@ function ReportsTab() {
             <label className="text-xs text-muted-foreground font-medium">العقار</label>
             <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
               <SelectTrigger className="h-10">
-                <SelectValue placeholder={mySubmissions[0]?.nameAr || mySubmissions[0]?.name || "شاليه الربيع"} />
+                <SelectValue placeholder={
+                  mySubmissions.length === 1
+                    ? (mySubmissions[0]?.nameAr || mySubmissions[0]?.name)
+                    : "جميع العقارات"
+                } />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{mySubmissions[0]?.nameAr || mySubmissions[0]?.name || "شاليه الربيع"}</SelectItem>
+                {mySubmissions.length !== 1 && (
+                  <SelectItem value="all">جميع العقارات</SelectItem>
+                )}
                 {mySubmissions.map((s: any) => (
-                  <SelectItem key={s.id} value={String(s.id)}>{s.nameAr ?? s.name ?? `شاليه #${s.id}`}</SelectItem>
+                  <SelectItem key={s.id} value={String(s.id)}>{s.nameAr || s.name || `عقار #${s.id}`}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
