@@ -2609,6 +2609,7 @@ function RescheduleDialog({
   const [waConfirmMsg, setWaConfirmMsg] = useState("");
   const [oldDateSnap, setOldDateSnap] = useState("");
   const [oldPeriodSnap, setOldPeriodSnap] = useState<string | null>(null);
+  const [newTotalPrice, setNewTotalPrice] = useState("");
 
   const _getArabicDayName = (dateStr: string) =>
     new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(dateStr + "T12:00:00"));
@@ -2655,15 +2656,27 @@ function RescheduleDialog({
     return null;
   };
 
-  /* ── Live price diff calculation ── */
+  /* ── Auto-computed price (read-only, used to pre-fill the editable input) ── */
   const newComputedPrice = useMemo(
     () => (newDate && newPeriod && newPeriod !== "none" ? _getPriceForDate(newDate, newPeriod) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [newDate, newPeriod, dialogSeasons, chaletPrices]
   );
+  /* Auto-fill editable price input whenever computed price changes */
+  useEffect(() => {
+    if (newComputedPrice !== null) {
+      setNewTotalPrice(String(Math.round(newComputedPrice)));
+    }
+  }, [newComputedPrice]);
+
   const oldTotalPrice = booking?.totalPrice ? Number(booking.totalPrice) : null;
-  const priceDiff = newComputedPrice !== null && oldTotalPrice !== null
-    ? Math.round(newComputedPrice - oldTotalPrice)
+  const newTotalPriceNum = newTotalPrice !== "" && !isNaN(Number(newTotalPrice)) ? Math.round(Number(newTotalPrice)) : null;
+  const depositPaidNum = booking?.depositPaid ? Number(booking.depositPaid) : null;
+  const newRemaining = newTotalPriceNum !== null && depositPaidNum !== null
+    ? Math.max(0, newTotalPriceNum - depositPaidNum)
+    : null;
+  const priceDiff = newTotalPriceNum !== null && oldTotalPrice !== null
+    ? newTotalPriceNum - oldTotalPrice
     : null;
 
   useEffect(() => {
@@ -2677,6 +2690,7 @@ function RescheduleDialog({
       setWaConfirmMsg("");
       setOldDateSnap(booking.bookingDate);
       setOldPeriodSnap(booking.period ?? null);
+      setNewTotalPrice("");
     }
   }, [open, booking]);
 
@@ -2741,9 +2755,9 @@ function RescheduleDialog({
         period: newPeriodForApi,
         rescheduleReason: reason.trim(),
       };
-      /* If we computed a new price, update totalPrice so المتبقي refreshes */
-      if (newComputedPrice !== null) {
-        patchBody.totalPrice = newComputedPrice;
+      /* Use the manually entered (or auto-filled) price to update totalPrice → المتبقي recalculates */
+      if (newTotalPriceNum !== null) {
+        patchBody.totalPrice = newTotalPriceNum;
       }
       const r = await apiFetch(`/owner/bookings/${booking.id}`, {
         method: "PATCH",
@@ -2754,7 +2768,7 @@ function RescheduleDialog({
         setError(data?.error ?? "حدث خطأ، يرجى المحاولة");
         return;
       }
-      /* ── Build WA confirmation message (old → new date, with period + price) ── */
+      /* ── Build WA confirmation message (old → new, with period + agreed price) ── */
       const snap = oldDateSnap || booking.bookingDate;
       const oldHijri = formatDualDate(snap).hijri.replace(/\s*هـ\s*$/, "");
       const oldGreg  = formatDualDate(snap).gregorian;
@@ -2765,11 +2779,8 @@ function RescheduleDialog({
       const oldPeriodAr = _periodLabel(oldPeriodSnap);
       const newPeriodAr = _periodLabel(newPeriodForApi);
       let msg = `مرحباً ${booking.clientName ?? ""}، تم تعديل حجزك في ${chaletName ?? "العقار"} بناءً على (${reason.trim()}).\n\nالحجز السابق: يوم ${oldDay} (${oldHijri} | ${oldGreg}) - فترة ${oldPeriodAr}.\n\nالحجز الجديد: يوم ${newDay} (${newHijri} | ${newGreg}) - فترة ${newPeriodAr}.`;
-      if (newComputedPrice !== null && oldTotalPrice !== null && priceDiff !== null && priceDiff !== 0) {
-        const diffLabel = priceDiff > 0 ? "إضافة" : "خصم";
-        const absDiff = Math.abs(priceDiff);
-        const newTotal = Math.round(newComputedPrice);
-        msg += `\n\nتعديل السعر: تم ${diffLabel} مبلغ ${absDiff.toLocaleString("ar-SA")} ريال، ليصبح الإجمالي الجديد ${newTotal.toLocaleString("ar-SA")} ريال.`;
+      if (newTotalPriceNum !== null) {
+        msg += `\n\nالسعر الإجمالي المتفق عليه: ${newTotalPriceNum.toLocaleString("ar-SA")} ريال.`;
       }
       setWaConfirmMsg(msg);
       setShowWAConfirm(true);
@@ -2879,27 +2890,48 @@ function RescheduleDialog({
                 />
               </div>
 
-              {/* Price difference notice */}
-              {priceDiff !== null && (
-                <div className={[
-                  "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold",
-                  priceDiff === 0
-                    ? "bg-muted/30 border-border text-muted-foreground"
-                    : priceDiff > 0
+              {/* Editable total price + remaining balance */}
+              <div className="space-y-2">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold flex items-center gap-1.5">
+                    السعر الإجمالي الجديد
+                    {newComputedPrice !== null && (
+                      <span className="text-[10px] font-normal text-muted-foreground">(محسوب تلقائياً — قابل للتعديل)</span>
+                    )}
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      dir="ltr"
+                      value={newTotalPrice}
+                      onChange={(e) => setNewTotalPrice(e.target.value.replace(/[^0-9.]/g, ""))}
+                      placeholder="أدخل السعر الإجمالي"
+                      className="text-right pl-14"
+                    />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">ر.س</span>
+                  </div>
+                </div>
+                {/* New remaining balance */}
+                {newRemaining !== null && (
+                  <div className="flex items-center justify-between rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2">
+                    <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">المتبقي الجديد</span>
+                    <span className="text-sm font-bold text-blue-800 dark:text-blue-200">{newRemaining.toLocaleString("ar-SA")} ر.س</span>
+                  </div>
+                )}
+                {/* Price diff vs original */}
+                {priceDiff !== null && priceDiff !== 0 && (
+                  <div className={[
+                    "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold",
+                    priceDiff > 0
                       ? "bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300"
                       : "bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-800 dark:text-green-300",
-                ].join(" ")}>
-                  <span className="text-base">
-                    {priceDiff === 0 ? "🟰" : priceDiff > 0 ? "⬆️" : "⬇️"}
-                  </span>
-                  <span>
-                    {priceDiff === 0
-                      ? "لا يوجد فارق في السعر"
-                      : `فارق السعر: ${priceDiff > 0 ? "+" : ""}${Math.abs(priceDiff).toLocaleString("ar-SA")} ريال — الإجمالي الجديد: ${Math.round(newComputedPrice!).toLocaleString("ar-SA")} ريال`
-                    }
-                  </span>
-                </div>
-              )}
+                  ].join(" ")}>
+                    <span>{priceDiff > 0 ? "⬆️" : "⬇️"}</span>
+                    <span>فارق عن الحجز الأصلي: {priceDiff > 0 ? "+" : ""}{priceDiff.toLocaleString("ar-SA")} ريال</span>
+                  </div>
+                )}
+              </div>
 
               {error && (
                 <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2">
