@@ -10141,6 +10141,7 @@ function ReportsTab() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string>("all");
+  const [isHijri, setIsHijri] = useState(false);
   const [sharePhone, setSharePhone] = useState(() => localStorage.getItem("reportSharePhone") ?? "");
   const [shareEmail, setShareEmail] = useState(() => localStorage.getItem("reportShareEmail") ?? "");
   const [showShare, setShowShare] = useState(false);
@@ -10164,13 +10165,13 @@ function ReportsTab() {
 
   /* Auto-select the only property when owner has exactly one submission */
   useEffect(() => {
-    if (mySubmissions.length === 1 && selectedSubmissionId === "all") {
+    if (mySubmissions && mySubmissions.length > 0 && mySubmissions.length === 1 && selectedSubmissionId === "all") {
       setSelectedSubmissionId(String(mySubmissions[0].id));
     }
-  }, [mySubmissions.length]);
+  }, [mySubmissions?.length]);
 
   const { data: report, isLoading } = useQuery<MonthReport>({
-    queryKey: ["owner", "reports", selectedMonth, selectedSubmissionId],
+    queryKey: ["owner", "reports", selectedMonth, selectedSubmissionId, isHijri],
     queryFn: async () => {
       const params = new URLSearchParams({ month: selectedMonth });
       if (selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
@@ -10269,11 +10270,13 @@ function ReportsTab() {
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const val = d.toISOString().slice(0, 7);
-      const label = d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+      const label = isHijri
+        ? d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" })
+        : d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
       opts.push({ val, label });
     }
     return opts;
-  }, []);
+  }, [isHijri]);
 
   const yearOptions = useMemo(() => {
     const cur = new Date().getFullYear();
@@ -10607,9 +10610,9 @@ function ReportsTab() {
           <div className="flex-1 space-y-1">
             <label className="text-xs text-muted-foreground font-medium">العقار</label>
             <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
-              <SelectTrigger className="h-10"><SelectValue placeholder="كل العقارات" /></SelectTrigger>
+              <SelectTrigger className="h-10"><SelectValue placeholder={mySubmissions.length === 1 ? (mySubmissions[0].nameAr || mySubmissions[0].name || "كل العقارات") : "عرض كل العقارات"} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">كل العقارات</SelectItem>
+                <SelectItem value="all">{mySubmissions.length === 1 ? (mySubmissions[0].nameAr || mySubmissions[0].name || "كل العقارات") : "عرض كل العقارات"}</SelectItem>
                 {mySubmissions.map((s: any) => (
                   <SelectItem key={s.id} value={String(s.id)}>{s.nameAr ?? `شاليه #${s.id}`}</SelectItem>
                 ))}
@@ -10638,6 +10641,19 @@ function ReportsTab() {
             </div>
           )}
         </div>
+        {/* H/G Calendar Toggle */}
+        {viewMode === "monthly" && (
+          <div className="flex items-center justify-between pt-1 border-t border-border">
+            <label className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 cursor-pointer select-none" htmlFor="hijri-toggle">
+              عرض بالتقويم الهجري
+            </label>
+            <Switch
+              id="hijri-toggle"
+              checked={isHijri}
+              onCheckedChange={setIsHijri}
+            />
+          </div>
+        )}
         {selectedSubmissionId !== "all" && (
           <p className="text-xs text-primary font-medium flex items-center gap-1">
             <Building2 className="w-3.5 h-3.5" />
