@@ -6957,7 +6957,7 @@ function RevenueTab() {
   const { unit } = useAdminFinance();
   const currentMonth = new Date().toISOString().slice(0, 7);
   const [selectedMonth, setSelectedMonth]     = useState(currentMonth);
-  const [calType, setCalType]                 = useState<"gregorian" | "hijri">("gregorian");
+  const [calType, setCalType]                 = useState<"gregorian" | "hijri">(() => (localStorage.getItem("revCalType") as "gregorian" | "hijri") ?? "gregorian");
   const [selectedHijriMonth, setSelectedHijriMonth] = useState<string>("");
   const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage" | "cancellation" | "refund" | "insurance">("all");
   const [svcFilter, setSvcFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
@@ -6989,7 +6989,7 @@ function RevenueTab() {
     return opts.reverse();
   }, []);
 
-  /* ── Hijri month options (past 14 + current + next 6 Hijri months) ── */
+  /* ── Hijri month options (past 15 + current + next 13 Hijri months, covering 1448) ── */
   const hijriMonthOptions = useMemo(() => {
     const seen = new Set<string>();
     const opts: { key: string; label: string; isFuture?: boolean }[] = [];
@@ -6997,9 +6997,9 @@ function RevenueTab() {
     const now = new Date();
     const nowKey = fmt.format(now);
     const MS = 86_400_000;
-    // Step every 29 days (< shortest Hijri month of 29 days) to guarantee
-    // every Hijri month is sampled. Cover ~15 months back and ~7 months forward.
-    for (let day = -450; day <= 210; day += 29) {
+    // Step every 29 days to guarantee every Hijri month is sampled.
+    // Cover ~15 months back and ~13 months forward (to cover full year 1448).
+    for (let day = -450; day <= 390; day += 29) {
       const d = new Date(now.getTime() + day * MS);
       const key = fmt.format(d);
       if (!seen.has(key)) {
@@ -7008,7 +7008,8 @@ function RevenueTab() {
         opts.push({ key, label: isFuture ? `🔮 ${key}` : key, isFuture });
       }
     }
-    return opts;
+    // Newest first (future → current → past), mirroring Gregorian month selector
+    return opts.reverse();
   }, []);
 
   /* Default selectedHijriMonth to current Hijri month */
@@ -7485,11 +7486,11 @@ function RevenueTab() {
           {/* Calendar toggle — hidden in all-future mode */}
           {!showAllFuture && <div className="flex rounded-lg border border-border overflow-hidden text-xs">
             <button
-              onClick={() => { setCalType("gregorian"); setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50); }}
+              onClick={() => { setCalType("gregorian"); localStorage.setItem("revCalType", "gregorian"); setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50); }}
               className={`px-3 py-1.5 font-medium transition-colors ${calType === "gregorian" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
             >م</button>
             <button
-              onClick={() => { setCalType("hijri"); setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50); }}
+              onClick={() => { setCalType("hijri"); localStorage.setItem("revCalType", "hijri"); setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50); }}
               className={`px-3 py-1.5 font-medium transition-colors ${calType === "hijri" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
             >هـ</button>
           </div>}
@@ -10141,6 +10142,13 @@ function ReportsTab() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string>("all");
   const [sharePhone, setSharePhone] = useState(() => localStorage.getItem("reportSharePhone") ?? "");
+
+  /* Auto-select the only property when owner has exactly one submission */
+  useEffect(() => {
+    if (mySubmissions.length === 1 && selectedSubmissionId === "all") {
+      setSelectedSubmissionId(String(mySubmissions[0].id));
+    }
+  }, [mySubmissions.length]);
   const [shareEmail, setShareEmail] = useState(() => localStorage.getItem("reportShareEmail") ?? "");
   const [showShare, setShowShare] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
@@ -13738,6 +13746,14 @@ export default function Dashboard() {
       setSelectedServiceId(null);
     }
   }, [dashMode, myApprovedProviders.length]);
+
+  /* Auto-select the single chalet as finance unit when owner has only one property */
+  useEffect(() => {
+    if (ownerChalets.length === 1 && myApprovedProviders.length === 0 && selectedFinanceUnit.type === "all") {
+      const c = ownerChalets[0];
+      setSelectedFinanceUnit({ type: "chalet", id: c.id, submissionId: c.submissionId, name: c.nameAr ?? `شاليه ${c.id}` });
+    }
+  }, [ownerChalets.length, myApprovedProviders.length]);
 
   interface NotifSummaryRow { id: number; isRead: boolean; type: string; message: string; }
   const { data: notifSummary = [] } = useQuery<NotifSummaryRow[]>({
