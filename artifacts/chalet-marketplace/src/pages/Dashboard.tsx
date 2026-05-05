@@ -3356,9 +3356,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     });
   }, [bookings, filterFrom, filterTo, searchQuery, ownerChalets]);
 
-  const getManualWhatsAppTemplates = () => messageSettings.waEnabled ? [
+  const getManualWhatsAppTemplates = (booking: OwnerBooking) => messageSettings.waEnabled ? [
     { id: "confirmation", title: "تأكيد الحجز", body: messageSettings.bookingConfirmationTemplate },
-    { id: "cancellation", title: "إلغاء الحجز", body: messageSettings.cancellationTemplate },
+    ...(booking.cancelledAt ? [{ id: "cancellation", title: "إلغاء الحجز", body: messageSettings.cancellationTemplate }] : []),
     ...((messageSettings.customTemplates ?? []).map((tpl) => ({ id: tpl.id, title: tpl.title, body: tpl.body }))),
   ].filter((tpl) => tpl.body?.trim()) : [];
 
@@ -3430,6 +3430,79 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    setOpenMessageMenuId(null);
+  };
+
+  const openReceiptWhatsApp = (b: OwnerBooking) => {
+    const phone = normalizeGuestPhone(b);
+    const bChaletName = getBookingChaletName(b);
+    const tp   = b.totalPrice    ? Number(b.totalPrice)    : null;
+    const dp   = b.depositPaid   ? Number(b.depositPaid)   : null;
+    const ins  = b.insuranceFee  ? Number(b.insuranceFee)  : null;
+    const rem  = tp !== null && dp !== null ? Math.max(0, tp - dp) : null;
+    const fmtR = (n: number) => n.toLocaleString("ar-SA", { maximumFractionDigits: 2 });
+    const periodLabel = b.period
+      ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[b.period as string] ?? b.period)
+      : "";
+    const { hijri: hijriDate, gregorian: gregDate } = formatDualDate(b.bookingDate);
+    const dualDate = hijriDate && gregDate ? `${hijriDate} | ${gregDate}` : b.bookingDate;
+    const lines: string[] = [
+      `🏡 إيصال حجز – حكاية أناقة`,
+      ``,
+      `🏠 الشاليه: ${bChaletName}`,
+      `👤 العميل: ${b.clientName}`,
+      `📅 التاريخ: ${dualDate}`,
+      `⏱ المدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`,
+    ];
+    if (tp !== null) {
+      lines.push(``, `💰 تفاصيل المبالغ:`);
+      lines.push(`• الإجمالي: ${fmtR(tp)} ر.س`);
+      lines.push(`• العربون: ${fmtR(dp ?? 0)} ر.س`);
+      lines.push(`• المتبقي: ${fmtR(rem ?? 0)} ر.س${b.balanceCollected ? " ✓" : ""}`);
+    }
+    if (ins) {
+      if (!b.insuranceRefunded) {
+        lines.push(`• التأمين: ${fmtR(ins)} ر.س 🔒 (محتجز)`);
+      } else if (b.insuranceDeducted && Number(b.insuranceDeducted) > 0) {
+        const deducted = Number(b.insuranceDeducted);
+        const refunded = Math.max(0, ins - deducted);
+        const proofImgs: string[] = (() => { try { return JSON.parse(b.insuranceProofImages ?? "[]"); } catch { return []; } })();
+        lines.push(``, `✂️ تم خصم مبلغ ${fmtR(deducted)} ر.س من التأمين`);
+        if (b.insuranceDeductReason) lines.push(`📋 بسبب: ${b.insuranceDeductReason}`);
+        if (refunded > 0) lines.push(`💚 المبلغ المتبقي المُرجَع إليك: ${fmtR(refunded)} ر.س`);
+        else lines.push(`💚 المبلغ المُرجَع: ٠ ر.س`);
+        if (proofImgs.length > 0) {
+          const base2 = import.meta.env.BASE_URL.replace(/\/$/, "");
+          const firstUrl = proofImgs[0].startsWith("http") ? proofImgs[0] : `${window.location.origin}${base2}${proofImgs[0]}`;
+          lines.push(``, `✨ منصة حكاية أناقة – شاليهات القصيم`);
+          lines.push(``, `📸 صور التوثيق الإضافية:`, firstUrl);
+          const msgP = lines.join("\n");
+          const a2 = document.createElement("a");
+          a2.href = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msgP)}` : `https://wa.me/?text=${encodeURIComponent(msgP)}`;
+          a2.target = "_blank"; a2.rel = "noopener noreferrer";
+          document.body.appendChild(a2); a2.click(); document.body.removeChild(a2);
+          setOpenMessageMenuId(null);
+          return;
+        }
+      } else {
+        lines.push(`• التأمين: ${fmtR(ins)} ر.س ↩ تم الإرجاع بالكامل`);
+      }
+    }
+    const bChalet = ownerChalets.find((c: any) => c.submissionId === b.submissionId) ?? ownerChalets.find((c: any) => c.id === activeChaletId);
+    const terms: string = bChalet?.termsAndConditions ?? "";
+    if (terms.trim()) {
+      const termLines = terms.split("\n").map((l: string) => l.trim()).filter(Boolean);
+      if (termLines.length > 0) {
+        lines.push(``, `📋 الشروط والأحكام:`);
+        termLines.forEach((t: string) => lines.push(`• ${t}`));
+      }
+    }
+    lines.push(``, `✨ منصة حكاية أناقة – شاليهات القصيم`);
+    const msgFull = lines.join("\n");
+    const a3 = document.createElement("a");
+    a3.href = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msgFull)}` : `https://wa.me/?text=${encodeURIComponent(msgFull)}`;
+    a3.target = "_blank"; a3.rel = "noopener noreferrer";
+    document.body.appendChild(a3); a3.click(); document.body.removeChild(a3);
     setOpenMessageMenuId(null);
   };
 
@@ -3621,7 +3694,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const popStartG = formatDualDate(b.bookingDate).gregorian;
                   const popEndH   = formatDualDate(popEndStr).hijri.replace(/\s*هـ\s*$/, "");
                   const popEndG   = formatDualDate(popEndStr).gregorian;
-                  const modalMessageTemplates = getManualWhatsAppTemplates();
+                  const modalMessageTemplates = getManualWhatsAppTemplates(b);
                   const sendModalWhatsAppTemplate = (templateBody: string) => openManualWhatsAppTemplate(b, templateBody);
                   return (
                     <div key={b.id} className={`rounded-xl border p-3 space-y-1.5 ${bi > 0 ? "mt-2" : ""} ${
@@ -3686,6 +3759,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                     ) : (
                                       <p className="px-3 py-2 text-xs text-muted-foreground">أضف قالباً من إعدادات الرسائل</p>
                                     )}
+                                    <div className="h-px bg-border my-1" />
+                                    <button
+                                      type="button"
+                                      onClick={() => openReceiptWhatsApp(b)}
+                                      className="w-full text-right px-3 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                                    >
+                                      إيصال واتساب مفصل
+                                    </button>
                                   </div>
                                 )}
                               </span>
@@ -4303,7 +4384,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 document.body.removeChild(a);
               };
 
-              const messageTemplates = getManualWhatsAppTemplates();
+              const messageTemplates = getManualWhatsAppTemplates(b);
 
               const sendManualWhatsAppTemplate = (templateBody: string, reason = "") => {
                 openManualWhatsAppTemplate(b, templateBody, reason);
