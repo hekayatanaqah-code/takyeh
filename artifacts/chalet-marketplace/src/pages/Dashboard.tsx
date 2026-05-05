@@ -3467,6 +3467,52 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const getArabicDayName = (dateStr: string) =>
     new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(dateStr + "T12:00:00"));
 
+  /* ── Pure message builder — NO window.open, NO side effects whatsoever ── */
+  const buildCancellationWaMsg = (
+    b: OwnerBooking,
+    templateBody: string,
+    reason: string,
+    depositRefund: number,
+    insuranceFee: number,
+  ): string => {
+    const startHijri = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
+    const startGreg  = formatDualDate(b.bookingDate).gregorian;
+    const dur = Math.max(1, b.durationDays ?? 1);
+    const endD = new Date(b.bookingDate + "T00:00:00");
+    endD.setDate(endD.getDate() + dur - 1);
+    const endStr   = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, "0")}-${String(endD.getDate()).padStart(2, "0")}`;
+    const endHijri = formatDualDate(endStr).hijri.replace(/\s*هـ\s*$/, "");
+    const endGreg  = formatDualDate(endStr).gregorian;
+    const _bTotal     = b.totalPrice  ? Number(b.totalPrice)  : 0;
+    const _bPaid      = b.depositPaid ? Number(b.depositPaid) : 0;
+    const _bRemaining = Math.max(0, _bTotal + insuranceFee - _bPaid);
+    const _fmt = (n: number) => n > 0 ? n.toLocaleString("ar-SA") : "—";
+    const totalRefund = depositRefund + insuranceFee;
+    return templateBody
+      .replace(/\{اسم_العميل\}/g, b.clientName ?? "")
+      .replace(/\{اسم_العقار\}/g, getBookingChaletName(b))
+      .replace(/\{التاريخ\}/g, getBookingDateText(b))
+      .replace(/\{سبب_الإلغاء\}/g, reason || b.cancelReason || "حسب الاتفاق")
+      .replace(/\{اسم_اليوم_من\}/g, getArabicDayName(b.bookingDate))
+      .replace(/\{اسم_اليوم_إلى\}/g, getArabicDayName(endStr))
+      .replace(/\{من_التاريخ\}/g, startHijri)
+      .replace(/\{من_التاريخ_م\}/g, startGreg)
+      .replace(/\{إلى_التاريخ\}/g, endHijri)
+      .replace(/\{إلى_التاريخ_م\}/g, endGreg)
+      .replace(/\{الإيجار\}/g, _fmt(_bTotal))
+      .replace(/\{التأمين\}/g, _fmt(insuranceFee))
+      .replace(/\{المدفوع\}/g, _fmt(_bPaid))
+      .replace(/\{المتبقي\}/g, _fmt(_bRemaining))
+      .replace(/\{سبب_التعديل\}/g, reason || "—")
+      .replace(/\{الفترة_القديمة\}/g, "—")
+      .replace(/\{الفترة_الجديدة\}/g, "—")
+      .replace(/\{استرداد_العربون\}/g, _fmt(depositRefund))
+      .replace(/\{استرداد_التأمين\}/g, _fmt(insuranceFee))
+      .replace(/\{إجمالي_المسترد\}/g, _fmt(totalRefund))
+      .replace(/\{المبلغ_المسترد\}/g, _fmt(totalRefund))
+      .replace(/\{[^}]+\}/g, "—");
+  };
+
   const openManualWhatsAppTemplate = (b: OwnerBooking, templateBody: string, reason = "", refundAmount?: number, insuranceFeeOverride?: number, returnOnly = false): string | void => {
     const startHijri  = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
     const startGreg   = formatDualDate(b.bookingDate).gregorian;
@@ -5043,35 +5089,49 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         onClose={() => setDeleteDialogBooking(null)}
         onConfirm={(id, reason, reasonCode, refundAmount) => {
           if (isReadOnly) { onBlockedEdit(); return; }
+          /* snapshot booking BEFORE any state mutation clears it */
+          const bkSnap = deleteDialogBooking;
+          /* 1. save cancellation to DB — no WA open here */
           deleteBooking.mutate({ id, reason, reasonCode, refundAmount });
-          if (deleteDialogBooking && messageSettings.waEnabled && messageSettings.cancellationTemplate) {
-            const bk = deleteDialogBooking;
-            const insAmt  = Number(bk.insuranceFee ?? 0);
-            const depAmt  = refundAmount ?? 0;
-            const phone   = normalizeGuestPhone(bk);
-            const msg     = openManualWhatsAppTemplate(bk, messageSettings.cancellationTemplate, reason, depAmt, insAmt, true);
-            if (typeof msg === "string") setWaCancelPreview({ booking: bk, phone, message: msg });
+          /* 2. if WA enabled, build message with pure builder and show preview */
+          if (bkSnap && messageSettings.waEnabled && messageSettings.cancellationTemplate) {
+            const phone  = normalizeGuestPhone(bkSnap);
+            const depAmt = refundAmount ?? 0;
+            const insAmt = Number(bkSnap.insuranceFee ?? 0);
+            const msg    = buildCancellationWaMsg(
+              bkSnap,
+              messageSettings.cancellationTemplate,
+              reason,
+              depAmt,
+              insAmt,
+            );
+            /* 3. set state so preview modal renders — window.open happens ONLY
+               when the owner clicks 'إرسال عبر واتساب' inside the modal */
+            setWaCancelPreview({ booking: bkSnap, phone, message: msg });
           }
         }}
       />
 
-      {/* WhatsApp Cancellation Preview Modal */}
-      <WaCancelPreviewDialog
-        open={!!waCancelPreview}
-        phone={waCancelPreview?.phone ?? ""}
-        initialMessage={waCancelPreview?.message ?? ""}
-        onClose={() => setWaCancelPreview(null)}
-        onSent={(finalMsg, wasEdited) => {
-          if (wasEdited && waCancelPreview) {
-            const bk   = waCancelPreview.booking;
-            const date = new Date().toLocaleDateString("ar-SA");
-            const tag  = `[رسالة إلغاء مُرسلة — ${date}]:\n${finalMsg}`;
-            const prev = bk.notes?.trim() ? bk.notes.trim() + "\n\n" : "";
-            appendBookingNotes.mutate({ id: bk.id, notes: prev + tag });
-          }
-          setWaCancelPreview(null);
-        }}
-      />
+      {/* WhatsApp Cancellation Preview Modal — conditionally rendered,
+          mounts only when waCancelPreview is set, unmounts when cleared */}
+      {waCancelPreview && (
+        <WaCancelPreviewDialog
+          open={true}
+          phone={waCancelPreview.phone}
+          initialMessage={waCancelPreview.message}
+          onClose={() => setWaCancelPreview(null)}
+          onSent={(finalMsg, wasEdited) => {
+            if (wasEdited) {
+              const bk   = waCancelPreview.booking;
+              const date = new Date().toLocaleDateString("ar-SA");
+              const tag  = `[رسالة إلغاء مُرسلة — ${date}]:\n${finalMsg}`;
+              const prev = bk.notes?.trim() ? bk.notes.trim() + "\n\n" : "";
+              appendBookingNotes.mutate({ id: bk.id, notes: prev + tag });
+            }
+            setWaCancelPreview(null);
+          }}
+        />
+      )}
 
       {/* Reschedule Dialog */}
       <RescheduleDialog
