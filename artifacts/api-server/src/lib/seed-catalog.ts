@@ -102,13 +102,13 @@ export async function seedCatalogIfEmpty() {
   `);
 
   const NEW_CANCELLATION_TEMPLATE =
-    "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}.\n\nالسبب: {سبب_الإلغاء}.\nالمبلغ المسترد: {المبلغ_المسترد} ريال.";
+    "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}.\n\nالسبب: {سبب_الإلغاء}.\n\nتفاصيل المبالغ المُستردّة:\n• استرداد العربون: {استرداد_العربون} ريال\n• استرداد التأمين: {استرداد_التأمين} ريال\n• إجمالي المبلغ المسترد: {إجمالي_المسترد} ريال";
 
   await db.execute(sql`
     UPDATE owner_notification_settings
     SET arrival_reminder_template = ${NEW_CANCELLATION_TEMPLATE}
     WHERE arrival_reminder_template IS NULL
-       OR arrival_reminder_template NOT LIKE '%{المبلغ_المسترد}%'
+       OR arrival_reminder_template NOT LIKE '%{استرداد_العربون}%'
   `);
 
   const existingCities = await db.select().from(citiesCatalogTable);

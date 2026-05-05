@@ -132,7 +132,7 @@ const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   bookingConfirmationEnabled: true,
   bookingConfirmationTemplate: DEFAULT_CONFIRMATION_TEMPLATE_BODY,
   changeNoticeEnabled: true,
-  cancellationTemplate: "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}.\n\nالسبب: {سبب_الإلغاء}.\nالمبلغ المسترد: {المبلغ_المسترد} ريال.",
+  cancellationTemplate: "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}.\n\nالسبب: {سبب_الإلغاء}.\n\nتفاصيل المبالغ المُستردّة:\n• استرداد العربون: {استرداد_العربون} ريال\n• استرداد التأمين: {استرداد_التأمين} ريال\n• إجمالي المبلغ المسترد: {إجمالي_المسترد} ريال",
   modificationTemplate: DEFAULT_MODIFICATION_TEMPLATE_BODY,
   customTemplates: [],
   attachmentNote: "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
@@ -2414,6 +2414,79 @@ const CANCEL_REASONS = [
   { code: "other",          label: "أخرى" },
 ] as const;
 
+/* ── WhatsApp Cancellation Preview Dialog ──────────────────────────────── */
+function WaCancelPreviewDialog({
+  open, phone, initialMessage, onClose, onSent,
+}: {
+  open: boolean;
+  phone: string;
+  initialMessage: string;
+  onClose: () => void;
+  onSent: (finalMessage: string, wasEdited: boolean) => void;
+}) {
+  const [msg, setMsg] = useState(initialMessage);
+  useEffect(() => { if (open) setMsg(initialMessage); }, [open, initialMessage]);
+
+  const wasEdited = msg.trim() !== initialMessage.trim();
+
+  const handleSend = () => {
+    const encoded = encodeURIComponent(msg);
+    const url = phone
+      ? `https://wa.me/${phone}?text=${encoded}`
+      : `https://wa.me/?text=${encoded}`;
+    const a = document.createElement("a");
+    a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    onSent(msg, wasEdited);
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent dir="rtl" className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <span className="text-xl">💬</span>
+            معاينة رسالة الإلغاء
+          </DialogTitle>
+          <DialogDescription className="text-right text-sm">
+            راجع الرسالة وعدّلها إن أردت قبل إرسالها عبر واتساب
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <Textarea
+            value={msg}
+            onChange={(e) => setMsg(e.target.value)}
+            rows={11}
+            dir="rtl"
+            className="text-sm font-mono leading-relaxed resize-none"
+          />
+          {wasEdited && (
+            <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-2.5 text-xs text-amber-700 dark:text-amber-400">
+              <span className="shrink-0">✏️</span>
+              <span>تم تعديل الرسالة — ستُحفظ النسخة المُرسلة في ملاحظات الحجز تلقائياً.</span>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onClose}>تخطّي</Button>
+          <Button
+            size="sm"
+            onClick={handleSend}
+            className="bg-[#25D366] hover:bg-[#1ea855] text-white gap-1.5"
+          >
+            <MessageSquare className="w-4 h-4" />
+            إرسال عبر واتساب
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ── Delete / Cancel Booking Dialog ────────────────────────────────────── */
 function DeleteConfirmDialog({
   open, booking, onClose, onConfirm,
 }: {
@@ -3083,6 +3156,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
   const [deleteDialogBooking, setDeleteDialogBooking] = useState<OwnerBooking | null>(null);
+  const [waCancelPreview, setWaCancelPreview] = useState<{ booking: OwnerBooking; phone: string; message: string } | null>(null);
   const [rescheduleBooking, setRescheduleBooking] = useState<OwnerBooking | null>(null);
   const [showArchive, setShowArchive] = useState(false);
   const [archiveTab, setArchiveTab] = useState<"cancelled" | "rescheduled">("cancelled");
@@ -3304,6 +3378,13 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "bookings"] }),
   });
 
+  const appendBookingNotes = useMutation({
+    mutationFn: async ({ id, notes }: { id: number; notes: string }) => {
+      await apiFetch(`/owner/bookings/${id}`, { method: "PATCH", body: JSON.stringify({ notes }) });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "bookings"] }),
+  });
+
   const calAvailability = useMemo(() => {
     return availability.filter((a) => {
       const [y, m] = a.dateStr.split("-").map(Number);
@@ -3386,7 +3467,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const getArabicDayName = (dateStr: string) =>
     new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(dateStr + "T12:00:00"));
 
-  const openManualWhatsAppTemplate = (b: OwnerBooking, templateBody: string, reason = "", refundAmount?: number) => {
+  const openManualWhatsAppTemplate = (b: OwnerBooking, templateBody: string, reason = "", refundAmount?: number, insuranceFeeOverride?: number, returnOnly = false): string | void => {
     const startHijri  = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
     const startGreg   = formatDualDate(b.bookingDate).gregorian;
     const dur = Math.max(1, b.durationDays ?? 1);
@@ -3397,7 +3478,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     const endGreg   = formatDualDate(endStr).gregorian;
     /* ── Financial variables ── */
     const _bTotal      = b.totalPrice    ? Number(b.totalPrice)    : 0;
-    const _bInsurance  = b.insuranceFee  ? Number(b.insuranceFee)  : 0;
+    const _bInsurance  = insuranceFeeOverride ?? (b.insuranceFee ? Number(b.insuranceFee) : 0);
     const _bPaid       = b.depositPaid   ? Number(b.depositPaid)   : 0;
     const _bRemaining  = Math.max(0, _bTotal + _bInsurance - _bPaid);
     const _fmt = (n: number) => n > 0 ? n.toLocaleString("ar-SA") : "—";
@@ -3419,12 +3500,24 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       .replace(/\{سبب_التعديل\}/g, reason || "—")
       .replace(/\{الفترة_القديمة\}/g, "—")
       .replace(/\{الفترة_الجديدة\}/g, "—")
+      .replace(/\{استرداد_العربون\}/g, (() => {
+        const dep = refundAmount != null ? refundAmount : (b.cancelRefundAmount ? Number(b.cancelRefundAmount) : 0);
+        return dep > 0 ? dep.toLocaleString("ar-SA") : "—";
+      })())
+      .replace(/\{استرداد_التأمين\}/g, _bInsurance > 0 ? _bInsurance.toLocaleString("ar-SA") : "—")
+      .replace(/\{إجمالي_المسترد\}/g, (() => {
+        const dep = refundAmount != null ? refundAmount : (b.cancelRefundAmount ? Number(b.cancelRefundAmount) : 0);
+        const total = dep + _bInsurance;
+        return total > 0 ? total.toLocaleString("ar-SA") : "—";
+      })())
       .replace(/\{المبلغ_المسترد\}/g, (() => {
-        if (refundAmount != null) return refundAmount > 0 ? refundAmount.toLocaleString("ar-SA") : "—";
-        const stored = b.cancelRefundAmount ? Number(b.cancelRefundAmount) : 0;
-        return stored > 0 ? stored.toLocaleString("ar-SA") : "—";
+        /* backward-compat: same as {إجمالي_المسترد} — deposit refund + insurance */
+        const dep = refundAmount != null ? refundAmount : (b.cancelRefundAmount ? Number(b.cancelRefundAmount) : 0);
+        const total = dep + _bInsurance;
+        return total > 0 ? total.toLocaleString("ar-SA") : "—";
       })())
       .replace(/\{[^}]+\}/g, "—");
+    if (returnOnly) return msg;
     const encoded = encodeURIComponent(msg);
     const phone = normalizeGuestPhone(b);
     const waUrl = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
@@ -4952,8 +5045,31 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           if (isReadOnly) { onBlockedEdit(); return; }
           deleteBooking.mutate({ id, reason, reasonCode, refundAmount });
           if (deleteDialogBooking && messageSettings.waEnabled && messageSettings.cancellationTemplate) {
-            openManualWhatsAppTemplate(deleteDialogBooking, messageSettings.cancellationTemplate, reason, refundAmount ?? 0);
+            const bk = deleteDialogBooking;
+            const insAmt  = Number(bk.insuranceFee ?? 0);
+            const depAmt  = refundAmount ?? 0;
+            const phone   = normalizeGuestPhone(bk);
+            const msg     = openManualWhatsAppTemplate(bk, messageSettings.cancellationTemplate, reason, depAmt, insAmt, true);
+            if (typeof msg === "string") setWaCancelPreview({ booking: bk, phone, message: msg });
           }
+        }}
+      />
+
+      {/* WhatsApp Cancellation Preview Modal */}
+      <WaCancelPreviewDialog
+        open={!!waCancelPreview}
+        phone={waCancelPreview?.phone ?? ""}
+        initialMessage={waCancelPreview?.message ?? ""}
+        onClose={() => setWaCancelPreview(null)}
+        onSent={(finalMsg, wasEdited) => {
+          if (wasEdited && waCancelPreview) {
+            const bk   = waCancelPreview.booking;
+            const date = new Date().toLocaleDateString("ar-SA");
+            const tag  = `[رسالة إلغاء مُرسلة — ${date}]:\n${finalMsg}`;
+            const prev = bk.notes?.trim() ? bk.notes.trim() + "\n\n" : "";
+            appendBookingNotes.mutate({ id: bk.id, notes: prev + tag });
+          }
+          setWaCancelPreview(null);
         }}
       />
 
