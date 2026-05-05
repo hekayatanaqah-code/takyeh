@@ -2810,7 +2810,7 @@ function RescheduleDialog({
       const msg = tpl
         .replace(/\{اسم_العميل\}/g, booking.clientName ?? "")
         .replace(/\{اسم_العقار\}/g, chaletName ?? "العقار")
-        .replace(/\{سبب_التعديل\}/g, reason.trim())
+        .replace(/\{سبب_التعديل\}/g, reason.trim() || "—")
         .replace(/\{اسم_اليوم_من\}/g, oldDay)
         .replace(/\{من_التاريخ\}/g, oldHijri)
         .replace(/\{من_التاريخ_م\}/g, oldGreg)
@@ -2822,7 +2822,8 @@ function RescheduleDialog({
         .replace(/\{الإيجار\}/g, _fmtN(_msgTotal))
         .replace(/\{التأمين\}/g, _fmtN(_msgInsurance))
         .replace(/\{المدفوع\}/g, _fmtN(_msgPaid))
-        .replace(/\{المتبقي\}/g, _fmtN(_msgRemaining));
+        .replace(/\{المتبقي\}/g, _fmtN(_msgRemaining))
+        .replace(/\{[^}]+\}/g, "—");
       setWaConfirmMsg(msg);
       setShowWAConfirm(true);
       onRescheduled();
@@ -3358,7 +3359,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const getManualWhatsAppTemplates = () => messageSettings.waEnabled ? [
     { id: "confirmation", title: "تأكيد الحجز", body: messageSettings.bookingConfirmationTemplate },
     { id: "cancellation", title: "إلغاء الحجز", body: messageSettings.cancellationTemplate },
-    { id: "modification", title: "تعديل الحجز", body: messageSettings.modificationTemplate },
     ...((messageSettings.customTemplates ?? []).map((tpl) => ({ id: tpl.id, title: tpl.title, body: tpl.body }))),
   ].filter((tpl) => tpl.body?.trim()) : [];
 
@@ -3418,7 +3418,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       .replace(/\{المتبقي\}/g, _fmt(_bRemaining))
       .replace(/\{سبب_التعديل\}/g, reason || "—")
       .replace(/\{الفترة_القديمة\}/g, "—")
-      .replace(/\{الفترة_الجديدة\}/g, "—");
+      .replace(/\{الفترة_الجديدة\}/g, "—")
+      .replace(/\{[^}]+\}/g, "—");
     const encoded = encodeURIComponent(msg);
     const phone = normalizeGuestPhone(b);
     const waUrl = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
