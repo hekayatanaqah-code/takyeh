@@ -101,6 +101,16 @@ export async function seedCatalogIfEmpty() {
        OR change_notice_template NOT LIKE '%{الإيجار}%'
   `);
 
+  const NEW_CANCELLATION_TEMPLATE =
+    "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}.\n\nالسبب: {سبب_الإلغاء}.\nالمبلغ المسترد: {المبلغ_المسترد} ريال.";
+
+  await db.execute(sql`
+    UPDATE owner_notification_settings
+    SET arrival_reminder_template = ${NEW_CANCELLATION_TEMPLATE}
+    WHERE arrival_reminder_template IS NULL
+       OR arrival_reminder_template NOT LIKE '%{المبلغ_المسترد}%'
+  `);
+
   const existingCities = await db.select().from(citiesCatalogTable);
   if (existingCities.length === 0) {
     await db.insert(citiesCatalogTable).values(

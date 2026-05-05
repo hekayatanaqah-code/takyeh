@@ -1864,38 +1864,6 @@ export async function runSubscriptionExpiryJob() {
   }
 }
 
-/* ── GET /admin/contact-inquiries — list contact form submissions ── */
-router.get("/contact-inquiries", async (_req, res) => {
-  try {
-    const result = await db.execute(sql`
-      SELECT id, name, phone, email, message, status, created_at
-      FROM contact_inquiries
-      ORDER BY created_at DESC
-      LIMIT 200
-    `);
-    return res.json((result as any).rows ?? []);
-  } catch (err) {
-    console.error("[GET /admin/contact-inquiries]", err);
-    return res.status(500).json({ error: "حدث خطأ" });
-  }
-});
-
-/* ── PATCH /admin/contact-inquiries/:id/status ── */
-router.patch("/contact-inquiries/:id/status", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body as { status: string };
-    if (!["new", "read", "replied"].includes(status)) {
-      return res.status(400).json({ error: "حالة غير صالحة" });
-    }
-    await db.execute(sql`UPDATE contact_inquiries SET status = ${status} WHERE id = ${parseInt(id, 10)}`);
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error("[PATCH /admin/contact-inquiries/:id/status]", err);
-    return res.status(500).json({ error: "حدث خطأ" });
-  }
-});
-
 /* ── GET /admin/wa-subscribers — WhatsApp news subscribers list ── */
 router.get("/wa-subscribers", async (_req, res) => {
   try {

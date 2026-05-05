@@ -120,7 +120,7 @@ interface OwnerMessageSettings {
   attachmentNote: string;
 }
 
-const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{سبب_التعديل}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}", "{اسم_اليوم_من}", "{اسم_اليوم_إلى}", "{الفترة_القديمة}", "{الفترة_الجديدة}", "{الإيجار}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
+const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}", "{اسم_اليوم_من}", "{اسم_اليوم_إلى}", "{الفترة_القديمة}", "{الفترة_الجديدة}", "{الإيجار}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
 
 /* ── Canonical default template bodies (shared by settings defaults + RescheduleDialog fallback) ── */
 const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
@@ -132,7 +132,7 @@ const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   bookingConfirmationEnabled: true,
   bookingConfirmationTemplate: DEFAULT_CONFIRMATION_TEMPLATE_BODY,
   changeNoticeEnabled: true,
-  cancellationTemplate: "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}. السبب: {سبب_الإلغاء}.",
+  cancellationTemplate: "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}.\n\nالسبب: {سبب_الإلغاء}.\nالمبلغ المسترد: {المبلغ_المسترد} ريال.",
   modificationTemplate: DEFAULT_MODIFICATION_TEMPLATE_BODY,
   customTemplates: [],
   attachmentNote: "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
@@ -3386,7 +3386,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const getArabicDayName = (dateStr: string) =>
     new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(dateStr + "T12:00:00"));
 
-  const openManualWhatsAppTemplate = (b: OwnerBooking, templateBody: string, reason = "") => {
+  const openManualWhatsAppTemplate = (b: OwnerBooking, templateBody: string, reason = "", refundAmount?: number) => {
     const startHijri  = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
     const startGreg   = formatDualDate(b.bookingDate).gregorian;
     const dur = Math.max(1, b.durationDays ?? 1);
@@ -3419,6 +3419,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       .replace(/\{سبب_التعديل\}/g, reason || "—")
       .replace(/\{الفترة_القديمة\}/g, "—")
       .replace(/\{الفترة_الجديدة\}/g, "—")
+      .replace(/\{المبلغ_المسترد\}/g, (() => {
+        if (refundAmount != null) return refundAmount > 0 ? refundAmount.toLocaleString("ar-SA") : "—";
+        const stored = b.cancelRefundAmount ? Number(b.cancelRefundAmount) : 0;
+        return stored > 0 ? stored.toLocaleString("ar-SA") : "—";
+      })())
       .replace(/\{[^}]+\}/g, "—");
     const encoded = encodeURIComponent(msg);
     const phone = normalizeGuestPhone(b);
@@ -3431,6 +3436,47 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     a.click();
     document.body.removeChild(a);
     setOpenMessageMenuId(null);
+  };
+
+  const openRescheduleLogWhatsApp = (log: RescheduleLogItem) => {
+    let rawPhone = (log.clientPhone ?? "").replace(/\D/g, "");
+    if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
+    if (rawPhone.startsWith("0"))  rawPhone = "966" + rawPhone.slice(1);
+    if (rawPhone.length === 9 && rawPhone.startsWith("5")) rawPhone = "966" + rawPhone;
+
+    const tpl = messageSettings.modificationTemplate || DEFAULT_MODIFICATION_TEMPLATE_BODY;
+    const _dayName = (d: string) => new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(d + "T12:00:00"));
+    const _periodAr = (p?: string | null) => p === "morning" ? "صباحية" : p === "evening" ? "مسائية" : p === "full_day" ? "يوم كامل" : "—";
+    const oldHijri = formatDualDate(log.oldDate).hijri.replace(/\s*هـ\s*$/, "");
+    const oldGreg  = formatDualDate(log.oldDate).gregorian;
+    const newHijri = formatDualDate(log.newDate).hijri.replace(/\s*هـ\s*$/, "");
+    const newGreg  = formatDualDate(log.newDate).gregorian;
+
+    const chaletName = (() => {
+      const found = bookings.find((bk) => bk.id === log.bookingId);
+      return found ? getBookingChaletName(found) : (ownerChalets[0]?.nameAr ?? "العقار");
+    })();
+
+    const msg = tpl
+      .replace(/\{اسم_العميل\}/g, log.clientName ?? "")
+      .replace(/\{اسم_العقار\}/g, chaletName)
+      .replace(/\{سبب_التعديل\}/g, log.reason || "—")
+      .replace(/\{اسم_اليوم_من\}/g, _dayName(log.oldDate))
+      .replace(/\{من_التاريخ\}/g, oldHijri)
+      .replace(/\{من_التاريخ_م\}/g, oldGreg)
+      .replace(/\{الفترة_القديمة\}/g, _periodAr(log.oldPeriod))
+      .replace(/\{اسم_اليوم_إلى\}/g, _dayName(log.newDate))
+      .replace(/\{إلى_التاريخ\}/g, newHijri)
+      .replace(/\{إلى_التاريخ_م\}/g, newGreg)
+      .replace(/\{الفترة_الجديدة\}/g, _periodAr(log.newPeriod))
+      .replace(/\{[^}]+\}/g, "—");
+
+    const a = document.createElement("a");
+    a.href = rawPhone
+      ? `https://wa.me/${rawPhone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    a.target = "_blank"; a.rel = "noopener noreferrer";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
   const openReceiptWhatsApp = (b: OwnerBooking) => {
@@ -4756,14 +4802,25 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             <p className="text-[11px] text-muted-foreground/60">أُلغي في {cancelledDateStr}</p>
                           )}
                         </div>
-                        <button
-                          onClick={() => restoreBooking.mutate(b.id)}
-                          disabled={restoreBooking.isPending}
-                          className="flex items-center gap-1 text-xs font-medium text-primary border border-primary/30 rounded-lg px-2.5 py-1.5 hover:bg-primary/10 transition-colors disabled:opacity-50 shrink-0"
-                        >
-                          <RotateCcw className="w-3 h-3" />
-                          استعادة
-                        </button>
+                        <div className="flex flex-col gap-1.5 items-end shrink-0">
+                          {messageSettings.waEnabled && b.clientPhone && (
+                            <button
+                              onClick={() => openManualWhatsAppTemplate(b, messageSettings.cancellationTemplate, b.cancelReason || "")}
+                              className="flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg px-2.5 py-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                            >
+                              <MessageSquare className="w-3 h-3" />
+                              إشعار الإلغاء
+                            </button>
+                          )}
+                          <button
+                            onClick={() => restoreBooking.mutate(b.id)}
+                            disabled={restoreBooking.isPending}
+                            className="flex items-center gap-1 text-xs font-medium text-primary border border-primary/30 rounded-lg px-2.5 py-1.5 hover:bg-primary/10 transition-colors disabled:opacity-50"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            استعادة
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -4850,6 +4907,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <p className="text-xs text-foreground leading-relaxed break-words">{log.reason}</p>
                         </div>
                       )}
+                      {/* WhatsApp button */}
+                      {messageSettings.waEnabled && log.clientPhone && (
+                        <button
+                          onClick={() => openRescheduleLogWhatsApp(log)}
+                          className="flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors w-full justify-center"
+                        >
+                          <MessageSquare className="w-3 h-3" />
+                          إشعار التعديل
+                        </button>
+                      )}
                     </div>
                   );
                   });
@@ -4881,7 +4948,13 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         open={!!deleteDialogBooking}
         booking={deleteDialogBooking}
         onClose={() => setDeleteDialogBooking(null)}
-        onConfirm={(id, reason, reasonCode, refundAmount) => { if (isReadOnly) { onBlockedEdit(); return; } deleteBooking.mutate({ id, reason, reasonCode, refundAmount }); }}
+        onConfirm={(id, reason, reasonCode, refundAmount) => {
+          if (isReadOnly) { onBlockedEdit(); return; }
+          deleteBooking.mutate({ id, reason, reasonCode, refundAmount });
+          if (deleteDialogBooking && messageSettings.waEnabled && messageSettings.cancellationTemplate) {
+            openManualWhatsAppTemplate(deleteDialogBooking, messageSettings.cancellationTemplate, reason, refundAmount ?? 0);
+          }
+        }}
       />
 
       {/* Reschedule Dialog */}
