@@ -120,16 +120,16 @@ interface OwnerMessageSettings {
   attachmentNote: string;
 }
 
-const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}", "{اسم_اليوم_من}", "{اسم_اليوم_إلى}"];
+const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}", "{اسم_اليوم_من}", "{اسم_اليوم_إلى}", "{الإيجار}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   waEnabled: false,
   waPhone: "",
   bookingConfirmationEnabled: true,
-  bookingConfirmationTemplate: "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.",
+  bookingConfirmationTemplate: "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.",
   changeNoticeEnabled: true,
   cancellationTemplate: "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}. السبب: {سبب_الإلغاء}.",
-  modificationTemplate: "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} من يوم {اسم_اليوم_من} الموافق ({من_التاريخ} | {من_التاريخ_م}) إلى يوم {اسم_اليوم_إلى} الموافق ({إلى_التاريخ} | {إلى_التاريخ_م}).",
+  modificationTemplate: "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} من يوم {اسم_اليوم_من} الموافق ({من_التاريخ} | {من_التاريخ_م}) إلى يوم {اسم_اليوم_إلى} الموافق ({إلى_التاريخ} | {إلى_التاريخ_م}).\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.",
   customTemplates: [],
   attachmentNote: "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
 };
@@ -2797,11 +2797,21 @@ function RescheduleDialog({
       const oldPeriodAr = _periodLabel(oldPeriodSnap);
       const newPeriodAr = _periodLabel(newPeriodForApi);
       let msg = `مرحباً ${booking.clientName ?? ""}، تم تعديل حجزك في ${chaletName ?? "العقار"} بناءً على (${reason.trim()}).\n\nالحجز السابق: يوم ${oldDay} (${oldHijri} | ${oldGreg}) - فترة ${oldPeriodAr}.\n\nالحجز الجديد: يوم ${newDay} (${newHijri} | ${newGreg}) - فترة ${newPeriodAr}.`;
-      if (newTotalPriceNum !== null) {
-        msg += `\n\nالسعر الإجمالي المتفق عليه: ${newTotalPriceNum.toLocaleString("ar-SA")} ريال.`;
-      }
-      if (insuranceFeeNum > 0) {
-        msg += `\n\nمبلغ التأمين: ${insuranceFeeNum.toLocaleString("ar-SA")} ريال (${insuranceStatusAr}).`;
+      /* ── Unified financial breakdown block ── */
+      const _msgTotal     = newTotalPriceNum ?? 0;
+      const _msgInsurance = insuranceFeeNum;
+      const _msgPaid      = depositPaidNum ?? 0;
+      const _msgRemaining = Math.max(0, _msgTotal + _msgInsurance - _msgPaid);
+      const _hasFinancial = newTotalPriceNum !== null || insuranceFeeNum > 0 || depositPaidNum !== null;
+      if (_hasFinancial) {
+        msg += "\n";
+        if (newTotalPriceNum !== null)
+          msg += `\nقيمة الإيجار: ${_msgTotal.toLocaleString("ar-SA")} ريال.`;
+        if (insuranceFeeNum > 0)
+          msg += `\nمبلغ التأمين: ${_msgInsurance.toLocaleString("ar-SA")} ريال.`;
+        if (_msgPaid > 0)
+          msg += `\nالمبلغ المدفوع: ${_msgPaid.toLocaleString("ar-SA")} ريال.`;
+        msg += `\nالمتبقي للدفع عند الوصول: ${_msgRemaining.toLocaleString("ar-SA")} ريال.`;
       }
       setWaConfirmMsg(msg);
       setShowWAConfirm(true);
@@ -3015,8 +3025,14 @@ function RescheduleDialog({
                 </div>
               )}
               <div className="rounded-xl border border-border bg-muted/40 p-3">
-                <p className="text-[11px] font-bold text-muted-foreground mb-2 uppercase tracking-wide">نص الرسالة</p>
-                <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed">{waConfirmMsg}</pre>
+                <p className="text-[11px] font-bold text-muted-foreground mb-2 uppercase tracking-wide">نص الرسالة — قابل للتعديل قبل الإرسال</p>
+                <Textarea
+                  value={waConfirmMsg}
+                  onChange={(e) => setWaConfirmMsg(e.target.value)}
+                  rows={11}
+                  dir="rtl"
+                  className="text-sm font-sans leading-relaxed resize-y"
+                />
               </div>
               <Button
                 className="w-full bg-[#25D366] hover:bg-[#1da851] text-white font-bold gap-2"
@@ -3369,6 +3385,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     const endStr    = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, "0")}-${String(endD.getDate()).padStart(2, "0")}`;
     const endHijri  = formatDualDate(endStr).hijri.replace(/\s*هـ\s*$/, "");
     const endGreg   = formatDualDate(endStr).gregorian;
+    /* ── Financial variables ── */
+    const _bTotal      = b.totalPrice    ? Number(b.totalPrice)    : 0;
+    const _bInsurance  = b.insuranceFee  ? Number(b.insuranceFee)  : 0;
+    const _bPaid       = b.depositPaid   ? Number(b.depositPaid)   : 0;
+    const _bRemaining  = Math.max(0, _bTotal + _bInsurance - _bPaid);
+    const _fmt = (n: number) => n > 0 ? n.toLocaleString("ar-SA") : "—";
     const msg = templateBody
       .replace(/\{اسم_العميل\}/g, b.clientName ?? "")
       .replace(/\{اسم_العقار\}/g, getBookingChaletName(b))
@@ -3379,7 +3401,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       .replace(/\{من_التاريخ\}/g, startHijri)
       .replace(/\{من_التاريخ_م\}/g, startGreg)
       .replace(/\{إلى_التاريخ\}/g, endHijri)
-      .replace(/\{إلى_التاريخ_م\}/g, endGreg);
+      .replace(/\{إلى_التاريخ_م\}/g, endGreg)
+      .replace(/\{الإيجار\}/g, _fmt(_bTotal))
+      .replace(/\{التأمين\}/g, _fmt(_bInsurance))
+      .replace(/\{المدفوع\}/g, _fmt(_bPaid))
+      .replace(/\{المتبقي\}/g, _fmt(_bRemaining));
     const encoded = encodeURIComponent(msg);
     const phone = normalizeGuestPhone(b);
     const waUrl = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
