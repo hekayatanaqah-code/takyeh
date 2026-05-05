@@ -120,16 +120,20 @@ interface OwnerMessageSettings {
   attachmentNote: string;
 }
 
-const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}", "{اسم_اليوم_من}", "{اسم_اليوم_إلى}", "{الإيجار}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
+const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{سبب_التعديل}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}", "{اسم_اليوم_من}", "{اسم_اليوم_إلى}", "{الفترة_القديمة}", "{الفترة_الجديدة}", "{الإيجار}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
+
+/* ── Canonical default template bodies (shared by settings defaults + RescheduleDialog fallback) ── */
+const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
+const DEFAULT_MODIFICATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} بناءً على ({سبب_التعديل}).\n\nالحجز السابق: يوم {اسم_اليوم_من} ({من_التاريخ} | {من_التاريخ_م}) - فترة {الفترة_القديمة}.\n\nالحجز الجديد: يوم {اسم_اليوم_إلى} ({إلى_التاريخ} | {إلى_التاريخ_م}) - فترة {الفترة_الجديدة}.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   waEnabled: false,
   waPhone: "",
   bookingConfirmationEnabled: true,
-  bookingConfirmationTemplate: "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.",
+  bookingConfirmationTemplate: DEFAULT_CONFIRMATION_TEMPLATE_BODY,
   changeNoticeEnabled: true,
   cancellationTemplate: "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}. السبب: {سبب_الإلغاء}.",
-  modificationTemplate: "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} من يوم {اسم_اليوم_من} الموافق ({من_التاريخ} | {من_التاريخ_م}) إلى يوم {اسم_اليوم_إلى} الموافق ({إلى_التاريخ} | {إلى_التاريخ_م}).\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.",
+  modificationTemplate: DEFAULT_MODIFICATION_TEMPLATE_BODY,
   customTemplates: [],
   attachmentNote: "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
 };
@@ -2588,7 +2592,7 @@ function DeleteConfirmDialog({
 
 /* ── Reschedule Dialog ───────────────────────── */
 function RescheduleDialog({
-  open, booking, existingBookings, chaletName, clientPhone, chaletPrices, onClose, onRescheduled,
+  open, booking, existingBookings, chaletName, clientPhone, chaletPrices, modificationTemplate, onClose, onRescheduled,
 }: {
   open: boolean;
   booking: OwnerBooking | null;
@@ -2596,6 +2600,7 @@ function RescheduleDialog({
   chaletName?: string;
   clientPhone?: string;
   chaletPrices?: { priceMorning?: string | null; priceEvening?: string | null; priceFullDay?: string | null; pricePerNight?: string | null } | null;
+  modificationTemplate?: string;
   onClose: () => void;
   onRescheduled: () => void;
 }) {
@@ -2786,7 +2791,7 @@ function RescheduleDialog({
         setError(data?.error ?? "حدث خطأ، يرجى المحاولة");
         return;
       }
-      /* ── Build WA confirmation message (old → new, with period + agreed price) ── */
+      /* ── Build WA message from modificationTemplate (falls back to default if owner hasn't customized) ── */
       const snap = oldDateSnap || booking.bookingDate;
       const oldHijri = formatDualDate(snap).hijri.replace(/\s*هـ\s*$/, "");
       const oldGreg  = formatDualDate(snap).gregorian;
@@ -2796,23 +2801,28 @@ function RescheduleDialog({
       const newDay   = _getArabicDayName(newDate);
       const oldPeriodAr = _periodLabel(oldPeriodSnap);
       const newPeriodAr = _periodLabel(newPeriodForApi);
-      let msg = `مرحباً ${booking.clientName ?? ""}، تم تعديل حجزك في ${chaletName ?? "العقار"} بناءً على (${reason.trim()}).\n\nالحجز السابق: يوم ${oldDay} (${oldHijri} | ${oldGreg}) - فترة ${oldPeriodAr}.\n\nالحجز الجديد: يوم ${newDay} (${newHijri} | ${newGreg}) - فترة ${newPeriodAr}.`;
-      /* ── Unified financial breakdown block ── */
       const _msgTotal     = newTotalPriceNum ?? 0;
       const _msgInsurance = insuranceFeeNum;
       const _msgPaid      = depositPaidNum ?? 0;
       const _msgRemaining = Math.max(0, _msgTotal + _msgInsurance - _msgPaid);
-      const _hasFinancial = newTotalPriceNum !== null || insuranceFeeNum > 0 || depositPaidNum !== null;
-      if (_hasFinancial) {
-        msg += "\n";
-        if (newTotalPriceNum !== null)
-          msg += `\nقيمة الإيجار: ${_msgTotal.toLocaleString("ar-SA")} ريال.`;
-        if (insuranceFeeNum > 0)
-          msg += `\nمبلغ التأمين: ${_msgInsurance.toLocaleString("ar-SA")} ريال.`;
-        if (_msgPaid > 0)
-          msg += `\nالمبلغ المدفوع: ${_msgPaid.toLocaleString("ar-SA")} ريال.`;
-        msg += `\nالمتبقي للدفع عند الوصول: ${_msgRemaining.toLocaleString("ar-SA")} ريال.`;
-      }
+      const _fmtN = (n: number) => n > 0 ? n.toLocaleString("ar-SA") : "—";
+      const tpl = modificationTemplate || DEFAULT_MODIFICATION_TEMPLATE_BODY;
+      const msg = tpl
+        .replace(/\{اسم_العميل\}/g, booking.clientName ?? "")
+        .replace(/\{اسم_العقار\}/g, chaletName ?? "العقار")
+        .replace(/\{سبب_التعديل\}/g, reason.trim())
+        .replace(/\{اسم_اليوم_من\}/g, oldDay)
+        .replace(/\{من_التاريخ\}/g, oldHijri)
+        .replace(/\{من_التاريخ_م\}/g, oldGreg)
+        .replace(/\{الفترة_القديمة\}/g, oldPeriodAr)
+        .replace(/\{اسم_اليوم_إلى\}/g, newDay)
+        .replace(/\{إلى_التاريخ\}/g, newHijri)
+        .replace(/\{إلى_التاريخ_م\}/g, newGreg)
+        .replace(/\{الفترة_الجديدة\}/g, newPeriodAr)
+        .replace(/\{الإيجار\}/g, _fmtN(_msgTotal))
+        .replace(/\{التأمين\}/g, _fmtN(_msgInsurance))
+        .replace(/\{المدفوع\}/g, _fmtN(_msgPaid))
+        .replace(/\{المتبقي\}/g, _fmtN(_msgRemaining));
       setWaConfirmMsg(msg);
       setShowWAConfirm(true);
       onRescheduled();
@@ -3405,7 +3415,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       .replace(/\{الإيجار\}/g, _fmt(_bTotal))
       .replace(/\{التأمين\}/g, _fmt(_bInsurance))
       .replace(/\{المدفوع\}/g, _fmt(_bPaid))
-      .replace(/\{المتبقي\}/g, _fmt(_bRemaining));
+      .replace(/\{المتبقي\}/g, _fmt(_bRemaining))
+      .replace(/\{سبب_التعديل\}/g, reason || "—")
+      .replace(/\{الفترة_القديمة\}/g, "—")
+      .replace(/\{الفترة_الجديدة\}/g, "—");
     const encoded = encodeURIComponent(msg);
     const phone = normalizeGuestPhone(b);
     const waUrl = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
@@ -4794,6 +4807,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         open={!!rescheduleBooking}
         booking={rescheduleBooking}
         existingBookings={bookings}
+        modificationTemplate={messageSettings.modificationTemplate}
         chaletName={
           ownerChalets.find((c: any) => c.submissionId === rescheduleBooking?.submissionId)?.nameAr
           ?? ownerChalets.find((c: any) => c.id === (activeChaletId ?? ownerChalets[0]?.id))?.nameAr
@@ -13717,6 +13731,10 @@ function OwnerMessageSettingsTab() {
     setForm((prev) => ({ ...prev, [key]: `${prev[key] || ""} ${variable}`.trim() }));
   }
 
+  function resetToDefault(key: "bookingConfirmationTemplate" | "cancellationTemplate" | "modificationTemplate") {
+    setField(key, DEFAULT_OWNER_MESSAGE_SETTINGS[key] as string);
+  }
+
   function addCustomTemplate() {
     setForm((prev) => ({
       ...prev,
@@ -13802,12 +13820,15 @@ function OwnerMessageSettingsTab() {
             dir="rtl"
             disabled={isReadOnly}
           />
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 items-center">
             {MESSAGE_VARIABLES.map((v) => (
               <button key={v} type="button" onClick={() => insertVariable("bookingConfirmationTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
                 {v}
               </button>
             ))}
+            <button type="button" onClick={() => resetToDefault("bookingConfirmationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1 rounded-md border border-dashed border-muted-foreground/40 text-[11px] text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+              ↺ استعادة الافتراضي
+            </button>
           </div>
         </div>
 
@@ -13826,12 +13847,15 @@ function OwnerMessageSettingsTab() {
             dir="rtl"
             disabled={isReadOnly}
           />
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 items-center">
             {MESSAGE_VARIABLES.map((v) => (
               <button key={v} type="button" onClick={() => insertVariable("cancellationTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
                 {v}
               </button>
             ))}
+            <button type="button" onClick={() => resetToDefault("cancellationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1 rounded-md border border-dashed border-muted-foreground/40 text-[11px] text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+              ↺ استعادة الافتراضي
+            </button>
           </div>
         </div>
 
@@ -13845,16 +13869,19 @@ function OwnerMessageSettingsTab() {
           <Textarea
             value={form.modificationTemplate}
             onChange={(e) => setField("modificationTemplate", e.target.value)}
-            rows={4}
+            rows={6}
             dir="rtl"
             disabled={isReadOnly}
           />
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 items-center">
             {MESSAGE_VARIABLES.map((v) => (
               <button key={v} type="button" onClick={() => insertVariable("modificationTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
                 {v}
               </button>
             ))}
+            <button type="button" onClick={() => resetToDefault("modificationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1 rounded-md border border-dashed border-muted-foreground/40 text-[11px] text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+              ↺ استعادة الافتراضي
+            </button>
           </div>
         </div>
 
