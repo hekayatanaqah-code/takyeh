@@ -78,6 +78,29 @@ export async function seedCatalogIfEmpty() {
     )
   `);
 
+  /* ── Force-upgrade outdated message templates that are missing financial variables ──
+     Runs every startup but only touches rows that lack {الإيجار} in the template.
+     Safe/idempotent: skips rows that already contain the variable.               ── */
+  const NEW_CONFIRMATION_TEMPLATE =
+    "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
+
+  const NEW_MODIFICATION_TEMPLATE =
+    "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} بناءً على ({سبب_التعديل}).\n\nالحجز السابق: يوم {اسم_اليوم_من} ({من_التاريخ} | {من_التاريخ_م}) - فترة {الفترة_القديمة}.\n\nالحجز الجديد: يوم {اسم_اليوم_إلى} ({إلى_التاريخ} | {إلى_التاريخ_م}) - فترة {الفترة_الجديدة}.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
+
+  await db.execute(sql`
+    UPDATE owner_notification_settings
+    SET booking_confirmation_template = ${NEW_CONFIRMATION_TEMPLATE}
+    WHERE booking_confirmation_template IS NULL
+       OR booking_confirmation_template NOT LIKE '%{الإيجار}%'
+  `);
+
+  await db.execute(sql`
+    UPDATE owner_notification_settings
+    SET change_notice_template = ${NEW_MODIFICATION_TEMPLATE}
+    WHERE change_notice_template IS NULL
+       OR change_notice_template NOT LIKE '%{الإيجار}%'
+  `);
+
   const existingCities = await db.select().from(citiesCatalogTable);
   if (existingCities.length === 0) {
     await db.insert(citiesCatalogTable).values(

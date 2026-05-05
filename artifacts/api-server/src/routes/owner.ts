@@ -680,10 +680,16 @@ function normalizeMessageSettings(row: typeof ownerNotificationSettingsTable.$in
     waEnabled: row?.waEnabled ?? false,
     waPhone: row?.waPhone ?? "",
     bookingConfirmationEnabled: row?.bookingConfirmationEnabled ?? false,
-    bookingConfirmationTemplate: row?.bookingConfirmationTemplate || DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
+    bookingConfirmationTemplate: (() => {
+      const t = row?.bookingConfirmationTemplate;
+      return (t && t.includes("{الإيجار}")) ? t : DEFAULT_BOOKING_CONFIRMATION_TEMPLATE;
+    })(),
     changeNoticeEnabled: row?.changeNoticeEnabled ?? false,
     cancellationTemplate: row?.arrivalReminderTemplate || DEFAULT_CANCELLATION_TEMPLATE,
-    modificationTemplate: row?.changeNoticeTemplate || DEFAULT_MODIFICATION_TEMPLATE,
+    modificationTemplate: (() => {
+      const t = row?.changeNoticeTemplate;
+      return (t && t.includes("{الإيجار}")) ? t : DEFAULT_MODIFICATION_TEMPLATE;
+    })(),
     customTemplates: Array.isArray(customTemplates) ? customTemplates : [],
     attachmentNote: row?.waInstanceId ?? "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
     updatedAt: row?.updatedAt ?? null,
