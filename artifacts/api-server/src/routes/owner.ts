@@ -1113,6 +1113,10 @@ router.delete("/bookings/:id", async (req, res) => {
   const refund        = refundAmount ?? 0;
   const cancelIncome  = Math.max(0, depositPaid - refund);
 
+  // Auto-return insurance on cancellation: client never entered the property,
+  // so insurance is always fully refunded. Mark insuranceRefunded = true automatically.
+  const hasInsurance = target?.insuranceFee && Number(target.insuranceFee) > 0;
+
   await db
     .update(ownerBookingsTable)
     .set({
@@ -1121,6 +1125,7 @@ router.delete("/bookings/:id", async (req, res) => {
       cancelReasonCode:   reasonCode ?? null,
       cancelRefundAmount: refund > 0 ? String(refund) : null,
       cancelIncome:       cancelIncome > 0 ? String(cancelIncome) : null,
+      ...(hasInsurance ? { insuranceRefunded: true } : {}),
     })
     .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)));
 
@@ -2460,9 +2465,12 @@ router.get("/financial-summary", async (req, res) => {
   const totalInsuranceDeducted = monthBookings.reduce((s, b) =>
     s + (b.insuranceDeducted ? Number(b.insuranceDeducted) : 0), 0);
   const totalRevenue = monthBookings.reduce((s, b) => s + calcBookingRevenue(b), 0) + totalInsuranceDeducted;
-  // Insurance held (refundable, NOT in revenue — only unresolved insurance fees)
-  const totalInsuranceHeld = monthBookings.reduce((s, b) =>
-    s + (!b.insuranceRefunded && b.insuranceFee ? Number(b.insuranceFee) : 0), 0);
+  // Insurance held (refundable, NOT in revenue) — ONLY from active (non-cancelled) bookings.
+  // Cancelled bookings auto-set insuranceRefunded=true, but we also filter by cancelledAt
+  // here to correctly handle historical data from before that auto-flag was deployed.
+  const totalInsuranceHeld = monthBookings
+    .filter(b => !b.cancelledAt)
+    .reduce((s, b) => s + (!b.insuranceRefunded && b.insuranceFee ? Number(b.insuranceFee) : 0), 0);
 
   // Expenses: for this month
   const expenseConditions = [
