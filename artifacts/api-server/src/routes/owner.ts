@@ -2462,7 +2462,9 @@ router.get("/financial-summary", async (req, res) => {
       const remaining = Number(b.totalPrice) - deposit;
       return deposit + (b.balanceCollected ? remaining : 0);
     }
-    return b.revenueAmount ? Number(b.revenueAmount) : 0;
+    if (b.revenueAmount) return Number(b.revenueAmount);
+    // Fallback: depositPaid is the confirmed revenue when no price is recorded
+    return Number(b.depositPaid ?? 0);
   };
   // Insurance deductions → treated as revenue under "تلفيات" category
   const totalInsuranceDeducted = monthBookings.reduce((s, b) =>
@@ -2540,7 +2542,9 @@ router.get("/financial-summary", async (req, res) => {
         const dep = Number(r.depositPaid ?? 0);
         return s + dep + (r.balanceCollected ? Number(r.totalPrice) - dep : 0);
       }
-      return s + (r.rev ? Number(r.rev) : 0);
+      if (r.rev) return s + Number(r.rev);
+      // Fallback: depositPaid is the confirmed revenue when no price is recorded
+      return s + Number(r.depositPaid ?? 0);
     }, 0);
 
     const eConds = [
@@ -3042,7 +3046,9 @@ router.get("/yearly-summary", async (req, res) => {
         const dep = Number(r.depositPaid ?? 0);
         return s + dep + (r.balanceCollected ? Number(r.totalPrice) - dep : 0);
       }
-      return s + (r.rev ? Number(r.rev) : 0);
+      if (r.rev) return s + Number(r.rev);
+      // Fallback: depositPaid is the confirmed revenue when no price is recorded
+      return s + Number(r.depositPaid ?? 0);
     }, 0);
 
     const eConds: any[] = [
@@ -3090,7 +3096,8 @@ router.get("/yearly-summary-hijri", async (req, res) => {
   /* Gregorian window: a Hijri year spans ~354 days starting mid-Gregorian-year.
      Approximate: gYear ≈ (hijriYear − 1) × 354.367/365.25 + 622
      We search ±1 Gregorian year around that to ensure full coverage.          */
-  const approxGYear = Math.floor((hijriYear - 1) * 354.367 / 365.25 + 622);
+  /* Correct formula: hijriYear (not hijriYear-1) so H1447 maps to ~2025-2026 */
+  const approxGYear = Math.floor(hijriYear * 354.367 / 365.25 + 622);
   const gYearStart = approxGYear - 1;
   const gYearEnd   = approxGYear + 1;
 
@@ -3162,8 +3169,11 @@ router.get("/yearly-summary-hijri", async (req, res) => {
     if (b.totalPrice !== null) {
       const dep = Number(b.depositPaid ?? 0);
       rev = dep + (b.balanceCollected ? Number(b.totalPrice) - dep : 0);
+    } else if (b.rev) {
+      rev = Number(b.rev);
     } else {
-      rev = b.rev ? Number(b.rev) : 0;
+      // Fallback: depositPaid is the confirmed revenue when no price is recorded
+      rev = Number(b.depositPaid ?? 0);
     }
     revByM[hym.month] = (revByM[hym.month] ?? 0) + rev;
   }
