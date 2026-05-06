@@ -10824,10 +10824,29 @@ function ReportsTab() {
     }
   }, [mySubmissions?.length]);
 
+  /* Derive Hijri year+month from the middle of the selected Gregorian month */
+  const hijriYM = useMemo(() => {
+    if (!isHijri) return null;
+    try {
+      const mid = new Date(selectedMonth + "-15T12:00:00");
+      const parts = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric" }).formatToParts(mid);
+      return {
+        year:  Number(parts.find(p => p.type === "year")?.value  ?? 0),
+        month: Number(parts.find(p => p.type === "month")?.value ?? 0),
+      };
+    } catch { return null; }
+  }, [isHijri, selectedMonth]);
+
   const { data: report, isLoading } = useQuery<MonthReport>({
-    queryKey: ["owner", "reports", selectedMonth, selectedSubmissionId, isHijri],
+    queryKey: ["owner", "reports", isHijri && hijriYM ? `h-${hijriYM.year}-${hijriYM.month}` : selectedMonth, selectedSubmissionId],
     queryFn: async () => {
-      const params = new URLSearchParams({ month: selectedMonth });
+      const params = new URLSearchParams();
+      if (isHijri && hijriYM) {
+        params.set("hijriYear",  String(hijriYM.year));
+        params.set("hijriMonth", String(hijriYM.month));
+      } else {
+        params.set("month", selectedMonth);
+      }
       if (selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
       const r = await apiFetch(`/owner/reports?${params}`);
       if (!r.ok) throw new Error("failed");
@@ -10855,9 +10874,15 @@ function ReportsTab() {
     categoryTotals: Record<string, number>;
     trend: { month: string; revenue: number; expenses: number }[];
   }>({
-    queryKey: ["owner", "financial-summary", selectedMonth, selectedSubmissionId],
+    queryKey: ["owner", "financial-summary", isHijri && hijriYM ? `h-${hijriYM.year}-${hijriYM.month}` : selectedMonth, selectedSubmissionId],
     queryFn: async () => {
-      const params = new URLSearchParams({ month: selectedMonth });
+      const params = new URLSearchParams();
+      if (isHijri && hijriYM) {
+        params.set("hijriYear",  String(hijriYM.year));
+        params.set("hijriMonth", String(hijriYM.month));
+      } else {
+        params.set("month", selectedMonth);
+      }
       if (selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
       const r = await apiFetch(`/owner/financial-summary?${params}`);
       if (!r.ok) return null;
