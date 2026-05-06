@@ -3030,9 +3030,10 @@ router.get("/yearly-summary", async (req, res) => {
     ];
     if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
     const bRows = await db
-      .select({ rev: ownerBookingsTable.revenueAmount, totalPrice: ownerBookingsTable.totalPrice, depositPaid: ownerBookingsTable.depositPaid, balanceCollected: ownerBookingsTable.balanceCollected })
+      .select({ rev: ownerBookingsTable.revenueAmount, totalPrice: ownerBookingsTable.totalPrice, depositPaid: ownerBookingsTable.depositPaid, balanceCollected: ownerBookingsTable.balanceCollected, cancelledAt: ownerBookingsTable.cancelledAt })
       .from(ownerBookingsTable).where(and(...bConds));
-    const revenue = bRows.reduce((s, r) => {
+    const activeRows = bRows.filter(r => r.cancelledAt === null);
+    const revenue = activeRows.reduce((s, r) => {
       if (r.totalPrice !== null) {
         const dep = Number(r.depositPaid ?? 0);
         return s + dep + (r.balanceCollected ? Number(r.totalPrice) - dep : 0);
@@ -3068,6 +3069,129 @@ router.get("/yearly-summary", async (req, res) => {
   );
 
   return res.json({ year, monthly, totals });
+});
+
+/* ── Yearly Summary (Hijri calendar) ────────────────────────── */
+router.get("/yearly-summary-hijri", async (req, res) => {
+  const ownerId = req.user!.id;
+
+  const hijriYearStr = typeof req.query.hijriYear === "string" ? req.query.hijriYear : "";
+  const hijriYear = parseInt(hijriYearStr, 10);
+  if (!hijriYear || hijriYear < 1400 || hijriYear > 1600) {
+    return res.status(400).json({ error: "hijriYear غير صالح" });
+  }
+
+  const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
+
+  /* Gregorian window: a Hijri year spans ~354 days starting mid-Gregorian-year.
+     Approximate: gYear ≈ (hijriYear − 1) × 354.367/365.25 + 622
+     We search ±1 Gregorian year around that to ensure full coverage.          */
+  const approxGYear = Math.floor((hijriYear - 1) * 354.367 / 365.25 + 622);
+  const gYearStart = approxGYear - 1;
+  const gYearEnd   = approxGYear + 1;
+
+  /* Helper – extract {year, month} in Hijri from a Gregorian date string */
+  const getHijriYM = (dateStr: string): { year: number; month: number } => {
+    try {
+      const d = new Date(dateStr + "T12:00:00");
+      const parts = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric" }).formatToParts(d);
+      return {
+        year:  Number(parts.find(p => p.type === "year")?.value  ?? 0),
+        month: Number(parts.find(p => p.type === "month")?.value ?? 0),
+      };
+    } catch { return { year: 0, month: 0 }; }
+  };
+
+  /* Staff salaries map */
+  const staffRows = await db.select({ id: ownerStaffTable.id, baseSalary: ownerStaffTable.baseSalary })
+    .from(ownerStaffTable).where(eq(ownerStaffTable.ownerId, ownerId));
+  const staffMap = Object.fromEntries(staffRows.map(s => [s.id, Number(s.baseSalary)]));
+
+  /* Fetch non-cancelled bookings in the Gregorian window */
+  const bConds: any[] = [
+    eq(ownerBookingsTable.ownerId, ownerId),
+    gte(ownerBookingsTable.bookingDate, `${gYearStart}-01-01`),
+    lte(ownerBookingsTable.bookingDate, `${gYearEnd}-12-31`),
+    isNull(ownerBookingsTable.cancelledAt),
+  ];
+  if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
+  const bRows = await db.select({
+    bookingDate: ownerBookingsTable.bookingDate,
+    rev:             ownerBookingsTable.revenueAmount,
+    totalPrice:      ownerBookingsTable.totalPrice,
+    depositPaid:     ownerBookingsTable.depositPaid,
+    balanceCollected: ownerBookingsTable.balanceCollected,
+  }).from(ownerBookingsTable).where(and(...bConds));
+
+  /* Fetch expenses in the Gregorian window */
+  const eConds: any[] = [
+    eq(ownerExpensesTable.ownerId, ownerId),
+    gte(ownerExpensesTable.dateStr, `${gYearStart}-01-01`),
+    lte(ownerExpensesTable.dateStr, `${gYearEnd}-12-31`),
+  ];
+  if (submissionId) eConds.push(eq(ownerExpensesTable.submissionId, submissionId));
+  const eRows = await db.select({ dateStr: ownerExpensesTable.dateStr, amt: ownerExpensesTable.amount })
+    .from(ownerExpensesTable).where(and(...eConds));
+
+  /* Fetch salary logs in the Gregorian window (single query) */
+  const slRows = await db.select({
+    month: salaryLogsTable.month,
+    bonus: salaryLogsTable.bonus,
+    deduction: salaryLogsTable.deduction,
+    staffId: salaryLogsTable.staffId,
+  }).from(salaryLogsTable).where(and(
+    eq(salaryLogsTable.ownerId, ownerId),
+    gte(salaryLogsTable.month, `${gYearStart}-01`),
+    lte(salaryLogsTable.month, `${gYearEnd}-12`),
+  ));
+
+  /* Bucket by Hijri month 1-12 */
+  const revByM: Record<number, number> = {};
+  const expByM: Record<number, number> = {};
+  const salByM: Record<number, number> = {};
+  for (let m = 1; m <= 12; m++) { revByM[m] = 0; expByM[m] = 0; salByM[m] = 0; }
+
+  for (const b of bRows) {
+    const hym = getHijriYM(b.bookingDate);
+    if (hym.year !== hijriYear) continue;
+    let rev = 0;
+    if (b.totalPrice !== null) {
+      const dep = Number(b.depositPaid ?? 0);
+      rev = dep + (b.balanceCollected ? Number(b.totalPrice) - dep : 0);
+    } else {
+      rev = b.rev ? Number(b.rev) : 0;
+    }
+    revByM[hym.month] = (revByM[hym.month] ?? 0) + rev;
+  }
+
+  for (const e of eRows) {
+    const hym = getHijriYM(e.dateStr);
+    if (hym.year !== hijriYear) continue;
+    expByM[hym.month] = (expByM[hym.month] ?? 0) + Number(e.amt);
+  }
+
+  for (const log of slRows) {
+    const hym = getHijriYM(`${log.month}-15`);
+    if (hym.year !== hijriYear) continue;
+    const base = staffMap[log.staffId] ?? 0;
+    salByM[hym.month] = (salByM[hym.month] ?? 0) + base + Number(log.bonus) - Number(log.deduction);
+  }
+
+  const hijriMonthNames = ["محرم","صفر","ربيع الأول","ربيع الآخر","جمادى الأولى","جمادى الآخرة","رجب","شعبان","رمضان","شوال","ذو القعدة","ذو الحجة"];
+
+  const monthly = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1;
+    const revenue  = revByM[m] ?? 0;
+    const expenses = (expByM[m] ?? 0) + (salByM[m] ?? 0);
+    return { month: `${hijriYear}-${String(m).padStart(2, "0")}`, monthName: hijriMonthNames[i], revenue, expenses, netProfit: revenue - expenses };
+  });
+
+  const totals = monthly.reduce(
+    (s, m) => ({ revenue: s.revenue + m.revenue, expenses: s.expenses + m.expenses, netProfit: s.netProfit + m.netProfit }),
+    { revenue: 0, expenses: 0, netProfit: 0 },
+  );
+
+  return res.json({ hijriYear, monthly, totals });
 });
 
 /* ── Report Archive ─────────────────────────────────────────── */

@@ -10792,6 +10792,10 @@ function ReportsTab() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string>("all");
   const [isHijri, setIsHijri] = useState(false);
+  const [isYearlyHijri, setIsYearlyHijri] = useState(false);
+  const [selectedHijriYear, setSelectedHijriYear] = useState(() =>
+    String(new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric" }).format(new Date()))
+  );
   const [sharePhone, setSharePhone] = useState(() => localStorage.getItem("reportSharePhone") ?? "");
   const [shareEmail, setShareEmail] = useState(() => localStorage.getItem("reportShareEmail") ?? "");
   const [showShare, setShowShare] = useState(false);
@@ -10802,7 +10806,7 @@ function ReportsTab() {
   const [archiveSavedId, setArchiveSavedId] = useState<number | null>(null);
   const qc = useQueryClient();
 
-  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedYear, selectedSubmissionId, reportType]);
+  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, reportType]);
 
   const { data: mySubmissions = [] } = useQuery<any[]>({
     queryKey: ["my-submissions-for-report"],
@@ -10875,7 +10879,23 @@ function ReportsTab() {
       if (!r.ok) throw new Error("failed");
       return r.json();
     },
-    enabled: viewMode === "yearly",
+    enabled: viewMode === "yearly" && !isYearlyHijri,
+  });
+
+  const { data: yearlyHijri, isLoading: yearlyHijriLoading } = useQuery<{
+    hijriYear: number;
+    monthly: { month: string; monthName: string; revenue: number; expenses: number; netProfit: number }[];
+    totals: { revenue: number; expenses: number; netProfit: number };
+  }>({
+    queryKey: ["owner", "yearly-summary-hijri", selectedHijriYear, selectedSubmissionId],
+    queryFn: async () => {
+      const params = new URLSearchParams({ hijriYear: selectedHijriYear });
+      if (selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
+      const r = await apiFetch(`/owner/yearly-summary-hijri?${params}`);
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    },
+    enabled: viewMode === "yearly" && isYearlyHijri,
   });
 
   const { data: archive = [] } = useQuery<any[]>({
@@ -10931,6 +10951,11 @@ function ReportsTab() {
   const yearOptions = useMemo(() => {
     const cur = new Date().getFullYear();
     return [cur, cur - 1, cur - 2].map((y) => ({ val: String(y), label: String(y) }));
+  }, []);
+
+  const hijriYearOptions = useMemo(() => {
+    const cur = parseInt(new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric" }).format(new Date()), 10);
+    return [cur, cur - 1, cur - 2].map((y) => ({ val: String(y), label: `${y} هـ` }));
   }, []);
 
   const slotLabels: Record<string, { icon: ReactElement; label: string }> = {
@@ -11299,13 +11324,28 @@ function ReportsTab() {
             </div>
           ) : (
             <div className="flex-1 space-y-1">
-              <label className="text-xs text-muted-foreground font-medium">السنة</label>
-              <Select value={selectedYear} onValueChange={setSelectedYear}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {yearOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-muted-foreground font-medium">السنة</label>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <span className="text-xs text-muted-foreground">هجري</span>
+                  <Switch checked={isYearlyHijri} onCheckedChange={setIsYearlyHijri} />
+                </label>
+              </div>
+              {isYearlyHijri ? (
+                <Select value={selectedHijriYear} onValueChange={setSelectedHijriYear}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {hijriYearOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {yearOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           )}
         </div>
@@ -11318,17 +11358,29 @@ function ReportsTab() {
       </div>
 
       {/* ── YEARLY VIEW ── */}
-      {viewMode === "yearly" && (
+      {viewMode === "yearly" && (() => {
+        const activeYearly = isYearlyHijri ? yearlyHijri : yearly;
+        const activeYearlyLoading = isYearlyHijri ? yearlyHijriLoading : yearlyLoading;
+        const activeYearLabel = isYearlyHijri ? `${selectedHijriYear} هـ` : selectedYear;
+        const getMonthLabel = (m: any) =>
+          isYearlyHijri && (m as any).monthName
+            ? (m as any).monthName
+            : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
+        const getMonthShortLabel = (m: any) =>
+          isYearlyHijri && (m as any).monthName
+            ? (m as any).monthName.slice(0, 5)
+            : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "short" });
+        return (
         <>
-          {yearlyLoading ? (
+          {activeYearlyLoading ? (
             <div className="space-y-4">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
-          ) : yearly ? (
+          ) : activeYearly ? (
             <>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "إجمالي الإيرادات", value: formatAmount(yearly.totals.revenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-                  { label: "إجمالي المصروفات", value: formatAmount(yearly.totals.expenses), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
-                  { label: "صافي الربح السنوي", value: formatAmount(yearly.totals.netProfit), icon: <DollarSign className="w-5 h-5" />, color: yearly.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700" },
+                  { label: "إجمالي الإيرادات", value: formatAmount(activeYearly.totals.revenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+                  { label: "إجمالي المصروفات", value: formatAmount(activeYearly.totals.expenses), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+                  { label: "صافي الربح السنوي", value: formatAmount(activeYearly.totals.netProfit), icon: <DollarSign className="w-5 h-5" />, color: activeYearly.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700" },
                 ].map((s) => (
                   <div key={s.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>{s.icon}</div>
@@ -11338,15 +11390,15 @@ function ReportsTab() {
                 ))}
               </div>
 
-              {yearly.monthly.some((m) => m.revenue > 0 || m.expenses > 0) && (
+              {activeYearly.monthly.some((m) => m.revenue > 0 || m.expenses > 0) && (
                 <div className="bg-card border border-border rounded-2xl p-5">
                   <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
                     <BarChart2 className="w-4 h-4 text-primary" />
-                    الإيرادات والمصروفات لعام {selectedYear}
+                    الإيرادات والمصروفات لعام {activeYearLabel}
                   </h3>
                   <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={yearly.monthly.map((m) => ({
-                      name: new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "short" }),
+                    <BarChart data={activeYearly.monthly.map((m) => ({
+                      name: getMonthShortLabel(m),
                       الإيرادات: m.revenue,
                       المصروفات: m.expenses,
                     }))} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
@@ -11363,7 +11415,7 @@ function ReportsTab() {
               )}
 
               <div className="bg-card border border-border rounded-2xl p-5">
-                <h3 className="font-bold text-foreground text-sm mb-4">تفصيل شهري لعام {selectedYear}</h3>
+                <h3 className="font-bold text-foreground text-sm mb-4">تفصيل شهري لعام {activeYearLabel}</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -11375,9 +11427,9 @@ function ReportsTab() {
                       </tr>
                     </thead>
                     <tbody>
-                      {yearly.monthly.map((m) => (
+                      {activeYearly.monthly.map((m) => (
                         <tr key={m.month} className="border-b border-border/50">
-                          <td className="py-2 text-muted-foreground">{new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" })}</td>
+                          <td className="py-2 text-muted-foreground">{getMonthLabel(m)}</td>
                           <td className="py-2 font-medium text-green-600">{formatAmount(m.revenue)}</td>
                           <td className="py-2 font-medium text-red-600">{formatAmount(m.expenses)}</td>
                           <td className={`py-2 font-bold ${m.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmount(m.netProfit)}</td>
@@ -11387,9 +11439,9 @@ function ReportsTab() {
                     <tfoot>
                       <tr className="border-t-2 border-border">
                         <td className="py-2 font-bold">الإجمالي</td>
-                        <td className="py-2 font-bold text-green-600">{formatAmount(yearly.totals.revenue)}</td>
-                        <td className="py-2 font-bold text-red-600">{formatAmount(yearly.totals.expenses)}</td>
-                        <td className={`py-2 font-bold ${yearly.totals.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmount(yearly.totals.netProfit)}</td>
+                        <td className="py-2 font-bold text-green-600">{formatAmount(activeYearly.totals.revenue)}</td>
+                        <td className="py-2 font-bold text-red-600">{formatAmount(activeYearly.totals.expenses)}</td>
+                        <td className={`py-2 font-bold ${activeYearly.totals.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmount(activeYearly.totals.netProfit)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -11397,7 +11449,7 @@ function ReportsTab() {
               </div>
 
               <div className="flex flex-wrap gap-2 justify-end">
-                <Button variant="outline" size="sm" onClick={() => printYearlyReport(selectedYear, selectedPropertyName, yearly)} className="gap-2">
+                <Button variant="outline" size="sm" onClick={() => printYearlyReport(isYearlyHijri ? activeYearLabel : selectedYear, selectedPropertyName, activeYearly as any)} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير السنوي
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleShareWhatsApp} disabled={pdfLoading} className="gap-2">
@@ -11430,7 +11482,8 @@ function ReportsTab() {
             </div>
           )}
         </>
-      )}
+        );
+      })()}
 
       {/* ── MONTHLY VIEW ── */}
       {viewMode === "monthly" && (
