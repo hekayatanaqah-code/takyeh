@@ -1814,18 +1814,20 @@ router.get("/reports", async (req, res) => {
     : allBookings;
 
   const monthBookings = filteredBookings.filter((b) => b.bookingDate.startsWith(month));
+  /* Only active (non-cancelled) bookings count toward all stats */
+  const activeMonthBookings = monthBookings.filter((b) => !b.cancelledAt);
 
-  const totalBookings = monthBookings.length;
-  const platformBookings = monthBookings.filter((b) => b.source === "platform");
-  const externalBookings = monthBookings.filter((b) => b.source === "external");
-  const totalDays = monthBookings.reduce((sum, b) => sum + (b.durationDays ?? 1), 0);
+  const totalBookings = activeMonthBookings.length;
+  const platformBookings = activeMonthBookings.filter((b) => b.source === "platform");
+  const externalBookings = activeMonthBookings.filter((b) => b.source === "external");
+  const totalDays = activeMonthBookings.reduce((sum, b) => sum + (b.durationDays ?? 1), 0);
 
   const [year, mon] = month.split("-").map(Number);
   const daysInMonth = new Date(year, mon, 0).getDate();
   const occupancyRate = totalDays > 0 ? Math.min(100, Math.round((totalDays / daysInMonth) * 100)) : 0;
 
   const slotStats = { morning: 0, evening: 0, full_day: 0, unspecified: 0 };
-  for (const b of monthBookings) {
+  for (const b of activeMonthBookings) {
     if (b.period === "morning") slotStats.morning++;
     else if (b.period === "evening") slotStats.evening++;
     else if (b.period === "full_day") slotStats.full_day++;
@@ -2439,11 +2441,12 @@ router.get("/financial-summary", async (req, res) => {
     : months[months.length - 1];
   const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
 
-  // Revenue: sum of revenueAmount in ownerBookings for this month
+  // Revenue: sum of revenueAmount in ownerBookings for this month — cancelled bookings EXCLUDED
   const bookingConditions = [
     eq(ownerBookingsTable.ownerId, ownerId),
     gte(ownerBookingsTable.bookingDate, `${selectedMonth}-01`),
     lte(ownerBookingsTable.bookingDate, `${selectedMonth}-31`),
+    isNull(ownerBookingsTable.cancelledAt),
   ];
   if (submissionId) bookingConditions.push(eq(ownerBookingsTable.submissionId, submissionId));
 
@@ -2520,12 +2523,13 @@ router.get("/financial-summary", async (req, res) => {
     insuranceRevenueTotals["insurance_damage"] = totalInsuranceDeducted;
   }
 
-  // Monthly trend for chart (last 6 months)
+  // Monthly trend for chart (last 6 months) — cancelled bookings EXCLUDED
   const trend = await Promise.all(months.map(async (m) => {
     const bConds = [
       eq(ownerBookingsTable.ownerId, ownerId),
       gte(ownerBookingsTable.bookingDate, `${m}-01`),
       lte(ownerBookingsTable.bookingDate, `${m}-31`),
+      isNull(ownerBookingsTable.cancelledAt),
     ];
     if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
     const bRows = await db
