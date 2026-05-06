@@ -65,6 +65,18 @@ export async function seedCatalogIfEmpty() {
     )
   `);
 
+  /* ── Back-fill: mark insurance as refunded for all pre-existing cancelled bookings ──
+     Safe/idempotent: only touches rows where cancelled_at IS NOT NULL and
+     insurance_fee > 0 and insurance_refunded is still false.                        ── */
+  await db.execute(sql`
+    UPDATE owner_bookings
+    SET insurance_refunded = true
+    WHERE cancelled_at IS NOT NULL
+      AND insurance_fee IS NOT NULL
+      AND CAST(insurance_fee AS NUMERIC) > 0
+      AND (insurance_refunded IS NULL OR insurance_refunded = false)
+  `);
+
   /* ── Contact Inquiries table ── */
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS contact_inquiries (

@@ -3298,6 +3298,7 @@ router.get("/deposits", requireAuth, async (req: Request, res: Response) => {
         eq(ownerBookingsTable.ownerId, ownerId),
         isNotNull(ownerBookingsTable.insuranceFee),
         ne(ownerBookingsTable.insuranceFee, "0"),
+        isNull(ownerBookingsTable.cancelledAt),
       )
     )
     .orderBy(desc(ownerBookingsTable.bookingDate));

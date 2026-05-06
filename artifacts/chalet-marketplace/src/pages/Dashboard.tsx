@@ -12614,7 +12614,7 @@ function DepositsTab() {
         const totalDeposits = deposits.reduce((s, d) => s + Number(d.insuranceFee), 0);
         const totalDeducted = deposits.reduce((s, d) => s + Number(d.insuranceDeducted ?? 0), 0);
         const totalRefundable = deposits
-          .filter((d) => !d.insuranceRefunded)
+          .filter((d) => !d.insuranceRefunded && !d.cancelledAt)
           .reduce((s, d) => s + Number(d.insuranceFee), 0);
         return (
           <div className="grid grid-cols-3 gap-3">
