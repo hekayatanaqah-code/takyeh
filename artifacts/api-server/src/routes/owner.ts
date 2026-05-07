@@ -34,6 +34,20 @@ import { sendOtpEmail } from "../lib/email";
 
 const router = Router();
 
+/* ── Platform-admin guard ───────────────────────────────────────
+   Only the designated platform admin Replit account(s) may view
+   all owners or create sessions for other owners.
+   Set PLATFORM_ADMIN_IDS to a comma-separated list of Replit user
+   sub values (e.g. "56719001") or leave unset to use the default.
+   ──────────────────────────────────────────────────────────────── */
+const PLATFORM_ADMIN_IDS = new Set(
+  (process.env.PLATFORM_ADMIN_IDS ?? "56719001")
+    .split(",").map(s => s.trim()).filter(Boolean)
+);
+function isPlatformAdmin(req: Request): boolean {
+  return !!(req.user?.id && PLATFORM_ADMIN_IDS.has(String(req.user.id)));
+}
+
 /* ── Shared Hijri date helper ───────────────────────────────── */
 /** Convert a "YYYY-MM-DD" Gregorian string to its Hijri {year, month} using Umm al-Qura. */
 function getHijriYM(dateStr: string): { year: number; month: number } {
@@ -156,26 +170,72 @@ router.get("/enter-session", async (req, res) => {
   return res.redirect(`${frontendBase}/dashboard`);
 });
 
-/* ── GET /owner/available-owners — list all real owner IDs (Passport auth, no temp session needed) ── */
+/* ── GET /owner/available-owners ────────────────────────────────
+   Platform admins → all real owner IDs (for the switcher banner).
+   Regular owners  → only their own owner_N key(s).
+   ─────────────────────────────────────────────────────────────── */
 router.get("/available-owners", async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: "يجب تسجيل الدخول" });
+
+  if (isPlatformAdmin(req)) {
+    /* Admin: return every non-demo, non-numeric owner */
+    const r = await db.execute<{ owner_id: string; name_ar: string }>(
+      sql`SELECT owner_id, MIN(name_ar) AS name_ar
+          FROM chalet_submissions
+          WHERE owner_id NOT LIKE '__demo%'
+            AND NOT (owner_id ~ '^[0-9]+$')
+          GROUP BY owner_id
+          ORDER BY owner_id`
+    );
+    const rows = (r as any).rows as Array<{ owner_id: string; name_ar: string }>;
+    return res.json(rows.map(row => ({ ownerId: row.owner_id, name: row.name_ar ?? row.owner_id })));
+  }
+
+  /* Regular owner: resolve their own owner_N key only */
+  const email = await resolveOwnerEmail(req);
+  if (!email) return res.json([]);
+
   const r = await db.execute<{ owner_id: string; name_ar: string }>(
-    sql`SELECT owner_id, MIN(name_ar) AS name_ar
-        FROM chalet_submissions
-        WHERE owner_id NOT LIKE '__demo%'
-          AND NOT (owner_id ~ '^[0-9]+$')
-        GROUP BY owner_id
-        ORDER BY owner_id`
+    sql`SELECT cs.owner_id, MIN(cs.name_ar) AS name_ar
+        FROM chalet_submissions cs
+        JOIN owner_applications oa ON LOWER(oa.email) = LOWER(${email})
+        WHERE cs.owner_id = CONCAT('owner_', oa.id::text)
+          AND cs.owner_id NOT LIKE '__demo%'
+        GROUP BY cs.owner_id
+        ORDER BY cs.owner_id`
   );
   const rows = (r as any).rows as Array<{ owner_id: string; name_ar: string }>;
   return res.json(rows.map(row => ({ ownerId: row.owner_id, name: row.name_ar ?? row.owner_id })));
 });
 
-/* ── POST /owner/auto-session — create a fresh 6-hour session for any ownerId (Passport auth only) ── */
+/* ── POST /owner/auto-session ───────────────────────────────────
+   Platform admins → may create a session for any owner.
+   Regular owners  → may only create a session for their own
+                     owner_N key (self-activation, not impersonation).
+   ─────────────────────────────────────────────────────────────── */
 router.post("/auto-session", async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: "يجب تسجيل الدخول" });
   const ownerId = String(req.body?.ownerId ?? "").trim();
   if (!ownerId) return res.status(400).json({ error: "ownerId مطلوب" });
+
+  if (!isPlatformAdmin(req)) {
+    /* Non-admin: verify the requested ownerId belongs to this user */
+    const email = await resolveOwnerEmail(req);
+    if (!email) return res.status(403).json({ error: "غير مصرح" });
+
+    const ownerCheck = await db.execute<{ owner_id: string }>(
+      sql`SELECT cs.owner_id
+          FROM chalet_submissions cs
+          JOIN owner_applications oa ON LOWER(oa.email) = LOWER(${email})
+          WHERE cs.owner_id = ${ownerId}
+            AND cs.owner_id = CONCAT('owner_', oa.id::text)
+          LIMIT 1`
+    );
+    if (!((ownerCheck as any).rows as any[]).length) {
+      return res.status(403).json({ error: "غير مصرح — لا يمكنك الوصول إلى حساب مالك آخر" });
+    }
+  }
+
   const check = await db.execute<{ owner_id: string }>(
     sql`SELECT owner_id FROM chalet_submissions WHERE owner_id = ${ownerId} LIMIT 1`
   );
