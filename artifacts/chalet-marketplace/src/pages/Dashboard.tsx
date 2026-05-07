@@ -14386,10 +14386,31 @@ export default function Dashboard() {
           });
         } else {
           setImpersonation({ impersonating: false });
-          /* Load available owner accounts for the selector banner */
+          /* Check if this user has linked owner accounts.
+             If exactly one → auto-activate silently (no banner shown).
+             If multiple (platform admin) → store list but show no banner;
+             admin should use the Admin panel to switch owners. */
           apiFetch("/owner/available-owners")
             .then(r => r.ok ? r.json() : [])
-            .then(setAvailableOwners)
+            .then(async (owners: { ownerId: string; name: string }[]) => {
+              if (owners.length === 1) {
+                setOwnerSwitchLoading(true);
+                try {
+                  const r = await apiFetch("/owner/auto-session", {
+                    method: "POST",
+                    body: JSON.stringify({ ownerId: owners[0].ownerId }),
+                  });
+                  if (r.ok) {
+                    const { token } = await r.json();
+                    window.location.href = `${BASE}/api/owner/enter-session?token=${token}`;
+                    return;
+                  }
+                } catch {}
+                setOwnerSwitchLoading(false);
+              } else {
+                setAvailableOwners(owners);
+              }
+            })
             .catch(() => {});
         }
       })
@@ -14430,7 +14451,10 @@ export default function Dashboard() {
 
   const isImpersonating = impersonation.impersonating;
   const isDemo = impersonation.ownerId === "__demo_preview__";
-  const isReadOnly = isImpersonating && !editEnabled && !isDemo;
+  /* Self-session: owner activated their own account (not an admin impersonating them) */
+  const isSelfSession = impersonation.adminName === "__owner_self__";
+  /* Read-only only applies to true admin impersonation, not owner's own session */
+  const isReadOnly = isImpersonating && !isSelfSession && !editEnabled && !isDemo;
 
   /* When impersonating an owner, suppress staff-mode so owner dashboard shows fully */
   const actAsStaff = isStaff && !isImpersonating;
@@ -14665,7 +14689,7 @@ export default function Dashboard() {
 
   const isLoadingAuth = authLoading || staffLoading;
 
-  const isFullyLoading  = isLoadingAuth || impersonationLoading;
+  const isFullyLoading  = isLoadingAuth || impersonationLoading || ownerSwitchLoading;
   const canAccess       = isAuthenticated || isStaff || isImpersonating;
 
   useEffect(() => {
@@ -14721,7 +14745,7 @@ export default function Dashboard() {
       )}
 
       {/* ── Impersonation Banner (real owner, not demo) ── */}
-      {isImpersonating && !isDemo && (
+      {isImpersonating && !isDemo && !isSelfSession && (
         <div
           className={`sticky top-0 z-50 w-full px-4 py-2 flex items-center justify-between gap-3 flex-wrap ${editEnabled ? "bg-red-600 text-white" : "bg-amber-500 text-amber-950"}`}
           dir="rtl"
@@ -14791,33 +14815,6 @@ export default function Dashboard() {
 
       <div className="container mx-auto px-4 py-10 max-w-4xl">
 
-        {/* ── Owner Selector Banner — shown when no temp session is active ── */}
-        {!impersonationLoading && !isImpersonating && !actAsStaff && availableOwners.length > 0 && (
-          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 mb-6" dir="rtl">
-            <div className="flex items-center gap-2 mb-3">
-              <Building2 className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <span className="text-sm font-bold text-amber-800 dark:text-amber-200">
-                اختر حساب المالك لعرض التقارير والحجوزات
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {availableOwners.map(owner => (
-                <button
-                  key={owner.ownerId}
-                  onClick={() => handleSelectOwner(owner.ownerId)}
-                  disabled={ownerSwitchLoading}
-                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-wait shadow-sm"
-                >
-                  <Home className="w-3.5 h-3.5 shrink-0" />
-                  {owner.name}
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px] text-amber-700/60 dark:text-amber-300/50 mt-2">
-              الجلسة تستمر 6 ساعات — بعدها ستظهر هذه القائمة مجدداً
-            </p>
-          </div>
-        )}
 
         {/* Profile Card — adapts for owner vs staff */}
         <motion.div
@@ -15180,35 +15177,53 @@ export default function Dashboard() {
                   <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                     <BarChart2 className="w-3.5 h-3.5" />عرض التقارير المالية لـ:
                   </p>
-                  <div className="flex gap-2 flex-wrap">
-                    {/* Master / All */}
-                    <button type="button" onClick={() => setSelectedFinanceUnit({ type: "all" })}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors border ${selectedFinanceUnit.type === "all" ? "bg-slate-700 text-white border-slate-700 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200" : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"}`}>
-                      <Briefcase className="w-3 h-3" />الميزانية الرئيسية
-                    </button>
-                    {/* Chalets */}
-                    {ownerChalets.map((c: any) => (
-                      <button key={`chalet-${c.id}`} type="button"
-                        onClick={() => setSelectedFinanceUnit({ type: "chalet", id: c.id, submissionId: c.submissionId, name: c.nameAr ?? `شاليه ${c.id}` })}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors border ${selectedFinanceUnit.type === "chalet" && (selectedFinanceUnit as any).id === c.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}>
-                        <Home className="w-3 h-3" />{c.nameAr ?? `شاليه ${c.id}`}
-                      </button>
-                    ))}
-                    {/* Services */}
-                    {myApprovedProviders.map((p: any) => (
-                      <button key={`service-${p.id}`} type="button"
-                        onClick={() => setSelectedFinanceUnit({ type: "service", id: p.id, name: p.businessName ?? `خدمة ${p.id}` })}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors border ${selectedFinanceUnit.type === "service" && (selectedFinanceUnit as any).id === p.id ? "bg-amber-500 text-white border-amber-500" : "border-border text-muted-foreground hover:border-amber-500 hover:text-amber-600"}`}>
-                        <Activity className="w-3 h-3" />{p.businessName ?? `خدمة ${p.id}`}
-                      </button>
-                    ))}
-                  </div>
-                  {selectedFinanceUnit.type !== "all" && (
-                    <div className={`rounded-xl px-3.5 py-2 text-xs font-semibold flex items-center gap-2 ${selectedFinanceUnit.type === "chalet" ? "bg-primary/5 border border-primary/20 text-primary" : "bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 text-amber-700 dark:text-amber-300"}`}>
-                      {selectedFinanceUnit.type === "chalet" ? <Home className="w-3.5 h-3.5" /> : <Activity className="w-3.5 h-3.5" />}
-                      عرض: {(selectedFinanceUnit as any).name}
-                    </div>
-                  )}
+                  <Select
+                    value={
+                      selectedFinanceUnit.type === "all"
+                        ? "all"
+                        : selectedFinanceUnit.type === "chalet"
+                        ? `chalet-${(selectedFinanceUnit as any).id}`
+                        : `service-${(selectedFinanceUnit as any).id}`
+                    }
+                    onValueChange={(v) => {
+                      if (v === "all") {
+                        setSelectedFinanceUnit({ type: "all" });
+                      } else if (v.startsWith("chalet-")) {
+                        const id = Number(v.replace("chalet-", ""));
+                        const c = ownerChalets.find((c: any) => c.id === id);
+                        if (c) setSelectedFinanceUnit({ type: "chalet", id: c.id, submissionId: c.submissionId, name: c.nameAr ?? `شاليه ${c.id}` });
+                      } else if (v.startsWith("service-")) {
+                        const id = Number(v.replace("service-", ""));
+                        const p = myApprovedProviders.find((p: any) => p.id === id);
+                        if (p) setSelectedFinanceUnit({ type: "service", id: p.id, name: p.businessName ?? `خدمة ${p.id}` });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full rounded-xl border-border bg-background h-10 text-sm">
+                      <SelectValue placeholder="اختر الوحدة المالية" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">
+                        <span className="flex items-center gap-2">
+                          <Briefcase className="w-3.5 h-3.5 shrink-0" />الميزانية الرئيسية
+                        </span>
+                      </SelectItem>
+                      {ownerChalets.map((c: any) => (
+                        <SelectItem key={`chalet-${c.id}`} value={`chalet-${c.id}`}>
+                          <span className="flex items-center gap-2">
+                            <Home className="w-3.5 h-3.5 shrink-0" />{c.nameAr ?? `شاليه ${c.id}`}
+                          </span>
+                        </SelectItem>
+                      ))}
+                      {myApprovedProviders.map((p: any) => (
+                        <SelectItem key={`service-${p.id}`} value={`service-${p.id}`}>
+                          <span className="flex items-center gap-2">
+                            <Activity className="w-3.5 h-3.5 shrink-0" />{p.businessName ?? `خدمة ${p.id}`}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 

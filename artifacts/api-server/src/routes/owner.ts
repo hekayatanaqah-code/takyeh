@@ -242,9 +242,11 @@ router.post("/auto-session", async (req, res) => {
   if (!((check as any).rows as any[]).length) return res.status(404).json({ error: "المالك غير موجود" });
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000);
+  /* '__owner_self__' = owner activated their own session (not an admin impersonating) */
+  const adminLabel = isPlatformAdmin(req) ? 'مدير المنصة' : '__owner_self__';
   await db.execute(
     sql`INSERT INTO owner_temp_sessions (token, owner_id, admin_label, expires_at)
-        VALUES (${token}, ${ownerId}, 'مالك', ${expiresAt})`
+        VALUES (${token}, ${ownerId}, ${adminLabel}, ${expiresAt})`
   );
   return res.json({ token });
 });
