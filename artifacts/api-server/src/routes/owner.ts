@@ -1926,127 +1926,119 @@ router.get("/plan-limits", async (req, res) => {
 /* ── Monthly Reports ───────────────────────────────────────── */
 
 router.get("/reports", async (req, res) => {
-  const ownerId = req.user!.id;
+  const ownerId    = req.user!.id;
   const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
 
-  /* ── Hijri monthly report ────────────────────────────────── */
+  /* ── Calendar parameters ─────────────────────────────────── */
   const hijriYear  = req.query.hijriYear  ? Number(req.query.hijriYear)  : null;
   const hijriMonth = req.query.hijriMonth ? Number(req.query.hijriMonth) : null;
-  if (hijriYear && hijriMonth && hijriMonth >= 1 && hijriMonth <= 12) {
-    const approxGYear = Math.floor(hijriYear * 354.367 / 365.25 + 622);
-    const allBookings = await db.select().from(ownerBookingsTable).where(and(
-      eq(ownerBookingsTable.ownerId, ownerId),
-      gte(ownerBookingsTable.bookingDate, `${approxGYear - 1}-01-01`),
-      lte(ownerBookingsTable.bookingDate, `${approxGYear + 1}-12-31`),
-    ));
-    const filtered = submissionId ? allBookings.filter(b => b.submissionId === submissionId) : allBookings;
-    const monthBookings = filtered.filter(b => {
-      const hym = getHijriYM(b.bookingDate);
-      return hym.year === hijriYear && hym.month === hijriMonth;
-    });
-    const activeMonthBookings = monthBookings.filter(b => !b.cancelledAt);
-    const totalBookings  = activeMonthBookings.length;
-    const platformBookings = activeMonthBookings.filter(b => b.source === "platform");
-    const externalBookings = activeMonthBookings.filter(b => b.source === "external");
-    const totalDays = activeMonthBookings.reduce((sum, b) => sum + (b.durationDays ?? 1), 0);
-    const daysInMonth = 30;
-    const occupancyRate = totalDays > 0 ? Math.min(100, Math.round((totalDays / daysInMonth) * 100)) : 0;
-    const slotStats = { morning: 0, evening: 0, full_day: 0, unspecified: 0 };
-    for (const b of activeMonthBookings) {
-      if (b.period === "morning") slotStats.morning++;
-      else if (b.period === "evening") slotStats.evening++;
-      else if (b.period === "full_day") slotStats.full_day++;
-      else slotStats.unspecified++;
-    }
-    const topSlot = Object.entries(slotStats).filter(([k]) => k !== "unspecified").sort(([, a], [, b]) => b - a)[0]?.[0] ?? "unspecified";
-    const slotLabels: Record<string, string> = { morning: "صباحي", evening: "مسائي", full_day: "يوم كامل", unspecified: "غير محدد" };
-    /* Daily revenue breakdown by Hijri day-of-month (days 1–30) */
-    const dailyRevenue = Array.from({ length: 30 }, (_, i) => {
-      const day = i + 1;
-      const revenue = activeMonthBookings
-        .filter(b => getHijriYM(b.bookingDate).year === hijriYear && getHijriYM(b.bookingDate).month === hijriMonth && getHijriDay(b.bookingDate) === day)
-        .reduce((s, b) => s + calcBookingRev(b), 0);
-      return { day, revenue };
-    });
-    return res.json({
-      month: `${approxGYear}-${String(hijriMonth).padStart(2, "0")}`,
-      hijriMonthLabel: `${HIJRI_MONTH_NAMES[hijriMonth - 1] ?? hijriMonth} ${hijriYear} هـ`,
-      totalBookings,
-      platformBookings: platformBookings.length,
-      externalBookings: externalBookings.length,
-      totalDays,
-      daysInMonth,
-      occupancyRate,
-      slotStats,
-      topSlot,
-      topSlotLabel: slotLabels[topSlot] ?? topSlot,
-      bookings: monthBookings,
-      dailyRevenue,
-    });
-  }
+  const isHijriMode = !!(hijriYear && hijriMonth && hijriMonth >= 1 && hijriMonth <= 12);
 
-  /* ── Gregorian monthly report ────────────────────────────── */
-  const month = (req.query.month as string) ?? new Date().toISOString().slice(0, 7);
-  if (!/^\d{4}-\d{2}$/.test(month)) {
+  const month = typeof req.query.month === "string"
+    ? req.query.month
+    : new Date().toISOString().slice(0, 7);
+  if (!isHijriMode && !/^\d{4}-\d{2}$/.test(month)) {
     return res.status(400).json({ error: "تنسيق الشهر غير صحيح (YYYY-MM)" });
   }
 
-  /* Use SQL date-range bounds (same pattern as Hijri path and /financial-summary)
-     so ownerId, date window, and optional submissionId are all enforced in DB */
-  const gConds: Parameters<typeof and>[0][] = [
-    eq(ownerBookingsTable.ownerId, ownerId),
-    gte(ownerBookingsTable.bookingDate, `${month}-01`),
-    lte(ownerBookingsTable.bookingDate, `${month}-31`),
-  ];
-  if (submissionId) gConds.push(eq(ownerBookingsTable.submissionId, submissionId));
+  /* ── Unified DB fetch: one query for both calendars ─────────
+     Wide year window so every booking in the relevant period is
+     included regardless of Gregorian vs Hijri month boundaries. */
+  let windowStart: string;
+  let windowEnd:   string;
+  if (isHijriMode) {
+    const approxGYear = Math.floor(hijriYear! * 354.367 / 365.25 + 622);
+    windowStart = `${approxGYear - 1}-01-01`;
+    windowEnd   = `${approxGYear + 1}-12-31`;
+  } else {
+    const [yr] = month.split("-").map(Number);
+    windowStart = `${yr - 1}-01-01`;
+    windowEnd   = `${yr + 1}-12-31`;
+  }
 
-  const monthBookings = await db
+  const fetchConds: Parameters<typeof and>[0][] = [
+    eq(ownerBookingsTable.ownerId, ownerId),
+    gte(ownerBookingsTable.bookingDate, windowStart),
+    lte(ownerBookingsTable.bookingDate, windowEnd),
+  ];
+  if (submissionId) fetchConds.push(eq(ownerBookingsTable.submissionId, submissionId));
+
+  const windowBookings = await db
     .select()
     .from(ownerBookingsTable)
-    .where(and(...gConds));
-  /* Only active (non-cancelled) bookings count toward all stats */
-  const activeMonthBookings = monthBookings.filter((b) => !b.cancelledAt);
+    .where(and(...fetchConds));
 
-  const totalBookings = activeMonthBookings.length;
-  const platformBookings = activeMonthBookings.filter((b) => b.source === "platform");
-  const externalBookings = activeMonthBookings.filter((b) => b.source === "external");
+  /* ── JS month grouping: only this filter differs by calendar ─ */
+  const monthBookings = isHijriMode
+    ? windowBookings.filter(b => {
+        const hym = getHijriYM(b.bookingDate);
+        return hym.year === hijriYear && hym.month === hijriMonth;
+      })
+    : windowBookings.filter(b => b.bookingDate.startsWith(month));
+
+  /* ── Stats (calendar-agnostic) ──────────────────────────────── */
+  const activeMonthBookings = monthBookings.filter(b => !b.cancelledAt);
+  const totalBookings    = activeMonthBookings.length;
+  const platformBookings = activeMonthBookings.filter(b => b.source === "platform");
+  const externalBookings = activeMonthBookings.filter(b => b.source === "external");
   const totalDays = activeMonthBookings.reduce((sum, b) => sum + (b.durationDays ?? 1), 0);
 
-  const [year, mon] = month.split("-").map(Number);
-  const daysInMonth = new Date(year, mon, 0).getDate();
-  const occupancyRate = totalDays > 0 ? Math.min(100, Math.round((totalDays / daysInMonth) * 100)) : 0;
+  let daysInMonth: number;
+  if (isHijriMode) {
+    daysInMonth = 30;
+  } else {
+    const [year, mon] = month.split("-").map(Number);
+    daysInMonth = new Date(year, mon, 0).getDate();
+  }
+  const occupancyRate = totalDays > 0
+    ? Math.min(100, Math.round((totalDays / daysInMonth) * 100))
+    : 0;
 
   const slotStats = { morning: 0, evening: 0, full_day: 0, unspecified: 0 };
   for (const b of activeMonthBookings) {
-    if (b.period === "morning") slotStats.morning++;
-    else if (b.period === "evening") slotStats.evening++;
+    if      (b.period === "morning")  slotStats.morning++;
+    else if (b.period === "evening")  slotStats.evening++;
     else if (b.period === "full_day") slotStats.full_day++;
-    else slotStats.unspecified++;
+    else                              slotStats.unspecified++;
   }
-
   const topSlot = Object.entries(slotStats)
     .filter(([k]) => k !== "unspecified")
     .sort(([, a], [, b]) => b - a)[0]?.[0] ?? "unspecified";
-
   const slotLabels: Record<string, string> = {
-    morning: "صباحي",
-    evening: "مسائي",
-    full_day: "يوم كامل",
-    unspecified: "غير محدد",
+    morning: "صباحي", evening: "مسائي", full_day: "يوم كامل", unspecified: "غير محدد",
   };
 
-  /* Daily revenue breakdown by Gregorian day-of-month */
-  const dailyRevenue = Array.from({ length: daysInMonth }, (_, i) => {
-    const day = i + 1;
-    const dayStr = `${month}-${String(day).padStart(2, "0")}`;
-    const revenue = activeMonthBookings
-      .filter(b => b.bookingDate === dayStr)
-      .reduce((s, b) => s + calcBookingRev(b), 0);
-    return { day, revenue };
-  });
+  /* ── Daily revenue breakdown ─────────────────────────────── */
+  const dailyRevenue = isHijriMode
+    ? Array.from({ length: 30 }, (_, i) => {
+        const day = i + 1;
+        const revenue = activeMonthBookings
+          .filter(b =>
+            getHijriYM(b.bookingDate).year  === hijriYear  &&
+            getHijriYM(b.bookingDate).month === hijriMonth &&
+            getHijriDay(b.bookingDate) === day)
+          .reduce((s, b) => s + calcBookingRev(b), 0);
+        return { day, revenue };
+      })
+    : Array.from({ length: daysInMonth }, (_, i) => {
+        const day    = i + 1;
+        const dayStr = `${month}-${String(day).padStart(2, "0")}`;
+        const revenue = activeMonthBookings
+          .filter(b => b.bookingDate === dayStr)
+          .reduce((s, b) => s + calcBookingRev(b), 0);
+        return { day, revenue };
+      });
+
+  /* ── Response ────────────────────────────────────────────── */
+  const responseMonth = isHijriMode
+    ? `${Math.floor(hijriYear! * 354.367 / 365.25 + 622)}-${String(hijriMonth!).padStart(2, "0")}`
+    : month;
 
   return res.json({
-    month,
+    month: responseMonth,
+    ...(isHijriMode ? {
+      hijriMonthLabel: `${HIJRI_MONTH_NAMES[hijriMonth! - 1] ?? hijriMonth} ${hijriYear} هـ`,
+    } : {}),
     totalBookings,
     platformBookings: platformBookings.length,
     externalBookings: externalBookings.length,
