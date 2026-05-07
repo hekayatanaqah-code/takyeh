@@ -1991,15 +1991,19 @@ router.get("/reports", async (req, res) => {
     return res.status(400).json({ error: "تنسيق الشهر غير صحيح (YYYY-MM)" });
   }
 
-  const allBookings = await db
+  /* Use SQL date-range bounds (same pattern as Hijri path and /financial-summary)
+     so ownerId, date window, and optional submissionId are all enforced in DB */
+  const gConds: Parameters<typeof and>[0][] = [
+    eq(ownerBookingsTable.ownerId, ownerId),
+    gte(ownerBookingsTable.bookingDate, `${month}-01`),
+    lte(ownerBookingsTable.bookingDate, `${month}-31`),
+  ];
+  if (submissionId) gConds.push(eq(ownerBookingsTable.submissionId, submissionId));
+
+  const monthBookings = await db
     .select()
     .from(ownerBookingsTable)
-    .where(eq(ownerBookingsTable.ownerId, ownerId));
-  const filteredBookings = submissionId
-    ? allBookings.filter((b) => b.submissionId === submissionId)
-    : allBookings;
-
-  const monthBookings = filteredBookings.filter((b) => b.bookingDate.startsWith(month));
+    .where(and(...gConds));
   /* Only active (non-cancelled) bookings count toward all stats */
   const activeMonthBookings = monthBookings.filter((b) => !b.cancelledAt);
 
