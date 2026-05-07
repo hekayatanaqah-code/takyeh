@@ -10977,20 +10977,31 @@ function ReportsTab() {
     return [cur, cur - 1, cur - 2].map((y) => ({ val: String(y), label: `${y} هـ` }));
   }, []);
 
-  /* Maps Hijri month number → approximate Gregorian month name for the selected Hijri year */
+  /* Maps Hijri month number → exact Gregorian date range string (e.g. "18 مايو – 16 يونيو") */
   const hijriMonthGRanges = useMemo(() => {
     const year = parseInt(selectedHijriYear, 10);
     const approxGYear = Math.floor(year * 354.367 / 365.25 + 622);
     const gNames = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
-    const result: Record<number, string> = {};
+    const fmt = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric", day: "numeric" });
+    const firstDays: Record<number, Date> = {};
     const scanStart = new Date(approxGYear - 1, 0, 1);
-    for (let offset = 0; offset < 730 && Object.keys(result).length < 12; offset++) {
+    for (let offset = 0; offset < 760; offset++) {
       const d = new Date(scanStart.getTime() + offset * 86400000);
-      const parts = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric", day: "numeric" }).formatToParts(d);
+      const parts = fmt.formatToParts(d);
       const hd = Object.fromEntries(parts.filter(p => p.type !== "literal").map(p => [p.type, parseInt(p.value)]));
-      if (hd.year === year && hd.day >= 13 && hd.day <= 17 && !result[hd.month]) {
-        result[hd.month] = gNames[d.getMonth()];
+      if (hd.year === year && hd.day === 1 && !firstDays[hd.month]) {
+        firstDays[hd.month] = d;
       }
+    }
+    const result: Record<number, string> = {};
+    for (let m = 1; m <= 12; m++) {
+      const start = firstDays[m];
+      if (!start) continue;
+      const nextMonthStart = firstDays[m + 1] ?? new Date(start.getTime() + 30 * 86400000);
+      const end = new Date(nextMonthStart.getTime() - 86400000);
+      const s = `${start.getDate()} ${gNames[start.getMonth()]}`;
+      const e = `${end.getDate()} ${gNames[end.getMonth()]}`;
+      result[m] = start.getMonth() === end.getMonth() ? `${start.getDate()}–${end.getDate()} ${gNames[start.getMonth()]}` : `${s} – ${e}`;
     }
     return result;
   }, [selectedHijriYear]);
@@ -11377,7 +11388,10 @@ function ReportsTab() {
                     </Select>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    {HIJRI_MONTHS[parseInt(selectedHijriMonthNum) - 1]} {selectedHijriYear} هـ — يوافق تقريباً شهر {hijriMonthGRanges[parseInt(selectedHijriMonthNum)] ?? "—"} ميلادي
+                    {HIJRI_MONTHS[parseInt(selectedHijriMonthNum) - 1]} {selectedHijriYear} هـ
+                    {hijriMonthGRanges[parseInt(selectedHijriMonthNum)] && (
+                      <> — يمتد من {hijriMonthGRanges[parseInt(selectedHijriMonthNum)]} م</>
+                    )}
                   </p>
                 </>
               ) : (
@@ -14459,6 +14473,8 @@ export default function Dashboard() {
   }>({ impersonating: false });
   const [impersonationLoading, setImpersonationLoading] = useState(true);
   const [editEnabled, setEditEnabled] = useState(false);
+  const [availableOwners, setAvailableOwners] = useState<{ ownerId: string; name: string }[]>([]);
+  const [ownerSwitchLoading, setOwnerSwitchLoading] = useState(false);
 
   useEffect(() => {
     apiFetch("/owner/impersonation-mode")
@@ -14473,6 +14489,11 @@ export default function Dashboard() {
           });
         } else {
           setImpersonation({ impersonating: false });
+          /* Load available owner accounts for the selector banner */
+          apiFetch("/owner/available-owners")
+            .then(r => r.ok ? r.json() : [])
+            .then(setAvailableOwners)
+            .catch(() => {});
         }
       })
       .finally(() => setImpersonationLoading(false));
@@ -14492,6 +14513,22 @@ export default function Dashboard() {
       }),
     }).catch(() => {});
     setEditEnabled((prev) => !prev);
+  }
+
+  async function handleSelectOwner(ownerId: string) {
+    setOwnerSwitchLoading(true);
+    try {
+      const r = await apiFetch("/owner/auto-session", {
+        method: "POST",
+        body: JSON.stringify({ ownerId }),
+      });
+      if (!r.ok) throw new Error("failed");
+      const { token } = await r.json();
+      window.location.href = `${BASE}/api/owner/enter-session?token=${token}`;
+    } catch {
+      setOwnerSwitchLoading(false);
+      toast({ title: "خطأ", description: "تعذر إنشاء جلسة المالك", variant: "destructive" });
+    }
   }
 
   const isImpersonating = impersonation.impersonating;
@@ -14856,6 +14893,35 @@ export default function Dashboard() {
       <Navbar />
 
       <div className="container mx-auto px-4 py-10 max-w-4xl">
+
+        {/* ── Owner Selector Banner — shown when no temp session is active ── */}
+        {!impersonationLoading && !isImpersonating && !actAsStaff && availableOwners.length > 0 && (
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-4 mb-6" dir="rtl">
+            <div className="flex items-center gap-2 mb-3">
+              <Building2 className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="text-sm font-bold text-amber-800 dark:text-amber-200">
+                اختر حساب المالك لعرض التقارير والحجوزات
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {availableOwners.map(owner => (
+                <button
+                  key={owner.ownerId}
+                  onClick={() => handleSelectOwner(owner.ownerId)}
+                  disabled={ownerSwitchLoading}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-wait shadow-sm"
+                >
+                  <Home className="w-3.5 h-3.5 shrink-0" />
+                  {owner.name}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-amber-700/60 dark:text-amber-300/50 mt-2">
+              الجلسة تستمر 6 ساعات — بعدها ستظهر هذه القائمة مجدداً
+            </p>
+          </div>
+        )}
+
         {/* Profile Card — adapts for owner vs staff */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}

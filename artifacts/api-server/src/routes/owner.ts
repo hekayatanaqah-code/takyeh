@@ -156,6 +156,39 @@ router.get("/enter-session", async (req, res) => {
   return res.redirect(`${frontendBase}/dashboard`);
 });
 
+/* ── GET /owner/available-owners — list all real owner IDs (Passport auth, no temp session needed) ── */
+router.get("/available-owners", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: "يجب تسجيل الدخول" });
+  const r = await db.execute<{ owner_id: string; name_ar: string }>(
+    sql`SELECT owner_id, MIN(name_ar) AS name_ar
+        FROM chalet_submissions
+        WHERE owner_id NOT LIKE '__demo%'
+          AND NOT (owner_id ~ '^[0-9]+$')
+        GROUP BY owner_id
+        ORDER BY owner_id`
+  );
+  const rows = (r as any).rows as Array<{ owner_id: string; name_ar: string }>;
+  return res.json(rows.map(row => ({ ownerId: row.owner_id, name: row.name_ar ?? row.owner_id })));
+});
+
+/* ── POST /owner/auto-session — create a fresh 6-hour session for any ownerId (Passport auth only) ── */
+router.post("/auto-session", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: "يجب تسجيل الدخول" });
+  const ownerId = String(req.body?.ownerId ?? "").trim();
+  if (!ownerId) return res.status(400).json({ error: "ownerId مطلوب" });
+  const check = await db.execute<{ owner_id: string }>(
+    sql`SELECT owner_id FROM chalet_submissions WHERE owner_id = ${ownerId} LIMIT 1`
+  );
+  if (!((check as any).rows as any[]).length) return res.status(404).json({ error: "المالك غير موجود" });
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000);
+  await db.execute(
+    sql`INSERT INTO owner_temp_sessions (token, owner_id, admin_label, expires_at)
+        VALUES (${token}, ${ownerId}, 'مالك', ${expiresAt})`
+  );
+  return res.json({ token });
+});
+
 router.use(requireAuth);
 
 /* ── Impersonation Mode check (called by Dashboard banner) ── */
