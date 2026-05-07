@@ -10858,7 +10858,7 @@ function ReportsTab() {
     },
   });
 
-  const { data: financial } = useQuery<{
+  const { data: financial, isLoading: isLoadingFinancial } = useQuery<{
     month: string;
     totalRevenue: number;
     totalInsuranceHeld: number;
@@ -10976,6 +10976,24 @@ function ReportsTab() {
     const cur = parseInt(new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric" }).format(new Date()), 10);
     return [cur, cur - 1, cur - 2].map((y) => ({ val: String(y), label: `${y} هـ` }));
   }, []);
+
+  /* Maps Hijri month number → approximate Gregorian month name for the selected Hijri year */
+  const hijriMonthGRanges = useMemo(() => {
+    const year = parseInt(selectedHijriYear, 10);
+    const approxGYear = Math.floor(year * 354.367 / 365.25 + 622);
+    const gNames = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+    const result: Record<number, string> = {};
+    const scanStart = new Date(approxGYear - 1, 0, 1);
+    for (let offset = 0; offset < 730 && Object.keys(result).length < 12; offset++) {
+      const d = new Date(scanStart.getTime() + offset * 86400000);
+      const parts = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric", day: "numeric" }).formatToParts(d);
+      const hd = Object.fromEntries(parts.filter(p => p.type !== "literal").map(p => [p.type, parseInt(p.value)]));
+      if (hd.year === year && hd.day >= 13 && hd.day <= 17 && !result[hd.month]) {
+        result[hd.month] = gNames[d.getMonth()];
+      }
+    }
+    return result;
+  }, [selectedHijriYear]);
 
   const slotLabels: Record<string, { icon: ReactElement; label: string }> = {
     morning:     { icon: <Sunrise className="w-4 h-4" />,  label: "صباحي" },
@@ -11322,35 +11340,46 @@ function ReportsTab() {
             </Select>
           </div>
           {viewMode === "monthly" ? (
-            <div className="flex-1 space-y-1">
+            <div className="flex-1 space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs text-muted-foreground font-medium">الشهر</label>
-                <label htmlFor="hijri-toggle" className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <span className="text-xs text-muted-foreground">التقويم الهجري</span>
-                  <Switch
-                    id="hijri-toggle"
-                    checked={isHijri}
-                    onCheckedChange={setIsHijri}
-                  />
-                </label>
+                <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setIsHijri(false)}
+                    className={`px-2.5 py-1 rounded-md transition-all font-medium ${!isHijri ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  >ميلادي</button>
+                  <button
+                    type="button"
+                    onClick={() => setIsHijri(true)}
+                    className={`px-2.5 py-1 rounded-md transition-all font-medium ${isHijri ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  >هجري</button>
+                </div>
               </div>
               {isHijri ? (
-                <div className="flex gap-2">
-                  <Select value={selectedHijriYear} onValueChange={setSelectedHijriYear}>
-                    <SelectTrigger className="h-10 w-[88px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {hijriYearOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                  <Select value={selectedHijriMonthNum} onValueChange={setSelectedHijriMonthNum}>
-                    <SelectTrigger className="h-10 flex-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {HIJRI_MONTHS.map((name, i) => (
-                        <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <>
+                  <div className="flex gap-2 flex-nowrap">
+                    <Select value={selectedHijriYear} onValueChange={setSelectedHijriYear}>
+                      <SelectTrigger className="h-10 w-[96px] shrink-0"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {hijriYearOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={selectedHijriMonthNum} onValueChange={setSelectedHijriMonthNum}>
+                      <SelectTrigger className="h-10 flex-1 min-w-0"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {HIJRI_MONTHS.map((name, i) => (
+                          <SelectItem key={i + 1} value={String(i + 1)}>
+                            {name}{hijriMonthGRanges[i + 1] ? ` (${hijriMonthGRanges[i + 1]})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {HIJRI_MONTHS[parseInt(selectedHijriMonthNum) - 1]} {selectedHijriYear} هـ — يوافق تقريباً شهر {hijriMonthGRanges[parseInt(selectedHijriMonthNum)] ?? "—"} ميلادي
+                  </p>
+                </>
               ) : (
                 <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
@@ -11526,7 +11555,11 @@ function ReportsTab() {
       {/* ── MONTHLY VIEW ── */}
       {viewMode === "monthly" && (
         <>
-          {financial && (
+          {isLoadingFinancial ? (
+            <div className="grid grid-cols-3 gap-3">
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
+            </div>
+          ) : financial ? (
             <>
               <div className="grid grid-cols-3 gap-3">
                 {[
@@ -11623,7 +11656,7 @@ function ReportsTab() {
                 </div>
               )}
             </>
-          )}
+          ) : null}
 
           {isLoading ? (
             <div className="space-y-4">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
