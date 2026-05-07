@@ -3309,17 +3309,20 @@ router.get("/yearly-summary", async (req, res) => {
     ];
     if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
     const bRows = await db
-      .select({ rev: ownerBookingsTable.revenueAmount, totalPrice: ownerBookingsTable.totalPrice, depositPaid: ownerBookingsTable.depositPaid, balanceCollected: ownerBookingsTable.balanceCollected, cancelledAt: ownerBookingsTable.cancelledAt })
+      .select({ rev: ownerBookingsTable.revenueAmount, totalPrice: ownerBookingsTable.totalPrice, depositPaid: ownerBookingsTable.depositPaid, balanceCollected: ownerBookingsTable.balanceCollected, cancelledAt: ownerBookingsTable.cancelledAt, insuranceDeducted: ownerBookingsTable.insuranceDeducted })
       .from(ownerBookingsTable).where(and(...bConds));
     const activeRows = bRows.filter(r => r.cancelledAt === null);
     const revenue = activeRows.reduce((s, r) => {
+      let rev = 0;
       if (r.totalPrice !== null) {
         const dep = Number(r.depositPaid ?? 0);
-        return s + dep + (r.balanceCollected ? Number(r.totalPrice) - dep : 0);
+        rev = dep + (r.balanceCollected ? Number(r.totalPrice) - dep : 0);
+      } else if (r.rev) {
+        rev = Number(r.rev);
+      } else {
+        rev = Number(r.depositPaid ?? 0);
       }
-      if (r.rev) return s + Number(r.rev);
-      // Fallback: depositPaid is the confirmed revenue when no price is recorded
-      return s + Number(r.depositPaid ?? 0);
+      return s + rev + (r.insuranceDeducted ? Number(r.insuranceDeducted) : 0);
     }, 0);
 
     const eConds: any[] = [
@@ -3391,6 +3394,7 @@ router.get("/yearly-summary-hijri", async (req, res) => {
     totalPrice:      ownerBookingsTable.totalPrice,
     depositPaid:     ownerBookingsTable.depositPaid,
     balanceCollected: ownerBookingsTable.balanceCollected,
+    insuranceDeducted: ownerBookingsTable.insuranceDeducted,
   }).from(ownerBookingsTable).where(and(...bConds));
 
   /* Fetch expenses in the Gregorian window */
@@ -3431,9 +3435,9 @@ router.get("/yearly-summary-hijri", async (req, res) => {
     } else if (b.rev) {
       rev = Number(b.rev);
     } else {
-      // Fallback: depositPaid is the confirmed revenue when no price is recorded
       rev = Number(b.depositPaid ?? 0);
     }
+    rev += (b.insuranceDeducted ? Number(b.insuranceDeducted) : 0);
     revByM[hym.month] = (revByM[hym.month] ?? 0) + rev;
   }
 

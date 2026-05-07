@@ -7603,6 +7603,18 @@ function getHijriMonthKey(dateStr: string): string {
   } catch { return ""; }
 }
 
+const HIJRI_MONTH_NAMES_AR = ["محرم","صفر","ربيع الأول","ربيع الآخر","جمادى الأولى","جمادى الآخرة","رجب","شعبان","رمضان","شوال","ذو القعدة","ذو الحجة"];
+
+function getHijriYMClient(date: Date): { year: number; month: number } {
+  try {
+    const parts = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric" }).formatToParts(date);
+    return {
+      year:  Number(parts.find(p => p.type === "year")?.value  ?? 0),
+      month: Number(parts.find(p => p.type === "month")?.value ?? 0),
+    };
+  } catch { return { year: 0, month: 0 }; }
+}
+
 function RevenueTab() {
   const { unit } = useAdminFinance();
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -8392,7 +8404,7 @@ function RevenueTab() {
           <div className="flex items-center gap-2 mb-4">
             <Zap className="w-4 h-4 text-primary" />
             <span className="text-sm font-bold text-foreground">ملخص الإيرادات الموحّدة</span>
-            <span className="text-xs text-muted-foreground ms-auto">{monthOptions.find(o => o.val === selectedMonth)?.label}</span>
+            <span className="text-xs text-muted-foreground ms-auto">{calType === "hijri" ? selectedHijriMonth : monthOptions.find(o => o.val === selectedMonth)?.label}</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="text-center">
@@ -10797,6 +10809,10 @@ function ReportsTab() {
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string>("all");
   const [isHijri, setIsHijri] = useState(false);
   const [isYearlyHijri, setIsYearlyHijri] = useState(false);
+  const [selectedHijriMonthVal, setSelectedHijriMonthVal] = useState<string>(() => {
+    const { year, month } = getHijriYMClient(new Date());
+    return year ? `${year}-${String(month).padStart(2, "0")}` : "";
+  });
   const [selectedHijriYear, setSelectedHijriYear] = useState(() =>
     String(new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric" }).format(new Date()))
   );
@@ -10810,7 +10826,7 @@ function ReportsTab() {
   const [archiveSavedId, setArchiveSavedId] = useState<number | null>(null);
   const qc = useQueryClient();
 
-  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, reportType]);
+  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, reportType]);
 
   const { data: mySubmissions = [] } = useQuery<any[]>({
     queryKey: ["my-submissions-for-report"],
@@ -10828,10 +10844,22 @@ function ReportsTab() {
     }
   }, [mySubmissions?.length]);
 
+  const hijriReportParsed = useMemo(() => {
+    if (!isHijri || !selectedHijriMonthVal) return null;
+    const [y, m] = selectedHijriMonthVal.split("-").map(Number);
+    return { year: y, month: m };
+  }, [isHijri, selectedHijriMonthVal]);
+
   const { data: report, isLoading } = useQuery<MonthReport>({
-    queryKey: ["owner", "reports", selectedMonth, selectedSubmissionId, isHijri],
+    queryKey: ["owner", "reports", isHijri, isHijri ? selectedHijriMonthVal : selectedMonth, selectedSubmissionId],
     queryFn: async () => {
-      const params = new URLSearchParams({ month: selectedMonth });
+      const params = new URLSearchParams();
+      if (isHijri && hijriReportParsed) {
+        params.set("hijriYear",  String(hijriReportParsed.year));
+        params.set("hijriMonth", String(hijriReportParsed.month));
+      } else {
+        params.set("month", selectedMonth);
+      }
       if (selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
       const r = await apiFetch(`/owner/reports?${params}`);
       if (!r.ok) throw new Error("failed");
@@ -10859,9 +10887,15 @@ function ReportsTab() {
     categoryTotals: Record<string, number>;
     trend: { month: string; revenue: number; expenses: number }[];
   }>({
-    queryKey: ["owner", "financial-summary", selectedMonth, selectedSubmissionId],
+    queryKey: ["owner", "financial-summary", isHijri, isHijri ? selectedHijriMonthVal : selectedMonth, selectedSubmissionId],
     queryFn: async () => {
-      const params = new URLSearchParams({ month: selectedMonth });
+      const params = new URLSearchParams();
+      if (isHijri && hijriReportParsed) {
+        params.set("hijriYear",  String(hijriReportParsed.year));
+        params.set("hijriMonth", String(hijriReportParsed.month));
+      } else {
+        params.set("month", selectedMonth);
+      }
       if (selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
       const r = await apiFetch(`/owner/financial-summary?${params}`);
       if (!r.ok) return null;
@@ -10944,13 +10978,32 @@ function ReportsTab() {
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const val = d.toISOString().slice(0, 7);
-      const label = isHijri
-        ? d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" })
-        : d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+      const label = d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
       opts.push({ val, label });
     }
     return opts;
-  }, [isHijri]);
+  }, []);
+
+  const hijriMonthOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const opts: { val: string; year: number; month: number; label: string }[] = [];
+    const now = new Date();
+    for (let i = 0; i <= 15 && opts.length < 13; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 15);
+      const { year, month } = getHijriYMClient(d);
+      if (!year) continue;
+      const key = `${year}-${String(month).padStart(2, "0")}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        opts.push({ val: key, year, month, label: `${HIJRI_MONTH_NAMES_AR[month - 1] ?? month} ${year} هـ` });
+      }
+    }
+    return opts;
+  }, []);
+
+  const activeMonthLabel = isHijri
+    ? (report?.hijriMonthLabel ?? hijriMonthOptions.find(o => o.val === selectedHijriMonthVal)?.label ?? selectedHijriMonthVal)
+    : (monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth);
 
   const yearOptions = useMemo(() => {
     const cur = new Date().getFullYear();
@@ -10983,7 +11036,7 @@ function ReportsTab() {
     let htmlContent = "";
 
     if (viewMode === "monthly" && report) {
-      const monthLabel = monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth;
+      const monthLabel = activeMonthLabel;
       titleText = `تقرير ${monthLabel} – ${selectedPropertyName}`;
       bodyText =
         `📊 تقرير شهر ${monthLabel}\n` +
@@ -11076,7 +11129,7 @@ function ReportsTab() {
     let subject = "";
     let body = "";
     if (viewMode === "monthly" && report) {
-      subject = `تقرير شهري – ${monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth}`;
+      subject = `تقرير شهري – ${activeMonthLabel}`;
       body = `${selectedPropertyName}\n\nالحجوزات: ${report.totalBookings}\nالإشغال: ${report.occupancyRate}%` +
         (financial ? `\nصافي الربح: ${formatAmount(financial.netProfit)}` : "") +
         (url ? `\n\nرابط التقرير PDF:\n${url}` : "") +
@@ -11319,12 +11372,21 @@ function ReportsTab() {
                   />
                 </label>
               </div>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {monthOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
-                </SelectContent>
-              </Select>
+              {isHijri ? (
+                <Select value={selectedHijriMonthVal} onValueChange={setSelectedHijriMonthVal}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {hijriMonthOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {monthOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           ) : (
             <div className="flex-1 space-y-1">
@@ -11615,9 +11677,27 @@ function ReportsTab() {
                 ))}
               </div>
 
+              {report.dailyRevenue && report.dailyRevenue.some((d) => d.revenue > 0) && (
+                <div className="bg-card border border-border rounded-2xl p-5">
+                  <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
+                    <BarChart2 className="w-4 h-4 text-primary" />
+                    الإيرادات اليومية — {activeMonthLabel}
+                  </h3>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={report.dailyRevenue.map((d) => ({ day: String(d.day), الإيرادات: d.revenue }))} margin={{ top: 0, right: 0, left: -15, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} interval={2} />
+                      <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: 12 }} formatter={(v: number) => [formatAmount(v), "الإيرادات"]} />
+                      <Bar dataKey="الإيرادات" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
               <div className="bg-card border border-border rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-foreground text-sm">نسبة الإشغال — {monthOptions.find((o) => o.val === selectedMonth)?.label}</h3>
+                  <h3 className="font-bold text-foreground text-sm">نسبة الإشغال — {activeMonthLabel}</h3>
                   <span className="text-2xl font-bold text-primary">{report.occupancyRate}%</span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-3">
