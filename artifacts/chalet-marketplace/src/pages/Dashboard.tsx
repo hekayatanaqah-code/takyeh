@@ -10977,31 +10977,20 @@ function ReportsTab() {
     return [cur, cur - 1, cur - 2].map((y) => ({ val: String(y), label: `${y} هـ` }));
   }, []);
 
-  /* Maps Hijri month number → exact Gregorian date range string (e.g. "18 مايو – 16 يونيو") */
+  /* Maps Hijri month number → approximate Gregorian month name for the selected Hijri year */
   const hijriMonthGRanges = useMemo(() => {
     const year = parseInt(selectedHijriYear, 10);
     const approxGYear = Math.floor(year * 354.367 / 365.25 + 622);
     const gNames = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
-    const fmt = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric", day: "numeric" });
-    const firstDays: Record<number, Date> = {};
-    const scanStart = new Date(approxGYear - 1, 0, 1);
-    for (let offset = 0; offset < 760; offset++) {
-      const d = new Date(scanStart.getTime() + offset * 86400000);
-      const parts = fmt.formatToParts(d);
-      const hd = Object.fromEntries(parts.filter(p => p.type !== "literal").map(p => [p.type, parseInt(p.value)]));
-      if (hd.year === year && hd.day === 1 && !firstDays[hd.month]) {
-        firstDays[hd.month] = d;
-      }
-    }
     const result: Record<number, string> = {};
-    for (let m = 1; m <= 12; m++) {
-      const start = firstDays[m];
-      if (!start) continue;
-      const nextMonthStart = firstDays[m + 1] ?? new Date(start.getTime() + 30 * 86400000);
-      const end = new Date(nextMonthStart.getTime() - 86400000);
-      const s = `${start.getDate()} ${gNames[start.getMonth()]}`;
-      const e = `${end.getDate()} ${gNames[end.getMonth()]}`;
-      result[m] = start.getMonth() === end.getMonth() ? `${start.getDate()}–${end.getDate()} ${gNames[start.getMonth()]}` : `${s} – ${e}`;
+    const scanStart = new Date(approxGYear - 1, 0, 1);
+    for (let offset = 0; offset < 730 && Object.keys(result).length < 12; offset++) {
+      const d = new Date(scanStart.getTime() + offset * 86400000);
+      const parts = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric", day: "numeric" }).formatToParts(d);
+      const hd = Object.fromEntries(parts.filter(p => p.type !== "literal").map(p => [p.type, parseInt(p.value)]));
+      if (hd.year === year && hd.day >= 13 && hd.day <= 17 && !result[hd.month]) {
+        result[hd.month] = gNames[d.getMonth()];
+      }
     }
     return result;
   }, [selectedHijriYear]);
@@ -11388,10 +11377,7 @@ function ReportsTab() {
                     </Select>
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    {HIJRI_MONTHS[parseInt(selectedHijriMonthNum) - 1]} {selectedHijriYear} هـ
-                    {hijriMonthGRanges[parseInt(selectedHijriMonthNum)] && (
-                      <> — يمتد من {hijriMonthGRanges[parseInt(selectedHijriMonthNum)]} م</>
-                    )}
+                    {HIJRI_MONTHS[parseInt(selectedHijriMonthNum) - 1]} {selectedHijriYear} هـ — يوافق تقريباً شهر {hijriMonthGRanges[parseInt(selectedHijriMonthNum)] ?? "—"} ميلادي
                   </p>
                 </>
               ) : (
