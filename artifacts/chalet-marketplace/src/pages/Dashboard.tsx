@@ -8916,6 +8916,7 @@ function RevenueTab() {
 /* ── Reports Tab ─────────────────────────────── */
 interface MonthReport {
   month: string;
+  hijriMonthLabel?: string;
   totalBookings: number;
   platformBookings: number;
   externalBookings: number;
@@ -8925,7 +8926,10 @@ interface MonthReport {
   slotStats: { morning: number; evening: number; full_day: number; unspecified: number };
   topSlot: string;
   topSlotLabel: string;
+  dailyRevenue?: { day: number; revenue: number }[];
 }
+
+const HIJRI_MONTHS = ["محرم","صفر","ربيع الأول","ربيع الآخر","جمادى الأولى","جمادى الآخرة","رجب","شعبان","رمضان","شوال","ذو القعدة","ذو الحجة"];
 
 /* ── Expense Categories ──────────────────────────── */
 const EXPENSE_CATS: { key: string; label: string; emoji: string; color: string }[] = [
@@ -10796,6 +10800,9 @@ function ReportsTab() {
   const [selectedHijriYear, setSelectedHijriYear] = useState(() =>
     String(new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric" }).format(new Date()))
   );
+  const [selectedHijriMonthNum, setSelectedHijriMonthNum] = useState(() =>
+    String(parseInt(new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { month: "numeric" }).format(new Date()), 10))
+  );
   const [sharePhone, setSharePhone] = useState(() => localStorage.getItem("reportSharePhone") ?? "");
   const [shareEmail, setShareEmail] = useState(() => localStorage.getItem("reportShareEmail") ?? "");
   const [showShare, setShowShare] = useState(false);
@@ -10824,26 +10831,13 @@ function ReportsTab() {
     }
   }, [mySubmissions?.length]);
 
-  /* Derive Hijri year+month from the middle of the selected Gregorian month */
-  const hijriYM = useMemo(() => {
-    if (!isHijri) return null;
-    try {
-      const mid = new Date(selectedMonth + "-15T12:00:00");
-      const parts = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric" }).formatToParts(mid);
-      return {
-        year:  Number(parts.find(p => p.type === "year")?.value  ?? 0),
-        month: Number(parts.find(p => p.type === "month")?.value ?? 0),
-      };
-    } catch { return null; }
-  }, [isHijri, selectedMonth]);
-
   const { data: report, isLoading } = useQuery<MonthReport>({
-    queryKey: ["owner", "reports", isHijri && hijriYM ? `h-${hijriYM.year}-${hijriYM.month}` : selectedMonth, selectedSubmissionId],
+    queryKey: ["owner", "reports", isHijri ? `h-${selectedHijriYear}-${selectedHijriMonthNum}` : selectedMonth, selectedSubmissionId],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (isHijri && hijriYM) {
-        params.set("hijriYear",  String(hijriYM.year));
-        params.set("hijriMonth", String(hijriYM.month));
+      if (isHijri) {
+        params.set("hijriYear",  selectedHijriYear);
+        params.set("hijriMonth", selectedHijriMonthNum);
       } else {
         params.set("month", selectedMonth);
       }
@@ -10874,12 +10868,12 @@ function ReportsTab() {
     categoryTotals: Record<string, number>;
     trend: { month: string; revenue: number; expenses: number }[];
   }>({
-    queryKey: ["owner", "financial-summary", isHijri && hijriYM ? `h-${hijriYM.year}-${hijriYM.month}` : selectedMonth, selectedSubmissionId],
+    queryKey: ["owner", "financial-summary", isHijri ? `h-${selectedHijriYear}-${selectedHijriMonthNum}` : selectedMonth, selectedSubmissionId],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (isHijri && hijriYM) {
-        params.set("hijriYear",  String(hijriYM.year));
-        params.set("hijriMonth", String(hijriYM.month));
+      if (isHijri) {
+        params.set("hijriYear",  selectedHijriYear);
+        params.set("hijriMonth", selectedHijriMonthNum);
       } else {
         params.set("month", selectedMonth);
       }
@@ -11340,12 +11334,31 @@ function ReportsTab() {
                   />
                 </label>
               </div>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {monthOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
-                </SelectContent>
-              </Select>
+              {isHijri ? (
+                <div className="flex gap-2">
+                  <Select value={selectedHijriYear} onValueChange={setSelectedHijriYear}>
+                    <SelectTrigger className="h-10 w-[88px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {hijriYearOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={selectedHijriMonthNum} onValueChange={setSelectedHijriMonthNum}>
+                    <SelectTrigger className="h-10 flex-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {HIJRI_MONTHS.map((name, i) => (
+                        <SelectItem key={i + 1} value={String(i + 1)}>{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {monthOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           ) : (
             <div className="flex-1 space-y-1">
@@ -11638,7 +11651,7 @@ function ReportsTab() {
 
               <div className="bg-card border border-border rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-foreground text-sm">نسبة الإشغال — {monthOptions.find((o) => o.val === selectedMonth)?.label}</h3>
+                  <h3 className="font-bold text-foreground text-sm">نسبة الإشغال — {isHijri ? (report.hijriMonthLabel || `${HIJRI_MONTHS[parseInt(selectedHijriMonthNum) - 1]} ${selectedHijriYear} هـ`) : monthOptions.find((o) => o.val === selectedMonth)?.label}</h3>
                   <span className="text-2xl font-bold text-primary">{report.occupancyRate}%</span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-3">
@@ -11673,6 +11686,28 @@ function ReportsTab() {
                   })}
                 </div>
               </div>
+
+              {report.dailyRevenue && report.dailyRevenue.some(d => d.revenue > 0) && (
+                <div className="bg-card border border-border rounded-2xl p-5">
+                  <h3 className="font-bold text-foreground mb-4 text-sm flex items-center gap-2">
+                    <BarChart2 className="w-4 h-4 text-primary" />
+                    الإيرادات اليومية — {isHijri ? (report.hijriMonthLabel || `${HIJRI_MONTHS[parseInt(selectedHijriMonthNum) - 1]} ${selectedHijriYear} هـ`) : monthOptions.find(o => o.val === selectedMonth)?.label}
+                  </h3>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <BarChart data={report.dailyRevenue} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="day" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                      <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                      <Tooltip
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: 12 }}
+                        formatter={(value: number) => [`${value.toLocaleString("ar-SA")} ر.س`, "الإيرادات"]}
+                        labelFormatter={(label) => isHijri ? `اليوم ${label} هـ` : `يوم ${label}`}
+                      />
+                      <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="الإيرادات" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-2 justify-end">
                 <Button variant="outline" size="sm" onClick={() => printMonthlyReport(selectedMonth, selectedPropertyName, report, financial)} className="gap-2">

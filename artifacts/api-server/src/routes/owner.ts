@@ -49,6 +49,25 @@ function getHijriYM(dateStr: string): { year: number; month: number } {
 
 const HIJRI_MONTH_NAMES = ["محرم","صفر","ربيع الأول","ربيع الآخر","جمادى الأولى","جمادى الآخرة","رجب","شعبان","رمضان","شوال","ذو القعدة","ذو الحجة"];
 
+/** Extract the Hijri day-of-month from a "YYYY-MM-DD" string using Umm al-Qura. */
+function getHijriDay(dateStr: string): number {
+  try {
+    const d = new Date(dateStr + "T12:00:00");
+    const parts = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { day: "numeric" }).formatToParts(d);
+    return Number(parts.find(p => p.type === "day")?.value ?? 0);
+  } catch { return 0; }
+}
+
+/** Recognised revenue for one booking row (deposit + balance if collected; falls back to revenueAmount, then depositPaid). */
+function calcBookingRev(b: { totalPrice: string | null; depositPaid: string | null; balanceCollected: boolean | null; revenueAmount: string | null }): number {
+  if (b.totalPrice !== null) {
+    const dep = Number(b.depositPaid ?? 0);
+    return dep + (b.balanceCollected ? Number(b.totalPrice) - dep : 0);
+  }
+  if (b.revenueAmount) return Number(b.revenueAmount);
+  return Number(b.depositPaid ?? 0);
+}
+
 const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
 const DEFAULT_CANCELLATION_TEMPLATE = "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}.\n\nالسبب: {سبب_الإلغاء}.\n\nتفاصيل المبالغ المُستردّة:\n• استرداد العربون: {استرداد_العربون} ريال\n• استرداد التأمين: {استرداد_التأمين} ريال\n• إجمالي المبلغ المسترد: {إجمالي_المسترد} ريال";
 const DEFAULT_MODIFICATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} بناءً على ({سبب_التعديل}).\n\nالحجز السابق: يوم {اسم_اليوم_من} ({من_التاريخ} | {من_التاريخ_م}) - فترة {الفترة_القديمة}.\n\nالحجز الجديد: يوم {اسم_اليوم_إلى} ({إلى_التاريخ} | {إلى_التاريخ_م}) - فترة {الفترة_الجديدة}.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
@@ -1846,6 +1865,14 @@ router.get("/reports", async (req, res) => {
     }
     const topSlot = Object.entries(slotStats).filter(([k]) => k !== "unspecified").sort(([, a], [, b]) => b - a)[0]?.[0] ?? "unspecified";
     const slotLabels: Record<string, string> = { morning: "صباحي", evening: "مسائي", full_day: "يوم كامل", unspecified: "غير محدد" };
+    /* Daily revenue breakdown by Hijri day-of-month (days 1–30) */
+    const dailyRevenue = Array.from({ length: 30 }, (_, i) => {
+      const day = i + 1;
+      const revenue = activeMonthBookings
+        .filter(b => getHijriYM(b.bookingDate).year === hijriYear && getHijriYM(b.bookingDate).month === hijriMonth && getHijriDay(b.bookingDate) === day)
+        .reduce((s, b) => s + calcBookingRev(b), 0);
+      return { day, revenue };
+    });
     return res.json({
       month: `${approxGYear}-${String(hijriMonth).padStart(2, "0")}`,
       hijriMonthLabel: `${HIJRI_MONTH_NAMES[hijriMonth - 1] ?? hijriMonth} ${hijriYear} هـ`,
@@ -1859,6 +1886,7 @@ router.get("/reports", async (req, res) => {
       topSlot,
       topSlotLabel: slotLabels[topSlot] ?? topSlot,
       bookings: monthBookings,
+      dailyRevenue,
     });
   }
 
@@ -1908,6 +1936,16 @@ router.get("/reports", async (req, res) => {
     unspecified: "غير محدد",
   };
 
+  /* Daily revenue breakdown by Gregorian day-of-month */
+  const dailyRevenue = Array.from({ length: daysInMonth }, (_, i) => {
+    const day = i + 1;
+    const dayStr = `${month}-${String(day).padStart(2, "0")}`;
+    const revenue = activeMonthBookings
+      .filter(b => b.bookingDate === dayStr)
+      .reduce((s, b) => s + calcBookingRev(b), 0);
+    return { day, revenue };
+  });
+
   return res.json({
     month,
     totalBookings,
@@ -1920,6 +1958,7 @@ router.get("/reports", async (req, res) => {
     topSlot,
     topSlotLabel: slotLabels[topSlot] ?? topSlot,
     bookings: monthBookings,
+    dailyRevenue,
   });
 });
 
