@@ -9288,6 +9288,7 @@ function RevenueTab() {
                   <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">العميل</th>
                   <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">التاريخ</th>
                   <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">النوع</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">طريقة الدفع</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">المبلغ</th>
                   <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">إجراء</th>
                 </tr>
@@ -9297,10 +9298,13 @@ function RevenueTab() {
                   const { hijri, gregorian } = formatDualDate(row.bookingDate);
                   const meta = TYPE_META[row.type];
                   const hasProof = row.type === "damage" && (() => { try { return JSON.parse(row.proofImages ?? "[]").length > 0; } catch { return false; } })();
-                  const chaletId = revOwnerChalets.find((c) => c.submissionId === row.booking.submissionId)?.id ?? null;
-                  const revSent = reviewSentRevIds.has(row.bookingId);
-                  const revPending = reviewPendingRevId === row.bookingId;
                   const amtColor = row.type === "damage" ? "text-red-600" : row.type === "refund" ? "text-rose-600" : row.type === "balance" ? "text-green-600" : row.type === "cancellation" ? "text-orange-600" : row.type === "insurance" ? "text-slate-600" : "text-blue-600";
+                  const pm = row.booking?.paymentMethod ?? "transfer";
+                  const pmBadge = pm === "pos"
+                    ? { icon: "💳", label: "شبكة", cls: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" }
+                    : pm === "cash"
+                      ? { icon: "💵", label: "كاش", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" }
+                      : { icon: "🏦", label: "تحويل", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" };
                   return (
                     <tr key={`${row.bookingId}-${row.type}-${i}`} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${row.isPending ? "opacity-70" : ""}`}>
                       <td className="py-2.5 px-3 font-medium">
@@ -9316,9 +9320,9 @@ function RevenueTab() {
                           <span className="ms-1 text-[10px] font-semibold text-slate-600 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 px-1.5 py-0.5 rounded-full">معزول</span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-xs">
+                      <td className="py-2.5 px-3 text-xs whitespace-nowrap">
                         <div className="font-medium">{hijri}</div>
-                        <div className="text-muted-foreground">{gregorian}</div>
+                        <div className="text-muted-foreground">{gregorian} م</div>
                       </td>
                       <td className="py-2.5 px-3">
                         <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${meta.cls}`}>
@@ -9334,6 +9338,15 @@ function RevenueTab() {
                           >📸 عرض الإثبات</button>
                         )}
                       </td>
+                      <td className="py-2.5 px-3">
+                        {(row.type === "deposit" || row.type === "balance" || row.type === "damage" || row.type === "cancellation") ? (
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${pmBadge.cls}`}>
+                            {pmBadge.icon} {pmBadge.label}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </td>
                       <td className="py-2.5 px-3 text-left font-bold text-base tabular-nums">
                         <span className={amtColor}>
                           {fmtN(row.amount)}
@@ -9341,67 +9354,21 @@ function RevenueTab() {
                         <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
                       </td>
                       <td className="py-2.5 px-3">
-                        <div className="flex flex-col gap-1">
-                          {(row.type === "deposit" || row.type === "balance") && !row.isPending && (() => {
-                            const bk = row.booking;
-                            const dep = Number(bk.depositPaid ?? 0);
-                            const rem = bk.totalPrice ? Math.max(0, Number(bk.totalPrice) - dep) : 0;
-                            const maxAmt = dep + (bk.balanceCollected ? rem : 0);
-                            return maxAmt > 0 ? (
-                              <button
-                                onClick={() => { setRefundModal({ booking: bk, maxAmount: maxAmt }); setRefundAmount(""); setRefundReason(""); setRefundType("partial"); }}
-                                className="flex items-center gap-1 text-[11px] font-medium text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg px-2 py-1 hover:bg-rose-100 transition-colors whitespace-nowrap"
-                              >
-                                <RotateCcw className="w-3 h-3" />
-                                استرداد
-                              </button>
-                            ) : null;
-                          })()}
-                          {chaletId && (
-                          <button
-                            disabled={revSent || revPending}
-                            onClick={async () => {
-                              if (!chaletId) return;
-                              setReviewPendingRevId(row.bookingId);
-                              try {
-                                const r = await apiFetch("/owner/review-invite", {
-                                  method: "POST",
-                                  body: JSON.stringify({ chaletId, guestName: row.clientName }),
-                                });
-                                if (r.ok) {
-                                  const data = await r.json();
-                                  const revBase = import.meta.env.BASE_URL.replace(/\/$/, "");
-                                  const link = `${window.location.origin}${revBase}/r/${data.token}`;
-                                  const revChalet = revOwnerChalets.find((c) => c.id === chaletId);
-                                  const chaletName = revChalet?.nameAr ?? "شاليهنا";
-                                  const revSiteSettings = siteSettingsCache;
-                                  const DEFAULT_WA_REV = "أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} 🌟\nاضغط هنا لتقييمك: {link}";
-                                  const tpl = (revChalet as any)?.waReviewTemplate ?? revSiteSettings?.wa_review_template ?? DEFAULT_WA_REV;
-                                  const msg = tpl
-                                    .replace(/\{link\}/g, link)
-                                    .replace(/\{guest_name\}/g, row.clientName ?? "")
-                                    .replace(/\{chalet_name\}/g, chaletName);
-                                  let rawPhone = row.booking.clientPhone?.replace(/\D/g, "") ?? "";
-                                  if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
-                                  if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
-                                  const a = document.createElement("a");
-                                  a.href = `https://wa.me/${rawPhone || ""}?text=${encodeURIComponent(msg)}`;
-                                  a.target = "_blank"; a.rel = "noopener noreferrer";
-                                  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                                  setReviewSentRevIds((prev) => new Set([...prev, row.bookingId]));
-                                  toast({ title: "تم إرسال طلب التقييم ✓", description: `تم فتح واتساب لإرسال رابط التقييم إلى ${row.clientName}` });
-                                }
-                              } finally {
-                                setReviewPendingRevId(null);
-                              }
-                            }}
-                            className="flex items-center gap-1 text-[11px] font-medium text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg px-2 py-1 hover:bg-teal-100 transition-colors disabled:opacity-50 whitespace-nowrap"
-                          >
-                            {revPending ? <Loader2 className="w-3 h-3 animate-spin" /> : revSent ? <CheckCircle className="w-3 h-3" /> : <Star className="w-3 h-3" />}
-                            {revSent ? "تم ✓" : "طلب تقييم"}
-                          </button>
-                          )}
-                        </div>
+                        {(row.type === "deposit" || row.type === "balance") && !row.isPending && (() => {
+                          const bk = row.booking;
+                          const dep = Number(bk.depositPaid ?? 0);
+                          const rem = bk.totalPrice ? Math.max(0, Number(bk.totalPrice) - dep) : 0;
+                          const maxAmt = dep + (bk.balanceCollected ? rem : 0);
+                          return maxAmt > 0 ? (
+                            <button
+                              onClick={() => { setRefundModal({ booking: bk, maxAmount: maxAmt }); setRefundAmount(""); setRefundReason(""); setRefundType("partial"); }}
+                              className="flex items-center gap-1 text-[11px] font-medium text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg px-2 py-1 hover:bg-rose-100 transition-colors whitespace-nowrap"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              استرداد
+                            </button>
+                          ) : null;
+                        })()}
                       </td>
                     </tr>
                   );
@@ -9409,7 +9376,7 @@ function RevenueTab() {
               </tbody>
               <tfoot>
                 <tr className="bg-muted/30">
-                  <td colSpan={3} className="py-2 px-3 text-xs font-bold text-muted-foreground">المجموع</td>
+                  <td colSpan={4} className="py-2 px-3 text-xs font-bold text-muted-foreground">المجموع</td>
                   <td className="py-2 px-3 text-left font-extrabold text-base text-primary tabular-nums">
                     {fmtN(filteredRows.reduce((s, r) => s + r.amount, 0))} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
                   </td>
