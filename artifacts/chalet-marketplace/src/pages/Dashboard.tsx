@@ -9290,7 +9290,6 @@ function RevenueTab() {
                   <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">النوع</th>
                   <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">طريقة الدفع</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground">المبلغ</th>
-                  <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">إجراء</th>
                 </tr>
               </thead>
               <tbody>
@@ -9309,15 +9308,15 @@ function RevenueTab() {
                     <tr key={`${row.bookingId}-${row.type}-${i}`} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${row.isPending ? "opacity-70" : ""}`}>
                       <td className="py-2.5 px-3 font-medium">
                         {row.clientName}
-                        {row.isPending && <span className="ms-1 text-[10px] font-semibold text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded-full">متوقّع</span>}
+                        {row.isPending && <span className="ms-1 text-[10px] font-semibold text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded-full">متبقي</span>}
                         {row.type === "deposit" && row.isPending && (
-                          <span className="ms-1 text-[10px] font-semibold text-amber-700 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 px-1.5 py-0.5 rounded-full">⏳ عائم</span>
+                          <span className="ms-1 text-[10px] font-semibold text-amber-700 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 px-1.5 py-0.5 rounded-full">محصّل</span>
                         )}
                         {row.type === "deposit" && !row.isPending && (
                           <span className="ms-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 px-1.5 py-0.5 rounded-full">✓ مؤكد</span>
                         )}
                         {row.type === "insurance" && (
-                          <span className="ms-1 text-[10px] font-semibold text-slate-600 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 px-1.5 py-0.5 rounded-full">معزول</span>
+                          <span className="ms-1 text-[10px] font-semibold text-slate-600 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 px-1.5 py-0.5 rounded-full">تأمين عهدة</span>
                         )}
                       </td>
                       <td className="py-2.5 px-3 text-xs whitespace-nowrap">
@@ -9347,28 +9346,28 @@ function RevenueTab() {
                           <span className="text-muted-foreground text-xs">—</span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-left font-bold text-base tabular-nums">
-                        <span className={amtColor}>
-                          {fmtN(row.amount)}
-                        </span>
-                        <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
-                      </td>
-                      <td className="py-2.5 px-3">
-                        {(row.type === "deposit" || row.type === "balance") && !row.isPending && (() => {
-                          const bk = row.booking;
-                          const dep = Number(bk.depositPaid ?? 0);
-                          const rem = bk.totalPrice ? Math.max(0, Number(bk.totalPrice) - dep) : 0;
-                          const maxAmt = dep + (bk.balanceCollected ? rem : 0);
-                          return maxAmt > 0 ? (
-                            <button
-                              onClick={() => { setRefundModal({ booking: bk, maxAmount: maxAmt }); setRefundAmount(""); setRefundReason(""); setRefundType("partial"); }}
-                              className="flex items-center gap-1 text-[11px] font-medium text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg px-2 py-1 hover:bg-rose-100 transition-colors whitespace-nowrap"
-                            >
-                              <RotateCcw className="w-3 h-3" />
-                              استرداد
-                            </button>
-                          ) : null;
-                        })()}
+                      <td className="py-2.5 px-3 text-left">
+                        <div className="inline-flex flex-col items-start gap-1">
+                          <div className="font-bold text-base tabular-nums">
+                            <span className={amtColor}>{fmtN(row.amount)}</span>
+                            <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
+                          </div>
+                          {(row.type === "deposit" || row.type === "balance") && !row.isPending && (() => {
+                            const bk = row.booking;
+                            const dep = Number(bk.depositPaid ?? 0);
+                            const rem = bk.totalPrice ? Math.max(0, Number(bk.totalPrice) - dep) : 0;
+                            const maxAmt = dep + (bk.balanceCollected ? rem : 0);
+                            return maxAmt > 0 ? (
+                              <button
+                                onClick={() => { setRefundModal({ booking: bk, maxAmount: maxAmt }); setRefundAmount(""); setRefundReason(""); setRefundType("partial"); }}
+                                className="flex items-center gap-1 text-[11px] font-medium text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg px-2 py-1 hover:bg-rose-100 transition-colors whitespace-nowrap"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                استرداد
+                              </button>
+                            ) : null;
+                          })()}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -9380,7 +9379,6 @@ function RevenueTab() {
                   <td className="py-2 px-3 text-left font-extrabold text-base text-primary tabular-nums">
                     {fmtN(filteredRows.reduce((s, r) => s + r.amount, 0))} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
                   </td>
-                  <td />
                 </tr>
               </tfoot>
             </table>
