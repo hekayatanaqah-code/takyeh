@@ -3050,7 +3050,7 @@ router.post("/bookings/:id/payments", async (req, res) => {
   const schema = z.object({
     amount: z.number().positive(),
     paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    method: z.enum(["cash", "transfer"]),
+    method: z.enum(["cash", "transfer", "pos"]),
     cashDeposited: z.boolean(),
     receiptUrl: z.string().nullable().optional(),
   });

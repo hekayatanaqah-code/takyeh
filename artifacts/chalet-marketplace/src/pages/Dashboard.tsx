@@ -41,6 +41,9 @@ import QRCode from "qrcode";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+const toArN = (v: string | number) => String(v).replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[+d]);
+const fromArN = (v: string) => v.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[^0-9.]/g, '');
+
 function apiFetch(path: string, opts?: RequestInit) {
   return fetch(`${BASE}/api${path}`, {
     credentials: "include",
@@ -3289,7 +3292,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [calPayTarget, setCalPayTarget] = useState<number | null>(null);
   const [calPayAmt, setCalPayAmt] = useState("");
   const [calPayDate, setCalPayDate] = useState(new Date().toISOString().slice(0, 10));
-  const [calPayMethod, setCalPayMethod] = useState<"cash" | "transfer">("cash");
+  const [calPayMethod, setCalPayMethod] = useState<"cash" | "transfer" | "pos">("cash");
   const [calPayDeposited, setCalPayDeposited] = useState(false);
   const [calPayReceiptUrl, setCalPayReceiptUrl] = useState<string | null>(null);
   const [calPayReceiptUploading, setCalPayReceiptUploading] = useState(false);
@@ -3339,7 +3342,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   }, [allInstallments]);
 
   async function addInstallmentPayment(bookingId: number) {
-    const amt = parseFloat(calPayAmt);
+    const amt = parseFloat(fromArN(calPayAmt));
     if (isNaN(amt) || amt <= 0) {
       toast({ title: "خطأ", description: "أدخل مبلغاً صحيحاً", variant: "destructive" });
       return;
@@ -4395,26 +4398,27 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                   {bkPmts.map(p => (
                                     <div key={p.id} className="flex items-center gap-1.5 flex-wrap">
                                       <span className="text-[10px] text-muted-foreground">{p.paymentDate}</span>
-                                      <span className="text-[10px] font-bold text-green-700 dark:text-green-400">{Number(p.amount).toLocaleString("en-US")} ر.س</span>
-                                      <span className="text-[10px]">{p.method === "transfer" ? "🏦" : "💵"}</span>
+                                      <span className="text-[10px] font-bold text-green-700 dark:text-green-400">{toArN(Math.round(Number(p.amount)))} ر.س</span>
+                                      <span className="text-[10px]">{p.method === "transfer" ? "🏦" : p.method === "pos" ? "💳" : "💵"}</span>
                                       {p.receiptUrl && (<button type="button" onClick={() => setReceiptLightbox(p.receiptUrl!)} className="text-[10px] text-blue-600 hover:underline">🧾</button>)}
                                       {!isReadOnly && (<button type="button" onClick={() => deleteInstallmentPayment(b.id, p.id)} className="text-[10px] text-destructive hover:underline mr-auto">✕</button>)}
                                     </div>
                                   ))}
-                                  {isFullyPaid2 ? (<p className="text-[10px] font-bold text-green-600">✅ اكتمل السداد</p>) : (<p className="text-[10px] text-amber-600">المتبقي: {remDyn2.toLocaleString("en-US")} ر.س</p>)}
+                                  {isFullyPaid2 ? (<p className="text-[10px] font-bold text-green-600">✅ اكتمل السداد</p>) : (<p className="text-[10px] text-amber-600">المتبقي: {toArN(Math.round(remDyn2))} ر.س</p>)}
                                 </div>
                               )}
                               {!isFullyPaid2 && !isReadOnly && (
                                 calPayTarget === b.id ? (
                                   <div className="w-full border border-blue-200 dark:border-blue-800 rounded-xl p-2.5 space-y-2 bg-blue-50 dark:bg-blue-900/10">
-                                    <p className="text-[11px] font-bold text-blue-700 dark:text-blue-400">إضافة دفعة — المتبقي {remDyn2.toLocaleString("en-US")} ر.س</p>
+                                    <p className="text-[11px] font-bold text-blue-700 dark:text-blue-400">إضافة دفعة — المتبقي {toArN(Math.round(remDyn2))} ر.س</p>
                                     <div className="flex gap-2">
-                                      <input type="number" value={calPayAmt} onChange={e => setCalPayAmt(e.target.value)} placeholder="المبلغ" className="flex-1 text-[11px] rounded-lg border border-border bg-background px-2 py-1.5 text-foreground min-w-0" />
+                                      <input type="text" inputMode="decimal" value={toArN(calPayAmt)} onChange={e => setCalPayAmt(fromArN(e.target.value))} placeholder="المبلغ" className="flex-1 text-[11px] rounded-lg border border-border bg-background px-2 py-1.5 text-foreground min-w-0 text-center" />
                                       <input type="date" value={calPayDate} onChange={e => setCalPayDate(e.target.value)} className="flex-1 text-[11px] rounded-lg border border-border bg-background px-2 py-1.5 text-foreground min-w-0" />
                                     </div>
-                                    <div className="flex gap-2">
-                                      <button type="button" onClick={() => setCalPayMethod("cash")} className={`flex-1 text-[11px] font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "cash" ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 كاش</button>
+                                    <div className="flex gap-1.5">
+                                      <button type="button" onClick={() => { setCalPayMethod("cash"); setCalPayDeposited(false); }} className={`flex-1 text-[11px] font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "cash" ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 كاش</button>
                                       <button type="button" onClick={() => { setCalPayMethod("transfer"); setCalPayDeposited(true); }} className={`flex-1 text-[11px] font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "transfer" ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300" : "border-border text-muted-foreground"}`}>🏦 تحويل</button>
+                                      <button type="button" onClick={() => { setCalPayMethod("pos"); setCalPayDeposited(true); }} className={`flex-1 text-[11px] font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "pos" ? "border-purple-500 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300" : "border-border text-muted-foreground"}`}>💳 شبكة</button>
                                     </div>
                                     {calPayMethod === "cash" && (
                                       <div className="flex gap-2">
@@ -4423,16 +4427,18 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                       </div>
                                     )}
                                     <input ref={calPayReceiptRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; setCalPayReceiptUploading(true); try { const url = await uploadFile(file); if (url) setCalPayReceiptUrl(url); } finally { setCalPayReceiptUploading(false); e.target.value = ""; } }} />
-                                    {calPayReceiptUrl ? (
-                                      <div className="flex items-center gap-2">
-                                        <button type="button" onClick={() => setReceiptLightbox(calPayReceiptUrl)}><img src={calPayReceiptUrl} alt="إيصال" className="h-8 w-8 rounded object-cover border hover:opacity-80 transition" /></button>
-                                        <p className="text-[10px] text-green-600 flex-1">إيصال مرفق ✓</p>
-                                        <button type="button" onClick={() => setCalPayReceiptUrl(null)} className="text-[10px] text-destructive underline">إزالة</button>
-                                      </div>
-                                    ) : (
-                                      <button type="button" disabled={calPayReceiptUploading} onClick={() => calPayReceiptRef.current?.click()} className="flex items-center gap-1 text-[10px] text-blue-700 dark:text-blue-400 hover:underline">
-                                        {calPayReceiptUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : "📎"} إرفاق إيصال (اختياري)
-                                      </button>
+                                    {(calPayMethod === "transfer" || calPayMethod === "pos") && (
+                                      calPayReceiptUrl ? (
+                                        <div className="flex items-center gap-2">
+                                          <button type="button" onClick={() => setReceiptLightbox(calPayReceiptUrl)}><img src={calPayReceiptUrl} alt="إيصال" className="h-8 w-8 rounded object-cover border hover:opacity-80 transition" /></button>
+                                          <p className="text-[10px] text-green-600 flex-1">إيصال مرفق ✓</p>
+                                          <button type="button" onClick={() => setCalPayReceiptUrl(null)} className="text-[10px] text-destructive underline">إزالة</button>
+                                        </div>
+                                      ) : (
+                                        <button type="button" disabled={calPayReceiptUploading} onClick={() => calPayReceiptRef.current?.click()} className="flex items-center gap-1 text-[10px] text-blue-700 dark:text-blue-400 hover:underline">
+                                          {calPayReceiptUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : "📎"} إرفاق إيصال (اختياري)
+                                        </button>
+                                      )
                                     )}
                                     <div className="flex gap-2">
                                       <button type="button" onClick={() => { setCalPayTarget(null); setCalPayAmt(""); setCalPayReceiptUrl(null); }} className="flex-1 text-[11px] rounded-lg py-1.5 border border-border text-muted-foreground hover:bg-muted transition-colors">إلغاء</button>
@@ -4443,7 +4449,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                   </div>
                                 ) : (
                                   <button type="button" onClick={() => { setCalPayTarget(b.id); setCalPayAmt(String(remDyn2)); setCalPayDate(new Date().toISOString().slice(0, 10)); setCalPayMethod("cash"); setCalPayDeposited(false); }} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-700 rounded-lg py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                                    <CheckCircle className="w-3 h-3" /> + إضافة دفعة ({remDyn2.toLocaleString("en-US")} ر.س)
+                                    <CheckCircle className="w-3 h-3" /> + إضافة دفعة ({toArN(Math.round(remDyn2))} ر.س)
                                   </button>
                                 )
                               )}
@@ -5274,26 +5280,27 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               {bkPmtsL.map(p => (
                                 <div key={p.id} className="flex items-center gap-2 flex-wrap">
                                   <span className="text-xs text-muted-foreground">{p.paymentDate}</span>
-                                  <span className="text-xs font-bold text-green-700 dark:text-green-400">{Number(p.amount).toLocaleString("en-US")} ر.س</span>
-                                  <span className="text-xs">{p.method === "transfer" ? "🏦" : "💵"}</span>
+                                  <span className="text-xs font-bold text-green-700 dark:text-green-400">{toArN(Math.round(Number(p.amount)))} ر.س</span>
+                                  <span className="text-xs">{p.method === "transfer" ? "🏦" : p.method === "pos" ? "💳" : "💵"}</span>
                                   {p.receiptUrl && (<button type="button" onClick={() => setReceiptLightbox(p.receiptUrl!)} className="text-xs text-blue-600 hover:underline">🧾 إيصال</button>)}
                                   {!isReadOnly && (<button type="button" onClick={() => deleteInstallmentPayment(b.id, p.id)} className="text-xs text-destructive hover:underline mr-auto">✕ حذف</button>)}
                                 </div>
                               ))}
-                              {isFullyPaidL ? (<p className="text-xs font-bold text-green-600">✅ اكتمل السداد</p>) : (<p className="text-xs text-amber-600">المتبقي: {remDynL.toLocaleString("en-US")} ر.س</p>)}
+                              {isFullyPaidL ? (<p className="text-xs font-bold text-green-600">✅ اكتمل السداد</p>) : (<p className="text-xs text-amber-600">المتبقي: {toArN(Math.round(remDynL))} ر.س</p>)}
                             </div>
                           )}
                           {!isFullyPaidL && !isReadOnly && (
                             calPayTarget === b.id ? (
                               <div className="w-full border border-blue-200 dark:border-blue-800 rounded-xl p-3 space-y-2 bg-blue-50 dark:bg-blue-900/10">
-                                <p className="text-xs font-bold text-blue-700 dark:text-blue-400">إضافة دفعة — المتبقي {remDynL.toLocaleString("en-US")} ر.س</p>
+                                <p className="text-xs font-bold text-blue-700 dark:text-blue-400">إضافة دفعة — المتبقي {toArN(Math.round(remDynL))} ر.س</p>
                                 <div className="flex gap-2">
-                                  <input type="number" value={calPayAmt} onChange={e => setCalPayAmt(e.target.value)} placeholder="المبلغ" className="flex-1 text-xs rounded-lg border border-border bg-background px-2.5 py-2 text-foreground min-w-0" />
+                                  <input type="text" inputMode="decimal" value={toArN(calPayAmt)} onChange={e => setCalPayAmt(fromArN(e.target.value))} placeholder="المبلغ" className="flex-1 text-xs rounded-lg border border-border bg-background px-2.5 py-2 text-foreground min-w-0 text-center" />
                                   <input type="date" value={calPayDate} onChange={e => setCalPayDate(e.target.value)} className="flex-1 text-xs rounded-lg border border-border bg-background px-2.5 py-2 text-foreground min-w-0" />
                                 </div>
-                                <div className="flex gap-2">
-                                  <button type="button" onClick={() => setCalPayMethod("cash")} className={`flex-1 text-xs font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "cash" ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 كاش</button>
+                                <div className="flex gap-1.5">
+                                  <button type="button" onClick={() => { setCalPayMethod("cash"); setCalPayDeposited(false); }} className={`flex-1 text-xs font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "cash" ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 كاش</button>
                                   <button type="button" onClick={() => { setCalPayMethod("transfer"); setCalPayDeposited(true); }} className={`flex-1 text-xs font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "transfer" ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300" : "border-border text-muted-foreground"}`}>🏦 تحويل</button>
+                                  <button type="button" onClick={() => { setCalPayMethod("pos"); setCalPayDeposited(true); }} className={`flex-1 text-xs font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "pos" ? "border-purple-500 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300" : "border-border text-muted-foreground"}`}>💳 شبكة</button>
                                 </div>
                                 {calPayMethod === "cash" && (
                                   <div className="flex gap-2">
@@ -5302,16 +5309,18 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                   </div>
                                 )}
                                 <input ref={calPayReceiptRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; setCalPayReceiptUploading(true); try { const url = await uploadFile(file); if (url) setCalPayReceiptUrl(url); } finally { setCalPayReceiptUploading(false); e.target.value = ""; } }} />
-                                {calPayReceiptUrl ? (
-                                  <div className="flex items-center gap-2">
-                                    <button type="button" onClick={() => setReceiptLightbox(calPayReceiptUrl)}><img src={calPayReceiptUrl} alt="إيصال" className="h-9 w-9 rounded object-cover border hover:opacity-80 transition" /></button>
-                                    <p className="text-xs text-green-600 flex-1">إيصال مرفق ✓</p>
-                                    <button type="button" onClick={() => setCalPayReceiptUrl(null)} className="text-xs text-destructive underline">إزالة</button>
-                                  </div>
-                                ) : (
-                                  <button type="button" disabled={calPayReceiptUploading} onClick={() => calPayReceiptRef.current?.click()} className="flex items-center gap-1 text-xs text-blue-700 dark:text-blue-400 hover:underline">
-                                    {calPayReceiptUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "📎"} إرفاق إيصال (اختياري)
-                                  </button>
+                                {(calPayMethod === "transfer" || calPayMethod === "pos") && (
+                                  calPayReceiptUrl ? (
+                                    <div className="flex items-center gap-2">
+                                      <button type="button" onClick={() => setReceiptLightbox(calPayReceiptUrl)}><img src={calPayReceiptUrl} alt="إيصال" className="h-9 w-9 rounded object-cover border hover:opacity-80 transition" /></button>
+                                      <p className="text-xs text-green-600 flex-1">إيصال مرفق ✓</p>
+                                      <button type="button" onClick={() => setCalPayReceiptUrl(null)} className="text-xs text-destructive underline">إزالة</button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" disabled={calPayReceiptUploading} onClick={() => calPayReceiptRef.current?.click()} className="flex items-center gap-1 text-xs text-blue-700 dark:text-blue-400 hover:underline">
+                                      {calPayReceiptUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "📎"} إرفاق إيصال (اختياري)
+                                    </button>
+                                  )
                                 )}
                                 <div className="flex gap-2">
                                   <button type="button" onClick={() => { setCalPayTarget(null); setCalPayAmt(""); setCalPayReceiptUrl(null); }} className="flex-1 text-xs rounded-lg py-1.5 border border-border text-muted-foreground hover:bg-muted transition-colors">إلغاء</button>
@@ -5326,7 +5335,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 className="flex items-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-2.5 py-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                               >
                                 <CheckCircle className="w-3.5 h-3.5" />
-                                + إضافة دفعة ({remDynL.toLocaleString("en-US")} ر.س)
+                                + إضافة دفعة ({toArN(Math.round(remDynL))} ر.س)
                               </button>
                             )
                           )}
