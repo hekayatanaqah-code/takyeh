@@ -2647,21 +2647,68 @@ router.get("/financial-summary", async (req, res) => {
   ];
   if (submissionId) cashConds.push(eq(ownerBookingsTable.submissionId, submissionId));
   const cashBookingsAll = await db
-    .select({ depositPaid: ownerBookingsTable.depositPaid, balanceCollected: ownerBookingsTable.balanceCollected, totalPrice: ownerBookingsTable.totalPrice, paymentMethod: ownerBookingsTable.paymentMethod, cashDeposited: ownerBookingsTable.cashDeposited })
+    .select({
+      id: ownerBookingsTable.id,
+      clientName: ownerBookingsTable.clientName,
+      bookingDate: ownerBookingsTable.bookingDate,
+      depositPaid: ownerBookingsTable.depositPaid,
+      balanceCollected: ownerBookingsTable.balanceCollected,
+      totalPrice: ownerBookingsTable.totalPrice,
+      paymentMethod: ownerBookingsTable.paymentMethod,
+      cashDeposited: ownerBookingsTable.cashDeposited,
+    })
     .from(ownerBookingsTable).where(and(...cashConds));
-  const legacyBookingCash = cashBookingsAll
-    .filter(b => (b.paymentMethod ?? "cash") === "cash" && !b.cashDeposited)
-    .reduce((s, b) => {
-      const dep = Number(b.depositPaid ?? 0);
-      const bal = b.balanceCollected ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
-      return s + dep + bal;
-    }, 0);
+
+  // Set of booking IDs that have installment payment records (to avoid double-counting balance)
+  const bookingIdsWithInstallmentsPre = new Set(
+    (await db.select({ bookingId: bookingPaymentsTable.bookingId })
+      .from(bookingPaymentsTable)
+      .where(eq(bookingPaymentsTable.ownerId, ownerId))
+    ).map(r => r.bookingId)
+  );
+
+  const legacyCashEntries = cashBookingsAll
+    .filter(b => (b.paymentMethod ?? "cash") === "cash" && !b.cashDeposited);
+  const legacyBookingCash = legacyCashEntries.reduce((s, b) => {
+    const dep = Number(b.depositPaid ?? 0);
+    // Only add balance portion for bookings without installment tracking (otherwise installmentCashSum covers it)
+    const bal = (!bookingIdsWithInstallmentsPre.has(b.id) && b.balanceCollected)
+      ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
+    return s + dep + bal;
+  }, 0);
+
+  const instCashConds: Parameters<typeof and>[0][] = [
+    eq(bookingPaymentsTable.ownerId, ownerId),
+    eq(bookingPaymentsTable.method, "cash"),
+    eq(bookingPaymentsTable.cashDeposited, false),
+  ];
   const installmentCashRows = await db
-    .select({ amount: bookingPaymentsTable.amount })
+    .select({
+      amount: bookingPaymentsTable.amount,
+      paymentDate: bookingPaymentsTable.paymentDate,
+      clientName: ownerBookingsTable.clientName,
+    })
     .from(bookingPaymentsTable)
-    .where(and(eq(bookingPaymentsTable.ownerId, ownerId), eq(bookingPaymentsTable.method, "cash"), eq(bookingPaymentsTable.cashDeposited, false)));
+    .innerJoin(ownerBookingsTable, eq(bookingPaymentsTable.bookingId, ownerBookingsTable.id))
+    .where(and(...instCashConds));
   const installmentCashSum = installmentCashRows.reduce((s, p) => s + Number(p.amount), 0);
   const cashOnHand = Math.round(legacyBookingCash + installmentCashSum);
+
+  // Build breakdown list for the clickable liquidity box
+  const cashBreakdown: { clientName: string; date: string; amount: number; source: string }[] = [
+    ...legacyCashEntries.map(b => {
+      const dep = Number(b.depositPaid ?? 0);
+      const bal = (!bookingIdsWithInstallmentsPre.has(b.id) && b.balanceCollected)
+        ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
+      return { clientName: b.clientName, date: b.bookingDate, amount: dep + bal, source: "booking" };
+    }).filter(x => x.amount > 0),
+    ...installmentCashRows.map(p => ({
+      clientName: p.clientName,
+      date: p.paymentDate,
+      amount: Number(p.amount),
+      source: "installment",
+    })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
 
   /* ── Hijri monthly financial summary ───────────────────────── */
   const hYear  = req.query.hijriYear  ? Number(req.query.hijriYear)  : null;
@@ -2734,7 +2781,7 @@ router.get("/financial-summary", async (req, res) => {
       totalRevenue, totalDeposits, totalPendingBalance, totalInsuranceHeld,
       totalInsuranceDeducted: Math.round(totalInsuranceDeducted),
       totalExpenses: totalExpensesAll, netProfit, categoryTotals, insuranceRevenueTotals,
-      trend: [], cashOnHand, totalWithdrawals,
+      trend: [], cashOnHand, cashBreakdown, totalWithdrawals,
     });
   }
 
@@ -3014,6 +3061,7 @@ router.get("/financial-summary", async (req, res) => {
     insuranceRevenueTotals,
     trend,
     cashOnHand,
+    cashBreakdown,
     totalWithdrawals,
     // ── Monthly split ──
     pendingRevenue:          Math.round(pendingRevenue),

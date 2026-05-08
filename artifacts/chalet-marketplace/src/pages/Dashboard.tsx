@@ -8262,6 +8262,8 @@ function RevenueTab() {
   const effectiveMonth = calType === "hijri" && selectedHijriMonth
     ? (hijriToGregorianMap[selectedHijriMonth] ?? selectedMonth) : selectedMonth;
 
+  const [cashBreakdownOpen, setCashBreakdownOpen] = useState(false);
+
   const { data: financial, isLoading: finLoading, refetch: refetchFinancial } = useQuery<{
     totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
     totalInsuranceHeld: number; totalInsuranceDeducted: number;
@@ -8270,6 +8272,7 @@ function RevenueTab() {
     totalCashCollected?: number; confirmedRevenue?: number; floatingCash?: number;
     insuranceVault?: number; allTimeRefundsIssued?: number; allTimeCancelIncome?: number;
     cashOnHand?: number; totalWithdrawals?: number;
+    cashBreakdown?: { clientName: string; date: string; amount: number; source: string }[];
   }>({
     queryKey: ["owner", "financial-summary-rev", effectiveMonth, financialSubmissionId ?? "all"],
     queryFn: async () => {
@@ -9077,21 +9080,78 @@ function RevenueTab() {
         </div>
       </div>
 
-      {/* ── Cash on Hand ── */}
+      {/* ── Cash on Hand (clickable) ── */}
       {(financial?.cashOnHand ?? 0) > 0 && (
-        <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-4 flex items-center gap-4">
-          <Banknote className="w-8 h-8 text-amber-500 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <div className="text-xs font-bold text-amber-700 dark:text-amber-400">سيولة يدوية — لم تُودَع في البنك بعد</div>
-              <span className="text-[10px] bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-200 font-bold px-1.5 py-0.5 rounded-full">نقدي</span>
+        <>
+          <button
+            type="button"
+            onClick={() => setCashBreakdownOpen(true)}
+            className="w-full rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-4 flex items-center gap-4 text-right hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors cursor-pointer"
+          >
+            <Banknote className="w-8 h-8 text-amber-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <div className="text-xs font-bold text-amber-700 dark:text-amber-400">سيولة يدوية — لم تُودَع في البنك بعد</div>
+                <span className="text-[10px] bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-200 font-bold px-1.5 py-0.5 rounded-full">نقدي</span>
+              </div>
+              <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 tabular-nums">
+                {fmtN(financial?.cashOnHand ?? 0)} <span className="text-sm font-normal">ر.س</span>
+              </div>
+              <div className="text-[11px] text-amber-600 dark:text-amber-500 mt-0.5">
+                اضغط لعرض التفاصيل · مبالغ كاش مع المالك أو الحارس
+              </div>
             </div>
-            <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 tabular-nums">
-              {fmtN(financial?.cashOnHand ?? 0)} <span className="text-sm font-normal">ر.س</span>
-            </div>
-            <div className="text-[11px] text-amber-600 dark:text-amber-500 mt-0.5">مبالغ كاش مع المالك أو الحارس — لم يُؤكَّد إيداعها بعد</div>
-          </div>
-        </div>
+            <ChevronLeft className="w-5 h-5 text-amber-400 shrink-0" />
+          </button>
+
+          {/* Breakdown dialog */}
+          <Dialog open={cashBreakdownOpen} onOpenChange={setCashBreakdownOpen}>
+            <DialogContent className="max-w-sm" dir="rtl">
+              <DialogHeader>
+                <DialogTitle className="text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                  <Banknote className="w-5 h-5" />
+                  تفاصيل السيولة اليدوية
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+                {(financial?.cashBreakdown ?? []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">لا توجد بنود</p>
+                ) : (
+                  <table className="w-full text-sm" dir="rtl">
+                    <thead className="text-xs font-bold text-muted-foreground border-b border-border">
+                      <tr>
+                        <th className="py-2 text-right">العميل</th>
+                        <th className="py-2 text-center">التاريخ</th>
+                        <th className="py-2 text-left">المبلغ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {(financial?.cashBreakdown ?? []).map((row, i) => (
+                        <tr key={i} className="hover:bg-muted/30">
+                          <td className="py-2 font-medium text-foreground">{row.clientName}</td>
+                          <td className="py-2 text-center text-muted-foreground text-xs">
+                            {new Date(row.date).toLocaleDateString("ar-SA", { day: "2-digit", month: "short" })}
+                          </td>
+                          <td className="py-2 text-left font-bold tabular-nums text-amber-700 dark:text-amber-300">
+                            {fmtN(row.amount)} <span className="text-[10px] font-normal">ر.س</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="border-t-2 border-amber-300">
+                      <tr>
+                        <td colSpan={2} className="pt-2 font-bold text-amber-700 dark:text-amber-400">الإجمالي</td>
+                        <td className="pt-2 text-left font-extrabold tabular-nums text-amber-700 dark:text-amber-300">
+                          {fmtN(financial?.cashOnHand ?? 0)} <span className="text-[10px] font-normal">ر.س</span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
       )}
 
       {/* ── Service KPI Cards in "all" mode ── */}
@@ -9681,6 +9741,7 @@ function TransactionHistoryTab() {
                 <tr>
                   <th className="px-4 py-3 text-right">التاريخ</th>
                   <th className="px-4 py-3 text-right">النوع</th>
+                  <th className="px-4 py-3 text-right">طريقة الدفع</th>
                   <th className="px-4 py-3 text-right">البيان</th>
                   <th className="px-4 py-3 text-left">المبلغ</th>
                   <th className="px-4 py-3 text-right">الحالة / إجراء</th>
@@ -9693,6 +9754,13 @@ function TransactionHistoryTab() {
                   const isIncome = item.type === "income";
                   const needsDeposit = isIncome && item.method === "cash" && item.cashDeposited === false && item.status !== "cancelled";
                   const isUpdating = updatingId === item.id;
+                  const methodBadge = isIncome
+                    ? item.method === "transfer"
+                      ? { icon: "🏦", label: "تحويل", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" }
+                      : item.method === "pos"
+                        ? { icon: "💳", label: "شبكة", cls: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" }
+                        : { icon: "💵", label: "كاش", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" }
+                    : null;
                   return (
                     <tr key={item.id} className={`hover:bg-muted/30 transition-colors ${needsDeposit ? "bg-amber-50/40 dark:bg-amber-950/10" : ""}`}>
                       <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
@@ -9706,7 +9774,16 @@ function TransactionHistoryTab() {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-foreground font-medium max-w-[160px] truncate">{item.label}</td>
+                      <td className="px-4 py-3">
+                        {methodBadge ? (
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${methodBadge.cls}`}>
+                            {methodBadge.icon} {methodBadge.label}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-foreground font-medium max-w-[140px] truncate">{item.label}</td>
                       <td className={`px-4 py-3 text-left font-bold tabular-nums whitespace-nowrap ${isIncome && item.status !== "cancelled" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                         {isIncome && item.status !== "cancelled" ? "+" : "−"}{item.amount.toLocaleString("ar-SA")}
                       </td>
