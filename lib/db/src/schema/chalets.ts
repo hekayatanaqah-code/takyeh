@@ -189,6 +189,7 @@ export type ChaletCategory = typeof chaletCategoriesTable.$inferSelect;
 
 /* ── Owner Bookings ────────────────────────────────────────── */
 export const bookingSourceEnum = pgEnum("booking_source", ["platform", "external"]);
+export const paymentMethodEnum = pgEnum("payment_method_type", ["cash", "transfer", "pos"]);
 
 export const ownerBookingsTable = pgTable("owner_bookings", {
   id: serial("id").primaryKey(),
@@ -217,6 +218,8 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   cancelRefundAmount: numeric("cancel_refund_amount", { precision: 10, scale: 2 }), /* amount returned to client */
   cancelIncome: numeric("cancel_income", { precision: 10, scale: 2 }), /* deposit - refund = realized profit */
   ratedAt: timestamp("rated_at", { withTimezone: true }),
+  paymentMethod: paymentMethodEnum("payment_method").default("cash"),
+  cashDeposited: boolean("cash_deposited").notNull().default(false),
 });
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;
 

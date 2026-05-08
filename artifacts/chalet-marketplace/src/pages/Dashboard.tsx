@@ -90,7 +90,7 @@ interface OwnerBooking {
   insuranceRefunded: boolean;
   insuranceDeducted?: string | null;
   insuranceDeductReason?: string | null;
-  insuranceProofImages?: string | null; // JSON-encoded array of URLs
+  insuranceProofImages?: string | null;
   createdAt: string;
   cancelledAt?: string | null;
   cancelReason?: string | null;
@@ -98,6 +98,8 @@ interface OwnerBooking {
   cancelRefundAmount?: string | null;
   cancelIncome?: string | null;
   ratedAt?: string | null;
+  paymentMethod?: "cash" | "transfer" | "pos" | null;
+  cashDeposited?: boolean;
 }
 
 function getLocalDateStr(date = new Date()) {
@@ -1347,6 +1349,8 @@ function AddBookingDialog({
   const [totalPrice, setTotalPrice] = useState("");
   const [depositPaid, setDepositPaid] = useState("");
   const [insuranceFee, setInsuranceFee] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "transfer" | "pos">("cash");
+  const [cashDeposited, setCashDeposited] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -1500,6 +1504,7 @@ function AddBookingDialog({
     setClientName(""); setClientPhone(""); setBookingDate(""); setDurationDays(1);
     setPeriod(""); setSource("external"); setSubmissionId(""); setNotes("");
     setTotalPrice(""); setDepositPaid(""); setInsuranceFee("");
+    setPaymentMethod("cash"); setCashDeposited(false);
     setIsReturningCustomer(null);
   };
 
@@ -1527,6 +1532,8 @@ function AddBookingDialog({
           totalPrice: totalPrice ? Math.round(Number(totalPrice)) : undefined,
           depositPaid: depositPaid ? Math.round(Number(depositPaid)) : undefined,
           insuranceFee: insuranceFee ? Math.round(Number(insuranceFee)) : undefined,
+          paymentMethod,
+          cashDeposited: paymentMethod === "cash" ? cashDeposited : true,
         }),
       });
       if (!r.ok) { setError("حدث خطأ، يرجى المحاولة مجدداً"); return; }
@@ -1837,6 +1844,47 @@ function AddBookingDialog({
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">ملاحظات <span className="text-xs font-normal text-muted-foreground">(اختياري)</span></label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="أي ملاحظات إضافية..." />
+          </div>
+
+          {/* ── Payment Method ── */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">طريقة الدفع</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { val: "cash",     label: "كاش",    emoji: "💵" },
+                { val: "transfer", label: "حوالة",  emoji: "🏦" },
+                { val: "pos",      label: "شبكة",   emoji: "💳" },
+              ] as const).map(({ val, label, emoji }) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setPaymentMethod(val)}
+                  className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2.5 text-xs font-semibold transition-all ${
+                    paymentMethod === val
+                      ? "border-primary bg-primary/8 text-primary"
+                      : "border-border text-muted-foreground hover:border-muted-foreground"
+                  }`}
+                >
+                  <span className="text-base">{emoji}</span>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {paymentMethod === "cash" && (
+              <div className="flex items-center justify-between rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-3 py-2.5">
+                <div>
+                  <p className="text-xs font-bold text-amber-800 dark:text-amber-300">هل تم إيداع الكاش في البنك؟</p>
+                  <p className="text-[11px] text-amber-600 dark:text-amber-500 mt-0.5">لا = سيولة يدوية · نعم = رصيد بنكي</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCashDeposited(p => !p)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${cashDeposited ? "bg-green-500" : "bg-amber-300"}`}
+                >
+                  <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${cashDeposited ? "translate-x-5" : "translate-x-0"}`} />
+                </button>
+              </div>
+            )}
           </div>
 
           {error && <p className="text-sm text-destructive font-medium">{error}</p>}
@@ -7733,6 +7781,7 @@ function RevenueTab() {
     totalCancellationIncome?: number; totalRefundedToClients?: number;
     totalCashCollected?: number; confirmedRevenue?: number; floatingCash?: number;
     insuranceVault?: number; allTimeRefundsIssued?: number; allTimeCancelIncome?: number;
+    cashOnHand?: number; totalWithdrawals?: number;
   }>({
     queryKey: ["owner", "financial-summary-rev", effectiveMonth, financialSubmissionId ?? "all"],
     queryFn: async () => {
@@ -8540,6 +8589,20 @@ function RevenueTab() {
         </div>
       </div>
 
+      {/* ── Cash on Hand ── */}
+      {(financial?.cashOnHand ?? 0) > 0 && (
+        <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-4 flex items-center gap-4">
+          <Banknote className="w-8 h-8 text-amber-500 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold text-amber-700 dark:text-amber-400">سيولة يدوية — لم تُودَع في البنك بعد</div>
+            <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 tabular-nums mt-0.5">
+              {fmtN(financial?.cashOnHand ?? 0)} <span className="text-sm font-normal">ر.س</span>
+            </div>
+            <div className="text-[11px] text-amber-600 dark:text-amber-500 mt-0.5">مبالغ كاش استُلمت ولم يُؤكَّد إيداعها في الحساب البنكي</div>
+          </div>
+        </div>
+      )}
+
       {/* ── Service KPI Cards in "all" mode ── */}
       {unit.type === "all" && svcRevSummary && (
         <>
@@ -8946,13 +9009,14 @@ const HIJRI_MONTHS = ["محرم","صفر","ربيع الأول","ربيع الآ
 
 /* ── Expense Categories ──────────────────────────── */
 const EXPENSE_CATS: { key: string; label: string; emoji: string; color: string }[] = [
-  { key: "salaries",    label: "الرواتب",       emoji: "💰", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
-  { key: "electricity", label: "الكهرباء",      emoji: "⚡", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" },
-  { key: "water",       label: "الماء",          emoji: "💧", color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300" },
-  { key: "internet",    label: "الإنترنت",       emoji: "🌐", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" },
-  { key: "maintenance", label: "الصيانة",        emoji: "🔧", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
-  { key: "supplies",    label: "المستلزمات",     emoji: "📦", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
-  { key: "other",       label: "أخرى",           emoji: "✨", color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
+  { key: "salaries",    label: "الرواتب",         emoji: "💰", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  { key: "electricity", label: "الكهرباء",        emoji: "⚡", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" },
+  { key: "water",       label: "الماء",            emoji: "💧", color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300" },
+  { key: "internet",    label: "الإنترنت",         emoji: "🌐", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" },
+  { key: "maintenance", label: "الصيانة",          emoji: "🔧", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" },
+  { key: "supplies",    label: "المستلزمات",       emoji: "📦", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+  { key: "withdrawal",  label: "مسحوبات شخصية",   emoji: "💸", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" },
+  { key: "other",       label: "أخرى",             emoji: "✨", color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
 ];
 const catMap = Object.fromEntries(EXPENSE_CATS.map((c) => [c.key, c]));
 
@@ -9011,6 +9075,132 @@ const COLOR_CLASSES: Record<string, string> = {
 
 function catColorClass(color: string) {
   return COLOR_CLASSES[color] ?? COLOR_CLASSES.slate;
+}
+
+function TransactionHistoryTab() {
+  const { unit } = useAdminFinance();
+  const _now = new Date();
+  const currentMonth = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
+  const [month, setMonth] = useState(currentMonth);
+
+  const monthOptions: { value: string; label: string }[] = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(_now.getFullYear(), _now.getMonth() - i, 1);
+    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    monthOptions.push({ value: val, label: d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" }) });
+  }
+
+  const submissionId = unit.type === "chalet" ? unit.submissionId : undefined;
+  const { data: items = [], isLoading } = useQuery<{
+    id: string; date: string; type: "income" | "expense" | "withdrawal";
+    label: string; amount: number; method: string; status: string; cashDeposited: boolean | null;
+  }[]>({
+    queryKey: ["owner", "transaction-history", month, submissionId ?? "all"],
+    queryFn: async () => {
+      const params = new URLSearchParams({ month });
+      if (submissionId) params.set("submissionId", String(submissionId));
+      const r = await fetch(`/api/owner/transaction-history?${params}`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const typeLabel = (t: string, method: string) => {
+    if (t === "income") {
+      const m = method === "transfer" ? "حوالة" : method === "pos" ? "شبكة" : "كاش";
+      return { text: `إيراد — ${m}`, cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" };
+    }
+    if (t === "withdrawal") return { text: "مسحوبات شخصية", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" };
+    return { text: "مصروف", cls: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" };
+  };
+
+  const statusLabel = (s: string) => {
+    if (s === "collected") return { text: "مُحصَّل", cls: "text-green-600 dark:text-green-400" };
+    if (s === "deposit_only") return { text: "عربون فقط", cls: "text-amber-600 dark:text-amber-400" };
+    if (s === "cancelled") return { text: "ملغي", cls: "text-red-500 dark:text-red-400" };
+    return { text: "مدفوع", cls: "text-slate-500" };
+  };
+
+  const totalIn = items.filter(i => i.type === "income" && i.status !== "cancelled").reduce((s, i) => s + i.amount, 0);
+  const totalOut = items.filter(i => i.type !== "income").reduce((s, i) => s + i.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Month selector */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <ListChecks className="w-4 h-4 text-slate-600 shrink-0" />
+        <h3 className="font-bold text-foreground">سجل المعاملات المالية</h3>
+        <select
+          value={month}
+          onChange={e => setMonth(e.target.value)}
+          className="mr-auto text-sm border border-border rounded-lg px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          dir="rtl"
+        >
+          {monthOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+
+      {/* Summary row */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-green-200 bg-green-50 dark:bg-green-900/10 p-3.5">
+          <div className="text-xs text-green-700 dark:text-green-400 font-semibold">إجمالي الإيرادات</div>
+          <div className="text-xl font-extrabold text-green-700 dark:text-green-300 tabular-nums mt-0.5">{totalIn.toLocaleString("ar-SA")} <span className="text-xs font-normal">ر.س</span></div>
+        </div>
+        <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/10 p-3.5">
+          <div className="text-xs text-red-700 dark:text-red-400 font-semibold">إجمالي المصروفات</div>
+          <div className="text-xl font-extrabold text-red-700 dark:text-red-300 tabular-nums mt-0.5">{totalOut.toLocaleString("ar-SA")} <span className="text-xs font-normal">ر.س</span></div>
+        </div>
+      </div>
+
+      {/* Table */}
+      {isLoading ? (
+        <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}</div>
+      ) : items.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground text-sm">لا توجد معاملات في هذا الشهر</div>
+      ) : (
+        <div className="rounded-2xl border border-border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" dir="rtl">
+              <thead className="bg-muted/50 text-xs font-bold text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 text-right">التاريخ</th>
+                  <th className="px-4 py-3 text-right">النوع</th>
+                  <th className="px-4 py-3 text-right">البيان</th>
+                  <th className="px-4 py-3 text-left">المبلغ</th>
+                  <th className="px-4 py-3 text-right">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {items.map(item => {
+                  const tl = typeLabel(item.type, item.method);
+                  const sl = statusLabel(item.status);
+                  const isIncome = item.type === "income";
+                  return (
+                    <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
+                        {new Date(item.date).toLocaleDateString("ar-SA", { day: "2-digit", month: "short" })}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tl.cls}`}>{tl.text}</span>
+                        {isIncome && item.method === "cash" && item.cashDeposited === false && (
+                          <span className="mr-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">يدوي</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-foreground font-medium max-w-[180px] truncate">{item.label}</td>
+                      <td className={`px-4 py-3 text-left font-bold tabular-nums whitespace-nowrap ${isIncome && item.status !== "cancelled" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                        {isIncome && item.status !== "cancelled" ? "+" : "−"}{item.amount.toLocaleString("ar-SA")}
+                      </td>
+                      <td className={`px-4 py-3 text-xs font-semibold ${sl.cls}`}>{sl.text}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ExpensesTab() {
@@ -10890,6 +11080,8 @@ function ReportsTab() {
     netProfit: number;
     categoryTotals: Record<string, number>;
     trend: { month: string; revenue: number; expenses: number }[];
+    cashOnHand?: number;
+    totalWithdrawals?: number;
   }>({
     queryKey: ["owner", "financial-summary", isHijri, isHijri ? selectedHijriMonthVal : selectedMonth, selectedSubmissionId],
     queryFn: async () => {
@@ -14434,7 +14626,7 @@ function OwnerMessageSettingsTab() {
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
-  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "insurance" | "support">("revenue");
+  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "insurance" | "support" | "history">("revenue");
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
@@ -15205,6 +15397,7 @@ export default function Dashboard() {
             { id: "insurance",     label: "التأمينات",        icon: <Shield className="w-4 h-4" />,       color: "text-slate-600" },
             { id: "reports",       label: "التقارير المالية", icon: <BarChart2 className="w-4 h-4" />,    color: "text-indigo-600" },
             { id: "support",       label: "مركز الدعم",       icon: <MessageSquare className="w-4 h-4" />, color: "text-primary" },
+            { id: "history",       label: "سجل المعاملات",    icon: <ListChecks className="w-4 h-4" />,    color: "text-slate-600" },
           ] as const;
           return (
             <motion.div key="admin-finance-mode" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
@@ -15342,6 +15535,7 @@ export default function Dashboard() {
                 {adminFinanceTab === "insurance"     && <ServiceInsurancesTab />}
                 {adminFinanceTab === "reports"       && <ReportsTab />}
                 {adminFinanceTab === "support"       && <OwnerSupportTab />}
+                {adminFinanceTab === "history"       && <TransactionHistoryTab />}
               </div>
               </AdminFinanceCtx.Provider>
             </motion.div>

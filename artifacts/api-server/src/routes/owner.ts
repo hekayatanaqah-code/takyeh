@@ -955,6 +955,8 @@ router.post("/bookings", async (req, res) => {
     totalPrice: z.number().nonnegative().optional(),
     depositPaid: z.number().nonnegative().optional(),
     insuranceFee: z.number().nonnegative().optional(),
+    paymentMethod: z.enum(["cash", "transfer", "pos"]).default("cash"),
+    cashDeposited: z.boolean().default(false),
   }).safeParse(req.body);
 
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة — رقم الجوال والفترة مطلوبان" });
@@ -1066,6 +1068,8 @@ router.patch("/bookings/:id", async (req, res) => {
     insuranceDeductReason: z.string().nullable().optional(),
     insuranceProofImages: z.array(z.string()).optional(),
     notes: z.string().nullable().optional(),
+    paymentMethod: z.enum(["cash", "transfer", "pos"]).optional(),
+    cashDeposited: z.boolean().optional(),
     // Reschedule fields
     bookingDate: z.string().min(1).optional(),
     durationDays: z.number().int().min(1).optional(),
@@ -2633,6 +2637,25 @@ router.get("/financial-summary", async (req, res) => {
     : months[months.length - 1];
   const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
 
+  // Cash on Hand: all-time, computed for both Hijri & Gregorian responses
+  const cashConds: Parameters<typeof and>[0][] = [
+    eq(ownerBookingsTable.ownerId, ownerId),
+    isNull(ownerBookingsTable.cancelledAt),
+  ];
+  if (submissionId) cashConds.push(eq(ownerBookingsTable.submissionId, submissionId));
+  const cashBookingsAll = await db
+    .select({ depositPaid: ownerBookingsTable.depositPaid, balanceCollected: ownerBookingsTable.balanceCollected, totalPrice: ownerBookingsTable.totalPrice, paymentMethod: ownerBookingsTable.paymentMethod, cashDeposited: ownerBookingsTable.cashDeposited })
+    .from(ownerBookingsTable).where(and(...cashConds));
+  const cashOnHand = Math.round(
+    cashBookingsAll
+      .filter(b => (b.paymentMethod ?? "cash") === "cash" && !b.cashDeposited)
+      .reduce((s, b) => {
+        const dep = Number(b.depositPaid ?? 0);
+        const bal = b.balanceCollected ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
+        return s + dep + bal;
+      }, 0)
+  );
+
   /* ── Hijri monthly financial summary ───────────────────────── */
   const hYear  = req.query.hijriYear  ? Number(req.query.hijriYear)  : null;
   const hMonth = req.query.hijriMonth ? Number(req.query.hijriMonth) : null;
@@ -2696,6 +2719,7 @@ router.get("/financial-summary", async (req, res) => {
     const totalExpensesAll = Math.round(totalExpenses + totalSalaries);
     const netProfit = totalRevenue - totalExpensesAll;
     const insuranceRevenueTotals: Record<string, number> = totalInsuranceDeducted > 0 ? { insurance_damage: totalInsuranceDeducted } : {};
+    const totalWithdrawals = Math.round(monthExpenses.filter(e => e.category === "withdrawal").reduce((s, e) => s + Number(e.amount), 0));
 
     return res.json({
       month: `${approxGYear}-${String(hMonth).padStart(2, "0")}`,
@@ -2703,7 +2727,7 @@ router.get("/financial-summary", async (req, res) => {
       totalRevenue, totalDeposits, totalPendingBalance, totalInsuranceHeld,
       totalInsuranceDeducted: Math.round(totalInsuranceDeducted),
       totalExpenses: totalExpensesAll, netProfit, categoryTotals, insuranceRevenueTotals,
-      trend: [], // Trend chart is always Gregorian 6-month overview
+      trend: [], cashOnHand, totalWithdrawals,
     });
   }
 
@@ -2790,6 +2814,7 @@ router.get("/financial-summary", async (req, res) => {
   }
   const totalExpensesAll = totalExpenses + totalSalaries;
   const netProfit = totalRevenue - totalExpensesAll;
+  const totalWithdrawals = Math.round(monthExpenses.filter(e => e.category === "withdrawal").reduce((s, e) => s + Number(e.amount), 0));
   // Insurance revenue category (deductions from insurance → تلفيات)
   const insuranceRevenueTotals: Record<string, number> = {};
   if (totalInsuranceDeducted > 0) {
@@ -2981,6 +3006,8 @@ router.get("/financial-summary", async (req, res) => {
     categoryTotals,
     insuranceRevenueTotals,
     trend,
+    cashOnHand,
+    totalWithdrawals,
     // ── Monthly split ──
     pendingRevenue:          Math.round(pendingRevenue),
     realizedRevenue:         Math.round(realizedRevenue),
@@ -4099,6 +4126,61 @@ router.get("/notification-settings", async (req, res) => {
   if (!ownerId) return res.status(401).json({ error: "unauthorized" });
   const [row] = await db.select().from(ownerNotificationSettingsTable).where(eq(ownerNotificationSettingsTable.ownerId, ownerId));
   return res.json(row ?? { ownerId, waEnabled: false, waPhone: null });
+});
+
+/* ── GET /owner/transaction-history ───────────────────────────
+   Combined log: bookings income + expenses + withdrawals */
+router.get("/transaction-history", async (req, res) => {
+  const ownerId = req.user!.id;
+  const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : null;
+  const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
+
+  const bConds: Parameters<typeof and>[0][] = [eq(ownerBookingsTable.ownerId, ownerId)];
+  const eConds: Parameters<typeof and>[0][] = [eq(ownerExpensesTable.ownerId, ownerId)];
+  if (month) {
+    bConds.push(gte(ownerBookingsTable.bookingDate, `${month}-01`));
+    bConds.push(lte(ownerBookingsTable.bookingDate, `${month}-31`));
+    eConds.push(gte(ownerExpensesTable.dateStr, `${month}-01`));
+    eConds.push(lte(ownerExpensesTable.dateStr, `${month}-31`));
+  }
+  if (submissionId) {
+    bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
+    eConds.push(eq(ownerExpensesTable.submissionId, submissionId));
+  }
+
+  const [bookings, expenses] = await Promise.all([
+    db.select().from(ownerBookingsTable).where(and(...bConds)).orderBy(ownerBookingsTable.bookingDate),
+    db.select().from(ownerExpensesTable).where(and(...eConds)).orderBy(ownerExpensesTable.dateStr),
+  ]);
+
+  const items = [
+    ...bookings.map(b => {
+      const dep = Number(b.depositPaid ?? 0);
+      const bal = b.balanceCollected ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
+      return {
+        id: `b-${b.id}`,
+        date: b.bookingDate,
+        type: "income" as const,
+        label: `حجز — ${b.clientName}`,
+        amount: dep + bal,
+        method: (b.paymentMethod ?? "cash") as string,
+        status: b.cancelledAt ? "cancelled" : (b.balanceCollected ? "collected" : "deposit_only"),
+        cashDeposited: b.cashDeposited,
+      };
+    }),
+    ...expenses.map(e => ({
+      id: `e-${e.id}`,
+      date: e.dateStr,
+      type: e.category === "withdrawal" ? "withdrawal" as const : "expense" as const,
+      label: e.customCategory || e.category,
+      amount: Number(e.amount),
+      method: "na" as const,
+      status: "paid" as const,
+      cashDeposited: null as boolean | null,
+    })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+
+  return res.json(items);
 });
 
 /* ── PATCH /owner/notification-settings ───────────────────────
