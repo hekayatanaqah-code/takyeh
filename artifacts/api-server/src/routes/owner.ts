@@ -2681,6 +2681,8 @@ router.get("/financial-summary", async (req, res) => {
     eq(bookingPaymentsTable.ownerId, ownerId),
     eq(bookingPaymentsTable.method, "cash"),
     eq(bookingPaymentsTable.cashDeposited, false),
+    // Exclude payments linked to cancelled bookings
+    isNull(ownerBookingsTable.cancelledAt),
   ];
   const installmentCashRows = await db
     .select({

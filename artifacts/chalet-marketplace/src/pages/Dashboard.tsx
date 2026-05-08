@@ -8242,6 +8242,12 @@ function RevenueTab() {
   });
 
   const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
+  const fmtDualDate = (dateStr: string) => {
+    const d = new Date(dateStr + "T12:00:00");
+    const hijri = d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long" });
+    const greg = d.toLocaleDateString("ar-SA", { day: "2-digit", month: "long", calendar: "gregory" });
+    return `${hijri} / ${greg}`;
+  };
 
   const financialSubmissionId = unit.type === "chalet" ? (unit as any).submissionId : undefined;
 
@@ -9129,8 +9135,8 @@ function RevenueTab() {
                       {(financial?.cashBreakdown ?? []).map((row, i) => (
                         <tr key={i} className="hover:bg-muted/30">
                           <td className="py-2 font-medium text-foreground">{row.clientName}</td>
-                          <td className="py-2 text-center text-muted-foreground text-xs">
-                            {new Date(row.date).toLocaleDateString("ar-SA", { day: "2-digit", month: "short" })}
+                          <td className="py-2 text-center text-muted-foreground text-xs leading-tight">
+                            {fmtDualDate(row.date)}
                           </td>
                           <td className="py-2 text-left font-bold tabular-nums text-amber-700 dark:text-amber-300">
                             {fmtN(row.amount)} <span className="text-[10px] font-normal">ر.س</span>
@@ -9763,8 +9769,8 @@ function TransactionHistoryTab() {
                     : null;
                   return (
                     <tr key={item.id} className={`hover:bg-muted/30 transition-colors ${needsDeposit ? "bg-amber-50/40 dark:bg-amber-950/10" : ""}`}>
-                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
-                        {new Date(item.date).toLocaleDateString("ar-SA", { day: "2-digit", month: "short" })}
+                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap leading-tight">
+                        {fmtDualDate(item.date)}
                       </td>
                       <td className="px-4 py-3 space-y-1">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tl.cls}`}>{tl.text}</span>
