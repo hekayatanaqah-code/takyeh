@@ -220,6 +220,7 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   ratedAt: timestamp("rated_at", { withTimezone: true }),
   paymentMethod: paymentMethodEnum("payment_method").default("cash"),
   cashDeposited: boolean("cash_deposited").notNull().default(false),
+  paymentReceiptUrl: text("payment_receipt_url"),
 });
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;
 

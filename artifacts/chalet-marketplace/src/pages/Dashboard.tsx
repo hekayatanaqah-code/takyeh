@@ -100,6 +100,7 @@ interface OwnerBooking {
   ratedAt?: string | null;
   paymentMethod?: "cash" | "transfer" | "pos" | null;
   cashDeposited?: boolean;
+  paymentReceiptUrl?: string | null;
 }
 
 function getLocalDateStr(date = new Date()) {
@@ -1351,6 +1352,8 @@ function AddBookingDialog({
   const [insuranceFee, setInsuranceFee] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "transfer" | "pos">("cash");
   const [cashDeposited, setCashDeposited] = useState(false);
+  const [paymentReceiptUrl, setPaymentReceiptUrl] = useState<string | null>(null);
+  const [receiptUploading, setReceiptUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -1504,7 +1507,7 @@ function AddBookingDialog({
     setClientName(""); setClientPhone(""); setBookingDate(""); setDurationDays(1);
     setPeriod(""); setSource("external"); setSubmissionId(""); setNotes("");
     setTotalPrice(""); setDepositPaid(""); setInsuranceFee("");
-    setPaymentMethod("cash"); setCashDeposited(false);
+    setPaymentMethod("cash"); setCashDeposited(false); setPaymentReceiptUrl(null);
     setIsReturningCustomer(null);
   };
 
@@ -1534,6 +1537,7 @@ function AddBookingDialog({
           insuranceFee: insuranceFee ? Math.round(Number(insuranceFee)) : undefined,
           paymentMethod,
           cashDeposited: paymentMethod === "cash" ? cashDeposited : true,
+          paymentReceiptUrl: paymentReceiptUrl || undefined,
         }),
       });
       if (!r.ok) { setError("حدث خطأ، يرجى المحاولة مجدداً"); return; }
@@ -1871,25 +1875,71 @@ function AddBookingDialog({
               ))}
             </div>
             {paymentMethod === "cash" && (
-              <div className="flex items-center justify-between rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-3 py-2.5">
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3 space-y-2.5">
                 <div>
                   <p className="text-xs font-bold text-amber-800 dark:text-amber-300">هل تم إيداع الكاش في البنك؟</p>
-                  <p className="text-[11px] text-amber-600 dark:text-amber-500 mt-0.5">لا = سيولة يدوية · نعم = رصيد بنكي</p>
+                  <p className="text-[11px] text-amber-600 dark:text-amber-500 mt-0.5">اختر الوضع الصحيح — يمكن تغييره لاحقاً من سجل المعاملات</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setCashDeposited(p => !p)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${cashDeposited ? "bg-green-500" : "bg-amber-300"}`}
-                >
-                  <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${cashDeposited ? "translate-x-5" : "translate-x-0"}`} />
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCashDeposited(false)}
+                    className={`flex flex-col items-center gap-0.5 rounded-xl border-2 py-2.5 px-2 text-xs font-bold transition-all ${!cashDeposited ? "border-amber-500 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground bg-background hover:border-amber-300"}`}
+                  >
+                    <span className="text-base">💵</span>
+                    <span>لا</span>
+                    <span className="font-normal text-[10px]">سيولة يدوية</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCashDeposited(true)}
+                    className={`flex flex-col items-center gap-0.5 rounded-xl border-2 py-2.5 px-2 text-xs font-bold transition-all ${cashDeposited ? "border-green-500 bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300" : "border-border text-muted-foreground bg-background hover:border-green-300"}`}
+                  >
+                    <span className="text-base">🏦</span>
+                    <span>نعم</span>
+                    <span className="font-normal text-[10px]">أُودع في البنك</span>
+                  </button>
+                </div>
               </div>
+            )}
+          </div>
+
+          {/* ── Receipt Image ── */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">
+              إرفاق صورة التحويل أو الإيصال <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
+            </label>
+            {paymentReceiptUrl ? (
+              <div className="flex items-center gap-3 rounded-xl border border-border p-2.5">
+                <img src={paymentReceiptUrl} alt="إيصال" className="h-14 w-14 rounded-lg object-cover shrink-0" />
+                <span className="flex-1 text-xs text-muted-foreground">تم إرفاق الصورة</span>
+                <button type="button" onClick={() => setPaymentReceiptUrl(null)} className="text-xs text-destructive hover:underline">حذف</button>
+              </div>
+            ) : (
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl border-2 border-dashed border-border p-3 hover:border-primary/40 transition-colors">
+                <Camera className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-sm text-muted-foreground">{receiptUploading ? "جاري الرفع..." : "اضغط لإرفاق صورة"}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  disabled={receiptUploading}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setReceiptUploading(true);
+                    const url = await uploadFile(file);
+                    if (url) setPaymentReceiptUrl(url);
+                    setReceiptUploading(false);
+                  }}
+                />
+              </label>
             )}
           </div>
 
           {error && <p className="text-sm text-destructive font-medium">{error}</p>}
           <div className="flex gap-3 pt-2">
-            <Button type="submit" className="flex-1" disabled={saving}>
+            <Button type="submit" className="flex-1" disabled={saving || receiptUploading}>
               {saving ? "جاري الحفظ..." : "حفظ الحجز"}
             </Button>
             <Button type="button" variant="outline" onClick={() => { onClose(); reset(); }}>إلغاء</Button>
@@ -7681,6 +7731,12 @@ function RevenueTab() {
   const [refundReason, setRefundReason] = useState("");
   const [refundType, setRefundType] = useState<"partial" | "full">("partial");
   const [refundPending, setRefundPending] = useState(false);
+  const [showWithdrawal, setShowWithdrawal] = useState(false);
+  const [wAmount, setWAmount] = useState("");
+  const [wDate, setWDate] = useState(getLocalDateStr());
+  const [wNote, setWNote] = useState("");
+  const [wSaving, setWSaving] = useState(false);
+  const qcRev = useQueryClient();
   const { toast } = useToast();
 
   const monthOptions = useMemo(() => {
@@ -8589,16 +8645,99 @@ function RevenueTab() {
         </div>
       </div>
 
+      {/* ── Quick Withdrawal Button ── */}
+      <div className="rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">💸</span>
+            <div>
+              <div className="text-sm font-bold text-amber-800 dark:text-amber-300">تسجيل مسحوبات شخصية</div>
+              <div className="text-[11px] text-amber-600 dark:text-amber-500">تُخصم من صافي الربح وتظهر في سجل المعاملات</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowWithdrawal(p => !p)}
+            className="shrink-0 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 transition-colors"
+          >
+            {showWithdrawal ? "إلغاء" : "+ إضافة"}
+          </button>
+        </div>
+        {showWithdrawal && (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!wAmount || Number(wAmount) <= 0) return;
+              setWSaving(true);
+              try {
+                const r = await apiFetch("/owner/expenses", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    category: "withdrawal",
+                    amount: Math.round(Number(wAmount)),
+                    dateStr: wDate,
+                    notes: wNote || undefined,
+                    submissionId: unit.type === "chalet" ? (unit as any).submissionId : undefined,
+                  }),
+                });
+                if (r.ok) {
+                  toast({ title: "تم تسجيل المسحوبات", description: `${Math.round(Number(wAmount)).toLocaleString("ar-SA")} ر.س` });
+                  setWAmount(""); setWNote(""); setWDate(getLocalDateStr());
+                  setShowWithdrawal(false);
+                  qcRev.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
+                  refetchFinancial();
+                }
+              } finally { setWSaving(false); }
+            }}
+            className="space-y-2.5 pt-1 border-t border-amber-200 dark:border-amber-800"
+          >
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">المبلغ (ر.س) *</label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={wAmount}
+                  onChange={e => setWAmount(e.target.value)}
+                  placeholder="0"
+                  className="h-9 text-sm"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">التاريخ</label>
+                <Input
+                  type="date"
+                  value={wDate}
+                  onChange={e => setWDate(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">ملاحظة (اختياري)</label>
+              <Input value={wNote} onChange={e => setWNote(e.target.value)} placeholder="مثال: سحب شخصي، راتب المالك..." className="h-9 text-sm" />
+            </div>
+            <Button type="submit" disabled={wSaving || !wAmount} size="sm" className="w-full bg-amber-600 hover:bg-amber-700 text-white">
+              {wSaving ? "جاري الحفظ..." : "💸 تسجيل المسحوبات"}
+            </Button>
+          </form>
+        )}
+      </div>
+
       {/* ── Cash on Hand ── */}
       {(financial?.cashOnHand ?? 0) > 0 && (
         <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-4 flex items-center gap-4">
           <Banknote className="w-8 h-8 text-amber-500 shrink-0" />
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-bold text-amber-700 dark:text-amber-400">سيولة يدوية — لم تُودَع في البنك بعد</div>
-            <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 tabular-nums mt-0.5">
+            <div className="flex items-center gap-2 mb-0.5">
+              <div className="text-xs font-bold text-amber-700 dark:text-amber-400">سيولة يدوية — لم تُودَع في البنك بعد</div>
+              <span className="text-[10px] bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-200 font-bold px-1.5 py-0.5 rounded-full">نقدي</span>
+            </div>
+            <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 tabular-nums">
               {fmtN(financial?.cashOnHand ?? 0)} <span className="text-sm font-normal">ر.س</span>
             </div>
-            <div className="text-[11px] text-amber-600 dark:text-amber-500 mt-0.5">مبالغ كاش استُلمت ولم يُؤكَّد إيداعها في الحساب البنكي</div>
+            <div className="text-[11px] text-amber-600 dark:text-amber-500 mt-0.5">مبالغ كاش مع المالك أو الحارس — لم يُؤكَّد إيداعها بعد</div>
           </div>
         </div>
       )}
@@ -9079,9 +9218,12 @@ function catColorClass(color: string) {
 
 function TransactionHistoryTab() {
   const { unit } = useAdminFinance();
+  const qcHist = useQueryClient();
+  const { toast } = useToast();
   const _now = new Date();
   const currentMonth = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
   const [month, setMonth] = useState(currentMonth);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const monthOptions: { value: string; label: string }[] = [];
   for (let i = 0; i < 12; i++) {
@@ -9091,6 +9233,25 @@ function TransactionHistoryTab() {
   }
 
   const submissionId = unit.type === "chalet" ? unit.submissionId : undefined;
+
+  const markDeposited = async (itemId: string) => {
+    const bookingId = itemId.startsWith("b-") ? Number(itemId.slice(2)) : null;
+    if (!bookingId) return;
+    setUpdatingId(itemId);
+    try {
+      const r = await apiFetch(`/owner/bookings/${bookingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ cashDeposited: true }),
+      });
+      if (r.ok) {
+        toast({ title: "تم التحديث", description: "تم نقل المبلغ إلى الرصيد البنكي" });
+        qcHist.invalidateQueries({ queryKey: ["owner", "transaction-history"] });
+        qcHist.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
+        qcHist.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
+      }
+    } finally { setUpdatingId(null); }
+  };
+
   const { data: items = [], isLoading } = useQuery<{
     id: string; date: string; type: "income" | "expense" | "withdrawal";
     label: string; amount: number; method: string; status: string; cashDeposited: boolean | null;
@@ -9167,7 +9328,7 @@ function TransactionHistoryTab() {
                   <th className="px-4 py-3 text-right">النوع</th>
                   <th className="px-4 py-3 text-right">البيان</th>
                   <th className="px-4 py-3 text-left">المبلغ</th>
-                  <th className="px-4 py-3 text-right">الحالة</th>
+                  <th className="px-4 py-3 text-right">الحالة / إجراء</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -9175,22 +9336,38 @@ function TransactionHistoryTab() {
                   const tl = typeLabel(item.type, item.method);
                   const sl = statusLabel(item.status);
                   const isIncome = item.type === "income";
+                  const needsDeposit = isIncome && item.method === "cash" && item.cashDeposited === false && item.status !== "cancelled";
+                  const isUpdating = updatingId === item.id;
                   return (
-                    <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                    <tr key={item.id} className={`hover:bg-muted/30 transition-colors ${needsDeposit ? "bg-amber-50/40 dark:bg-amber-950/10" : ""}`}>
                       <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
                         {new Date(item.date).toLocaleDateString("ar-SA", { day: "2-digit", month: "short" })}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 space-y-1">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tl.cls}`}>{tl.text}</span>
-                        {isIncome && item.method === "cash" && item.cashDeposited === false && (
-                          <span className="mr-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">يدوي</span>
+                        {needsDeposit && (
+                          <div>
+                            <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">💵 سيولة يدوية</span>
+                          </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-foreground font-medium max-w-[180px] truncate">{item.label}</td>
+                      <td className="px-4 py-3 text-foreground font-medium max-w-[160px] truncate">{item.label}</td>
                       <td className={`px-4 py-3 text-left font-bold tabular-nums whitespace-nowrap ${isIncome && item.status !== "cancelled" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                         {isIncome && item.status !== "cancelled" ? "+" : "−"}{item.amount.toLocaleString("ar-SA")}
                       </td>
-                      <td className={`px-4 py-3 text-xs font-semibold ${sl.cls}`}>{sl.text}</td>
+                      <td className="px-4 py-3 text-right">
+                        {needsDeposit ? (
+                          <button
+                            onClick={() => markDeposited(item.id)}
+                            disabled={isUpdating}
+                            className="inline-flex items-center gap-1 rounded-lg border border-green-400 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-[11px] font-bold px-2.5 py-1.5 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors disabled:opacity-50"
+                          >
+                            {isUpdating ? "..." : "✓ تم الإيداع"}
+                          </button>
+                        ) : (
+                          <span className={`text-xs font-semibold ${sl.cls}`}>{sl.text}</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}

@@ -957,6 +957,7 @@ router.post("/bookings", async (req, res) => {
     insuranceFee: z.number().nonnegative().optional(),
     paymentMethod: z.enum(["cash", "transfer", "pos"]).default("cash"),
     cashDeposited: z.boolean().default(false),
+    paymentReceiptUrl: z.string().nullable().optional(),
   }).safeParse(req.body);
 
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة — رقم الجوال والفترة مطلوبان" });
@@ -1070,6 +1071,7 @@ router.patch("/bookings/:id", async (req, res) => {
     notes: z.string().nullable().optional(),
     paymentMethod: z.enum(["cash", "transfer", "pos"]).optional(),
     cashDeposited: z.boolean().optional(),
+    paymentReceiptUrl: z.string().nullable().optional(),
     // Reschedule fields
     bookingDate: z.string().min(1).optional(),
     durationDays: z.number().int().min(1).optional(),
