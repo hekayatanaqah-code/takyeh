@@ -4185,6 +4185,80 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           </div>
                         );
                       })()}
+                      {/* ── Payment Status Section (modal) ── */}
+                      {b.paymentMethod === "cash" && (
+                        <div className={`rounded-lg border p-2.5 space-y-2 mt-1 ${b.cashDeposited ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" : "bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700"}`}>
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm">{b.cashDeposited ? "🏦" : "💵"}</span>
+                              <div>
+                                <p className={`text-[11px] font-bold ${b.cashDeposited ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"}`}>
+                                  {b.cashDeposited ? "تم الإيداع في البنك" : "نقدي — لم يُودَع بعد"}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {b.cashDeposited ? "المبلغ مُحوَّل للبنك ✓" : "يظهر في السيولة اليدوية"}
+                                </p>
+                              </div>
+                            </div>
+                            {!b.cashDeposited && !isReadOnly && (
+                              <button
+                                type="button"
+                                disabled={calDepositSaving === b.id}
+                                onClick={() => confirmCalendarDeposit(b.id, calReceiptUrl)}
+                                className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 rounded-lg px-2.5 py-1.5 transition-colors"
+                              >
+                                {calDepositSaving === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                                تأكيد الإيداع في البنك
+                              </button>
+                            )}
+                          </div>
+                          {!b.cashDeposited && !isReadOnly && (
+                            <div className="border-t border-amber-200 dark:border-amber-800 pt-1.5">
+                              <input
+                                ref={calReceiptRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (!file) return;
+                                  setCalReceiptUploading(true);
+                                  try {
+                                    const url = await uploadFile(file);
+                                    if (url) setCalReceiptUrl(url);
+                                  } finally { setCalReceiptUploading(false); e.target.value = ""; }
+                                }}
+                              />
+                              {calReceiptUrl ? (
+                                <div className="flex items-center gap-2">
+                                  <img src={calReceiptUrl} alt="إيصال" className="h-8 w-8 rounded object-cover border" />
+                                  <p className="text-[10px] text-green-600 flex-1">تم رفع الإيصال ✓</p>
+                                  <button type="button" onClick={() => setCalReceiptUrl(null)} className="text-[10px] text-destructive underline">إزالة</button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={calReceiptUploading}
+                                  onClick={() => calReceiptRef.current?.click()}
+                                  className="flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-400 hover:underline"
+                                >
+                                  {calReceiptUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : "📎"}
+                                  إرفاق صورة الإيصال (اختياري)
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {b.paymentReceiptUrl && (
+                            <div className="border-t border-green-200 dark:border-green-800 pt-1.5">
+                              <p className="text-[10px] text-muted-foreground mb-1">إيصال الإيداع:</p>
+                              <a href={b.paymentReceiptUrl} target="_blank" rel="noreferrer" className="block w-fit">
+                                <img src={b.paymentReceiptUrl} alt="إيصال" className="h-12 w-12 rounded-lg object-cover border hover:opacity-80 transition" />
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Booking management quick actions */}
                       <div className="flex gap-2 mt-2 pt-2 border-t border-border/50 flex-wrap">
                         <button
