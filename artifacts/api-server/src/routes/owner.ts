@@ -1941,40 +1941,39 @@ router.get("/reports", async (req, res) => {
     return res.status(400).json({ error: "تنسيق الشهر غير صحيح (YYYY-MM)" });
   }
 
-  /* ── Unified DB fetch: one query for both calendars ─────────
-     Wide year window so every booking in the relevant period is
-     included regardless of Gregorian vs Hijri month boundaries. */
-  let windowStart: string;
-  let windowEnd:   string;
-  if (isHijriMode) {
-    const approxGYear = Math.floor(hijriYear! * 354.367 / 365.25 + 622);
-    windowStart = `${approxGYear - 1}-01-01`;
-    windowEnd   = `${approxGYear + 1}-12-31`;
-  } else {
-    const [yr] = month.split("-").map(Number);
-    windowStart = `${yr - 1}-01-01`;
-    windowEnd   = `${yr + 1}-12-31`;
-  }
-
+  /* ── Unified DB fetch: all owner bookings, no SQL date filter ──
+     Gregorian months are matched with new Date(bookingDate) so
+     year/month comparison is always calendar-correct.
+     Hijri uses a SQL window (approx Gregorian range) + JS Hijri
+     calendar math to keep the result set small.              */
   const fetchConds: Parameters<typeof and>[0][] = [
     eq(ownerBookingsTable.ownerId, ownerId),
-    gte(ownerBookingsTable.bookingDate, windowStart),
-    lte(ownerBookingsTable.bookingDate, windowEnd),
   ];
+  if (isHijriMode) {
+    const approxGYear = Math.floor(hijriYear! * 354.367 / 365.25 + 622);
+    fetchConds.push(gte(ownerBookingsTable.bookingDate, `${approxGYear - 1}-01-01`));
+    fetchConds.push(lte(ownerBookingsTable.bookingDate, `${approxGYear + 1}-12-31`));
+  }
   if (submissionId) fetchConds.push(eq(ownerBookingsTable.submissionId, submissionId));
 
-  const windowBookings = await db
+  const allOwnerBookings = await db
     .select()
     .from(ownerBookingsTable)
     .where(and(...fetchConds));
 
-  /* ── JS month grouping: only this filter differs by calendar ─ */
+  /* ── JS month grouping ───────────────────────────────────────
+     Gregorian: new Date(bookingDate).getFullYear/getMonth()
+     Hijri:     getHijriYM(bookingDate) calendar conversion     */
+  const [gYear, gMon] = isHijriMode ? [0, 0] : month.split("-").map(Number);
   const monthBookings = isHijriMode
-    ? windowBookings.filter(b => {
+    ? allOwnerBookings.filter(b => {
         const hym = getHijriYM(b.bookingDate);
         return hym.year === hijriYear && hym.month === hijriMonth;
       })
-    : windowBookings.filter(b => b.bookingDate.startsWith(month));
+    : allOwnerBookings.filter(b => {
+        const d = new Date(b.bookingDate);
+        return d.getFullYear() === gYear && d.getMonth() === gMon - 1;
+      });
 
   /* ── Stats (calendar-agnostic) ──────────────────────────────── */
   const activeMonthBookings = monthBookings.filter(b => !b.cancelledAt);
@@ -2708,19 +2707,24 @@ router.get("/financial-summary", async (req, res) => {
     });
   }
 
-  // Revenue: sum of revenueAmount in ownerBookings for this month — cancelled bookings EXCLUDED
-  const bookingConditions = [
+  // Revenue: fetch all active bookings for this owner, then JS-filter to the
+  // selected Gregorian month using new Date() so year/month comparison is correct.
+  const [fYear, fMon] = selectedMonth.split("-").map(Number);
+  const monthActiveConds: Parameters<typeof and>[0][] = [
     eq(ownerBookingsTable.ownerId, ownerId),
-    gte(ownerBookingsTable.bookingDate, `${selectedMonth}-01`),
-    lte(ownerBookingsTable.bookingDate, `${selectedMonth}-31`),
     isNull(ownerBookingsTable.cancelledAt),
   ];
-  if (submissionId) bookingConditions.push(eq(ownerBookingsTable.submissionId, submissionId));
+  if (submissionId) monthActiveConds.push(eq(ownerBookingsTable.submissionId, submissionId));
 
-  const monthBookings = await db
+  const ownerActiveBookings = await db
     .select()
     .from(ownerBookingsTable)
-    .where(and(...bookingConditions));
+    .where(and(...monthActiveConds));
+
+  const monthBookings = ownerActiveBookings.filter(b => {
+    const d = new Date(b.bookingDate);
+    return d.getFullYear() === fYear && d.getMonth() === fMon - 1;
+  });
 
   // Revenue: if totalPrice is set, use deposit + remaining (if collected); else fall back to revenueAmount
   const calcBookingRevenue = (b: typeof monthBookings[number]) => {
