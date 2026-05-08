@@ -3286,13 +3286,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [calReceiptUrl, setCalReceiptUrl] = useState<string | null>(null);
   const [calReceiptUploading, setCalReceiptUploading] = useState(false);
   const calReceiptRef = useRef<HTMLInputElement>(null);
-  const [calCollectTarget, setCalCollectTarget] = useState<number | null>(null);
-  const [calBalMethod, setCalBalMethod] = useState<"cash" | "transfer">("cash");
-  const [calBalDeposited, setCalBalDeposited] = useState(false);
-  const [calBalReceiptUrl, setCalBalReceiptUrl] = useState<string | null>(null);
-  const [calBalReceiptUploading, setCalBalReceiptUploading] = useState(false);
-  const [calBalSaving, setCalBalSaving] = useState(false);
-  const calBalReceiptRef = useRef<HTMLInputElement>(null);
+  const [calPayTarget, setCalPayTarget] = useState<number | null>(null);
+  const [calPayAmt, setCalPayAmt] = useState("");
+  const [calPayDate, setCalPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [calPayMethod, setCalPayMethod] = useState<"cash" | "transfer">("cash");
+  const [calPayDeposited, setCalPayDeposited] = useState(false);
+  const [calPayReceiptUrl, setCalPayReceiptUrl] = useState<string | null>(null);
+  const [calPayReceiptUploading, setCalPayReceiptUploading] = useState(false);
+  const [calPaySaving, setCalPaySaving] = useState(false);
+  const calPayReceiptRef = useRef<HTMLInputElement>(null);
   const [receiptLightbox, setReceiptLightbox] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -3315,31 +3317,65 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     } finally { setCalDepositSaving(null); }
   }
 
-  async function confirmCollectBalance(bookingId: number) {
-    setCalBalSaving(true);
+  const { data: allInstallments = [] } = useQuery<{
+    id: number; bookingId: number; amount: string; paymentDate: string;
+    method: string; cashDeposited: boolean; receiptUrl: string | null;
+  }[]>({
+    queryKey: ["owner", "booking-payments"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/booking-payments");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const paymentsByBooking = useMemo(() => {
+    const map: Record<number, typeof allInstallments> = {};
+    allInstallments.forEach(p => {
+      if (!map[p.bookingId]) map[p.bookingId] = [];
+      map[p.bookingId].push(p);
+    });
+    return map;
+  }, [allInstallments]);
+
+  async function addInstallmentPayment(bookingId: number) {
+    const amt = parseFloat(calPayAmt);
+    if (isNaN(amt) || amt <= 0) {
+      toast({ title: "خطأ", description: "أدخل مبلغاً صحيحاً", variant: "destructive" });
+      return;
+    }
+    setCalPaySaving(true);
     try {
-      const isDeposited = calBalMethod === "transfer" ? true : calBalDeposited;
-      const body: Record<string, unknown> = {
-        balanceCollected: true,
-        paymentMethod: calBalMethod,
-        cashDeposited: isDeposited,
-      };
-      if (calBalReceiptUrl) body.paymentReceiptUrl = calBalReceiptUrl;
-      const r = await apiFetch(`/owner/bookings/${bookingId}`, {
-        method: "PATCH",
-        body: JSON.stringify(body),
+      const isDeposited = calPayMethod === "transfer" ? true : calPayDeposited;
+      const r = await apiFetch(`/owner/bookings/${bookingId}/payments`, {
+        method: "POST",
+        body: JSON.stringify({ amount: amt, paymentDate: calPayDate, method: calPayMethod, cashDeposited: isDeposited, receiptUrl: calPayReceiptUrl }),
       });
       if (r.ok) {
-        toast({ title: "✅ تم تحصيل المتبقي", description: isDeposited ? "أُودع في رصيد البنك" : "سُجِّل كسيولة يدوية" });
+        const result = await r.json();
+        toast({
+          title: result.fullyPaid ? "✅ اكتمل السداد" : "✅ تمت إضافة الدفعة",
+          description: result.fullyPaid ? "سُدِّد المبلغ بالكامل" : `المتبقي: ${Math.max(0, result.remaining - result.totalPaid).toLocaleString("ar-SA")} ر.س`,
+        });
         qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
+        qc.invalidateQueries({ queryKey: ["owner", "booking-payments"] });
         qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
         qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
         qc.invalidateQueries({ queryKey: ["owner", "transaction-history"] });
-        setCalCollectTarget(null);
-        setCalBalReceiptUrl(null);
-        setCalBalDeposited(false);
+        setCalPayTarget(null);
+        setCalPayAmt("");
+        setCalPayReceiptUrl(null);
+        setCalPayDeposited(false);
       }
-    } finally { setCalBalSaving(false); }
+    } finally { setCalPaySaving(false); }
+  }
+
+  async function deleteInstallmentPayment(bookingId: number, paymentId: number) {
+    await apiFetch(`/owner/bookings/${bookingId}/payments/${paymentId}`, { method: "DELETE" });
+    qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
+    qc.invalidateQueries({ queryKey: ["owner", "booking-payments"] });
+    qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
+    qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
   }
 
   const { data: ownerChalets = [], isLoading: chaletsLoading } = useQuery<any[]>({
@@ -4329,50 +4365,76 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             {reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "طلب تقييم"}
                           </button>
                         )}
-                        {/* Collect remaining balance */}
+                        {/* Installment payments — modal */}
                         {(() => {
                           const dep2 = Number(b.depositPaid ?? 0);
-                          const bal2 = b.totalPrice !== null ? Math.max(0, Number(b.totalPrice) - dep2) : null;
-                          if (bal2 === null || bal2 <= 0 || b.balanceCollected) return null;
-                          if (calCollectTarget === b.id) {
-                            return (
-                              <div className="w-full border border-blue-200 dark:border-blue-800 rounded-xl p-2.5 space-y-2 bg-blue-50 dark:bg-blue-900/10">
-                                <p className="text-[11px] font-bold text-blue-700 dark:text-blue-400">طريقة تحصيل المتبقي ({bal2.toLocaleString("ar-SA")} ر.س):</p>
-                                <div className="flex gap-2">
-                                  <button type="button" onClick={() => setCalBalMethod("cash")} className={`flex-1 text-[11px] font-bold rounded-lg py-1.5 border-2 transition-colors ${calBalMethod === "cash" ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 كاش</button>
-                                  <button type="button" onClick={() => { setCalBalMethod("transfer"); setCalBalDeposited(true); }} className={`flex-1 text-[11px] font-bold rounded-lg py-1.5 border-2 transition-colors ${calBalMethod === "transfer" ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300" : "border-border text-muted-foreground"}`}>🏦 تحويل</button>
+                          const total2 = b.totalPrice !== null ? Number(b.totalPrice) : null;
+                          if (total2 === null || total2 <= dep2) return null;
+                          const bkPmts = paymentsByBooking[b.id] ?? [];
+                          const totalPaid2 = bkPmts.reduce((s, p) => s + Number(p.amount), 0);
+                          const remDyn2 = Math.max(0, total2 - dep2 - totalPaid2);
+                          const isFullyPaid2 = b.balanceCollected || remDyn2 <= 0;
+                          return (
+                            <>
+                              {bkPmts.length > 0 && (
+                                <div className="w-full border border-green-200 dark:border-green-800 rounded-xl p-2.5 space-y-1.5 bg-green-50 dark:bg-green-900/10">
+                                  <p className="text-[10px] font-bold text-green-700 dark:text-green-400">💰 الدفعات المحصّلة:</p>
+                                  {bkPmts.map(p => (
+                                    <div key={p.id} className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[10px] text-muted-foreground">{p.paymentDate}</span>
+                                      <span className="text-[10px] font-bold text-green-700 dark:text-green-400">{Number(p.amount).toLocaleString("ar-SA")} ر.س</span>
+                                      <span className="text-[10px]">{p.method === "transfer" ? "🏦" : "💵"}</span>
+                                      {p.receiptUrl && (<button type="button" onClick={() => setReceiptLightbox(p.receiptUrl!)} className="text-[10px] text-blue-600 hover:underline">🧾</button>)}
+                                      {!isReadOnly && (<button type="button" onClick={() => deleteInstallmentPayment(b.id, p.id)} className="text-[10px] text-destructive hover:underline mr-auto">✕</button>)}
+                                    </div>
+                                  ))}
+                                  {isFullyPaid2 ? (<p className="text-[10px] font-bold text-green-600">✅ اكتمل السداد</p>) : (<p className="text-[10px] text-amber-600">المتبقي: {remDyn2.toLocaleString("ar-SA")} ر.س</p>)}
                                 </div>
-                                {calBalMethod === "cash" && (
-                                  <div className="flex gap-2">
-                                    <button type="button" onClick={() => setCalBalDeposited(false)} className={`flex-1 text-[10px] font-bold rounded-lg py-1 border-2 transition-colors ${!calBalDeposited ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 سيولة</button>
-                                    <button type="button" onClick={() => setCalBalDeposited(true)} className={`flex-1 text-[10px] font-bold rounded-lg py-1 border-2 transition-colors ${calBalDeposited ? "border-green-500 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300" : "border-border text-muted-foreground"}`}>🏦 أُودع بالبنك</button>
-                                  </div>
-                                )}
-                                <input ref={calBalReceiptRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; setCalBalReceiptUploading(true); try { const url = await uploadFile(file); if (url) setCalBalReceiptUrl(url); } finally { setCalBalReceiptUploading(false); e.target.value = ""; } }} />
-                                {calBalReceiptUrl ? (
-                                  <div className="flex items-center gap-2">
-                                    <button type="button" onClick={() => setReceiptLightbox(calBalReceiptUrl)}><img src={calBalReceiptUrl} alt="إيصال" className="h-8 w-8 rounded object-cover border hover:opacity-80 transition" /></button>
-                                    <p className="text-[10px] text-green-600 flex-1">إيصال مرفق ✓</p>
-                                    <button type="button" onClick={() => setCalBalReceiptUrl(null)} className="text-[10px] text-destructive underline">إزالة</button>
+                              )}
+                              {!isFullyPaid2 && !isReadOnly && (
+                                calPayTarget === b.id ? (
+                                  <div className="w-full border border-blue-200 dark:border-blue-800 rounded-xl p-2.5 space-y-2 bg-blue-50 dark:bg-blue-900/10">
+                                    <p className="text-[11px] font-bold text-blue-700 dark:text-blue-400">إضافة دفعة — المتبقي {remDyn2.toLocaleString("ar-SA")} ر.س</p>
+                                    <div className="flex gap-2">
+                                      <input type="number" value={calPayAmt} onChange={e => setCalPayAmt(e.target.value)} placeholder="المبلغ" className="flex-1 text-[11px] rounded-lg border border-border bg-background px-2 py-1.5 text-foreground min-w-0" />
+                                      <input type="date" value={calPayDate} onChange={e => setCalPayDate(e.target.value)} className="flex-1 text-[11px] rounded-lg border border-border bg-background px-2 py-1.5 text-foreground min-w-0" />
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button type="button" onClick={() => setCalPayMethod("cash")} className={`flex-1 text-[11px] font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "cash" ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 كاش</button>
+                                      <button type="button" onClick={() => { setCalPayMethod("transfer"); setCalPayDeposited(true); }} className={`flex-1 text-[11px] font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "transfer" ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300" : "border-border text-muted-foreground"}`}>🏦 تحويل</button>
+                                    </div>
+                                    {calPayMethod === "cash" && (
+                                      <div className="flex gap-2">
+                                        <button type="button" onClick={() => setCalPayDeposited(false)} className={`flex-1 text-[10px] font-bold rounded-lg py-1 border-2 transition-colors ${!calPayDeposited ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 سيولة</button>
+                                        <button type="button" onClick={() => setCalPayDeposited(true)} className={`flex-1 text-[10px] font-bold rounded-lg py-1 border-2 transition-colors ${calPayDeposited ? "border-green-500 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300" : "border-border text-muted-foreground"}`}>🏦 أُودع</button>
+                                      </div>
+                                    )}
+                                    <input ref={calPayReceiptRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; setCalPayReceiptUploading(true); try { const url = await uploadFile(file); if (url) setCalPayReceiptUrl(url); } finally { setCalPayReceiptUploading(false); e.target.value = ""; } }} />
+                                    {calPayReceiptUrl ? (
+                                      <div className="flex items-center gap-2">
+                                        <button type="button" onClick={() => setReceiptLightbox(calPayReceiptUrl)}><img src={calPayReceiptUrl} alt="إيصال" className="h-8 w-8 rounded object-cover border hover:opacity-80 transition" /></button>
+                                        <p className="text-[10px] text-green-600 flex-1">إيصال مرفق ✓</p>
+                                        <button type="button" onClick={() => setCalPayReceiptUrl(null)} className="text-[10px] text-destructive underline">إزالة</button>
+                                      </div>
+                                    ) : (
+                                      <button type="button" disabled={calPayReceiptUploading} onClick={() => calPayReceiptRef.current?.click()} className="flex items-center gap-1 text-[10px] text-blue-700 dark:text-blue-400 hover:underline">
+                                        {calPayReceiptUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : "📎"} إرفاق إيصال (اختياري)
+                                      </button>
+                                    )}
+                                    <div className="flex gap-2">
+                                      <button type="button" onClick={() => { setCalPayTarget(null); setCalPayAmt(""); setCalPayReceiptUrl(null); }} className="flex-1 text-[11px] rounded-lg py-1.5 border border-border text-muted-foreground hover:bg-muted transition-colors">إلغاء</button>
+                                      <button type="button" onClick={() => addInstallmentPayment(b.id)} disabled={calPaySaving} className="flex-1 text-[11px] font-bold rounded-lg py-1.5 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-1 transition-colors">
+                                        {calPaySaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />} تأكيد الدفعة
+                                      </button>
+                                    </div>
                                   </div>
                                 ) : (
-                                  <button type="button" disabled={calBalReceiptUploading} onClick={() => calBalReceiptRef.current?.click()} className="flex items-center gap-1 text-[10px] text-blue-700 dark:text-blue-400 hover:underline">
-                                    {calBalReceiptUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : "📎"} إرفاق إيصال (اختياري)
+                                  <button type="button" onClick={() => { setCalPayTarget(b.id); setCalPayAmt(String(remDyn2)); setCalPayDate(new Date().toISOString().slice(0, 10)); setCalPayMethod("cash"); setCalPayDeposited(false); }} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-700 rounded-lg py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                                    <CheckCircle className="w-3 h-3" /> + إضافة دفعة ({remDyn2.toLocaleString("ar-SA")} ر.س)
                                   </button>
-                                )}
-                                <div className="flex gap-2">
-                                  <button type="button" onClick={() => { setCalCollectTarget(null); setCalBalReceiptUrl(null); }} className="flex-1 text-[11px] rounded-lg py-1.5 border border-border text-muted-foreground hover:bg-muted transition-colors">إلغاء</button>
-                                  <button type="button" onClick={() => confirmCollectBalance(b.id)} disabled={calBalSaving} className="flex-1 text-[11px] font-bold rounded-lg py-1.5 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-1 transition-colors">
-                                    {calBalSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />} تأكيد التحصيل
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          }
-                          return (
-                            <button type="button" onClick={() => { setCalCollectTarget(b.id); setCalBalMethod("cash"); setCalBalDeposited(false); }} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-700 rounded-lg py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                              <CheckCircle className="w-3 h-3" /> تحصيل المتبقي ({bal2.toLocaleString("ar-SA")} ر.س)
-                            </button>
+                                )
+                              )}
+                            </>
                           );
                         })()}
                         <button
@@ -5184,50 +5246,80 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         </button>
                       )
                     )}
-                    {/* Collect balance */}
-                    {remaining !== null && remaining > 0 && !b.balanceCollected && (
-                      calCollectTarget === b.id ? (
-                        <div className="w-full border border-blue-200 dark:border-blue-800 rounded-xl p-3 space-y-2 bg-blue-50 dark:bg-blue-900/10">
-                          <p className="text-xs font-bold text-blue-700 dark:text-blue-400">طريقة تحصيل المتبقي ({remaining.toLocaleString("ar-SA")} ر.س):</p>
-                          <div className="flex gap-2">
-                            <button type="button" onClick={() => setCalBalMethod("cash")} className={`flex-1 text-xs font-bold rounded-lg py-1.5 border-2 transition-colors ${calBalMethod === "cash" ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 كاش</button>
-                            <button type="button" onClick={() => { setCalBalMethod("transfer"); setCalBalDeposited(true); }} className={`flex-1 text-xs font-bold rounded-lg py-1.5 border-2 transition-colors ${calBalMethod === "transfer" ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300" : "border-border text-muted-foreground"}`}>🏦 تحويل</button>
-                          </div>
-                          {calBalMethod === "cash" && (
-                            <div className="flex gap-2">
-                              <button type="button" onClick={() => setCalBalDeposited(false)} className={`flex-1 text-[11px] font-bold rounded-lg py-1 border-2 transition-colors ${!calBalDeposited ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 سيولة</button>
-                              <button type="button" onClick={() => setCalBalDeposited(true)} className={`flex-1 text-[11px] font-bold rounded-lg py-1 border-2 transition-colors ${calBalDeposited ? "border-green-500 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300" : "border-border text-muted-foreground"}`}>🏦 أُودع بالبنك</button>
+                    {/* Installment payments — list */}
+                    {(() => {
+                      if (tp === null || dp === null || tp <= dp) return null;
+                      const bkPmtsL = paymentsByBooking[b.id] ?? [];
+                      const totalPaidL = bkPmtsL.reduce((s, p) => s + Number(p.amount), 0);
+                      const remDynL = Math.max(0, tp - dp - totalPaidL);
+                      const isFullyPaidL = b.balanceCollected || remDynL <= 0;
+                      return (
+                        <>
+                          {bkPmtsL.length > 0 && (
+                            <div className="w-full border border-green-200 dark:border-green-800 rounded-xl p-3 space-y-1.5 bg-green-50 dark:bg-green-900/10">
+                              <p className="text-xs font-bold text-green-700 dark:text-green-400">💰 الدفعات المحصّلة:</p>
+                              {bkPmtsL.map(p => (
+                                <div key={p.id} className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs text-muted-foreground">{p.paymentDate}</span>
+                                  <span className="text-xs font-bold text-green-700 dark:text-green-400">{Number(p.amount).toLocaleString("ar-SA")} ر.س</span>
+                                  <span className="text-xs">{p.method === "transfer" ? "🏦" : "💵"}</span>
+                                  {p.receiptUrl && (<button type="button" onClick={() => setReceiptLightbox(p.receiptUrl!)} className="text-xs text-blue-600 hover:underline">🧾 إيصال</button>)}
+                                  {!isReadOnly && (<button type="button" onClick={() => deleteInstallmentPayment(b.id, p.id)} className="text-xs text-destructive hover:underline mr-auto">✕ حذف</button>)}
+                                </div>
+                              ))}
+                              {isFullyPaidL ? (<p className="text-xs font-bold text-green-600">✅ اكتمل السداد</p>) : (<p className="text-xs text-amber-600">المتبقي: {remDynL.toLocaleString("ar-SA")} ر.س</p>)}
                             </div>
                           )}
-                          <input ref={calBalReceiptRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; setCalBalReceiptUploading(true); try { const url = await uploadFile(file); if (url) setCalBalReceiptUrl(url); } finally { setCalBalReceiptUploading(false); e.target.value = ""; } }} />
-                          {calBalReceiptUrl ? (
-                            <div className="flex items-center gap-2">
-                              <button type="button" onClick={() => setReceiptLightbox(calBalReceiptUrl)}><img src={calBalReceiptUrl} alt="إيصال" className="h-8 w-8 rounded object-cover border hover:opacity-80 transition" /></button>
-                              <p className="text-xs text-green-600 flex-1">إيصال مرفق ✓</p>
-                              <button type="button" onClick={() => setCalBalReceiptUrl(null)} className="text-xs text-destructive underline">إزالة</button>
-                            </div>
-                          ) : (
-                            <button type="button" disabled={calBalReceiptUploading} onClick={() => calBalReceiptRef.current?.click()} className="flex items-center gap-1 text-xs text-blue-700 dark:text-blue-400 hover:underline">
-                              {calBalReceiptUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "📎"} إرفاق إيصال (اختياري)
-                            </button>
+                          {!isFullyPaidL && !isReadOnly && (
+                            calPayTarget === b.id ? (
+                              <div className="w-full border border-blue-200 dark:border-blue-800 rounded-xl p-3 space-y-2 bg-blue-50 dark:bg-blue-900/10">
+                                <p className="text-xs font-bold text-blue-700 dark:text-blue-400">إضافة دفعة — المتبقي {remDynL.toLocaleString("ar-SA")} ر.س</p>
+                                <div className="flex gap-2">
+                                  <input type="number" value={calPayAmt} onChange={e => setCalPayAmt(e.target.value)} placeholder="المبلغ" className="flex-1 text-xs rounded-lg border border-border bg-background px-2.5 py-2 text-foreground min-w-0" />
+                                  <input type="date" value={calPayDate} onChange={e => setCalPayDate(e.target.value)} className="flex-1 text-xs rounded-lg border border-border bg-background px-2.5 py-2 text-foreground min-w-0" />
+                                </div>
+                                <div className="flex gap-2">
+                                  <button type="button" onClick={() => setCalPayMethod("cash")} className={`flex-1 text-xs font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "cash" ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 كاش</button>
+                                  <button type="button" onClick={() => { setCalPayMethod("transfer"); setCalPayDeposited(true); }} className={`flex-1 text-xs font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "transfer" ? "border-blue-500 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300" : "border-border text-muted-foreground"}`}>🏦 تحويل</button>
+                                </div>
+                                {calPayMethod === "cash" && (
+                                  <div className="flex gap-2">
+                                    <button type="button" onClick={() => setCalPayDeposited(false)} className={`flex-1 text-[11px] font-bold rounded-lg py-1 border-2 transition-colors ${!calPayDeposited ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 سيولة</button>
+                                    <button type="button" onClick={() => setCalPayDeposited(true)} className={`flex-1 text-[11px] font-bold rounded-lg py-1 border-2 transition-colors ${calPayDeposited ? "border-green-500 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300" : "border-border text-muted-foreground"}`}>🏦 أُودع</button>
+                                  </div>
+                                )}
+                                <input ref={calPayReceiptRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; setCalPayReceiptUploading(true); try { const url = await uploadFile(file); if (url) setCalPayReceiptUrl(url); } finally { setCalPayReceiptUploading(false); e.target.value = ""; } }} />
+                                {calPayReceiptUrl ? (
+                                  <div className="flex items-center gap-2">
+                                    <button type="button" onClick={() => setReceiptLightbox(calPayReceiptUrl)}><img src={calPayReceiptUrl} alt="إيصال" className="h-9 w-9 rounded object-cover border hover:opacity-80 transition" /></button>
+                                    <p className="text-xs text-green-600 flex-1">إيصال مرفق ✓</p>
+                                    <button type="button" onClick={() => setCalPayReceiptUrl(null)} className="text-xs text-destructive underline">إزالة</button>
+                                  </div>
+                                ) : (
+                                  <button type="button" disabled={calPayReceiptUploading} onClick={() => calPayReceiptRef.current?.click()} className="flex items-center gap-1 text-xs text-blue-700 dark:text-blue-400 hover:underline">
+                                    {calPayReceiptUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "📎"} إرفاق إيصال (اختياري)
+                                  </button>
+                                )}
+                                <div className="flex gap-2">
+                                  <button type="button" onClick={() => { setCalPayTarget(null); setCalPayAmt(""); setCalPayReceiptUrl(null); }} className="flex-1 text-xs rounded-lg py-1.5 border border-border text-muted-foreground hover:bg-muted transition-colors">إلغاء</button>
+                                  <button type="button" onClick={() => addInstallmentPayment(b.id)} disabled={calPaySaving} className="flex-1 text-xs font-bold rounded-lg py-1.5 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-1 transition-colors">
+                                    {calPaySaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />} تأكيد الدفعة
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => { setCalPayTarget(b.id); setCalPayAmt(String(remDynL)); setCalPayDate(new Date().toISOString().slice(0, 10)); setCalPayMethod("cash"); setCalPayDeposited(false); }}
+                                className="flex items-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-2.5 py-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                              >
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                + إضافة دفعة ({remDynL.toLocaleString("ar-SA")} ر.س)
+                              </button>
+                            )
                           )}
-                          <div className="flex gap-2">
-                            <button type="button" onClick={() => { setCalCollectTarget(null); setCalBalReceiptUrl(null); }} className="flex-1 text-xs rounded-lg py-1.5 border border-border text-muted-foreground hover:bg-muted transition-colors">إلغاء</button>
-                            <button type="button" onClick={() => confirmCollectBalance(b.id)} disabled={calBalSaving} className="flex-1 text-xs font-bold rounded-lg py-1.5 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-1 transition-colors">
-                              {calBalSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />} تأكيد التحصيل
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => { setCalCollectTarget(b.id); setCalBalMethod("cash"); setCalBalDeposited(false); }}
-                          className="flex items-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-2.5 py-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                        >
-                          <CheckCircle className="w-3.5 h-3.5" />
-                          تحصيل المتبقي ({remaining.toLocaleString("ar-SA")} ر.س)
-                        </button>
-                      )
-                    )}
+                        </>
+                      );
+                    })()}
                     {/* Manage insurance */}
                     {ins && !b.insuranceRefunded && (
                       <button

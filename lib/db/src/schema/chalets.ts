@@ -709,3 +709,17 @@ export const contactInquiriesTable = pgTable("contact_inquiries", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ContactInquiry = typeof contactInquiriesTable.$inferSelect;
+
+/* ── Booking Payments / Installments ────────────────────────── */
+export const bookingPaymentsTable = pgTable("booking_payments", {
+  id: serial("id").primaryKey(),
+  bookingId: integer("booking_id").notNull().references(() => ownerBookingsTable.id, { onDelete: "cascade" }),
+  ownerId: text("owner_id").notNull(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  paymentDate: text("payment_date").notNull(),
+  method: text("method").notNull().default("cash"),
+  cashDeposited: boolean("cash_deposited").notNull().default(false),
+  receiptUrl: text("receipt_url"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+export type BookingPayment = typeof bookingPaymentsTable.$inferSelect;

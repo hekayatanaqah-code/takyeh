@@ -24,6 +24,7 @@ import {
   serviceProvidersTable,
   ownerTempSessionsTable,
   ownerRefundsTable,
+  bookingPaymentsTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
@@ -2648,15 +2649,19 @@ router.get("/financial-summary", async (req, res) => {
   const cashBookingsAll = await db
     .select({ depositPaid: ownerBookingsTable.depositPaid, balanceCollected: ownerBookingsTable.balanceCollected, totalPrice: ownerBookingsTable.totalPrice, paymentMethod: ownerBookingsTable.paymentMethod, cashDeposited: ownerBookingsTable.cashDeposited })
     .from(ownerBookingsTable).where(and(...cashConds));
-  const cashOnHand = Math.round(
-    cashBookingsAll
-      .filter(b => (b.paymentMethod ?? "cash") === "cash" && !b.cashDeposited)
-      .reduce((s, b) => {
-        const dep = Number(b.depositPaid ?? 0);
-        const bal = b.balanceCollected ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
-        return s + dep + bal;
-      }, 0)
-  );
+  const legacyBookingCash = cashBookingsAll
+    .filter(b => (b.paymentMethod ?? "cash") === "cash" && !b.cashDeposited)
+    .reduce((s, b) => {
+      const dep = Number(b.depositPaid ?? 0);
+      const bal = b.balanceCollected ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
+      return s + dep + bal;
+    }, 0);
+  const installmentCashRows = await db
+    .select({ amount: bookingPaymentsTable.amount })
+    .from(bookingPaymentsTable)
+    .where(and(eq(bookingPaymentsTable.ownerId, ownerId), eq(bookingPaymentsTable.method, "cash"), eq(bookingPaymentsTable.cashDeposited, false)));
+  const installmentCashSum = installmentCashRows.reduce((s, p) => s + Number(p.amount), 0);
+  const cashOnHand = Math.round(legacyBookingCash + installmentCashSum);
 
   /* ── Hijri monthly financial summary ───────────────────────── */
   const hYear  = req.query.hijriYear  ? Number(req.query.hijriYear)  : null;
@@ -3024,6 +3029,75 @@ router.get("/financial-summary", async (req, res) => {
     allTimeRefundsIssued,
     allTimeCancelIncome,
   });
+});
+
+/* ── GET /owner/booking-payments ────────────────────────────── */
+router.get("/booking-payments", async (req, res) => {
+  const ownerId = req.user!.id;
+  const payments = await db
+    .select()
+    .from(bookingPaymentsTable)
+    .where(eq(bookingPaymentsTable.ownerId, ownerId))
+    .orderBy(bookingPaymentsTable.paymentDate);
+  return res.json(payments);
+});
+
+/* ── POST /owner/bookings/:id/payments ──────────────────────── */
+router.post("/bookings/:id/payments", async (req, res) => {
+  const ownerId = req.user!.id;
+  const bookingId = Number(req.params.id);
+  if (isNaN(bookingId)) return res.status(400).json({ error: "invalid" });
+  const schema = z.object({
+    amount: z.number().positive(),
+    paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    method: z.enum(["cash", "transfer"]),
+    cashDeposited: z.boolean(),
+    receiptUrl: z.string().nullable().optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid data" });
+  const [booking] = await db.select().from(ownerBookingsTable)
+    .where(and(eq(ownerBookingsTable.id, bookingId), eq(ownerBookingsTable.ownerId, ownerId)));
+  if (!booking) return res.status(404).json({ error: "not found" });
+  const { amount, paymentDate, method, cashDeposited, receiptUrl } = parsed.data;
+  const isDeposited = method === "transfer" ? true : cashDeposited;
+  await db.insert(bookingPaymentsTable).values({
+    bookingId, ownerId, amount: String(amount), paymentDate, method,
+    cashDeposited: isDeposited, receiptUrl: receiptUrl ?? null,
+  });
+  const allPmts = await db.select({ amount: bookingPaymentsTable.amount })
+    .from(bookingPaymentsTable).where(eq(bookingPaymentsTable.bookingId, bookingId));
+  const totalPaid = allPmts.reduce((s, p) => s + Number(p.amount), 0);
+  const dep = Number(booking.depositPaid ?? 0);
+  const total = Number(booking.totalPrice ?? 0);
+  const remaining = Math.max(0, total - dep);
+  const isFullyPaid = remaining > 0 && totalPaid >= remaining;
+  await db.update(ownerBookingsTable).set({ balanceCollected: isFullyPaid })
+    .where(eq(ownerBookingsTable.id, bookingId));
+  return res.json({ ok: true, fullyPaid: isFullyPaid, totalPaid, remaining });
+});
+
+/* ── DELETE /owner/bookings/:id/payments/:paymentId ──────────── */
+router.delete("/bookings/:id/payments/:paymentId", async (req, res) => {
+  const ownerId = req.user!.id;
+  const bookingId = Number(req.params.id);
+  const paymentId = Number(req.params.paymentId);
+  await db.delete(bookingPaymentsTable).where(
+    and(eq(bookingPaymentsTable.id, paymentId), eq(bookingPaymentsTable.ownerId, ownerId),
+      eq(bookingPaymentsTable.bookingId, bookingId))
+  );
+  const [booking] = await db.select().from(ownerBookingsTable).where(eq(ownerBookingsTable.id, bookingId));
+  if (booking) {
+    const allPmts = await db.select({ amount: bookingPaymentsTable.amount })
+      .from(bookingPaymentsTable).where(eq(bookingPaymentsTable.bookingId, bookingId));
+    const totalPaid = allPmts.reduce((s, p) => s + Number(p.amount), 0);
+    const dep = Number(booking.depositPaid ?? 0);
+    const total = Number(booking.totalPrice ?? 0);
+    const remaining = Math.max(0, total - dep);
+    await db.update(ownerBookingsTable).set({ balanceCollected: remaining > 0 && totalPaid >= remaining })
+      .where(eq(ownerBookingsTable.id, bookingId));
+  }
+  return res.json({ ok: true });
 });
 
 /* ── Refunds: POST /owner/bookings/:id/refund ──────────────── */
@@ -4139,38 +4213,71 @@ router.get("/transaction-history", async (req, res) => {
 
   const bConds: Parameters<typeof and>[0][] = [eq(ownerBookingsTable.ownerId, ownerId)];
   const eConds: Parameters<typeof and>[0][] = [eq(ownerExpensesTable.ownerId, ownerId)];
+  const pConds: Parameters<typeof and>[0][] = [eq(bookingPaymentsTable.ownerId, ownerId)];
   if (month) {
     bConds.push(gte(ownerBookingsTable.bookingDate, `${month}-01`));
     bConds.push(lte(ownerBookingsTable.bookingDate, `${month}-31`));
     eConds.push(gte(ownerExpensesTable.dateStr, `${month}-01`));
     eConds.push(lte(ownerExpensesTable.dateStr, `${month}-31`));
+    pConds.push(gte(bookingPaymentsTable.paymentDate, `${month}-01`));
+    pConds.push(lte(bookingPaymentsTable.paymentDate, `${month}-31`));
   }
   if (submissionId) {
     bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
     eConds.push(eq(ownerExpensesTable.submissionId, submissionId));
   }
 
-  const [bookings, expenses] = await Promise.all([
+  const [bookings, expenses, instPayments] = await Promise.all([
     db.select().from(ownerBookingsTable).where(and(...bConds)).orderBy(ownerBookingsTable.bookingDate),
     db.select().from(ownerExpensesTable).where(and(...eConds)).orderBy(ownerExpensesTable.dateStr),
+    db.select({
+      id: bookingPaymentsTable.id,
+      bookingId: bookingPaymentsTable.bookingId,
+      amount: bookingPaymentsTable.amount,
+      paymentDate: bookingPaymentsTable.paymentDate,
+      method: bookingPaymentsTable.method,
+      cashDeposited: bookingPaymentsTable.cashDeposited,
+      receiptUrl: bookingPaymentsTable.receiptUrl,
+      clientName: ownerBookingsTable.clientName,
+      submissionId: ownerBookingsTable.submissionId,
+    })
+    .from(bookingPaymentsTable)
+    .innerJoin(ownerBookingsTable, eq(bookingPaymentsTable.bookingId, ownerBookingsTable.id))
+    .where(and(...pConds)),
   ]);
+
+  const bookingIdsWithInstallments = new Set(instPayments.map(p => p.bookingId));
 
   const items = [
     ...bookings.map(b => {
       const dep = Number(b.depositPaid ?? 0);
-      const bal = b.balanceCollected ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
+      const hasInst = bookingIdsWithInstallments.has(b.id);
+      const bal = (!hasInst && b.balanceCollected) ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
       return {
         id: `b-${b.id}`,
         date: b.bookingDate,
         type: "income" as const,
-        label: `حجز — ${b.clientName}`,
+        label: `إيداع — ${b.clientName}`,
         amount: dep + bal,
-        method: (b.paymentMethod ?? "cash") as string,
-        status: b.cancelledAt ? "cancelled" : (b.balanceCollected ? "collected" : "deposit_only"),
-        cashDeposited: b.cashDeposited,
+        method: (b.paymentMethod ?? "transfer") as string,
+        status: b.cancelledAt ? "cancelled" : (hasInst ? "deposit_only" : (b.balanceCollected ? "collected" : "deposit_only")),
+        cashDeposited: true as boolean | null,
         paymentReceiptUrl: b.paymentReceiptUrl ?? null,
       };
     }),
+    ...instPayments
+      .filter(p => !submissionId || p.submissionId === submissionId)
+      .map(p => ({
+        id: `p-${p.id}`,
+        date: p.paymentDate,
+        type: "income" as const,
+        label: `دفعة — ${p.clientName}`,
+        amount: Number(p.amount),
+        method: p.method,
+        status: "collected" as string,
+        cashDeposited: p.cashDeposited as boolean | null,
+        paymentReceiptUrl: p.receiptUrl ?? null,
+      })),
     ...expenses.map(e => ({
       id: `e-${e.id}`,
       date: e.dateStr,
@@ -4180,6 +4287,7 @@ router.get("/transaction-history", async (req, res) => {
       method: "na" as const,
       status: "paid" as const,
       cashDeposited: null as boolean | null,
+      paymentReceiptUrl: null as string | null,
     })),
   ].sort((a, b) => b.date.localeCompare(a.date));
 
