@@ -1522,6 +1522,7 @@ function AddBookingDialog({
     if (maintenanceBlockNote) { setError(`هذا اليوم غير متاح للحجز (صيانة/إغلاق مؤقت) — ${maintenanceBlockNote}`); return; }
     if (!period || period === "none") { setError("يرجى اختيار الفترة"); return; }
     if (!totalPrice) { setError("يرجى إدخال إجمالي قيمة الحجز"); return; }
+    if (!depositPaid || Number(depositPaid) <= 0) { setError("الرجاء إدخال مبلغ العربون/الدفعة أولاً"); return; }
     setSaving(true); setError("");
     try {
       const r = await apiFetch("/owner/bookings", {
@@ -4702,7 +4703,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
             )}
 
             {/* Legend */}
-            <div className="flex flex-wrap gap-3 mt-4">
+            <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4">
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span className="inline-flex items-center justify-center w-14 h-5 rounded bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200 text-[10px] font-semibold">يوم كامل</span>
                 محجوز بالكامل
@@ -4714,6 +4715,19 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span className="w-4 h-5 rounded bg-muted inline-block" />
                 متاح
+              </span>
+              <span className="w-px h-5 bg-border inline-block self-center" />
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="w-2.5 h-2.5 rounded-full bg-green-500 ring-1 ring-border shrink-0" />
+                محصّل بالكامل
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 ring-1 ring-border shrink-0" />
+                يوجد متبقي
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-500 ring-1 ring-border shrink-0" />
+                نقدي لم يُودَع
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-2">انقر على أي تاريخ لضبط الفترات أو عرض تفاصيل الحجز.</p>
