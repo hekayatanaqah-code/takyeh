@@ -2397,6 +2397,22 @@ function MiniCalendar({
     return m;
   }, [bookings]);
 
+  /* Dates that have a cash booking NOT yet deposited to bank */
+  const cashUndepositedDates = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of bookings) {
+      if (!b.bookingDate || b.paymentMethod !== "cash" || b.cashDeposited === true) continue;
+      const duration = Math.max(1, b.durationDays ?? 1);
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      for (let i = 0; i < duration; i++) {
+        const d = new Date(sy, sm - 1, sd + i);
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        s.add(ds);
+      }
+    }
+    return s;
+  }, [bookings]);
+
   const today = new Date().toISOString().slice(0, 10);
 
   const cells: (number | null)[] = [];
@@ -2454,7 +2470,7 @@ function MiniCalendar({
               key={dateStr}
               onClick={() => onDateClick(dateStr)}
               className={[
-                "flex flex-col items-center justify-start pt-1.5 pb-1.5 px-0.5 w-full",
+                "relative flex flex-col items-center justify-start pt-1.5 pb-1.5 px-0.5 w-full",
                 "transition-colors focus:outline-none focus:z-10 focus:ring-2 focus:ring-inset focus:ring-primary/60",
                 "min-h-[66px]",
                 isManualBlock
@@ -2495,6 +2511,13 @@ function MiniCalendar({
                     </div>
                   ))}
                 </div>
+              )}
+              {/* Cash-not-deposited indicator dot */}
+              {cashUndepositedDates.has(dateStr) && (
+                <span
+                  className="absolute top-1 left-1 w-2 h-2 rounded-full bg-orange-500 ring-1 ring-white dark:ring-gray-900"
+                  title="نقدي لم يُودَع في البنك"
+                />
               )}
             </button>
           );
@@ -3259,7 +3282,30 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [showArchive, setShowArchive] = useState(false);
   const [archiveTab, setArchiveTab] = useState<"cancelled" | "rescheduled">("cancelled");
   const [searchQuery, setSearchQuery] = useState("");
+  const [calDepositSaving, setCalDepositSaving] = useState<number | null>(null);
+  const [calReceiptUrl, setCalReceiptUrl] = useState<string | null>(null);
+  const [calReceiptUploading, setCalReceiptUploading] = useState(false);
+  const calReceiptRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  async function confirmCalendarDeposit(bookingId: number, receiptUrl?: string | null) {
+    setCalDepositSaving(bookingId);
+    try {
+      const body: Record<string, unknown> = { cashDeposited: true };
+      if (receiptUrl) body.paymentReceiptUrl = receiptUrl;
+      const r = await apiFetch(`/owner/bookings/${bookingId}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (r.ok) {
+        toast({ title: "✅ تم تأكيد الإيداع", description: "نُقل المبلغ من السيولة إلى رصيد البنك" });
+        qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
+        qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
+        qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
+        setCalReceiptUrl(null);
+      }
+    } finally { setCalDepositSaving(null); }
+  }
 
   const { data: ownerChalets = [], isLoading: chaletsLoading } = useQuery<any[]>({
     queryKey: ["owner", "chalets"],
@@ -4842,6 +4888,81 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   )}
 
                   {b.notes && <p className="text-xs text-muted-foreground border-t border-border pt-2">{b.notes}</p>}
+
+                  {/* ── Payment Status Section ── */}
+                  {b.paymentMethod === "cash" && (
+                    <div className={`rounded-lg border p-3 space-y-2 ${b.cashDeposited ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" : "bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700"}`}>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">{b.cashDeposited ? "🏦" : "💵"}</span>
+                          <div>
+                            <p className={`text-xs font-bold ${b.cashDeposited ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"}`}>
+                              {b.cashDeposited ? "تم الإيداع في البنك" : "نقدي — لم يُودَع بعد"}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {b.cashDeposited ? "المبلغ مُحوَّل للبنك ✓" : "يظهر في السيولة اليدوية"}
+                            </p>
+                          </div>
+                        </div>
+                        {!b.cashDeposited && !isReadOnly && (
+                          <button
+                            type="button"
+                            disabled={calDepositSaving === b.id}
+                            onClick={() => confirmCalendarDeposit(b.id, calReceiptUrl)}
+                            className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 rounded-lg px-3 py-1.5 transition-colors"
+                          >
+                            {calDepositSaving === b.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                            تأكيد الإيداع في البنك
+                          </button>
+                        )}
+                      </div>
+                      {!b.cashDeposited && !isReadOnly && (
+                        <div className="border-t border-amber-200 dark:border-amber-800 pt-2">
+                          <input
+                            ref={calReceiptRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setCalReceiptUploading(true);
+                              try {
+                                const url = await uploadFile(file);
+                                if (url) setCalReceiptUrl(url);
+                              } finally { setCalReceiptUploading(false); e.target.value = ""; }
+                            }}
+                          />
+                          {calReceiptUrl ? (
+                            <div className="flex items-center gap-2">
+                              <img src={calReceiptUrl} alt="إيصال" className="h-10 w-10 rounded object-cover border" />
+                              <p className="text-[11px] text-green-600 flex-1">تم رفع الإيصال ✓</p>
+                              <button type="button" onClick={() => setCalReceiptUrl(null)} className="text-[10px] text-destructive underline">إزالة</button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={calReceiptUploading}
+                              onClick={() => calReceiptRef.current?.click()}
+                              className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400 hover:underline"
+                            >
+                              {calReceiptUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : "📎"}
+                              إرفاق صورة الإيصال (اختياري)
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {/* Receipt viewer */}
+                      {b.paymentReceiptUrl && (
+                        <div className="border-t border-green-200 dark:border-green-800 pt-2">
+                          <p className="text-[10px] text-muted-foreground mb-1.5">إيصال الإيداع:</p>
+                          <a href={b.paymentReceiptUrl} target="_blank" rel="noreferrer" className="block w-fit">
+                            <img src={b.paymentReceiptUrl} alt="إيصال" className="h-16 w-16 rounded-lg object-cover border hover:opacity-80 transition" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Action buttons */}
                   <div className="flex flex-wrap gap-2 pt-1">
@@ -7731,12 +7852,6 @@ function RevenueTab() {
   const [refundReason, setRefundReason] = useState("");
   const [refundType, setRefundType] = useState<"partial" | "full">("partial");
   const [refundPending, setRefundPending] = useState(false);
-  const [showWithdrawal, setShowWithdrawal] = useState(false);
-  const [wAmount, setWAmount] = useState("");
-  const [wDate, setWDate] = useState(getLocalDateStr());
-  const [wNote, setWNote] = useState("");
-  const [wSaving, setWSaving] = useState(false);
-  const qcRev = useQueryClient();
   const { toast } = useToast();
 
   const monthOptions = useMemo(() => {
@@ -8645,86 +8760,6 @@ function RevenueTab() {
         </div>
       </div>
 
-      {/* ── Quick Withdrawal Button ── */}
-      <div className="rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 p-4 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">💸</span>
-            <div>
-              <div className="text-sm font-bold text-amber-800 dark:text-amber-300">تسجيل مسحوبات شخصية</div>
-              <div className="text-[11px] text-amber-600 dark:text-amber-500">تُخصم من صافي الربح وتظهر في سجل المعاملات</div>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowWithdrawal(p => !p)}
-            className="shrink-0 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 transition-colors"
-          >
-            {showWithdrawal ? "إلغاء" : "+ إضافة"}
-          </button>
-        </div>
-        {showWithdrawal && (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (!wAmount || Number(wAmount) <= 0) return;
-              setWSaving(true);
-              try {
-                const r = await apiFetch("/owner/expenses", {
-                  method: "POST",
-                  body: JSON.stringify({
-                    category: "withdrawal",
-                    amount: Math.round(Number(wAmount)),
-                    dateStr: wDate,
-                    notes: wNote || undefined,
-                    submissionId: unit.type === "chalet" ? (unit as any).submissionId : undefined,
-                  }),
-                });
-                if (r.ok) {
-                  toast({ title: "تم تسجيل المسحوبات", description: `${Math.round(Number(wAmount)).toLocaleString("ar-SA")} ر.س` });
-                  setWAmount(""); setWNote(""); setWDate(getLocalDateStr());
-                  setShowWithdrawal(false);
-                  qcRev.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
-                  refetchFinancial();
-                }
-              } finally { setWSaving(false); }
-            }}
-            className="space-y-2.5 pt-1 border-t border-amber-200 dark:border-amber-800"
-          >
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">المبلغ (ر.س) *</label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={wAmount}
-                  onChange={e => setWAmount(e.target.value)}
-                  placeholder="0"
-                  className="h-9 text-sm"
-                  required
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">التاريخ</label>
-                <Input
-                  type="date"
-                  value={wDate}
-                  onChange={e => setWDate(e.target.value)}
-                  className="h-9 text-sm"
-                />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">ملاحظة (اختياري)</label>
-              <Input value={wNote} onChange={e => setWNote(e.target.value)} placeholder="مثال: سحب شخصي، راتب المالك..." className="h-9 text-sm" />
-            </div>
-            <Button type="submit" disabled={wSaving || !wAmount} size="sm" className="w-full bg-amber-600 hover:bg-amber-700 text-white">
-              {wSaving ? "جاري الحفظ..." : "💸 تسجيل المسحوبات"}
-            </Button>
-          </form>
-        )}
-      </div>
-
       {/* ── Cash on Hand ── */}
       {(financial?.cashOnHand ?? 0) > 0 && (
         <div className="rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-4 flex items-center gap-4">
@@ -9391,6 +9426,12 @@ function ExpensesTab() {
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [showWithdrawal, setShowWithdrawal] = useState(false);
+  const [wAmount, setWAmount] = useState("");
+  const [wDate, setWDate] = useState(getLocalDateStr());
+  const [wNote, setWNote] = useState("");
+  const [wSaving, setWSaving] = useState(false);
+  const { toast } = useToast();
 
   /* ── dynamic categories ── */
   const { data: expenseCats = [] } = useQuery<ExpenseCatItem[]>({
@@ -9654,6 +9695,88 @@ function ExpensesTab() {
             <p className="text-xs text-muted-foreground">اختر شاليهاً أو خدمةً محددة من القائمة لإضافة مصروف مرتبط بها</p>
           </div>
         </div>
+      )}
+
+      {/* ── Personal Withdrawals Quick Button ── */}
+      {unit.type !== "all" && (
+      <div className="rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">💸</span>
+            <div>
+              <div className="text-sm font-bold text-amber-800 dark:text-amber-300">تسجيل مسحوبات شخصية</div>
+              <div className="text-[11px] text-amber-600 dark:text-amber-500">تُخصم من صافي الربح وتظهر في سجل المعاملات</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowWithdrawal(p => !p)}
+            className="shrink-0 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 transition-colors"
+          >
+            {showWithdrawal ? "إلغاء" : "+ إضافة"}
+          </button>
+        </div>
+        {showWithdrawal && (
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!wAmount || Number(wAmount) <= 0) return;
+              setWSaving(true);
+              try {
+                const r = await apiFetch("/owner/expenses", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    category: "withdrawal",
+                    amount: Math.round(Number(wAmount)),
+                    dateStr: wDate,
+                    notes: wNote || undefined,
+                    submissionId: unit.type === "chalet" ? (unit as any).submissionId : undefined,
+                  }),
+                });
+                if (r.ok) {
+                  toast({ title: "تم تسجيل المسحوبات", description: `${Math.round(Number(wAmount)).toLocaleString("ar-SA")} ر.س` });
+                  setWAmount(""); setWNote(""); setWDate(getLocalDateStr());
+                  setShowWithdrawal(false);
+                  qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
+                  qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
+                }
+              } finally { setWSaving(false); }
+            }}
+            className="space-y-2.5 pt-1 border-t border-amber-200 dark:border-amber-800"
+          >
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">المبلغ (ر.س) *</label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={wAmount}
+                  onChange={e => setWAmount(e.target.value)}
+                  placeholder="0"
+                  className="h-9 text-sm"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">التاريخ</label>
+                <Input
+                  type="date"
+                  value={wDate}
+                  onChange={e => setWDate(e.target.value)}
+                  className="h-9 text-sm"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">ملاحظة (اختياري)</label>
+              <Input value={wNote} onChange={e => setWNote(e.target.value)} placeholder="مثال: سحب شخصي، راتب المالك..." className="h-9 text-sm" />
+            </div>
+            <Button type="submit" disabled={wSaving || !wAmount} size="sm" className="w-full bg-amber-600 hover:bg-amber-700 text-white">
+              {wSaving ? "جاري الحفظ..." : "💸 تسجيل المسحوبات"}
+            </Button>
+          </form>
+        )}
+      </div>
       )}
 
       {/* Month Filter + List */}
