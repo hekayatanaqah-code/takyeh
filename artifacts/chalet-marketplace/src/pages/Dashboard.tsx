@@ -1522,7 +1522,7 @@ function AddBookingDialog({
     if (maintenanceBlockNote) { setError(`هذا اليوم غير متاح للحجز (صيانة/إغلاق مؤقت) — ${maintenanceBlockNote}`); return; }
     if (!period || period === "none") { setError("يرجى اختيار الفترة"); return; }
     if (!totalPrice) { setError("يرجى إدخال إجمالي قيمة الحجز"); return; }
-    if (!depositPaid || Number(depositPaid) <= 0) { setError("الرجاء إدخال مبلغ العربون/الدفعة أولاً"); return; }
+    if (Number(depositPaid) > 0 && !paymentMethod) { setError("الرجاء اختيار طريقة الدفع"); return; }
     setSaving(true); setError("");
     try {
       const r = await apiFetch("/owner/bookings", {
@@ -1856,29 +1856,38 @@ function AddBookingDialog({
 
           {/* ── Payment Method ── */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold">طريقة الدفع</label>
+            <label className={`text-sm font-semibold ${Number(depositPaid) <= 0 ? "text-muted-foreground" : ""}`}>
+              طريقة الدفع
+              {Number(depositPaid) <= 0 && <span className="text-[11px] font-normal mr-1.5">(أدخل مبلغاً أولاً)</span>}
+            </label>
             <div className="grid grid-cols-3 gap-2">
               {([
                 { val: "cash",     label: "كاش",    emoji: "💵" },
                 { val: "transfer", label: "حوالة",  emoji: "🏦" },
                 { val: "pos",      label: "شبكة",   emoji: "💳" },
-              ] as const).map(({ val, label, emoji }) => (
-                <button
-                  key={val}
-                  type="button"
-                  onClick={() => setPaymentMethod(val)}
-                  className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2.5 text-xs font-semibold transition-all ${
-                    paymentMethod === val
-                      ? "border-primary bg-primary/8 text-primary"
-                      : "border-border text-muted-foreground hover:border-muted-foreground"
-                  }`}
-                >
-                  <span className="text-base">{emoji}</span>
-                  {label}
-                </button>
-              ))}
+              ] as const).map(({ val, label, emoji }) => {
+                const depositHasValue = Number(depositPaid) > 0;
+                return (
+                  <button
+                    key={val}
+                    type="button"
+                    disabled={!depositHasValue}
+                    onClick={() => depositHasValue && setPaymentMethod(val)}
+                    className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2.5 text-xs font-semibold transition-all ${
+                      !depositHasValue
+                        ? "border-border text-muted-foreground/40 bg-muted/30 cursor-not-allowed opacity-50"
+                        : paymentMethod === val
+                          ? "border-primary bg-primary/8 text-primary"
+                          : "border-border text-muted-foreground hover:border-muted-foreground"
+                    }`}
+                  >
+                    <span className="text-base">{emoji}</span>
+                    {label}
+                  </button>
+                );
+              })}
             </div>
-            {paymentMethod === "cash" && (
+            {paymentMethod === "cash" && Number(depositPaid) > 0 && (
               <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 p-3 space-y-2.5">
                 <div>
                   <p className="text-xs font-bold text-amber-800 dark:text-amber-300">هل تم إيداع الكاش في البنك؟</p>
