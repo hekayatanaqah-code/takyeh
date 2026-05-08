@@ -1265,6 +1265,12 @@ router.delete("/bookings/:id", async (req, res) => {
     })
     .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)));
 
+  // Auto-purge undeposited cash payments for this booking:
+  // Once cancelled, any "cash on hand" entries are no longer valid liquidity.
+  await db
+    .delete(bookingPaymentsTable)
+    .where(and(eq(bookingPaymentsTable.bookingId, id), eq(bookingPaymentsTable.cashDeposited, false)));
+
   // Sync availability after cancellation (booking no longer blocks these dates)
   if (target?.submissionId) {
     syncAvailabilityFromBookings(
@@ -2686,6 +2692,8 @@ router.get("/financial-summary", async (req, res) => {
   ];
   const installmentCashRows = await db
     .select({
+      id: bookingPaymentsTable.id,
+      bookingId: bookingPaymentsTable.bookingId,
       amount: bookingPaymentsTable.amount,
       paymentDate: bookingPaymentsTable.paymentDate,
       clientName: ownerBookingsTable.clientName,
@@ -2709,6 +2717,8 @@ router.get("/financial-summary", async (req, res) => {
       date: p.paymentDate,
       amount: Number(p.amount),
       source: "installment",
+      paymentId: p.id,
+      bookingId: p.bookingId,
     })),
   ].sort((a, b) => b.date.localeCompare(a.date));
 

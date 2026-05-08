@@ -8278,7 +8278,7 @@ function RevenueTab() {
     totalCashCollected?: number; confirmedRevenue?: number; floatingCash?: number;
     insuranceVault?: number; allTimeRefundsIssued?: number; allTimeCancelIncome?: number;
     cashOnHand?: number; totalWithdrawals?: number;
-    cashBreakdown?: { clientName: string; date: string; amount: number; source: string }[];
+    cashBreakdown?: { clientName: string; date: string; amount: number; source: string; paymentId?: number; bookingId?: number }[];
   }>({
     queryKey: ["owner", "financial-summary-rev", effectiveMonth, financialSubmissionId ?? "all"],
     queryFn: async () => {
@@ -8327,7 +8327,7 @@ function RevenueTab() {
     chaletName: string; submissionId: number | null;
   }
 
-  const { data: futureSummary, isLoading: futureLoading } = useQuery<{
+  const { data: futureSummary, isLoading: futureLoading, refetch: refetchFuture } = useQuery<{
     globalTotalCashCollected: number;
     totalCancellationIncome: number;
     totalRefundedToClients: number;
@@ -8739,6 +8739,14 @@ function RevenueTab() {
             <div className="flex items-center gap-2 mb-1">
               <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />
               <span className="text-sm font-bold text-foreground">إجمالي السيولة المحصلة</span>
+              <button
+                type="button"
+                title="إعادة حساب"
+                onClick={() => { refetchFinancial(); refetchFuture(); refetchBookings(); }}
+                className="h-6 w-6 flex items-center justify-center rounded-md text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
             </div>
             {futureLoading ? <Skeleton className="h-9 w-40" /> : (
               <div className="text-3xl font-extrabold text-emerald-700 tabular-nums leading-tight">
@@ -9129,6 +9137,7 @@ function RevenueTab() {
                         <th className="py-2 text-right">العميل</th>
                         <th className="py-2 text-center">التاريخ</th>
                         <th className="py-2 text-left">المبلغ</th>
+                        <th className="py-2"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -9138,16 +9147,34 @@ function RevenueTab() {
                           <td className="py-2 text-center text-muted-foreground text-xs leading-tight">
                             {fmtDualDate(row.date)}
                           </td>
-                          <td className="py-2 text-left font-bold tabular-nums text-amber-700 dark:text-amber-300">
+                          <td className="py-2 text-left font-bold tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">
                             {fmtN(row.amount)} <span className="text-[10px] font-normal">ر.س</span>
+                          </td>
+                          <td className="py-2 text-center">
+                            {row.paymentId && row.bookingId ? (
+                              <button
+                                type="button"
+                                title="حذف هذه الدفعة"
+                                onClick={async () => {
+                                  if (!confirm(`حذف دفعة ${fmtN(row.amount)} ر.س لـ ${row.clientName}؟`)) return;
+                                  const r = await apiFetch(`/owner/bookings/${row.bookingId}/payments/${row.paymentId}`, { method: "DELETE" });
+                                  if (r.ok) { refetchFinancial(); refetchFuture(); }
+                                }}
+                                className="h-6 w-6 flex items-center justify-center rounded text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">—</span>
+                            )}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="border-t-2 border-amber-300">
                       <tr>
-                        <td colSpan={2} className="pt-2 font-bold text-amber-700 dark:text-amber-400">الإجمالي</td>
-                        <td className="pt-2 text-left font-extrabold tabular-nums text-amber-700 dark:text-amber-300">
+                        <td colSpan={3} className="pt-2 font-bold text-amber-700 dark:text-amber-400">الإجمالي</td>
+                        <td className="pt-2 text-left font-extrabold tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">
                           {fmtN(financial?.cashOnHand ?? 0)} <span className="text-[10px] font-normal">ر.س</span>
                         </td>
                       </tr>
