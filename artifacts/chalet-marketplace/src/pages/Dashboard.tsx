@@ -1924,7 +1924,7 @@ function AddBookingDialog({
                 <span className="text-sm text-muted-foreground">{receiptUploading ? "جاري الرفع..." : "اضغط لإرفاق صورة"}</span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,application/pdf"
                   className="sr-only"
                   disabled={receiptUploading}
                   onChange={async (e) => {
@@ -2416,6 +2416,47 @@ function MiniCalendar({
     return s;
   }, [bookings]);
 
+  /* Dates where the booking is fully paid (green dot) */
+  const fullyPaidDates = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of bookings) {
+      if (!b.bookingDate) continue;
+      const total = Number(b.totalPrice ?? 0);
+      const dep = Number(b.depositPaid ?? 0);
+      const isFullyPaid = b.balanceCollected === true || (total > 0 && dep >= total);
+      if (!isFullyPaid) continue;
+      const duration = Math.max(1, b.durationDays ?? 1);
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      for (let i = 0; i < duration; i++) {
+        const d = new Date(sy, sm - 1, sd + i);
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        s.add(ds);
+      }
+    }
+    return s;
+  }, [bookings]);
+
+  /* Dates where the booking has a remaining (متبقي) balance (yellow dot) */
+  const hasRemainingDates = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of bookings) {
+      if (!b.bookingDate) continue;
+      const total = Number(b.totalPrice ?? 0);
+      const dep = Number(b.depositPaid ?? 0);
+      if (total === 0) continue;
+      const isFullyPaid = b.balanceCollected === true || (total > 0 && dep >= total);
+      if (isFullyPaid) continue;
+      const duration = Math.max(1, b.durationDays ?? 1);
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      for (let i = 0; i < duration; i++) {
+        const d = new Date(sy, sm - 1, sd + i);
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        s.add(ds);
+      }
+    }
+    return s;
+  }, [bookings]);
+
   const today = new Date().toISOString().slice(0, 10);
 
   const cells: (number | null)[] = [];
@@ -2521,6 +2562,20 @@ function MiniCalendar({
                   className="absolute top-1 left-1 w-2 h-2 rounded-full bg-orange-500 ring-1 ring-white dark:ring-gray-900"
                   title="نقدي لم يُودَع في البنك"
                 />
+              )}
+              {/* Payment status dot — green: fully paid, yellow: has remaining */}
+              {isBlocked && !cashUndepositedDates.has(dateStr) && (
+                hasRemainingDates.has(dateStr) ? (
+                  <span
+                    className="absolute top-1 right-1 w-2 h-2 rounded-full bg-yellow-400 ring-1 ring-white dark:ring-gray-900"
+                    title="يوجد متبقي غير مسدد"
+                  />
+                ) : fullyPaidDates.has(dateStr) ? (
+                  <span
+                    className="absolute top-1 right-1 w-2 h-2 rounded-full bg-green-500 ring-1 ring-white dark:ring-gray-900"
+                    title="مسدد بالكامل"
+                  />
+                ) : null
               )}
             </button>
           );
@@ -3344,7 +3399,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   async function addInstallmentPayment(bookingId: number) {
     const amt = parseFloat(fromArN(calPayAmt));
     if (isNaN(amt) || amt <= 0) {
-      toast({ title: "خطأ", description: "أدخل مبلغاً صحيحاً", variant: "destructive" });
+      toast({ title: "خطأ", description: "الرجاء إدخال مبلغ صحيح", variant: "destructive" });
       return;
     }
     setCalPaySaving(true);
@@ -4304,7 +4359,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               <input
                                 ref={calReceiptRef}
                                 type="file"
-                                accept="image/*"
+                                accept="image/*,application/pdf"
                                 className="hidden"
                                 onChange={async (e) => {
                                   const file = e.target.files?.[0];
@@ -4426,7 +4481,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                         <button type="button" onClick={() => setCalPayDeposited(true)} className={`flex-1 text-[10px] font-bold rounded-lg py-1 border-2 transition-colors ${calPayDeposited ? "border-green-500 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300" : "border-border text-muted-foreground"}`}>🏦 أُودع</button>
                                       </div>
                                     )}
-                                    <input ref={calPayReceiptRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; setCalPayReceiptUploading(true); try { const url = await uploadFile(file); if (url) setCalPayReceiptUrl(url); } finally { setCalPayReceiptUploading(false); e.target.value = ""; } }} />
+                                    <input ref={calPayReceiptRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; setCalPayReceiptUploading(true); try { const url = await uploadFile(file); if (url) setCalPayReceiptUrl(url); } finally { setCalPayReceiptUploading(false); e.target.value = ""; } }} />
                                     {(calPayMethod === "transfer" || calPayMethod === "pos") && (
                                       calPayReceiptUrl ? (
                                         <div className="flex items-center gap-2">
@@ -5160,7 +5215,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <input
                             ref={calReceiptRef}
                             type="file"
-                            accept="image/*"
+                            accept="image/*,application/pdf"
                             className="hidden"
                             onChange={async (e) => {
                               const file = e.target.files?.[0];
@@ -5308,7 +5363,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                     <button type="button" onClick={() => setCalPayDeposited(true)} className={`flex-1 text-[11px] font-bold rounded-lg py-1 border-2 transition-colors ${calPayDeposited ? "border-green-500 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300" : "border-border text-muted-foreground"}`}>🏦 أُودع</button>
                                   </div>
                                 )}
-                                <input ref={calPayReceiptRef} type="file" accept="image/*" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; setCalPayReceiptUploading(true); try { const url = await uploadFile(file); if (url) setCalPayReceiptUrl(url); } finally { setCalPayReceiptUploading(false); e.target.value = ""; } }} />
+                                <input ref={calPayReceiptRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={async (e) => { const file = e.target.files?.[0]; if (!file) return; setCalPayReceiptUploading(true); try { const url = await uploadFile(file); if (url) setCalPayReceiptUrl(url); } finally { setCalPayReceiptUploading(false); e.target.value = ""; } }} />
                                 {(calPayMethod === "transfer" || calPayMethod === "pos") && (
                                   calPayReceiptUrl ? (
                                     <div className="flex items-center gap-2">
@@ -10083,7 +10138,7 @@ function ExpensesTab() {
           </div>
           {/* Row 4: Receipt upload */}
           <div className="flex items-center gap-3">
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleReceiptUpload(e.target.files[0])} />
+            <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && handleReceiptUpload(e.target.files[0])} />
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
