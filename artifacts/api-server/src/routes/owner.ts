@@ -3055,7 +3055,7 @@ router.post("/bookings/:id/payments", async (req, res) => {
     receiptUrl: z.string().nullable().optional(),
   });
   const parsed = schema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "invalid data" });
+  if (!parsed.success) return res.status(400).json({ error: "invalid data", details: parsed.error.errors });
   const [booking] = await db.select().from(ownerBookingsTable)
     .where(and(eq(ownerBookingsTable.id, bookingId), eq(ownerBookingsTable.ownerId, ownerId)));
   if (!booking) return res.status(404).json({ error: "not found" });

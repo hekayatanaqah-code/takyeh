@@ -3347,15 +3347,23 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     setCalPaySaving(true);
     try {
       const isDeposited = calPayMethod === "transfer" ? true : calPayDeposited;
+      const payload = {
+        amount: amt,
+        paymentDate: calPayDate,
+        method: calPayMethod,
+        cashDeposited: isDeposited,
+        receiptUrl: calPayReceiptUrl,
+      };
       const r = await apiFetch(`/owner/bookings/${bookingId}/payments`, {
         method: "POST",
-        body: JSON.stringify({ amount: amt, paymentDate: calPayDate, method: calPayMethod, cashDeposited: isDeposited, receiptUrl: calPayReceiptUrl }),
+        body: JSON.stringify(payload),
       });
+      let data: any = {};
+      try { data = await r.json(); } catch { /* ignore parse errors */ }
       if (r.ok) {
-        const result = await r.json();
         toast({
-          title: result.fullyPaid ? "✅ اكتمل السداد" : "✅ تمت إضافة الدفعة",
-          description: result.fullyPaid ? "سُدِّد المبلغ بالكامل" : `المتبقي: ${Math.max(0, result.remaining - result.totalPaid).toLocaleString("ar-SA")} ر.س`,
+          title: data.fullyPaid ? "✅ اكتمل السداد" : "✅ تمت إضافة الدفعة",
+          description: data.fullyPaid ? "سُدِّد المبلغ بالكامل" : `المتبقي: ${Math.round(Math.max(0, (data.remaining ?? 0) - (data.totalPaid ?? 0))).toLocaleString("en-US")} ر.س`,
         });
         qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
         qc.invalidateQueries({ queryKey: ["owner", "booking-payments"] });
@@ -3366,7 +3374,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         setCalPayAmt("");
         setCalPayReceiptUrl(null);
         setCalPayDeposited(false);
+      } else {
+        const msg = data?.details?.[0]?.message ?? data?.error ?? `خطأ ${r.status}`;
+        toast({ title: "⚠️ لم يتم الحفظ", description: msg, variant: "destructive" });
       }
+    } catch (err) {
+      toast({ title: "خطأ في الاتصال", description: "تعذّر الاتصال بالخادم", variant: "destructive" });
     } finally { setCalPaySaving(false); }
   }
 
@@ -4382,19 +4395,19 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                   {bkPmts.map(p => (
                                     <div key={p.id} className="flex items-center gap-1.5 flex-wrap">
                                       <span className="text-[10px] text-muted-foreground">{p.paymentDate}</span>
-                                      <span className="text-[10px] font-bold text-green-700 dark:text-green-400">{Number(p.amount).toLocaleString("ar-SA")} ر.س</span>
+                                      <span className="text-[10px] font-bold text-green-700 dark:text-green-400">{Number(p.amount).toLocaleString("en-US")} ر.س</span>
                                       <span className="text-[10px]">{p.method === "transfer" ? "🏦" : "💵"}</span>
                                       {p.receiptUrl && (<button type="button" onClick={() => setReceiptLightbox(p.receiptUrl!)} className="text-[10px] text-blue-600 hover:underline">🧾</button>)}
                                       {!isReadOnly && (<button type="button" onClick={() => deleteInstallmentPayment(b.id, p.id)} className="text-[10px] text-destructive hover:underline mr-auto">✕</button>)}
                                     </div>
                                   ))}
-                                  {isFullyPaid2 ? (<p className="text-[10px] font-bold text-green-600">✅ اكتمل السداد</p>) : (<p className="text-[10px] text-amber-600">المتبقي: {remDyn2.toLocaleString("ar-SA")} ر.س</p>)}
+                                  {isFullyPaid2 ? (<p className="text-[10px] font-bold text-green-600">✅ اكتمل السداد</p>) : (<p className="text-[10px] text-amber-600">المتبقي: {remDyn2.toLocaleString("en-US")} ر.س</p>)}
                                 </div>
                               )}
                               {!isFullyPaid2 && !isReadOnly && (
                                 calPayTarget === b.id ? (
                                   <div className="w-full border border-blue-200 dark:border-blue-800 rounded-xl p-2.5 space-y-2 bg-blue-50 dark:bg-blue-900/10">
-                                    <p className="text-[11px] font-bold text-blue-700 dark:text-blue-400">إضافة دفعة — المتبقي {remDyn2.toLocaleString("ar-SA")} ر.س</p>
+                                    <p className="text-[11px] font-bold text-blue-700 dark:text-blue-400">إضافة دفعة — المتبقي {remDyn2.toLocaleString("en-US")} ر.س</p>
                                     <div className="flex gap-2">
                                       <input type="number" value={calPayAmt} onChange={e => setCalPayAmt(e.target.value)} placeholder="المبلغ" className="flex-1 text-[11px] rounded-lg border border-border bg-background px-2 py-1.5 text-foreground min-w-0" />
                                       <input type="date" value={calPayDate} onChange={e => setCalPayDate(e.target.value)} className="flex-1 text-[11px] rounded-lg border border-border bg-background px-2 py-1.5 text-foreground min-w-0" />
@@ -4430,7 +4443,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                   </div>
                                 ) : (
                                   <button type="button" onClick={() => { setCalPayTarget(b.id); setCalPayAmt(String(remDyn2)); setCalPayDate(new Date().toISOString().slice(0, 10)); setCalPayMethod("cash"); setCalPayDeposited(false); }} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-700 rounded-lg py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                                    <CheckCircle className="w-3 h-3" /> + إضافة دفعة ({remDyn2.toLocaleString("ar-SA")} ر.س)
+                                    <CheckCircle className="w-3 h-3" /> + إضافة دفعة ({remDyn2.toLocaleString("en-US")} ر.س)
                                   </button>
                                 )
                               )}
@@ -5261,19 +5274,19 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               {bkPmtsL.map(p => (
                                 <div key={p.id} className="flex items-center gap-2 flex-wrap">
                                   <span className="text-xs text-muted-foreground">{p.paymentDate}</span>
-                                  <span className="text-xs font-bold text-green-700 dark:text-green-400">{Number(p.amount).toLocaleString("ar-SA")} ر.س</span>
+                                  <span className="text-xs font-bold text-green-700 dark:text-green-400">{Number(p.amount).toLocaleString("en-US")} ر.س</span>
                                   <span className="text-xs">{p.method === "transfer" ? "🏦" : "💵"}</span>
                                   {p.receiptUrl && (<button type="button" onClick={() => setReceiptLightbox(p.receiptUrl!)} className="text-xs text-blue-600 hover:underline">🧾 إيصال</button>)}
                                   {!isReadOnly && (<button type="button" onClick={() => deleteInstallmentPayment(b.id, p.id)} className="text-xs text-destructive hover:underline mr-auto">✕ حذف</button>)}
                                 </div>
                               ))}
-                              {isFullyPaidL ? (<p className="text-xs font-bold text-green-600">✅ اكتمل السداد</p>) : (<p className="text-xs text-amber-600">المتبقي: {remDynL.toLocaleString("ar-SA")} ر.س</p>)}
+                              {isFullyPaidL ? (<p className="text-xs font-bold text-green-600">✅ اكتمل السداد</p>) : (<p className="text-xs text-amber-600">المتبقي: {remDynL.toLocaleString("en-US")} ر.س</p>)}
                             </div>
                           )}
                           {!isFullyPaidL && !isReadOnly && (
                             calPayTarget === b.id ? (
                               <div className="w-full border border-blue-200 dark:border-blue-800 rounded-xl p-3 space-y-2 bg-blue-50 dark:bg-blue-900/10">
-                                <p className="text-xs font-bold text-blue-700 dark:text-blue-400">إضافة دفعة — المتبقي {remDynL.toLocaleString("ar-SA")} ر.س</p>
+                                <p className="text-xs font-bold text-blue-700 dark:text-blue-400">إضافة دفعة — المتبقي {remDynL.toLocaleString("en-US")} ر.س</p>
                                 <div className="flex gap-2">
                                   <input type="number" value={calPayAmt} onChange={e => setCalPayAmt(e.target.value)} placeholder="المبلغ" className="flex-1 text-xs rounded-lg border border-border bg-background px-2.5 py-2 text-foreground min-w-0" />
                                   <input type="date" value={calPayDate} onChange={e => setCalPayDate(e.target.value)} className="flex-1 text-xs rounded-lg border border-border bg-background px-2.5 py-2 text-foreground min-w-0" />
@@ -5313,7 +5326,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 className="flex items-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-2.5 py-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                               >
                                 <CheckCircle className="w-3.5 h-3.5" />
-                                + إضافة دفعة ({remDynL.toLocaleString("ar-SA")} ر.س)
+                                + إضافة دفعة ({remDynL.toLocaleString("en-US")} ر.س)
                               </button>
                             )
                           )}
