@@ -7617,7 +7617,8 @@ function getHijriYMClient(date: Date): { year: number; month: number } {
 
 function RevenueTab() {
   const { unit } = useAdminFinance();
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const _nowRev = new Date();
+  const currentMonth = `${_nowRev.getFullYear()}-${String(_nowRev.getMonth() + 1).padStart(2, "0")}`;
   const [selectedMonth, setSelectedMonth]     = useState(currentMonth);
   const [calType, setCalType]                 = useState<"gregorian" | "hijri">(() => (localStorage.getItem("revCalType") as "gregorian" | "hijri") ?? "gregorian");
   const [selectedHijriMonth, setSelectedHijriMonth] = useState<string>("");
@@ -7641,7 +7642,7 @@ function RevenueTab() {
       const d = new Date();
       d.setDate(1);
       d.setMonth(d.getMonth() - i);
-      const val = d.toISOString().slice(0, 7);
+      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const hijriPart = new Date(d.getFullYear(), d.getMonth(), 15).toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
       const gregPart = d.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" });
       const isFuture = i < 0;
@@ -9016,7 +9017,8 @@ function ExpensesTab() {
   const { unit } = useAdminFinance();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const _nowExp = new Date();
+  const currentMonth = `${_nowExp.getFullYear()}-${String(_nowExp.getMonth() + 1).padStart(2, "0")}`;
   const [month, setMonth] = useState(currentMonth);
   const [form, setForm] = useState({ categoryId: "", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", customCategory: "", submissionId: "" });
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
@@ -9059,7 +9061,7 @@ function ExpensesTab() {
     const now = new Date();
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const val = d.toISOString().slice(0, 7);
+      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const label = d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
       opts.push({ val, label });
     }
@@ -9698,7 +9700,8 @@ function StaffTab() {
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
   const { user } = useAuth();
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const _nowStaff = new Date();
+  const currentMonth = `${_nowStaff.getFullYear()}-${String(_nowStaff.getMonth() + 1).padStart(2, "0")}`;
   /* ── state ── */
   const [addForm, setAddForm] = useState({ name: "", baseSalary: "", username: "", password: "" });
   const [addPerms, setAddPerms] = useState<StaffPermissions>({});
@@ -9727,7 +9730,7 @@ function StaffTab() {
     const now = new Date();
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      opts.push({ val: d.toISOString().slice(0, 7), label: d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" }) });
+      opts.push({ val: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" }) });
     }
     return opts;
   }, []);
@@ -10799,8 +10802,9 @@ async function generateAndUploadReportPdf(
 function ReportsTab() {
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const { unit: repUnit } = useAdminFinance();
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const currentYear = new Date().getFullYear().toString();
+  const _nowRep = new Date();
+  const currentMonth = `${_nowRep.getFullYear()}-${String(_nowRep.getMonth() + 1).padStart(2, "0")}`;
+  const currentYear = String(_nowRep.getFullYear());
 
   const [viewMode, setViewMode] = useState<"monthly" | "yearly">("monthly");
   const [reportType, setReportType] = useState<"chalets" | "services" | "unified">("chalets");
@@ -10977,7 +10981,7 @@ function ReportsTab() {
     const now = new Date();
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const val = d.toISOString().slice(0, 7);
+      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const label = d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
       opts.push({ val, label });
     }
