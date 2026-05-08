@@ -4168,6 +4168,7 @@ router.get("/transaction-history", async (req, res) => {
         method: (b.paymentMethod ?? "cash") as string,
         status: b.cancelledAt ? "cancelled" : (b.balanceCollected ? "collected" : "deposit_only"),
         cashDeposited: b.cashDeposited,
+        paymentReceiptUrl: b.paymentReceiptUrl ?? null,
       };
     }),
     ...expenses.map(e => ({
