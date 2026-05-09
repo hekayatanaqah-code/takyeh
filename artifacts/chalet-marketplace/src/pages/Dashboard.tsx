@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
+import { HijriDatePicker } from "@/components/HijriDatePicker";
 import { formatDualDate, toHijri } from "@/lib/hijri";
 import { toAr, fromAr } from "@/lib/utils";
 import {
@@ -5122,11 +5123,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     )}
                     {/* Add new exception */}
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <input
-                        type="date"
+                      <HijriDatePicker
                         value={newExDate}
-                        onChange={(e) => setNewExDate(e.target.value)}
-                        className="flex-1 min-w-[120px] bg-background border border-border rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-teal-400/50"
+                        onChange={setNewExDate}
+                        className="flex-1 min-w-[160px]"
+                        placeholder="اختر التاريخ الهجري"
                       />
                       <div className="flex gap-1">
                         {(["morning","evening"] as const).map((p) => (
