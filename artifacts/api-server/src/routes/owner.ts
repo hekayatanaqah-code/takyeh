@@ -4228,6 +4228,22 @@ router.get("/chalets/:chaletId/services", async (req, res) => {
   return res.json(services);
 });
 
+/* GET /owner/submission-addons/:submissionId — active add-ons for a chalet by submission ID */
+router.get("/submission-addons/:submissionId", async (req, res) => {
+  const submissionId = Number(req.params.submissionId);
+  if (!submissionId) return res.json([]);
+  const [chalet] = await db.select({ id: chaletsTable.id })
+    .from(chaletsTable)
+    .where(eq(chaletsTable.submissionId, submissionId))
+    .limit(1);
+  if (!chalet) return res.json([]);
+  const addons = await db.select()
+    .from(chaletServicesTable)
+    .where(and(eq(chaletServicesTable.chaletId, chalet.id), eq(chaletServicesTable.isActive, true)))
+    .orderBy(chaletServicesTable.createdAt);
+  return res.json(addons);
+});
+
 const galleryPhotoSchema = z.array(z.object({ url: z.string().url(), caption: z.string().max(200) })).max(10).optional();
 
 /* POST /owner/chalets/:chaletId/services */
@@ -4239,7 +4255,7 @@ router.post("/chalets/:chaletId/services", async (req, res) => {
     name: z.string().min(1, "اسم الخدمة مطلوب").max(200),
     category: z.string().max(100).optional(),
     description: z.string().max(500).optional(),
-    price: z.number({ invalid_type_error: "السعر يجب أن يكون رقمًا" }).positive("السعر يجب أن يكون أكبر من صفر"),
+    price: z.number({ invalid_type_error: "السعر يجب أن يكون رقمًا" }).nonnegative("السعر لا يمكن أن يكون سالبًا"),
     unit: z.string().max(100).optional(),
     imageUrl: z.string().url().optional().or(z.literal("")),
     galleryPhotos: galleryPhotoSchema,
@@ -4276,7 +4292,7 @@ router.patch("/chalets/:chaletId/services/:serviceId", async (req, res) => {
     name: z.string().min(1).max(200).optional(),
     category: z.string().max(100).nullable().optional(),
     description: z.string().max(500).nullable().optional(),
-    price: z.number().positive().optional(),
+    price: z.number().nonnegative().optional(),
     unit: z.string().max(100).optional(),
     imageUrl: z.string().url().nullable().optional().or(z.literal("")),
     galleryPhotos: galleryPhotoSchema.or(z.null()).optional(),

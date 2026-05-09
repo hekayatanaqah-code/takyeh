@@ -1360,6 +1360,7 @@ function AddBookingDialog({
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [selectedAddonIds, setSelectedAddonIds] = useState<number[]>([]);
 
   /* ── Seasonal pricing hint ── */
   const activeSubNum = submissionId && submissionId !== "none" ? Number(submissionId) : submissions[0]?.id ?? null;
@@ -1379,6 +1380,22 @@ function AddBookingDialog({
       (!s.period || !period || s.period === "all" || s.period === period)
     ) ?? null;
   }, [bookingDate, period, dialogSeasons]);
+
+  /* ── Add-on services for selected chalet ── */
+  const { data: dialogAddons = [] } = useQuery<ChaletServiceRow[]>({
+    queryKey: ["owner", "submission-addons", activeSubNum],
+    queryFn: async () => {
+      if (!activeSubNum) return [];
+      const r = await apiFetch(`/owner/submission-addons/${activeSubNum}`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: !!activeSubNum,
+  });
+  const addonsTotalPrice = useMemo(() =>
+    dialogAddons
+      .filter(a => selectedAddonIds.includes(a.id) && a.unit !== "مجاني" && Number(a.price) > 0)
+      .reduce((sum, a) => sum + Math.round(Number(a.price)), 0),
+  [dialogAddons, selectedAddonIds]);
 
   /* ── Derived chalet — must be declared BEFORE any derived variables that use it ── */
   const selectedChalet = submissions.find((s: any) => String(s.id) === submissionId) ?? null;
@@ -1512,7 +1529,7 @@ function AddBookingDialog({
     setPeriod(""); setSource("external"); setSubmissionId(""); setNotes("");
     setTotalPrice(""); setDepositPaid(""); setInsuranceFee("");
     setPaymentMethod("cash"); setCashDeposited(false); setPaymentReceiptUrl(null);
-    setIsReturningCustomer(null);
+    setIsReturningCustomer(null); setSelectedAddonIds([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1738,6 +1755,58 @@ function AddBookingDialog({
               ))}
             </div>
           </div>
+
+          {/* ── Add-on Services checklist ── */}
+          {dialogAddons.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <Plus className="w-3.5 h-3.5" />
+                خدمات إضافية (اختياري)
+              </p>
+              <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2.5">
+                {dialogAddons.map(addon => {
+                  const checked = selectedAddonIds.includes(addon.id);
+                  const isFree = addon.unit === "مجاني" || Number(addon.price) === 0;
+                  return (
+                    <label key={addon.id} className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => setSelectedAddonIds(ids =>
+                          e.target.checked ? [...ids, addon.id] : ids.filter(i => i !== addon.id)
+                        )}
+                        className="mt-0.5 w-4 h-4 accent-primary shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold leading-tight">{addon.name}</p>
+                        {addon.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{addon.description}</p>
+                        )}
+                      </div>
+                      <span className={`text-xs font-bold whitespace-nowrap shrink-0 ${isFree ? "text-green-600 dark:text-green-400" : "text-primary"}`}>
+                        {isFree ? "🎁 مجاني" : `${toAr(Math.round(Number(addon.price)))} ر.س / ${addon.unit}`}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              {selectedAddonIds.length > 0 && addonsTotalPrice > 0 && (
+                <div className="flex items-center justify-between rounded-lg bg-primary/8 border border-primary/20 px-3 py-2">
+                  <span className="text-xs font-semibold">إجمالي الإضافات المختارة</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-primary">{toAr(addonsTotalPrice)} ر.س</span>
+                    <Button
+                      type="button" size="sm" variant="outline"
+                      className="h-6 text-[11px] px-2 border-primary/30 text-primary hover:bg-primary/8"
+                      onClick={() => setTotalPrice(String((Number(totalPrice) || 0) + addonsTotalPrice))}
+                    >
+                      ✚ أضف للإجمالي
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Financial Fields — إجمالي required ── */}
           <div className="bg-muted/40 rounded-xl p-3 space-y-3">
@@ -6191,16 +6260,19 @@ const SERVICE_CATEGORY_OPTIONS = [
 ];
 
 const SERVICE_UNIT_OPTIONS = [
-  { value: "مرة واحدة",  label: "مرة واحدة (ثابت)" },
-  { value: "لكل شخص",   label: "لكل شخص" },
-  { value: "في الليلة",  label: "في الليلة" },
-  { value: "يومياً",     label: "يومياً" },
-  { value: "لكل جلسة",  label: "لكل جلسة" },
+  { value: "رسوم ثابتة",  label: "🏷️ رسوم ثابتة (Fixed)" },
+  { value: "بالساعة",     label: "⏱️ بالساعة (Hourly)" },
+  { value: "مجاني",       label: "🎁 مجاني (Free)" },
+  { value: "لكل شخص",    label: "👤 لكل شخص" },
+  { value: "في الليلة",  label: "🌙 في الليلة" },
+  { value: "يومياً",     label: "📅 يومياً" },
+  { value: "مرة واحدة",  label: "🔢 مرة واحدة" },
+  { value: "لكل جلسة",  label: "🎯 لكل جلسة" },
 ];
 
 const BLANK_SVC_FORM = {
   name: "", category: "", categoryCustom: "", description: "",
-  price: "", unit: "مرة واحدة", imageUrl: "",
+  price: "", unit: "رسوم ثابتة", imageUrl: "",
   gallery: [] as Array<{ url: string; caption: string; uploading?: boolean }>,
 };
 
@@ -6285,7 +6357,7 @@ function ChaletServicesTab() {
       // Client-side validation
       const errs: Record<string, string> = {};
       if (!form.name.trim()) errs.name = "اسم الخدمة مطلوب";
-      if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0) errs.price = "أدخل سعرًا صحيحًا أكبر من صفر";
+      if (form.price === "" || isNaN(Number(form.price)) || Number(form.price) < 0) errs.price = "أدخل سعرًا صحيحًا (يمكن أن يكون صفرًا للخدمات المجانية)";
       if (form.category === "أخرى" && !form.categoryCustom.trim()) errs.categoryCustom = "يرجى كتابة اسم الفئة";
       if (Object.keys(errs).length > 0) { setFieldErrors(errs); throw new Error("validation"); }
 
@@ -16079,7 +16151,7 @@ export default function Dashboard() {
     { id: "reviews",   label: "التقييمات",            icon: <Star className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات",   icon: <Calendar className="w-4 h-4" /> },
     { id: "deposits",  label: "إدارة التأمينات",       icon: <Lock className="w-4 h-4" /> },
-    { id: "services",  label: "الخدمات الإضافية",    icon: <MessageSquare className="w-4 h-4" /> },
+    { id: "services",  label: "منيو الإضافات",        icon: <Plus className="w-4 h-4" /> },
     { id: "messageSettings", label: "إعدادات الرسائل الآلية", icon: <Send className="w-4 h-4" /> },
     { id: "profile",   label: "إعدادات الحساب",      icon: <Settings className="w-4 h-4" /> },
   ] as const;

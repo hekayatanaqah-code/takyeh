@@ -150,6 +150,17 @@ export default function ChaletDetail() {
     staleTime: 60 * 1000,
   });
 
+  interface ChaletAddon { id: number; name: string; category: string | null; description: string | null; price: string; unit: string; }
+  const { data: chaletAddons = [] } = useQuery<ChaletAddon[]>({
+    queryKey: ["chalet-addons", id],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/chalets/${id}/services`, { credentials: "include" });
+      return r.ok ? r.json() : [];
+    },
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000,
+  });
+
   /* ── Loading ── */
   if (isLoading) return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", display: "flex", flexDirection: "column" }}>
@@ -468,6 +479,39 @@ export default function ChaletDetail() {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Add-on Services ── */}
+            {chaletAddons.length > 0 && (
+              <div style={CARD}>
+                <h2 style={SEC}>خدمات إضافية متوفرة عند الطلب</h2>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
+                  {chaletAddons.map(svc => {
+                    const isFree = svc.unit === "مجاني" || Number(svc.price) === 0;
+                    return (
+                      <div key={svc.id} style={{ borderRadius: 14, border: "1.5px solid #e5e7eb", background: "#fafafa", padding: "14px 16px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                          <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#111827", lineHeight: 1.4 }}>{svc.name}</p>
+                          <span style={{
+                            background: isFree ? "#f0fdf4" : "#fefce8",
+                            color: isFree ? "#15803d" : "#92400e",
+                            border: `1.5px solid ${isFree ? "#bbf7d0" : "#fde68a"}`,
+                            borderRadius: 8, padding: "3px 9px", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", flexShrink: 0,
+                          }}>
+                            {isFree ? "🎁 مجاني" : `${Number(svc.price).toLocaleString("ar-SA")} ر.س / ${svc.unit}`}
+                          </span>
+                        </div>
+                        {svc.description && (
+                          <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6b7280", lineHeight: 1.6 }}>{svc.description}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 10, background: "#f0f9ff", border: "1.5px solid #bae6fd", fontSize: 13, color: "#0369a1", fontWeight: 600 }}>
+                  💬 لطلب أي من هذه الخدمات، تواصل مع صاحب الشاليه عند الحجز.
                 </div>
               </div>
             )}

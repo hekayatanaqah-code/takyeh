@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, chaletsTable } from "@workspace/db";
-import { chaletAvailabilityTable, ownerBookingsTable } from "@workspace/db/schema";
+import { chaletAvailabilityTable, ownerBookingsTable, chaletServicesTable } from "@workspace/db/schema";
 import { eq, lte, gte, and, sql, inArray, isNull, type SQL } from "drizzle-orm";
 import {
   GetChaletsQueryParams,
@@ -516,6 +516,23 @@ router.get("/:id", async (req, res) => {
   };
 
   res.json(data);
+});
+
+/* GET /chalets/:id/services — public, returns active add-on services for a chalet */
+router.get("/:id/services", async (req, res) => {
+  const chaletId = Number(req.params.id);
+  if (!chaletId) return res.json([]);
+  const services = await db.select({
+    id: chaletServicesTable.id,
+    name: chaletServicesTable.name,
+    category: chaletServicesTable.category,
+    description: chaletServicesTable.description,
+    price: chaletServicesTable.price,
+    unit: chaletServicesTable.unit,
+  }).from(chaletServicesTable)
+    .where(and(eq(chaletServicesTable.chaletId, chaletId), eq(chaletServicesTable.isActive, true)))
+    .orderBy(chaletServicesTable.createdAt);
+  return res.json(services);
 });
 
 export default router;
