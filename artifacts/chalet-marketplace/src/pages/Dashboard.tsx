@@ -10047,6 +10047,13 @@ function TransactionHistoryTab() {
   const [month, setMonth] = useState(currentMonth);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  const fmtDualDate = (dateStr: string) => {
+    const d = new Date(dateStr + "T12:00:00");
+    const hijri = d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long" });
+    const greg = d.toLocaleDateString("ar-SA", { day: "2-digit", month: "long", calendar: "gregory" });
+    return `${hijri} / ${greg}`;
+  };
+
   const monthOptions: { value: string; label: string }[] = [];
   for (let i = 0; i < 12; i++) {
     const d = new Date(_now.getFullYear(), _now.getMonth() - i, 1);
