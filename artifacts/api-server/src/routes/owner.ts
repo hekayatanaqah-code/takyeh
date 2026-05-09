@@ -1643,6 +1643,58 @@ router.patch("/chalets/:chaletId/times", async (req, res) => {
   return res.json(updated);
 });
 
+/* ── PATCH /owner/chalets/:chaletId/buffer-policy — save cleaning buffer settings ── */
+router.patch("/chalets/:chaletId/buffer-policy", requireAuth, async (req, res) => {
+  const ownerId = req.user!.id;
+  const chaletId = Number(req.params.chaletId);
+  if (isNaN(chaletId)) return res.status(400).json({ error: "معرّف غير صالح" });
+
+  const body = z.object({
+    bufferPolicyEnabled: z.boolean().optional(),
+    bufferBlockNextMorningFullDay: z.boolean().optional(),
+    bufferBlockNextMorningEvening: z.boolean().optional(),
+    bufferBlockSameDayEvening: z.boolean().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+
+  /* Verify ownership */
+  const allOwnerIds = new Set<string>([ownerId]);
+  try {
+    const email = await resolveOwnerEmail(req);
+    if (email) {
+      const r = await db.execute(sql`SELECT id FROM owner_applications WHERE LOWER(email) = LOWER(${email}) LIMIT 1`);
+      const appId = ((r as any).rows as Array<{ id: number }>)[0]?.id;
+      if (appId) allOwnerIds.add(`owner_${appId}`);
+    }
+  } catch { /* non-fatal */ }
+
+  const subs = await db
+    .select({ id: chaletSubmissionsTable.id })
+    .from(chaletSubmissionsTable)
+    .where(inArray(chaletSubmissionsTable.ownerId, [...allOwnerIds]));
+
+  const subIds = subs.map((s) => s.id);
+  const chaletRows = await db
+    .select({ id: chaletsTable.id })
+    .from(chaletsTable)
+    .where(and(eq(chaletsTable.id, chaletId), inArray(chaletsTable.submissionId, subIds.length > 0 ? subIds : [-1])))
+    .limit(1);
+
+  if (chaletRows.length === 0) return res.status(403).json({ error: "غير مصرح" });
+
+  const patch: Record<string, boolean> = {};
+  if (body.data.bufferPolicyEnabled !== undefined) patch.bufferPolicyEnabled = body.data.bufferPolicyEnabled;
+  if (body.data.bufferBlockNextMorningFullDay !== undefined) patch.bufferBlockNextMorningFullDay = body.data.bufferBlockNextMorningFullDay;
+  if (body.data.bufferBlockNextMorningEvening !== undefined) patch.bufferBlockNextMorningEvening = body.data.bufferBlockNextMorningEvening;
+  if (body.data.bufferBlockSameDayEvening !== undefined) patch.bufferBlockSameDayEvening = body.data.bufferBlockSameDayEvening;
+
+  if (Object.keys(patch).length > 0) {
+    await db.update(chaletsTable).set(patch).where(eq(chaletsTable.id, chaletId));
+  }
+
+  return res.json({ ok: true });
+});
+
 /* ── Availability (date-slot blocking) ─────────────────────── */
 
 router.get("/availability", async (req, res) => {

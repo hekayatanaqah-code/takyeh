@@ -2374,13 +2374,14 @@ const _hijriYFmt    = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { y
 const _getFirstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
 function MiniCalendar({
-  year, month, availability, bookings, onDateClick,
+  year, month, availability, bookings, onDateClick, bufferPolicy,
 }: {
   year: number;
   month: number;
   availability: ChaletAvailability[];
   bookings: OwnerBooking[];
   onDateClick: (dateStr: string) => void;
+  bufferPolicy?: { enabled: boolean; blockNextMorningFullDay: boolean; blockNextMorningEvening: boolean; blockSameDayEvening: boolean };
 }) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
@@ -2425,6 +2426,32 @@ function MiniCalendar({
     }
     return s;
   }, [bookings]);
+
+  /* Buffer / cleaning-time periods — Map<dateStr, Set<"morning"|"evening">> */
+  const cleaningTimePeriods = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    if (!bufferPolicy?.enabled) return m;
+    const addPeriod = (ds: string, period: string) => {
+      if (!m.has(ds)) m.set(ds, new Set());
+      m.get(ds)!.add(period);
+    };
+    for (const b of bookings) {
+      if (!b.bookingDate) continue;
+      const duration = Math.max(1, b.durationDays ?? 1);
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      /* last day of the booking */
+      const lastD = new Date(sy, sm - 1, sd + duration - 1);
+      const lastDs = `${lastD.getFullYear()}-${String(lastD.getMonth() + 1).padStart(2, "0")}-${String(lastD.getDate()).padStart(2, "0")}`;
+      /* next day after the booking */
+      const nextD = new Date(lastD); nextD.setDate(nextD.getDate() + 1);
+      const nextDs = `${nextD.getFullYear()}-${String(nextD.getMonth() + 1).padStart(2, "0")}-${String(nextD.getDate()).padStart(2, "0")}`;
+      const p = b.period ?? "full_day";
+      if (bufferPolicy.blockNextMorningFullDay && p === "full_day") addPeriod(nextDs, "morning");
+      if (bufferPolicy.blockNextMorningEvening && p === "evening") addPeriod(nextDs, "morning");
+      if (bufferPolicy.blockSameDayEvening && p === "morning") addPeriod(lastDs, "evening");
+    }
+    return m;
+  }, [bookings, bufferPolicy]);
 
   /* Dates where the booking is fully paid (green dot) */
   const fullyPaidDates = useMemo(() => {
@@ -2508,7 +2535,7 @@ function MiniCalendar({
           const hijriDay = _hijriFmt.format(new Date(year, month - 1, day));
 
           /* Build per-period rows for display */
-          type PRow = { label: string; guest: string; amber: boolean };
+          type PRow = { label: string; guest: string; amber: boolean; cleaning?: boolean };
           const pRows: PRow[] = [];
           if (!isManualBlock) {
             if (fullDayBlocked) {
@@ -2517,6 +2544,14 @@ function MiniCalendar({
               if (morningBlocked) pRows.push({ label: "صباحي", guest: morningGuest ? _getFirstName(morningGuest) : "", amber: true });
               if (eveningBlocked) pRows.push({ label: "مسائي", guest: eveningGuest ? _getFirstName(eveningGuest) : "", amber: true });
             }
+          }
+          /* Cleaning-time virtual rows */
+          const cleanPeriods = cleaningTimePeriods.get(dateStr);
+          if (cleanPeriods) {
+            if (cleanPeriods.has("morning") && !morningBlocked && !fullDayBlocked)
+              pRows.push({ label: "🧹 تنظيف ص", guest: "", amber: false, cleaning: true });
+            if (cleanPeriods.has("evening") && !eveningBlocked && !fullDayBlocked)
+              pRows.push({ label: "🧹 تنظيف م", guest: "", amber: false, cleaning: true });
           }
 
           return (
@@ -2555,7 +2590,9 @@ function MiniCalendar({
                   {pRows.map((row, ri) => (
                     <div key={ri} className="w-full flex flex-col items-center">
                       <span className={`text-[0.44rem] font-bold leading-none text-center ${
-                        row.amber ? "text-amber-800 dark:text-amber-200" : "text-red-800 dark:text-red-200"
+                        row.cleaning
+                          ? "text-teal-700 dark:text-teal-300"
+                          : row.amber ? "text-amber-800 dark:text-amber-200" : "text-red-800 dark:text-red-200"
                       }`}>{row.label}</span>
                       {row.guest && (
                         <span className={`text-[0.42rem] leading-none truncate w-full text-center font-medium ${
@@ -3585,6 +3622,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [fullDayCheckOut, setFullDayCheckOut] = useState<string>("");
   const [savingTimes, setSavingTimes] = useState(false);
   const [timesSaved, setTimesSaved] = useState(false);
+  const [bufferPolicyEnabled, setBufferPolicyEnabled] = useState(false);
+  const [bufferBlockNextMorningFullDay, setBufferBlockNextMorningFullDay] = useState(false);
+  const [bufferBlockNextMorningEvening, setBufferBlockNextMorningEvening] = useState(false);
+  const [bufferBlockSameDayEvening, setBufferBlockSameDayEvening] = useState(false);
+  const [savingBuffer, setSavingBuffer] = useState(false);
+  const [bufferSaved, setBufferSaved] = useState(false);
 
   // Sync fields when active chalet changes
   const prevChaletRef = useRef<number | null>(null);
@@ -3597,6 +3640,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     setFullDayCheckIn(activeChalet?.fullDayCheckIn ?? "");
     setFullDayCheckOut(activeChalet?.fullDayCheckOut ?? "");
     setTimesSaved(false);
+    setBufferPolicyEnabled(activeChalet?.bufferPolicyEnabled ?? false);
+    setBufferBlockNextMorningFullDay(activeChalet?.bufferBlockNextMorningFullDay ?? false);
+    setBufferBlockNextMorningEvening(activeChalet?.bufferBlockNextMorningEvening ?? false);
+    setBufferBlockSameDayEvening(activeChalet?.bufferBlockSameDayEvening ?? false);
+    setBufferSaved(false);
   }
 
   const saveTimes = async () => {
@@ -3619,6 +3667,27 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       setTimeout(() => setTimesSaved(false), 3000);
     } finally {
       setSavingTimes(false);
+    }
+  };
+
+  const saveBufferPolicy = async () => {
+    if (!activeChaletId) return;
+    setSavingBuffer(true);
+    try {
+      await apiFetch(`/owner/chalets/${activeChaletId}/buffer-policy`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          bufferPolicyEnabled,
+          bufferBlockNextMorningFullDay,
+          bufferBlockNextMorningEvening,
+          bufferBlockSameDayEvening,
+        }),
+      });
+      await qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
+      setBufferSaved(true);
+      setTimeout(() => setBufferSaved(false), 3000);
+    } finally {
+      setSavingBuffer(false);
     }
   };
 
@@ -4675,6 +4744,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 month={calMonth}
                 availability={calAvailability}
                 bookings={calBookings}
+                bufferPolicy={activeChalet ? {
+                  enabled: bufferPolicyEnabled,
+                  blockNextMorningFullDay: bufferBlockNextMorningFullDay,
+                  blockNextMorningEvening: bufferBlockNextMorningEvening,
+                  blockSameDayEvening: bufferBlockSameDayEvening,
+                } : undefined}
                 onDateClick={(ds) => {
                   const dayBkgs = calBookings.filter((b) => {
                     if (!b.bookingDate) return false;
@@ -4743,6 +4818,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
             {/* Check-in / Check-out times — per period */}
             {activeChaletId && (
+              <>
               <div className="mt-5 pt-5 border-t border-border/50">
                 <h4 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
                   <Clock className="w-4 h-4 text-primary" />
@@ -4855,6 +4931,81 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   )}
                 </div>
               </div>
+
+              {/* ── Buffer / Cleaning Time Policy ── */}
+              <div className="mt-5 pt-5 border-t border-border/50">
+                <h4 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
+                  <span>🧹</span>
+                  سياسة وقت التجهيز والتنظيف
+                </h4>
+                <p className="text-xs text-muted-foreground mb-3">
+                  تُطبَّق هذه القواعد على نتائج البحث العام لمنع تعارض الحجوزات — يظل بإمكانك إضافة حجوزات يدوية في هذه الفترات عند الحاجة.
+                </p>
+
+                {/* Main toggle */}
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-teal-50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800/40 px-3.5 py-3 mb-3">
+                  <div>
+                    <p className="text-xs font-semibold text-teal-800 dark:text-teal-300">تفعيل سياسة وقت التجهيز والتنظيف</p>
+                    <p className="text-[11px] text-teal-600 dark:text-teal-400 mt-0.5">يُظهر فترات التنظيف على تقويمك بعلامة 🧹</p>
+                  </div>
+                  <Switch checked={bufferPolicyEnabled} onCheckedChange={setBufferPolicyEnabled} />
+                </div>
+
+                {/* Sub-options */}
+                {bufferPolicyEnabled && (
+                  <div className="space-y-2 mb-3 pr-1">
+                    {([
+                      {
+                        key: "blockNextMorningFullDay" as const,
+                        state: bufferBlockNextMorningFullDay,
+                        set: setBufferBlockNextMorningFullDay,
+                        label: "إغلاق صباح اليوم التالي تلقائياً عند وجود حجز (يوم كامل)",
+                      },
+                      {
+                        key: "blockNextMorningEvening" as const,
+                        state: bufferBlockNextMorningEvening,
+                        set: setBufferBlockNextMorningEvening,
+                        label: "إغلاق صباح اليوم التالي تلقائياً عند وجود حجز (مسائي)",
+                      },
+                      {
+                        key: "blockSameDayEvening" as const,
+                        state: bufferBlockSameDayEvening,
+                        set: setBufferBlockSameDayEvening,
+                        label: "إغلاق مساء نفس اليوم تلقائياً عند وجود حجز (صباحي)",
+                      },
+                    ]).map(({ state, set, label }) => (
+                      <label key={label} className="flex items-start gap-2.5 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={state}
+                          onChange={(e) => set(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded border-border text-primary accent-primary shrink-0"
+                        />
+                        <span className="text-xs text-foreground leading-snug group-hover:text-primary transition-colors">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3">
+                  <Button
+                    size="sm"
+                    onClick={saveBufferPolicy}
+                    disabled={savingBuffer}
+                    className="rounded-xl text-xs h-8 bg-teal-600 hover:bg-teal-700 text-white"
+                  >
+                    {savingBuffer ? <Loader2 className="w-3.5 h-3.5 animate-spin me-1.5" /> : null}
+                    حفظ السياسة
+                  </Button>
+                  {bufferSaved && (
+                    <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      تم الحفظ بنجاح
+                    </span>
+                  )}
+                </div>
+              </div>
+              </>
             )}
           </>
         )}

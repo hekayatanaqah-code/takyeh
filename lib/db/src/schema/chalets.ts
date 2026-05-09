@@ -53,6 +53,11 @@ export const chaletsTable = pgTable("chalets", {
   /* ── Booking Reminder (WhatsApp) ── */
   reminderEnabled: boolean("reminder_enabled").notNull().default(false),
   reminderDays: integer("reminder_days").notNull().default(1),
+  /* ── Buffer / Cleaning Time Policy ── */
+  bufferPolicyEnabled: boolean("buffer_policy_enabled").notNull().default(false),
+  bufferBlockNextMorningFullDay: boolean("buffer_block_next_morning_full_day").notNull().default(false),
+  bufferBlockNextMorningEvening: boolean("buffer_block_next_morning_evening").notNull().default(false),
+  bufferBlockSameDayEvening: boolean("buffer_block_same_day_evening").notNull().default(false),
   /* ── Map coordinates ── */
   latitude: numeric("latitude", { precision: 10, scale: 6 }),
   longitude: numeric("longitude", { precision: 10, scale: 6 }),
