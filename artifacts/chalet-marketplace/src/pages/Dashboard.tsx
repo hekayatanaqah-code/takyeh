@@ -1393,7 +1393,7 @@ function AddBookingDialog({
   });
   const addonsTotalPrice = useMemo(() =>
     dialogAddons
-      .filter(a => selectedAddonIds.includes(a.id) && a.unit !== "مجاني" && Number(a.price) > 0)
+      .filter(a => selectedAddonIds.includes(a.id) && a.unit !== "خدمة مجانية" && Number(a.price) > 0)
       .reduce((sum, a) => sum + Math.round(Number(a.price)), 0),
   [dialogAddons, selectedAddonIds]);
 
@@ -1766,7 +1766,7 @@ function AddBookingDialog({
               <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-2.5">
                 {dialogAddons.map(addon => {
                   const checked = selectedAddonIds.includes(addon.id);
-                  const isFree = addon.unit === "مجاني" || Number(addon.price) === 0;
+                  const isFree = addon.unit === "خدمة مجانية" || Number(addon.price) === 0;
                   return (
                     <label key={addon.id} className="flex items-start gap-3 cursor-pointer">
                       <input
@@ -1784,7 +1784,7 @@ function AddBookingDialog({
                         )}
                       </div>
                       <span className={`text-xs font-bold whitespace-nowrap shrink-0 ${isFree ? "text-green-600 dark:text-green-400" : "text-primary"}`}>
-                        {isFree ? "🎁 مجاني" : `${toAr(Math.round(Number(addon.price)))} ر.س / ${addon.unit}`}
+                        {isFree ? "🎁 خدمة مجانية" : `${toAr(Math.round(Number(addon.price)))} ر.س / ${addon.unit}`}
                       </span>
                     </label>
                   );
@@ -6260,14 +6260,14 @@ const SERVICE_CATEGORY_OPTIONS = [
 ];
 
 const SERVICE_UNIT_OPTIONS = [
-  { value: "رسوم ثابتة",  label: "🏷️ رسوم ثابتة (Fixed)" },
-  { value: "بالساعة",     label: "⏱️ بالساعة (Hourly)" },
-  { value: "مجاني",       label: "🎁 مجاني (Free)" },
-  { value: "لكل شخص",    label: "👤 لكل شخص" },
-  { value: "في الليلة",  label: "🌙 في الليلة" },
-  { value: "يومياً",     label: "📅 يومياً" },
-  { value: "مرة واحدة",  label: "🔢 مرة واحدة" },
-  { value: "لكل جلسة",  label: "🎯 لكل جلسة" },
+  { value: "رسوم ثابتة",    label: "رسوم ثابتة" },
+  { value: "بالساعة",       label: "بالساعة" },
+  { value: "خدمة مجانية",   label: "خدمة مجانية" },
+  { value: "لكل شخص",      label: "لكل شخص" },
+  { value: "في الليلة",    label: "في الليلة" },
+  { value: "يومياً",       label: "يومياً" },
+  { value: "لمرة واحدة",   label: "لمرة واحدة" },
+  { value: "لكل جلسة",    label: "لكل جلسة" },
 ];
 
 const BLANK_SVC_FORM = {
@@ -6459,8 +6459,8 @@ function ChaletServicesTab() {
             <MessageSquare className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h2 className="font-bold text-lg text-foreground">الخدمات الإضافية</h2>
-            <p className="text-muted-foreground text-sm">أضف خدمات ومرافق إضافية مدفوعة لكل شاليه</p>
+            <h2 className="font-bold text-lg text-foreground">إدارة الخدمات والمرافق</h2>
+            <p className="text-muted-foreground text-sm">أضف خدمات ومرافق إضافية لكل شاليه (مدفوعة أو مجانية)</p>
           </div>
         </div>
       </div>
@@ -6551,24 +6551,35 @@ function ChaletServicesTab() {
             {/* Row 2: price + unit */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">السعر (ر.س) <span className="text-destructive">*</span></label>
+                <label className="text-xs font-medium text-muted-foreground">
+                  السعر (ر.س) <span className="text-destructive">*</span>
+                  {form.unit === "خدمة مجانية" && <span className="text-green-600 mr-1">(صفر للخدمات المجانية)</span>}
+                </label>
                 <input
-                  type="number"
-                  placeholder="0"
-                  min="0"
-                  step="0.01"
-                  value={form.price}
-                  onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                  className={inputCls("price")}
-                  dir="ltr"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="٠"
+                  value={toAr(form.price)}
+                  onChange={(e) => setForm((f) => ({
+                    ...f,
+                    price: e.target.value
+                      .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+                      .replace(/[^\d.]/g, ""),
+                  }))}
+                  className={inputCls("price") + " text-right"}
+                  disabled={form.unit === "خدمة مجانية"}
                 />
                 {fieldErrors.price && <p className="text-[11px] text-destructive">{fieldErrors.price}</p>}
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">وحدة الاحتساب</label>
+                <label className="text-xs font-medium text-muted-foreground">نوع الرسوم</label>
                 <select
                   value={form.unit}
-                  onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
+                  onChange={(e) => setForm((f) => ({
+                    ...f,
+                    unit: e.target.value,
+                    price: e.target.value === "خدمة مجانية" ? "0" : (f.price === "0" && e.target.value !== "خدمة مجانية" ? "" : f.price),
+                  }))}
                   className={inputCls("unit")}
                 >
                   {SERVICE_UNIT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -6699,9 +6710,11 @@ function ChaletServicesTab() {
                     )}
                   </div>
                   {svc.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{svc.description}</p>}
-                  <p className="text-sm font-bold text-primary mt-1">
-                    {Number(svc.price).toLocaleString("ar-SA")} ر.س
-                    <span className="text-xs text-muted-foreground font-normal"> / {svc.unit}</span>
+                  <p className="text-sm font-bold mt-1 flex items-center gap-1">
+                    {svc.unit === "خدمة مجانية" || Number(svc.price) === 0
+                      ? <span className="text-green-600">🎁 خدمة مجانية</span>
+                      : <><span className="text-primary">{toAr(Math.round(Number(svc.price)))} ر.س</span><span className="text-xs text-muted-foreground font-normal"> / {svc.unit}</span></>
+                    }
                   </p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -16151,7 +16164,7 @@ export default function Dashboard() {
     { id: "reviews",   label: "التقييمات",            icon: <Star className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات",   icon: <Calendar className="w-4 h-4" /> },
     { id: "deposits",  label: "إدارة التأمينات",       icon: <Lock className="w-4 h-4" /> },
-    { id: "services",  label: "منيو الإضافات",        icon: <Plus className="w-4 h-4" /> },
+    { id: "services",  label: "إدارة الخدمات والمرافق", icon: <Plus className="w-4 h-4" /> },
     { id: "messageSettings", label: "إعدادات الرسائل الآلية", icon: <Send className="w-4 h-4" /> },
     { id: "profile",   label: "إعدادات الحساب",      icon: <Settings className="w-4 h-4" /> },
   ] as const;

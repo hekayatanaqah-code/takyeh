@@ -489,7 +489,7 @@ export default function ChaletDetail() {
                 <h2 style={SEC}>خدمات إضافية متوفرة عند الطلب</h2>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
                   {chaletAddons.map(svc => {
-                    const isFree = svc.unit === "مجاني" || Number(svc.price) === 0;
+                    const isFree = svc.unit === "خدمة مجانية" || Number(svc.price) === 0;
                     return (
                       <div key={svc.id} style={{ borderRadius: 14, border: "1.5px solid #e5e7eb", background: "#fafafa", padding: "14px 16px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
@@ -500,7 +500,7 @@ export default function ChaletDetail() {
                             border: `1.5px solid ${isFree ? "#bbf7d0" : "#fde68a"}`,
                             borderRadius: 8, padding: "3px 9px", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", flexShrink: 0,
                           }}>
-                            {isFree ? "🎁 مجاني" : `${Number(svc.price).toLocaleString("ar-SA")} ر.س / ${svc.unit}`}
+                            {isFree ? "🎁 خدمة مجانية" : `${Number(svc.price).toLocaleString("ar-SA")} ر.س / ${svc.unit}`}
                           </span>
                         </div>
                         {svc.description && (
