@@ -15756,7 +15756,7 @@ function OwnerMessageSettingsTab() {
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
-  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "insurance" | "support" | "history">("revenue");
+  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history">("revenue");
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
@@ -16524,7 +16524,6 @@ export default function Dashboard() {
             { id: "staff",         label: "الموظفون",         icon: <Users className="w-4 h-4" />,        color: "text-blue-600" },
             { id: "customers",     label: "قاعدة العملاء",   icon: <UserCheck className="w-4 h-4" />,    color: "text-purple-600" },
             { id: "notifications", label: "الإشعارات",        icon: <Bell className="w-4 h-4" />,         color: "text-amber-600" },
-            { id: "insurance",     label: "التأمينات",        icon: <Shield className="w-4 h-4" />,       color: "text-slate-600" },
             { id: "reports",       label: "التقارير المالية", icon: <BarChart2 className="w-4 h-4" />,    color: "text-indigo-600" },
             { id: "support",       label: "مركز الدعم",       icon: <MessageSquare className="w-4 h-4" />, color: "text-primary" },
             { id: "history",       label: "سجل المعاملات",    icon: <ListChecks className="w-4 h-4" />,    color: "text-slate-600" },
@@ -16662,7 +16661,6 @@ export default function Dashboard() {
                   </div>
                 )}
                 {adminFinanceTab === "notifications" && <NotificationsTab />}
-                {adminFinanceTab === "insurance"     && <ServiceInsurancesTab />}
                 {adminFinanceTab === "reports"       && <ReportsTab />}
                 {adminFinanceTab === "support"       && <OwnerSupportTab />}
                 {adminFinanceTab === "history"       && <TransactionHistoryTab />}
