@@ -959,6 +959,7 @@ router.post("/bookings", async (req, res) => {
     paymentMethod: z.enum(["cash", "transfer", "pos"]).default("cash"),
     cashDeposited: z.boolean().default(false),
     paymentReceiptUrl: z.string().nullable().optional(),
+    addonIds: z.array(z.number().int().positive()).optional(),
   }).safeParse(req.body);
 
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة — رقم الجوال والفترة مطلوبان" });
@@ -991,7 +992,17 @@ router.post("/bookings", async (req, res) => {
     }
   }
 
-  const { revenueAmount, totalPrice, depositPaid, insuranceFee, ...restBooking } = body.data;
+  /* Resolve selected addon details for denormalized storage */
+  let resolvedAddons: Array<{ id: number; name: string; price: string; unit: string }> | null = null;
+  if (body.data.addonIds && body.data.addonIds.length > 0) {
+    const services = await db
+      .select({ id: chaletServicesTable.id, name: chaletServicesTable.name, price: chaletServicesTable.price, unit: chaletServicesTable.unit })
+      .from(chaletServicesTable)
+      .where(inArray(chaletServicesTable.id, body.data.addonIds));
+    resolvedAddons = services.map(s => ({ id: s.id, name: s.name, price: String(s.price), unit: s.unit }));
+  }
+
+  const { revenueAmount, totalPrice, depositPaid, insuranceFee, addonIds: _addonIds, ...restBooking } = body.data;
   const [booking] = await db
     .insert(ownerBookingsTable)
     .values({
@@ -1001,6 +1012,7 @@ router.post("/bookings", async (req, res) => {
       totalPrice: totalPrice !== undefined ? String(Math.round(totalPrice)) : null,
       depositPaid: depositPaid !== undefined ? String(Math.round(depositPaid)) : null,
       insuranceFee: insuranceFee !== undefined ? String(Math.round(insuranceFee)) : null,
+      bookedAddons: resolvedAddons,
     })
     .returning();
 

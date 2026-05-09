@@ -228,6 +228,7 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   paymentMethod: paymentMethodEnum("payment_method").default("cash"),
   cashDeposited: boolean("cash_deposited").notNull().default(false),
   paymentReceiptUrl: text("payment_receipt_url"),
+  bookedAddons: jsonb("booked_addons").$type<Array<{ id: number; name: string; price: string; unit: string }>>(),
 });
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;
 
