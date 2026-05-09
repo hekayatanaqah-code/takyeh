@@ -1,68 +1,15 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-
-/* ── Hijri month names (Arabic) ── */
-const HIJRI_MONTHS_AR = [
-  "محرم", "صفر", "ربيع الأول", "ربيع الثاني",
-  "جمادى الأولى", "جمادى الثانية", "رجب", "شعبان",
-  "رمضان", "شوال", "ذو القعدة", "ذو الحجة",
-];
+import {
+  HIJRI_MONTHS_AR,
+  toHijriComponents,
+  getHijriMonthDays,
+  toGregorianStr,
+  prevHijriMonth,
+  nextHijriMonth,
+} from "@/lib/hijri";
 
 /* Arabic day-of-week headers (Sun → Sat) */
 const DAYS_SHORT = ["أح", "إث", "ثل", "أر", "خم", "جم", "سب"];
-
-/* Intl formatter: Umm al-Qura calendar */
-const hijriFmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", {
-  year: "numeric",
-  month: "numeric",
-  day: "numeric",
-});
-
-/** Convert a Gregorian Date to its Hijri components (Umm al-Qura). */
-function toHijri(date: Date): { year: number; month: number; day: number } {
-  const parts = hijriFmt.formatToParts(date);
-  const get = (type: string) =>
-    parseInt(parts.find((p) => p.type === type)?.value?.replace(/[٠-٩]/g, (d) =>
-      String(d.charCodeAt(0) - 0x0660)) ?? "0", 10);
-  return { year: get("year"), month: get("month"), day: get("day") };
-}
-
-/**
- * Approximate Gregorian Date for the start of a Hijri month.
- * Accuracy ±5 days — used only as a scan seed.
- */
-function hijriToApproxGregorian(hy: number, hm: number): Date {
-  /* Islamic epoch: July 19, 622 CE (Gregorian) */
-  const epochMs = Date.UTC(622, 6, 19);
-  const days = (hy - 1) * 354.36707 + (hm - 1) * 29.53059;
-  return new Date(epochMs + days * 86400000);
-}
-
-/** All Gregorian days that fall within a given Hijri month (Umm al-Qura). */
-function getHijriMonthDays(
-  hy: number,
-  hm: number,
-): { date: Date; hijriDay: number }[] {
-  const estimate = hijriToApproxGregorian(hy, hm);
-  const cursor = new Date(estimate);
-  cursor.setDate(cursor.getDate() - 6); /* start a little before the estimate */
-
-  const result: { date: Date; hijriDay: number }[] = [];
-  for (let i = 0; i < 65; i++) {
-    const h = toHijri(cursor);
-    if (h.year === hy && h.month === hm) {
-      result.push({ date: new Date(cursor), hijriDay: h.day });
-    } else if (result.length > 0) {
-      break; /* past end of month */
-    }
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return result;
-}
-
-/** Format a Date as "YYYY-MM-DD" Gregorian string. */
-function toGregorianStr(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
 
 /* ── Component ── */
 
@@ -85,14 +32,10 @@ export function HijriDatePicker({
   const containerRef = useRef<HTMLDivElement>(null);
 
   /* ── Picker navigation state ── */
-  const todayHijri = useMemo(() => toHijri(new Date()), []);
+  const todayHijri = useMemo(() => toHijriComponents(new Date()), []);
   const initHijri = useMemo(() => {
     if (value) {
-      try {
-        return toHijri(new Date(value + "T12:00:00"));
-      } catch {
-        /* fall through */
-      }
+      try { return toHijriComponents(new Date(value + "T12:00:00")); } catch { /* */ }
     }
     return todayHijri;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -104,7 +47,7 @@ export function HijriDatePicker({
   useEffect(() => {
     if (value) {
       try {
-        const h = toHijri(new Date(value + "T12:00:00"));
+        const h = toHijriComponents(new Date(value + "T12:00:00"));
         setPickerHY(h.year);
         setPickerHM(h.month);
       } catch { /* */ }
@@ -133,32 +76,33 @@ export function HijriDatePicker({
   const firstDOW = monthDays[0]?.date.getDay() ?? 0;
 
   /* ── Navigation helpers ── */
-  const prevHijriMonth = () => {
-    if (pickerHM === 1) { setPickerHY((y) => y - 1); setPickerHM(12); }
-    else setPickerHM((m) => m - 1);
-  };
-  const nextHijriMonth = () => {
-    if (pickerHM === 12) { setPickerHY((y) => y + 1); setPickerHM(1); }
-    else setPickerHM((m) => m + 1);
-  };
+  const goPrev = () => { const p = prevHijriMonth(pickerHY, pickerHM); setPickerHY(p.year); setPickerHM(p.month); };
+  const goNext = () => { const n = nextHijriMonth(pickerHY, pickerHM); setPickerHY(n.year); setPickerHM(n.month); };
+
+  /* ── Gregorian range label (secondary header) ── */
+  const gregRangeLabel = useMemo(() => {
+    if (monthDays.length === 0) return "";
+    const first = monthDays[0].date;
+    const last = monthDays[monthDays.length - 1].date;
+    const opts: Intl.DateTimeFormatOptions = { month: "long", year: "numeric", calendar: "gregory" };
+    const a = first.toLocaleDateString("ar-SA", opts);
+    const b = last.toLocaleDateString("ar-SA", opts);
+    return a === b ? a : `${a} – ${b}`;
+  }, [monthDays]);
 
   /* ── Computed display string ── */
   const displayStr = useMemo(() => {
     if (!value) return null;
     try {
       const d = new Date(value + "T12:00:00");
-      const h = toHijri(d);
-      const hijriLabel = `${h.day} ${HIJRI_MONTHS_AR[h.month - 1]} ${h.year} هـ`;
+      const h = toHijriComponents(d);
+      const hijriLabel = `${h.day.toLocaleString("ar-SA")} ${HIJRI_MONTHS_AR[h.month - 1]} ${h.year} هـ`;
       const gregLabel = d.toLocaleDateString("ar-SA", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
+        day: "numeric", month: "long", year: "numeric",
         calendar: "gregory",
       } as Intl.DateTimeFormatOptions);
       return { hijriLabel, gregLabel };
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   }, [value]);
 
   /* Today's Gregorian string for comparison */
@@ -188,29 +132,23 @@ export function HijriDatePicker({
         <div className="absolute z-[100] top-full mt-1 right-0 w-72 bg-background border border-border rounded-xl shadow-2xl p-3">
           {/* Header */}
           <div className="flex items-center justify-between mb-2.5 gap-2">
-            {/* next month (RTL: left arrow = next) */}
             <button
               type="button"
-              onClick={nextHijriMonth}
+              onClick={goNext}
               className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-muted transition-colors text-sm font-bold text-muted-foreground"
               aria-label="الشهر التالي"
             >›</button>
 
             <div className="flex-1 text-center">
               <p className="text-[13px] font-bold text-foreground">
-                {HIJRI_MONTHS_AR[pickerHM - 1]} {pickerHY}
+                {HIJRI_MONTHS_AR[pickerHM - 1]} {pickerHY} هـ
               </p>
-              <p className="text-[9px] text-muted-foreground mt-0.5">
-                {monthDays[0]?.date.toLocaleDateString("ar-SA", { month: "long", year: "numeric" })}
-                {monthDays.length > 0 && monthDays[monthDays.length - 1]?.date
-                  ? " — " + monthDays[monthDays.length - 1].date.toLocaleDateString("ar-SA", { month: "long", year: "numeric" })
-                  : ""}
-              </p>
+              <p className="text-[9px] text-muted-foreground mt-0.5">{gregRangeLabel}</p>
             </div>
 
             <button
               type="button"
-              onClick={prevHijriMonth}
+              onClick={goPrev}
               className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-muted transition-colors text-sm font-bold text-muted-foreground"
               aria-label="الشهر السابق"
             >‹</button>
@@ -219,19 +157,13 @@ export function HijriDatePicker({
           {/* Day-of-week headers */}
           <div className="grid grid-cols-7 mb-1">
             {DAYS_SHORT.map((d) => (
-              <div
-                key={d}
-                className="text-center text-[9px] font-semibold text-muted-foreground py-1"
-              >{d}</div>
+              <div key={d} className="text-center text-[9px] font-semibold text-muted-foreground py-1">{d}</div>
             ))}
           </div>
 
           {/* Day cells */}
           <div className="grid grid-cols-7 gap-y-0.5">
-            {/* Leading empty cells */}
-            {Array.from({ length: firstDOW }).map((_, i) => (
-              <div key={`pad-${i}`} />
-            ))}
+            {Array.from({ length: firstDOW }).map((_, i) => <div key={`pad-${i}`} />)}
 
             {monthDays.map(({ date, hijriDay }) => {
               const gregStr = toGregorianStr(date);
@@ -252,11 +184,9 @@ export function HijriDatePicker({
                       : "hover:bg-muted text-foreground",
                   ].join(" ")}
                 >
-                  {/* Hijri day number (Arabic-Indic) */}
                   <span className="text-[11px] font-bold leading-none">
                     {hijriDay.toLocaleString("ar-SA")}
                   </span>
-                  {/* Gregorian day number */}
                   <span className={`text-[7.5px] leading-none mt-0.5 ${isSelected ? "text-teal-100" : "text-muted-foreground"}`}>
                     {date.getDate()}
                   </span>

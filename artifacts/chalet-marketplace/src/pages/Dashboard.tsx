@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { HijriDatePicker } from "@/components/HijriDatePicker";
-import { formatDualDate, toHijri } from "@/lib/hijri";
+import { formatDualDate, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents } from "@/lib/hijri";
 import { toAr, fromAr } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -2377,10 +2377,10 @@ const _getFirstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 type BufferExceptionDateFE = { date: string; periods: string[]; action: "disable" | "enable" };
 
 function MiniCalendar({
-  year, month, availability, bookings, onDateClick, bufferPolicy, onCleaningBlockClick,
+  hijriYear, hijriMonth, availability, bookings, onDateClick, bufferPolicy, onCleaningBlockClick,
 }: {
-  year: number;
-  month: number;
+  hijriYear: number;
+  hijriMonth: number;
   availability: ChaletAvailability[];
   bookings: OwnerBooking[];
   onDateClick: (dateStr: string) => void;
@@ -2394,9 +2394,9 @@ function MiniCalendar({
   };
   onCleaningBlockClick?: (dateStr: string, period: string) => void;
 }) {
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
   const arabicDays = ["أح", "إث", "ثل", "أر", "خم", "جم", "سب"];
+  const hijriMonthDays = useMemo(() => getHijriMonthDays(hijriYear, hijriMonth), [hijriYear, hijriMonth]);
+  const firstDOW = hijriMonthDays[0]?.date.getDay() ?? 0;
 
   const availMap = useMemo(() => {
     const m = new Map<string, ChaletAvailability>();
@@ -2523,9 +2523,8 @@ function MiniCalendar({
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < firstDayOfMonth; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  type CalCell = { date: Date; hijriDay: number } | null;
+  const calCells: CalCell[] = [...Array<null>(firstDOW).fill(null), ...hijriMonthDays];
 
   return (
     <div className="select-none rounded-xl overflow-hidden border border-border">
@@ -2537,10 +2536,11 @@ function MiniCalendar({
         ))}
 
         {/* Day cells */}
-        {cells.map((day, i) => {
-          if (!day) return <div key={`empty-${i}`} className="bg-background/60 min-h-[62px]" />;
+        {calCells.map((cell, i) => {
+          if (!cell) return <div key={`empty-${i}`} className="bg-background/60 min-h-[62px]" />;
 
-          const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const { date: cellDate, hijriDay } = cell;
+          const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, "0")}-${String(cellDate.getDate()).padStart(2, "0")}`;
           const avEntry = availMap.get(dateStr);
           const bkEntry = bookingMap.get(dateStr); // Map<period, guestName>
 
@@ -2559,7 +2559,6 @@ function MiniCalendar({
           const isManualBlock = !!avEntry?.notes && (!bkEntry || bkEntry.size === 0);
 
           /* Hijri day number */
-          const hijriDay = _hijriFmt.format(new Date(year, month - 1, day));
 
           /* Build per-period rows for display */
           type PRow = { label: string; guest: string; amber: boolean; cleaning?: boolean };
@@ -2599,10 +2598,10 @@ function MiniCalendar({
                 isToday ? "ring-2 ring-inset ring-primary" : "",
               ].join(" ")}
             >
-              {/* Hijri day */}
-              <span className="text-[0.82rem] font-bold leading-none">{hijriDay}</span>
-              {/* Gregorian day */}
-              <span className={`text-[0.52rem] leading-none mt-0.5 tabular-nums ${isBlocked || isManualBlock ? "opacity-60" : "text-muted-foreground"}`}>{day}</span>
+              {/* Hijri day — large, primary */}
+              <span className="text-[0.82rem] font-bold leading-none">{hijriDay.toLocaleString("ar-SA")}</span>
+              {/* Gregorian day — small, secondary */}
+              <span className={`text-[0.52rem] leading-none mt-0.5 tabular-nums ${isBlocked || isManualBlock ? "opacity-60" : "text-muted-foreground"}`}>{cellDate.getDate()}</span>
 
               {/* Manual block label */}
               {isManualBlock && (
@@ -3402,8 +3401,17 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [selectedChaletId, setSelectedChaletId] = useState<number | "all" | null>(null);
   const [calendarMode, setCalendarMode] = useState<"calendar" | "agenda">("calendar");
   const [agendaScope, setAgendaScope] = useState<"week" | "month">("week");
-  const [calYear, setCalYear] = useState(new Date().getFullYear());
-  const [calMonth, setCalMonth] = useState(new Date().getMonth() + 1);
+  const _todayH = toHijriComponents(new Date());
+  const [calHijriYear, setCalHijriYear] = useState(_todayH.year);
+  const [calHijriMonth, setCalHijriMonth] = useState(_todayH.month);
+  const { calMonthDays, calMonthStart, calMonthEnd } = useMemo(() => {
+    const days = getHijriMonthDays(calHijriYear, calHijriMonth);
+    return {
+      calMonthDays: days,
+      calMonthStart: days[0] ? toGregorianStr(days[0].date) : "",
+      calMonthEnd: days.length > 0 ? toGregorianStr(days[days.length - 1].date) : "",
+    };
+  }, [calHijriYear, calHijriMonth]);
   const [blockDateStr, setBlockDateStr] = useState<string | null>(null);
   const [chalUnblockDay, setChalUnblockDay] = useState<{ ds: string; avId: number } | null>(null);
   const [unblockingChal, setUnblockingChal] = useState(false);
@@ -3831,18 +3839,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   });
 
   const calAvailability = useMemo(() => {
-    return availability.filter((a) => {
-      const [y, m] = a.dateStr.split("-").map(Number);
-      return y === calYear && m === calMonth;
-    });
-  }, [availability, calYear, calMonth]);
+    if (!calMonthStart || !calMonthEnd) return [];
+    return availability.filter((a) => a.dateStr >= calMonthStart && a.dateStr <= calMonthEnd);
+  }, [availability, calMonthStart, calMonthEnd]);
 
-  /* Filter bookings whose range OVERLAPS with the current calendar month (fixes multi-day cross-month display) */
+  /* Filter bookings whose range OVERLAPS with the current Hijri calendar month */
   const calBookings = useMemo(() => {
     if (!showAllChalets && !activeChalet) return [];
-    const lastDay = new Date(calYear, calMonth, 0).getDate();
-    const monthStart = `${calYear}-${String(calMonth).padStart(2, "0")}-01`;
-    const monthEnd   = `${calYear}-${String(calMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    if (!calMonthStart || !calMonthEnd) return [];
     return bookings.filter((b) => {
       if (!b.bookingDate) return false;
       if (!showAllChalets && b.submissionId !== activeChalet?.submissionId) return false;
@@ -3850,21 +3854,18 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       const dur = Math.max(1, b.durationDays ?? 1);
       const bEndDate = new Date(by, bm - 1, bd + dur - 1);
       const bEnd = `${bEndDate.getFullYear()}-${String(bEndDate.getMonth() + 1).padStart(2, "0")}-${String(bEndDate.getDate()).padStart(2, "0")}`;
-      return b.bookingDate <= monthEnd && bEnd >= monthStart;
+      return b.bookingDate <= calMonthEnd && bEnd >= calMonthStart;
     });
-  }, [bookings, activeChalet, calYear, calMonth, showAllChalets]);
+  }, [bookings, activeChalet, calMonthStart, calMonthEnd, showAllChalets]);
 
   const blockEntry = blockDateStr ? availability.find((a) => a.dateStr === blockDateStr) ?? null : null;
 
-  const _calFirstDay = new Date(calYear, calMonth - 1, 1);
-  const _calLastDay  = new Date(calYear, calMonth, 0);
-  const _hmFirst     = _hijriMFmt.format(_calFirstDay);
-  const _hmLast      = _hijriMFmt.format(_calLastDay);
-  const _hyLast      = _hijriYFmt.format(_calLastDay);
-  const monthLabelHijri = _hmFirst === _hmLast
-    ? `${_hmFirst} ${_hyLast}`
-    : `${_hmFirst} - ${_hmLast} ${_hyLast}`;
-  const monthLabelGreg = _calFirstDay.toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" });
+  const monthLabelHijri = `${HIJRI_MONTHS_AR[calHijriMonth - 1]} ${calHijriYear} هـ`;
+  const _firstGregDate = calMonthDays[0]?.date;
+  const _lastGregDate = calMonthDays.length > 0 ? calMonthDays[calMonthDays.length - 1].date : undefined;
+  const _firstGregLabel = _firstGregDate?.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions) ?? "";
+  const _lastGregLabel = _lastGregDate?.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions) ?? "";
+  const monthLabelGreg = _firstGregLabel === _lastGregLabel ? _firstGregLabel : `${_firstGregLabel} – ${_lastGregLabel}`;
   const monthLabel = `${monthLabelHijri} · ${monthLabelGreg}`;
 
   const filteredBookings = useMemo(() => {
@@ -4137,12 +4138,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   };
 
   const prevMonth = () => {
-    if (calMonth === 1) { setCalYear(y => y - 1); setCalMonth(12); }
-    else setCalMonth(m => m - 1);
+    const p = prevHijriMonth(calHijriYear, calHijriMonth);
+    setCalHijriYear(p.year); setCalHijriMonth(p.month);
   };
   const nextMonth = () => {
-    if (calMonth === 12) { setCalYear(y => y + 1); setCalMonth(1); }
-    else setCalMonth(m => m + 1);
+    const n = nextHijriMonth(calHijriYear, calHijriMonth);
+    setCalHijriYear(n.year); setCalHijriMonth(n.month);
   };
 
   const noApprovedChalets = !chaletsLoading && ownerChalets.length === 0;
@@ -4155,18 +4156,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   }, [submissions, ownerChalets]);
   const agendaRows = useMemo(() => {
     const scopeStart = (() => {
-      if (agendaScope === "month") return `${calYear}-${String(calMonth).padStart(2, "0")}-01`;
+      if (agendaScope === "month") return calMonthStart;
       const base = new Date();
-      const inCurrentMonth = base.getFullYear() === calYear && base.getMonth() + 1 === calMonth;
-      const anchor = inCurrentMonth ? base : new Date(calYear, calMonth - 1, 1);
+      const todayIso = base.toISOString().slice(0, 10);
+      const inCurrentMonth = !!calMonthStart && todayIso >= calMonthStart && todayIso <= calMonthEnd;
+      const anchor = inCurrentMonth ? new Date(base) : (calMonthDays[0] ? new Date(calMonthDays[0].date) : new Date());
       anchor.setDate(anchor.getDate() - anchor.getDay());
       return `${anchor.getFullYear()}-${String(anchor.getMonth() + 1).padStart(2, "0")}-${String(anchor.getDate()).padStart(2, "0")}`;
     })();
     const scopeEnd = (() => {
-      if (agendaScope === "month") {
-        const lastDay = new Date(calYear, calMonth, 0).getDate();
-        return `${calYear}-${String(calMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-      }
+      if (agendaScope === "month") return calMonthEnd;
       const [y, m, d] = scopeStart.split("-").map(Number);
       const end = new Date(y, m - 1, d + 6);
       return `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
@@ -4185,7 +4184,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       rows.push({ dateStr: ds, bookings: dayBookings });
     }
     return rows;
-  }, [agendaScope, calYear, calMonth, calBookings]);
+  }, [agendaScope, calMonthStart, calMonthEnd, calMonthDays, calBookings]);
 
   return (
     <div className="space-y-6">
@@ -4820,8 +4819,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               <Skeleton className="h-48 w-full rounded-xl" />
             ) : (
               <MiniCalendar
-                year={calYear}
-                month={calMonth}
+                hijriYear={calHijriYear}
+                hijriMonth={calHijriMonth}
                 availability={calAvailability}
                 bookings={calBookings}
                 bufferPolicy={activeChalet ? {
