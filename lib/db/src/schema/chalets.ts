@@ -58,6 +58,8 @@ export const chaletsTable = pgTable("chalets", {
   bufferBlockNextMorningFullDay: boolean("buffer_block_next_morning_full_day").notNull().default(false),
   bufferBlockNextMorningEvening: boolean("buffer_block_next_morning_evening").notNull().default(false),
   bufferBlockSameDayEvening: boolean("buffer_block_same_day_evening").notNull().default(false),
+  bufferExceptionWeekdays: text("buffer_exception_weekdays").default("[]"),
+  bufferExceptionDates: text("buffer_exception_dates").default("[]"),
   /* ── Map coordinates ── */
   latitude: numeric("latitude", { precision: 10, scale: 6 }),
   longitude: numeric("longitude", { precision: 10, scale: 6 }),

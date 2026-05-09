@@ -1654,6 +1654,12 @@ router.patch("/chalets/:chaletId/buffer-policy", requireAuth, async (req, res) =
     bufferBlockNextMorningFullDay: z.boolean().optional(),
     bufferBlockNextMorningEvening: z.boolean().optional(),
     bufferBlockSameDayEvening: z.boolean().optional(),
+    bufferExceptionWeekdays: z.array(z.number().int().min(0).max(6)).optional(),
+    bufferExceptionDates: z.array(z.object({
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      periods: z.array(z.enum(["morning", "evening"])),
+      action: z.enum(["disable", "enable"]),
+    })).optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
@@ -1682,11 +1688,13 @@ router.patch("/chalets/:chaletId/buffer-policy", requireAuth, async (req, res) =
 
   if (chaletRows.length === 0) return res.status(403).json({ error: "غير مصرح" });
 
-  const patch: Record<string, boolean> = {};
+  const patch: Record<string, boolean | string> = {};
   if (body.data.bufferPolicyEnabled !== undefined) patch.bufferPolicyEnabled = body.data.bufferPolicyEnabled;
   if (body.data.bufferBlockNextMorningFullDay !== undefined) patch.bufferBlockNextMorningFullDay = body.data.bufferBlockNextMorningFullDay;
   if (body.data.bufferBlockNextMorningEvening !== undefined) patch.bufferBlockNextMorningEvening = body.data.bufferBlockNextMorningEvening;
   if (body.data.bufferBlockSameDayEvening !== undefined) patch.bufferBlockSameDayEvening = body.data.bufferBlockSameDayEvening;
+  if (body.data.bufferExceptionWeekdays !== undefined) patch.bufferExceptionWeekdays = JSON.stringify(body.data.bufferExceptionWeekdays);
+  if (body.data.bufferExceptionDates !== undefined) patch.bufferExceptionDates = JSON.stringify(body.data.bufferExceptionDates);
 
   if (Object.keys(patch).length > 0) {
     await db.update(chaletsTable).set(patch).where(eq(chaletsTable.id, chaletId));

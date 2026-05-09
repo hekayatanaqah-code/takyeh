@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, chaletsTable } from "@workspace/db";
-import { chaletAvailabilityTable } from "@workspace/db/schema";
-import { eq, lte, gte, and, sql, inArray, type SQL } from "drizzle-orm";
+import { chaletAvailabilityTable, ownerBookingsTable } from "@workspace/db/schema";
+import { eq, lte, gte, and, sql, inArray, isNull, type SQL } from "drizzle-orm";
 import {
   GetChaletsQueryParams,
   GetChaletByIdParams,
@@ -16,9 +16,92 @@ function todayStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function fmtDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function isPausedNow(row: { pausedFrom?: string | null; pausedUntil?: string | null }, today = todayStr()) {
   if (!row.pausedFrom) return false;
   return row.pausedFrom <= today && (!row.pausedUntil || row.pausedUntil >= today);
+}
+
+type BufferExceptionDate = { date: string; periods: string[]; action: "disable" | "enable" };
+type BookingForBuffer = { bookingDate: string; durationDays: number; period: string | null };
+type ChaletForBuffer = {
+  bufferPolicyEnabled: boolean;
+  bufferBlockNextMorningFullDay: boolean;
+  bufferBlockNextMorningEvening: boolean;
+  bufferBlockSameDayEvening: boolean;
+  bufferExceptionWeekdays: string | null;
+  bufferExceptionDates: string | null;
+};
+
+/**
+ * Returns true if the given dateStr+period slot is a cleaning buffer block
+ * (i.e. it should be treated as occupied in public search).
+ * Priority: specific-date exception > weekday exception > general rules.
+ */
+function isBufferCleaning(
+  chalet: ChaletForBuffer,
+  bookings: BookingForBuffer[],
+  dateStr: string,
+  period: "morning" | "evening",
+): boolean {
+  if (!chalet.bufferPolicyEnabled) return false;
+
+  let exWeekdays: number[] = [];
+  let exDates: BufferExceptionDate[] = [];
+  try { exWeekdays = JSON.parse(chalet.bufferExceptionWeekdays ?? "[]"); } catch { /* */ }
+  try { exDates = JSON.parse(chalet.bufferExceptionDates ?? "[]"); } catch { /* */ }
+
+  /* Determine if any booking produces a cleaning slot here */
+  let wouldBeCleaning = false;
+  for (const b of bookings) {
+    if (!b.bookingDate) continue;
+    const dur = Math.max(1, b.durationDays ?? 1);
+    const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+    const lastD = new Date(sy, sm - 1, sd + dur - 1);
+    const lastDs = fmtDate(lastD);
+    const nextD = new Date(lastD); nextD.setDate(nextD.getDate() + 1);
+    const nextDs = fmtDate(nextD);
+    const bp = b.period ?? "full_day";
+
+    if (period === "morning") {
+      if (chalet.bufferBlockNextMorningFullDay && bp === "full_day" && nextDs === dateStr) { wouldBeCleaning = true; break; }
+      if (chalet.bufferBlockNextMorningEvening && bp === "evening" && nextDs === dateStr) { wouldBeCleaning = true; break; }
+    } else {
+      if (chalet.bufferBlockSameDayEvening && bp === "morning" && lastDs === dateStr) { wouldBeCleaning = true; break; }
+    }
+  }
+
+  if (!wouldBeCleaning) return false;
+
+  /* ── Exception priority ── */
+  /* 1. Specific-date exception (highest) */
+  const dateEx = exDates.find((e) => e.date === dateStr && e.periods.includes(period));
+  if (dateEx) return dateEx.action === "enable"; /* "disable" → not a cleaning block */
+
+  /* 2. Weekday exception */
+  const dow = new Date(dateStr + "T12:00:00").getDay();
+  if (exWeekdays.includes(dow)) return false;
+
+  /* 3. General rules — is a cleaning block */
+  return true;
+}
+
+/** True if the searched date+period is blocked by the buffer policy */
+function isBufferBlocked(
+  chalet: ChaletForBuffer,
+  bookings: BookingForBuffer[],
+  searchDate: string,
+  searchPeriod: string | undefined,
+): boolean {
+  if (!chalet.bufferPolicyEnabled) return false;
+  const periods: Array<"morning" | "evening"> =
+    searchPeriod === "morning" ? ["morning"] :
+    searchPeriod === "evening" ? ["evening"] :
+    ["morning", "evening"];
+  return periods.some((p) => isBufferCleaning(chalet, bookings, searchDate, p));
 }
 
 router.get("/", async (req, res) => {
@@ -75,7 +158,60 @@ router.get("/", async (req, res) => {
         if (searchPeriod === "full_day") return !entry.periodFullDay;
         return !(entry.periodMorning || entry.periodEvening || entry.periodFullDay);
       });
+    }
 
+    /* ── Buffer / Cleaning Time sync ────────────────────────
+       Fetch bookings for buffer-enabled chalets and treat
+       cleaning slots as occupied in public search results.
+    ────────────────────────────────────────────────────────── */
+    const bufferChalets = rows.filter((r) => r.bufferPolicyEnabled);
+    if (bufferChalets.length > 0) {
+      const bufferSubIds = bufferChalets
+        .map((r) => r.submissionId)
+        .filter((id): id is number => id != null);
+
+      /* Bookings starting up to 30 days before searchDate can produce cleaning slots on searchDate */
+      const lookbackDate = fmtDate(
+        new Date(new Date(searchDate + "T12:00:00").getTime() - 30 * 86400000),
+      );
+
+      const relevantBookings = bufferSubIds.length > 0
+        ? await db
+            .select({
+              submissionId: ownerBookingsTable.submissionId,
+              bookingDate: ownerBookingsTable.bookingDate,
+              durationDays: ownerBookingsTable.durationDays,
+              period: ownerBookingsTable.period,
+            })
+            .from(ownerBookingsTable)
+            .where(
+              and(
+                inArray(ownerBookingsTable.submissionId, bufferSubIds),
+                isNull(ownerBookingsTable.cancelledAt),
+                gte(ownerBookingsTable.bookingDate, lookbackDate),
+                lte(ownerBookingsTable.bookingDate, searchDate),
+              ),
+            )
+        : [];
+
+      /* Group bookings by submissionId */
+      const bookingsBySubId = new Map<number, BookingForBuffer[]>();
+      for (const b of relevantBookings) {
+        if (b.submissionId == null) continue;
+        const key = b.submissionId;
+        if (!bookingsBySubId.has(key)) bookingsBySubId.set(key, []);
+        bookingsBySubId.get(key)!.push({
+          bookingDate: b.bookingDate,
+          durationDays: b.durationDays,
+          period: b.period,
+        });
+      }
+
+      rows = rows.filter((row) => {
+        if (!row.bufferPolicyEnabled || row.submissionId == null) return true;
+        const bookings = bookingsBySubId.get(row.submissionId) ?? [];
+        return !isBufferBlocked(row, bookings, searchDate, searchPeriod);
+      });
     }
 
     /* Additionally filter by dailyPrices granularity when period is specified */
@@ -85,10 +221,8 @@ router.get("/", async (req, res) => {
       rows = rows.filter((row) => {
         const daily = row.dailyPrices as Record<string, Record<string, number>> | null;
         if (daily) {
-          /* dailyPrices is set — only include chalet if this day+period has a price */
           return daily[periodKey]?.[String(dayOfWeek)] != null;
         }
-        /* No dailyPrices — fall back to slot booleans */
         if (searchPeriod === "morning") return row.slotMorning ?? true;
         if (searchPeriod === "evening") return row.slotEvening ?? true;
         if (searchPeriod === "full_day") return row.slotFullDay ?? true;
@@ -202,11 +336,54 @@ router.get("/next-available", async (req, res) => {
     blockMap.get(entry.chaletId)!.set(entry.dateStr, entry);
   }
 
+  /* 3b. Bulk-fetch bookings for buffer-enabled chalets (for cleaning slot computation) */
+  const bufferChalets = activeChalets.filter((c) => c.bufferPolicyEnabled);
+  const bufferSubIds = bufferChalets
+    .map((c) => c.submissionId)
+    .filter((id): id is number => id != null);
+
+  const lookbackDate = fmtDate(
+    new Date(new Date(date + "T12:00:00Z").getTime() - 30 * 86400000),
+  );
+
+  const allBufferBookings = bufferSubIds.length > 0
+    ? await db
+        .select({
+          submissionId: ownerBookingsTable.submissionId,
+          bookingDate: ownerBookingsTable.bookingDate,
+          durationDays: ownerBookingsTable.durationDays,
+          period: ownerBookingsTable.period,
+        })
+        .from(ownerBookingsTable)
+        .where(
+          and(
+            inArray(ownerBookingsTable.submissionId, bufferSubIds),
+            isNull(ownerBookingsTable.cancelledAt),
+            gte(ownerBookingsTable.bookingDate, lookbackDate),
+            lte(ownerBookingsTable.bookingDate, endDate),
+          ),
+        )
+    : [];
+
+  const bufferBookingsBySubId = new Map<number, BookingForBuffer[]>();
+  for (const b of allBufferBookings) {
+    if (b.submissionId == null) continue;
+    if (!bufferBookingsBySubId.has(b.submissionId)) bufferBookingsBySubId.set(b.submissionId, []);
+    bufferBookingsBySubId.get(b.submissionId)!.push({
+      bookingDate: b.bookingDate,
+      durationDays: b.durationDays,
+      period: b.period,
+    });
+  }
+
   /* 4. For each chalet, find its earliest available future date */
   const result: Array<{ chalet: (typeof activeChalets)[0]; nextAvailableDate: string }> = [];
 
   for (const chalet of activeChalets) {
     const chaletBlocks = blockMap.get(chalet.id) ?? new Map();
+    const bufferBookings = chalet.submissionId != null
+      ? (bufferBookingsBySubId.get(chalet.submissionId) ?? [])
+      : [];
 
     for (const futureDate of futureDates) {
       const entry = chaletBlocks.get(futureDate);
@@ -217,6 +394,13 @@ router.get("/next-available", async (req, res) => {
         else if (period === "evening")  available = !entry.periodEvening;
         else if (period === "full_day") available = !entry.periodFullDay;
         else available = !(entry.periodMorning || entry.periodEvening || entry.periodFullDay);
+      }
+
+      /* Also check buffer cleaning blocks */
+      if (available && chalet.bufferPolicyEnabled) {
+        if (isBufferBlocked(chalet, bufferBookings, futureDate, period)) {
+          available = false;
+        }
       }
 
       if (available) {

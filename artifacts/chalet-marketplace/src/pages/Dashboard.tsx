@@ -2373,15 +2373,25 @@ const _hijriMFmt    = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { m
 const _hijriYFmt    = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { year: "numeric" });
 const _getFirstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
+type BufferExceptionDateFE = { date: string; periods: string[]; action: "disable" | "enable" };
+
 function MiniCalendar({
-  year, month, availability, bookings, onDateClick, bufferPolicy,
+  year, month, availability, bookings, onDateClick, bufferPolicy, onCleaningBlockClick,
 }: {
   year: number;
   month: number;
   availability: ChaletAvailability[];
   bookings: OwnerBooking[];
   onDateClick: (dateStr: string) => void;
-  bufferPolicy?: { enabled: boolean; blockNextMorningFullDay: boolean; blockNextMorningEvening: boolean; blockSameDayEvening: boolean };
+  bufferPolicy?: {
+    enabled: boolean;
+    blockNextMorningFullDay: boolean;
+    blockNextMorningEvening: boolean;
+    blockSameDayEvening: boolean;
+    exceptionWeekdays?: number[];
+    exceptionDates?: BufferExceptionDateFE[];
+  };
+  onCleaningBlockClick?: (dateStr: string, period: string) => void;
 }) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDayOfMonth = new Date(year, month - 1, 1).getDay();
@@ -2431,10 +2441,26 @@ function MiniCalendar({
   const cleaningTimePeriods = useMemo(() => {
     const m = new Map<string, Set<string>>();
     if (!bufferPolicy?.enabled) return m;
+
+    const exWeekdays = bufferPolicy.exceptionWeekdays ?? [];
+    const exDates = bufferPolicy.exceptionDates ?? [];
+
     const addPeriod = (ds: string, period: string) => {
+      /* ── Exception priority ── */
+      /* 1. Date-specific exception */
+      const dateEx = exDates.find((e) => e.date === ds && e.periods.includes(period));
+      if (dateEx) {
+        if (dateEx.action === "disable") return; /* override removes cleaning block */
+        /* action === "enable": force-add → fall through */
+      } else {
+        /* 2. Weekday exception */
+        const dow = new Date(ds + "T12:00:00").getDay();
+        if (exWeekdays.includes(dow)) return; /* buffer disabled on this weekday */
+      }
       if (!m.has(ds)) m.set(ds, new Set());
       m.get(ds)!.add(period);
     };
+
     for (const b of bookings) {
       if (!b.bookingDate) continue;
       const duration = Math.max(1, b.durationDays ?? 1);
@@ -2549,9 +2575,9 @@ function MiniCalendar({
           const cleanPeriods = cleaningTimePeriods.get(dateStr);
           if (cleanPeriods) {
             if (cleanPeriods.has("morning") && !morningBlocked && !fullDayBlocked)
-              pRows.push({ label: "🧹 تنظيف ص", guest: "", amber: false, cleaning: true });
+              pRows.push({ label: "🧹 تنظيف ص", guest: "", amber: false, cleaning: true, period: "morning" });
             if (cleanPeriods.has("evening") && !eveningBlocked && !fullDayBlocked)
-              pRows.push({ label: "🧹 تنظيف م", guest: "", amber: false, cleaning: true });
+              pRows.push({ label: "🧹 تنظيف م", guest: "", amber: false, cleaning: true, period: "evening" });
           }
 
           return (
@@ -2589,11 +2615,15 @@ function MiniCalendar({
                 <div className="mt-1 w-full flex flex-col items-center gap-[2px]">
                   {pRows.map((row, ri) => (
                     <div key={ri} className="w-full flex flex-col items-center">
-                      <span className={`text-[0.44rem] font-bold leading-none text-center ${
+                      <span
+                      className={`text-[0.44rem] font-bold leading-none text-center ${
                         row.cleaning
-                          ? "text-teal-700 dark:text-teal-300"
+                          ? "text-teal-700 dark:text-teal-300 cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400 underline decoration-dotted"
                           : row.amber ? "text-amber-800 dark:text-amber-200" : "text-red-800 dark:text-red-200"
-                      }`}>{row.label}</span>
+                      }`}
+                      title={row.cleaning ? "انقر للسماح بالحجز في هذه الفترة" : undefined}
+                      onClick={row.cleaning && row.period ? (e) => { e.stopPropagation(); onCleaningBlockClick?.(dateStr, row.period!); } : undefined}
+                    >{row.label}</span>
                       {row.guest && (
                         <span className={`text-[0.42rem] leading-none truncate w-full text-center font-medium ${
                           row.amber ? "text-amber-700 dark:text-amber-300" : "text-red-700 dark:text-red-300"
@@ -3628,6 +3658,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [bufferBlockSameDayEvening, setBufferBlockSameDayEvening] = useState(false);
   const [savingBuffer, setSavingBuffer] = useState(false);
   const [bufferSaved, setBufferSaved] = useState(false);
+  const [bufferExceptionWeekdays, setBufferExceptionWeekdays] = useState<number[]>([]);
+  const [bufferExceptionDates, setBufferExceptionDates] = useState<BufferExceptionDateFE[]>([]);
+  const [newExDate, setNewExDate] = useState("");
+  const [newExPeriods, setNewExPeriods] = useState<string[]>(["morning", "evening"]);
+  const [newExAction, setNewExAction] = useState<"disable" | "enable">("disable");
 
   // Sync fields when active chalet changes
   const prevChaletRef = useRef<number | null>(null);
@@ -3644,6 +3679,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     setBufferBlockNextMorningFullDay(activeChalet?.bufferBlockNextMorningFullDay ?? false);
     setBufferBlockNextMorningEvening(activeChalet?.bufferBlockNextMorningEvening ?? false);
     setBufferBlockSameDayEvening(activeChalet?.bufferBlockSameDayEvening ?? false);
+    try { setBufferExceptionWeekdays(JSON.parse(activeChalet?.bufferExceptionWeekdays ?? "[]")); } catch { setBufferExceptionWeekdays([]); }
+    try { setBufferExceptionDates(JSON.parse(activeChalet?.bufferExceptionDates ?? "[]")); } catch { setBufferExceptionDates([]); }
     setBufferSaved(false);
   }
 
@@ -3681,6 +3718,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           bufferBlockNextMorningFullDay,
           bufferBlockNextMorningEvening,
           bufferBlockSameDayEvening,
+          bufferExceptionWeekdays,
+          bufferExceptionDates,
         }),
       });
       await qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
@@ -3689,6 +3728,46 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     } finally {
       setSavingBuffer(false);
     }
+  };
+
+  /* Toggle a specific cleaning block exception (auto-saves silently) */
+  const toggleCleaningException = async (dateStr: string, period: string) => {
+    if (!activeChaletId) return;
+    setBufferExceptionDates((prev) => {
+      const disableEntry = prev.find((e) => e.date === dateStr && e.action === "disable");
+      let newDates: BufferExceptionDateFE[];
+      if (disableEntry && disableEntry.periods.includes(period)) {
+        /* Already overridden → remove (re-enable cleaning block) */
+        const newPeriods = disableEntry.periods.filter((p) => p !== period);
+        newDates = newPeriods.length === 0
+          ? prev.filter((e) => !(e.date === dateStr && e.action === "disable"))
+          : prev.map((e) => e.date === dateStr && e.action === "disable" ? { ...e, periods: newPeriods } : e);
+      } else {
+        /* Add disable exception for this period */
+        if (disableEntry) {
+          newDates = prev.map((e) =>
+            e.date === dateStr && e.action === "disable"
+              ? { ...e, periods: [...new Set([...e.periods, period])] }
+              : e,
+          );
+        } else {
+          newDates = [...prev, { date: dateStr, periods: [period], action: "disable" }];
+        }
+      }
+      /* Auto-save silently */
+      apiFetch(`/owner/chalets/${activeChaletId}/buffer-policy`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          bufferPolicyEnabled,
+          bufferBlockNextMorningFullDay,
+          bufferBlockNextMorningEvening,
+          bufferBlockSameDayEvening,
+          bufferExceptionWeekdays,
+          bufferExceptionDates: newDates,
+        }),
+      }).then(() => qc.invalidateQueries({ queryKey: ["owner", "chalets"] })).catch(() => {});
+      return newDates;
+    });
   };
 
   const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
@@ -4749,7 +4828,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   blockNextMorningFullDay: bufferBlockNextMorningFullDay,
                   blockNextMorningEvening: bufferBlockNextMorningEvening,
                   blockSameDayEvening: bufferBlockSameDayEvening,
+                  exceptionWeekdays: bufferExceptionWeekdays,
+                  exceptionDates: bufferExceptionDates,
                 } : undefined}
+                onCleaningBlockClick={toggleCleaningException}
                 onDateClick={(ds) => {
                   const dayBkgs = calBookings.filter((b) => {
                     if (!b.bookingDate) return false;
@@ -4984,6 +5066,107 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         <span className="text-xs text-foreground leading-snug group-hover:text-primary transition-colors">{label}</span>
                       </label>
                     ))}
+                  </div>
+                )}
+
+                {/* ── Weekday Exceptions ── */}
+                {bufferPolicyEnabled && (
+                  <div className="rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5 mb-3">
+                    <p className="text-[11px] font-semibold text-foreground mb-0.5">استثناءات أيام الأسبوع</p>
+                    <p className="text-[10px] text-muted-foreground mb-2">الأيام التي يُعطَّل فيها وقت التنظيف التلقائي بالكامل</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {([["الأحد",0],["الاثنين",1],["الثلاثاء",2],["الأربعاء",3],["الخميس",4],["الجمعة",5],["السبت",6]] as [string,number][]).map(([lbl,dow]) => (
+                        <button
+                          key={dow}
+                          type="button"
+                          onClick={() => setBufferExceptionWeekdays((prev) =>
+                            prev.includes(dow) ? prev.filter((d) => d !== dow) : [...prev, dow]
+                          )}
+                          className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                            bufferExceptionWeekdays.includes(dow)
+                              ? "bg-teal-600 border-teal-600 text-white"
+                              : "bg-background border-border text-muted-foreground hover:border-teal-400"
+                          }`}
+                        >{lbl}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Date-Specific Exceptions ── */}
+                {bufferPolicyEnabled && (
+                  <div className="rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5 mb-3">
+                    <p className="text-[11px] font-semibold text-foreground mb-0.5">استثناءات تواريخ محددة</p>
+                    <p className="text-[10px] text-muted-foreground mb-2">تحكم يدوي في فترات التنظيف · يمكنك أيضاً النقر على 🧹 في التقويم مباشرةً</p>
+                    {/* Existing exceptions list */}
+                    {bufferExceptionDates.length > 0 && (
+                      <div className="space-y-1 mb-2">
+                        {bufferExceptionDates.map((ex, i) => (
+                          <div key={i} className="flex items-center justify-between gap-2 rounded-lg bg-background border border-border/60 px-2.5 py-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${ex.action === "disable" ? "bg-emerald-500" : "bg-orange-500"}`} />
+                              <span className="text-[11px] font-medium">{ex.date}</span>
+                              <span className="text-[10px] text-muted-foreground">{ex.periods.map((p) => p === "morning" ? "ص" : "م").join(" / ")}</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${ex.action === "disable" ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300" : "bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300"}`}>
+                                {ex.action === "disable" ? "متاح للحجز" : "مغلق للتنظيف"}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setBufferExceptionDates((prev) => prev.filter((_, j) => j !== i))}
+                              className="text-muted-foreground hover:text-destructive transition-colors text-xs shrink-0"
+                            >✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Add new exception */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <input
+                        type="date"
+                        value={newExDate}
+                        onChange={(e) => setNewExDate(e.target.value)}
+                        className="flex-1 min-w-[120px] bg-background border border-border rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-teal-400/50"
+                      />
+                      <div className="flex gap-1">
+                        {(["morning","evening"] as const).map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setNewExPeriods((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p])}
+                            className={`text-[10px] px-2 py-1 rounded-lg border transition-colors ${newExPeriods.includes(p) ? "bg-primary/10 border-primary text-primary" : "border-border text-muted-foreground"}`}
+                          >{p === "morning" ? "صباح" : "مساء"}</button>
+                        ))}
+                      </div>
+                      <select
+                        value={newExAction}
+                        onChange={(e) => setNewExAction(e.target.value as "disable" | "enable")}
+                        className="bg-background border border-border rounded-lg px-1.5 py-1 text-[10px] focus:outline-none focus:ring-1 focus:ring-teal-400/50"
+                      >
+                        <option value="disable">متاح (تعطيل التنظيف)</option>
+                        <option value="enable">مغلق (فرض التنظيف)</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newExDate || newExPeriods.length === 0) return;
+                          setBufferExceptionDates((prev) => {
+                            const existing = prev.find((e) => e.date === newExDate && e.action === newExAction);
+                            if (existing) {
+                              return prev.map((e) =>
+                                e.date === newExDate && e.action === newExAction
+                                  ? { ...e, periods: [...new Set([...e.periods, ...newExPeriods])] }
+                                  : e,
+                              );
+                            }
+                            return [...prev, { date: newExDate, periods: [...newExPeriods], action: newExAction }];
+                          });
+                          setNewExDate("");
+                          setNewExPeriods(["morning","evening"]);
+                        }}
+                        className="text-[10px] px-2.5 py-1 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors whitespace-nowrap"
+                      >+ إضافة</button>
+                    </div>
                   </div>
                 )}
 
