@@ -10148,12 +10148,11 @@ function RevenueTab() {
 
       {/* ── Revenue Breakdown: 3 KPI cards (all-time) + per-booking table ── */}
       {unit.type !== "service" && (() => {
-        // Mirror server revenue logic: deposit + remaining only if balance collected; else just deposit
+        // Use full booked value (totalPrice) for the breakdown display — shows
+        // what was agreed/booked, not just what has been collected so far.
         const calcRev = (b: OwnerBooking): number => {
-          if (b.totalPrice != null) {
-            const dep = Number(b.depositPaid ?? 0);
-            return dep + (b.balanceCollected ? Number(b.totalPrice) - dep : 0);
-          }
+          if (b.totalPrice != null && Number(b.totalPrice) > 0) return Number(b.totalPrice);
+          if (b.revenueAmount != null && Number(b.revenueAmount) > 0) return Number(b.revenueAmount);
           return Number(b.depositPaid ?? 0);
         };
         const getAddonSum = (b: OwnerBooking): number => {
@@ -10205,46 +10204,46 @@ function RevenueTab() {
               <TrendingUp className="w-4 h-4 text-primary shrink-0" />
               <span className="text-sm font-bold text-foreground">تفصيل مصادر الإيراد — إجمالي كل الوقت</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
               {/* Card 1 — Base Rent */}
-              <div className="bg-gradient-to-br from-primary/5 to-primary/10 border-2 border-primary/25 rounded-2xl p-5 flex flex-col gap-3 min-h-[120px]">
-                <div className="flex items-center gap-2 text-xs font-bold text-primary">
+              <div style={{ minHeight: "150px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px", borderRadius: "16px", border: "2px solid rgba(var(--primary-rgb,59,130,246),0.25)" }} className="bg-gradient-to-br from-primary/5 to-primary/10">
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }} className="text-xs font-bold text-primary">
                   <Home className="w-4 h-4 shrink-0" />
                   <span>إجمالي إيرادات الإيجار</span>
                 </div>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-extrabold text-primary tabular-nums leading-none">{fmtN(Math.round(allTimeBase))}</span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "4px" }}>
+                  <span className="text-3xl font-extrabold text-primary tabular-nums" style={{ lineHeight: 1 }}>{fmtN(Math.round(allTimeBase))}</span>
                   <span className="text-sm font-semibold text-muted-foreground">ر.س</span>
                 </div>
-                <div className="text-[11px] text-primary/70 font-medium mt-auto">
+                <div className="text-xs text-primary/70 font-medium" style={{ marginTop: "auto" }}>
                   {allTimeTotal > 0 ? `${Math.round((allTimeBase / allTimeTotal) * 100).toLocaleString("ar-SA")}٪ من الإجمالي الكلي` : "لا توجد حجوزات بعد"}
                 </div>
               </div>
               {/* Card 2 — Service Fees */}
-              <div className="bg-gradient-to-br from-amber-500/5 to-amber-500/10 border-2 border-amber-400/30 rounded-2xl p-5 flex flex-col gap-3 min-h-[120px]">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-600">
+              <div style={{ minHeight: "150px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px", borderRadius: "16px", border: "2px solid rgba(245,158,11,0.3)" }} className="bg-gradient-to-br from-amber-500/5 to-amber-500/10">
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }} className="text-xs font-bold text-amber-600">
                   <Zap className="w-4 h-4 shrink-0" />
                   <span>إجمالي إيرادات الخدمات</span>
                 </div>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-extrabold text-amber-600 tabular-nums leading-none">{fmtN(Math.round(allTimeServices))}</span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "4px" }}>
+                  <span className="text-3xl font-extrabold text-amber-600 tabular-nums" style={{ lineHeight: 1 }}>{fmtN(Math.round(allTimeServices))}</span>
                   <span className="text-sm font-semibold text-muted-foreground">ر.س</span>
                 </div>
-                <div className="text-[11px] text-amber-600/80 font-medium mt-auto">
+                <div className="text-xs text-amber-600/80 font-medium" style={{ marginTop: "auto" }}>
                   {allTimeTotal > 0 ? `${Math.round((allTimeServices / allTimeTotal) * 100).toLocaleString("ar-SA")}٪ من الإجمالي الكلي` : "لا توجد خدمات مدفوعة"}
                 </div>
               </div>
               {/* Card 3 — Net Total */}
-              <div className="bg-gradient-to-br from-green-500/5 to-emerald-500/10 border-2 border-green-400/30 rounded-2xl p-5 flex flex-col gap-3 min-h-[120px]">
-                <div className="flex items-center gap-2 text-xs font-bold text-green-700 dark:text-green-400">
+              <div style={{ minHeight: "150px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px", borderRadius: "16px", border: "2px solid rgba(34,197,94,0.3)" }} className="bg-gradient-to-br from-green-500/5 to-emerald-500/10">
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }} className="text-xs font-bold text-green-700 dark:text-green-400">
                   <DollarSign className="w-4 h-4 shrink-0" />
                   <span>صافي الدخل الكلي</span>
                 </div>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-extrabold text-green-700 dark:text-green-400 tabular-nums leading-none">{fmtN(Math.round(allTimeTotal))}</span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "4px" }}>
+                  <span className="text-3xl font-extrabold text-green-700 dark:text-green-400 tabular-nums" style={{ lineHeight: 1 }}>{fmtN(Math.round(allTimeTotal))}</span>
                   <span className="text-sm font-semibold text-muted-foreground">ر.س</span>
                 </div>
-                <div className="text-[11px] text-green-600/80 font-medium mt-auto">إيجار أساسي + خدمات ومرافق</div>
+                <div className="text-xs text-green-600/80 font-medium" style={{ marginTop: "auto" }}>إيجار أساسي + خدمات ومرافق</div>
               </div>
             </div>
 
