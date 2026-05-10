@@ -9877,6 +9877,127 @@ function RevenueTab() {
         </>
       )}
 
+      {/* ── Booking Revenue Breakdown: base rent vs addons ── */}
+      {unit.type !== "service" && (() => {
+        const addonMap: Record<string, number> = {};
+        let totalBaseRent = 0;
+        let totalAddonRevenue = 0;
+        for (const b of monthBookings) {
+          if (!b.totalPrice) continue;
+          const tp = Number(b.totalPrice);
+          const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+          const paidAddons = addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0);
+          const addonSum = paidAddons.reduce((s, a) => s + Math.round(Number(a.price)), 0);
+          totalBaseRent += tp - addonSum;
+          totalAddonRevenue += addonSum;
+          for (const a of paidAddons) {
+            addonMap[a.name] = (addonMap[a.name] ?? 0) + Math.round(Number(a.price));
+          }
+        }
+        const grandTotal = totalBaseRent + totalAddonRevenue;
+        if (grandTotal === 0) return null;
+        const basePct = Math.round((totalBaseRent / grandTotal) * 100);
+        const addonPct = 100 - basePct;
+        const topServices = Object.entries(addonMap)
+          .map(([name, total]) => ({ name, total }))
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 5);
+        return (
+          <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingUp className="w-4 h-4 text-primary" />
+              <span className="text-sm font-bold text-foreground">تحليل مصادر الإيراد</span>
+              <span className="ms-auto text-[10px] text-muted-foreground">{calType === "hijri" ? selectedHijriMonth : monthOptions.find(o => o.val === selectedMonth)?.label}</span>
+            </div>
+
+            {/* Two breakdown cards */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-1">
+                <div className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+                  <Home className="w-3 h-3" /> إيرادات الإيجار الأساسية
+                </div>
+                <div className="text-xl font-bold text-primary tabular-nums">
+                  {fmtN(Math.round(totalBaseRent))}
+                  <span className="text-xs font-normal text-muted-foreground ms-1">ر.س</span>
+                </div>
+                <div className="text-[10px] text-primary/70 font-medium">{basePct.toLocaleString("ar-SA")}٪ من الإجمالي</div>
+              </div>
+              <div className="bg-amber-500/5 border border-amber-400/20 rounded-xl p-3 space-y-1">
+                <div className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-amber-500" /> إيرادات الخدمات والمرافق
+                </div>
+                <div className="text-xl font-bold text-amber-600 tabular-nums">
+                  {fmtN(Math.round(totalAddonRevenue))}
+                  <span className="text-xs font-normal text-muted-foreground ms-1">ر.س</span>
+                </div>
+                <div className="text-[10px] text-amber-600/80 font-medium">{addonPct.toLocaleString("ar-SA")}٪ من الإجمالي</div>
+              </div>
+            </div>
+
+            {/* Contribution bar */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span>نسبة كل مصدر من إجمالي الإيراد</span>
+                <span className="font-bold tabular-nums">{fmtN(Math.round(grandTotal))} ر.س</span>
+              </div>
+              <div className="h-6 rounded-full overflow-hidden flex gap-px">
+                {basePct > 0 && (
+                  <div style={{ width: `${basePct}%` }} className="bg-primary flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500">
+                    {basePct > 12 ? `${basePct.toLocaleString("ar-SA")}٪` : ""}
+                  </div>
+                )}
+                {addonPct > 0 && (
+                  <div style={{ width: `${addonPct}%` }} className="bg-amber-500 flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500">
+                    {addonPct > 12 ? `${addonPct.toLocaleString("ar-SA")}٪` : ""}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-4 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-primary inline-block" />
+                  إيجار أساسي
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                  خدمات وملاحق
+                </span>
+              </div>
+            </div>
+
+            {/* Top services */}
+            {topServices.length > 0 && (
+              <div className="space-y-2 border-t border-border/50 pt-3">
+                <div className="text-[11px] font-bold text-foreground mb-2">أكثر الخدمات تحقيقاً للأرباح</div>
+                {topServices.map((svc, i) => {
+                  const pct = Math.round((svc.total / totalAddonRevenue) * 100);
+                  const barColors = ["bg-amber-500", "bg-orange-500", "bg-yellow-500", "bg-amber-400", "bg-orange-400"];
+                  return (
+                    <div key={svc.name} className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="font-medium text-foreground flex items-center gap-1">
+                          <span className="text-[10px] text-muted-foreground tabular-nums">{(i + 1).toLocaleString("ar-SA")}.</span>
+                          {svc.name}
+                        </span>
+                        <span className="font-bold text-amber-600 tabular-nums">{fmtN(svc.total)} ر.س</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div style={{ width: `${pct}%` }} className={`h-full rounded-full transition-all duration-500 ${barColors[i] ?? "bg-amber-500"}`} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {topServices.length === 0 && (
+              <div className="text-center text-[11px] text-muted-foreground py-2 border-t border-border/50 pt-3">
+                لا توجد بيانات خدمات لهذا الشهر — سيظهر التحليل عند حجز خدمات مدفوعة
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Revenue log + damage deductions: only in individual unit view, NOT master */}
       {unit.type !== "all" && (
       <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
