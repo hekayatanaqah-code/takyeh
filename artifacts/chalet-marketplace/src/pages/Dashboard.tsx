@@ -10148,18 +10148,29 @@ function RevenueTab() {
 
       {/* ── Revenue Breakdown: 3 KPI cards (all-time) + per-booking table ── */}
       {unit.type !== "service" && (() => {
+        // Mirror server revenue logic: deposit + remaining only if balance collected; else just deposit
+        const calcRev = (b: OwnerBooking): number => {
+          if (b.totalPrice != null) {
+            const dep = Number(b.depositPaid ?? 0);
+            return dep + (b.balanceCollected ? Number(b.totalPrice) - dep : 0);
+          }
+          return Number(b.depositPaid ?? 0);
+        };
+        const getAddonSum = (b: OwnerBooking): number => {
+          const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+          return addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
+            .reduce((s, a) => s + Math.round(Number(a.price)), 0);
+        };
+
         // All-time totals from all bookings in scope
         let allTimeBase = 0, allTimeServices = 0;
         const scopedAll = unit.type === "chalet"
           ? allBookings.filter(b => (b as any).chaletId === (unit as any).id)
           : allBookings;
         for (const b of scopedAll) {
-          if (!b.totalPrice) continue;
-          const tp = Number(b.totalPrice);
-          const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
-          const addonSum = addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
-            .reduce((s, a) => s + Math.round(Number(a.price)), 0);
-          allTimeBase += tp - addonSum;
+          const rev = calcRev(b);
+          const addonSum = getAddonSum(b);
+          allTimeBase += Math.max(0, rev - addonSum);
           allTimeServices += addonSum;
         }
         const allTimeTotal = allTimeBase + allTimeServices;
@@ -10168,18 +10179,16 @@ function RevenueTab() {
         interface BreakdownRow { bookingId: number; clientName: string; bookingDate: string; baseRent: number; services: number; total: number; }
         const breakdownRows: BreakdownRow[] = [];
         for (const b of monthBookings) {
-          if (!b.totalPrice) continue;
-          const tp = Number(b.totalPrice);
-          const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
-          const addonSum = addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
-            .reduce((s, a) => s + Math.round(Number(a.price)), 0);
+          const rev = calcRev(b);
+          if (rev === 0 && !b.depositPaid) continue;
+          const addonSum = getAddonSum(b);
           breakdownRows.push({
             bookingId: b.id,
             clientName: b.clientName,
             bookingDate: b.bookingDate,
-            baseRent: tp - addonSum,
+            baseRent: Math.max(0, rev - addonSum),
             services: addonSum,
-            total: tp,
+            total: rev,
           });
         }
 
@@ -10187,7 +10196,7 @@ function RevenueTab() {
         const monthServices = breakdownRows.reduce((s, r) => s + r.services, 0);
         const monthTotal = breakdownRows.reduce((s, r) => s + r.total, 0);
 
-        if (allTimeTotal === 0 && breakdownRows.length === 0) return null;
+        if (scopedAll.length === 0 && breakdownRows.length === 0) return null;
 
         return (
           <div className="space-y-4">
@@ -10196,46 +10205,46 @@ function RevenueTab() {
               <TrendingUp className="w-4 h-4 text-primary shrink-0" />
               <span className="text-sm font-bold text-foreground">تفصيل مصادر الإيراد — إجمالي كل الوقت</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Card 1 — Base Rent */}
-              <div className="bg-gradient-to-br from-primary/5 to-primary/10 border-2 border-primary/25 rounded-2xl p-4 space-y-1.5">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-primary uppercase tracking-wide">
-                  <Home className="w-3.5 h-3.5" />
-                  إجمالي إيرادات الإيجار
+              <div className="bg-gradient-to-br from-primary/5 to-primary/10 border-2 border-primary/25 rounded-2xl p-5 flex flex-col gap-3 min-h-[120px]">
+                <div className="flex items-center gap-2 text-xs font-bold text-primary">
+                  <Home className="w-4 h-4 shrink-0" />
+                  <span>إجمالي إيرادات الإيجار</span>
                 </div>
-                <div className="text-2xl font-extrabold text-primary tabular-nums">
-                  {fmtN(Math.round(allTimeBase))}
-                  <span className="text-sm font-normal text-muted-foreground ms-1">ر.س</span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-extrabold text-primary tabular-nums leading-none">{fmtN(Math.round(allTimeBase))}</span>
+                  <span className="text-sm font-semibold text-muted-foreground">ر.س</span>
                 </div>
-                <div className="text-[10px] text-primary/70 font-medium">
-                  {allTimeTotal > 0 ? `${Math.round((allTimeBase / allTimeTotal) * 100).toLocaleString("ar-SA")}٪ من الإجمالي الكلي` : "—"}
+                <div className="text-[11px] text-primary/70 font-medium mt-auto">
+                  {allTimeTotal > 0 ? `${Math.round((allTimeBase / allTimeTotal) * 100).toLocaleString("ar-SA")}٪ من الإجمالي الكلي` : "لا توجد حجوزات بعد"}
                 </div>
               </div>
               {/* Card 2 — Service Fees */}
-              <div className="bg-gradient-to-br from-amber-500/5 to-amber-500/10 border-2 border-amber-400/30 rounded-2xl p-4 space-y-1.5">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 uppercase tracking-wide">
-                  <Zap className="w-3.5 h-3.5" />
-                  إجمالي إيرادات الخدمات
+              <div className="bg-gradient-to-br from-amber-500/5 to-amber-500/10 border-2 border-amber-400/30 rounded-2xl p-5 flex flex-col gap-3 min-h-[120px]">
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-600">
+                  <Zap className="w-4 h-4 shrink-0" />
+                  <span>إجمالي إيرادات الخدمات</span>
                 </div>
-                <div className="text-2xl font-extrabold text-amber-600 tabular-nums">
-                  {fmtN(Math.round(allTimeServices))}
-                  <span className="text-sm font-normal text-muted-foreground ms-1">ر.س</span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-extrabold text-amber-600 tabular-nums leading-none">{fmtN(Math.round(allTimeServices))}</span>
+                  <span className="text-sm font-semibold text-muted-foreground">ر.س</span>
                 </div>
-                <div className="text-[10px] text-amber-600/80 font-medium">
-                  {allTimeTotal > 0 ? `${Math.round((allTimeServices / allTimeTotal) * 100).toLocaleString("ar-SA")}٪ من الإجمالي الكلي` : "—"}
+                <div className="text-[11px] text-amber-600/80 font-medium mt-auto">
+                  {allTimeTotal > 0 ? `${Math.round((allTimeServices / allTimeTotal) * 100).toLocaleString("ar-SA")}٪ من الإجمالي الكلي` : "لا توجد خدمات مدفوعة"}
                 </div>
               </div>
               {/* Card 3 — Net Total */}
-              <div className="bg-gradient-to-br from-green-500/5 to-emerald-500/10 border-2 border-green-400/30 rounded-2xl p-4 space-y-1.5">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-green-700 dark:text-green-400 uppercase tracking-wide">
-                  <DollarSign className="w-3.5 h-3.5" />
-                  صافي الدخل الكلي
+              <div className="bg-gradient-to-br from-green-500/5 to-emerald-500/10 border-2 border-green-400/30 rounded-2xl p-5 flex flex-col gap-3 min-h-[120px]">
+                <div className="flex items-center gap-2 text-xs font-bold text-green-700 dark:text-green-400">
+                  <DollarSign className="w-4 h-4 shrink-0" />
+                  <span>صافي الدخل الكلي</span>
                 </div>
-                <div className="text-2xl font-extrabold text-green-700 dark:text-green-400 tabular-nums">
-                  {fmtN(Math.round(allTimeTotal))}
-                  <span className="text-sm font-normal text-muted-foreground ms-1">ر.س</span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-extrabold text-green-700 dark:text-green-400 tabular-nums leading-none">{fmtN(Math.round(allTimeTotal))}</span>
+                  <span className="text-sm font-semibold text-muted-foreground">ر.س</span>
                 </div>
-                <div className="text-[10px] text-green-600/80 font-medium">إيجار أساسي + خدمات ومرافق</div>
+                <div className="text-[11px] text-green-600/80 font-medium mt-auto">إيجار أساسي + خدمات ومرافق</div>
               </div>
             </div>
 
