@@ -9191,6 +9191,27 @@ function RevenueTab() {
     },
   });
 
+  // ── All-time revenue breakdown (hook-level, not inside JSX) ─────────────
+  const revBreakdown = useMemo(() => {
+    const scopedBookings = unit.type === "chalet"
+      ? allBookings.filter(b => (b as any).chaletId === (unit as any).id)
+      : allBookings;
+    let totalBaseRent = 0, totalServices = 0;
+    for (const b of scopedBookings) {
+      const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+      const svc = addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
+        .reduce((s, a) => s + Math.round(Number(a.price)), 0);
+      const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice)
+        : b.revenueAmount != null && Number(b.revenueAmount) > 0 ? Number(b.revenueAmount)
+        : Number(b.depositPaid ?? 0);
+      totalBaseRent += Math.max(0, tp - svc);
+      totalServices += svc;
+    }
+    const total = totalBaseRent + totalServices;
+    console.log("[تكية Finance] bookings:", scopedBookings.length, "| إيجار:", Math.round(totalBaseRent), "| خدمات:", Math.round(totalServices), "| إجمالي:", Math.round(total));
+    return { base: Math.round(totalBaseRent), services: Math.round(totalServices), total: Math.round(total) };
+  }, [allBookings, unit]);
+
   const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings", "cancelled"],
     queryFn: async () => {
@@ -9569,6 +9590,53 @@ function RevenueTab() {
 
   return (
     <div className="space-y-5" dir="rtl">
+
+      {/* ══ ALL-TIME REVENUE SUMMARY CARDS ══════════════════════════════════ */}
+      {unit.type !== "service" && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <TrendingUp className="w-4 h-4 text-primary" />
+            <span style={{ fontSize: 14, fontWeight: 700 }}>ملخص الإيرادات الكلي</span>
+            {bkLoading && <span style={{ fontSize: 11, color: "#888", marginRight: "auto" }}>جارٍ التحميل…</span>}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            {/* إيجار */}
+            <div style={{ background: "linear-gradient(135deg,#eff6ff,#dbeafe)", border: "2px solid #93c5fd", borderRadius: 16, padding: 20, minHeight: 150, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>
+                <Home className="w-4 h-4" />
+                <span>إجمالي الإيجار</span>
+              </div>
+              <div style={{ fontSize: 32, fontWeight: 900, color: "#1d4ed8", lineHeight: 1, marginTop: 4 }}>
+                {fmtN(revBreakdown.base)}
+              </div>
+              <div style={{ fontSize: 12, color: "#3b82f6", marginTop: "auto" }}>ر.س</div>
+            </div>
+            {/* خدمات */}
+            <div style={{ background: "linear-gradient(135deg,#fffbeb,#fef3c7)", border: "2px solid #f59e0b", borderRadius: 16, padding: 20, minHeight: 150, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#b45309" }}>
+                <Zap className="w-4 h-4" />
+                <span>إجمالي الخدمات</span>
+              </div>
+              <div style={{ fontSize: 32, fontWeight: 900, color: "#b45309", lineHeight: 1, marginTop: 4 }}>
+                {fmtN(revBreakdown.services)}
+              </div>
+              <div style={{ fontSize: 12, color: "#d97706", marginTop: "auto" }}>ر.س</div>
+            </div>
+            {/* إجمالي */}
+            <div style={{ background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", border: "2px solid #4ade80", borderRadius: 16, padding: 20, minHeight: 150, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#15803d" }}>
+                <DollarSign className="w-4 h-4" />
+                <span>صافي الدخل الكلي</span>
+              </div>
+              <div style={{ fontSize: 32, fontWeight: 900, color: "#15803d", lineHeight: 1, marginTop: 4 }}>
+                {fmtN(revBreakdown.total)}
+              </div>
+              <div style={{ fontSize: 12, color: "#16a34a", marginTop: "auto" }}>ر.س</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Month selector + Calendar type toggle */}
       <div className="flex items-center gap-3 flex-wrap">
         <TrendingUp className="w-5 h-5 text-primary shrink-0" />
@@ -10146,171 +10214,84 @@ function RevenueTab() {
         </>
       )}
 
-      {/* ── Revenue Breakdown: 3 KPI cards (all-time) + per-booking table ── */}
+      {/* ── Monthly booking breakdown table ── */}
       {unit.type !== "service" && (() => {
-        // Use full booked value (totalPrice) for the breakdown display — shows
-        // what was agreed/booked, not just what has been collected so far.
-        const calcRev = (b: OwnerBooking): number => {
-          if (b.totalPrice != null && Number(b.totalPrice) > 0) return Number(b.totalPrice);
-          if (b.revenueAmount != null && Number(b.revenueAmount) > 0) return Number(b.revenueAmount);
-          return Number(b.depositPaid ?? 0);
-        };
-        const getAddonSum = (b: OwnerBooking): number => {
+        const getAddonSum2 = (b: OwnerBooking): number => {
           const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
           return addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
             .reduce((s, a) => s + Math.round(Number(a.price)), 0);
         };
-
-        // All-time totals from all bookings in scope
-        let allTimeBase = 0, allTimeServices = 0;
-        const scopedAll = unit.type === "chalet"
-          ? allBookings.filter(b => (b as any).chaletId === (unit as any).id)
-          : allBookings;
-        for (const b of scopedAll) {
-          const rev = calcRev(b);
-          const addonSum = getAddonSum(b);
-          allTimeBase += Math.max(0, rev - addonSum);
-          allTimeServices += addonSum;
-        }
-        const allTimeTotal = allTimeBase + allTimeServices;
-
-        // Per-booking breakdown for selected month
-        interface BreakdownRow { bookingId: number; clientName: string; bookingDate: string; baseRent: number; services: number; total: number; }
-        const breakdownRows: BreakdownRow[] = [];
-        for (const b of monthBookings) {
-          const rev = calcRev(b);
-          if (rev === 0 && !b.depositPaid) continue;
-          const addonSum = getAddonSum(b);
-          breakdownRows.push({
-            bookingId: b.id,
-            clientName: b.clientName,
-            bookingDate: b.bookingDate,
-            baseRent: Math.max(0, rev - addonSum),
-            services: addonSum,
-            total: rev,
-          });
-        }
-
+        const breakdownRows = monthBookings.map(b => {
+          const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice)
+            : b.revenueAmount != null && Number(b.revenueAmount) > 0 ? Number(b.revenueAmount)
+            : Number(b.depositPaid ?? 0);
+          const svc = getAddonSum2(b);
+          return { bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate,
+            baseRent: Math.max(0, tp - svc), services: svc, total: tp };
+        }).filter(r => r.total > 0);
+        if (breakdownRows.length === 0) return null;
         const monthBase = breakdownRows.reduce((s, r) => s + r.baseRent, 0);
         const monthServices = breakdownRows.reduce((s, r) => s + r.services, 0);
         const monthTotal = breakdownRows.reduce((s, r) => s + r.total, 0);
 
-        if (scopedAll.length === 0 && breakdownRows.length === 0) return null;
-
         return (
-          <div className="space-y-4">
-            {/* ── 3 All-time KPI cards ── */}
-            <div className="flex items-center gap-2 px-1">
-              <TrendingUp className="w-4 h-4 text-primary shrink-0" />
-              <span className="text-sm font-bold text-foreground">تفصيل مصادر الإيراد — إجمالي كل الوقت</span>
+          <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Receipt className="w-4 h-4 text-primary" />
+              <span style={{ fontWeight: 700, fontSize: 14 }}>تفصيل الحجوزات الشهرية</span>
+              <span style={{ fontSize: 11, background: "#eff6ff", color: "#1d4ed8", borderRadius: 20, padding: "2px 8px", fontWeight: 600 }}>
+                {calType === "hijri" ? selectedHijriMonth : monthOptions.find(o => o.val === selectedMonth)?.label}
+              </span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
-              {/* Card 1 — Base Rent */}
-              <div style={{ minHeight: "150px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px", borderRadius: "16px", border: "2px solid rgba(var(--primary-rgb,59,130,246),0.25)" }} className="bg-gradient-to-br from-primary/5 to-primary/10">
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }} className="text-xs font-bold text-primary">
-                  <Home className="w-4 h-4 shrink-0" />
-                  <span>إجمالي إيرادات الإيجار</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "4px" }}>
-                  <span className="text-3xl font-extrabold text-primary tabular-nums" style={{ lineHeight: 1 }}>{fmtN(Math.round(allTimeBase))}</span>
-                  <span className="text-sm font-semibold text-muted-foreground">ر.س</span>
-                </div>
-                <div className="text-xs text-primary/70 font-medium" style={{ marginTop: "auto" }}>
-                  {allTimeTotal > 0 ? `${Math.round((allTimeBase / allTimeTotal) * 100).toLocaleString("ar-SA")}٪ من الإجمالي الكلي` : "لا توجد حجوزات بعد"}
-                </div>
-              </div>
-              {/* Card 2 — Service Fees */}
-              <div style={{ minHeight: "150px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px", borderRadius: "16px", border: "2px solid rgba(245,158,11,0.3)" }} className="bg-gradient-to-br from-amber-500/5 to-amber-500/10">
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }} className="text-xs font-bold text-amber-600">
-                  <Zap className="w-4 h-4 shrink-0" />
-                  <span>إجمالي إيرادات الخدمات</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "4px" }}>
-                  <span className="text-3xl font-extrabold text-amber-600 tabular-nums" style={{ lineHeight: 1 }}>{fmtN(Math.round(allTimeServices))}</span>
-                  <span className="text-sm font-semibold text-muted-foreground">ر.س</span>
-                </div>
-                <div className="text-xs text-amber-600/80 font-medium" style={{ marginTop: "auto" }}>
-                  {allTimeTotal > 0 ? `${Math.round((allTimeServices / allTimeTotal) * 100).toLocaleString("ar-SA")}٪ من الإجمالي الكلي` : "لا توجد خدمات مدفوعة"}
-                </div>
-              </div>
-              {/* Card 3 — Net Total */}
-              <div style={{ minHeight: "150px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px", borderRadius: "16px", border: "2px solid rgba(34,197,94,0.3)" }} className="bg-gradient-to-br from-green-500/5 to-emerald-500/10">
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }} className="text-xs font-bold text-green-700 dark:text-green-400">
-                  <DollarSign className="w-4 h-4 shrink-0" />
-                  <span>صافي الدخل الكلي</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "6px", marginTop: "4px" }}>
-                  <span className="text-3xl font-extrabold text-green-700 dark:text-green-400 tabular-nums" style={{ lineHeight: 1 }}>{fmtN(Math.round(allTimeTotal))}</span>
-                  <span className="text-sm font-semibold text-muted-foreground">ر.س</span>
-                </div>
-                <div className="text-xs text-green-600/80 font-medium" style={{ marginTop: "auto" }}>إيجار أساسي + خدمات ومرافق</div>
-              </div>
-            </div>
-
-            {/* ── Monthly breakdown table ── */}
-            {breakdownRows.length > 0 && (
-              <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Receipt className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-bold text-foreground">تفصيل الحجوزات</span>
-                  <span className="text-[10px] bg-primary/10 text-primary font-semibold px-2 py-0.5 rounded-full">
-                    {calType === "hijri" ? selectedHijriMonth : monthOptions.find(o => o.val === selectedMonth)?.label}
-                  </span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm min-w-[480px]">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">العميل</th>
-                        <th className="text-right py-2 px-2 text-xs font-semibold text-muted-foreground">التاريخ</th>
-                        <th className="text-left py-2 px-3 text-xs font-semibold text-primary">قيمة الإيجار</th>
-                        <th className="text-left py-2 px-3 text-xs font-semibold text-amber-600">قيمة الخدمات</th>
-                        <th className="text-left py-2 px-3 text-xs font-semibold text-green-700 dark:text-green-400">الإجمالي</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {breakdownRows.map((row) => {
-                        const { hijri, gregorian } = formatDualDate(row.bookingDate);
-                        return (
-                          <tr key={row.bookingId} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                            <td className="py-2.5 px-3 font-medium text-foreground">{row.clientName}</td>
-                            <td className="py-2.5 px-2 text-xs text-muted-foreground leading-tight">
-                              <div>{hijri}</div>
-                              <div className="text-[10px] opacity-70">{gregorian}</div>
-                            </td>
-                            <td className="py-2.5 px-3 text-left font-bold text-primary tabular-nums">
-                              {fmtN(row.baseRent)}
-                              <span className="text-[10px] font-normal text-muted-foreground ms-0.5">ر.س</span>
-                            </td>
-                            <td className="py-2.5 px-3 text-left font-bold text-amber-600 tabular-nums">
-                              {row.services > 0 ? <>{fmtN(row.services)}<span className="text-[10px] font-normal text-muted-foreground ms-0.5">ر.س</span></> : <span className="text-muted-foreground font-normal text-xs">—</span>}
-                            </td>
-                            <td className="py-2.5 px-3 text-left font-extrabold text-green-700 dark:text-green-400 tabular-nums">
-                              {fmtN(row.total)}
-                              <span className="text-[10px] font-normal text-muted-foreground ms-0.5">ر.س</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot className="border-t-2 border-border">
-                      <tr className="bg-muted/20">
-                        <td className="py-2.5 px-3 font-bold text-foreground text-sm" colSpan={2}>الإجمالي</td>
-                        <td className="py-2.5 px-3 text-left font-extrabold text-primary tabular-nums">
-                          {fmtN(Math.round(monthBase))}<span className="text-[10px] font-normal text-muted-foreground ms-0.5">ر.س</span>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 460 }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
+                    <th style={{ textAlign: "right", padding: "8px 12px", fontSize: 12, color: "#6b7280" }}>العميل</th>
+                    <th style={{ textAlign: "right", padding: "8px 8px", fontSize: 12, color: "#6b7280" }}>التاريخ</th>
+                    <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 12, color: "#1d4ed8", fontWeight: 700 }}>قيمة الإيجار</th>
+                    <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 12, color: "#b45309", fontWeight: 700 }}>رسوم الخدمات</th>
+                    <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 12, color: "#15803d", fontWeight: 700 }}>الإجمالي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {breakdownRows.map(row => {
+                    const { hijri, gregorian } = formatDualDate(row.bookingDate);
+                    return (
+                      <tr key={row.bookingId} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                        <td style={{ padding: "10px 12px", fontWeight: 600 }}>{row.clientName}</td>
+                        <td style={{ padding: "10px 8px", fontSize: 11, color: "#6b7280" }}>
+                          <div>{hijri}</div><div style={{ opacity: 0.7 }}>{gregorian}</div>
                         </td>
-                        <td className="py-2.5 px-3 text-left font-extrabold text-amber-600 tabular-nums">
-                          {monthServices > 0 ? <>{fmtN(Math.round(monthServices))}<span className="text-[10px] font-normal text-muted-foreground ms-0.5">ر.س</span></> : <span className="text-muted-foreground font-normal text-xs">—</span>}
+                        <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "#1d4ed8" }}>
+                          {fmtN(row.baseRent)} <span style={{ fontSize: 11, color: "#6b7280" }}>ر.س</span>
                         </td>
-                        <td className="py-2.5 px-3 text-left font-extrabold text-green-700 dark:text-green-400 tabular-nums">
-                          {fmtN(Math.round(monthTotal))}<span className="text-[10px] font-normal text-muted-foreground ms-0.5">ر.س</span>
+                        <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "#b45309" }}>
+                          {row.services > 0 ? <>{fmtN(row.services)} <span style={{ fontSize: 11, color: "#6b7280" }}>ر.س</span></> : <span style={{ color: "#9ca3af" }}>—</span>}
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#15803d" }}>
+                          {fmtN(row.total)} <span style={{ fontSize: 11, color: "#6b7280" }}>ر.س</span>
                         </td>
                       </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            )}
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: "2px solid #d1d5db", background: "#f9fafb" }}>
+                    <td colSpan={2} style={{ padding: "10px 12px", fontWeight: 700, fontSize: 13 }}>الإجمالي</td>
+                    <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#1d4ed8" }}>
+                      {fmtN(Math.round(monthBase))} <span style={{ fontSize: 11, color: "#6b7280" }}>ر.س</span>
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#b45309" }}>
+                      {monthServices > 0 ? <>{fmtN(Math.round(monthServices))} <span style={{ fontSize: 11, color: "#6b7280" }}>ر.س</span></> : <span style={{ color: "#9ca3af" }}>—</span>}
+                    </td>
+                    <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#15803d" }}>
+                      {fmtN(Math.round(monthTotal))} <span style={{ fontSize: 11, color: "#6b7280" }}>ر.س</span>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
         );
       })()}
