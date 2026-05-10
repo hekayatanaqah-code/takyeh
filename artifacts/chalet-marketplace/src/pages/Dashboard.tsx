@@ -128,10 +128,10 @@ interface OwnerMessageSettings {
   attachmentNote: string;
 }
 
-const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}", "{اسم_اليوم_من}", "{اسم_اليوم_إلى}", "{الفترة_القديمة}", "{الفترة_الجديدة}", "{الإيجار}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
+const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}", "{اسم_اليوم_من}", "{اسم_اليوم_إلى}", "{الفترة_القديمة}", "{الفترة_الجديدة}", "{الإيجار}", "{إجمالي_الخدمات}", "{تفاصيل_الخدمات}", "{الإجمالي_الكلي}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
 
 /* ── Canonical default template bodies (shared by settings defaults + RescheduleDialog fallback) ── */
-const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nقيمة الإيجار: {الإيجار} ريال.\nإجمالي الخدمات الإضافية: {إجمالي_الخدمات} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
+const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\n💰 تفاصيل المبالغ:\nقيمة حجز الشاليه: {الإيجار} ريال.\n{تفاصيل_الخدمات}الإجمالي الكلي: {الإجمالي_الكلي} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
 const DEFAULT_MODIFICATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} بناءً على ({سبب_التعديل}).\n\nالحجز السابق: يوم {اسم_اليوم_من} ({من_التاريخ} | {من_التاريخ_م}) - فترة {الفترة_القديمة}.\n\nالحجز الجديد: يوم {اسم_اليوم_إلى} ({إلى_التاريخ} | {إلى_التاريخ_م}) - فترة {الفترة_الجديدة}.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
@@ -4064,8 +4064,24 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     const _bTotal      = b.totalPrice    ? Number(b.totalPrice)    : 0;
     const _bInsurance  = insuranceFeeOverride ?? (b.insuranceFee ? Number(b.insuranceFee) : 0);
     const _bPaid       = b.depositPaid   ? Number(b.depositPaid)   : 0;
+    const _bAddons     = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+    const _bAddonsTotal = _bAddons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0).reduce((sum, a) => sum + Math.round(Number(a.price)), 0);
+    const _bBaseRent   = _bTotal - _bAddonsTotal;
     const _bRemaining  = Math.max(0, _bTotal + _bInsurance - _bPaid);
     const _fmt = (n: number) => n > 0 ? n.toLocaleString("ar-SA") : "—";
+    /* {تفاصيل_الخدمات}: expands to a multi-line services block, or "" when no paid services */
+    const _bServicesBlock = (() => {
+      if (_bAddons.length === 0) return "";
+      const lines: string[] = ["الخدمات الإضافية المختارة:"];
+      _bAddons.forEach(a => {
+        const priceStr = (a.unit === "خدمة مجانية" || Number(a.price) === 0)
+          ? "مجاني"
+          : `${Math.round(Number(a.price)).toLocaleString("ar-SA")} ريال`;
+        lines.push(`  • ${a.name}: ${priceStr}`);
+      });
+      if (_bAddonsTotal > 0) lines.push(`إجمالي الخدمات: ${_bAddonsTotal.toLocaleString("ar-SA")} ريال.`);
+      return lines.join("\n") + "\n";
+    })();
     const msg = templateBody
       .replace(/\{اسم_العميل\}/g, b.clientName ?? "")
       .replace(/\{اسم_العقار\}/g, getBookingChaletName(b))
@@ -4077,7 +4093,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       .replace(/\{من_التاريخ_م\}/g, startGreg)
       .replace(/\{إلى_التاريخ\}/g, endHijri)
       .replace(/\{إلى_التاريخ_م\}/g, endGreg)
-      .replace(/\{الإيجار\}/g, _fmt(_bTotal))
+      .replace(/\{الإيجار\}/g, _fmt(_bBaseRent))
+      .replace(/\{الإجمالي_الكلي\}/g, _fmt(_bTotal))
+      .replace(/\{إجمالي_الخدمات\}/g, _bAddonsTotal > 0 ? _bAddonsTotal.toLocaleString("ar-SA") : "—")
+      .replace(/\{تفاصيل_الخدمات\}/g, _bServicesBlock)
       .replace(/\{التأمين\}/g, _fmt(_bInsurance))
       .replace(/\{المدفوع\}/g, _fmt(_bPaid))
       .replace(/\{المتبقي\}/g, _fmt(_bRemaining))
@@ -4095,14 +4114,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         return total > 0 ? total.toLocaleString("ar-SA") : "—";
       })())
       .replace(/\{المبلغ_المسترد\}/g, (() => {
-        /* backward-compat: same as {إجمالي_المسترد} — deposit refund + insurance */
         const dep = refundAmount != null ? refundAmount : (b.cancelRefundAmount ? Number(b.cancelRefundAmount) : 0);
         const total = dep + _bInsurance;
-        return total > 0 ? total.toLocaleString("ar-SA") : "—";
-      })())
-      .replace(/\{إجمالي_الخدمات\}/g, (() => {
-        const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
-        const total = addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0).reduce((sum, a) => sum + Math.round(Number(a.price)), 0);
         return total > 0 ? total.toLocaleString("ar-SA") : "—";
       })())
       .replace(/\{[^}]+\}/g, "—");
