@@ -5432,9 +5432,23 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   `⏱ المدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`,
                 ];
 
+                const _lstAddons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+                const _lstAddonsTotal = _lstAddons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0).reduce((sum, a) => sum + Math.round(Number(a.price)), 0);
                 if (tp !== null) {
                   lines.push(``, `💰 تفاصيل المبالغ:`);
-                  lines.push(`• الإجمالي: ${fmtAR(tp)} ر.س`);
+                  if (_lstAddons.length > 0) {
+                    const _lstBaseRent = tp - _lstAddonsTotal;
+                    lines.push(`• قيمة الإيجار الأساسية: ${fmtAR(_lstBaseRent)} ر.س`);
+                    lines.push(``, `🛎 الخدمات الإضافية:`);
+                    _lstAddons.forEach(a => {
+                      const _ps = (a.unit === "خدمة مجانية" || Number(a.price) === 0) ? "مجاني" : `${fmtAR(Math.round(Number(a.price)))} ر.س`;
+                      lines.push(`  • ${a.name}: ${_ps}`);
+                    });
+                    if (_lstAddonsTotal > 0) lines.push(`  إجمالي الخدمات: ${fmtAR(_lstAddonsTotal)} ر.س`);
+                    lines.push(``, `• الإجمالي الكلي: ${fmtAR(tp)} ر.س`);
+                  } else {
+                    lines.push(`• الإجمالي: ${fmtAR(tp)} ر.س`);
+                  }
                   lines.push(`• العربون: ${fmtAR(dp ?? 0)} ر.س`);
                   lines.push(`• المتبقي: ${fmtAR(remaining ?? 0)} ر.س${b.balanceCollected ? " ✓" : ""}`);
                 }
@@ -5596,24 +5610,55 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   })()}
 
                   {/* Financial summary */}
-                  {tp !== null && (
-                    <div className="grid grid-cols-3 gap-2 bg-muted/40 rounded-lg p-2.5 text-center">
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">الإجمالي</p>
-                        <p className="text-xs font-bold text-foreground">{fmtAR(tp)} ر.س</p>
+                  {tp !== null && (() => {
+                    const listAddons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+                    const listAddonsTotal = listAddons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0).reduce((sum, a) => sum + Math.round(Number(a.price)), 0);
+                    const listBaseRent = tp - listAddonsTotal;
+                    return (
+                      <div className="space-y-2">
+                        {listAddons.length > 0 && (
+                          <div className="bg-muted/30 rounded-lg px-3 py-2 space-y-1 text-xs">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">قيمة الإيجار الأساسية</span>
+                              <span className="font-semibold text-foreground">{fmtAR(listBaseRent)} ر.س</span>
+                            </div>
+                            {listAddons.map(a => (
+                              <div key={a.id} className="flex justify-between pr-2 text-muted-foreground/80">
+                                <span>↪ {a.name}</span>
+                                <span>{a.unit === "خدمة مجانية" || Number(a.price) === 0 ? "مجاني" : `${fmtAR(Math.round(Number(a.price)))} ر.س`}</span>
+                              </div>
+                            ))}
+                            {listAddonsTotal > 0 && (
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>إجمالي الخدمات</span>
+                                <span className="font-semibold text-primary">+{fmtAR(listAddonsTotal)} ر.س</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between border-t border-border/50 pt-1">
+                              <span className="font-semibold text-foreground">الإجمالي الكلي</span>
+                              <span className="font-bold text-foreground">{fmtAR(tp)} ر.س</span>
+                            </div>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-3 gap-2 bg-muted/40 rounded-lg p-2.5 text-center">
+                          <div>
+                            <p className="text-[10px] text-muted-foreground">{listAddons.length > 0 ? "الإجمالي الكلي" : "الإجمالي"}</p>
+                            <p className="text-xs font-bold text-foreground">{fmtAR(tp)} ر.س</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground">{tp !== null && dp !== null && dp === tp ? "كامل المبلغ" : "العربون"}</p>
+                            <p className="text-xs font-bold text-green-600 dark:text-green-400">{fmtAR(dp ?? 0)} ر.س</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-muted-foreground">المتبقي</p>
+                            <p className={`text-xs font-bold ${b.balanceCollected ? "text-green-600 dark:text-green-400 line-through" : "text-amber-600 dark:text-amber-400"}`}>
+                              {fmtAR(remaining ?? 0)} ر.س
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">{tp !== null && dp !== null && dp === tp ? "كامل المبلغ" : "العربون"}</p>
-                        <p className="text-xs font-bold text-green-600 dark:text-green-400">{fmtAR(dp ?? 0)} ر.س</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">المتبقي</p>
-                        <p className={`text-xs font-bold ${b.balanceCollected ? "text-green-600 dark:text-green-400 line-through" : "text-amber-600 dark:text-amber-400"}`}>
-                          {fmtAR(remaining ?? 0)} ر.س
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                   {ins !== null && (
                     <div className={`rounded-lg border px-3 py-2 ${b.insuranceRefunded ? "bg-slate-50 dark:bg-slate-900/20 border-slate-200 dark:border-slate-700" : "bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800"}`}>
                       <div className="flex items-center justify-between">
