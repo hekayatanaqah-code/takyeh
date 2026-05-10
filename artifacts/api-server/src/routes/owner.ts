@@ -83,7 +83,7 @@ function calcBookingRev(b: { totalPrice: string | null; depositPaid: string | nu
   return Number(b.depositPaid ?? 0);
 }
 
-const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nقيمة الإيجار: {الإيجار} ريال.\nإجمالي الخدمات الإضافية: {إجمالي_الخدمات} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
+const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\n💰 تفاصيل المبالغ:\nقيمة الإيجار: {قيمة_الإيجار} ريال.\nقيمة الإضافات: {إجمالي_الخدمات} ريال.\nالإجمالي الكلي: {الإجمالي_الكلي} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
 const DEFAULT_CANCELLATION_TEMPLATE = "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}.\n\nالسبب: {سبب_الإلغاء}.\n\nتفاصيل المبالغ المُستردّة:\n• استرداد العربون: {استرداد_العربون} ريال\n• استرداد التأمين: {استرداد_التأمين} ريال\n• إجمالي المبلغ المسترد: {إجمالي_المسترد} ريال";
 const DEFAULT_MODIFICATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} بناءً على ({سبب_التعديل}).\n\nالحجز السابق: يوم {اسم_اليوم_من} ({من_التاريخ} | {من_التاريخ_م}) - فترة {الفترة_القديمة}.\n\nالحجز الجديد: يوم {اسم_اليوم_إلى} ({إلى_التاريخ} | {إلى_التاريخ_م}) - فترة {الفترة_الجديدة}.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
 
@@ -812,7 +812,7 @@ function normalizeMessageSettings(row: typeof ownerNotificationSettingsTable.$in
     bookingConfirmationEnabled: row?.bookingConfirmationEnabled ?? false,
     bookingConfirmationTemplate: (() => {
       const t = row?.bookingConfirmationTemplate;
-      return (t && t.includes("{الإيجار}")) ? t : DEFAULT_BOOKING_CONFIRMATION_TEMPLATE;
+      return (t && t.includes("{الإجمالي_الكلي}")) ? t : DEFAULT_BOOKING_CONFIRMATION_TEMPLATE;
     })(),
     changeNoticeEnabled: row?.changeNoticeEnabled ?? false,
     cancellationTemplate: row?.arrivalReminderTemplate || DEFAULT_CANCELLATION_TEMPLATE,
