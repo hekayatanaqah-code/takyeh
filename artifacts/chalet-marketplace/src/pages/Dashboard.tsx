@@ -1401,13 +1401,9 @@ function AddBookingDialog({
       .reduce((sum, a) => sum + Math.round(Number(a.price)), 0),
   [dialogAddons, selectedAddonIds]);
 
-  /* ── Auto-update totalPrice when addon selection changes ── */
+  /* ── Track addons total (no longer mutates totalPrice — base rent stays separate) ── */
   useEffect(() => {
-    const diff = addonsTotalPrice - prevAddonsTotalRef.current;
-    if (diff !== 0) {
-      setTotalPrice(prev => String(Math.max(0, (Number(prev) || 0) + diff)));
-      prevAddonsTotalRef.current = addonsTotalPrice;
-    }
+    prevAddonsTotalRef.current = addonsTotalPrice;
   }, [addonsTotalPrice]);
 
   /* ── Derived chalet — must be declared BEFORE any derived variables that use it ── */
@@ -1514,7 +1510,8 @@ function AddBookingDialog({
 
   const tp = totalPrice ? Math.round(Number(totalPrice)) : null;
   const dp = depositPaid ? Math.round(Number(depositPaid)) : null;
-  const remainingBalance = tp !== null && dp !== null ? Math.max(0, tp - dp) : null;
+  const grandTotal = tp !== null ? tp + addonsTotalPrice : null;
+  const remainingBalance = grandTotal !== null && dp !== null ? Math.max(0, grandTotal - dp) : null;
 
   // Auto-fill client name + detect new/returning customer
   const handlePhoneBlur = async () => {
@@ -1553,7 +1550,7 @@ function AddBookingDialog({
     if (!bookingDate) { setError("يرجى اختيار تاريخ الحجز"); return; }
     if (maintenanceBlockNote) { setError(`هذا اليوم غير متاح للحجز (صيانة/إغلاق مؤقت) — ${maintenanceBlockNote}`); return; }
     if (!period || period === "none") { setError("يرجى اختيار الفترة"); return; }
-    if (!totalPrice) { setError("يرجى إدخال إجمالي قيمة الحجز"); return; }
+    if (!totalPrice) { setError("يرجى إدخال قيمة الإيجار الأساسية"); return; }
     if (Number(depositPaid) > 0 && !paymentMethod) { setError("الرجاء اختيار طريقة الدفع"); return; }
     setSaving(true); setError("");
     try {
@@ -1568,7 +1565,7 @@ function AddBookingDialog({
           source,
           notes: notes || undefined,
           submissionId: submissionId && submissionId !== "none" ? Number(submissionId) : undefined,
-          totalPrice: totalPrice ? Math.round(Number(totalPrice)) : undefined,
+          totalPrice: totalPrice ? Math.round(Number(totalPrice)) + addonsTotalPrice : undefined,
           depositPaid: depositPaid ? Math.round(Number(depositPaid)) : undefined,
           insuranceFee: insuranceFee ? Math.round(Number(insuranceFee)) : undefined,
           paymentMethod,
@@ -1811,10 +1808,24 @@ function AddBookingDialog({
                   })}
                 </div>
               )}
-              {selectedAddonIds.length > 0 && addonsTotalPrice > 0 && (
-                <div className="flex items-center justify-between rounded-lg bg-primary/8 border border-primary/20 px-3 py-2">
-                  <span className="text-xs font-semibold text-muted-foreground">تمت إضافة الخدمات للإجمالي</span>
-                  <span className="text-sm font-bold text-primary">+ {toAr(addonsTotalPrice)} ر.س</span>
+              {addonsTotalPrice > 0 && (
+                <div className="rounded-lg bg-muted/50 border border-border px-3 py-2 space-y-1 text-xs">
+                  {totalPrice && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>قيمة الإيجار الأساسية</span>
+                      <span className="font-semibold text-foreground">{toAr(Number(totalPrice) || 0)} ر.س</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>إجمالي الخدمات الإضافية</span>
+                    <span className="font-semibold text-primary">+ {toAr(addonsTotalPrice)} ر.س</span>
+                  </div>
+                  {totalPrice && (
+                    <div className="flex justify-between border-t border-border pt-1">
+                      <span className="font-semibold text-foreground">الإجمالي الكلي</span>
+                      <span className="font-bold text-primary">{toAr((Number(totalPrice) || 0) + addonsTotalPrice)} ر.س</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1864,7 +1875,7 @@ function AddBookingDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">
-                  إجمالي قيمة الحجز (ر.س) <span className="text-destructive">*</span>
+                  قيمة الإيجار الأساسية (ر.س) <span className="text-destructive">*</span>
                 </label>
                 <Input
                   type="text"
@@ -4171,21 +4182,25 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       `📅 التاريخ: ${dualDate}`,
       `⏱ المدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`,
     ];
+    const _receiptAddons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+    const _receiptAddonsTotal = _receiptAddons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0).reduce((sum, a) => sum + Math.round(Number(a.price)), 0);
     if (tp !== null) {
       lines.push(``, `💰 تفاصيل المبالغ:`);
-      lines.push(`• الإجمالي: ${fmtR(tp)} ر.س`);
+      if (_receiptAddons.length > 0) {
+        const baseRent = tp - _receiptAddonsTotal;
+        lines.push(`• قيمة الإيجار الأساسية: ${fmtR(baseRent)} ر.س`);
+        lines.push(``, `🛎 الخدمات الإضافية:`);
+        _receiptAddons.forEach(a => {
+          const _ps = (a.unit === "خدمة مجانية" || Number(a.price) === 0) ? "مجاني" : `${fmtR(Math.round(Number(a.price)))} ر.س`;
+          lines.push(`  • ${a.name}: ${_ps}`);
+        });
+        if (_receiptAddonsTotal > 0) lines.push(`  إجمالي الخدمات: ${fmtR(_receiptAddonsTotal)} ر.س`);
+        lines.push(``, `• الإجمالي الكلي: ${fmtR(tp)} ر.س`);
+      } else {
+        lines.push(`• الإجمالي: ${fmtR(tp)} ر.س`);
+      }
       lines.push(`• العربون: ${fmtR(dp ?? 0)} ر.س`);
       lines.push(`• المتبقي: ${fmtR(rem ?? 0)} ر.س${b.balanceCollected ? " ✓" : ""}`);
-    }
-    const _receiptAddons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
-    if (_receiptAddons.length > 0) {
-      lines.push(``, `🛎 الخدمات الإضافية:`);
-      _receiptAddons.forEach(a => {
-        const _ps = (a.unit === "خدمة مجانية" || Number(a.price) === 0) ? "مجاني" : `${fmtR(Math.round(Number(a.price)))} ر.س`;
-        lines.push(`  • ${a.name}: ${_ps}`);
-      });
-      const _at = _receiptAddons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0).reduce((sum, a) => sum + Math.round(Number(a.price)), 0);
-      if (_at > 0) lines.push(`  إجمالي الخدمات: ${fmtR(_at)} ر.س`);
     }
     if (ins) {
       if (!b.insuranceRefunded) {
@@ -4498,18 +4513,35 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             </span>
                           </span>
                         </>}
-                        {total !== null && <>
-                          <span>الإجمالي</span>
-                          <span className="font-semibold text-foreground text-left">{total.toLocaleString("ar-SA")} ر.س</span>
-                        </>}
-                        {b.bookedAddons && Array.isArray(b.bookedAddons) && (b.bookedAddons as any[]).length > 0 &&
-                          (b.bookedAddons as Array<{ id: number; name: string; price: string; unit: string }>).flatMap(a => [
-                            <span key={`al-${a.id}`} className="pr-3 text-muted-foreground/60 truncate">↪ {a.name}</span>,
-                            <span key={`ap-${a.id}`} className="text-foreground/80 text-left text-[0.68rem]">
-                              {a.unit === "خدمة مجانية" || Number(a.price) === 0 ? "مجاني" : `${Math.round(Number(a.price)).toLocaleString("ar-SA")} ر.س`}
-                            </span>,
-                          ])
-                        }
+                        {total !== null && (() => {
+                          const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+                          const addonsTotal = addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0).reduce((sum, a) => sum + Math.round(Number(a.price)), 0);
+                          const baseRent = total - addonsTotal;
+                          const hasAddons = addons.length > 0;
+                          return hasAddons ? (
+                            <>
+                              <span>قيمة الإيجار</span>
+                              <span className="font-semibold text-foreground text-left">{baseRent.toLocaleString("ar-SA")} ر.س</span>
+                              {addons.flatMap(a => [
+                                <span key={`al-${a.id}`} className="pr-3 text-muted-foreground/60 truncate">↪ {a.name}</span>,
+                                <span key={`ap-${a.id}`} className="text-foreground/80 text-left text-[0.68rem]">
+                                  {a.unit === "خدمة مجانية" || Number(a.price) === 0 ? "مجاني" : `${Math.round(Number(a.price)).toLocaleString("ar-SA")} ر.س`}
+                                </span>,
+                              ])}
+                              {addonsTotal > 0 && <>
+                                <span className="text-muted-foreground">إجمالي الخدمات</span>
+                                <span className="text-foreground text-left">{addonsTotal.toLocaleString("ar-SA")} ر.س</span>
+                              </>}
+                              <span className="font-semibold text-foreground border-t border-border/50 pt-1">الإجمالي الكلي</span>
+                              <span className="font-bold text-foreground text-left border-t border-border/50 pt-1">{total.toLocaleString("ar-SA")} ر.س</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>الإجمالي</span>
+                              <span className="font-semibold text-foreground text-left">{total.toLocaleString("ar-SA")} ر.س</span>
+                            </>
+                          );
+                        })()}
                         {dep !== null && dep > 0 && <>
                           <span>العربون</span>
                           <span className="font-semibold text-foreground text-left">{dep.toLocaleString("ar-SA")} ر.س</span>
