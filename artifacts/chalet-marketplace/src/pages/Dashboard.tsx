@@ -8754,8 +8754,8 @@ function ServiceInsurancesTab() {
   );
 }
 
-/* ── Analytics Tab ──────────────────────────── */
-function AnalyticsTab() {
+/* ── (AnalyticsTab removed — consolidated into RevenueTab) ── */
+function _AnalyticsTab_REMOVED() {
   const { unit } = useAdminFinance();
 
   const { data: allBookings = [], isLoading } = useQuery<OwnerBooking[]>({
@@ -10146,121 +10146,161 @@ function RevenueTab() {
         </>
       )}
 
-      {/* ── Booking Revenue Breakdown: base rent vs addons ── */}
+      {/* ── Revenue Breakdown: 3 KPI cards (all-time) + per-booking table ── */}
       {unit.type !== "service" && (() => {
-        const addonMap: Record<string, number> = {};
-        let totalBaseRent = 0;
-        let totalAddonRevenue = 0;
+        // All-time totals from all bookings in scope
+        let allTimeBase = 0, allTimeServices = 0;
+        const scopedAll = unit.type === "chalet"
+          ? allBookings.filter(b => (b as any).chaletId === (unit as any).id)
+          : allBookings;
+        for (const b of scopedAll) {
+          if (!b.totalPrice) continue;
+          const tp = Number(b.totalPrice);
+          const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+          const addonSum = addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
+            .reduce((s, a) => s + Math.round(Number(a.price)), 0);
+          allTimeBase += tp - addonSum;
+          allTimeServices += addonSum;
+        }
+        const allTimeTotal = allTimeBase + allTimeServices;
+
+        // Per-booking breakdown for selected month
+        interface BreakdownRow { bookingId: number; clientName: string; bookingDate: string; baseRent: number; services: number; total: number; }
+        const breakdownRows: BreakdownRow[] = [];
         for (const b of monthBookings) {
           if (!b.totalPrice) continue;
           const tp = Number(b.totalPrice);
           const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
-          const paidAddons = addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0);
-          const addonSum = paidAddons.reduce((s, a) => s + Math.round(Number(a.price)), 0);
-          totalBaseRent += tp - addonSum;
-          totalAddonRevenue += addonSum;
-          for (const a of paidAddons) {
-            addonMap[a.name] = (addonMap[a.name] ?? 0) + Math.round(Number(a.price));
-          }
+          const addonSum = addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
+            .reduce((s, a) => s + Math.round(Number(a.price)), 0);
+          breakdownRows.push({
+            bookingId: b.id,
+            clientName: b.clientName,
+            bookingDate: b.bookingDate,
+            baseRent: tp - addonSum,
+            services: addonSum,
+            total: tp,
+          });
         }
-        const grandTotal = totalBaseRent + totalAddonRevenue;
-        if (grandTotal === 0) return null;
-        const basePct = Math.round((totalBaseRent / grandTotal) * 100);
-        const addonPct = 100 - basePct;
-        const topServices = Object.entries(addonMap)
-          .map(([name, total]) => ({ name, total }))
-          .sort((a, b) => b.total - a.total)
-          .slice(0, 5);
+
+        const monthBase = breakdownRows.reduce((s, r) => s + r.baseRent, 0);
+        const monthServices = breakdownRows.reduce((s, r) => s + r.services, 0);
+        const monthTotal = breakdownRows.reduce((s, r) => s + r.total, 0);
+
+        if (allTimeTotal === 0 && breakdownRows.length === 0) return null;
+
         return (
-          <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingUp className="w-4 h-4 text-primary" />
-              <span className="text-sm font-bold text-foreground">تحليل مصادر الإيراد</span>
-              <span className="ms-auto text-[10px] text-muted-foreground">{calType === "hijri" ? selectedHijriMonth : monthOptions.find(o => o.val === selectedMonth)?.label}</span>
+          <div className="space-y-4">
+            {/* ── 3 All-time KPI cards ── */}
+            <div className="flex items-center gap-2 px-1">
+              <TrendingUp className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-sm font-bold text-foreground">تفصيل مصادر الإيراد — إجمالي كل الوقت</span>
             </div>
-
-            {/* Two breakdown cards */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-1">
-                <div className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
-                  <Home className="w-3 h-3" /> إيرادات الإيجار الأساسية
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Card 1 — Base Rent */}
+              <div className="bg-gradient-to-br from-primary/5 to-primary/10 border-2 border-primary/25 rounded-2xl p-4 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-primary uppercase tracking-wide">
+                  <Home className="w-3.5 h-3.5" />
+                  إجمالي إيرادات الإيجار
                 </div>
-                <div className="text-xl font-bold text-primary tabular-nums">
-                  {fmtN(Math.round(totalBaseRent))}
-                  <span className="text-xs font-normal text-muted-foreground ms-1">ر.س</span>
+                <div className="text-2xl font-extrabold text-primary tabular-nums">
+                  {fmtN(Math.round(allTimeBase))}
+                  <span className="text-sm font-normal text-muted-foreground ms-1">ر.س</span>
                 </div>
-                <div className="text-[10px] text-primary/70 font-medium">{basePct.toLocaleString("ar-SA")}٪ من الإجمالي</div>
-              </div>
-              <div className="bg-amber-500/5 border border-amber-400/20 rounded-xl p-3 space-y-1">
-                <div className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
-                  <Zap className="w-3 h-3 text-amber-500" /> إيرادات الخدمات والمرافق
+                <div className="text-[10px] text-primary/70 font-medium">
+                  {allTimeTotal > 0 ? `${Math.round((allTimeBase / allTimeTotal) * 100).toLocaleString("ar-SA")}٪ من الإجمالي الكلي` : "—"}
                 </div>
-                <div className="text-xl font-bold text-amber-600 tabular-nums">
-                  {fmtN(Math.round(totalAddonRevenue))}
-                  <span className="text-xs font-normal text-muted-foreground ms-1">ر.س</span>
+              </div>
+              {/* Card 2 — Service Fees */}
+              <div className="bg-gradient-to-br from-amber-500/5 to-amber-500/10 border-2 border-amber-400/30 rounded-2xl p-4 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 uppercase tracking-wide">
+                  <Zap className="w-3.5 h-3.5" />
+                  إجمالي إيرادات الخدمات
                 </div>
-                <div className="text-[10px] text-amber-600/80 font-medium">{addonPct.toLocaleString("ar-SA")}٪ من الإجمالي</div>
+                <div className="text-2xl font-extrabold text-amber-600 tabular-nums">
+                  {fmtN(Math.round(allTimeServices))}
+                  <span className="text-sm font-normal text-muted-foreground ms-1">ر.س</span>
+                </div>
+                <div className="text-[10px] text-amber-600/80 font-medium">
+                  {allTimeTotal > 0 ? `${Math.round((allTimeServices / allTimeTotal) * 100).toLocaleString("ar-SA")}٪ من الإجمالي الكلي` : "—"}
+                </div>
               </div>
-            </div>
-
-            {/* Contribution bar */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>نسبة كل مصدر من إجمالي الإيراد</span>
-                <span className="font-bold tabular-nums">{fmtN(Math.round(grandTotal))} ر.س</span>
-              </div>
-              <div className="h-6 rounded-full overflow-hidden flex gap-px">
-                {basePct > 0 && (
-                  <div style={{ width: `${basePct}%` }} className="bg-primary flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500">
-                    {basePct > 12 ? `${basePct.toLocaleString("ar-SA")}٪` : ""}
-                  </div>
-                )}
-                {addonPct > 0 && (
-                  <div style={{ width: `${addonPct}%` }} className="bg-amber-500 flex items-center justify-center text-[10px] font-bold text-white transition-all duration-500">
-                    {addonPct > 12 ? `${addonPct.toLocaleString("ar-SA")}٪` : ""}
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-4 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-primary inline-block" />
-                  إيجار أساسي
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
-                  خدمات وملاحق
-                </span>
+              {/* Card 3 — Net Total */}
+              <div className="bg-gradient-to-br from-green-500/5 to-emerald-500/10 border-2 border-green-400/30 rounded-2xl p-4 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-green-700 dark:text-green-400 uppercase tracking-wide">
+                  <DollarSign className="w-3.5 h-3.5" />
+                  صافي الدخل الكلي
+                </div>
+                <div className="text-2xl font-extrabold text-green-700 dark:text-green-400 tabular-nums">
+                  {fmtN(Math.round(allTimeTotal))}
+                  <span className="text-sm font-normal text-muted-foreground ms-1">ر.س</span>
+                </div>
+                <div className="text-[10px] text-green-600/80 font-medium">إيجار أساسي + خدمات ومرافق</div>
               </div>
             </div>
 
-            {/* Top services */}
-            {topServices.length > 0 && (
-              <div className="space-y-2 border-t border-border/50 pt-3">
-                <div className="text-[11px] font-bold text-foreground mb-2">أكثر الخدمات تحقيقاً للأرباح</div>
-                {topServices.map((svc, i) => {
-                  const pct = Math.round((svc.total / totalAddonRevenue) * 100);
-                  const barColors = ["bg-amber-500", "bg-orange-500", "bg-yellow-500", "bg-amber-400", "bg-orange-400"];
-                  return (
-                    <div key={svc.name} className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="font-medium text-foreground flex items-center gap-1">
-                          <span className="text-[10px] text-muted-foreground tabular-nums">{(i + 1).toLocaleString("ar-SA")}.</span>
-                          {svc.name}
-                        </span>
-                        <span className="font-bold text-amber-600 tabular-nums">{fmtN(svc.total)} ر.س</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div style={{ width: `${pct}%` }} className={`h-full rounded-full transition-all duration-500 ${barColors[i] ?? "bg-amber-500"}`} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {topServices.length === 0 && (
-              <div className="text-center text-[11px] text-muted-foreground py-2 border-t border-border/50 pt-3">
-                لا توجد بيانات خدمات لهذا الشهر — سيظهر التحليل عند حجز خدمات مدفوعة
+            {/* ── Monthly breakdown table ── */}
+            {breakdownRows.length > 0 && (
+              <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Receipt className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-bold text-foreground">تفصيل الحجوزات</span>
+                  <span className="text-[10px] bg-primary/10 text-primary font-semibold px-2 py-0.5 rounded-full">
+                    {calType === "hijri" ? selectedHijriMonth : monthOptions.find(o => o.val === selectedMonth)?.label}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[480px]">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">العميل</th>
+                        <th className="text-right py-2 px-2 text-xs font-semibold text-muted-foreground">التاريخ</th>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-primary">قيمة الإيجار</th>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-amber-600">قيمة الخدمات</th>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-green-700 dark:text-green-400">الإجمالي</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {breakdownRows.map((row) => {
+                        const { hijri, gregorian } = formatDualDate(row.bookingDate);
+                        return (
+                          <tr key={row.bookingId} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                            <td className="py-2.5 px-3 font-medium text-foreground">{row.clientName}</td>
+                            <td className="py-2.5 px-2 text-xs text-muted-foreground leading-tight">
+                              <div>{hijri}</div>
+                              <div className="text-[10px] opacity-70">{gregorian}</div>
+                            </td>
+                            <td className="py-2.5 px-3 text-left font-bold text-primary tabular-nums">
+                              {fmtN(row.baseRent)}
+                              <span className="text-[10px] font-normal text-muted-foreground ms-0.5">ر.س</span>
+                            </td>
+                            <td className="py-2.5 px-3 text-left font-bold text-amber-600 tabular-nums">
+                              {row.services > 0 ? <>{fmtN(row.services)}<span className="text-[10px] font-normal text-muted-foreground ms-0.5">ر.س</span></> : <span className="text-muted-foreground font-normal text-xs">—</span>}
+                            </td>
+                            <td className="py-2.5 px-3 text-left font-extrabold text-green-700 dark:text-green-400 tabular-nums">
+                              {fmtN(row.total)}
+                              <span className="text-[10px] font-normal text-muted-foreground ms-0.5">ر.س</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="border-t-2 border-border">
+                      <tr className="bg-muted/20">
+                        <td className="py-2.5 px-3 font-bold text-foreground text-sm" colSpan={2}>الإجمالي</td>
+                        <td className="py-2.5 px-3 text-left font-extrabold text-primary tabular-nums">
+                          {fmtN(Math.round(monthBase))}<span className="text-[10px] font-normal text-muted-foreground ms-0.5">ر.س</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-left font-extrabold text-amber-600 tabular-nums">
+                          {monthServices > 0 ? <>{fmtN(Math.round(monthServices))}<span className="text-[10px] font-normal text-muted-foreground ms-0.5">ر.س</span></> : <span className="text-muted-foreground font-normal text-xs">—</span>}
+                        </td>
+                        <td className="py-2.5 px-3 text-left font-extrabold text-green-700 dark:text-green-400 tabular-nums">
+                          {fmtN(Math.round(monthTotal))}<span className="text-[10px] font-normal text-muted-foreground ms-0.5">ر.س</span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
             )}
           </div>
@@ -16364,7 +16404,7 @@ function OwnerMessageSettingsTab() {
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
-  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history" | "analytics">("revenue");
+  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history">("revenue");
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
@@ -17128,7 +17168,6 @@ export default function Dashboard() {
         {dashMode === "admin-finance" && !actAsStaff && (() => {
           const afTabs = [
             { id: "revenue",       label: "الإيرادات",             icon: <TrendingUp className="w-4 h-4" />,   color: "text-green-600" },
-            { id: "analytics",     label: "الإحصائيات والتقارير",  icon: <PieChart className="w-4 h-4" />,     color: "text-violet-600" },
             { id: "expenses",      label: "المصروفات",             icon: <TrendingDown className="w-4 h-4" />, color: "text-red-500" },
             { id: "staff",         label: "الموظفون",              icon: <Users className="w-4 h-4" />,        color: "text-blue-600" },
             { id: "customers",     label: "قاعدة العملاء",        icon: <UserCheck className="w-4 h-4" />,    color: "text-purple-600" },
@@ -17187,7 +17226,7 @@ export default function Dashboard() {
               </div>
 
               {/* ── Unit Selector (for Revenue / Expenses / Reports tabs) ── */}
-              {(adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "reports" || adminFinanceTab === "analytics") && (
+              {(adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "reports") && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                     <BarChart2 className="w-3.5 h-3.5" />عرض التقارير المالية لـ:
@@ -17243,14 +17282,13 @@ export default function Dashboard() {
               )}
 
               {/* Consolidated banner (shown for "all" view only) */}
-              {selectedFinanceUnit.type === "all" && isCrossOwner && (adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "staff" || adminFinanceTab === "reports" || adminFinanceTab === "analytics") && (
+              {selectedFinanceUnit.type === "all" && isCrossOwner && (adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "staff" || adminFinanceTab === "reports") && (
                 <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-primary font-semibold flex items-center gap-2">
                   <Zap className="w-3.5 h-3.5" />
-                  {adminFinanceTab === "revenue"   && "الإيرادات الموحّدة — تشمل حجوزات الشاليهات وإيرادات الخدمات"}
-                  {adminFinanceTab === "expenses"  && "المصروفات الموحّدة — تشمل مصروفات الشاليهات والخدمات"}
-                  {adminFinanceTab === "staff"     && "فريق العمل الموحّد — جميع الموظفين في شاليهاتك وخدماتك"}
-                  {adminFinanceTab === "reports"   && "التقارير الإجمالية — تجمع بيانات كل نشاطاتك"}
-                  {adminFinanceTab === "analytics" && "تحليل مصادر الدخل — إيجار أساسي مقابل خدمات ومرافق"}
+                  {adminFinanceTab === "revenue"  && "الإيرادات الموحّدة — تشمل حجوزات الشاليهات وإيرادات الخدمات"}
+                  {adminFinanceTab === "expenses" && "المصروفات الموحّدة — تشمل مصروفات الشاليهات والخدمات"}
+                  {adminFinanceTab === "staff"    && "فريق العمل الموحّد — جميع الموظفين في شاليهاتك وخدماتك"}
+                  {adminFinanceTab === "reports"  && "التقارير الإجمالية — تجمع بيانات كل نشاطاتك"}
                 </div>
               )}
 
@@ -17258,7 +17296,6 @@ export default function Dashboard() {
               <AdminFinanceCtx.Provider value={{ unit: selectedFinanceUnit }}>
               <div className="min-h-[320px]">
                 {adminFinanceTab === "revenue"       && <RevenueTab />}
-                {adminFinanceTab === "analytics"     && <AnalyticsTab />}
                 {adminFinanceTab === "expenses"      && <ExpensesTab />}
                 {adminFinanceTab === "staff"         && <StaffTab />}
                 {adminFinanceTab === "customers"     && (
