@@ -105,6 +105,7 @@ interface OwnerBooking {
   paymentMethod?: "cash" | "transfer" | "pos" | null;
   cashDeposited?: boolean;
   paymentReceiptUrl?: string | null;
+  bookedAddons?: Array<{ id: number; name: string; price: string; unit: string }> | null;
 }
 
 function getLocalDateStr(date = new Date()) {
@@ -130,7 +131,7 @@ interface OwnerMessageSettings {
 const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}", "{اسم_اليوم_من}", "{اسم_اليوم_إلى}", "{الفترة_القديمة}", "{الفترة_الجديدة}", "{الإيجار}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
 
 /* ── Canonical default template bodies (shared by settings defaults + RescheduleDialog fallback) ── */
-const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
+const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nقيمة الإيجار: {الإيجار} ريال.\nإجمالي الخدمات الإضافية: {إجمالي_الخدمات} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
 const DEFAULT_MODIFICATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} بناءً على ({سبب_التعديل}).\n\nالحجز السابق: يوم {اسم_اليوم_من} ({من_التاريخ} | {من_التاريخ_م}) - فترة {الفترة_القديمة}.\n\nالحجز الجديد: يوم {اسم_اليوم_إلى} ({إلى_التاريخ} | {إلى_التاريخ_م}) - فترة {الفترة_الجديدة}.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
@@ -4088,6 +4089,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         const total = dep + _bInsurance;
         return total > 0 ? total.toLocaleString("ar-SA") : "—";
       })())
+      .replace(/\{إجمالي_الخدمات\}/g, (() => {
+        const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+        const total = addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0).reduce((sum, a) => sum + Math.round(Number(a.price)), 0);
+        return total > 0 ? total.toLocaleString("ar-SA") : "—";
+      })())
       .replace(/\{[^}]+\}/g, "—");
     if (returnOnly) return msg;
     const encoded = encodeURIComponent(msg);
@@ -4170,6 +4176,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       lines.push(`• الإجمالي: ${fmtR(tp)} ر.س`);
       lines.push(`• العربون: ${fmtR(dp ?? 0)} ر.س`);
       lines.push(`• المتبقي: ${fmtR(rem ?? 0)} ر.س${b.balanceCollected ? " ✓" : ""}`);
+    }
+    const _receiptAddons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+    if (_receiptAddons.length > 0) {
+      lines.push(``, `🛎 الخدمات الإضافية:`);
+      _receiptAddons.forEach(a => {
+        const _ps = (a.unit === "خدمة مجانية" || Number(a.price) === 0) ? "مجاني" : `${fmtR(Math.round(Number(a.price)))} ر.س`;
+        lines.push(`  • ${a.name}: ${_ps}`);
+      });
+      const _at = _receiptAddons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0).reduce((sum, a) => sum + Math.round(Number(a.price)), 0);
+      if (_at > 0) lines.push(`  إجمالي الخدمات: ${fmtR(_at)} ر.س`);
     }
     if (ins) {
       if (!b.insuranceRefunded) {
@@ -4486,6 +4502,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <span>الإجمالي</span>
                           <span className="font-semibold text-foreground text-left">{total.toLocaleString("ar-SA")} ر.س</span>
                         </>}
+                        {b.bookedAddons && Array.isArray(b.bookedAddons) && (b.bookedAddons as any[]).length > 0 &&
+                          (b.bookedAddons as Array<{ id: number; name: string; price: string; unit: string }>).flatMap(a => [
+                            <span key={`al-${a.id}`} className="pr-3 text-muted-foreground/60 truncate">↪ {a.name}</span>,
+                            <span key={`ap-${a.id}`} className="text-foreground/80 text-left text-[0.68rem]">
+                              {a.unit === "خدمة مجانية" || Number(a.price) === 0 ? "مجاني" : `${Math.round(Number(a.price)).toLocaleString("ar-SA")} ر.س`}
+                            </span>,
+                          ])
+                        }
                         {dep !== null && dep > 0 && <>
                           <span>العربون</span>
                           <span className="font-semibold text-foreground text-left">{dep.toLocaleString("ar-SA")} ر.س</span>

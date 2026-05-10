@@ -83,7 +83,7 @@ function calcBookingRev(b: { totalPrice: string | null; depositPaid: string | nu
   return Number(b.depositPaid ?? 0);
 }
 
-const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
+const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nقيمة الإيجار: {الإيجار} ريال.\nإجمالي الخدمات الإضافية: {إجمالي_الخدمات} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
 const DEFAULT_CANCELLATION_TEMPLATE = "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}.\n\nالسبب: {سبب_الإلغاء}.\n\nتفاصيل المبالغ المُستردّة:\n• استرداد العربون: {استرداد_العربون} ريال\n• استرداد التأمين: {استرداد_التأمين} ريال\n• إجمالي المبلغ المسترد: {إجمالي_المسترد} ريال";
 const DEFAULT_MODIFICATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} بناءً على ({سبب_التعديل}).\n\nالحجز السابق: يوم {اسم_اليوم_من} ({من_التاريخ} | {من_التاريخ_م}) - فترة {الفترة_القديمة}.\n\nالحجز الجديد: يوم {اسم_اليوم_إلى} ({إلى_التاريخ} | {إلى_التاريخ_م}) - فترة {الفترة_الجديدة}.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
 
@@ -1048,14 +1048,19 @@ router.post("/bookings", async (req, res) => {
         }
       }
       const periodLabel = booking.period === "morning" ? "صباحي" : booking.period === "evening" ? "مسائي" : "يوم كامل";
-      let msg = `حجز جديد في ${chaletName} — ${booking.clientName} — ${booking.bookingDate} (${periodLabel})`;
+      const _notifAddons = (booking.bookedAddons as Array<{ id: number; name: string; price: string; unit: string }> | null) ?? [];
+      const _notifAddonsTotal = _notifAddons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0).reduce((sum, a) => sum + Math.round(Number(a.price)), 0);
+      const _notifAddonsSuffix = _notifAddons.length > 0
+        ? `\nالخدمات الإضافية: ${_notifAddons.map(a => a.name).join("، ")}${_notifAddonsTotal > 0 ? ` (${_notifAddonsTotal} ر.س)` : " (مجاني)"}`
+        : "";
+      let msg = `حجز جديد في ${chaletName} — ${booking.clientName} — ${booking.bookingDate} (${periodLabel})${_notifAddonsSuffix}`;
       const [waSetting] = await db
         .select()
         .from(ownerNotificationSettingsTable)
         .where(eq(ownerNotificationSettingsTable.ownerId, ownerId))
         .limit(1);
       if (waSetting?.waEnabled && waSetting.waPhone) {
-        const waText = encodeURIComponent(`حجز جديد في ${chaletName}:\nالعميل: ${booking.clientName}\nالتاريخ: ${booking.bookingDate}\nالفترة: ${periodLabel}`);
+        const waText = encodeURIComponent(`حجز جديد في ${chaletName}:\nالعميل: ${booking.clientName}\nالتاريخ: ${booking.bookingDate}\nالفترة: ${periodLabel}${_notifAddonsSuffix}`);
         msg += ` | wa.me/${waSetting.waPhone}?text=${waText}`;
       }
       await db.insert(ownerNotificationsTable).values({
