@@ -9191,7 +9191,7 @@ function RevenueTab() {
     },
   });
 
-  // ── All-time revenue breakdown (hook-level, not inside JSX) ─────────────
+  // ── All-time revenue breakdown (kept for reference) ──────────────────────
   const revBreakdown = useMemo(() => {
     const scopedBookings = unit.type === "chalet"
       ? allBookings.filter(b => (b as any).chaletId === (unit as any).id)
@@ -9208,7 +9208,6 @@ function RevenueTab() {
       totalServices += svc;
     }
     const total = totalBaseRent + totalServices;
-    console.log("[تكية Finance] bookings:", scopedBookings.length, "| إيجار:", Math.round(totalBaseRent), "| خدمات:", Math.round(totalServices), "| إجمالي:", Math.round(total));
     return { base: Math.round(totalBaseRent), services: Math.round(totalServices), total: Math.round(total) };
   }, [allBookings, unit]);
 
@@ -9289,6 +9288,22 @@ function RevenueTab() {
     if (unit.type === "chalet") filtered = filtered.filter(b => (b as any).chaletId === (unit as any).id);
     return filtered;
   }, [allBookings, selectedMonth, selectedHijriMonth, calType, unit]);
+
+  // ── Monthly revenue breakdown: base rent + services for selected month ───
+  const monthRevBreakdown = useMemo(() => {
+    let base = 0, services = 0;
+    for (const b of monthBookings) {
+      const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+      const svc = addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
+        .reduce((s, a) => s + Math.round(Number(a.price)), 0);
+      const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice)
+        : b.revenueAmount != null && Number(b.revenueAmount) > 0 ? Number(b.revenueAmount)
+        : Number(b.depositPaid ?? 0);
+      base += Math.max(0, tp - svc);
+      services += svc;
+    }
+    return { base: Math.round(base), services: Math.round(services), total: Math.round(base + services) };
+  }, [monthBookings]);
 
   // Service-unit: filter service appointments to selected month
   const monthSvcAppts = useMemo(() =>
@@ -9645,6 +9660,45 @@ function RevenueTab() {
           )}
         </div>
       </div>
+
+      {/* ══ Monthly Revenue Summary Cards ══════════════════════════════════ */}
+      {!showAllFuture && unit.type !== "service" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+          <div style={{ background: "linear-gradient(135deg,#eff6ff,#dbeafe)", border: "2px solid #93c5fd", borderRadius: 16, padding: 20, minHeight: 140, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>
+              <Home className="w-4 h-4" />
+              <span>إجمالي الإيجار</span>
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: "#1d4ed8", lineHeight: 1, marginTop: 4 }}>
+              {bkLoading ? "…" : monthRevBreakdown.base.toLocaleString("ar-SA")}
+            </div>
+            <div style={{ fontSize: 12, color: "#3b82f6", marginTop: "auto" }}>ريال سعودي</div>
+            <div style={{ fontSize: 11, color: "#6b7280" }}>قيمة الإيجار الشهرية</div>
+          </div>
+          <div style={{ background: "linear-gradient(135deg,#fffbeb,#fef3c7)", border: "2px solid #f59e0b", borderRadius: 16, padding: 20, minHeight: 140, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#b45309" }}>
+              <Zap className="w-4 h-4" />
+              <span>إجمالي الخدمات</span>
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: "#b45309", lineHeight: 1, marginTop: 4 }}>
+              {bkLoading ? "…" : monthRevBreakdown.services.toLocaleString("ar-SA")}
+            </div>
+            <div style={{ fontSize: 12, color: "#d97706", marginTop: "auto" }}>ريال سعودي</div>
+            <div style={{ fontSize: 11, color: "#6b7280" }}>رسوم الإضافات والخدمات</div>
+          </div>
+          <div style={{ background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", border: "2px solid #4ade80", borderRadius: 16, padding: 20, minHeight: 140, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#15803d" }}>
+              <DollarSign className="w-4 h-4" />
+              <span>صافي الدخل</span>
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: "#15803d", lineHeight: 1, marginTop: 4 }}>
+              {bkLoading ? "…" : monthRevBreakdown.total.toLocaleString("ar-SA")}
+            </div>
+            <div style={{ fontSize: 12, color: "#16a34a", marginTop: "auto" }}>ريال سعودي</div>
+            <div style={{ fontSize: 11, color: "#6b7280" }}>إيجار + خدمات الشهر المختار</div>
+          </div>
+        </div>
+      )}
 
       {/* ══════════════ ALWAYS VISIBLE: Global Cash Position ══════════════ */}
       <div className="bg-gradient-to-l from-emerald-600/10 to-teal-500/10 border-2 border-emerald-500/30 rounded-2xl p-4 sm:p-5">
@@ -12919,11 +12973,16 @@ function ReportsTab() {
       return addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
         .reduce((s, a) => s + Math.round(Number(a.price)), 0);
     };
+    const [selHY, selHM] = selectedHijriMonthVal ? selectedHijriMonthVal.split("-").map(Number) : [0, 0];
     const filtered = repAllBookings.filter(b => {
       if (!b.bookingDate) return false;
-      const monthMatch = isHijri
-        ? getHijriMonthKey(b.bookingDate) === selectedHijriMonthVal
-        : b.bookingDate.startsWith(selectedMonth);
+      let monthMatch: boolean;
+      if (isHijri && selHY) {
+        const { year, month } = getHijriYMClient(new Date(b.bookingDate + "T12:00:00"));
+        monthMatch = year === selHY && month === selHM;
+      } else {
+        monthMatch = b.bookingDate.startsWith(selectedMonth);
+      }
       const propMatch = selectedSubmissionId === "all" || String(b.submissionId) === selectedSubmissionId;
       return monthMatch && propMatch;
     });
