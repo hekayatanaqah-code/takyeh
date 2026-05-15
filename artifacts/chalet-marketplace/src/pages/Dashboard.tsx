@@ -16614,7 +16614,12 @@ export default function Dashboard() {
     apiFetch("/owner/impersonation-mode")
       .then((r) => r.ok ? r.json() : { active: false })
       .then((d) => {
-        if (d.active) {
+        /* Only treat as "impersonating" for genuine admin sessions.
+           Owner self-sessions (adminLabel === "__owner_self__") are silently
+           ignored here — the server's getOwnerIds() helper handles owner_N
+           bridging via email lookup, so no temp-session redirect is needed
+           for regular password-login owners. */
+        if (d.active && d.adminLabel !== "__owner_self__") {
           setImpersonation({
             impersonating: true,
             ownerId: d.ownerId,
@@ -16623,32 +16628,6 @@ export default function Dashboard() {
           });
         } else {
           setImpersonation({ impersonating: false });
-          /* Check if this user has linked owner accounts.
-             If exactly one → auto-activate silently (no banner shown).
-             If multiple (platform admin) → store list but show no banner;
-             admin should use the Admin panel to switch owners. */
-          apiFetch("/owner/available-owners")
-            .then(r => r.ok ? r.json() : [])
-            .then(async (owners: { ownerId: string; name: string }[]) => {
-              if (owners.length === 1) {
-                setOwnerSwitchLoading(true);
-                try {
-                  const r = await apiFetch("/owner/auto-session", {
-                    method: "POST",
-                    body: JSON.stringify({ ownerId: owners[0].ownerId }),
-                  });
-                  if (r.ok) {
-                    const { token } = await r.json();
-                    window.location.href = `${BASE}/api/owner/enter-session?token=${token}`;
-                    return;
-                  }
-                } catch {}
-                setOwnerSwitchLoading(false);
-              } else {
-                setAvailableOwners(owners);
-              }
-            })
-            .catch(() => {});
         }
       })
       .finally(() => setImpersonationLoading(false));
