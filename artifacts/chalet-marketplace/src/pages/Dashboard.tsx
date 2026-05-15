@@ -9591,52 +9591,6 @@ function RevenueTab() {
   return (
     <div className="space-y-5" dir="rtl">
 
-      {/* ══ ALL-TIME REVENUE SUMMARY CARDS ══════════════════════════════════ */}
-      {unit.type !== "service" && (
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <TrendingUp className="w-4 h-4 text-primary" />
-            <span style={{ fontSize: 14, fontWeight: 700 }}>ملخص الإيرادات الكلي</span>
-            {bkLoading && <span style={{ fontSize: 11, color: "#888", marginRight: "auto" }}>جارٍ التحميل…</span>}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-            {/* إيجار */}
-            <div style={{ background: "linear-gradient(135deg,#eff6ff,#dbeafe)", border: "2px solid #93c5fd", borderRadius: 16, padding: 20, minHeight: 150, display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>
-                <Home className="w-4 h-4" />
-                <span>إجمالي الإيجار</span>
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 900, color: "#1d4ed8", lineHeight: 1, marginTop: 4 }}>
-                {fmtN(revBreakdown.base)}
-              </div>
-              <div style={{ fontSize: 12, color: "#3b82f6", marginTop: "auto" }}>ر.س</div>
-            </div>
-            {/* خدمات */}
-            <div style={{ background: "linear-gradient(135deg,#fffbeb,#fef3c7)", border: "2px solid #f59e0b", borderRadius: 16, padding: 20, minHeight: 150, display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#b45309" }}>
-                <Zap className="w-4 h-4" />
-                <span>إجمالي الخدمات</span>
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 900, color: "#b45309", lineHeight: 1, marginTop: 4 }}>
-                {fmtN(revBreakdown.services)}
-              </div>
-              <div style={{ fontSize: 12, color: "#d97706", marginTop: "auto" }}>ر.س</div>
-            </div>
-            {/* إجمالي */}
-            <div style={{ background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", border: "2px solid #4ade80", borderRadius: 16, padding: 20, minHeight: 150, display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#15803d" }}>
-                <DollarSign className="w-4 h-4" />
-                <span>صافي الدخل الكلي</span>
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 900, color: "#15803d", lineHeight: 1, marginTop: 4 }}>
-                {fmtN(revBreakdown.total)}
-              </div>
-              <div style={{ fontSize: 12, color: "#16a34a", marginTop: "auto" }}>ر.س</div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Month selector + Calendar type toggle */}
       <div className="flex items-center gap-3 flex-wrap">
         <TrendingUp className="w-5 h-5 text-primary shrink-0" />
@@ -12947,6 +12901,46 @@ function ReportsTab() {
     return opts;
   }, []);
 
+  // ── Fetch all owner bookings for revenue breakdown in التقارير المالية ───
+  const { data: repAllBookings = [] } = useQuery<OwnerBooking[]>({
+    queryKey: ["owner", "bookings-revenue"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/bookings");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: viewMode === "monthly",
+  });
+
+  // ── Compute monthly booking breakdown for the selected month/property ───
+  const repBreakdown = useMemo(() => {
+    const getAddonSum = (b: OwnerBooking): number => {
+      const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
+      return addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
+        .reduce((s, a) => s + Math.round(Number(a.price)), 0);
+    };
+    const filtered = repAllBookings.filter(b => {
+      if (!b.bookingDate) return false;
+      const monthMatch = isHijri
+        ? getHijriMonthKey(b.bookingDate) === selectedHijriMonthVal
+        : b.bookingDate.startsWith(selectedMonth);
+      const propMatch = selectedSubmissionId === "all" || String(b.submissionId) === selectedSubmissionId;
+      return monthMatch && propMatch;
+    });
+    const rows = filtered.map(b => {
+      const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice)
+        : b.revenueAmount != null && Number(b.revenueAmount) > 0 ? Number(b.revenueAmount)
+        : Number(b.depositPaid ?? 0);
+      const svc = getAddonSum(b);
+      return { id: b.id, name: b.clientName, date: b.bookingDate, base: Math.max(0, tp - svc), svc, total: tp };
+    }).filter(r => r.total > 0);
+    const totBase  = Math.round(rows.reduce((s, r) => s + r.base, 0));
+    const totSvc   = Math.round(rows.reduce((s, r) => s + r.svc, 0));
+    const totTotal = Math.round(rows.reduce((s, r) => s + r.total, 0));
+    console.log("[تكية Reports] bookings:", rows.length, "| إيجار:", totBase, "| خدمات:", totSvc, "| إجمالي:", totTotal);
+    return { rows, totBase, totSvc, totTotal };
+  }, [repAllBookings, selectedMonth, selectedHijriMonthVal, isHijri, selectedSubmissionId]);
+
   const hijriMonthOptions = useMemo(() => {
     const seen = new Set<string>();
     const opts: { val: string; year: number; month: number; label: string }[] = [];
@@ -13517,6 +13511,108 @@ function ReportsTab() {
       {/* ── MONTHLY VIEW ── */}
       {viewMode === "monthly" && (
         <>
+          {/* ══ Revenue Breakdown Cards: إجمالي الإيجار | إجمالي الخدمات | صافي الدخل ══ */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+            <div style={{ background: "linear-gradient(135deg,#eff6ff,#dbeafe)", border: "2px solid #93c5fd", borderRadius: 16, padding: 20, minHeight: 150, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>
+                <Home className="w-4 h-4" />
+                <span>إجمالي الإيجار</span>
+              </div>
+              <div style={{ fontSize: 30, fontWeight: 900, color: "#1d4ed8", lineHeight: 1, marginTop: 4 }}>
+                {repBreakdown.totBase.toLocaleString("ar-SA")}
+              </div>
+              <div style={{ fontSize: 12, color: "#3b82f6", marginTop: "auto" }}>ريال سعودي</div>
+              <div style={{ fontSize: 11, color: "#6b7280" }}>مجموع قيمة الإيجار من الحجوزات</div>
+            </div>
+            <div style={{ background: "linear-gradient(135deg,#fffbeb,#fef3c7)", border: "2px solid #f59e0b", borderRadius: 16, padding: 20, minHeight: 150, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#b45309" }}>
+                <Zap className="w-4 h-4" />
+                <span>إجمالي الخدمات</span>
+              </div>
+              <div style={{ fontSize: 30, fontWeight: 900, color: "#b45309", lineHeight: 1, marginTop: 4 }}>
+                {repBreakdown.totSvc.toLocaleString("ar-SA")}
+              </div>
+              <div style={{ fontSize: 12, color: "#d97706", marginTop: "auto" }}>ريال سعودي</div>
+              <div style={{ fontSize: 11, color: "#6b7280" }}>رسوم الإضافات والخدمات</div>
+            </div>
+            <div style={{ background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", border: "2px solid #4ade80", borderRadius: 16, padding: 20, minHeight: 150, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#15803d" }}>
+                <DollarSign className="w-4 h-4" />
+                <span>صافي الدخل</span>
+              </div>
+              <div style={{ fontSize: 30, fontWeight: 900, color: "#15803d", lineHeight: 1, marginTop: 4 }}>
+                {repBreakdown.totTotal.toLocaleString("ar-SA")}
+              </div>
+              <div style={{ fontSize: 12, color: "#16a34a", marginTop: "auto" }}>ريال سعودي</div>
+              <div style={{ fontSize: 11, color: "#6b7280" }}>إيجار + خدمات</div>
+            </div>
+          </div>
+
+          {/* ══ Booking Breakdown Table ══ */}
+          {repBreakdown.rows.length > 0 && (
+            <div style={{ background: "var(--card,#fff)", border: "1px solid var(--border,#e5e7eb)", borderRadius: 16, padding: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <Receipt className="w-4 h-4 text-primary" />
+                <span style={{ fontWeight: 700, fontSize: 14 }}>تفصيل الحجوزات</span>
+                <span style={{ fontSize: 11, background: "#eff6ff", color: "#1d4ed8", borderRadius: 20, padding: "2px 8px", fontWeight: 600 }}>
+                  {activeMonthLabel}
+                </span>
+                <span style={{ fontSize: 11, color: "#6b7280", marginRight: "auto" }}>
+                  {repBreakdown.rows.length} حجز
+                </span>
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 500 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
+                      <th style={{ textAlign: "right", padding: "8px 12px", fontSize: 12, color: "#6b7280", fontWeight: 600 }}>العميل</th>
+                      <th style={{ textAlign: "right", padding: "8px 8px",  fontSize: 12, color: "#6b7280", fontWeight: 600 }}>التاريخ</th>
+                      <th style={{ textAlign: "left",  padding: "8px 12px", fontSize: 12, color: "#1d4ed8", fontWeight: 700 }}>قيمة الإيجار</th>
+                      <th style={{ textAlign: "left",  padding: "8px 12px", fontSize: 12, color: "#b45309", fontWeight: 700 }}>رسوم الخدمات</th>
+                      <th style={{ textAlign: "left",  padding: "8px 12px", fontSize: 12, color: "#15803d", fontWeight: 700 }}>الإجمالي</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {repBreakdown.rows.map(row => {
+                      const { hijri, gregorian } = formatDualDate(row.date);
+                      return (
+                        <tr key={row.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                          <td style={{ padding: "10px 12px", fontWeight: 600, fontSize: 13 }}>{row.name}</td>
+                          <td style={{ padding: "10px 8px", fontSize: 11, color: "#6b7280", lineHeight: 1.4 }}>
+                            <div>{hijri}</div><div style={{ opacity: 0.7 }}>{gregorian}</div>
+                          </td>
+                          <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "#1d4ed8" }}>
+                            {row.base.toLocaleString("ar-SA")} <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span>
+                          </td>
+                          <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "#b45309" }}>
+                            {row.svc > 0 ? <>{row.svc.toLocaleString("ar-SA")} <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span></> : <span style={{ color: "#9ca3af" }}>—</span>}
+                          </td>
+                          <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#15803d" }}>
+                            {row.total.toLocaleString("ar-SA")} <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: "2px solid #d1d5db", background: "#f9fafb" }}>
+                      <td colSpan={2} style={{ padding: "10px 12px", fontWeight: 700, fontSize: 13 }}>الإجمالي</td>
+                      <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#1d4ed8" }}>
+                        {repBreakdown.totBase.toLocaleString("ar-SA")} <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span>
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#b45309" }}>
+                        {repBreakdown.totSvc > 0 ? <>{repBreakdown.totSvc.toLocaleString("ar-SA")} <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span></> : <span style={{ color: "#9ca3af" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#15803d" }}>
+                        {repBreakdown.totTotal.toLocaleString("ar-SA")} <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
           {financial && (
             <>
               <div className="grid grid-cols-3 gap-3">
