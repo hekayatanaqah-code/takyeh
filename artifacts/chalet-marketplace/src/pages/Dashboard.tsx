@@ -9285,14 +9285,32 @@ function RevenueTab() {
     } else {
       filtered = allBookings.filter(b => b.bookingDate?.startsWith(selectedMonth));
     }
-    if (unit.type === "chalet") filtered = filtered.filter(b => (b as any).chaletId === (unit as any).id);
+    // FIX: ownerBookingsTable has submissionId, NOT chaletId
+    if (unit.type === "chalet") {
+      const subId = (unit as any).submissionId;
+      if (subId) filtered = filtered.filter(b => b.submissionId === subId);
+    }
     return filtered;
   }, [allBookings, selectedMonth, selectedHijriMonth, calType, unit]);
 
   // ── Monthly revenue breakdown: base rent + services for selected month ───
+  // Computed directly from allBookings (not monthBookings) with correct submissionId filter
   const monthRevBreakdown = useMemo(() => {
+    // Step 1: filter by calendar month
+    let filtered: OwnerBooking[];
+    if (calType === "hijri" && selectedHijriMonth) {
+      filtered = allBookings.filter(b => b.bookingDate && getHijriMonthKey(b.bookingDate) === selectedHijriMonth);
+    } else {
+      filtered = allBookings.filter(b => !!b.bookingDate && b.bookingDate.startsWith(selectedMonth));
+    }
+    // Step 2: filter by property (use submissionId, not the non-existent chaletId)
+    if (unit.type === "chalet") {
+      const subId = (unit as any).submissionId;
+      if (subId) filtered = filtered.filter(b => b.submissionId === subId);
+    }
+    // Step 3: compute breakdown
     let base = 0, services = 0;
-    for (const b of monthBookings) {
+    for (const b of filtered) {
       const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
       const svc = addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
         .reduce((s, a) => s + Math.round(Number(a.price)), 0);
@@ -9302,8 +9320,10 @@ function RevenueTab() {
       base += Math.max(0, tp - svc);
       services += svc;
     }
-    return { base: Math.round(base), services: Math.round(services), total: Math.round(base + services) };
-  }, [monthBookings]);
+    const result = { base: Math.round(base), services: Math.round(services), total: Math.round(base + services) };
+    console.log(`[تكية REV] ${calType==="hijri"?selectedHijriMonth:selectedMonth} | all:${allBookings.length} → filtered:${filtered.length} | إيجار:${result.base} خدمات:${result.services} إجمالي:${result.total}`);
+    return result;
+  }, [allBookings, selectedMonth, selectedHijriMonth, calType, unit]);
 
   // Service-unit: filter service appointments to selected month
   const monthSvcAppts = useMemo(() =>
