@@ -1396,7 +1396,9 @@ router.post("/impersonate", async (req, res) => {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-  await db.insert(ownerTempSessionsTable).values({ token, ownerId, adminLabel, expiresAt });
+  /* Store the admin's Replit user ID so requireAuth can reject stale cookies for other users */
+  const createdByReplitId = (req as any).user?.id ?? null;
+  await db.insert(ownerTempSessionsTable).values({ token, ownerId, adminLabel, expiresAt, createdByReplitId });
 
   return res.json({ token });
 });

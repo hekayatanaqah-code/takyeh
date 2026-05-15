@@ -689,6 +689,7 @@ export const ownerTempSessionsTable = pgTable("owner_temp_sessions", {
   adminLabel: text("admin_label"), /* admin name for banner display */
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdByReplitId: text("created_by_replit_id"), /* Replit user ID who created this session */
 });
 
 /* ── Owner Support Requests ───────────────────────────────── */

@@ -109,20 +109,41 @@ async function _verifyOtp(email: string, code: string): Promise<boolean> {
 }
 
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  /* ── Path 1: Admin impersonation via owner_temp_session cookie ── */
+  /* ── Path 1: owner_temp_session cookie (impersonation / self-session) ──
+   *
+   * SECURITY: We must verify that the session was created by the *current*
+   * Replit user. Without this check, a stale admin cookie from a previous
+   * impersonation persists in the browser and overrides the real logged-in
+   * user for everyone who shares that browser — causing the "hardcoded
+   * Al-Khozama" bug where all accounts see one owner's data.
+   *
+   * Rule: honour the cookie only when one of the following is true:
+   *   (a) No Replit Passport session exists (staff login — no OIDC user).
+   *   (b) created_by_replit_id is NULL (legacy row without creator field).
+   *   (c) created_by_replit_id matches the currently authenticated user.
+   * In every other case the cookie is stale and must be cleared.           */
   const tempToken = (req.cookies as Record<string, string>)?.owner_temp_session;
   if (tempToken) {
-    const r = await db.execute<{ owner_id: string }>(
-      sql`SELECT owner_id FROM owner_temp_sessions
+    const r = await db.execute<{ owner_id: string; created_by_replit_id: string | null }>(
+      sql`SELECT owner_id, created_by_replit_id
+          FROM owner_temp_sessions
           WHERE token = ${tempToken} AND expires_at > now() LIMIT 1`
     );
-    const row = ((r as any).rows as Array<{ owner_id: string }>)[0];
+    const row = ((r as any).rows as Array<{ owner_id: string; created_by_replit_id: string | null }>)[0];
     if (row?.owner_id) {
-      (req as any).user = { id: row.owner_id, isImpersonated: true };
-      next(); return;
+      const currentReplitId = req.isAuthenticated() ? (req.user as any)?.id : null;
+      const cookieOwner = row.created_by_replit_id;
+      /* Accept when: no Replit session, OR creator field is null, OR creator matches current user */
+      if (!currentReplitId || cookieOwner === null || cookieOwner === currentReplitId) {
+        (req as any).user = { id: row.owner_id, isImpersonated: true };
+        next(); return;
+      }
+      /* Mismatch — stale cookie from a different user's session, drop it */
+      res.clearCookie("owner_temp_session");
+    } else {
+      /* Token invalid/expired — clear stale cookie */
+      res.clearCookie("owner_temp_session");
     }
-    /* Token invalid/expired — clear stale cookie and fall through */
-    res.clearCookie("owner_temp_session");
   }
 
   /* ── Path 2: Normal owner Passport session ── */
@@ -245,9 +266,11 @@ router.post("/auto-session", async (req, res) => {
   const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000);
   /* '__owner_self__' = owner activated their own session (not an admin impersonating) */
   const adminLabel = isPlatformAdmin(req) ? 'مدير المنصة' : '__owner_self__';
+  /* Store the creator's Replit user ID so requireAuth can reject stale cookies */
+  const createdByReplitId = req.isAuthenticated() ? (req.user as any).id : null;
   await db.execute(
-    sql`INSERT INTO owner_temp_sessions (token, owner_id, admin_label, expires_at)
-        VALUES (${token}, ${ownerId}, ${adminLabel}, ${expiresAt})`
+    sql`INSERT INTO owner_temp_sessions (token, owner_id, admin_label, expires_at, created_by_replit_id)
+        VALUES (${token}, ${ownerId}, ${adminLabel}, ${expiresAt}, ${createdByReplitId})`
   );
   return res.json({ token });
 });
