@@ -72,9 +72,16 @@ router.get("/", async (req, res) => {
   /* ── Expand to include "owner_N" aliases ──────────────────
    * Admin-added properties are stored with owner_id = "owner_N"
    * (from owner_applications.id). Replit-OAuth owners need to see
-   * these too, so we resolve the alias from their email.             */
+   * these too, so we resolve the alias from their email.
+   * EXCEPTION: platform admin in their direct (non-impersonated) Replit
+   * session must NOT get email-bridged to any owner's data.            */
+  const PLATFORM_ADMIN_IDS_SET = new Set(
+    (process.env.PLATFORM_ADMIN_IDS ?? "56719001").split(",").map(s => s.trim()).filter(Boolean)
+  );
+  const isAdminDirectSession = !tempToken && PLATFORM_ADMIN_IDS_SET.has(String(resolvedOwnerId));
+
   const ownerIds = new Set<string>([resolvedOwnerId]);
-  try {
+  if (!isAdminDirectSession) try {
     /* 1. If this IS already an "owner_N" key, also find the Replit user id */
     if (/^owner_\d+$/.test(resolvedOwnerId)) {
       const n = parseInt(resolvedOwnerId.replace("owner_", ""), 10);

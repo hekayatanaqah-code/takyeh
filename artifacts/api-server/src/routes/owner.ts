@@ -359,6 +359,34 @@ async function resolveOwnerEmail(req: Request): Promise<string | null> {
   return null;
 }
 
+/* ── Helper: build all valid ownerIds for the current session ──────────
+ * Combines the primary session ID with the "owner_N" alias from email
+ * bridging so that Replit-OAuth owners can see data stored under their
+ * admin-assigned "owner_N" key.
+ *
+ * Platform admins in their direct (non-impersonated) Replit session are
+ * intentionally NOT bridged to any owner — they must use temp sessions
+ * via the Admin panel to access owner-specific data.
+ * ─────────────────────────────────────────────────────────────────────── */
+async function getOwnerIds(req: Request): Promise<string[]> {
+  const primary = req.user!.id;
+  if (isPlatformAdmin(req) && !(req.user as any)?.isImpersonated) {
+    return [primary];
+  }
+  const ownerIds = new Set<string>([primary]);
+  try {
+    const email = await resolveOwnerEmail(req);
+    if (email) {
+      const r = await db.execute(
+        sql`SELECT id FROM owner_applications WHERE LOWER(email) = LOWER(${email}) LIMIT 1`
+      );
+      const appId = ((r as any).rows as Array<{ id: number }>)[0]?.id;
+      if (appId) ownerIds.add(`owner_${appId}`);
+    }
+  } catch { /* non-fatal */ }
+  return [...ownerIds];
+}
+
 /* ── GET /owner/profile — fetch owner profile ──────────────── */
 router.get("/profile", async (req, res) => {
   try {
@@ -888,7 +916,7 @@ router.put("/message-settings", async (req, res) => {
 });
 
 router.get("/bookings/stats", async (req, res) => {
-  const ownerId = req.user!.id;
+  const allOwnerIds = await getOwnerIds(req);
   const now = new Date();
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -897,17 +925,17 @@ router.get("/bookings/stats", async (req, res) => {
   const active = await db
     .select()
     .from(ownerBookingsTable)
-    .where(and(eq(ownerBookingsTable.ownerId, ownerId), isNull(ownerBookingsTable.cancelledAt)));
+    .where(and(inArray(ownerBookingsTable.ownerId, allOwnerIds), isNull(ownerBookingsTable.cancelledAt)));
 
   const cancelled = await db
     .select({ id: ownerBookingsTable.id })
     .from(ownerBookingsTable)
-    .where(and(eq(ownerBookingsTable.ownerId, ownerId), isNotNull(ownerBookingsTable.cancelledAt)));
+    .where(and(inArray(ownerBookingsTable.ownerId, allOwnerIds), isNotNull(ownerBookingsTable.cancelledAt)));
 
   const rescheduled = await db
     .select({ id: ownerRescheduleLogsTable.id })
     .from(ownerRescheduleLogsTable)
-    .where(eq(ownerRescheduleLogsTable.ownerId, ownerId));
+    .where(inArray(ownerRescheduleLogsTable.ownerId, allOwnerIds));
 
   const monthActive = active.filter((b) => b.bookingDate >= monthStart && b.bookingDate <= monthEnd);
   const revenueCurrentMonth = monthActive.reduce((sum, b) => sum + (b.totalPrice ? Number(b.totalPrice) : 0), 0);
@@ -922,21 +950,21 @@ router.get("/bookings/stats", async (req, res) => {
 });
 
 router.get("/bookings", async (req, res) => {
-  const ownerId = req.user!.id;
+  const allOwnerIds = await getOwnerIds(req);
   const rows = await db
     .select()
     .from(ownerBookingsTable)
-    .where(and(eq(ownerBookingsTable.ownerId, ownerId), isNull(ownerBookingsTable.cancelledAt)))
+    .where(and(inArray(ownerBookingsTable.ownerId, allOwnerIds), isNull(ownerBookingsTable.cancelledAt)))
     .orderBy(ownerBookingsTable.createdAt);
   return res.json(rows.reverse());
 });
 
 router.get("/bookings/cancelled", async (req, res) => {
-  const ownerId = req.user!.id;
+  const allOwnerIds = await getOwnerIds(req);
   const rows = await db
     .select()
     .from(ownerBookingsTable)
-    .where(and(eq(ownerBookingsTable.ownerId, ownerId), isNotNull(ownerBookingsTable.cancelledAt)))
+    .where(and(inArray(ownerBookingsTable.ownerId, allOwnerIds), isNotNull(ownerBookingsTable.cancelledAt)))
     .orderBy(ownerBookingsTable.cancelledAt);
   return res.json(rows.reverse());
 });
@@ -1331,25 +1359,7 @@ router.delete("/bookings/:id", async (req, res) => {
 /* ── Owner's Approved Chalets ──────────────────────────────── */
 
 router.get("/chalets", async (req, res) => {
-  const ownerId = req.user!.id;
-
-  /* Build full list of owner IDs to query:
-   *  1. The direct session user ID (Replit ID or "owner_N" for impersonation)
-   *  2. The "owner_N" key derived from owner_applications (for Replit-OAuth owners
-   *     whose admin-added properties were stored under the "owner_N" key) */
-  const ownerIds = new Set<string>([ownerId]);
-  try {
-    const email = await resolveOwnerEmail(req);
-    if (email) {
-      const r = await db.execute(
-        sql`SELECT id FROM owner_applications WHERE LOWER(email) = LOWER(${email}) LIMIT 1`
-      );
-      const appId = ((r as any).rows as Array<{ id: number }>)[0]?.id;
-      if (appId) ownerIds.add(`owner_${appId}`);
-    }
-  } catch { /* non-fatal */ }
-
-  const allOwnerIds = [...ownerIds];
+  const allOwnerIds = await getOwnerIds(req);
 
   const subs = await db
     .select({ id: chaletSubmissionsTable.id })
@@ -2016,7 +2026,8 @@ router.get("/plan-limits", async (req, res) => {
 /* ── Monthly Reports ───────────────────────────────────────── */
 
 router.get("/reports", async (req, res) => {
-  const ownerId    = req.user!.id;
+  const allOwnerIds = await getOwnerIds(req);
+  const ownerId = allOwnerIds[0];
   const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
 
   /* ── Calendar parameters ─────────────────────────────────── */
@@ -2037,7 +2048,7 @@ router.get("/reports", async (req, res) => {
      Hijri uses a SQL window (approx Gregorian range) + JS Hijri
      calendar math to keep the result set small.              */
   const fetchConds: Parameters<typeof and>[0][] = [
-    eq(ownerBookingsTable.ownerId, ownerId),
+    inArray(ownerBookingsTable.ownerId, allOwnerIds),
   ];
   if (isHijriMode) {
     const approxGYear = Math.floor(hijriYear! * 354.367 / 365.25 + 622);
@@ -2374,10 +2385,10 @@ router.get("/subscription", async (req, res) => {
 /* ── Expenses ──────────────────────────────────────────────── */
 
 router.get("/expenses", async (req, res) => {
-  const ownerId = req.user!.id;
+  const allOwnerIds = await getOwnerIds(req);
   const month = typeof req.query.month === "string" ? req.query.month : undefined;
   const providerId = req.query.providerId ? Number(req.query.providerId) : undefined;
-  const conditions = [eq(ownerExpensesTable.ownerId, ownerId)];
+  const conditions = [inArray(ownerExpensesTable.ownerId, allOwnerIds)];
   if (month) {
     conditions.push(
       gte(ownerExpensesTable.dateStr, `${month}-01`),
@@ -2424,11 +2435,11 @@ router.delete("/expenses/:id", async (req, res) => {
 /* ── Staff ─────────────────────────────────────────────────── */
 
 router.get("/staff", async (req, res) => {
-  const ownerId = req.user!.id;
+  const allOwnerIds = await getOwnerIds(req);
   const rows = await db
     .select()
     .from(ownerStaffTable)
-    .where(eq(ownerStaffTable.ownerId, ownerId))
+    .where(inArray(ownerStaffTable.ownerId, allOwnerIds))
     .orderBy(ownerStaffTable.createdAt);
   return res.json(rows.map(({ passwordHash: _ph, ...r }) => r));
 });
@@ -2708,7 +2719,8 @@ router.delete("/salary-logs/:id", async (req, res) => {
 /* ── Financial Summary ─────────────────────────────────────── */
 
 router.get("/financial-summary", async (req, res) => {
-  const ownerId = req.user!.id;
+  const allOwnerIds = await getOwnerIds(req);
+  const ownerId = allOwnerIds[0];
 
   // Build last 6 months list
   const months: string[] = [];
@@ -2725,7 +2737,7 @@ router.get("/financial-summary", async (req, res) => {
 
   // Cash on Hand: all-time, computed for both Hijri & Gregorian responses
   const cashConds: Parameters<typeof and>[0][] = [
-    eq(ownerBookingsTable.ownerId, ownerId),
+    inArray(ownerBookingsTable.ownerId, allOwnerIds),
     isNull(ownerBookingsTable.cancelledAt),
   ];
   if (submissionId) cashConds.push(eq(ownerBookingsTable.submissionId, submissionId));
@@ -2746,7 +2758,7 @@ router.get("/financial-summary", async (req, res) => {
   const bookingIdsWithInstallmentsPre = new Set(
     (await db.select({ bookingId: bookingPaymentsTable.bookingId })
       .from(bookingPaymentsTable)
-      .where(eq(bookingPaymentsTable.ownerId, ownerId))
+      .where(inArray(bookingPaymentsTable.ownerId, allOwnerIds))
     ).map(r => r.bookingId)
   );
 
@@ -2761,7 +2773,7 @@ router.get("/financial-summary", async (req, res) => {
   }, 0);
 
   const instCashConds: Parameters<typeof and>[0][] = [
-    eq(bookingPaymentsTable.ownerId, ownerId),
+    inArray(bookingPaymentsTable.ownerId, allOwnerIds),
     eq(bookingPaymentsTable.method, "cash"),
     eq(bookingPaymentsTable.cashDeposited, false),
     // Exclude payments linked to cancelled bookings
@@ -2808,7 +2820,7 @@ router.get("/financial-summary", async (req, res) => {
     const gEnd   = `${approxGYear + 1}-12-31`;
 
     const bConds: Parameters<typeof and>[0][] = [
-      eq(ownerBookingsTable.ownerId, ownerId),
+      inArray(ownerBookingsTable.ownerId, allOwnerIds),
       gte(ownerBookingsTable.bookingDate, gStart),
       lte(ownerBookingsTable.bookingDate, gEnd),
       isNull(ownerBookingsTable.cancelledAt),
@@ -2835,7 +2847,7 @@ router.get("/financial-summary", async (req, res) => {
     const totalInsuranceHeld  = monthBookings.reduce((s, b) => s + (!b.insuranceRefunded && b.insuranceFee ? Number(b.insuranceFee) : 0), 0);
 
     const eConds: Parameters<typeof and>[0][] = [
-      eq(ownerExpensesTable.ownerId, ownerId),
+      inArray(ownerExpensesTable.ownerId, allOwnerIds),
       gte(ownerExpensesTable.dateStr, gStart),
       lte(ownerExpensesTable.dateStr, gEnd),
     ];
@@ -2847,10 +2859,10 @@ router.get("/financial-summary", async (req, res) => {
     });
     const totalExpenses = monthExpenses.reduce((s, e) => s + Number(e.amount), 0);
 
-    const hStaffRows = await db.select({ id: ownerStaffTable.id, baseSalary: ownerStaffTable.baseSalary }).from(ownerStaffTable).where(eq(ownerStaffTable.ownerId, ownerId));
+    const hStaffRows = await db.select({ id: ownerStaffTable.id, baseSalary: ownerStaffTable.baseSalary }).from(ownerStaffTable).where(inArray(ownerStaffTable.ownerId, allOwnerIds));
     const hStaffMap  = Object.fromEntries(hStaffRows.map(s => [s.id, Number(s.baseSalary)]));
     const allSlRows  = await db.select({ bonus: salaryLogsTable.bonus, deduction: salaryLogsTable.deduction, staffId: salaryLogsTable.staffId, month: salaryLogsTable.month })
-      .from(salaryLogsTable).where(and(eq(salaryLogsTable.ownerId, ownerId), gte(salaryLogsTable.month, `${approxGYear - 1}-01`), lte(salaryLogsTable.month, `${approxGYear + 1}-12`)));
+      .from(salaryLogsTable).where(and(inArray(salaryLogsTable.ownerId, allOwnerIds), gte(salaryLogsTable.month, `${approxGYear - 1}-01`), lte(salaryLogsTable.month, `${approxGYear + 1}-12`)));
     const totalSalaries = allSlRows
       .filter(sl => { const hym = getHijriYM(`${sl.month}-15`); return hym.year === hYear && hym.month === hMonth; })
       .reduce((s, sl) => s + (hStaffMap[sl.staffId] ?? 0) + Number(sl.bonus) - Number(sl.deduction), 0);
@@ -2878,7 +2890,7 @@ router.get("/financial-summary", async (req, res) => {
   // selected Gregorian month using new Date() so year/month comparison is correct.
   const [fYear, fMon] = selectedMonth.split("-").map(Number);
   const monthActiveConds: Parameters<typeof and>[0][] = [
-    eq(ownerBookingsTable.ownerId, ownerId),
+    inArray(ownerBookingsTable.ownerId, allOwnerIds),
     isNull(ownerBookingsTable.cancelledAt),
   ];
   if (submissionId) monthActiveConds.push(eq(ownerBookingsTable.submissionId, submissionId));
@@ -2917,7 +2929,7 @@ router.get("/financial-summary", async (req, res) => {
 
   // Expenses: for this month
   const expenseConditions = [
-    eq(ownerExpensesTable.ownerId, ownerId),
+    inArray(ownerExpensesTable.ownerId, allOwnerIds),
     gte(ownerExpensesTable.dateStr, `${selectedMonth}-01`),
     lte(ownerExpensesTable.dateStr, `${selectedMonth}-31`),
   ];
@@ -2934,12 +2946,12 @@ router.get("/financial-summary", async (req, res) => {
   const salaryLogs = await db
     .select({ bonus: salaryLogsTable.bonus, deduction: salaryLogsTable.deduction, staffId: salaryLogsTable.staffId })
     .from(salaryLogsTable)
-    .where(and(eq(salaryLogsTable.ownerId, ownerId), eq(salaryLogsTable.month, selectedMonth)));
+    .where(and(inArray(salaryLogsTable.ownerId, allOwnerIds), eq(salaryLogsTable.month, selectedMonth)));
 
   const staffRows = await db
     .select({ id: ownerStaffTable.id, baseSalary: ownerStaffTable.baseSalary })
     .from(ownerStaffTable)
-    .where(eq(ownerStaffTable.ownerId, ownerId));
+    .where(inArray(ownerStaffTable.ownerId, allOwnerIds));
 
   const staffMap = Object.fromEntries(staffRows.map((s) => [s.id, Number(s.baseSalary)]));
   const totalSalaries = salaryLogs.reduce((s, log) => {
@@ -2967,7 +2979,7 @@ router.get("/financial-summary", async (req, res) => {
   // Monthly trend for chart (last 6 months) — cancelled bookings EXCLUDED
   const trend = await Promise.all(months.map(async (m) => {
     const bConds = [
-      eq(ownerBookingsTable.ownerId, ownerId),
+      inArray(ownerBookingsTable.ownerId, allOwnerIds),
       gte(ownerBookingsTable.bookingDate, `${m}-01`),
       lte(ownerBookingsTable.bookingDate, `${m}-31`),
       isNull(ownerBookingsTable.cancelledAt),
@@ -2987,7 +2999,7 @@ router.get("/financial-summary", async (req, res) => {
     }, 0);
 
     const eConds = [
-      eq(ownerExpensesTable.ownerId, ownerId),
+      inArray(ownerExpensesTable.ownerId, allOwnerIds),
       gte(ownerExpensesTable.dateStr, `${m}-01`),
       lte(ownerExpensesTable.dateStr, `${m}-31`),
     ];
@@ -2998,7 +3010,7 @@ router.get("/financial-summary", async (req, res) => {
     const slRows = await db
       .select({ bonus: salaryLogsTable.bonus, deduction: salaryLogsTable.deduction, staffId: salaryLogsTable.staffId })
       .from(salaryLogsTable)
-      .where(and(eq(salaryLogsTable.ownerId, ownerId), eq(salaryLogsTable.month, m)));
+      .where(and(inArray(salaryLogsTable.ownerId, allOwnerIds), eq(salaryLogsTable.month, m)));
     const salExp = slRows.reduce((s, log) => {
       const base = staffMap[log.staffId] ?? 0;
       return s + base + Number(log.bonus) - Number(log.deduction);
@@ -3042,7 +3054,7 @@ router.get("/financial-summary", async (req, res) => {
     .select({ cancelIncome: ownerBookingsTable.cancelIncome, cancelRefundAmount: ownerBookingsTable.cancelRefundAmount })
     .from(ownerBookingsTable)
     .where(and(
-      eq(ownerBookingsTable.ownerId, ownerId),
+      inArray(ownerBookingsTable.ownerId, allOwnerIds),
       gte(ownerBookingsTable.cancelledAt, new Date(`${selectedMonth}-01T00:00:00Z`)),
       lte(ownerBookingsTable.cancelledAt, new Date(`${selectedMonth}-31T23:59:59Z`)),
     ));
@@ -3052,7 +3064,7 @@ router.get("/financial-summary", async (req, res) => {
   // ── ALL-TIME three-layer liquidity model ──────────────────────
   // Fetch ALL active bookings for this owner (optionally scoped to a submission)
   const allActiveConds: Parameters<typeof and>[0][] = [
-    eq(ownerBookingsTable.ownerId, ownerId),
+    inArray(ownerBookingsTable.ownerId, allOwnerIds),
     isNull(ownerBookingsTable.cancelledAt),
   ];
   if (submissionId) allActiveConds.push(eq(ownerBookingsTable.submissionId, submissionId));
@@ -3071,7 +3083,7 @@ router.get("/financial-summary", async (req, res) => {
 
   // All cancelled bookings → cancel income
   const allCancelledConds: Parameters<typeof and>[0][] = [
-    eq(ownerBookingsTable.ownerId, ownerId),
+    inArray(ownerBookingsTable.ownerId, allOwnerIds),
     isNotNull(ownerBookingsTable.cancelledAt),
   ];
   if (submissionId) allCancelledConds.push(eq(ownerBookingsTable.submissionId, submissionId));
@@ -3082,7 +3094,7 @@ router.get("/financial-summary", async (req, res) => {
   const allTimeCancelIncome = Math.round(allCancelledRows.reduce((s, b) => s + Number(b.cancelIncome ?? 0), 0));
 
   // All refunds issued by owner
-  const allRefundsConds: Parameters<typeof and>[0][] = [eq(ownerRefundsTable.ownerId, ownerId)];
+  const allRefundsConds: Parameters<typeof and>[0][] = [inArray(ownerRefundsTable.ownerId, allOwnerIds)];
   if (submissionId) {
     // Filter refunds to bookings of this submission
     const bookingIds = allActiveBookings.map(b => b.id);
@@ -3527,7 +3539,8 @@ router.get("/service-clients", async (req, res) => {
 /* ── Yearly Summary ─────────────────────────────────────────── */
 
 router.get("/yearly-summary", async (req, res) => {
-  const ownerId = req.user!.id;
+  const allOwnerIds = await getOwnerIds(req);
+  const ownerId = allOwnerIds[0];
   const year = (typeof req.query.year === "string" && /^\d{4}$/.test(req.query.year))
     ? req.query.year
     : new Date().getFullYear().toString();
@@ -3536,14 +3549,14 @@ router.get("/yearly-summary", async (req, res) => {
   const staffRows = await db
     .select({ id: ownerStaffTable.id, baseSalary: ownerStaffTable.baseSalary })
     .from(ownerStaffTable)
-    .where(eq(ownerStaffTable.ownerId, ownerId));
+    .where(inArray(ownerStaffTable.ownerId, allOwnerIds));
   const staffMap = Object.fromEntries(staffRows.map((s) => [s.id, Number(s.baseSalary)]));
 
   const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
 
   const monthly = await Promise.all(months.map(async (m) => {
     const bConds: any[] = [
-      eq(ownerBookingsTable.ownerId, ownerId),
+      inArray(ownerBookingsTable.ownerId, allOwnerIds),
       gte(ownerBookingsTable.bookingDate, `${m}-01`),
       lte(ownerBookingsTable.bookingDate, `${m}-31`),
     ];
@@ -3566,7 +3579,7 @@ router.get("/yearly-summary", async (req, res) => {
     }, 0);
 
     const eConds: any[] = [
-      eq(ownerExpensesTable.ownerId, ownerId),
+      inArray(ownerExpensesTable.ownerId, allOwnerIds),
       gte(ownerExpensesTable.dateStr, `${m}-01`),
       lte(ownerExpensesTable.dateStr, `${m}-31`),
     ];
@@ -3577,7 +3590,7 @@ router.get("/yearly-summary", async (req, res) => {
     const slRows = await db
       .select({ bonus: salaryLogsTable.bonus, deduction: salaryLogsTable.deduction, staffId: salaryLogsTable.staffId })
       .from(salaryLogsTable)
-      .where(and(eq(salaryLogsTable.ownerId, ownerId), eq(salaryLogsTable.month, m)));
+      .where(and(inArray(salaryLogsTable.ownerId, allOwnerIds), eq(salaryLogsTable.month, m)));
     const salExp = slRows.reduce((s, log) => {
       const base = staffMap[log.staffId] ?? 0;
       return s + base + Number(log.bonus) - Number(log.deduction);
