@@ -9165,6 +9165,7 @@ function RevenueTab() {
   const { data: financial, isLoading: finLoading, refetch: refetchFinancial } = useQuery<{
     totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
     totalInsuranceHeld: number; totalInsuranceDeducted: number;
+    totalExpenses?: number; netProfit?: number;
     pendingRevenue?: number; realizedRevenue?: number; totalFutureValue?: number;
     totalCancellationIncome?: number; totalRefundedToClients?: number;
     totalCashCollected?: number; confirmedRevenue?: number; floatingCash?: number;
@@ -9681,100 +9682,109 @@ function RevenueTab() {
         </div>
       </div>
 
-      {/* ══ Monthly Revenue Summary Cards ══════════════════════════════════ */}
-      {!showAllFuture && unit.type !== "service" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-          <div style={{ background: "linear-gradient(135deg,#eff6ff,#dbeafe)", border: "2px solid #93c5fd", borderRadius: 16, padding: 20, minHeight: 140, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>
-              <Home className="w-4 h-4" />
-              <span>إجمالي الإيجار</span>
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: "#1d4ed8", lineHeight: 1, marginTop: 4 }}>
-              {bkLoading ? "…" : monthRevBreakdown.base.toLocaleString("ar-SA")}
-            </div>
-            <div style={{ fontSize: 12, color: "#3b82f6", marginTop: "auto" }}>ريال سعودي</div>
-            <div style={{ fontSize: 11, color: "#6b7280" }}>قيمة الإيجار الشهرية</div>
-          </div>
-          <div style={{ background: "linear-gradient(135deg,#fffbeb,#fef3c7)", border: "2px solid #f59e0b", borderRadius: 16, padding: 20, minHeight: 140, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#b45309" }}>
-              <Zap className="w-4 h-4" />
-              <span>إجمالي الخدمات</span>
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: "#b45309", lineHeight: 1, marginTop: 4 }}>
-              {bkLoading ? "…" : monthRevBreakdown.services.toLocaleString("ar-SA")}
-            </div>
-            <div style={{ fontSize: 12, color: "#d97706", marginTop: "auto" }}>ريال سعودي</div>
-            <div style={{ fontSize: 11, color: "#6b7280" }}>رسوم الإضافات والخدمات</div>
-          </div>
-          <div style={{ background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", border: "2px solid #4ade80", borderRadius: 16, padding: 20, minHeight: 140, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#15803d" }}>
-              <DollarSign className="w-4 h-4" />
-              <span>صافي الدخل</span>
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 900, color: "#15803d", lineHeight: 1, marginTop: 4 }}>
-              {bkLoading ? "…" : monthRevBreakdown.total.toLocaleString("ar-SA")}
-            </div>
-            <div style={{ fontSize: 12, color: "#16a34a", marginTop: "auto" }}>ريال سعودي</div>
-            <div style={{ fontSize: 11, color: "#6b7280" }}>إيجار + خدمات الشهر المختار</div>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════ ALWAYS VISIBLE: Global Cash Position ══════════════ */}
-      <div className="bg-gradient-to-l from-emerald-600/10 to-teal-500/10 border-2 border-emerald-500/30 rounded-2xl p-4 sm:p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <DollarSign className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span className="text-sm font-bold text-foreground">إجمالي السيولة المحصلة</span>
-              <button
-                type="button"
-                title="إعادة حساب"
-                onClick={() => { refetchFinancial(); refetchFuture(); refetchBookings(); }}
-                className="h-6 w-6 flex items-center justify-center rounded-md text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            {futureLoading ? <Skeleton className="h-9 w-40" /> : (
-              <div className="text-3xl font-extrabold text-emerald-700 tabular-nums leading-tight">
-                {fmtN(futureSummary?.globalTotalCashCollected ?? 0)}
-                <span className="text-base font-normal text-muted-foreground ms-2">ر.س</span>
+      {/* ══ Monthly Financial Summary Cards ══════════════════════════════ */}
+      {!showAllFuture && unit.type !== "service" && (() => {
+        const totalExp = financial?.totalExpenses ?? 0;
+        const netLiq = monthRevBreakdown.total - totalExp;
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            {/* Card 1 — إجمالي الإيرادات */}
+            <div style={{ background: "linear-gradient(135deg,#eff6ff,#dbeafe)", border: "2px solid #93c5fd", borderRadius: 16, padding: 20, minHeight: 140, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>
+                <TrendingUp className="w-4 h-4" />
+                <span>إجمالي الإيرادات</span>
               </div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#1d4ed8", lineHeight: 1, marginTop: 4 }}>
+                {bkLoading ? "…" : monthRevBreakdown.total.toLocaleString("ar-SA")}
+              </div>
+              <div style={{ fontSize: 12, color: "#3b82f6", marginTop: "auto" }}>ريال سعودي</div>
+              <div style={{ fontSize: 11, color: "#6b7280" }}>إيجار + خدمات الشهر المختار</div>
+            </div>
+            {/* Card 2 — إجمالي المصروفات */}
+            <div style={{ background: "linear-gradient(135deg,#fff1f2,#ffe4e6)", border: "2px solid #fca5a5", borderRadius: 16, padding: 20, minHeight: 140, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#b91c1c" }}>
+                <TrendingDown className="w-4 h-4" />
+                <span>إجمالي المصروفات</span>
+              </div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#b91c1c", lineHeight: 1, marginTop: 4 }}>
+                {finLoading ? "…" : totalExp.toLocaleString("ar-SA")}
+              </div>
+              <div style={{ fontSize: 12, color: "#ef4444", marginTop: "auto" }}>ريال سعودي</div>
+              <div style={{ fontSize: 11, color: "#6b7280" }}>مصروفات + رواتب الشهر المختار</div>
+            </div>
+            {/* Card 3 — صافي السيولة المتوفرة */}
+            <div style={{ background: netLiq >= 0 ? "linear-gradient(135deg,#f0fdf4,#dcfce7)" : "linear-gradient(135deg,#fefce8,#fef9c3)", border: `2px solid ${netLiq >= 0 ? "#4ade80" : "#fde047"}`, borderRadius: 16, padding: 20, minHeight: 140, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: netLiq >= 0 ? "#15803d" : "#a16207" }}>
+                <DollarSign className="w-4 h-4" />
+                <span>صافي السيولة المتوفرة</span>
+              </div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: netLiq >= 0 ? "#15803d" : "#a16207", lineHeight: 1, marginTop: 4 }}>
+                {(bkLoading || finLoading) ? "…" : netLiq.toLocaleString("ar-SA")}
+              </div>
+              <div style={{ fontSize: 12, color: netLiq >= 0 ? "#16a34a" : "#ca8a04", marginTop: "auto" }}>ريال سعودي</div>
+              <div style={{ fontSize: 11, color: "#6b7280" }}>الإيرادات − المصروفات</div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ══════════════ ALWAYS VISIBLE: Net Liquidity Position ══════════════ */}
+      {(() => {
+        const totalExp = financial?.totalExpenses ?? 0;
+        const netLiq = monthRevBreakdown.total - totalExp;
+        const isLoaded = !bkLoading && !finLoading;
+        return (
+          <div className={`border-2 rounded-2xl p-4 sm:p-5 ${netLiq >= 0 ? "bg-gradient-to-l from-emerald-600/10 to-teal-500/10 border-emerald-500/30" : "bg-gradient-to-l from-amber-50 to-yellow-50 border-amber-300 dark:from-amber-900/20 dark:to-yellow-900/20"}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <DollarSign className={`w-4 h-4 shrink-0 ${netLiq >= 0 ? "text-emerald-600" : "text-amber-600"}`} />
+                  <span className="text-sm font-bold text-foreground">صافي السيولة الفعلية</span>
+                  <button
+                    type="button"
+                    title="إعادة حساب"
+                    onClick={() => { refetchFinancial(); refetchFuture(); refetchBookings(); }}
+                    className={`h-6 w-6 flex items-center justify-center rounded-md transition-colors ${netLiq >= 0 ? "text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30" : "text-amber-600 hover:text-amber-800 hover:bg-amber-100"}`}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                {!isLoaded ? <Skeleton className="h-9 w-40" /> : (
+                  <div className={`text-3xl font-extrabold tabular-nums leading-tight ${netLiq >= 0 ? "text-emerald-700" : "text-amber-700"}`}>
+                    {netLiq.toLocaleString("ar-SA")}
+                    <span className="text-base font-normal text-muted-foreground ms-2">ر.س</span>
+                  </div>
+                )}
+                <div className="text-[11px] text-muted-foreground mt-0.5">إجمالي الإيرادات − إجمالي المصروفات للشهر المختار</div>
+              </div>
+              {/* تفاصيل الحجوزات */}
+              <div className="flex flex-wrap gap-3 sm:gap-4 shrink-0">
+                <div className="text-center min-w-[80px]">
+                  <div className="text-[11px] text-muted-foreground mb-0.5">متبقٍ عند الدخول</div>
+                  {futureLoading ? <Skeleton className="h-6 w-16 mx-auto" /> : (
+                    <div className="text-lg font-bold text-amber-600 tabular-nums">{fmtN(futureSummary?.futureRemainingBalance ?? 0)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></div>
+                  )}
+                </div>
+                <div className="text-center min-w-[80px]">
+                  <div className="text-[11px] text-muted-foreground mb-0.5">إيراد الإلغاءات</div>
+                  {futureLoading ? <Skeleton className="h-6 w-16 mx-auto" /> : (
+                    <div className="text-lg font-bold text-orange-600 tabular-nums">{fmtN(futureSummary?.totalCancellationIncome ?? 0)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></div>
+                  )}
+                </div>
+              </div>
+            </div>
+            {/* Quick link to future bookings */}
+            {!showAllFuture && (futureSummary?.futureCount ?? 0) > 0 && (
+              <button
+                onClick={() => setShowAllFuture(true)}
+                className="mt-3 text-xs text-emerald-700 dark:text-emerald-400 font-semibold underline underline-offset-2 hover:no-underline"
+              >
+                عرض {futureSummary!.futureCount} حجز قادم ←
+              </button>
             )}
-            <div className="text-[11px] text-muted-foreground mt-0.5">مجموع جميع المدفوعات المحصّلة (عربون + متبقٍ) عبر كل الحجوزات النشطة</div>
           </div>
-          <div className="flex flex-wrap gap-3 sm:gap-4 shrink-0">
-            <div className="text-center min-w-[80px]">
-              <div className="text-[11px] text-muted-foreground mb-0.5">مبالغ محصلة (مستقبل)</div>
-              {futureLoading ? <Skeleton className="h-6 w-16 mx-auto" /> : (
-                <div className="text-lg font-bold text-blue-600 tabular-nums">{fmtN(futureSummary?.futureCashInHand ?? 0)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></div>
-              )}
-            </div>
-            <div className="text-center min-w-[80px]">
-              <div className="text-[11px] text-muted-foreground mb-0.5">متبقٍ عند الدخول</div>
-              {futureLoading ? <Skeleton className="h-6 w-16 mx-auto" /> : (
-                <div className="text-lg font-bold text-amber-600 tabular-nums">{fmtN(futureSummary?.futureRemainingBalance ?? 0)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></div>
-              )}
-            </div>
-            <div className="text-center min-w-[80px]">
-              <div className="text-[11px] text-muted-foreground mb-0.5">إيراد الإلغاءات</div>
-              {futureLoading ? <Skeleton className="h-6 w-16 mx-auto" /> : (
-                <div className="text-lg font-bold text-orange-600 tabular-nums">{fmtN(futureSummary?.totalCancellationIncome ?? 0)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></div>
-              )}
-            </div>
-          </div>
-        </div>
-        {/* Quick link to future bookings */}
-        {!showAllFuture && (futureSummary?.futureCount ?? 0) > 0 && (
-          <button
-            onClick={() => setShowAllFuture(true)}
-            className="mt-3 text-xs text-emerald-700 dark:text-emerald-400 font-semibold underline underline-offset-2 hover:no-underline"
-          >
-            عرض {futureSummary!.futureCount} حجز قادم ←
-          </button>
-        )}
-      </div>
+        );
+      })()}
 
       {/* ══════════════ FUTURE CASH FLOW VIEW ══════════════ */}
       {showAllFuture && (
