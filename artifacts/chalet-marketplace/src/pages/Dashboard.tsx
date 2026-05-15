@@ -9173,10 +9173,18 @@ function RevenueTab() {
     cashOnHand?: number; totalWithdrawals?: number;
     cashBreakdown?: { clientName: string; date: string; amount: number; source: string; paymentId?: number; bookingId?: number }[];
   }>({
-    queryKey: ["owner", "financial-summary-rev", effectiveMonth, financialSubmissionId ?? "all"],
+    queryKey: ["owner", "financial-summary-rev", effectiveMonth, financialSubmissionId ?? "all", calType === "hijri" ? selectedHijriMonth : ""],
     queryFn: async () => {
       const params = new URLSearchParams({ month: effectiveMonth });
       if (financialSubmissionId) params.set("submissionId", String(financialSubmissionId));
+      if (calType === "hijri" && selectedHijriMonth) {
+        const approxDate = new Date((hijriToGregorianMap[selectedHijriMonth] ?? selectedMonth) + "-15T12:00:00");
+        const hym = getHijriYMClient(approxDate);
+        if (hym.year > 0) {
+          params.set("hijriYear", String(hym.year));
+          params.set("hijriMonth", String(hym.month));
+        }
+      }
       const r = await apiFetch(`/owner/financial-summary?${params}`);
       if (!r.ok) throw new Error("failed");
       return r.json();
@@ -9355,20 +9363,18 @@ function RevenueTab() {
     } else {
       cancelled = cancelled.filter(b => b.cancelledAt?.startsWith(selectedMonth));
     }
-    if (unit.type === "chalet") cancelled = cancelled.filter(b => (b as any).chaletId === (unit as any).id);
+    if (unit.type === "chalet") {
+      const subId = (unit as any).submissionId;
+      if (subId) cancelled = cancelled.filter(b => b.submissionId === subId);
+    }
     return cancelled;
   }, [cancelledBookings, selectedMonth, selectedHijriMonth, calType, unit]);
 
   const today = getLocalDateStr();
 
-  // For chalet-specific view: show ALL bookings for that chalet (past + future),
-  // so deposited amounts from future months are always visible in the log.
-  const revenueLogBookings = useMemo(() => {
-    if (unit.type === "chalet") {
-      return allBookings.filter(b => (b as any).chaletId === (unit as any).id || b.submissionId === (unit as any).submissionId);
-    }
-    return monthBookings;
-  }, [unit, allBookings, monthBookings]);
+  // Revenue log always uses the month-filtered set so the table totals
+  // match the summary cards exactly.
+  const revenueLogBookings = useMemo(() => monthBookings, [monthBookings]);
 
   // For chalet view: all cancelled bookings with income (not just selected month)
   const revenueLogCancelled = useMemo(() => {
@@ -11008,6 +11014,7 @@ function ExpensesTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
       qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
+      qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
       setForm((f) => ({ ...f, amount: "", notes: "", customCategory: "" }));
       setReceiptUrl(null);
     },
@@ -11021,6 +11028,7 @@ function ExpensesTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
       qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
+      qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
     },
   });
 
@@ -11810,6 +11818,7 @@ function StaffTab() {
       qc.invalidateQueries({ queryKey: ["owner", "salary-logs-history"] });
       qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
       qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
+      qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
       /* Build voucher data (with QR) from the result + payTarget context */
       if (payTarget) {
         const base  = Number(payTarget.baseSalary);
