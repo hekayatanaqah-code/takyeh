@@ -213,6 +213,7 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   totalPrice: numeric("total_price", { precision: 10, scale: 2 }),
   depositPaid: numeric("deposit_paid", { precision: 10, scale: 2 }),
   insuranceFee: numeric("insurance_fee", { precision: 10, scale: 2 }),
+  insuranceReceived: boolean("insurance_received").notNull().default(false),
   balanceCollected: boolean("balance_collected").notNull().default(false),
   insuranceRefunded: boolean("insurance_refunded").notNull().default(false),
   insuranceDeducted: numeric("insurance_deducted", { precision: 10, scale: 2 }),

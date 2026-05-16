@@ -1355,6 +1355,7 @@ function AddBookingDialog({
   const [totalPrice, setTotalPrice] = useState("");
   const [depositPaid, setDepositPaid] = useState("");
   const [insuranceFee, setInsuranceFee] = useState("");
+  const [insuranceReceived, setInsuranceReceived] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "transfer" | "pos">("cash");
   const [cashDeposited, setCashDeposited] = useState(false);
   const [paymentReceiptUrl, setPaymentReceiptUrl] = useState<string | null>(null);
@@ -1542,7 +1543,7 @@ function AddBookingDialog({
   const reset = () => {
     setClientName(""); setClientPhone(""); setBookingDate(""); setDurationDays(1);
     setPeriod(""); setSource("external"); setSubmissionId(""); setNotes("");
-    setTotalPrice(""); setDepositPaid(""); setInsuranceFee("");
+    setTotalPrice(""); setDepositPaid(""); setInsuranceFee(""); setInsuranceReceived(false);
     setPaymentMethod("cash"); setCashDeposited(false); setPaymentReceiptUrl(null);
     setIsReturningCustomer(null); setSelectedAddonIds([]);
     prevAddonsTotalRef.current = 0;
@@ -1557,6 +1558,10 @@ function AddBookingDialog({
     if (!period || period === "none") { setError("يرجى اختيار الفترة"); return; }
     if (!totalPrice) { setError("يرجى إدخال قيمة الإيجار الأساسية"); return; }
     if (Number(depositPaid) > 0 && !paymentMethod) { setError("الرجاء اختيار طريقة الدفع"); return; }
+    if (grandTotal !== null && Number(depositPaid) > grandTotal) {
+      setError("العربون لا يمكن أن يتجاوز إجمالي قيمة الحجز");
+      return;
+    }
     setSaving(true); setError("");
     try {
       const r = await apiFetch("/owner/bookings", {
@@ -1573,13 +1578,18 @@ function AddBookingDialog({
           totalPrice: totalPrice ? Math.round(Number(totalPrice)) + addonsTotalPrice : undefined,
           depositPaid: depositPaid ? Math.round(Number(depositPaid)) : undefined,
           insuranceFee: insuranceFee ? Math.round(Number(insuranceFee)) : undefined,
+          insuranceReceived: Number(insuranceFee) > 0 ? insuranceReceived : false,
           paymentMethod,
           cashDeposited: paymentMethod === "cash" ? cashDeposited : true,
           paymentReceiptUrl: paymentReceiptUrl || undefined,
           addonIds: selectedAddonIds.length > 0 ? selectedAddonIds : undefined,
         }),
       });
-      if (!r.ok) { setError("حدث خطأ، يرجى المحاولة مجدداً"); return; }
+      if (!r.ok) {
+        const errJson = await r.json().catch(() => ({}));
+        setError(errJson?.error ?? "حدث خطأ، يرجى المحاولة مجدداً");
+        return;
+      }
       onAdded();
       onClose();
       reset();
@@ -1935,6 +1945,22 @@ function AddBookingDialog({
                 placeholder="٠"
                 className="text-right"
               />
+              {Number(insuranceFee) > 0 && (
+                <label className="flex items-center gap-2 cursor-pointer select-none group mt-1">
+                  <input
+                    type="checkbox"
+                    checked={insuranceReceived}
+                    onChange={(e) => setInsuranceReceived(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-primary"
+                  />
+                  <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+                    تم استلام التأمين الآن؟
+                    <span className={`mr-1 font-semibold ${insuranceReceived ? "text-green-600" : "text-amber-600"}`}>
+                      {insuranceReceived ? "(مُستلَم — يُضاف للسجل)" : "(معلّق — لا يُضاف للسجل)"}
+                    </span>
+                  </span>
+                </label>
+              )}
             </div>
           </div>
 
@@ -9423,8 +9449,8 @@ function RevenueTab() {
         if (rem > 0) result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "balance", amount: rem, booking: b, isPending });
       }
 
-      // Insurance fee row — shows actual tamin received in bank
-      if (b.insuranceFee && Number(b.insuranceFee) > 0) {
+      // Insurance fee row — only show if insurance was actually received at booking time
+      if (b.insuranceFee && Number(b.insuranceFee) > 0 && (b as any).insuranceReceived === true) {
         result.push({ bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate, type: "insurance", amount: Math.round(Number(b.insuranceFee)), booking: b, isPending });
       }
 

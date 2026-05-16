@@ -1007,6 +1007,7 @@ router.post("/bookings", async (req, res) => {
     totalPrice: z.number().nonnegative().optional(),
     depositPaid: z.number().nonnegative().optional(),
     insuranceFee: z.number().nonnegative().optional(),
+    insuranceReceived: z.boolean().default(false),
     paymentMethod: z.enum(["cash", "transfer", "pos"]).default("cash"),
     cashDeposited: z.boolean().default(false),
     paymentReceiptUrl: z.string().nullable().optional(),
@@ -1014,6 +1015,13 @@ router.post("/bookings", async (req, res) => {
   }).safeParse(req.body);
 
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة — رقم الجوال والفترة مطلوبان" });
+
+  /* ── Deposit cap: depositPaid must not exceed totalPrice (+ addons) ── */
+  if (body.data.depositPaid !== undefined && body.data.totalPrice !== undefined) {
+    if (body.data.depositPaid > body.data.totalPrice) {
+      return res.status(400).json({ error: "العربون لا يمكن أن يتجاوز إجمالي قيمة الحجز" });
+    }
+  }
 
   if (body.data.submissionId) {
     const [sub] = await db
