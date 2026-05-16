@@ -1921,8 +1921,11 @@ function AddBookingDialog({
                       .replace(/\D/g, "")
                   )}
                   placeholder="٠"
-                  className="text-right"
+                  className={`text-right ${grandTotal !== null && Number(depositPaid) > grandTotal ? "border-destructive focus-visible:ring-destructive" : ""}`}
                 />
+                {grandTotal !== null && Number(depositPaid) > grandTotal && (
+                  <p className="text-xs font-semibold text-destructive">العربون لا يمكن أن يتجاوز إجمالي قيمة الحجز</p>
+                )}
               </div>
             </div>
             {remainingBalance !== null && (
@@ -2080,7 +2083,7 @@ function AddBookingDialog({
 
           {error && <p className="text-sm text-destructive font-medium">{error}</p>}
           <div className="flex gap-3 pt-2">
-            <Button type="submit" className="flex-1" disabled={saving || receiptUploading}>
+            <Button type="submit" className="flex-1" disabled={saving || receiptUploading || (grandTotal !== null && Number(depositPaid) > grandTotal)}>
               {saving ? "جاري الحفظ..." : "حفظ الحجز"}
             </Button>
             <Button type="button" variant="outline" onClick={() => { onClose(); reset(); }}>إلغاء</Button>
