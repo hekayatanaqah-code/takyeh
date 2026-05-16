@@ -1444,9 +1444,14 @@ function AddBookingDialog({
   // Only apply unpriced lock when a chalet is actually selected
   const hasChalet        = !!(submissionId && submissionId !== "none");
 
-  const morningDisabled  = conflictSet.has("morning")  || conflictSet.has("full_day") || (hasChalet && morningUnpriced);
-  const eveningDisabled  = conflictSet.has("evening")  || conflictSet.has("full_day") || (hasChalet && eveningUnpriced);
-  const fullDayDisabled  = conflictSet.has("morning")  || conflictSet.has("evening") || conflictSet.has("full_day") || (hasChalet && fullDayUnpriced);
+  /* ── Inactive slot — the chalet owner has disabled this period entirely ── */
+  const morningInactive  = hasChalet && selectedChalet?.slotMorning === false;
+  const eveningInactive  = hasChalet && selectedChalet?.slotEvening === false;
+  const fullDayInactive  = hasChalet && selectedChalet?.slotFullDay === false;
+
+  const morningDisabled  = conflictSet.has("morning")  || conflictSet.has("full_day") || morningInactive || (hasChalet && morningUnpriced);
+  const eveningDisabled  = conflictSet.has("evening")  || conflictSet.has("full_day") || eveningInactive || (hasChalet && eveningUnpriced);
+  const fullDayDisabled  = conflictSet.has("morning")  || conflictSet.has("evening") || conflictSet.has("full_day") || fullDayInactive || (hasChalet && fullDayUnpriced);
   const isFullyBlocked   = conflictSet.has("full_day") || (conflictSet.has("morning") && conflictSet.has("evening"));
 
   const morningBookingBlocked  = conflictSet.has("morning")  || conflictSet.has("full_day");
@@ -1725,17 +1730,20 @@ function AddBookingDialog({
               {([
                 {
                   value: "morning",  label: "صباحي",    sub: "الفترة الصباحية",
-                  disabled: morningDisabled, booked: morningBookingBlocked, unpriced: hasChalet && morningUnpriced && !morningBookingBlocked, icon: "🌅",
+                  disabled: morningDisabled, booked: morningBookingBlocked, inactive: morningInactive,
+                  unpriced: hasChalet && morningUnpriced && !morningBookingBlocked && !morningInactive, icon: "🌅",
                 },
                 {
                   value: "evening",  label: "مسائي",    sub: "الفترة المسائية",
-                  disabled: eveningDisabled, booked: eveningBookingBlocked, unpriced: hasChalet && eveningUnpriced && !eveningBookingBlocked, icon: "🌙",
+                  disabled: eveningDisabled, booked: eveningBookingBlocked, inactive: eveningInactive,
+                  unpriced: hasChalet && eveningUnpriced && !eveningBookingBlocked && !eveningInactive, icon: "🌙",
                 },
                 {
                   value: "full_day", label: "يوم كامل", sub: "يوم كامل",
-                  disabled: fullDayDisabled, booked: fullDayBookingBlocked, unpriced: hasChalet && fullDayUnpriced && !fullDayBookingBlocked, icon: "☀️",
+                  disabled: fullDayDisabled, booked: fullDayBookingBlocked, inactive: fullDayInactive,
+                  unpriced: hasChalet && fullDayUnpriced && !fullDayBookingBlocked && !fullDayInactive, icon: "☀️",
                 },
-              ] as const).map(({ value, label, sub, disabled, booked, unpriced, icon }) => (
+              ] as const).map(({ value, label, sub, disabled, booked, unpriced, inactive, icon }) => (
                 <button
                   key={value}
                   type="button"
@@ -1754,7 +1762,8 @@ function AddBookingDialog({
                   <span className="text-sm font-semibold flex items-center gap-1">
                     {icon && <span>{icon}</span>}
                     {label}
-                    {booked   && <span className="text-[10px] font-bold text-red-500 dark:text-red-400 mr-1">(محجوز)</span>}
+                    {inactive && <span className="text-[10px] font-bold text-muted-foreground mr-1">(غير متاح)</span>}
+                    {booked   && !inactive && <span className="text-[10px] font-bold text-red-500 dark:text-red-400 mr-1">(محجوز)</span>}
                     {unpriced && <span className="text-[10px] font-bold text-gray-400 mr-1">(غير مسعّر)</span>}
                   </span>
                   {(value as string) !== "none" && (
