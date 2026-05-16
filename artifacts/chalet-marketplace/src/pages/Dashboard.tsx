@@ -2792,6 +2792,236 @@ function MiniCalendar({
   );
 }
 
+/* ── Gregorian Calendar Grid ─────────────────── */
+function GregorianMiniCalendar({
+  gregYear, gregMonth, availability, bookings, onDateClick, bufferPolicy, onCleaningBlockClick,
+}: {
+  gregYear: number;
+  gregMonth: number;
+  availability: ChaletAvailability[];
+  bookings: OwnerBooking[];
+  onDateClick: (dateStr: string) => void;
+  bufferPolicy?: {
+    enabled: boolean;
+    blockNextMorningFullDay: boolean;
+    blockNextMorningEvening: boolean;
+    blockSameDayEvening: boolean;
+    exceptionWeekdays?: number[];
+    exceptionDates?: BufferExceptionDateFE[];
+  };
+  onCleaningBlockClick?: (dateStr: string, period: string) => void;
+}) {
+  const arabicDays = ["أح", "إث", "ثل", "أر", "خم", "جم", "سب"];
+
+  const gregDays = useMemo(() => {
+    const daysInMonth = new Date(gregYear, gregMonth, 0).getDate();
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const date = new Date(gregYear, gregMonth - 1, i + 1);
+      const h = toHijriComponents(date);
+      return { date, gregDay: i + 1, hijriDay: h.day };
+    });
+  }, [gregYear, gregMonth]);
+
+  const firstDOW = gregDays[0]?.date.getDay() ?? 0;
+
+  const availMap = useMemo(() => {
+    const m = new Map<string, ChaletAvailability>();
+    for (const a of availability) m.set(a.dateStr, a);
+    return m;
+  }, [availability]);
+
+  const bookingMap = useMemo(() => {
+    const m = new Map<string, Map<string, string>>();
+    for (const b of bookings) {
+      if (!b.bookingDate) continue;
+      const duration = Math.max(1, b.durationDays ?? 1);
+      const period = b.period ?? "full_day";
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      for (let i = 0; i < duration; i++) {
+        const d = new Date(sy, sm - 1, sd + i);
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        if (!m.has(ds)) m.set(ds, new Map());
+        m.get(ds)!.set(period, b.clientName ?? "");
+      }
+    }
+    return m;
+  }, [bookings]);
+
+  const cashUndepositedDates = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of bookings) {
+      if (!b.bookingDate || b.paymentMethod !== "cash" || b.cashDeposited === true) continue;
+      const duration = Math.max(1, b.durationDays ?? 1);
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      for (let i = 0; i < duration; i++) {
+        const d = new Date(sy, sm - 1, sd + i);
+        s.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+      }
+    }
+    return s;
+  }, [bookings]);
+
+  const cleaningTimePeriods = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    if (!bufferPolicy?.enabled) return m;
+    const exWeekdays = bufferPolicy.exceptionWeekdays ?? [];
+    const exDates = bufferPolicy.exceptionDates ?? [];
+    const addPeriod = (ds: string, period: string) => {
+      const dateEx = exDates.find((e) => e.date === ds && e.periods.includes(period));
+      if (dateEx) { if (dateEx.action === "disable") return; }
+      else { const dow = new Date(ds + "T12:00:00").getDay(); if (exWeekdays.includes(dow)) return; }
+      if (!m.has(ds)) m.set(ds, new Set());
+      m.get(ds)!.add(period);
+    };
+    for (const b of bookings) {
+      if (!b.bookingDate) continue;
+      const duration = Math.max(1, b.durationDays ?? 1);
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      const lastD = new Date(sy, sm - 1, sd + duration - 1);
+      const lastDs = `${lastD.getFullYear()}-${String(lastD.getMonth() + 1).padStart(2, "0")}-${String(lastD.getDate()).padStart(2, "0")}`;
+      const nextD = new Date(lastD); nextD.setDate(nextD.getDate() + 1);
+      const nextDs = `${nextD.getFullYear()}-${String(nextD.getMonth() + 1).padStart(2, "0")}-${String(nextD.getDate()).padStart(2, "0")}`;
+      const p = b.period ?? "full_day";
+      if (bufferPolicy.blockNextMorningFullDay && p === "full_day") addPeriod(nextDs, "morning");
+      if (bufferPolicy.blockNextMorningEvening && p === "evening") addPeriod(nextDs, "morning");
+      if (bufferPolicy.blockSameDayEvening && p === "morning") addPeriod(lastDs, "evening");
+    }
+    return m;
+  }, [bookings, bufferPolicy]);
+
+  const fullyPaidDates = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of bookings) {
+      if (!b.bookingDate) continue;
+      const total = Number(b.totalPrice ?? 0);
+      const dep = Number(b.depositPaid ?? 0);
+      if (!(b.balanceCollected === true || (total > 0 && dep >= total))) continue;
+      const duration = Math.max(1, b.durationDays ?? 1);
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      for (let i = 0; i < duration; i++) {
+        const d = new Date(sy, sm - 1, sd + i);
+        s.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+      }
+    }
+    return s;
+  }, [bookings]);
+
+  const hasRemainingDates = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of bookings) {
+      if (!b.bookingDate) continue;
+      const total = Number(b.totalPrice ?? 0);
+      const dep = Number(b.depositPaid ?? 0);
+      if (total === 0 || b.balanceCollected === true || (total > 0 && dep >= total)) continue;
+      const duration = Math.max(1, b.durationDays ?? 1);
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      for (let i = 0; i < duration; i++) {
+        const d = new Date(sy, sm - 1, sd + i);
+        s.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+      }
+    }
+    return s;
+  }, [bookings]);
+
+  const today = new Date().toISOString().slice(0, 10);
+  type CalCell = { date: Date; gregDay: number; hijriDay: number } | null;
+  const calCells: CalCell[] = [...Array<null>(firstDOW).fill(null), ...gregDays];
+
+  return (
+    <div className="select-none rounded-xl overflow-hidden border border-border">
+      <div className="grid grid-cols-7 gap-px bg-border">
+        {arabicDays.map((d) => (
+          <div key={d} className="bg-muted/60 text-center text-[10px] font-bold text-muted-foreground py-2">{d}</div>
+        ))}
+        {calCells.map((cell, i) => {
+          if (!cell) return <div key={`empty-${i}`} className="bg-background/60 min-h-[62px]" />;
+          const { date: cellDate, gregDay, hijriDay } = cell;
+          const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, "0")}-${String(cellDate.getDate()).padStart(2, "0")}`;
+          const avEntry = availMap.get(dateStr);
+          const bkEntry = bookingMap.get(dateStr);
+          const morningGuest = bkEntry?.get("morning") ?? (avEntry?.periodMorning ? null : undefined);
+          const eveningGuest = bkEntry?.get("evening") ?? (avEntry?.periodEvening ? null : undefined);
+          const fullDayGuest = bkEntry?.get("full_day") ?? (avEntry?.periodFullDay ? null : undefined);
+          const morningBlocked = morningGuest !== undefined;
+          const eveningBlocked = eveningGuest !== undefined;
+          const fullDayBlocked = fullDayGuest !== undefined;
+          const isBlocked = morningBlocked || eveningBlocked || fullDayBlocked;
+          const isPartial = isBlocked && !fullDayBlocked && (morningBlocked !== eveningBlocked);
+          const isToday = dateStr === today;
+          const isManualBlock = !!avEntry?.notes && (!bkEntry || bkEntry.size === 0);
+          type PRow = { label: string; guest: string; amber: boolean; cleaning?: boolean; period?: string };
+          const pRows: PRow[] = [];
+          if (!isManualBlock) {
+            if (fullDayBlocked) pRows.push({ label: "يوم كامل", guest: fullDayGuest ? fullDayGuest.trim().split(/\s+/)[0] : "", amber: false });
+            else {
+              if (morningBlocked) pRows.push({ label: "صباحي", guest: morningGuest ? morningGuest.trim().split(/\s+/)[0] : "", amber: true });
+              if (eveningBlocked) pRows.push({ label: "مسائي", guest: eveningGuest ? eveningGuest.trim().split(/\s+/)[0] : "", amber: true });
+            }
+          }
+          const cleanPeriods = cleaningTimePeriods.get(dateStr);
+          if (cleanPeriods) {
+            if (cleanPeriods.has("morning") && !morningBlocked && !fullDayBlocked)
+              pRows.push({ label: "🧹 تنظيف ص", guest: "", amber: false, cleaning: true, period: "morning" });
+            if (cleanPeriods.has("evening") && !eveningBlocked && !fullDayBlocked)
+              pRows.push({ label: "🧹 تنظيف م", guest: "", amber: false, cleaning: true, period: "evening" });
+          }
+          return (
+            <button
+              key={dateStr}
+              onClick={() => onDateClick(dateStr)}
+              className={[
+                "relative flex flex-col items-center justify-start pt-1.5 pb-1.5 px-0.5 w-full",
+                "transition-colors focus:outline-none focus:z-10 focus:ring-2 focus:ring-inset focus:ring-primary/60",
+                "min-h-[66px]",
+                isManualBlock ? "bg-gray-200 dark:bg-gray-700/60 text-gray-600 dark:text-gray-300"
+                  : isBlocked ? isPartial ? "bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100"
+                    : "bg-red-100 dark:bg-red-900/50 text-red-900 dark:text-red-100"
+                  : "bg-background hover:bg-primary/5 text-foreground",
+                isToday ? "ring-2 ring-inset ring-primary" : "",
+              ].join(" ")}
+            >
+              {/* Gregorian day — large, primary */}
+              <span className="text-[0.82rem] font-bold leading-none">{gregDay.toLocaleString("ar-SA")}</span>
+              {/* Hijri day — small, secondary */}
+              <span className={`text-[0.52rem] leading-none mt-0.5 tabular-nums ${isBlocked || isManualBlock ? "opacity-60" : "text-muted-foreground"}`}>{hijriDay.toLocaleString("ar-SA")} هـ</span>
+              {isManualBlock && (
+                <span className="mt-0.5 text-[0.42rem] font-bold leading-none text-gray-500 dark:text-gray-400 text-center">
+                  🔧 {avEntry!.notes!.length > 8 ? avEntry!.notes!.slice(0, 7) + "…" : avEntry!.notes}
+                </span>
+              )}
+              {pRows.length > 0 && (
+                <div className="mt-1 w-full flex flex-col items-center gap-[2px]">
+                  {pRows.map((row, ri) => (
+                    <div key={ri} className="w-full flex flex-col items-center">
+                      <span
+                        className={`text-[0.44rem] font-bold leading-none text-center ${row.cleaning ? "text-teal-700 dark:text-teal-300 cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400 underline decoration-dotted" : row.amber ? "text-amber-800 dark:text-amber-200" : "text-red-800 dark:text-red-200"}`}
+                        onClick={row.cleaning && row.period ? (e) => { e.stopPropagation(); onCleaningBlockClick?.(dateStr, row.period!); } : undefined}
+                      >{row.label}</span>
+                      {row.guest && (
+                        <span className={`text-[0.42rem] leading-none truncate w-full text-center font-medium ${row.amber ? "text-amber-700 dark:text-amber-300" : "text-red-700 dark:text-red-300"}`}>{row.guest}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {cashUndepositedDates.has(dateStr) && (
+                <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-orange-500 ring-1 ring-white dark:ring-gray-900" title="نقدي لم يُودَع في البنك" />
+              )}
+              {isBlocked && !cashUndepositedDates.has(dateStr) && (
+                hasRemainingDates.has(dateStr) ? (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-yellow-400 ring-1 ring-white dark:ring-gray-900" title="يوجد متبقي غير مسدد" />
+                ) : fullyPaidDates.has(dateStr) ? (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-green-500 ring-1 ring-white dark:ring-gray-900" title="مسدد بالكامل" />
+                ) : null
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /* ── Cancellation Management Dialog ─────────── */
 const CANCEL_REASONS = [
   { code: "client_request", label: "طلب العميل" },
@@ -3531,17 +3761,32 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [selectedChaletId, setSelectedChaletId] = useState<number | "all" | null>(null);
   const [calendarMode, setCalendarMode] = useState<"calendar" | "agenda">("calendar");
   const [agendaScope, setAgendaScope] = useState<"week" | "month">("week");
+  const [dashCalType, setDashCalType] = useState<"hijri" | "gregorian">(() => (localStorage.getItem("dashCalDefaultType") as "hijri" | "gregorian") ?? "hijri");
   const _todayH = toHijriComponents(new Date());
   const [calHijriYear, setCalHijriYear] = useState(_todayH.year);
   const [calHijriMonth, setCalHijriMonth] = useState(_todayH.month);
+  const _todayGreg = new Date();
+  const [calGregYear, setCalGregYear] = useState(_todayGreg.getFullYear());
+  const [calGregMonth, setCalGregMonth] = useState(_todayGreg.getMonth() + 1);
   const { calMonthDays, calMonthStart, calMonthEnd } = useMemo(() => {
+    if (dashCalType === "gregorian") {
+      const daysInMonth = new Date(calGregYear, calGregMonth, 0).getDate();
+      const days = Array.from({ length: daysInMonth }, (_, i) => {
+        const date = new Date(calGregYear, calGregMonth - 1, i + 1);
+        const h = toHijriComponents(date);
+        return { date, hijriDay: h.day };
+      });
+      const start = `${calGregYear}-${String(calGregMonth).padStart(2, "0")}-01`;
+      const end = `${calGregYear}-${String(calGregMonth).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
+      return { calMonthDays: days, calMonthStart: start, calMonthEnd: end };
+    }
     const days = getHijriMonthDays(calHijriYear, calHijriMonth);
     return {
       calMonthDays: days,
       calMonthStart: days[0] ? toGregorianStr(days[0].date) : "",
       calMonthEnd: days.length > 0 ? toGregorianStr(days[days.length - 1].date) : "",
     };
-  }, [calHijriYear, calHijriMonth]);
+  }, [calHijriYear, calHijriMonth, dashCalType, calGregYear, calGregMonth]);
   const [blockDateStr, setBlockDateStr] = useState<string | null>(null);
   const [chalUnblockDay, setChalUnblockDay] = useState<{ ds: string; avId: number } | null>(null);
   const [unblockingChal, setUnblockingChal] = useState(false);
@@ -3988,15 +4233,35 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     });
   }, [bookings, activeChalet, calMonthStart, calMonthEnd, showAllChalets]);
 
+  /* Stats computed from the currently visible calendar scope */
+  const calScopeStats = useMemo(() => {
+    const active = calBookings.filter(b => !b.cancelledAt);
+    return {
+      activeCount: active.length,
+      revenue: active.reduce((s, b) => s + Number(b.totalPrice ?? 0), 0),
+    };
+  }, [calBookings]);
+
   const blockEntry = blockDateStr ? availability.find((a) => a.dateStr === blockDateStr) ?? null : null;
 
-  const monthLabelHijri = `${HIJRI_MONTHS_AR[calHijriMonth - 1]} ${calHijriYear} هـ`;
   const _firstGregDate = calMonthDays[0]?.date;
   const _lastGregDate = calMonthDays.length > 0 ? calMonthDays[calMonthDays.length - 1].date : undefined;
   const _firstGregLabel = _firstGregDate?.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions) ?? "";
   const _lastGregLabel = _lastGregDate?.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions) ?? "";
   const monthLabelGreg = _firstGregLabel === _lastGregLabel ? _firstGregLabel : `${_firstGregLabel} – ${_lastGregLabel}`;
-  const monthLabel = `${monthLabelHijri} · ${monthLabelGreg}`;
+  const monthLabelHijri = useMemo(() => {
+    if (dashCalType === "gregorian") {
+      const firstH = calMonthDays[0] ? toHijriComponents(calMonthDays[0].date) : null;
+      const lastH = calMonthDays.length > 0 ? toHijriComponents(calMonthDays[calMonthDays.length - 1].date) : null;
+      const fLabel = firstH ? `${HIJRI_MONTHS_AR[firstH.month - 1]} ${firstH.year}` : "";
+      const lLabel = lastH ? `${HIJRI_MONTHS_AR[lastH.month - 1]} ${lastH.year}` : "";
+      return fLabel === lLabel ? `${fLabel} هـ` : `${fLabel} – ${lLabel} هـ`;
+    }
+    return `${HIJRI_MONTHS_AR[calHijriMonth - 1]} ${calHijriYear} هـ`;
+  }, [dashCalType, calMonthDays, calHijriMonth, calHijriYear]);
+  const monthLabel = dashCalType === "gregorian"
+    ? `${monthLabelGreg} · ${monthLabelHijri}`
+    : `${monthLabelHijri} · ${monthLabelGreg}`;
 
   const filteredBookings = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -4301,12 +4566,22 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   };
 
   const prevMonth = () => {
-    const p = prevHijriMonth(calHijriYear, calHijriMonth);
-    setCalHijriYear(p.year); setCalHijriMonth(p.month);
+    if (dashCalType === "gregorian") {
+      if (calGregMonth === 1) { setCalGregYear(y => y - 1); setCalGregMonth(12); }
+      else setCalGregMonth(m => m - 1);
+    } else {
+      const p = prevHijriMonth(calHijriYear, calHijriMonth);
+      setCalHijriYear(p.year); setCalHijriMonth(p.month);
+    }
   };
   const nextMonth = () => {
-    const n = nextHijriMonth(calHijriYear, calHijriMonth);
-    setCalHijriYear(n.year); setCalHijriMonth(n.month);
+    if (dashCalType === "gregorian") {
+      if (calGregMonth === 12) { setCalGregYear(y => y + 1); setCalGregMonth(1); }
+      else setCalGregMonth(m => m + 1);
+    } else {
+      const n = nextHijriMonth(calHijriYear, calHijriMonth);
+      setCalHijriYear(n.year); setCalHijriMonth(n.month);
+    }
   };
 
   const noApprovedChalets = !chaletsLoading && ownerChalets.length === 0;
@@ -4361,15 +4636,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
       {/* ── Stats Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Card 1: Active bookings this month */}
+        {/* Card 1: Active bookings in the currently displayed month */}
         <div className="bg-card border border-border rounded-2xl px-4 py-3.5 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
             <Activity className="w-5 h-5 text-primary" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-muted-foreground leading-none mb-1">الحجوزات النشطة — الشهر الحالي</p>
+            <p className="text-[11px] font-semibold text-muted-foreground leading-none mb-1">الحجوزات النشطة — {monthLabelHijri}</p>
             <p className="text-2xl font-extrabold text-foreground leading-none">
-              {bookingStats != null ? toAr(bookingStats.activeCurrentMonth) : "—"}
+              {toAr(calScopeStats.activeCount)}
             </p>
             <p className="text-[10px] text-muted-foreground mt-0.5">
               إجمالي {bookingStats != null ? toAr(bookingStats.totalActive) : "—"} حجز نشط
@@ -4377,17 +4652,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           </div>
         </div>
 
-        {/* Card 2: Estimated revenue this month */}
+        {/* Card 2: Estimated revenue in the currently displayed month */}
         <div className="bg-card border border-border rounded-2xl px-4 py-3.5 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
             <Banknote className="w-5 h-5 text-green-600 dark:text-green-400" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold text-muted-foreground leading-none mb-1">الإيرادات المتوقعة — الشهر الحالي</p>
+            <p className="text-[11px] font-semibold text-muted-foreground leading-none mb-1">الإيرادات المتوقعة — {monthLabelHijri}</p>
             <p className="text-xl font-extrabold text-green-600 dark:text-green-400 leading-none">
-              {bookingStats != null
-                ? `${bookingStats.revenueCurrentMonth.toLocaleString("ar-SA", { maximumFractionDigits: 0 })} ر.س`
-                : "—"}
+              {`${calScopeStats.revenue.toLocaleString("ar-SA", { maximumFractionDigits: 0 })} ر.س`}
             </p>
             <p className="text-[10px] text-muted-foreground mt-0.5">بناءً على إجمالي قيم الحجوزات</p>
           </div>
@@ -4926,6 +5199,21 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               أجندة
             </button>
           </div>
+          {/* Hijri / Gregorian calendar type toggle */}
+          <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+            <button
+              type="button"
+              onClick={() => { setDashCalType("hijri"); localStorage.setItem("dashCalDefaultType", "hijri"); }}
+              className={`px-3 py-1.5 font-bold transition-colors ${dashCalType === "hijri" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+              title="تقويم هجري"
+            >هـ</button>
+            <button
+              type="button"
+              onClick={() => { setDashCalType("gregorian"); localStorage.setItem("dashCalDefaultType", "gregorian"); }}
+              className={`px-3 py-1.5 font-bold transition-colors ${dashCalType === "gregorian" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+              title="تقويم ميلادي"
+            >م</button>
+          </div>
         </div>
 
         {noApprovedChalets ? (
@@ -5005,6 +5293,34 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               </div>
             ) : availLoading ? (
               <Skeleton className="h-48 w-full rounded-xl" />
+            ) : dashCalType === "gregorian" ? (
+              <GregorianMiniCalendar
+                gregYear={calGregYear}
+                gregMonth={calGregMonth}
+                availability={calAvailability}
+                bookings={calBookings}
+                bufferPolicy={activeChalet ? {
+                  enabled: bufferPolicyEnabled,
+                  blockNextMorningFullDay: bufferBlockNextMorningFullDay,
+                  blockNextMorningEvening: bufferBlockNextMorningEvening,
+                  blockSameDayEvening: bufferBlockSameDayEvening,
+                  exceptionWeekdays: bufferExceptionWeekdays,
+                  exceptionDates: bufferExceptionDates,
+                } : undefined}
+                onCleaningBlockClick={toggleCleaningException}
+                onDateClick={(ds) => {
+                  const dayBkgs = calBookings.filter((b) => {
+                    if (!b.bookingDate) return false;
+                    const [by, bm, bd] = b.bookingDate.split("-").map(Number);
+                    const endDate = new Date(by, bm - 1, bd + Math.max(1, b.durationDays ?? 1) - 1);
+                    const endStr = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}`;
+                    return ds >= b.bookingDate && ds <= endStr;
+                  });
+                  if (dayBkgs.length > 0) { setSummaryDate(ds); return; }
+                  if (isReadOnly) { onBlockedEdit(); return; }
+                  setBlockDateStr(ds);
+                }}
+              />
             ) : (
               <MiniCalendar
                 hijriYear={calHijriYear}
@@ -18210,6 +18526,53 @@ function OwnerProfileTab() {
                 {savingSubscribe && <p className="text-xs text-primary mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> جاري الحفظ...</p>}
               </div>
             </label>
+          </div>
+        )}
+
+        {/* ══════════ Calendar Preferences ══════════ */}
+        {secureStep === "idle" && (
+          <div className="border-t border-border pt-5 space-y-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Calendar className="w-4 h-4 text-primary" />
+              <p className="text-sm font-bold text-foreground">تفضيلات التقويم</p>
+            </div>
+            <p className="text-xs text-muted-foreground -mt-2">
+              اختر نوع التقويم الافتراضي لكل قسم عند تسجيل الدخول. يمكنك دائماً التبديل لحظياً من داخل كل قسم.
+            </p>
+            {/* Calendar default: Booking grid */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">التقويم الأساسي للحجوزات</label>
+              <div className="flex rounded-lg border border-border overflow-hidden text-sm w-fit">
+                <button
+                  type="button"
+                  onClick={() => { localStorage.setItem("dashCalDefaultType", "hijri"); window.dispatchEvent(new Event("storage")); }}
+                  className={`px-4 py-2 font-semibold transition-colors ${(localStorage.getItem("dashCalDefaultType") ?? "hijri") === "hijri" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                >هجري</button>
+                <button
+                  type="button"
+                  onClick={() => { localStorage.setItem("dashCalDefaultType", "gregorian"); window.dispatchEvent(new Event("storage")); }}
+                  className={`px-4 py-2 font-semibold transition-colors ${localStorage.getItem("dashCalDefaultType") === "gregorian" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                >ميلادي</button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">يحدد نوع التقويم في تبويب «التقويم» عند بدء الجلسة.</p>
+            </div>
+            {/* Calendar default: Financial reports */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">التقويم الأساسي للتقارير المالية</label>
+              <div className="flex rounded-lg border border-border overflow-hidden text-sm w-fit">
+                <button
+                  type="button"
+                  onClick={() => { localStorage.setItem("revCalType", "gregorian"); window.dispatchEvent(new Event("storage")); }}
+                  className={`px-4 py-2 font-semibold transition-colors ${(localStorage.getItem("revCalType") ?? "gregorian") === "gregorian" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                >ميلادي</button>
+                <button
+                  type="button"
+                  onClick={() => { localStorage.setItem("revCalType", "hijri"); window.dispatchEvent(new Event("storage")); }}
+                  className={`px-4 py-2 font-semibold transition-colors ${localStorage.getItem("revCalType") === "hijri" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                >هجري</button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">يحدد نوع التقويم في تبويب «التقارير المالية» عند بدء الجلسة.</p>
+            </div>
           </div>
         )}
 
