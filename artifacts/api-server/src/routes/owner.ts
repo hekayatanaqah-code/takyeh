@@ -1141,6 +1141,7 @@ router.patch("/bookings/:id", async (req, res) => {
   const id = Number(req.params.id);
   const body = z.object({
     balanceCollected: z.boolean().optional(),
+    insuranceReceived: z.boolean().optional(),
     insuranceRefunded: z.boolean().optional(),
     insuranceDeducted: z.number().nonnegative().optional(),
     insuranceDeductReason: z.string().nullable().optional(),

@@ -4219,6 +4219,26 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "bookings"] }),
   });
 
+  const markInsuranceReceived = useMutation({
+    mutationFn: async (bookingId: number) => {
+      const r = await apiFetch(`/owner/bookings/${bookingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ insuranceReceived: true }),
+      });
+      if (!r.ok) throw new Error("فشل");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
+      qc.invalidateQueries({ queryKey: ["owner", "bookings-revenue"] });
+      qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
+      qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
+      toast({ title: "✅ تم تسجيل استلام التأمين" });
+    },
+    onError: () => {
+      toast({ title: "⚠️ فشل", description: "تعذّر تحديث حالة التأمين", variant: "destructive" });
+    },
+  });
+
   const calAvailability = useMemo(() => {
     if (!calMonthStart || !calMonthEnd) return [];
     return availability.filter((a) => a.dateStr >= calMonthStart && a.dateStr <= calMonthEnd);
@@ -4927,6 +4947,17 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 )}
                               </div>
                             </div>
+                            {/* Quick-action: mark insurance as received */}
+                            {!b.insuranceRefunded && !b.insuranceReceived && !isReadOnly && (
+                              <button
+                                type="button"
+                                disabled={markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id}
+                                onClick={() => markInsuranceReceived.mutate(b.id)}
+                                className="w-full mt-1 text-[11px] py-1 rounded-md font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors disabled:opacity-50"
+                              >
+                                {markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id ? "جاري التسجيل..." : "✓ تسجيل استلام التأمين"}
+                              </button>
+                            )}
                             {/* Settlement formula — only if settled */}
                             {b.insuranceRefunded && deducted > 0 && (
                               <div className="pt-1 border-t border-slate-200 dark:border-slate-700 space-y-0.5">
@@ -5935,6 +5966,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                                 : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                             }`}>🔒 التأمين: {b.insuranceReceived ? "مُستلَم" : "معلّق"}</span>
+                          )}
+                          {ins && !b.insuranceRefunded && !b.insuranceReceived && !isReadOnly && (
+                            <button
+                              type="button"
+                              disabled={markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id}
+                              onClick={(e) => { e.stopPropagation(); markInsuranceReceived.mutate(b.id); }}
+                              className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 transition-colors disabled:opacity-50 border border-green-300 dark:border-green-700"
+                            >
+                              {markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id ? "..." : "✓ استُلم"}
+                            </button>
                           )}
                           {b.insuranceRefunded && !b.insuranceDeducted && (
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">↩ تم إعادة التأمين</span>
