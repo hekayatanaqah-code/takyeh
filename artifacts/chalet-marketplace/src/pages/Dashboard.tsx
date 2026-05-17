@@ -90,6 +90,7 @@ interface OwnerBooking {
   totalPrice?: string | null;
   depositPaid?: string | null;
   insuranceFee?: string | null;
+  insuranceReceived?: boolean | null;
   balanceCollected: boolean;
   insuranceRefunded: boolean;
   insuranceDeducted?: string | null;
@@ -3378,7 +3379,8 @@ function RescheduleDialog({
   const insuranceStatusAr =
     booking?.insuranceRefunded ? "مُسترجع" :
     (booking?.insuranceDeducted && Number(booking.insuranceDeducted) > 0) ? "مخصوم جزئياً" :
-    "محجوز";
+    booking?.insuranceReceived ? "مُستلَم" :
+    "معلّق";
   /* Insurance is still pending (to be collected at arrival) unless already refunded */
   const pendingInsuranceNum = !booking?.insuranceRefunded ? insuranceFeeNum : 0;
   /* Total the client must bring on the new arrival day */
@@ -3709,8 +3711,12 @@ function RescheduleDialog({
                         مبلغ التأمين
                         <span className={`mr-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
                           booking?.insuranceRefunded
-                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                            : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                            : (booking?.insuranceDeducted && Number(booking.insuranceDeducted) > 0)
+                              ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400"
+                              : booking?.insuranceReceived
+                                ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
                         }`}>{insuranceStatusAr}</span>
                       </span>
                       <span className="font-semibold text-foreground">{insuranceFeeNum.toLocaleString("ar-SA")} ر.س</span>
@@ -4907,10 +4913,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                   {insAmt.toLocaleString("ar-SA")} ر.س
                                 </span>
                                 {!b.insuranceRefunded && (
-                                  <span className="bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">معلّق</span>
+                                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    b.insuranceReceived
+                                      ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                                      : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                                  }`}>{b.insuranceReceived ? "مُستلَم" : "معلّق"}</span>
                                 )}
                                 {b.insuranceRefunded && deducted === 0 && (
-                                  <span className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">↩ مُعاد</span>
+                                  <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">↩ مُعاد</span>
                                 )}
                                 {b.insuranceRefunded && deducted > 0 && (
                                   <span className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">✂️ مخصوم</span>
@@ -5920,7 +5930,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">✓ تم التحصيل</span>
                           )}
                           {ins && !b.insuranceRefunded && (
-                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">🔒 تأمين محتجز</span>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                              b.insuranceReceived
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                            }`}>🔒 التأمين: {b.insuranceReceived ? "مُستلَم" : "معلّق"}</span>
                           )}
                           {b.insuranceRefunded && !b.insuranceDeducted && (
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">↩ تم إعادة التأمين</span>
@@ -9381,7 +9395,7 @@ function _AnalyticsTab_REMOVED() {
 /* ── Hijri month helpers ── */
 function getHijriMonthKey(dateStr: string): string {
   try {
-    return new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(new Date(dateStr + "T00:00:00"));
+    return new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(new Date(dateStr + "T12:00:00"));
   } catch { return ""; }
 }
 
@@ -13397,8 +13411,12 @@ function ReportsTab() {
     const seen = new Set<string>();
     const opts: { val: string; year: number; month: number; label: string }[] = [];
     const now = new Date();
-    for (let i = 0; i <= 15 && opts.length < 13; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 15);
+    const MS = 86_400_000;
+    // Step every 28 days from 18 months back to 3 months forward.
+    // This guarantees every Hijri month is sampled at least once,
+    // including months that start late in a Gregorian month (e.g. ذو الحجة).
+    for (let day = -545; day <= 90; day += 28) {
+      const d = new Date(now.getTime() + day * MS);
       const { year, month } = getHijriYMClient(d);
       if (!year) continue;
       const key = `${year}-${String(month).padStart(2, "0")}`;
@@ -13407,7 +13425,8 @@ function ReportsTab() {
         opts.push({ val: key, year, month, label: `${HIJRI_MONTH_NAMES_AR[month - 1] ?? month} ${year} هـ` });
       }
     }
-    return opts;
+    // Newest first
+    return opts.reverse();
   }, []);
 
   const activeMonthLabel = isHijri
