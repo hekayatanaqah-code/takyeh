@@ -9475,6 +9475,157 @@ function getHijriYMClient(date: Date): { year: number; month: number } {
   } catch { return { year: 0, month: 0 }; }
 }
 
+/* ── BankLedgerTab — Standalone Bank Account Ledger ──────────── */
+function BankLedgerTab() {
+  const { unit } = useAdminFinance();
+  const [activeTab, setActiveTab] = useState<"all" | "revenue" | "insurance" | "cash_deposit">("all");
+  const fmtN = (n: number) => n.toLocaleString("ar-SA");
+
+  const { data: allBookings = [], isLoading: bkLoading } = useQuery<OwnerBooking[]>({
+    queryKey: ["owner", "bookings-ledger", unit],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/bookings");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const ledgerEntries = useMemo(() => {
+    let scoped = allBookings;
+    if (unit.type === "chalet") {
+      const subId = (unit as any).submissionId;
+      if (subId) scoped = allBookings.filter(bk => bk.submissionId === subId);
+    }
+    const entries: {
+      bookingId: number; clientName: string; bookingDate: string;
+      type: "revenue" | "insurance" | "cash_deposit";
+      amount: number; status: string;
+    }[] = [];
+    for (const bk of scoped) {
+      if (bk.cancelledAt) continue;
+      if (bk.paymentMethod !== "cash") {
+        const dep = Number(bk.depositPaid ?? 0);
+        const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
+        const bal = bk.balanceCollected ? Math.max(0, tp - dep) : 0;
+        const total = dep + bal;
+        if (total > 0) entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "revenue", amount: total, status: bk.balanceCollected || dep >= tp ? "مكتمل" : "جزئي" });
+        if (bk.insuranceReceived && Number(bk.insuranceFee ?? 0) > 0)
+          entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "insurance", amount: Math.round(Number(bk.insuranceFee)), status: bk.insuranceRefunded ? "تم الرد" : "محتجز" });
+      } else if (bk.cashDeposited) {
+        const dep = Number(bk.depositPaid ?? 0);
+        const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
+        const bal = bk.balanceCollected ? Math.max(0, tp - dep) : 0;
+        const total = dep + bal;
+        if (total > 0) entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "cash_deposit", amount: total, status: "تم الإيداع" });
+      }
+    }
+    return entries.sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
+  }, [allBookings, unit]);
+
+  const filtered = useMemo(() => {
+    if (activeTab === "all") return ledgerEntries;
+    return ledgerEntries.filter(e => e.type === activeTab);
+  }, [ledgerEntries, activeTab]);
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
+          <span className="text-2xl">🏦</span>
+          <div>
+            <h3 className="font-bold text-base text-foreground">سجل الحساب البنكي</h3>
+            <p className="text-[11px] text-muted-foreground">سجل مفصّل لجميع الحوالات والإيداعات البنكية</p>
+          </div>
+          {!bkLoading && (
+            <div className="ms-auto text-xs font-semibold text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg">
+              {ledgerEntries.length} معاملة
+            </div>
+          )}
+        </div>
+        <div className="flex border-b border-border text-xs overflow-x-auto">
+          {([
+            ["all",          "🗂️ كل الحوالات"],
+            ["revenue",      "🏠 إيرادات الحجوزات"],
+            ["insurance",    "🔒 حوالات التأمينات"],
+            ["cash_deposit", "💵 إيداعات نقدية"],
+          ] as const).map(([id, label]) => (
+            <button key={id} onClick={() => setActiveTab(id)}
+              className={`px-4 py-3 font-semibold whitespace-nowrap transition-colors border-b-2 ${activeTab === id ? "border-primary text-primary bg-primary/5" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {bkLoading ? (
+          <div className="p-4 space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center text-muted-foreground text-sm py-14">
+            <div className="text-3xl mb-2">📭</div>لا توجد بيانات
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[620px]">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">تاريخ الحوالة</th>
+                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">اسم المستأجر</th>
+                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">رقم الحجز</th>
+                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">نوع الدفعة</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground">المبلغ المحوّل</th>
+                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">الحالة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((e, i) => {
+                  const hijriDate = e.bookingDate
+                    ? new Date(e.bookingDate + "T12:00:00").toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long" })
+                    : "—";
+                  const typeInfo = {
+                    revenue:      { label: "🏠 حجز",        cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+                    insurance:    { label: "🔒 تأمين",       cls: "bg-slate-50 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300" },
+                    cash_deposit: { label: "💵 إيداع نقدي", cls: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+                  }[e.type];
+                  const statusCls = e.status === "مكتمل" || e.status === "تم الإيداع"
+                    ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                    : e.status === "تم الرد" ? "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
+                    : e.status === "محتجز"   ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                    : "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
+                  return (
+                    <tr key={i} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                      <td className="py-2.5 px-4 text-xs text-muted-foreground">{hijriDate}</td>
+                      <td className="py-2.5 px-4 font-medium text-foreground">{e.clientName}</td>
+                      <td className="py-2.5 px-4 text-muted-foreground">#{e.bookingId}</td>
+                      <td className="py-2.5 px-4">
+                        <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ${typeInfo.cls}`}>{typeInfo.label}</span>
+                      </td>
+                      <td className="py-2.5 px-4 text-left">
+                        <span className="font-bold text-blue-600 dark:text-blue-400 tabular-nums">{fmtN(e.amount)}</span>
+                        <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
+                      </td>
+                      <td className="py-2.5 px-4">
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusCls}`}>{e.status}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-muted/30 border-t-2 border-border">
+                  <td colSpan={4} className="py-2.5 px-4 text-xs font-bold text-muted-foreground">الإجمالي</td>
+                  <td className="py-2.5 px-4 text-left">
+                    <span className="font-extrabold text-blue-700 dark:text-blue-400 tabular-nums">{fmtN(filtered.reduce((s, e) => s + e.amount, 0))}</span>
+                    <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function RevenueTab() {
   const { unit } = useAdminFinance();
   const _nowRev = new Date();
@@ -9592,8 +9743,9 @@ function RevenueTab() {
     ? (hijriToGregorianMap[selectedHijriMonth] ?? selectedMonth) : selectedMonth;
 
   const [cashBreakdownOpen, setCashBreakdownOpen] = useState(false);
+  const [depositCashOpen, setDepositCashOpen] = useState(false);
+  const [depositingCash, setDepositingCash] = useState(false);
   const [revSubTab, setRevSubTab] = useState<"monthly" | "receivables">("monthly");
-  const [bankLedgerTab, setBankLedgerTab] = useState<"all" | "revenue" | "insurance" | "other">("all");
   const showAllFuture = revSubTab === "receivables";
 
   const { data: financial, isLoading: finLoading, refetch: refetchFinancial } = useQuery<{
@@ -9676,29 +9828,6 @@ function RevenueTab() {
       .sort((a, bk) => (a.bookingDate ?? "").localeCompare(bk.bookingDate ?? ""));
   }, [allBookings, unit]);
 
-  const bankLedgerEntries = useMemo(() => {
-    let scoped = allBookings;
-    if (unit.type === "chalet") {
-      const subId = (unit as any).submissionId;
-      if (subId) scoped = allBookings.filter(bk => bk.submissionId === subId);
-    }
-    const entries: { bookingId: number; clientName: string; bookingDate: string; type: "revenue" | "insurance"; amount: number; status: string }[] = [];
-    for (const bk of scoped) {
-      if (bk.cancelledAt) continue;
-      if (bk.paymentMethod === "cash") continue;
-      const dep = Number(bk.depositPaid ?? 0);
-      const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
-      const bal = bk.balanceCollected ? Math.max(0, tp - dep) : 0;
-      const total = dep + bal;
-      if (total > 0) {
-        entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "revenue", amount: total, status: bk.balanceCollected || dep >= tp ? "مكتمل" : "جزئي" });
-      }
-      if (bk.insuranceReceived && Number(bk.insuranceFee ?? 0) > 0) {
-        entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "insurance", amount: Math.round(Number(bk.insuranceFee)), status: bk.insuranceRefunded ? "تم الرد" : "محتجز" });
-      }
-    }
-    return entries.sort((a, bk) => bk.bookingDate.localeCompare(a.bookingDate));
-  }, [allBookings, unit]);
 
   const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings", "cancelled"],
@@ -10384,31 +10513,39 @@ function RevenueTab() {
               </div>
             )}
           </div>
-          {/* Row 3: Un-deposited Cash — clickable → breakdown dialog */}
-          <button
-            type="button"
-            onClick={() => setCashBreakdownOpen(true)}
-            className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/40 transition-colors text-right"
-          >
-            <div className="flex items-center gap-3">
+          {/* Row 3: Un-deposited Cash — info click → breakdown, action → deposit */}
+          <div className="flex items-center justify-between px-5 py-4 border-t border-border/50">
+            <button
+              type="button"
+              onClick={() => setCashBreakdownOpen(true)}
+              className="flex items-center gap-3 flex-1 text-right hover:opacity-80 transition-opacity"
+            >
               <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0 text-lg">💵</div>
-              <div className="text-right">
+              <div>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-sm text-foreground">كاش لم يودَع / عهدة معلقة</span>
-                  <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full">اضغط للتفاصيل</span>
+                  <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full">تفاصيل ↓</span>
                 </div>
                 <div className="text-[11px] text-muted-foreground">نقدي بيد المشرف — لم يُودَع في البنك بعد</div>
               </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
+            </button>
+            <div className="flex items-center gap-3 shrink-0">
               {loading ? <Skeleton className="h-7 w-28" /> : (
                 <span className="text-xl font-extrabold text-amber-600 dark:text-amber-400 tabular-nums">
                   {fmtN(channels.cashUndeposited)} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
                 </span>
               )}
-              <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+              {!loading && channels.cashUndeposited > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setDepositCashOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg transition-colors whitespace-nowrap"
+                >
+                  🏦 تسجيل إيداع
+                </button>
+              )}
             </div>
-          </button>
+          </div>
           {/* Row 4: Insurance Custody */}
           <div className="flex items-center justify-between px-5 py-4">
             <div className="flex items-center gap-3">
@@ -10675,100 +10812,58 @@ function RevenueTab() {
 
       </>}
 
-      {/* ══ BANK LEDGER SECTION ══════════════════════════════════════════ */}
-      {unit.type !== "service" && (
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
-            <span className="text-xl">🏦</span>
-            <div>
-              <h3 className="font-bold text-sm text-foreground">سجل الحساب البنكي</h3>
-              <p className="text-[11px] text-muted-foreground">سجل مفصّل لجميع التحويلات البنكية</p>
+      {/* ══ DEPOSIT CASH CONFIRMATION DIALOG ══════════════════════════════ */}
+      <Dialog open={depositCashOpen} onOpenChange={setDepositCashOpen}>
+        <DialogContent dir="rtl" className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-right">
+              <span className="text-xl">🏦</span>
+              تسجيل إيداع نقدي في البنك
+            </DialogTitle>
+            <DialogDescription className="text-right text-sm mt-2">
+              هل أنت متأكد من تسجيل تحويل هذا المبلغ الكاش إلى الحساب البنكي؟
+            </DialogDescription>
+          </DialogHeader>
+          <div className="my-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4 text-center">
+            <div className="text-3xl font-extrabold text-amber-700 dark:text-amber-300 tabular-nums">
+              {fmtN(channels.cashUndeposited)}
+              <span className="text-lg font-normal text-muted-foreground ms-2">ر.س</span>
             </div>
+            <div className="text-xs text-muted-foreground mt-1">إجمالي الكاش غير المودَع حالياً</div>
           </div>
-          {/* Tabs */}
-          <div className="flex border-b border-border text-xs overflow-x-auto">
-            {([
-              ["all",       "🗂️ كل الحوالات"],
-              ["revenue",   "🏠 إيرادات الحجوزات"],
-              ["insurance", "🔒 حوالات التأمينات"],
-              ["other",     "➕ مبالغ أخرى"],
-            ] as const).map(([id, label]) => (
-              <button
-                key={id}
-                onClick={() => setBankLedgerTab(id)}
-                className={`px-4 py-3 font-semibold whitespace-nowrap transition-colors border-b-2 ${bankLedgerTab === id ? "border-primary text-primary bg-primary/5" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
-              >{label}</button>
-            ))}
-          </div>
-          {/* Content */}
-          {bkLoading ? (
-            <div className="p-4 space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
-          ) : (() => {
-            const filtered = bankLedgerTab === "other" ? []
-              : bankLedgerTab === "all" ? bankLedgerEntries
-              : bankLedgerEntries.filter(e => e.type === bankLedgerTab);
-            return filtered.length === 0 ? (
-              <div className="text-center text-muted-foreground text-sm py-12">لا توجد بيانات</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[620px]">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">تاريخ الحوالة</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">اسم المستأجر</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">رقم الحجز</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">نوع الدفعة</th>
-                      <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground">المبلغ المحوّل</th>
-                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">الحالة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((e, i) => {
-                      const hijriDate = e.bookingDate
-                        ? new Date(e.bookingDate + "T12:00:00").toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long" })
-                        : "—";
-                      return (
-                        <tr key={i} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                          <td className="py-2.5 px-4 text-xs text-muted-foreground">{hijriDate}</td>
-                          <td className="py-2.5 px-4 font-medium text-foreground">{e.clientName}</td>
-                          <td className="py-2.5 px-4 text-muted-foreground">#{e.bookingId}</td>
-                          <td className="py-2.5 px-4">
-                            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${e.type === "revenue" ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" : "bg-slate-50 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300"}`}>
-                              {e.type === "revenue" ? "🏠 حجز" : "🔒 تأمين"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-4 text-left">
-                            <span className="font-bold text-blue-600 dark:text-blue-400 tabular-nums">{fmtN(e.amount)}</span>
-                            <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
-                          </td>
-                          <td className="py-2.5 px-4">
-                            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                              e.status === "مكتمل" ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                              : e.status === "تم الرد" ? "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
-                              : e.status === "محتجز" ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                              : "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                            }`}>{e.status}</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-muted/30 border-t-2 border-border">
-                      <td colSpan={4} className="py-2.5 px-4 text-xs font-bold text-muted-foreground">الإجمالي</td>
-                      <td className="py-2.5 px-4 text-left">
-                        <span className="font-extrabold text-blue-700 dark:text-blue-400 tabular-nums">{fmtN(filtered.reduce((s, e) => s + e.amount, 0))}</span>
-                        <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
-                      </td>
-                      <td />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            );
-          })()}
-        </div>
-      )}
+          <p className="text-xs text-muted-foreground text-right bg-muted/40 rounded-lg p-3 leading-relaxed">
+            سيتم تسجيل هذه المبالغ كـ <strong>إيداعات نقدية</strong> في سجل الحساب البنكي، وستنتقل من عمود "كاش غير مودَع" إلى عمود "كاش تم إيداعه في البنك".
+          </p>
+          <DialogFooter className="flex gap-2 mt-2">
+            <Button variant="outline" onClick={() => setDepositCashOpen(false)} disabled={depositingCash} className="flex-1">
+              إلغاء
+            </Button>
+            <Button
+              onClick={async () => {
+                setDepositingCash(true);
+                try {
+                  const submissionId = unit.type === "chalet" ? (unit as any).submissionId : undefined;
+                  const r = await apiFetch("/owner/mark-cash-deposited", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ submissionId }),
+                  });
+                  if (r.ok) {
+                    await refetchBookings();
+                    setDepositCashOpen(false);
+                  }
+                } finally {
+                  setDepositingCash(false);
+                }
+              }}
+              disabled={depositingCash || channels.cashUndeposited === 0}
+              className="flex-1 bg-blue-600 hover:bg-blue-700"
+            >
+              {depositingCash ? "جارٍ التسجيل..." : "✓ تأكيد الإيداع"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ProofViewerDialog booking={proofTarget} open={!!proofTarget} onClose={() => setProofTarget(null)} />
 
@@ -16839,7 +16934,7 @@ function OwnerMessageSettingsTab() {
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
-  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history">("revenue");
+  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history" | "ledger">("revenue");
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
@@ -17582,6 +17677,7 @@ export default function Dashboard() {
         {dashMode === "admin-finance" && !actAsStaff && (() => {
           const afTabs = [
             { id: "revenue",       label: "الإيرادات",             icon: <TrendingUp className="w-4 h-4" />,   color: "text-green-600" },
+            { id: "ledger",        label: "سجل الحساب البنكي",   icon: <span className="text-base leading-none">🏦</span>, color: "text-blue-600" },
             { id: "expenses",      label: "المصروفات",             icon: <TrendingDown className="w-4 h-4" />, color: "text-red-500" },
             { id: "staff",         label: "الموظفون",              icon: <Users className="w-4 h-4" />,        color: "text-blue-600" },
             { id: "customers",     label: "قاعدة العملاء",        icon: <UserCheck className="w-4 h-4" />,    color: "text-purple-600" },
@@ -17640,7 +17736,7 @@ export default function Dashboard() {
               </div>
 
               {/* ── Unit Selector (for Revenue / Expenses / Reports tabs) ── */}
-              {(adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "reports") && (
+              {(adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "reports" || adminFinanceTab === "ledger") && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                     <BarChart2 className="w-3.5 h-3.5" />عرض التقارير المالية لـ:
@@ -17710,6 +17806,7 @@ export default function Dashboard() {
               <AdminFinanceCtx.Provider value={{ unit: selectedFinanceUnit }}>
               <div className="min-h-[320px]">
                 {adminFinanceTab === "revenue"       && <RevenueTab />}
+                {adminFinanceTab === "ledger"        && <BankLedgerTab />}
                 {adminFinanceTab === "expenses"      && <ExpensesTab />}
                 {adminFinanceTab === "staff"         && <StaffTab />}
                 {adminFinanceTab === "customers"     && (

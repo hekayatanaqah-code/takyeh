@@ -4510,4 +4510,54 @@ router.patch("/notification-settings", async (req, res) => {
   return res.json({ ok: true });
 });
 
+/* ── POST /owner/mark-cash-deposited ───────────────────────────
+   Bulk-mark all un-deposited cash bookings as deposited in the bank */
+router.post("/mark-cash-deposited", async (req, res) => {
+  const ownerId = req.user!.id;
+  const { submissionId } = req.body as { submissionId?: number };
+
+  const subs = await db
+    .select({ id: chaletSubmissionsTable.id })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.ownerId, ownerId));
+
+  if (subs.length === 0) return res.json({ updated: 0, totalAmount: 0 });
+  const subIds = subs.map(s => s.id);
+
+  const baseConditions = [
+    inArray(ownerBookingsTable.submissionId, subIds),
+    eq(ownerBookingsTable.paymentMethod, "cash"),
+    eq(ownerBookingsTable.cashDeposited, false),
+    isNull(ownerBookingsTable.cancelledAt),
+  ];
+  if (submissionId) baseConditions.push(eq(ownerBookingsTable.submissionId, Number(submissionId)));
+
+  const bookings = await db
+    .select({
+      id: ownerBookingsTable.id,
+      depositPaid: ownerBookingsTable.depositPaid,
+      totalPrice: ownerBookingsTable.totalPrice,
+      balanceCollected: ownerBookingsTable.balanceCollected,
+    })
+    .from(ownerBookingsTable)
+    .where(and(...baseConditions));
+
+  if (bookings.length === 0) return res.json({ updated: 0, totalAmount: 0 });
+
+  let totalAmount = 0;
+  for (const b of bookings) {
+    const dep = Number(b.depositPaid ?? 0);
+    const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
+    const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
+    totalAmount += dep + bal;
+  }
+
+  await db
+    .update(ownerBookingsTable)
+    .set({ cashDeposited: true })
+    .where(and(...baseConditions));
+
+  return res.json({ updated: bookings.length, totalAmount: Math.round(totalAmount) });
+});
+
 export default router;
