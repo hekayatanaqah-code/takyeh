@@ -5988,6 +5988,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                             }`}>🔒 التأمين: {b.insuranceReceived ? "مُستلَم" : "معلّق"}</span>
                           )}
+                          {ins && !b.insuranceRefunded && !b.insuranceReceived && !isReadOnly && (
+                            <button
+                              type="button"
+                              disabled={markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id}
+                              onClick={(e) => { e.stopPropagation(); setConfirmInsuranceBookingId(b.id); }}
+                              className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 transition-colors disabled:opacity-50 border border-green-300 dark:border-green-700"
+                            >
+                              تسجيل استلام
+                            </button>
+                          )}
                           {b.insuranceRefunded && !b.insuranceDeducted && (
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">↩ تم إعادة التأمين</span>
                           )}
