@@ -5206,19 +5206,21 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
       {/* Confirmation dialog: mark insurance as received */}
       <AlertDialog open={confirmInsuranceBookingId !== null} onOpenChange={(o) => { if (!o) setConfirmInsuranceBookingId(null); }}>
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد استلام التأمين</AlertDialogTitle>
-            <AlertDialogDescription>هل أنت متأكد من تسجيل استلام مبلغ التأمين؟</AlertDialogDescription>
+        <AlertDialogContent dir="rtl" className="max-w-sm text-right p-6">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle className="text-right text-base">تأكيد استلام التأمين</AlertDialogTitle>
+            <AlertDialogDescription className="text-right text-sm mt-1">
+              هل أنت متأكد من تسجيل استلام مبلغ التأمين؟
+            </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row-reverse gap-2">
+          <AlertDialogFooter className="flex flex-row justify-start gap-2 mt-4">
             <AlertDialogAction
-              className="bg-green-600 hover:bg-green-700 text-white"
+              className="bg-green-600 hover:bg-green-700 text-white px-5"
               onClick={() => { if (confirmInsuranceBookingId !== null) { markInsuranceReceived.mutate(confirmInsuranceBookingId); setConfirmInsuranceBookingId(null); } }}
             >
               تأكيد
             </AlertDialogAction>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogCancel className="px-5">إلغاء</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
