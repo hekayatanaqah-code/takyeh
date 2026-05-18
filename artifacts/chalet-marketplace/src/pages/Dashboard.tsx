@@ -9484,7 +9484,6 @@ function RevenueTab() {
   const [selectedHijriMonth, setSelectedHijriMonth] = useState<string>("");
   const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage" | "cancellation" | "refund" | "insurance">("all");
   const [svcFilter, setSvcFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
-  const [showAllFuture, setShowAllFuture] = useState(false);
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
   const [reviewSentRevIds, setReviewSentRevIds] = useState<Set<number>>(new Set());
   const [reviewPendingRevId, setReviewPendingRevId] = useState<number | null>(null);
@@ -9593,6 +9592,55 @@ function RevenueTab() {
     ? (hijriToGregorianMap[selectedHijriMonth] ?? selectedMonth) : selectedMonth;
 
   const [cashBreakdownOpen, setCashBreakdownOpen] = useState(false);
+  const [revSubTab, setRevSubTab] = useState<"monthly" | "receivables">("monthly");
+  const [bankLedgerTab, setBankLedgerTab] = useState<"all" | "revenue" | "insurance" | "other">("all");
+  const showAllFuture = revSubTab === "receivables";
+
+  const allReceivables = useMemo(() => {
+    let scoped = allBookings;
+    if (unit.type === "chalet") {
+      const subId = (unit as any).submissionId;
+      if (subId) scoped = allBookings.filter(bk => bk.submissionId === subId);
+    }
+    return scoped
+      .filter(bk => {
+        if (bk.cancelledAt) return false;
+        if (bk.balanceCollected) return false;
+        const dep = Number(bk.depositPaid ?? 0);
+        const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
+        return Math.max(0, tp - dep) > 0;
+      })
+      .map(bk => {
+        const dep = Number(bk.depositPaid ?? 0);
+        const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
+        return { ...bk, remaining: Math.max(0, tp - dep) };
+      })
+      .sort((a, bk) => (a.bookingDate ?? "").localeCompare(bk.bookingDate ?? ""));
+  }, [allBookings, unit]);
+
+  const bankLedgerEntries = useMemo(() => {
+    let scoped = allBookings;
+    if (unit.type === "chalet") {
+      const subId = (unit as any).submissionId;
+      if (subId) scoped = allBookings.filter(bk => bk.submissionId === subId);
+    }
+    const entries: { bookingId: number; clientName: string; bookingDate: string; type: "revenue" | "insurance"; amount: number; status: string }[] = [];
+    for (const bk of scoped) {
+      if (bk.cancelledAt) continue;
+      if (bk.paymentMethod === "cash") continue;
+      const dep = Number(bk.depositPaid ?? 0);
+      const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
+      const bal = bk.balanceCollected ? Math.max(0, tp - dep) : 0;
+      const total = dep + bal;
+      if (total > 0) {
+        entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "revenue", amount: total, status: bk.balanceCollected || dep >= tp ? "مكتمل" : "جزئي" });
+      }
+      if (bk.insuranceReceived && Number(bk.insuranceFee ?? 0) > 0) {
+        entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "insurance", amount: Math.round(Number(bk.insuranceFee)), status: bk.insuranceRefunded ? "تم الرد" : "محتجز" });
+      }
+    }
+    return entries.sort((a, bk) => bk.bookingDate.localeCompare(a.bookingDate));
+  }, [allBookings, unit]);
 
   const { data: financial, isLoading: finLoading, refetch: refetchFinancial } = useQuery<{
     totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
@@ -9935,20 +9983,30 @@ function RevenueTab() {
       const subId = (unit as any).submissionId;
       if (subId) scoped = allBookings.filter(b => b.submissionId === subId);
     }
-    let bankTransfers = 0, cashOnHand = 0;
+    let bankTransfers = 0, cashDeposited = 0, cashUndeposited = 0;
     for (const b of scoped) {
       if (b.cancelledAt) continue;
       const dep = Number(b.depositPaid ?? 0);
       const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
       const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
       const total = dep + bal;
-      if (b.paymentMethod === "cash") cashOnHand += total;
-      else bankTransfers += total;
+      if (b.paymentMethod === "cash") {
+        if (b.cashDeposited) cashDeposited += total;
+        else cashUndeposited += total;
+      } else {
+        bankTransfers += total;
+      }
     }
     const insuranceCustody = scoped
       .filter(b => !b.cancelledAt && b.insuranceReceived && !b.insuranceRefunded)
       .reduce((s, b) => s + Math.round(Number(b.insuranceFee ?? 0)), 0);
-    return { bankTransfers: Math.round(bankTransfers), cashOnHand: Math.round(cashOnHand), insuranceCustody };
+    return {
+      bankTransfers: Math.round(bankTransfers),
+      cashDeposited: Math.round(cashDeposited),
+      cashUndeposited: Math.round(cashUndeposited),
+      cashOnHand: Math.round(cashDeposited + cashUndeposited),
+      insuranceCustody,
+    };
   }, [allBookings, unit]);
 
   /* ── SERVICE UNIT: render service appointments revenue ── */
@@ -10117,14 +10175,22 @@ function RevenueTab() {
           {unit.type === "chalet" ? `إيرادات: ${(unit as any).name}` : "الإيرادات"}
         </h2>
         <div className="ms-auto flex items-center gap-2 flex-wrap justify-end">
-          {/* All-future toggle */}
-          <button
-            onClick={() => setShowAllFuture(v => !v)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors flex items-center gap-1.5 ${showAllFuture ? "bg-emerald-600 text-white border-emerald-600" : "bg-background border-border text-muted-foreground hover:bg-muted"}`}
-          >
-            <TrendingUp className="w-3 h-3" />
-            {showAllFuture ? "← تصفية شهرية" : "عرض كل المستقبليات"}
-          </button>
+          {/* Revenue sub-tab pills */}
+          <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+            <button
+              onClick={() => setRevSubTab("monthly")}
+              className={`px-3 py-1.5 font-semibold transition-colors ${revSubTab === "monthly" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+            >التصفية الشهرية</button>
+            <button
+              onClick={() => setRevSubTab("receivables")}
+              className={`px-3 py-1.5 font-semibold transition-colors flex items-center gap-1 ${revSubTab === "receivables" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+            >
+              عرض كل المستحقات
+              {allReceivables.length > 0 && (
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${revSubTab === "receivables" ? "bg-white/30 text-white" : "bg-amber-500 text-white"}`}>{allReceivables.length}</span>
+              )}
+            </button>
+          </div>
           {/* Calendar toggle — hidden in all-future mode */}
           {!showAllFuture && <div className="flex rounded-lg border border-border overflow-hidden text-xs">
             <button
@@ -10165,269 +10231,68 @@ function RevenueTab() {
         </div>
       </div>
 
-      {/* ══ Monthly Financial Summary Cards ══════════════════════════════ */}
-      {!showAllFuture && unit.type !== "service" && (() => {
-        const totalExp = financial?.totalExpenses ?? 0;
-        const netLiq = monthRevBreakdown.total - totalExp;
-        return (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-            {/* Card 1 — إجمالي الإيرادات */}
-            <div style={{ background: "linear-gradient(135deg,#eff6ff,#dbeafe)", border: "2px solid #93c5fd", borderRadius: 16, padding: 20, minHeight: 140, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>
-                <TrendingUp className="w-4 h-4" />
-                <span>إجمالي الإيرادات</span>
-              </div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#1d4ed8", lineHeight: 1, marginTop: 4 }}>
-                {bkLoading ? "…" : monthRevBreakdown.total.toLocaleString("ar-SA")}
-              </div>
-              <div style={{ fontSize: 12, color: "#3b82f6", marginTop: "auto" }}>ريال سعودي</div>
-              <div style={{ fontSize: 11, color: "#6b7280" }}>إيجار + خدمات الشهر المختار</div>
-            </div>
-            {/* Card 2 — إجمالي المصروفات */}
-            <div style={{ background: "linear-gradient(135deg,#fff1f2,#ffe4e6)", border: "2px solid #fca5a5", borderRadius: 16, padding: 20, minHeight: 140, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#b91c1c" }}>
-                <TrendingDown className="w-4 h-4" />
-                <span>إجمالي المصروفات</span>
-              </div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#b91c1c", lineHeight: 1, marginTop: 4 }}>
-                {finLoading ? "…" : totalExp.toLocaleString("ar-SA")}
-              </div>
-              <div style={{ fontSize: 12, color: "#ef4444", marginTop: "auto" }}>ريال سعودي</div>
-              <div style={{ fontSize: 11, color: "#6b7280" }}>مصروفات + رواتب الشهر المختار</div>
-            </div>
-            {/* Card 3 — صافي السيولة المتوفرة */}
-            <div style={{ background: netLiq >= 0 ? "linear-gradient(135deg,#f0fdf4,#dcfce7)" : "linear-gradient(135deg,#fefce8,#fef9c3)", border: `2px solid ${netLiq >= 0 ? "#4ade80" : "#fde047"}`, borderRadius: 16, padding: 20, minHeight: 140, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: netLiq >= 0 ? "#15803d" : "#a16207" }}>
-                <DollarSign className="w-4 h-4" />
-                <span>صافي السيولة المتوفرة</span>
-              </div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: netLiq >= 0 ? "#15803d" : "#a16207", lineHeight: 1, marginTop: 4 }}>
-                {(bkLoading || finLoading) ? "…" : netLiq.toLocaleString("ar-SA")}
-              </div>
-              <div style={{ fontSize: 12, color: netLiq >= 0 ? "#16a34a" : "#ca8a04", marginTop: "auto" }}>ريال سعودي</div>
-              <div style={{ fontSize: 11, color: "#6b7280" }}>الإيرادات − المصروفات</div>
-            </div>
-          </div>
-        );
-      })()}
+{false && null}
 
-      {/* ══════════════ ALWAYS VISIBLE: Net Liquidity Position ══════════════ */}
-      {(() => {
-        const totalExp = financial?.totalExpenses ?? 0;
-        const netLiq = monthRevBreakdown.total - totalExp;
-        const isLoaded = !bkLoading && !finLoading;
-        return (
-          <div className={`border-2 rounded-2xl p-4 sm:p-5 ${netLiq >= 0 ? "bg-gradient-to-l from-emerald-600/10 to-teal-500/10 border-emerald-500/30" : "bg-gradient-to-l from-amber-50 to-yellow-50 border-amber-300 dark:from-amber-900/20 dark:to-yellow-900/20"}`}>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <DollarSign className={`w-4 h-4 shrink-0 ${netLiq >= 0 ? "text-emerald-600" : "text-amber-600"}`} />
-                  <span className="text-sm font-bold text-foreground">صافي السيولة الفعلية</span>
-                  <button
-                    type="button"
-                    title="إعادة حساب"
-                    onClick={() => { refetchFinancial(); refetchFuture(); refetchBookings(); }}
-                    className={`h-6 w-6 flex items-center justify-center rounded-md transition-colors ${netLiq >= 0 ? "text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30" : "text-amber-600 hover:text-amber-800 hover:bg-amber-100"}`}
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                {!isLoaded ? <Skeleton className="h-9 w-40" /> : (
-                  <div className={`text-3xl font-extrabold tabular-nums leading-tight ${netLiq >= 0 ? "text-emerald-700" : "text-amber-700"}`}>
-                    {netLiq.toLocaleString("ar-SA")}
-                    <span className="text-base font-normal text-muted-foreground ms-2">ر.س</span>
-                  </div>
-                )}
-                <div className="text-[11px] text-muted-foreground mt-0.5">إجمالي الإيرادات − إجمالي المصروفات للشهر المختار</div>
-              </div>
-              {/* تفاصيل الحجوزات */}
-              <div className="flex flex-wrap gap-3 sm:gap-4 shrink-0">
-                <div className="text-center min-w-[80px]">
-                  <div className="text-[11px] text-muted-foreground mb-0.5">متبقٍ عند الدخول</div>
-                  {futureLoading ? <Skeleton className="h-6 w-16 mx-auto" /> : (
-                    <div className="text-lg font-bold text-amber-600 tabular-nums">{fmtN(futureSummary?.futureRemainingBalance ?? 0)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></div>
-                  )}
-                </div>
-                <div className="text-center min-w-[80px]">
-                  <div className="text-[11px] text-muted-foreground mb-0.5">إيراد الإلغاءات</div>
-                  {futureLoading ? <Skeleton className="h-6 w-16 mx-auto" /> : (
-                    <div className="text-lg font-bold text-orange-600 tabular-nums">{fmtN(futureSummary?.totalCancellationIncome ?? 0)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></div>
-                  )}
-                </div>
-              </div>
-            </div>
-            {/* Quick link to future bookings */}
-            {!showAllFuture && (futureSummary?.futureCount ?? 0) > 0 && (
-              <button
-                onClick={() => setShowAllFuture(true)}
-                className="mt-3 text-xs text-emerald-700 dark:text-emerald-400 font-semibold underline underline-offset-2 hover:no-underline"
-              >
-                عرض {futureSummary!.futureCount} حجز قادم ←
-              </button>
-            )}
-          </div>
-        );
-      })()}
+{false && null}
 
-      {/* ══════════════ FUTURE CASH FLOW VIEW ══════════════ */}
+      {/* ══════════════ ALL RECEIVABLES VIEW ══════════════ */}
       {showAllFuture && (
-        <div className="space-y-5">
-          {/* Primary metric card */}
-          <div className="bg-gradient-to-l from-emerald-600/10 to-teal-500/10 border-2 border-emerald-500/30 rounded-2xl p-5">
-            <div className="flex items-center gap-3 mb-2">
-              <DollarSign className="w-5 h-5 text-emerald-600" />
-              <span className="text-sm font-bold text-foreground">إجمالي السيولة المحصلة</span>
-              <span className="text-xs text-muted-foreground ms-auto">من جميع الحجوزات النشطة</span>
-            </div>
-            {futureLoading ? <Skeleton className="h-10 w-40" /> : (
-              <div className="text-3xl font-extrabold text-emerald-700 tabular-nums">
-                {fmtN(futureSummary?.globalTotalCashCollected ?? 0)}
-                <span className="text-lg font-normal text-muted-foreground ms-2">ر.س</span>
-              </div>
-            )}
-            <div className="text-xs text-muted-foreground mt-1">مجموع العربون + المتبقي المحصّل لجميع الحجوزات الماضية والقادمة</div>
-          </div>
-
-          {/* Summary cards by status */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Cash in hand for future */}
-            <div className="bg-card border border-blue-200 rounded-2xl p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-                <Wallet className="w-3.5 h-3.5 text-blue-500" />
-                مبالغ محصلة
-              </div>
-              {futureLoading ? <Skeleton className="h-7 w-24" /> : (
-                <div className="text-2xl font-bold text-blue-600 tabular-nums">
-                  {fmtN(futureSummary?.futureCashInHand ?? 0)}
-                  <span className="text-sm font-normal text-muted-foreground ms-1">ر.س</span>
-                </div>
-              )}
-              <div className="text-[11px] text-muted-foreground">عربون محصّل لحجوزات لم تبدأ بعد</div>
-            </div>
-
-            {/* Remaining balance to collect */}
-            <div className="bg-card border border-amber-200 rounded-2xl p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-                <Clock className="w-3.5 h-3.5 text-amber-500" />
-                مبالغ متبقية
-              </div>
-              {futureLoading ? <Skeleton className="h-7 w-24" /> : (
-                <div className="text-2xl font-bold text-amber-600 tabular-nums">
-                  {fmtN(futureSummary?.futureRemainingBalance ?? 0)}
-                  <span className="text-sm font-normal text-muted-foreground ms-1">ر.س</span>
-                </div>
-              )}
-              <div className="text-[11px] text-muted-foreground">يُحصَّل عند وصول العميل</div>
-            </div>
-
-            {/* Future bookings count */}
-            <div className="bg-card border border-purple-200 rounded-2xl p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-                <CalendarDays className="w-3.5 h-3.5 text-purple-500" />
-                حجوزات قادمة
-              </div>
-              {futureLoading ? <Skeleton className="h-7 w-16" /> : (
-                <div className="text-2xl font-bold text-purple-600 tabular-nums">
-                  {futureSummary?.futureCount ?? 0}
-                  <span className="text-sm font-normal text-muted-foreground ms-1">حجز</span>
-                </div>
-              )}
-              <div className="text-[11px] text-muted-foreground">إجمالي الحجوزات المؤكدة القادمة</div>
-            </div>
-          </div>
-
-          {/* Future bookings unified table */}
-          <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-emerald-600" />
-              <h3 className="font-bold text-sm text-foreground">الحجوزات المؤكدة القادمة</h3>
-              {!futureLoading && futureSummary && (
-                <span className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 px-2 py-0.5 rounded-full ms-auto font-semibold">
-                  {futureSummary.futureCount} حجز
-                </span>
-              )}
-            </div>
-            {futureLoading ? (
-              <div className="space-y-2">{[1,2,3,4].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
-            ) : !futureSummary?.futureBookings?.length ? (
-              <div className="text-center text-muted-foreground text-sm py-10">لا توجد حجوزات قادمة</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[620px]">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-muted-foreground">العميل</th>
-                      {unit.type === "all" && <th className="text-right py-2.5 px-3 text-xs font-semibold text-muted-foreground">الشاليه</th>}
-                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-muted-foreground">تاريخ الدخول</th>
-                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-muted-foreground">تاريخ الخروج</th>
-                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-muted-foreground">محصّل (عربون)</th>
-                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-muted-foreground">متبقي</th>
-                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-muted-foreground">الحالة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {futureSummary.futureBookings.map((fb) => {
-                      const { hijri: checkInHijri, gregorian: checkInGreg } = formatDualDate(fb.bookingDate);
-                      const { hijri: checkOutHijri, gregorian: checkOutGreg } = formatDualDate(fb.checkoutDate);
-                      const isFullyPaid = fb.balanceCollected || fb.remainingBalance === 0;
-                      return (
-                        <tr key={fb.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                          <td className="py-2.5 px-3">
-                            <div className="font-medium text-foreground">{fb.clientName}</div>
-                            {fb.period && <div className="text-[10px] text-muted-foreground">{fb.period === "morning" ? "صباحي" : fb.period === "evening" ? "مسائي" : "يومي"}</div>}
-                          </td>
-                          {unit.type === "all" && <td className="py-2.5 px-3 text-xs text-muted-foreground">{fb.chaletName || "—"}</td>}
-                          <td className="py-2.5 px-3 text-xs">
-                            <div className="font-medium">{checkInHijri}</div>
-                            <div className="text-muted-foreground">{checkInGreg}</div>
-                          </td>
-                          <td className="py-2.5 px-3 text-xs">
-                            <div className="font-medium">{checkOutHijri}</div>
-                            <div className="text-muted-foreground">{checkOutGreg}</div>
-                          </td>
-                          <td className="py-2.5 px-3 text-left">
-                            <span className="font-bold text-blue-600 tabular-nums">{fmtN(fb.depositPaid)}</span>
-                            <span className="text-[10px] text-muted-foreground ms-1">ر.س</span>
-                          </td>
-                          <td className="py-2.5 px-3 text-left">
-                            {fb.remainingBalance > 0 ? (
-                              <>
-                                <span className="font-bold text-amber-600 tabular-nums">{fmtN(fb.remainingBalance)}</span>
-                                <span className="text-[10px] text-muted-foreground ms-1">ر.س</span>
-                              </>
-                            ) : (
-                              <span className="text-[11px] text-green-600 font-semibold">مكتمل</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            {isFullyPaid ? (
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">✅ محصّل بالكامل</span>
-                            ) : (
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">⏳ متبقي عند الدخول</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-muted/30 border-t-2 border-border">
-                      <td colSpan={unit.type === "all" ? 4 : 3} className="py-2.5 px-3 text-xs font-bold text-muted-foreground">المجموع</td>
-                      <td className="py-2.5 px-3 text-left">
-                        <span className="font-extrabold text-blue-600 tabular-nums">{fmtN(futureSummary.futureCashInHand)}</span>
-                        <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
-                      </td>
-                      <td className="py-2.5 px-3 text-left">
-                        <span className="font-extrabold text-amber-600 tabular-nums">{fmtN(futureSummary.futureRemainingBalance)}</span>
-                        <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
-                      </td>
-                      <td />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+            <Clock className="w-4 h-4 text-amber-500" />
+            <h3 className="font-bold text-sm text-foreground">كل المستحقات غير المحصّلة</h3>
+            <span className="text-[11px] text-muted-foreground ms-1">— جميع الشهور</span>
+            {allReceivables.length > 0 && (
+              <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 rounded-full ms-auto font-semibold">
+                {allReceivables.length} ضيف
+              </span>
             )}
           </div>
+          {bkLoading ? (
+            <div className="p-4 space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+          ) : allReceivables.length === 0 ? (
+            <div className="text-center text-muted-foreground text-sm py-12">✅ لا توجد مستحقات معلقة</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[480px]">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">اسم المستأجر</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">رقم الحجز</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">التاريخ الهجري</th>
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground">المبلغ المتبقي</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allReceivables.map(bk => {
+                    const hijriDate = bk.bookingDate
+                      ? new Date(bk.bookingDate + "T12:00:00").toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric" })
+                      : "—";
+                    return (
+                      <tr key={bk.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                        <td className="py-3 px-4 font-medium text-foreground">{bk.clientName}</td>
+                        <td className="py-3 px-4 text-muted-foreground">#{bk.id}</td>
+                        <td className="py-3 px-4 text-xs text-muted-foreground">{hijriDate}</td>
+                        <td className="py-3 px-4 text-left">
+                          <span className="font-extrabold text-amber-600 dark:text-amber-400 tabular-nums">{fmtN(bk.remaining)}</span>
+                          <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-muted/30 border-t-2 border-border">
+                    <td colSpan={3} className="py-2.5 px-4 text-xs font-bold text-muted-foreground">الإجمالي</td>
+                    <td className="py-2.5 px-4 text-left">
+                      <span className="font-extrabold text-amber-700 dark:text-amber-400 tabular-nums">{fmtN(allReceivables.reduce((s, bk) => s + bk.remaining, 0))}</span>
+                      <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -10483,7 +10348,13 @@ function RevenueTab() {
           <h3 className="font-bold text-sm text-foreground">توزيع قنوات التحصيل</h3>
           <span className="text-[11px] text-muted-foreground ms-auto">الوضع الراهن — جميع الحجوزات</span>
         </div>
+        {/* Column headers */}
+        <div className="flex items-center justify-between px-5 py-2 bg-muted/30 border-b border-border">
+          <span className="text-xs font-bold text-muted-foreground">القناة المالية</span>
+          <span className="text-xs font-bold text-muted-foreground">المبلغ المحصّل</span>
+        </div>
         <div className="divide-y divide-border">
+          {/* Row 1: Bank / Transfers */}
           <div className="flex items-center justify-between px-5 py-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0 text-lg">🏦</div>
@@ -10498,6 +10369,22 @@ function RevenueTab() {
               </div>
             )}
           </div>
+          {/* Row 2: Cash Deposited to Bank */}
+          <div className="flex items-center justify-between px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0 text-lg">✅</div>
+              <div>
+                <div className="font-semibold text-sm text-foreground">كاش تم إيداعه في البنك</div>
+                <div className="text-[11px] text-muted-foreground">نقدي سبق تحويله للحساب البنكي</div>
+              </div>
+            </div>
+            {loading ? <Skeleton className="h-7 w-28" /> : (
+              <div className="text-xl font-extrabold text-green-600 dark:text-green-400 tabular-nums shrink-0">
+                {fmtN(channels.cashDeposited)} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
+              </div>
+            )}
+          </div>
+          {/* Row 3: Un-deposited Cash — clickable → breakdown dialog */}
           <button
             type="button"
             onClick={() => setCashBreakdownOpen(true)}
@@ -10507,21 +10394,22 @@ function RevenueTab() {
               <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0 text-lg">💵</div>
               <div className="text-right">
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm text-foreground">صندوق الكاش / بيد المشرف</span>
+                  <span className="font-semibold text-sm text-foreground">كاش لم يودَع / عهدة معلقة</span>
                   <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full">اضغط للتفاصيل</span>
                 </div>
-                <div className="text-[11px] text-muted-foreground">مجموع المبالغ النقدية المحصّلة</div>
+                <div className="text-[11px] text-muted-foreground">نقدي بيد المشرف — لم يُودَع في البنك بعد</div>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {loading ? <Skeleton className="h-7 w-28" /> : (
                 <span className="text-xl font-extrabold text-amber-600 dark:text-amber-400 tabular-nums">
-                  {fmtN(channels.cashOnHand)} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
+                  {fmtN(channels.cashUndeposited)} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
                 </span>
               )}
               <ChevronLeft className="w-4 h-4 text-muted-foreground" />
             </div>
           </button>
+          {/* Row 4: Insurance Custody */}
           <div className="flex items-center justify-between px-5 py-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 text-lg">🔒</div>
@@ -10786,6 +10674,101 @@ function RevenueTab() {
       )}
 
       </>}
+
+      {/* ══ BANK LEDGER SECTION ══════════════════════════════════════════ */}
+      {unit.type !== "service" && (
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+            <span className="text-xl">🏦</span>
+            <div>
+              <h3 className="font-bold text-sm text-foreground">سجل الحساب البنكي</h3>
+              <p className="text-[11px] text-muted-foreground">سجل مفصّل لجميع التحويلات البنكية</p>
+            </div>
+          </div>
+          {/* Tabs */}
+          <div className="flex border-b border-border text-xs overflow-x-auto">
+            {([
+              ["all",       "🗂️ كل الحوالات"],
+              ["revenue",   "🏠 إيرادات الحجوزات"],
+              ["insurance", "🔒 حوالات التأمينات"],
+              ["other",     "➕ مبالغ أخرى"],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setBankLedgerTab(id)}
+                className={`px-4 py-3 font-semibold whitespace-nowrap transition-colors border-b-2 ${bankLedgerTab === id ? "border-primary text-primary bg-primary/5" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
+              >{label}</button>
+            ))}
+          </div>
+          {/* Content */}
+          {bkLoading ? (
+            <div className="p-4 space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+          ) : (() => {
+            const filtered = bankLedgerTab === "other" ? []
+              : bankLedgerTab === "all" ? bankLedgerEntries
+              : bankLedgerEntries.filter(e => e.type === bankLedgerTab);
+            return filtered.length === 0 ? (
+              <div className="text-center text-muted-foreground text-sm py-12">لا توجد بيانات</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[620px]">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">تاريخ الحوالة</th>
+                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">اسم المستأجر</th>
+                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">رقم الحجز</th>
+                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">نوع الدفعة</th>
+                      <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground">المبلغ المحوّل</th>
+                      <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((e, i) => {
+                      const hijriDate = e.bookingDate
+                        ? new Date(e.bookingDate + "T12:00:00").toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long" })
+                        : "—";
+                      return (
+                        <tr key={i} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                          <td className="py-2.5 px-4 text-xs text-muted-foreground">{hijriDate}</td>
+                          <td className="py-2.5 px-4 font-medium text-foreground">{e.clientName}</td>
+                          <td className="py-2.5 px-4 text-muted-foreground">#{e.bookingId}</td>
+                          <td className="py-2.5 px-4">
+                            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${e.type === "revenue" ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" : "bg-slate-50 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300"}`}>
+                              {e.type === "revenue" ? "🏠 حجز" : "🔒 تأمين"}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-4 text-left">
+                            <span className="font-bold text-blue-600 dark:text-blue-400 tabular-nums">{fmtN(e.amount)}</span>
+                            <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
+                          </td>
+                          <td className="py-2.5 px-4">
+                            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                              e.status === "مكتمل" ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                              : e.status === "تم الرد" ? "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
+                              : e.status === "محتجز" ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                              : "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                            }`}>{e.status}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-muted/30 border-t-2 border-border">
+                      <td colSpan={4} className="py-2.5 px-4 text-xs font-bold text-muted-foreground">الإجمالي</td>
+                      <td className="py-2.5 px-4 text-left">
+                        <span className="font-extrabold text-blue-700 dark:text-blue-400 tabular-nums">{fmtN(filtered.reduce((s, e) => s + e.amount, 0))}</span>
+                        <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       <ProofViewerDialog booking={proofTarget} open={!!proofTarget} onClose={() => setProofTarget(null)} />
 
