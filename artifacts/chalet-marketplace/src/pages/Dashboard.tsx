@@ -10,6 +10,7 @@ import { useStaffAuth } from "@/lib/useStaffAuth";
 import { TAB_PERMISSION, ALL_PERM_KEYS, PERM_LABELS } from "@/lib/staffPermissions";
 import type { PermKey, StaffPermissions } from "@/lib/staffPermissions";
 import { Switch } from "@/components/ui/switch";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
@@ -3797,6 +3798,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [chalUnblockDay, setChalUnblockDay] = useState<{ ds: string; avId: number } | null>(null);
   const [unblockingChal, setUnblockingChal] = useState(false);
   const [summaryDate, setSummaryDate] = useState<string | null>(null);
+  const [confirmInsuranceBookingId, setConfirmInsuranceBookingId] = useState<number | null>(null);
   const [reviewSentIds, setReviewSentIds] = useState<Set<number>>(new Set());
   const [reviewPendingId, setReviewPendingId] = useState<number | null>(null);
   const [filterFrom, setFilterFrom] = useState("");
@@ -4952,7 +4954,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               <button
                                 type="button"
                                 disabled={markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id}
-                                onClick={() => markInsuranceReceived.mutate(b.id)}
+                                onClick={() => setConfirmInsuranceBookingId(b.id)}
                                 className="w-full mt-1 text-[11px] py-1 rounded-md font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors disabled:opacity-50"
                               >
                                 {markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id ? "جاري التسجيل..." : "✓ تسجيل استلام التأمين"}
@@ -5201,6 +5203,25 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           </Dialog>
         );
       })()}
+
+      {/* Confirmation dialog: mark insurance as received */}
+      <AlertDialog open={confirmInsuranceBookingId !== null} onOpenChange={(o) => { if (!o) setConfirmInsuranceBookingId(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد استلام التأمين</AlertDialogTitle>
+            <AlertDialogDescription>هل أنت متأكد من تسجيل استلام مبلغ التأمين؟</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogAction
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => { if (confirmInsuranceBookingId !== null) { markInsuranceReceived.mutate(confirmInsuranceBookingId); setConfirmInsuranceBookingId(null); } }}
+            >
+              تأكيد
+            </AlertDialogAction>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Calendar Section */}
       <div className="bg-card border border-border rounded-2xl p-5">
@@ -5966,16 +5987,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                                 : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                             }`}>🔒 التأمين: {b.insuranceReceived ? "مُستلَم" : "معلّق"}</span>
-                          )}
-                          {ins && !b.insuranceRefunded && !b.insuranceReceived && !isReadOnly && (
-                            <button
-                              type="button"
-                              disabled={markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id}
-                              onClick={(e) => { e.stopPropagation(); markInsuranceReceived.mutate(b.id); }}
-                              className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 transition-colors disabled:opacity-50 border border-green-300 dark:border-green-700"
-                            >
-                              {markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id ? "..." : "✓ استُلم"}
-                            </button>
                           )}
                           {b.insuranceRefunded && !b.insuranceDeducted && (
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">↩ تم إعادة التأمين</span>
