@@ -9906,6 +9906,51 @@ function RevenueTab() {
 
   const loading = finLoading || bkLoading;
 
+  const big3 = useMemo(() => {
+    const sales = monthBookings.reduce((s, b) => {
+      const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice)
+        : b.revenueAmount != null && Number(b.revenueAmount) > 0 ? Number(b.revenueAmount)
+        : Number(b.depositPaid ?? 0);
+      return s + tp;
+    }, 0);
+    const collected = monthBookings.reduce((s, b) => {
+      const dep = Number(b.depositPaid ?? 0);
+      const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
+      const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
+      return s + dep + bal;
+    }, 0);
+    const pending = monthBookings.reduce((s, b) => {
+      if (b.cancelledAt) return s;
+      const dep = Number(b.depositPaid ?? 0);
+      const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
+      const rem = b.balanceCollected ? 0 : Math.max(0, tp - dep);
+      return s + rem;
+    }, 0);
+    return { sales: Math.round(sales), collected: Math.round(collected), pending: Math.round(pending) };
+  }, [monthBookings]);
+
+  const channels = useMemo(() => {
+    let scoped = allBookings;
+    if (unit.type === "chalet") {
+      const subId = (unit as any).submissionId;
+      if (subId) scoped = allBookings.filter(b => b.submissionId === subId);
+    }
+    let bankTransfers = 0, cashOnHand = 0;
+    for (const b of scoped) {
+      if (b.cancelledAt) continue;
+      const dep = Number(b.depositPaid ?? 0);
+      const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
+      const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
+      const total = dep + bal;
+      if (b.paymentMethod === "cash") cashOnHand += total;
+      else bankTransfers += total;
+    }
+    const insuranceCustody = scoped
+      .filter(b => !b.cancelledAt && b.insuranceReceived && !b.insuranceRefunded)
+      .reduce((s, b) => s + Math.round(Number(b.insuranceFee ?? 0)), 0);
+    return { bankTransfers: Math.round(bankTransfers), cashOnHand: Math.round(cashOnHand), insuranceCustody };
+  }, [allBookings, unit]);
+
   /* ── SERVICE UNIT: render service appointments revenue ── */
   if (unit.type === "service") {
     // Build revenue rows mirroring chalet row structure
@@ -10389,391 +10434,178 @@ function RevenueTab() {
       {/* ══════════════ MONTHLY VIEW (hidden when all-future active) ══════════════ */}
       {!showAllFuture && <>
 
-      {/* ── MASTER VIEW: Unified Net Profit Card ── */}
-      {unit.type === "all" && (
-        <div className="bg-gradient-to-l from-primary/5 to-green-500/5 border border-primary/20 rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Zap className="w-4 h-4 text-primary" />
-            <span className="text-sm font-bold text-foreground">ملخص الإيرادات الموحّدة</span>
-            <span className="text-xs text-muted-foreground ms-auto">{calType === "hijri" ? selectedHijriMonth : monthOptions.find(o => o.val === selectedMonth)?.label}</span>
+      {/* ── THE BIG 3: Core Financial Metrics ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20 border-2 border-blue-300 dark:border-blue-700 rounded-2xl p-5 space-y-2">
+          <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 text-xs font-bold uppercase tracking-wide">
+            <Receipt className="w-4 h-4" />
+            إجمالي مبيعات الشهر
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="text-[11px] text-muted-foreground mb-1">إيرادات الشاليهات</div>
-              <div className="text-xl font-bold text-primary tabular-nums">{fmtN(financial?.totalRevenue ?? 0)}</div>
-              <div className="text-[10px] text-muted-foreground">ر.س</div>
+          {loading ? <Skeleton className="h-10 w-32" /> : (
+            <div className="text-3xl font-extrabold text-blue-700 dark:text-blue-400 tabular-nums">
+              {fmtN(big3.sales)}<span className="text-base font-normal text-muted-foreground ms-1.5">ر.س</span>
             </div>
-            <div className="text-center">
-              <div className="text-[11px] text-muted-foreground mb-1">إيرادات الخدمات</div>
-              <div className="text-xl font-bold text-amber-600 tabular-nums">{fmtN(svcRevSummary?.totalRevenue ?? 0)}</div>
-              <div className="text-[10px] text-muted-foreground">ر.س</div>
-            </div>
-            <div className="text-center border-r border-border/40 pr-4">
-              <div className="text-[11px] text-muted-foreground mb-1">الإجمالي المحصّل</div>
-              <div className="text-xl font-bold text-green-600 tabular-nums">{fmtN((financial?.totalRevenue ?? 0) + (svcRevSummary?.totalRevenue ?? 0))}</div>
-              <div className="text-[10px] text-muted-foreground">ر.س</div>
-            </div>
-            <div className="text-center">
-              <div className="text-[11px] text-muted-foreground mb-1">مبالغ لم تُحصَّل</div>
-              <div className="text-xl font-bold text-orange-500 tabular-nums">{fmtN((financial?.totalPendingBalance ?? 0) + (svcRevSummary?.totalPending ?? 0))}</div>
-              <div className="text-[10px] text-muted-foreground">ر.س</div>
-            </div>
-          </div>
+          )}
+          <div className="text-[11px] text-blue-600 dark:text-blue-500">إجمالي قيمة الحجوزات في الشهر المحدد</div>
         </div>
-      )}
 
-      {/* ── Chalet KPI Cards — Triple-Layer Cash Flow ── */}
-      {unit.type === "all" && <div className="flex items-center gap-2 px-1"><Home className="w-4 h-4 text-primary shrink-0" /><span className="text-sm font-bold text-foreground">تفاصيل إيرادات الشاليهات</span></div>}
-
-      {/* Layer 1-3: Triple cash flow */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Layer 1 — Total Cash Collected */}
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20 border-2 border-green-300 dark:border-green-700 rounded-2xl p-4 space-y-1.5">
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20 border-2 border-green-300 dark:border-green-700 rounded-2xl p-5 space-y-2">
           <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-xs font-bold uppercase tracking-wide">
-            <DollarSign className="w-3.5 h-3.5" />
-            إجمالي السيولة المحصّلة
+            <DollarSign className="w-4 h-4" />
+            المبالغ المحصّلة
           </div>
-          {loading ? <Skeleton className="h-8 w-28" /> : (
+          {loading ? <Skeleton className="h-10 w-32" /> : (
             <div className="text-3xl font-extrabold text-green-700 dark:text-green-400 tabular-nums">
-              {fmtN(financial?.totalCashCollected ?? financial?.totalRevenue ?? 0)}
-              <span className="text-base font-normal text-muted-foreground ms-1.5">ر.س</span>
+              {fmtN(big3.collected)}<span className="text-base font-normal text-muted-foreground ms-1.5">ر.س</span>
             </div>
           )}
-          <div className="text-[11px] text-green-600 dark:text-green-500 font-medium">كل ما دخل البنك فعلياً — عربون + متبقي + تأمين</div>
-          {financial?.allTimeRefundsIssued != null && financial.allTimeRefundsIssued > 0 && (
-            <div className="flex items-center gap-1 text-[11px] text-rose-600 dark:text-rose-400 font-medium">
-              <RotateCcw className="w-3 h-3" />
-              مسترد: {fmtN(financial.allTimeRefundsIssued)} ر.س
-            </div>
-          )}
+          <div className="text-[11px] text-green-600 dark:text-green-500">تحويل بنكي + نقدي — عربون + متبقي محصّل</div>
         </div>
 
-        {/* Layer 2 — Confirmed Revenue */}
-        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 border-2 border-emerald-300 dark:border-emerald-700 rounded-2xl p-4 space-y-1.5">
-          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 text-xs font-bold uppercase tracking-wide">
-            <CheckCircle className="w-3.5 h-3.5" />
-            إيرادات مؤكدة
-          </div>
-          {loading ? <Skeleton className="h-8 w-28" /> : (
-            <div className="text-3xl font-extrabold text-emerald-700 dark:text-emerald-400 tabular-nums">
-              {fmtN(financial?.confirmedRevenue ?? financial?.realizedRevenue ?? 0)}
-              <span className="text-base font-normal text-muted-foreground ms-1.5">ر.س</span>
-            </div>
-          )}
-          <div className="text-[11px] text-emerald-600 dark:text-emerald-500 font-medium">إقامات مكتملة + حجوزات خارج نافذة الإلغاء</div>
-        </div>
-
-        {/* Layer 3 — Floating Cash */}
-        <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 border-2 border-amber-300 dark:border-amber-700 rounded-2xl p-4 space-y-1.5">
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 border-2 border-amber-300 dark:border-amber-700 rounded-2xl p-5 space-y-2">
           <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs font-bold uppercase tracking-wide">
-            <Clock className="w-3.5 h-3.5" />
-            سيولة معلّقة
+            <Clock className="w-4 h-4" />
+            مستحقات معلقة
           </div>
-          {loading ? <Skeleton className="h-8 w-28" /> : (
+          {loading ? <Skeleton className="h-10 w-32" /> : (
             <div className="text-3xl font-extrabold text-amber-700 dark:text-amber-400 tabular-nums">
-              {fmtN(financial?.floatingCash ?? 0)}
-              <span className="text-base font-normal text-muted-foreground ms-1.5">ر.س</span>
+              {fmtN(big3.pending)}<span className="text-base font-normal text-muted-foreground ms-1.5">ر.س</span>
             </div>
           )}
-          <div className="text-[11px] text-amber-600 dark:text-amber-500 font-medium">عربون حجوزات قادمة ضمن نافذة الإلغاء</div>
+          <div className="text-[11px] text-amber-600 dark:text-amber-500">متبقٍ لم يُحصَّل من الضيوف حتى الآن</div>
         </div>
       </div>
 
-      {/* Secondary metrics row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {/* Insurance Vault — isolated */}
-        <div className="bg-card border border-slate-200 rounded-2xl p-4 space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-            <Lock className="w-3.5 h-3.5 text-slate-500" />
-            خزنة التأمين
-          </div>
-          {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-xl font-bold text-slate-600">{fmtN(financial?.insuranceVault ?? financial?.totalInsuranceHeld ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
-          )}
-          <div className="text-[10px] text-muted-foreground">معزولة — لا تدخل في الأرباح</div>
+      {/* ── FINANCIAL CHANNELS DISTRIBUTION ── */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+          <Wallet className="w-4 h-4 text-primary" />
+          <h3 className="font-bold text-sm text-foreground">توزيع قنوات التحصيل</h3>
+          <span className="text-[11px] text-muted-foreground ms-auto">الوضع الراهن — جميع الحجوزات</span>
         </div>
-
-        {/* Cancellation Income */}
-        <div className="bg-card border border-orange-200 rounded-2xl p-4 space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-            <Ban className="w-3.5 h-3.5 text-orange-500" />
-            إيراد الإلغاءات
+        <div className="divide-y divide-border">
+          <div className="flex items-center justify-between px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0 text-lg">🏦</div>
+              <div>
+                <div className="font-semibold text-sm text-foreground">الحساب البنكي / حوالات</div>
+                <div className="text-[11px] text-muted-foreground">مجموع التحويلات البنكية والشبكة المستلمة</div>
+              </div>
+            </div>
+            {loading ? <Skeleton className="h-7 w-28" /> : (
+              <div className="text-xl font-extrabold text-blue-600 dark:text-blue-400 tabular-nums shrink-0">
+                {fmtN(channels.bankTransfers)} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
+              </div>
+            )}
           </div>
-          {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-xl font-bold text-orange-600">{fmtN(financial?.totalCancellationIncome ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
-          )}
-          <div className="text-[10px] text-muted-foreground">هذا الشهر</div>
-        </div>
-
-        {/* Pending Collections */}
-        <div className="bg-card border border-amber-200 rounded-2xl p-4 space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-            <Clock className="w-3.5 h-3.5 text-amber-500" />
-            متبقٍ لم يُحصَّل
-          </div>
-          {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-xl font-bold text-amber-600">{fmtN(financial?.totalPendingBalance ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
-          )}
-          <div className="text-[10px] text-muted-foreground">مبالغ مستحقة عند الدخول</div>
-        </div>
-
-        {/* Expected Revenue */}
-        <div className="bg-card border border-blue-200 rounded-2xl p-4 space-y-1">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-            <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
-            إيرادات متوقّعة
-          </div>
-          {loading ? <Skeleton className="h-7 w-24" /> : (
-            <div className="text-xl font-bold text-blue-600">{fmtN(financial?.totalFutureValue ?? financial?.pendingRevenue ?? 0)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
-          )}
-          <div className="text-[10px] text-muted-foreground">قيمة الحجوزات القادمة</div>
-        </div>
-      </div>
-
-      {/* ── Cash on Hand (clickable) ── */}
-      {(financial?.cashOnHand ?? 0) > 0 && (
-        <>
           <button
             type="button"
             onClick={() => setCashBreakdownOpen(true)}
-            className="w-full rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-4 flex items-center gap-4 text-right hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors cursor-pointer"
+            className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/40 transition-colors text-right"
           >
-            <Banknote className="w-8 h-8 text-amber-500 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
-                <div className="text-xs font-bold text-amber-700 dark:text-amber-400">سيولة يدوية — لم تُودَع في البنك بعد</div>
-                <span className="text-[10px] bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-200 font-bold px-1.5 py-0.5 rounded-full">نقدي</span>
-              </div>
-              <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 tabular-nums">
-                {fmtN(financial?.cashOnHand ?? 0)} <span className="text-sm font-normal">ر.س</span>
-              </div>
-              <div className="text-[11px] text-amber-600 dark:text-amber-500 mt-0.5">
-                اضغط لعرض التفاصيل · مبالغ كاش مع المالك أو الحارس
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0 text-lg">💵</div>
+              <div className="text-right">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm text-foreground">صندوق الكاش / بيد المشرف</span>
+                  <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full">اضغط للتفاصيل</span>
+                </div>
+                <div className="text-[11px] text-muted-foreground">مجموع المبالغ النقدية المحصّلة</div>
               </div>
             </div>
-            <ChevronLeft className="w-5 h-5 text-amber-400 shrink-0" />
+            <div className="flex items-center gap-2 shrink-0">
+              {loading ? <Skeleton className="h-7 w-28" /> : (
+                <span className="text-xl font-extrabold text-amber-600 dark:text-amber-400 tabular-nums">
+                  {fmtN(channels.cashOnHand)} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
+                </span>
+              )}
+              <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+            </div>
           </button>
-
-          {/* Breakdown dialog */}
-          <Dialog open={cashBreakdownOpen} onOpenChange={setCashBreakdownOpen}>
-            <DialogContent className="max-w-sm" dir="rtl">
-              <DialogHeader>
-                <DialogTitle className="text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                  <Banknote className="w-5 h-5" />
-                  تفاصيل السيولة اليدوية
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-                {(financial?.cashBreakdown ?? []).length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">لا توجد بنود</p>
-                ) : (
-                  <table className="w-full text-sm" dir="rtl">
-                    <thead className="text-xs font-bold text-muted-foreground border-b border-border">
-                      <tr>
-                        <th className="py-2 text-right">العميل</th>
-                        <th className="py-2 text-center">التاريخ</th>
-                        <th className="py-2 text-left">المبلغ</th>
-                        <th className="py-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {(financial?.cashBreakdown ?? []).map((row, i) => (
-                        <tr key={i} className="hover:bg-muted/30">
-                          <td className="py-2 font-medium text-foreground">{row.clientName}</td>
-                          <td className="py-2 text-center text-muted-foreground text-xs leading-tight">
-                            {fmtDualDate(row.date)}
-                          </td>
-                          <td className="py-2 text-left font-bold tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">
-                            {fmtN(row.amount)} <span className="text-[10px] font-normal">ر.س</span>
-                          </td>
-                          <td className="py-2 text-center">
-                            {row.paymentId && row.bookingId ? (
-                              <button
-                                type="button"
-                                title="حذف هذه الدفعة"
-                                onClick={async () => {
-                                  if (!confirm(`حذف دفعة ${fmtN(row.amount)} ر.س لـ ${row.clientName}؟`)) return;
-                                  const r = await apiFetch(`/owner/bookings/${row.bookingId}/payments/${row.paymentId}`, { method: "DELETE" });
-                                  if (r.ok) { refetchFinancial(); refetchFuture(); }
-                                }}
-                                className="h-6 w-6 flex items-center justify-center rounded text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="border-t-2 border-amber-300">
-                      <tr>
-                        <td colSpan={3} className="pt-2 font-bold text-amber-700 dark:text-amber-400">الإجمالي</td>
-                        <td className="pt-2 text-left font-extrabold tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">
-                          {fmtN(financial?.cashOnHand ?? 0)} <span className="text-[10px] font-normal">ر.س</span>
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                )}
+          <div className="flex items-center justify-between px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 text-lg">🔒</div>
+              <div>
+                <div className="font-semibold text-sm text-foreground">عهدة التأمينات المستلمة</div>
+                <div className="text-[11px] text-muted-foreground">مبالغ تأمين محتجزة — تُعاد للعملاء لاحقاً</div>
               </div>
-            </DialogContent>
-          </Dialog>
-        </>
-      )}
-
-      {/* ── Service KPI Cards in "all" mode ── */}
-      {unit.type === "all" && svcRevSummary && (
-        <>
-          <div className="flex items-center gap-2 px-1">
-            <Activity className="w-4 h-4 text-amber-500 shrink-0" />
-            <span className="text-sm font-bold text-foreground">تفاصيل إيرادات الخدمات</span>
+            </div>
+            {loading ? <Skeleton className="h-7 w-28" /> : (
+              <div className="text-xl font-extrabold text-slate-600 dark:text-slate-400 tabular-nums shrink-0">
+                {fmtN(channels.insuranceCustody)} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
+              </div>
+            )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="bg-card border border-border rounded-2xl p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-                <DollarSign className="w-3.5 h-3.5 text-green-500" />
-                إيرادات الخدمات المحصّلة
-              </div>
-              <div className="text-2xl font-bold text-green-600 tabular-nums">{fmtN(svcRevSummary.totalRevenue)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
-              <div className="text-[11px] text-muted-foreground">عربون + متبقي محصّل + تلفيات</div>
-            </div>
-            <div className="bg-card border border-orange-200 rounded-2xl p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-                <Lock className="w-3.5 h-3.5 text-orange-500" />
-                تأمينات محتجزة حالياً
-              </div>
-              <div className="text-2xl font-bold text-orange-600 tabular-nums">{fmtN(svcRevSummary.totalInsurance)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
-              <div className="text-[11px] text-muted-foreground">غير محتسبة في الأرباح</div>
-            </div>
-            <div className="bg-card border border-amber-200 rounded-2xl p-4 space-y-1">
-              <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-                <Clock className="w-3.5 h-3.5 text-amber-500" />
-                مبالغ متبقية لم تُحصَّل
-              </div>
-              <div className="text-2xl font-bold text-amber-600 tabular-nums">{fmtN(svcRevSummary.totalPending)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
-              <div className="text-[11px] text-muted-foreground">مبالغ مستحقة من عملاء الخدمات</div>
-            </div>
-          </div>
-          {/* Per-provider breakdown */}
-          {svcRevSummary.byProvider.length > 0 && (
-            <div className="bg-card border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Activity className="w-4 h-4 text-amber-500" />
-                <span className="text-sm font-bold text-foreground">تفصيل الإيرادات حسب مزود الخدمة</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[400px]">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-right py-2 px-2 text-xs font-semibold text-muted-foreground">مزود الخدمة</th>
-                      <th className="text-left py-2 px-2 text-xs font-semibold text-muted-foreground">محصّل</th>
-                      <th className="text-left py-2 px-2 text-xs font-semibold text-muted-foreground">تأمينات</th>
-                      <th className="text-left py-2 px-2 text-xs font-semibold text-muted-foreground">لم يُحصَّل</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {svcRevSummary.byProvider.map(p => (
-                      <tr key={p.id} className="border-b border-border/50 hover:bg-muted/20">
-                        <td className="py-2 px-2 font-medium">{p.name}</td>
-                        <td className="py-2 px-2 text-left font-bold text-green-600 tabular-nums">{fmtN(p.revenue)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></td>
-                        <td className="py-2 px-2 text-left text-orange-600 tabular-nums">{fmtN(p.insurance)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></td>
-                        <td className="py-2 px-2 text-left text-amber-600 tabular-nums">{fmtN(p.pending)} <span className="text-[10px] font-normal text-muted-foreground">ر.س</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+        </div>
+      </div>
 
-      {/* ── Monthly booking breakdown table ── */}
-      {unit.type !== "service" && (() => {
-        const getAddonSum2 = (b: OwnerBooking): number => {
-          const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
-          return addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
-            .reduce((s, a) => s + Math.round(Number(a.price)), 0);
-        };
-        const breakdownRows = monthBookings.map(b => {
-          const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice)
-            : b.revenueAmount != null && Number(b.revenueAmount) > 0 ? Number(b.revenueAmount)
-            : Number(b.depositPaid ?? 0);
-          const svc = getAddonSum2(b);
-          return { bookingId: b.id, clientName: b.clientName, bookingDate: b.bookingDate,
-            baseRent: Math.max(0, tp - svc), services: svc, total: tp };
-        }).filter(r => r.total > 0);
-        if (breakdownRows.length === 0) return null;
-        const monthBase = breakdownRows.reduce((s, r) => s + r.baseRent, 0);
-        const monthServices = breakdownRows.reduce((s, r) => s + r.services, 0);
-        const monthTotal = breakdownRows.reduce((s, r) => s + r.total, 0);
-
-        return (
-          <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <Receipt className="w-4 h-4 text-primary" />
-              <span style={{ fontWeight: 700, fontSize: 14 }}>تفصيل الحجوزات الشهرية</span>
-              <span style={{ fontSize: 11, background: "#eff6ff", color: "#1d4ed8", borderRadius: 20, padding: "2px 8px", fontWeight: 600 }}>
-                {calType === "hijri" ? selectedHijriMonth : monthOptions.find(o => o.val === selectedMonth)?.label}
-              </span>
-            </div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 460 }}>
-                <thead>
-                  <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
-                    <th style={{ textAlign: "right", padding: "8px 12px", fontSize: 12, color: "#6b7280" }}>العميل</th>
-                    <th style={{ textAlign: "right", padding: "8px 8px", fontSize: 12, color: "#6b7280" }}>التاريخ</th>
-                    <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 12, color: "#1d4ed8", fontWeight: 700 }}>قيمة الإيجار</th>
-                    <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 12, color: "#b45309", fontWeight: 700 }}>رسوم الخدمات</th>
-                    <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 12, color: "#15803d", fontWeight: 700 }}>الإجمالي</th>
+      {/* Cash Breakdown Dialog */}
+      <Dialog open={cashBreakdownOpen} onOpenChange={setCashBreakdownOpen}>
+        <DialogContent className="max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-amber-700 dark:text-amber-400 flex items-center gap-2">
+              <Banknote className="w-5 h-5" />
+              تفاصيل السيولة اليدوية
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {(financial?.cashBreakdown ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">لا توجد بنود</p>
+            ) : (
+              <table className="w-full text-sm" dir="rtl">
+                <thead className="text-xs font-bold text-muted-foreground border-b border-border">
+                  <tr>
+                    <th className="py-2 text-right">العميل</th>
+                    <th className="py-2 text-center">التاريخ</th>
+                    <th className="py-2 text-left">المبلغ</th>
+                    <th className="py-2"></th>
                   </tr>
                 </thead>
-                <tbody>
-                  {breakdownRows.map(row => {
-                    const { hijri, gregorian } = formatDualDate(row.bookingDate);
-                    return (
-                      <tr key={row.bookingId} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                        <td style={{ padding: "10px 12px", fontWeight: 600 }}>{row.clientName}</td>
-                        <td style={{ padding: "10px 8px", fontSize: 11, color: "#6b7280" }}>
-                          <div>{hijri}</div><div style={{ opacity: 0.7 }}>{gregorian}</div>
-                        </td>
-                        <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "#1d4ed8" }}>
-                          {fmtN(row.baseRent)} <span style={{ fontSize: 11, color: "#6b7280" }}>ر.س</span>
-                        </td>
-                        <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "#b45309" }}>
-                          {row.services > 0 ? <>{fmtN(row.services)} <span style={{ fontSize: 11, color: "#6b7280" }}>ر.س</span></> : <span style={{ color: "#9ca3af" }}>—</span>}
-                        </td>
-                        <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#15803d" }}>
-                          {fmtN(row.total)} <span style={{ fontSize: 11, color: "#6b7280" }}>ر.س</span>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                <tbody className="divide-y divide-border">
+                  {(financial?.cashBreakdown ?? []).map((row, i) => (
+                    <tr key={i} className="hover:bg-muted/30">
+                      <td className="py-2 font-medium text-foreground">{row.clientName}</td>
+                      <td className="py-2 text-center text-muted-foreground text-xs leading-tight">{fmtDualDate(row.date)}</td>
+                      <td className="py-2 text-left font-bold tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">
+                        {fmtN(row.amount)} <span className="text-[10px] font-normal">ر.س</span>
+                      </td>
+                      <td className="py-2 text-center">
+                        {row.paymentId && row.bookingId ? (
+                          <button
+                            type="button"
+                            title="حذف هذه الدفعة"
+                            onClick={async () => {
+                              if (!confirm(`حذف دفعة ${fmtN(row.amount)} ر.س لـ ${row.clientName}؟`)) return;
+                              const r = await apiFetch(`/owner/bookings/${row.bookingId}/payments/${row.paymentId}`, { method: "DELETE" });
+                              if (r.ok) { refetchFinancial(); refetchFuture(); }
+                            }}
+                            className="h-6 w-6 flex items-center justify-center rounded text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
-                <tfoot>
-                  <tr style={{ borderTop: "2px solid #d1d5db", background: "#f9fafb" }}>
-                    <td colSpan={2} style={{ padding: "10px 12px", fontWeight: 700, fontSize: 13 }}>الإجمالي</td>
-                    <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#1d4ed8" }}>
-                      {fmtN(Math.round(monthBase))} <span style={{ fontSize: 11, color: "#6b7280" }}>ر.س</span>
-                    </td>
-                    <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#b45309" }}>
-                      {monthServices > 0 ? <>{fmtN(Math.round(monthServices))} <span style={{ fontSize: 11, color: "#6b7280" }}>ر.س</span></> : <span style={{ color: "#9ca3af" }}>—</span>}
-                    </td>
-                    <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#15803d" }}>
-                      {fmtN(Math.round(monthTotal))} <span style={{ fontSize: 11, color: "#6b7280" }}>ر.س</span>
+                <tfoot className="border-t-2 border-amber-300">
+                  <tr>
+                    <td colSpan={3} className="pt-2 font-bold text-amber-700 dark:text-amber-400">الإجمالي</td>
+                    <td className="pt-2 text-left font-extrabold tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">
+                      {fmtN(financial?.cashOnHand ?? 0)} <span className="text-[10px] font-normal">ر.س</span>
                     </td>
                   </tr>
                 </tfoot>
               </table>
-            </div>
+            )}
           </div>
-        );
-      })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Revenue log + damage deductions: only in individual unit view, NOT master */}
-      {unit.type !== "all" && (
+      {false && (
       <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Receipt className="w-4 h-4 text-primary" />
@@ -10906,7 +10738,7 @@ function RevenueTab() {
       )}
 
       {/* Damage Deductions sub-section — individual unit only */}
-      {unit.type !== "all" && rows.filter(r => r.type === "damage").length > 0 && (
+      {false && (
         <div className="bg-card border border-red-200 rounded-2xl p-4 space-y-3">
           <div className="flex items-center gap-2">
             <span className="text-base">✂️</span>
