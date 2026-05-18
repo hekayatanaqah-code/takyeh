@@ -9596,52 +9596,6 @@ function RevenueTab() {
   const [bankLedgerTab, setBankLedgerTab] = useState<"all" | "revenue" | "insurance" | "other">("all");
   const showAllFuture = revSubTab === "receivables";
 
-  const allReceivables = useMemo(() => {
-    let scoped = allBookings;
-    if (unit.type === "chalet") {
-      const subId = (unit as any).submissionId;
-      if (subId) scoped = allBookings.filter(bk => bk.submissionId === subId);
-    }
-    return scoped
-      .filter(bk => {
-        if (bk.cancelledAt) return false;
-        if (bk.balanceCollected) return false;
-        const dep = Number(bk.depositPaid ?? 0);
-        const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
-        return Math.max(0, tp - dep) > 0;
-      })
-      .map(bk => {
-        const dep = Number(bk.depositPaid ?? 0);
-        const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
-        return { ...bk, remaining: Math.max(0, tp - dep) };
-      })
-      .sort((a, bk) => (a.bookingDate ?? "").localeCompare(bk.bookingDate ?? ""));
-  }, [allBookings, unit]);
-
-  const bankLedgerEntries = useMemo(() => {
-    let scoped = allBookings;
-    if (unit.type === "chalet") {
-      const subId = (unit as any).submissionId;
-      if (subId) scoped = allBookings.filter(bk => bk.submissionId === subId);
-    }
-    const entries: { bookingId: number; clientName: string; bookingDate: string; type: "revenue" | "insurance"; amount: number; status: string }[] = [];
-    for (const bk of scoped) {
-      if (bk.cancelledAt) continue;
-      if (bk.paymentMethod === "cash") continue;
-      const dep = Number(bk.depositPaid ?? 0);
-      const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
-      const bal = bk.balanceCollected ? Math.max(0, tp - dep) : 0;
-      const total = dep + bal;
-      if (total > 0) {
-        entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "revenue", amount: total, status: bk.balanceCollected || dep >= tp ? "مكتمل" : "جزئي" });
-      }
-      if (bk.insuranceReceived && Number(bk.insuranceFee ?? 0) > 0) {
-        entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "insurance", amount: Math.round(Number(bk.insuranceFee)), status: bk.insuranceRefunded ? "تم الرد" : "محتجز" });
-      }
-    }
-    return entries.sort((a, bk) => bk.bookingDate.localeCompare(a.bookingDate));
-  }, [allBookings, unit]);
-
   const { data: financial, isLoading: finLoading, refetch: refetchFinancial } = useQuery<{
     totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
     totalInsuranceHeld: number; totalInsuranceDeducted: number;
@@ -9698,6 +9652,52 @@ function RevenueTab() {
     }
     const total = totalBaseRent + totalServices;
     return { base: Math.round(totalBaseRent), services: Math.round(totalServices), total: Math.round(total) };
+  }, [allBookings, unit]);
+
+  const allReceivables = useMemo(() => {
+    let scoped = allBookings;
+    if (unit.type === "chalet") {
+      const subId = (unit as any).submissionId;
+      if (subId) scoped = allBookings.filter(bk => bk.submissionId === subId);
+    }
+    return scoped
+      .filter(bk => {
+        if (bk.cancelledAt) return false;
+        if (bk.balanceCollected) return false;
+        const dep = Number(bk.depositPaid ?? 0);
+        const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
+        return Math.max(0, tp - dep) > 0;
+      })
+      .map(bk => {
+        const dep = Number(bk.depositPaid ?? 0);
+        const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
+        return { ...bk, remaining: Math.max(0, tp - dep) };
+      })
+      .sort((a, bk) => (a.bookingDate ?? "").localeCompare(bk.bookingDate ?? ""));
+  }, [allBookings, unit]);
+
+  const bankLedgerEntries = useMemo(() => {
+    let scoped = allBookings;
+    if (unit.type === "chalet") {
+      const subId = (unit as any).submissionId;
+      if (subId) scoped = allBookings.filter(bk => bk.submissionId === subId);
+    }
+    const entries: { bookingId: number; clientName: string; bookingDate: string; type: "revenue" | "insurance"; amount: number; status: string }[] = [];
+    for (const bk of scoped) {
+      if (bk.cancelledAt) continue;
+      if (bk.paymentMethod === "cash") continue;
+      const dep = Number(bk.depositPaid ?? 0);
+      const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
+      const bal = bk.balanceCollected ? Math.max(0, tp - dep) : 0;
+      const total = dep + bal;
+      if (total > 0) {
+        entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "revenue", amount: total, status: bk.balanceCollected || dep >= tp ? "مكتمل" : "جزئي" });
+      }
+      if (bk.insuranceReceived && Number(bk.insuranceFee ?? 0) > 0) {
+        entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "insurance", amount: Math.round(Number(bk.insuranceFee)), status: bk.insuranceRefunded ? "تم الرد" : "محتجز" });
+      }
+    }
+    return entries.sort((a, bk) => bk.bookingDate.localeCompare(a.bookingDate));
   }, [allBookings, unit]);
 
   const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
