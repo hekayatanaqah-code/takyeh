@@ -3828,7 +3828,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [bookingDepositTarget, setBookingDepositTarget] = useState<{ bookingId: number; maxAmount: number; totalCash: number; submissionId?: number | null; label?: string } | null>(null);
   const [bookingDepositAmt, setBookingDepositAmt] = useState("");
   const [bookingDepositSaving, setBookingDepositSaving] = useState(false);
-  const [insuranceDepositedIds, setInsuranceDepositedIds] = useState<Set<number>>(new Set());
+
   const [calReceiptUrl, setCalReceiptUrl] = useState<string | null>(null);
   const [calReceiptUploading, setCalReceiptUploading] = useState(false);
   const calReceiptRef = useRef<HTMLInputElement>(null);
@@ -3870,7 +3870,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     return map;
   }, [allInstallments]);
 
-  const { data: depositLogsCal = [] } = useQuery<Array<{ id: number; bookingId: number | null; submissionId: number | null; amount: string }>>({
+  const { data: depositLogsCal = [] } = useQuery<Array<{ id: number; bookingId: number | null; submissionId: number | null; amount: string; note: string | null }>>({
     queryKey: ["owner", "cash-deposit-logs"],
     queryFn: async () => {
       const r = await apiFetch("/owner/cash-deposit-logs");
@@ -3881,7 +3881,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const perBookingDeposited = useMemo(() => {
     const map = new Map<number, number>();
     depositLogsCal.forEach(l => {
-      if (l.bookingId) map.set(l.bookingId, (map.get(l.bookingId) ?? 0) + Math.round(Number(l.amount)));
+      if (l.bookingId && !(l.note ?? "").includes("تأمين"))
+        map.set(l.bookingId, (map.get(l.bookingId) ?? 0) + Math.round(Number(l.amount)));
+    });
+    return map;
+  }, [depositLogsCal]);
+  const perBookingInsuranceDeposited = useMemo(() => {
+    const map = new Map<number, number>();
+    depositLogsCal.forEach(l => {
+      if (l.bookingId && (l.note ?? "").includes("تأمين"))
+        map.set(l.bookingId, (map.get(l.bookingId) ?? 0) + Math.round(Number(l.amount)));
     });
     return map;
   }, [depositLogsCal]);
@@ -4961,7 +4970,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                       ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
                                       : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
                                   }`}>{b.insuranceReceived
-                                    ? ((b.insurancePaymentMethod ?? "transfer") === "cash" ? "مستلم (كاش)" : "مستلم (تحويل بنكي)")
+                                    ? ((b.insurancePaymentMethod ?? "transfer") === "cash"
+                                        ? (() => {
+                                            const iAmt = Math.round(Number(b.insuranceFee ?? 0));
+                                            const iDep = perBookingInsuranceDeposited.get(b.id) ?? 0;
+                                            const iRem = Math.max(0, iAmt - iDep);
+                                            if (iDep > 0 && iRem > 0) return `تم إيداع ${toEasternArabic(iDep.toLocaleString("ar-SA"))} ر.س بالبنك (متبقي كاش: ${toEasternArabic(iRem.toLocaleString("ar-SA"))} ر.س)`;
+                                            if (iRem === 0 && iDep > 0) return "تم الإيداع بالبنك ✓ (كاش)";
+                                            return "مستلم (كاش)";
+                                          })()
+                                        : "مستلم (تحويل بنكي)")
                                     : "معلّق"}</span>
                                 )}
                                 {b.insuranceRefunded && deducted === 0 && (
@@ -4983,15 +5001,21 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 {markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id ? "جاري التسجيل..." : "✓ تسجيل استلام التأمين"}
                               </button>
                             )}
-                            {b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !insuranceDepositedIds.has(b.id) && !isReadOnly && (
-                              <button
-                                type="button"
-                                onClick={() => { const ins = Math.round(Number(b.insuranceFee ?? 0)); openBookingDepositDialog(b.id, ins, ins, b.submissionId, `إيداع تأمين كاش — ${b.clientName}`); }}
-                                className="w-full mt-1 text-[11px] py-1 rounded-md font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                              >
-                                🏦 تسجيل إيداع التأمين بالبنك
-                              </button>
-                            )}
+                            {b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !isReadOnly && (() => {
+                              const iAmt = Math.round(Number(b.insuranceFee ?? 0));
+                              const iDep = perBookingInsuranceDeposited.get(b.id) ?? 0;
+                              const iRem = Math.max(0, iAmt - iDep);
+                              if (iRem <= 0) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => openBookingDepositDialog(b.id, iRem, iAmt, b.submissionId, `إيداع تأمين كاش — ${b.clientName}`)}
+                                  className="w-full mt-1 text-[11px] py-1 rounded-md font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                                >
+                                  🏦 {iDep > 0 ? `إيداع المتبقي (${toEasternArabic(iRem.toLocaleString("ar-SA"))} ر.س)` : "تسجيل إيداع التأمين بالبنك"}
+                                </button>
+                              );
+                            })()}
                             {/* Settlement formula — only if settled */}
                             {b.insuranceRefunded && deducted > 0 && (
                               <div className="pt-1 border-t border-slate-200 dark:border-slate-700 space-y-0.5">
@@ -5027,10 +5051,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
                         const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
                         const undepCashInst = (paymentsByBooking[b.id] ?? []).filter(i => i.method === "cash" && !i.cashDeposited).reduce((s, i) => s + Number(i.amount), 0);
-                        const totalCashB = (b.paymentMethod === "cash" ? dep + bal : 0) + undepCashInst;
-                        const prevDep = perBookingDeposited.get(b.id) ?? 0;
-                        const remaining = Math.max(0, totalCashB - prevDep);
-                        const fullyDep = b.cashDeposited || (totalCashB > 0 && remaining === 0);
+                        const bookingMainCash = b.paymentMethod === "cash" ? dep + bal : 0;
+                        const totalCashB = bookingMainCash + undepCashInst;
+                        const logDep = perBookingDeposited.get(b.id) ?? 0;
+                        const effectiveDep = (b.cashDeposited && logDep === 0) ? bookingMainCash : logDep;
+                        const remaining = Math.max(0, totalCashB - effectiveDep);
+                        const fullyDep = remaining === 0;
                         if (totalCashB <= 0 && !b.cashDeposited) return null;
                         return (
                         <div className={`rounded-lg border p-2.5 space-y-2 mt-1 ${fullyDep ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" : "bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700"}`}>
@@ -5039,10 +5065,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               <span className="text-sm">{fullyDep ? "🏦" : "💵"}</span>
                               <div>
                                 <p className={`text-[11px] font-bold ${fullyDep ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"}`}>
-                                  {fullyDep ? "تم الإيداع في البنك ✓" : prevDep > 0 ? `متبقي كاش لم يُودَع: ${toEasternArabic(remaining.toLocaleString("ar-SA"))} ر.س` : "نقدي — لم يُودَع بعد"}
+                                  {fullyDep ? "تم الإيداع في البنك ✓" : effectiveDep > 0 ? `متبقي كاش لم يُودَع: ${toEasternArabic(remaining.toLocaleString("ar-SA"))} ر.س` : "نقدي — لم يُودَع بعد"}
                                 </p>
                                 <p className="text-[10px] text-muted-foreground">
-                                  {fullyDep ? "المبلغ مُحوَّل للبنك ✓" : prevDep > 0 ? `أُودِع حتى الآن: ${toEasternArabic(prevDep.toLocaleString("ar-SA"))} ر.س` : "يظهر في السيولة اليدوية"}
+                                  {fullyDep ? "المبلغ مُحوَّل للبنك ✓" : effectiveDep > 0 ? `أُودِع حتى الآن: ${toEasternArabic(effectiveDep.toLocaleString("ar-SA"))} ر.س` : "يظهر في السيولة اليدوية"}
                                 </p>
                               </div>
                             </div>
@@ -5053,7 +5079,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg px-2.5 py-1.5 transition-colors"
                               >
                                 <CheckCircle className="w-3 h-3" />
-                                {prevDep > 0 ? "إيداع المتبقي" : "تسجيل إيداع بالبنك"}
+                                {effectiveDep > 0 ? "إيداع المتبقي" : "تسجيل إيداع بالبنك"}
                               </button>
                             )}
                           </div>
@@ -5093,6 +5119,27 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               )}
                             </div>
                           )}
+                          {/* insurance partial-deposit inline row for modal */}
+                          {b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !isReadOnly && (() => {
+                            const iAmt = Math.round(Number(b.insuranceFee ?? 0));
+                            const iDep = perBookingInsuranceDeposited.get(b.id) ?? 0;
+                            const iRem = Math.max(0, iAmt - iDep);
+                            if (iRem <= 0) return null;
+                            return (
+                              <div className="border-t border-blue-200 dark:border-blue-800 pt-1.5 flex items-center justify-between gap-2">
+                                <p className="text-[10px] text-blue-700 dark:text-blue-400">
+                                  {iDep > 0 ? `تأمين — متبقي: ${toEasternArabic(iRem.toLocaleString("ar-SA"))} ر.س` : `تأمين كاش (${toEasternArabic(iAmt.toLocaleString("ar-SA"))} ر.س) لم يُودَع`}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => openBookingDepositDialog(b.id, iRem, iAmt, b.submissionId, `إيداع تأمين كاش — ${b.clientName}`)}
+                                  className="shrink-0 text-[10px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-2 py-1 transition-colors"
+                                >
+                                  🏦 {iDep > 0 ? "إيداع المتبقي" : "إيداع التأمين"}
+                                </button>
+                              </div>
+                            );
+                          })()}
                           {b.paymentReceiptUrl && (
                             <div className="border-t border-green-200 dark:border-green-800 pt-1.5 flex items-center gap-2">
                               <p className="text-[10px] text-muted-foreground">إيصال:</p>
@@ -5300,9 +5347,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     const targetId = bookingDepositTarget.bookingId;
                     const isFullDeposit = amt >= bookingDepositTarget.totalCash;
                     toast({ title: "✅ تم تسجيل الإيداع", description: isInsurance ? "تم تسجيل إيداع التأمين بالبنك" : isFullDeposit ? "نُقل المبلغ كاملاً إلى الحساب البنكي" : `المتبقي: ${toEasternArabic(Math.max(0, bookingDepositTarget.totalCash - amt).toLocaleString("ar-SA"))} ر.س` });
-                    if (isInsurance) {
-                      setInsuranceDepositedIds(prev => { const next = new Set(prev); next.add(targetId); return next; });
-                    } else if (isFullDeposit) {
+                    if (!isInsurance && isFullDeposit) {
                       qc.setQueryData(["owner", "bookings"], (old: any) => {
                         if (!Array.isArray(old)) return old;
                         return old.map((bk: any) => bk.id === targetId ? { ...bk, cashDeposited: true } : bk);
@@ -6112,7 +6157,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                                 : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                             }`}>🔒 التأمين: {b.insuranceReceived
-                              ? ((b.insurancePaymentMethod ?? "transfer") === "cash" ? "مستلم (كاش)" : "مستلم (تحويل بنكي)")
+                              ? ((b.insurancePaymentMethod ?? "transfer") === "cash"
+                                  ? (() => {
+                                      const iAmt = Math.round(Number(b.insuranceFee ?? 0));
+                                      const iDep = perBookingInsuranceDeposited.get(b.id) ?? 0;
+                                      const iRem = Math.max(0, iAmt - iDep);
+                                      if (iDep > 0 && iRem > 0) return `تم إيداع ${toEasternArabic(iDep.toLocaleString("ar-SA"))} ر.س بالبنك (متبقي: ${toEasternArabic(iRem.toLocaleString("ar-SA"))} ر.س)`;
+                                      if (iRem === 0 && iDep > 0) return "تم الإيداع بالبنك ✓";
+                                      return "مستلم (كاش)";
+                                    })()
+                                  : "مستلم (تحويل بنكي)")
                               : "معلّق"}</span>
                           )}
                           {ins && !b.insuranceRefunded && !b.insuranceReceived && !isReadOnly && (
@@ -6125,15 +6179,21 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               تسجيل استلام
                             </button>
                           )}
-                          {ins && b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !insuranceDepositedIds.has(b.id) && !isReadOnly && (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); const ins = Math.round(Number(b.insuranceFee ?? 0)); openBookingDepositDialog(b.id, ins, ins, b.submissionId, `إيداع تأمين كاش — ${b.clientName}`); }}
-                              className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 transition-colors border border-blue-300 dark:border-blue-700"
-                            >
-                              🏦 إيداع التأمين
-                            </button>
-                          )}
+                          {ins && b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !isReadOnly && (() => {
+                            const iAmt = Math.round(Number(b.insuranceFee ?? 0));
+                            const iDep = perBookingInsuranceDeposited.get(b.id) ?? 0;
+                            const iRem = Math.max(0, iAmt - iDep);
+                            if (iRem <= 0) return null;
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); openBookingDepositDialog(b.id, iRem, iAmt, b.submissionId, `إيداع تأمين كاش — ${b.clientName}`); }}
+                                className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 transition-colors border border-blue-300 dark:border-blue-700"
+                              >
+                                🏦 {iDep > 0 ? `إيداع المتبقي (${toEasternArabic(iRem.toLocaleString("ar-SA"))} ر.س)` : "إيداع التأمين"}
+                              </button>
+                            );
+                          })()}
                           {b.insuranceRefunded && !b.insuranceDeducted && (
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">↩ تم إعادة التأمين</span>
                           )}
@@ -6307,10 +6367,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
                     const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
                     const undepCashInst = (paymentsByBooking[b.id] ?? []).filter(i => i.method === "cash" && !i.cashDeposited).reduce((s, i) => s + Number(i.amount), 0);
-                    const totalCashB = (b.paymentMethod === "cash" ? dep + bal : 0) + undepCashInst;
-                    const prevDep = perBookingDeposited.get(b.id) ?? 0;
-                    const remaining = Math.max(0, totalCashB - prevDep);
-                    const fullyDep = b.cashDeposited || (totalCashB > 0 && remaining === 0);
+                    const bookingMainCash = b.paymentMethod === "cash" ? dep + bal : 0;
+                    const totalCashB = bookingMainCash + undepCashInst;
+                    const logDep = perBookingDeposited.get(b.id) ?? 0;
+                    const effectiveDep = (b.cashDeposited && logDep === 0) ? bookingMainCash : logDep;
+                    const remaining = Math.max(0, totalCashB - effectiveDep);
+                    const fullyDep = remaining === 0;
                     if (totalCashB <= 0 && !b.cashDeposited) return null;
                     return (
                     <div className={`rounded-lg border p-3 space-y-2 ${fullyDep ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" : "bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700"}`}>
@@ -6319,10 +6381,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <span className="text-base">{fullyDep ? "🏦" : "💵"}</span>
                           <div>
                             <p className={`text-xs font-bold ${fullyDep ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"}`}>
-                              {fullyDep ? "تم الإيداع في البنك ✓" : prevDep > 0 ? `متبقي كاش لم يُودَع: ${toEasternArabic(remaining.toLocaleString("ar-SA"))} ر.س` : "نقدي — لم يُودَع بعد"}
+                              {fullyDep ? "تم الإيداع في البنك ✓" : effectiveDep > 0 ? `متبقي كاش لم يُودَع: ${toEasternArabic(remaining.toLocaleString("ar-SA"))} ر.س` : "نقدي — لم يُودَع بعد"}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
-                              {fullyDep ? "المبلغ مُحوَّل للبنك ✓" : prevDep > 0 ? `أُودِع حتى الآن: ${toEasternArabic(prevDep.toLocaleString("ar-SA"))} ر.س` : "يظهر في السيولة اليدوية"}
+                              {fullyDep ? "المبلغ مُحوَّل للبنك ✓" : effectiveDep > 0 ? `أُودِع حتى الآن: ${toEasternArabic(effectiveDep.toLocaleString("ar-SA"))} ر.س` : "يظهر في السيولة اليدوية"}
                             </p>
                           </div>
                         </div>
@@ -6333,7 +6395,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1.5 transition-colors"
                           >
                             <CheckCircle className="w-3.5 h-3.5" />
-                            {prevDep > 0 ? "إيداع المتبقي" : "تسجيل إيداع بالبنك"}
+                            {effectiveDep > 0 ? "إيداع المتبقي" : "تسجيل إيداع بالبنك"}
                           </button>
                         )}
                       </div>
