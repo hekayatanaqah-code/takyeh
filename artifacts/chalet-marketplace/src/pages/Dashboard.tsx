@@ -5245,12 +5245,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
             <div className="space-y-1.5">
               <label className="text-xs font-semibold">المبلغ المراد إيداعه بالحساب البنكي (SAR)</label>
               <input
-                type="number"
-                min={1}
-                max={bookingDepositTarget?.maxAmount}
-                value={bookingDepositAmt}
-                onChange={e => setBookingDepositAmt(e.target.value)}
-                placeholder={String(bookingDepositTarget?.maxAmount ?? "")}
+                type="text"
+                inputMode="decimal"
+                value={bookingDepositAmt ? toEasternArabic(bookingDepositAmt) : ""}
+                onChange={e => setBookingDepositAmt(fromEasternArabic(e.target.value).replace(/[^\d]/g, ""))}
+                placeholder={bookingDepositTarget?.maxAmount ? toEasternArabic(bookingDepositTarget.maxAmount) : ""}
                 className="w-full border border-border rounded-lg px-3 py-2 text-right text-sm bg-background focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               {bookingDepositAmt && Number(bookingDepositAmt) > (bookingDepositTarget?.maxAmount ?? 0) && (
@@ -10972,12 +10971,11 @@ function RevenueTab() {
           <div className="space-y-2">
             <label className="text-xs font-semibold text-foreground">مبلغ الإيداع (ر.س)</label>
             <input
-              type="number"
-              min={1}
-              max={channels.cashUndeposited}
-              value={depositAmount}
-              onChange={e => setDepositAmount(e.target.value)}
-              placeholder={String(channels.cashUndeposited)}
+              type="text"
+              inputMode="decimal"
+              value={depositAmount ? toEasternArabic(depositAmount) : ""}
+              onChange={e => setDepositAmount(fromEasternArabic(e.target.value).replace(/[^\d]/g, ""))}
+              placeholder={toEasternArabic(channels.cashUndeposited)}
               className={`w-full border rounded-lg px-3 py-2 text-right text-sm bg-background focus:outline-none focus:ring-2 ${depositAmount && Number(depositAmount) > channels.cashUndeposited ? "border-destructive focus:ring-destructive" : "border-border focus:ring-blue-500"}`}
             />
             {depositAmount && Number(depositAmount) > channels.cashUndeposited && (
@@ -17088,6 +17086,13 @@ function OwnerMessageSettingsTab() {
       </div>
     </div>
   );
+}
+
+function toEasternArabic(n: string | number): string {
+  return String(n).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[parseInt(d)]);
+}
+function fromEasternArabic(s: string): string {
+  return s.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
 }
 
 export default function Dashboard() {
