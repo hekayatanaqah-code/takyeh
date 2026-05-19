@@ -9799,9 +9799,7 @@ function BankLedgerTab() {
               </thead>
               <tbody>
                 {filtered.map((e, i) => {
-                  const hijriDate = e.bookingDate
-                    ? new Date(e.bookingDate + "T12:00:00").toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long" })
-                    : "—";
+                  const _dualDate = e.bookingDate ? formatDualDate(e.bookingDate) : null;
                   const typeInfo = {
                     revenue:      { label: "🏠 حجز",        cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
                     insurance:    { label: "🔒 تأمين",       cls: "bg-slate-50 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300" },
@@ -9814,7 +9812,14 @@ function BankLedgerTab() {
                     : "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
                   return (
                     <tr key={i} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                      <td className="py-2.5 px-4 text-xs text-muted-foreground">{hijriDate}</td>
+                      <td className="py-2.5 px-4 text-xs text-muted-foreground leading-tight whitespace-nowrap">
+                        {_dualDate ? (
+                          <>
+                            <span className="block">{_dualDate.hijri.replace(/\s*هـ\s*$/, "")}</span>
+                            <span className="block opacity-60">({_dualDate.gregorian})</span>
+                          </>
+                        ) : "—"}
+                      </td>
                       <td className="py-2.5 px-4 font-medium text-foreground">{e.clientName}</td>
                       <td className="py-2.5 px-4 text-muted-foreground">{e.bookingId > 0 ? `#${e.bookingId}` : "—"}</td>
                       <td className="py-2.5 px-4">
@@ -9940,10 +9945,8 @@ function RevenueTab() {
 
   const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
   const fmtDualDate = (dateStr: string) => {
-    const d = new Date(dateStr + "T12:00:00");
-    const hijri = d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long" });
-    const greg = d.toLocaleDateString("ar-SA", { day: "2-digit", month: "long", calendar: "gregory" });
-    return `${hijri} / ${greg}`;
+    const { hijri, gregorian } = formatDualDate(dateStr);
+    return `${hijri.replace(/\s*هـ\s*$/, "")} (${gregorian})`;
   };
 
   const financialSubmissionId = unit.type === "chalet" ? (unit as any).submissionId : undefined;
@@ -10633,20 +10636,25 @@ function RevenueTab() {
                   <tr className="border-b border-border bg-muted/30">
                     <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">اسم المستأجر</th>
                     <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">رقم الحجز</th>
-                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">التاريخ الهجري</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">التاريخ</th>
                     <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground">المبلغ المتبقي</th>
                   </tr>
                 </thead>
                 <tbody>
                   {allReceivables.map(bk => {
-                    const hijriDate = bk.bookingDate
-                      ? new Date(bk.bookingDate + "T12:00:00").toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric" })
-                      : "—";
+                    const _bkDual = bk.bookingDate ? formatDualDate(bk.bookingDate) : null;
                     return (
                       <tr key={bk.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                         <td className="py-3 px-4 font-medium text-foreground">{bk.clientName}</td>
                         <td className="py-3 px-4 text-muted-foreground">#{bk.id}</td>
-                        <td className="py-3 px-4 text-xs text-muted-foreground">{hijriDate}</td>
+                        <td className="py-3 px-4 text-xs text-muted-foreground leading-tight whitespace-nowrap">
+                          {_bkDual ? (
+                            <>
+                              <span className="block">{_bkDual.hijri.replace(/\s*هـ\s*$/, "")}</span>
+                              <span className="block opacity-60">({_bkDual.gregorian})</span>
+                            </>
+                          ) : "—"}
+                        </td>
                         <td className="py-3 px-4 text-left">
                           <span className="font-extrabold text-amber-600 dark:text-amber-400 tabular-nums">{fmtN(bk.remaining)}</span>
                           <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
@@ -11329,10 +11337,8 @@ function TransactionHistoryTab() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fmtDualDate = (dateStr: string) => {
-    const d = new Date(dateStr + "T12:00:00");
-    const hijri = d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long" });
-    const greg = d.toLocaleDateString("ar-SA", { day: "2-digit", month: "long", calendar: "gregory" });
-    return `${hijri} / ${greg}`;
+    const { hijri, gregorian } = formatDualDate(dateStr);
+    return `${hijri.replace(/\s*هـ\s*$/, "")} (${gregorian})`;
   };
 
   const monthOptions: { value: string; label: string }[] = [];
