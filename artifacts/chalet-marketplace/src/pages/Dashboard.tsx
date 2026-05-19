@@ -15615,7 +15615,17 @@ function DepositsTab() {
                   <div className="text-xs text-muted-foreground mt-0.5">🏡 {d.chaletTitle}</div>
                 )}
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  📅 {d.bookingDate}
+                  {(() => {
+                    const _dual = d.bookingDate ? formatDualDate(d.bookingDate) : null;
+                    return _dual ? (
+                      <span>
+                        📅 {_dual.hijri.replace(/\s*هـ\s*$/, "")}
+                        <span className="opacity-60 ms-1">({_dual.gregorian})</span>
+                      </span>
+                    ) : (
+                      <span>📅 —</span>
+                    );
+                  })()}
                   {d.durationDays > 1 && ` · ${toAr(d.durationDays)} أيام`}
                   {d.period && ` · ${periodLabel(d.period)}`}
                 </div>
