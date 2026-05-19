@@ -4535,7 +4535,9 @@ router.get("/cash-deposit-logs", async (req, res) => {
    Record a (partial or full) cash deposit to the bank ledger */
 router.post("/mark-cash-deposited", async (req, res) => {
   const ownerId = req.user!.id;
-  const { amount, submissionId, note } = req.body as { amount: number; submissionId?: number; note?: string };
+  const { amount, submissionId, bookingId, isInsurance, note } = req.body as {
+    amount: number; submissionId?: number; bookingId?: number; isInsurance?: boolean; note?: string;
+  };
 
   if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
     return res.status(400).json({ error: "المبلغ غير صحيح" });
@@ -4550,6 +4552,13 @@ router.post("/mark-cash-deposited", async (req, res) => {
       note: note ?? "إيداع نقدي",
     })
     .returning();
+
+  if (bookingId && !isInsurance) {
+    await db
+      .update(ownerBookingsTable)
+      .set({ cashDeposited: true })
+      .where(and(eq(ownerBookingsTable.id, Number(bookingId)), eq(ownerBookingsTable.ownerId, ownerId)));
+  }
 
   return res.json({ ok: true, log });
 });

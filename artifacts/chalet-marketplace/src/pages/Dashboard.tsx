@@ -4966,7 +4966,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 {markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id ? "جاري التسجيل..." : "✓ تسجيل استلام التأمين"}
                               </button>
                             )}
-                            {b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !isReadOnly && (
+                            {b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !(b as any)._insuranceCashDeposited && !isReadOnly && (
                               <button
                                 type="button"
                                 onClick={() => openBookingDepositDialog(b.id, Math.round(Number(b.insuranceFee ?? 0)), b.submissionId, `إيداع تأمين كاش — ${b.clientName}`)}
@@ -5267,13 +5267,23 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 if (!amt || amt <= 0 || amt > bookingDepositTarget.maxAmount) return;
                 setBookingDepositSaving(true);
                 try {
+                  const isInsurance = (bookingDepositTarget.label ?? "").includes("تأمين");
                   const r = await apiFetch("/owner/mark-cash-deposited", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ amount: amt, submissionId: bookingDepositTarget.submissionId, note: bookingDepositTarget.label ?? "إيداع نقدي" }),
+                    body: JSON.stringify({ amount: amt, submissionId: bookingDepositTarget.submissionId, bookingId: bookingDepositTarget.bookingId, isInsurance, note: bookingDepositTarget.label ?? "إيداع نقدي" }),
                   });
                   if (r.ok) {
                     toast({ title: "✅ تم تسجيل الإيداع", description: "نُقل المبلغ إلى سجل الحساب البنكي" });
+                    const targetId = bookingDepositTarget.bookingId;
+                    qc.setQueryData(["owner", "bookings"], (old: any) => {
+                      if (!Array.isArray(old)) return old;
+                      return old.map((bk: any) => {
+                        if (bk.id !== targetId) return bk;
+                        if (isInsurance) return { ...bk, _insuranceCashDeposited: true };
+                        return { ...bk, cashDeposited: true };
+                      });
+                    });
                     qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
                     qc.invalidateQueries({ queryKey: ["owner", "cash-deposit-logs"] });
                     qc.invalidateQueries({ queryKey: ["owner", "cash-deposit-logs-ledger"] });
@@ -6091,7 +6101,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               تسجيل استلام
                             </button>
                           )}
-                          {ins && b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !isReadOnly && (
+                          {ins && b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !(b as any)._insuranceCashDeposited && !isReadOnly && (
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); openBookingDepositDialog(b.id, Math.round(Number(b.insuranceFee ?? 0)), b.submissionId, `إيداع تأمين كاش — ${b.clientName}`); }}
