@@ -5203,7 +5203,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                   <p className="text-[10px] font-bold text-green-700 dark:text-green-400">💰 الدفعات المحصّلة:</p>
                                   {bkPmts.map(p => (
                                     <div key={p.id} className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-[10px] text-muted-foreground">{p.paymentDate}</span>
+                                      <span className="text-[10px] text-muted-foreground leading-tight">
+                                        <span className="block">{formatDualDate(p.paymentDate).hijri.replace(/\s*هـ\s*$/, "")}</span>
+                                        <span className="block opacity-60">({formatDualDate(p.paymentDate).gregorian})</span>
+                                      </span>
                                       <span className="text-[10px] font-bold text-green-700 dark:text-green-400">{toArN(Math.round(Number(p.amount)))} ر.س</span>
                                       <span className="text-[10px]">{p.method === "transfer" ? "🏦" : p.method === "pos" ? "💳" : "💵"}</span>
                                       {p.receiptUrl && (<button type="button" onClick={() => setReceiptLightbox(p.receiptUrl!)} className="text-[10px] text-blue-600 hover:underline">🧾</button>)}
@@ -6524,7 +6527,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               <p className="text-xs font-bold text-green-700 dark:text-green-400">💰 الدفعات المحصّلة:</p>
                               {bkPmtsL.map(p => (
                                 <div key={p.id} className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-xs text-muted-foreground">{p.paymentDate}</span>
+                                  <span className="text-xs text-muted-foreground leading-tight">
+                                    <span className="block">{formatDualDate(p.paymentDate).hijri.replace(/\s*هـ\s*$/, "")}</span>
+                                    <span className="block text-[10px] opacity-60">({formatDualDate(p.paymentDate).gregorian})</span>
+                                  </span>
                                   <span className="text-xs font-bold text-green-700 dark:text-green-400">{toArN(Math.round(Number(p.amount)))} ر.س</span>
                                   <span className="text-xs">{p.method === "transfer" ? "🏦" : p.method === "pos" ? "💳" : "💵"}</span>
                                   {p.receiptUrl && (<button type="button" onClick={() => setReceiptLightbox(p.receiptUrl!)} className="text-xs text-blue-600 hover:underline">🧾 إيصال</button>)}
