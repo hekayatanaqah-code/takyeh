@@ -3825,6 +3825,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [archiveTab, setArchiveTab] = useState<"cancelled" | "rescheduled">("cancelled");
   const [searchQuery, setSearchQuery] = useState("");
   const [calDepositSaving, setCalDepositSaving] = useState<number | null>(null);
+  const [bookingDepositTarget, setBookingDepositTarget] = useState<{ bookingId: number; maxAmount: number; submissionId?: number | null; label?: string } | null>(null);
+  const [bookingDepositAmt, setBookingDepositAmt] = useState("");
+  const [bookingDepositSaving, setBookingDepositSaving] = useState(false);
   const [calReceiptUrl, setCalReceiptUrl] = useState<string | null>(null);
   const [calReceiptUploading, setCalReceiptUploading] = useState(false);
   const calReceiptRef = useRef<HTMLInputElement>(null);
@@ -3840,23 +3843,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [receiptLightbox, setReceiptLightbox] = useState<string | null>(null);
   const { toast } = useToast();
 
-  async function confirmCalendarDeposit(bookingId: number, receiptUrl?: string | null) {
-    setCalDepositSaving(bookingId);
-    try {
-      const body: Record<string, unknown> = { cashDeposited: true };
-      if (receiptUrl) body.paymentReceiptUrl = receiptUrl;
-      const r = await apiFetch(`/owner/bookings/${bookingId}`, {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
-      if (r.ok) {
-        toast({ title: "✅ تم تأكيد الإيداع", description: "نُقل المبلغ من السيولة إلى رصيد البنك" });
-        qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
-        qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
-        qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
-        setCalReceiptUrl(null);
-      }
-    } finally { setCalDepositSaving(null); }
+  function openBookingDepositDialog(bookingId: number, maxAmount: number, submissionId?: number | null, label?: string) {
+    setBookingDepositTarget({ bookingId, maxAmount, submissionId, label });
+    setBookingDepositAmt("");
   }
 
   const { data: allInstallments = [] } = useQuery<{
@@ -4954,7 +4943,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                     b.insuranceReceived
                                       ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
                                       : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-                                  }`}>{b.insuranceReceived ? "مُستلَم" : "معلّق"}</span>
+                                  }`}>{b.insuranceReceived
+                                    ? ((b.insurancePaymentMethod ?? "transfer") === "cash" ? "مستلم (كاش)" : "مستلم (تحويل بنكي)")
+                                    : "معلّق"}</span>
                                 )}
                                 {b.insuranceRefunded && deducted === 0 && (
                                   <span className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">↩ مُعاد</span>
@@ -4973,6 +4964,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 className="w-full mt-1 text-[11px] py-1 rounded-md font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors disabled:opacity-50"
                               >
                                 {markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id ? "جاري التسجيل..." : "✓ تسجيل استلام التأمين"}
+                              </button>
+                            )}
+                            {b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !isReadOnly && (
+                              <button
+                                type="button"
+                                onClick={() => openBookingDepositDialog(b.id, Math.round(Number(b.insuranceFee ?? 0)), b.submissionId, `إيداع تأمين كاش — ${b.clientName}`)}
+                                className="w-full mt-1 text-[11px] py-1 rounded-md font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                              >
+                                🏦 تسجيل إيداع التأمين بالبنك
                               </button>
                             )}
                             {/* Settlement formula — only if settled */}
@@ -5022,12 +5022,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             {!b.cashDeposited && !isReadOnly && (
                               <button
                                 type="button"
-                                disabled={calDepositSaving === b.id}
-                                onClick={() => confirmCalendarDeposit(b.id, calReceiptUrl)}
-                                className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 rounded-lg px-2.5 py-1.5 transition-colors"
+                                onClick={() => {
+                                  const dep = Number(b.depositPaid ?? 0);
+                                  const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
+                                  const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
+                                  openBookingDepositDialog(b.id, dep + bal, b.submissionId, `إيداع نقدي — ${b.clientName}`);
+                                }}
+                                className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg px-2.5 py-1.5 transition-colors"
                               >
-                                {calDepositSaving === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
-                                تأكيد الإيداع في البنك
+                                <CheckCircle className="w-3 h-3" />
+                                تسجيل إيداع بالبنك
                               </button>
                             )}
                           </div>
@@ -5218,6 +5222,77 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           </Dialog>
         );
       })()}
+
+      {/* Per-booking cash deposit dialog */}
+      <Dialog open={bookingDepositTarget !== null} onOpenChange={(o) => { if (!o) { setBookingDepositTarget(null); setBookingDepositAmt(""); } }}>
+        <DialogContent dir="rtl" className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-right flex items-center gap-2">
+              <span>🏦</span> تسجيل إيداع بالبنك
+            </DialogTitle>
+            <DialogDescription className="text-right text-sm">
+              {bookingDepositTarget?.label ?? "إيداع الكاش في الحساب البنكي"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-3 text-center">
+              <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 tabular-nums">
+                {(bookingDepositTarget?.maxAmount ?? 0).toLocaleString("ar-SA")}
+                <span className="text-base font-normal text-muted-foreground ms-2">ر.س</span>
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">الحد الأقصى للإيداع</div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">المبلغ المراد إيداعه بالحساب البنكي (SAR)</label>
+              <input
+                type="number"
+                min={1}
+                max={bookingDepositTarget?.maxAmount}
+                value={bookingDepositAmt}
+                onChange={e => setBookingDepositAmt(e.target.value)}
+                placeholder={String(bookingDepositTarget?.maxAmount ?? "")}
+                className="w-full border border-border rounded-lg px-3 py-2 text-right text-sm bg-background focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {bookingDepositAmt && Number(bookingDepositAmt) > (bookingDepositTarget?.maxAmount ?? 0) && (
+                <p className="text-xs font-semibold text-destructive">⚠️ المبلغ يتجاوز الحد الأقصى ({(bookingDepositTarget?.maxAmount ?? 0).toLocaleString("ar-SA")} ر.س)</p>
+              )}
+              <p className="text-xs text-muted-foreground">اترك الحقل فارغاً لإيداع المبلغ الكامل</p>
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 mt-2">
+            <Button variant="outline" onClick={() => { setBookingDepositTarget(null); setBookingDepositAmt(""); }} disabled={bookingDepositSaving} className="flex-1">إلغاء</Button>
+            <Button
+              onClick={async () => {
+                if (!bookingDepositTarget) return;
+                const amt = bookingDepositAmt ? Number(bookingDepositAmt) : bookingDepositTarget.maxAmount;
+                if (!amt || amt <= 0 || amt > bookingDepositTarget.maxAmount) return;
+                setBookingDepositSaving(true);
+                try {
+                  const r = await apiFetch("/owner/mark-cash-deposited", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ amount: amt, submissionId: bookingDepositTarget.submissionId, note: bookingDepositTarget.label ?? "إيداع نقدي" }),
+                  });
+                  if (r.ok) {
+                    toast({ title: "✅ تم تسجيل الإيداع", description: "نُقل المبلغ إلى سجل الحساب البنكي" });
+                    qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
+                    qc.invalidateQueries({ queryKey: ["owner", "cash-deposit-logs"] });
+                    qc.invalidateQueries({ queryKey: ["owner", "cash-deposit-logs-ledger"] });
+                    qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
+                    qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
+                    setBookingDepositTarget(null);
+                    setBookingDepositAmt("");
+                  }
+                } finally { setBookingDepositSaving(false); }
+              }}
+              disabled={bookingDepositSaving || (!!bookingDepositAmt && Number(bookingDepositAmt) > (bookingDepositTarget?.maxAmount ?? 0))}
+              className="flex-1 bg-blue-600 hover:bg-blue-700"
+            >
+              {bookingDepositSaving ? "جارٍ التسجيل..." : "✓ تأكيد الإيداع"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmation dialog: mark insurance as received */}
       <AlertDialog open={confirmInsuranceBookingId !== null} onOpenChange={(o) => { if (!o) setConfirmInsuranceBookingId(null); }}>
@@ -6003,7 +6078,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               b.insuranceReceived
                                 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                                 : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                            }`}>🔒 التأمين: {b.insuranceReceived ? "مُستلَم" : "معلّق"}</span>
+                            }`}>🔒 التأمين: {b.insuranceReceived
+                              ? ((b.insurancePaymentMethod ?? "transfer") === "cash" ? "مستلم (كاش)" : "مستلم (تحويل بنكي)")
+                              : "معلّق"}</span>
                           )}
                           {ins && !b.insuranceRefunded && !b.insuranceReceived && !isReadOnly && (
                             <button
@@ -6013,6 +6090,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-200 transition-colors disabled:opacity-50 border border-green-300 dark:border-green-700"
                             >
                               تسجيل استلام
+                            </button>
+                          )}
+                          {ins && b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !isReadOnly && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); openBookingDepositDialog(b.id, Math.round(Number(b.insuranceFee ?? 0)), b.submissionId, `إيداع تأمين كاش — ${b.clientName}`); }}
+                              className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 transition-colors border border-blue-300 dark:border-blue-700"
+                            >
+                              🏦 إيداع التأمين
                             </button>
                           )}
                           {b.insuranceRefunded && !b.insuranceDeducted && (
@@ -6200,12 +6286,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         {!b.cashDeposited && !isReadOnly && (
                           <button
                             type="button"
-                            disabled={calDepositSaving === b.id}
-                            onClick={() => confirmCalendarDeposit(b.id, calReceiptUrl)}
-                            className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 rounded-lg px-3 py-1.5 transition-colors"
+                            onClick={() => {
+                              const dep = Number(b.depositPaid ?? 0);
+                              const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
+                              const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
+                              openBookingDepositDialog(b.id, dep + bal, b.submissionId, `إيداع نقدي — ${b.clientName}`);
+                            }}
+                            className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1.5 transition-colors"
                           >
-                            {calDepositSaving === b.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
-                            تأكيد الإيداع في البنك
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            تسجيل إيداع بالبنك
                           </button>
                         )}
                       </div>
@@ -10888,8 +10978,11 @@ function RevenueTab() {
               value={depositAmount}
               onChange={e => setDepositAmount(e.target.value)}
               placeholder={String(channels.cashUndeposited)}
-              className="w-full border border-border rounded-lg px-3 py-2 text-right text-sm bg-background focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full border rounded-lg px-3 py-2 text-right text-sm bg-background focus:outline-none focus:ring-2 ${depositAmount && Number(depositAmount) > channels.cashUndeposited ? "border-destructive focus:ring-destructive" : "border-border focus:ring-blue-500"}`}
             />
+            {depositAmount && Number(depositAmount) > channels.cashUndeposited && (
+              <p className="text-xs font-semibold text-destructive">⚠️ المبلغ يتجاوز الكاش المتاح ({channels.cashUndeposited.toLocaleString("ar-SA")} ر.س)</p>
+            )}
             <p className="text-xs text-muted-foreground">
               اترك الحقل فارغاً لإيداع المبلغ الكامل ({channels.cashUndeposited.toLocaleString("ar-SA")} ر.س)
             </p>
@@ -10922,7 +11015,7 @@ function RevenueTab() {
                   setDepositingCash(false);
                 }
               }}
-              disabled={depositingCash || channels.cashUndeposited === 0}
+              disabled={depositingCash || channels.cashUndeposited === 0 || (!!depositAmount && Number(depositAmount) > channels.cashUndeposited)}
               className="flex-1 bg-blue-600 hover:bg-blue-700"
             >
               {depositingCash ? "جارٍ التسجيل..." : "✓ تأكيد الإيداع"}

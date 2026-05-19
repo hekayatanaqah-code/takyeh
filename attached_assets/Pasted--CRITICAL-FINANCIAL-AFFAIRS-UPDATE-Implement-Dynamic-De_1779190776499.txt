@@ -1,0 +1,27 @@
+"CRITICAL FINANCIAL AFFAIRS UPDATE: Implement Dynamic Deposit Dialogs across Bookings, Strict Input Validation, and Detailed Badges.
+
+Please apply this audited specification to ensure all 'Confirm Deposit to Bank' actions across the entire platform are dynamic, secure, and prevent any immediate forced states:
+
+1. Dynamic Deposit Inputs inside Booking Details & List (No Direct Confirmation):
+The Flaw: Currently, clicking the 'تأكيد الإيداع في البنك' action button inside the booking calendar modal or the booking list instantly triggers the database state change without giving a choice (Ref: image_3d9830.png, image_3d984d.png).
+
+The Fix: Clicking this button MUST NOT confirm instantly. It must open a dialog with a numeric text field labeled: 'المبلغ المراد إيداعه بالحساب البنكي (SAR)'.
+
+Validation Rule: Default the value to the max cash available for this specific booking, but allow the owner to enter a partial amount. It MUST NEVER allow the user to input a number higher than the cash held within that booking. If they do, disable the confirm button and show a red error.
+
+2. Fix Input Validation in Revenue Page Deposits:
+In the monthly revenue deposit modal (Ref: image_3d986c.png), ensure strict validation is active. If the available cash is 2,100 SAR, the input must throw a hard validation error if the user types 2,500 SAR, blocking the confirmation.
+
+3. Add Insurance Cash 'Transfer to Bank' Trigger:
+If a booking shows 'التأمين: مستلم (كاش)', add a dedicated dynamic action button next to it: 'تسجيل إيداع التأمين بالبنك' (Ref: image_3da2d6.png). This button must follow the exact same dialog logic: open a modal, input amount, subtract from un-deposited cash, and send it to the standalone Bank Ledger.
+
+4. Specify Insurance Types on Cards:
+Update the summary status badge in the lower booking cards list (Ref: image_3d9830.png) to explicitly render:
+
+🟢 'التأمين: مستلم (تحويل بنكي)'
+
+🟢 'التأمين: مستلم (كاش)'
+
+🟠 'التأمين: معلّق'
+
+Deploy this strict, bulletproof financial confirmation and validation framework across all views now."
