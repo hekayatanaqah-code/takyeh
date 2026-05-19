@@ -251,6 +251,7 @@ export const cashDepositLogsTable = pgTable("cash_deposit_logs", {
   id: serial("id").primaryKey(),
   ownerId: text("owner_id").notNull(),
   submissionId: integer("submission_id"),
+  bookingId: integer("booking_id").references(() => ownerBookingsTable.id, { onDelete: "set null" }),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   note: text("note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -3825,9 +3825,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [archiveTab, setArchiveTab] = useState<"cancelled" | "rescheduled">("cancelled");
   const [searchQuery, setSearchQuery] = useState("");
   const [calDepositSaving, setCalDepositSaving] = useState<number | null>(null);
-  const [bookingDepositTarget, setBookingDepositTarget] = useState<{ bookingId: number; maxAmount: number; submissionId?: number | null; label?: string } | null>(null);
+  const [bookingDepositTarget, setBookingDepositTarget] = useState<{ bookingId: number; maxAmount: number; totalCash: number; submissionId?: number | null; label?: string } | null>(null);
   const [bookingDepositAmt, setBookingDepositAmt] = useState("");
   const [bookingDepositSaving, setBookingDepositSaving] = useState(false);
+  const [insuranceDepositedIds, setInsuranceDepositedIds] = useState<Set<number>>(new Set());
   const [calReceiptUrl, setCalReceiptUrl] = useState<string | null>(null);
   const [calReceiptUploading, setCalReceiptUploading] = useState(false);
   const calReceiptRef = useRef<HTMLInputElement>(null);
@@ -3843,8 +3844,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [receiptLightbox, setReceiptLightbox] = useState<string | null>(null);
   const { toast } = useToast();
 
-  function openBookingDepositDialog(bookingId: number, maxAmount: number, submissionId?: number | null, label?: string) {
-    setBookingDepositTarget({ bookingId, maxAmount, submissionId, label });
+  function openBookingDepositDialog(bookingId: number, maxAmount: number, totalCash: number, submissionId?: number | null, label?: string) {
+    setBookingDepositTarget({ bookingId, maxAmount, totalCash, submissionId, label });
     setBookingDepositAmt("");
   }
 
@@ -3868,6 +3869,22 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     });
     return map;
   }, [allInstallments]);
+
+  const { data: depositLogsCal = [] } = useQuery<Array<{ id: number; bookingId: number | null; submissionId: number | null; amount: string }>>({
+    queryKey: ["owner", "cash-deposit-logs"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/cash-deposit-logs");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+  const perBookingDeposited = useMemo(() => {
+    const map = new Map<number, number>();
+    depositLogsCal.forEach(l => {
+      if (l.bookingId) map.set(l.bookingId, (map.get(l.bookingId) ?? 0) + Math.round(Number(l.amount)));
+    });
+    return map;
+  }, [depositLogsCal]);
 
   async function addInstallmentPayment(bookingId: number) {
     const amt = parseFloat(fromArN(calPayAmt));
@@ -4966,10 +4983,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                 {markInsuranceReceived.isPending && markInsuranceReceived.variables === b.id ? "جاري التسجيل..." : "✓ تسجيل استلام التأمين"}
                               </button>
                             )}
-                            {b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !(b as any)._insuranceCashDeposited && !isReadOnly && (
+                            {b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !insuranceDepositedIds.has(b.id) && !isReadOnly && (
                               <button
                                 type="button"
-                                onClick={() => openBookingDepositDialog(b.id, Math.round(Number(b.insuranceFee ?? 0)), b.submissionId, `إيداع تأمين كاش — ${b.clientName}`)}
+                                onClick={() => { const ins = Math.round(Number(b.insuranceFee ?? 0)); openBookingDepositDialog(b.id, ins, ins, b.submissionId, `إيداع تأمين كاش — ${b.clientName}`); }}
                                 className="w-full mt-1 text-[11px] py-1 rounded-md font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
                               >
                                 🏦 تسجيل إيداع التأمين بالبنك
@@ -5005,37 +5022,42 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         );
                       })()}
                       {/* ── Payment Status Section (modal) ── */}
-                      {b.paymentMethod === "cash" && (
-                        <div className={`rounded-lg border p-2.5 space-y-2 mt-1 ${b.cashDeposited ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" : "bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700"}`}>
+                      {(() => {
+                        const dep = Number(b.depositPaid ?? 0);
+                        const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
+                        const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
+                        const undepCashInst = (paymentsByBooking[b.id] ?? []).filter(i => i.method === "cash" && !i.cashDeposited).reduce((s, i) => s + Number(i.amount), 0);
+                        const totalCashB = (b.paymentMethod === "cash" ? dep + bal : 0) + undepCashInst;
+                        const prevDep = perBookingDeposited.get(b.id) ?? 0;
+                        const remaining = Math.max(0, totalCashB - prevDep);
+                        const fullyDep = b.cashDeposited || (totalCashB > 0 && remaining === 0);
+                        if (totalCashB <= 0 && !b.cashDeposited) return null;
+                        return (
+                        <div className={`rounded-lg border p-2.5 space-y-2 mt-1 ${fullyDep ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" : "bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700"}`}>
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-sm">{b.cashDeposited ? "🏦" : "💵"}</span>
+                              <span className="text-sm">{fullyDep ? "🏦" : "💵"}</span>
                               <div>
-                                <p className={`text-[11px] font-bold ${b.cashDeposited ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"}`}>
-                                  {b.cashDeposited ? "تم الإيداع في البنك" : "نقدي — لم يُودَع بعد"}
+                                <p className={`text-[11px] font-bold ${fullyDep ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"}`}>
+                                  {fullyDep ? "تم الإيداع في البنك ✓" : prevDep > 0 ? `متبقي كاش لم يُودَع: ${toEasternArabic(remaining.toLocaleString("ar-SA"))} ر.س` : "نقدي — لم يُودَع بعد"}
                                 </p>
                                 <p className="text-[10px] text-muted-foreground">
-                                  {b.cashDeposited ? "المبلغ مُحوَّل للبنك ✓" : "يظهر في السيولة اليدوية"}
+                                  {fullyDep ? "المبلغ مُحوَّل للبنك ✓" : prevDep > 0 ? `أُودِع حتى الآن: ${toEasternArabic(prevDep.toLocaleString("ar-SA"))} ر.س` : "يظهر في السيولة اليدوية"}
                                 </p>
                               </div>
                             </div>
-                            {!b.cashDeposited && !isReadOnly && (
+                            {!fullyDep && remaining > 0 && !isReadOnly && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const dep = Number(b.depositPaid ?? 0);
-                                  const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
-                                  const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
-                                  openBookingDepositDialog(b.id, dep + bal, b.submissionId, `إيداع نقدي — ${b.clientName}`);
-                                }}
+                                onClick={() => openBookingDepositDialog(b.id, remaining, totalCashB, b.submissionId, `إيداع نقدي — ${b.clientName}`)}
                                 className="shrink-0 flex items-center gap-1 text-[11px] font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg px-2.5 py-1.5 transition-colors"
                               >
                                 <CheckCircle className="w-3 h-3" />
-                                تسجيل إيداع بالبنك
+                                {prevDep > 0 ? "إيداع المتبقي" : "تسجيل إيداع بالبنك"}
                               </button>
                             )}
                           </div>
-                          {!b.cashDeposited && !isReadOnly && (
+                          {!fullyDep && remaining > 0 && !isReadOnly && (
                             <div className="border-t border-amber-200 dark:border-amber-800 pt-1.5">
                               <input
                                 ref={calReceiptRef}
@@ -5083,7 +5105,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             </div>
                           )}
                         </div>
-                      )}
+                      );
+                      })()}
 
                       {/* Booking management quick actions */}
                       <div className="flex gap-2 mt-2 pt-2 border-t border-border/50 flex-wrap">
@@ -5271,19 +5294,20 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const r = await apiFetch("/owner/mark-cash-deposited", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ amount: amt, submissionId: bookingDepositTarget.submissionId, bookingId: bookingDepositTarget.bookingId, isInsurance, note: bookingDepositTarget.label ?? "إيداع نقدي" }),
+                    body: JSON.stringify({ amount: amt, submissionId: bookingDepositTarget.submissionId, bookingId: bookingDepositTarget.bookingId, isInsurance, totalCash: bookingDepositTarget.totalCash, note: bookingDepositTarget.label ?? "إيداع نقدي" }),
                   });
                   if (r.ok) {
-                    toast({ title: "✅ تم تسجيل الإيداع", description: "نُقل المبلغ إلى سجل الحساب البنكي" });
                     const targetId = bookingDepositTarget.bookingId;
-                    qc.setQueryData(["owner", "bookings"], (old: any) => {
-                      if (!Array.isArray(old)) return old;
-                      return old.map((bk: any) => {
-                        if (bk.id !== targetId) return bk;
-                        if (isInsurance) return { ...bk, _insuranceCashDeposited: true };
-                        return { ...bk, cashDeposited: true };
+                    const isFullDeposit = amt >= bookingDepositTarget.totalCash;
+                    toast({ title: "✅ تم تسجيل الإيداع", description: isInsurance ? "تم تسجيل إيداع التأمين بالبنك" : isFullDeposit ? "نُقل المبلغ كاملاً إلى الحساب البنكي" : `المتبقي: ${toEasternArabic(Math.max(0, bookingDepositTarget.totalCash - amt).toLocaleString("ar-SA"))} ر.س` });
+                    if (isInsurance) {
+                      setInsuranceDepositedIds(prev => { const next = new Set(prev); next.add(targetId); return next; });
+                    } else if (isFullDeposit) {
+                      qc.setQueryData(["owner", "bookings"], (old: any) => {
+                        if (!Array.isArray(old)) return old;
+                        return old.map((bk: any) => bk.id === targetId ? { ...bk, cashDeposited: true } : bk);
                       });
-                    });
+                    }
                     qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
                     qc.invalidateQueries({ queryKey: ["owner", "cash-deposit-logs"] });
                     qc.invalidateQueries({ queryKey: ["owner", "cash-deposit-logs-ledger"] });
@@ -6101,10 +6125,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               تسجيل استلام
                             </button>
                           )}
-                          {ins && b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !(b as any)._insuranceCashDeposited && !isReadOnly && (
+                          {ins && b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !insuranceDepositedIds.has(b.id) && !isReadOnly && (
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); openBookingDepositDialog(b.id, Math.round(Number(b.insuranceFee ?? 0)), b.submissionId, `إيداع تأمين كاش — ${b.clientName}`); }}
+                              onClick={(e) => { e.stopPropagation(); const ins = Math.round(Number(b.insuranceFee ?? 0)); openBookingDepositDialog(b.id, ins, ins, b.submissionId, `إيداع تأمين كاش — ${b.clientName}`); }}
                               className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 transition-colors border border-blue-300 dark:border-blue-700"
                             >
                               🏦 إيداع التأمين
@@ -6278,37 +6302,42 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   {b.notes && <p className="text-xs text-muted-foreground border-t border-border pt-2">{b.notes}</p>}
 
                   {/* ── Payment Status Section ── */}
-                  {b.paymentMethod === "cash" && (
-                    <div className={`rounded-lg border p-3 space-y-2 ${b.cashDeposited ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" : "bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700"}`}>
+                  {(() => {
+                    const dep = Number(b.depositPaid ?? 0);
+                    const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
+                    const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
+                    const undepCashInst = (paymentsByBooking[b.id] ?? []).filter(i => i.method === "cash" && !i.cashDeposited).reduce((s, i) => s + Number(i.amount), 0);
+                    const totalCashB = (b.paymentMethod === "cash" ? dep + bal : 0) + undepCashInst;
+                    const prevDep = perBookingDeposited.get(b.id) ?? 0;
+                    const remaining = Math.max(0, totalCashB - prevDep);
+                    const fullyDep = b.cashDeposited || (totalCashB > 0 && remaining === 0);
+                    if (totalCashB <= 0 && !b.cashDeposited) return null;
+                    return (
+                    <div className={`rounded-lg border p-3 space-y-2 ${fullyDep ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" : "bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700"}`}>
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2">
-                          <span className="text-base">{b.cashDeposited ? "🏦" : "💵"}</span>
+                          <span className="text-base">{fullyDep ? "🏦" : "💵"}</span>
                           <div>
-                            <p className={`text-xs font-bold ${b.cashDeposited ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"}`}>
-                              {b.cashDeposited ? "تم الإيداع في البنك" : "نقدي — لم يُودَع بعد"}
+                            <p className={`text-xs font-bold ${fullyDep ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"}`}>
+                              {fullyDep ? "تم الإيداع في البنك ✓" : prevDep > 0 ? `متبقي كاش لم يُودَع: ${toEasternArabic(remaining.toLocaleString("ar-SA"))} ر.س` : "نقدي — لم يُودَع بعد"}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
-                              {b.cashDeposited ? "المبلغ مُحوَّل للبنك ✓" : "يظهر في السيولة اليدوية"}
+                              {fullyDep ? "المبلغ مُحوَّل للبنك ✓" : prevDep > 0 ? `أُودِع حتى الآن: ${toEasternArabic(prevDep.toLocaleString("ar-SA"))} ر.س` : "يظهر في السيولة اليدوية"}
                             </p>
                           </div>
                         </div>
-                        {!b.cashDeposited && !isReadOnly && (
+                        {!fullyDep && remaining > 0 && !isReadOnly && (
                           <button
                             type="button"
-                            onClick={() => {
-                              const dep = Number(b.depositPaid ?? 0);
-                              const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
-                              const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
-                              openBookingDepositDialog(b.id, dep + bal, b.submissionId, `إيداع نقدي — ${b.clientName}`);
-                            }}
+                            onClick={() => openBookingDepositDialog(b.id, remaining, totalCashB, b.submissionId, `إيداع نقدي — ${b.clientName}`)}
                             className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1.5 transition-colors"
                           >
                             <CheckCircle className="w-3.5 h-3.5" />
-                            تسجيل إيداع بالبنك
+                            {prevDep > 0 ? "إيداع المتبقي" : "تسجيل إيداع بالبنك"}
                           </button>
                         )}
                       </div>
-                      {!b.cashDeposited && !isReadOnly && (
+                      {!fullyDep && remaining > 0 && !isReadOnly && (
                         <div className="border-t border-amber-200 dark:border-amber-800 pt-2">
                           <input
                             ref={calReceiptRef}
@@ -6354,7 +6383,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         </div>
                       )}
                     </div>
-                  )}
+                  );
+                  })()}
 
                   {/* Action buttons */}
                   <div className="flex flex-wrap gap-2 pt-1">

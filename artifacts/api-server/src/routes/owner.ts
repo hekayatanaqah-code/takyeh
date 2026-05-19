@@ -4535,8 +4535,8 @@ router.get("/cash-deposit-logs", async (req, res) => {
    Record a (partial or full) cash deposit to the bank ledger */
 router.post("/mark-cash-deposited", async (req, res) => {
   const ownerId = req.user!.id;
-  const { amount, submissionId, bookingId, isInsurance, note } = req.body as {
-    amount: number; submissionId?: number; bookingId?: number; isInsurance?: boolean; note?: string;
+  const { amount, submissionId, bookingId, isInsurance, totalCash, note } = req.body as {
+    amount: number; submissionId?: number; bookingId?: number; isInsurance?: boolean; totalCash?: number; note?: string;
   };
 
   if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
@@ -4548,12 +4548,13 @@ router.post("/mark-cash-deposited", async (req, res) => {
     .values({
       ownerId,
       submissionId: submissionId ? Number(submissionId) : null,
+      bookingId: bookingId ? Number(bookingId) : null,
       amount: String(Math.round(Number(amount))),
       note: note ?? "إيداع نقدي",
     })
     .returning();
 
-  if (bookingId && !isInsurance) {
+  if (bookingId && !isInsurance && totalCash && Number(amount) >= Number(totalCash)) {
     await db
       .update(ownerBookingsTable)
       .set({ cashDeposited: true })

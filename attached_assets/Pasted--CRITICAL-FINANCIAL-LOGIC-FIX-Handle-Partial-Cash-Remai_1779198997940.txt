@@ -1,0 +1,26 @@
+"CRITICAL FINANCIAL LOGIC FIX: Handle Partial Cash Remaining, Insurance State Sync, and New Cash Updates.
+
+We found 3 major operational and accounting flaws in your current implementation (Ref: image_414d33.png, image_40d20b.png, image_3e1ebc.png):
+
+1. FIX: Partial Deposit Logic for Booking Cash (Track the Remaining Balance)
+The Flaw: When an owner deposits a partial amount of the available booking cash (e.g., depositing 1000 SAR out of 2100 SAR), your system blindly marks the action as fully completed, updates the text to 'تم الإيداع', and hides the button.
+
+The Requirement: If the input_amount is LESS than the total available un-deposited cash:
+
+DO NOT hide the deposit button.
+
+Dynamically subtract the amount from the available cash on hand and update the display label immediately to show the exact remaining fraction: 'متبقي كاش لم يُودَع: [الرصيد المتبقي] ر.س' (formatted in Eastern Arabic numerals).
+
+Only hide the action button when the remaining un-deposited balance officially hits 0.
+
+2. FIX: Insurance Deposit Button Persistence Bug
+The Flaw: When recording an insurance deposit, it returns success but the frontend state does not reactively trigger, leaving the 'تأكيد الإيداع البنكي' button stuck on screen (Ref: image_40d20b.png).
+
+The Requirement: Ensure the onSuccess state mutates the target insurance status to fully update the local component array, instantly transforming the button into a static 'تم إيداع التأمين بالبنك ✓' label.
+
+3. FIX: '+ إضافة دفعة' Cash Workflow (Ref: image_414d33.png)
+The Flaw: In the booking sheet, when clicking '+ إضافة دفعة' and selecting 'كاش' (Cash) as the method (Ref: image_414d33.png), the system receives the money but fails to append it to the un-deposited cash pool. Thus, the owner has no way to transfer this new cash to the bank.
+
+The Requirement: If a new partial/remaining payment is added with the type 'كاش', the system MUST automatically add this exact amount back into that booking's un-deposited cash pool, instantly rendering the 'تأكيد الإيداع بالبنك' button next to it so it can be verified later.
+
+Refactor these conditional checks and reactivity loops across the Dashboard code now."
