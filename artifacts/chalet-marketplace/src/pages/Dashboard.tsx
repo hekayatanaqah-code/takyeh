@@ -106,6 +106,7 @@ interface OwnerBooking {
   ratedAt?: string | null;
   paymentMethod?: "cash" | "transfer" | "pos" | null;
   cashDeposited?: boolean;
+  insurancePaymentMethod?: "cash" | "transfer" | null;
   paymentReceiptUrl?: string | null;
   bookedAddons?: Array<{ id: number; name: string; price: string; unit: string }> | null;
 }
@@ -1358,6 +1359,7 @@ function AddBookingDialog({
   const [depositPaid, setDepositPaid] = useState("");
   const [insuranceFee, setInsuranceFee] = useState("");
   const [insuranceReceived, setInsuranceReceived] = useState(false);
+  const [insurancePaymentMethod, setInsurancePaymentMethod] = useState<"cash" | "transfer">("transfer");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "transfer" | "pos">("cash");
   const [cashDeposited, setCashDeposited] = useState(false);
   const [paymentReceiptUrl, setPaymentReceiptUrl] = useState<string | null>(null);
@@ -1581,6 +1583,7 @@ function AddBookingDialog({
           depositPaid: depositPaid ? Math.round(Number(depositPaid)) : undefined,
           insuranceFee: insuranceFee ? Math.round(Number(insuranceFee)) : undefined,
           insuranceReceived: Number(insuranceFee) > 0 ? insuranceReceived : false,
+          insurancePaymentMethod: Number(insuranceFee) > 0 && insuranceReceived ? insurancePaymentMethod : "transfer",
           paymentMethod,
           cashDeposited: paymentMethod === "cash" ? cashDeposited : true,
           paymentReceiptUrl: paymentReceiptUrl || undefined,
@@ -1965,6 +1968,18 @@ function AddBookingDialog({
                     </span>
                   </span>
                 </label>
+              )}
+              {Number(insuranceFee) > 0 && insuranceReceived && (
+                <div className="flex gap-2 mt-1.5">
+                  <button type="button" onClick={() => setInsurancePaymentMethod("transfer")}
+                    className={`flex-1 px-2 py-1.5 text-xs font-semibold rounded-lg border-2 transition-colors ${insurancePaymentMethod === "transfer" ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300" : "border-border text-muted-foreground hover:border-blue-300"}`}>
+                    🏦 تحويل بنكي
+                  </button>
+                  <button type="button" onClick={() => setInsurancePaymentMethod("cash")}
+                    className={`flex-1 px-2 py-1.5 text-xs font-semibold rounded-lg border-2 transition-colors ${insurancePaymentMethod === "cash" ? "border-amber-500 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" : "border-border text-muted-foreground hover:border-amber-300"}`}>
+                    💵 نقداً
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -9490,11 +9505,24 @@ function BankLedgerTab() {
     },
   });
 
+  const { data: depositLogs = [], isLoading: logsLoading } = useQuery<Array<{ id: number; ownerId: number; submissionId: number | null; amount: string; note: string | null; createdAt: string }>>({
+    queryKey: ["owner", "cash-deposit-logs-ledger"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/cash-deposit-logs");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
   const ledgerEntries = useMemo(() => {
     let scoped = allBookings;
+    let scopedLogs = depositLogs;
     if (unit.type === "chalet") {
       const subId = (unit as any).submissionId;
-      if (subId) scoped = allBookings.filter(bk => bk.submissionId === subId);
+      if (subId) {
+        scoped = allBookings.filter(bk => bk.submissionId === subId);
+        scopedLogs = depositLogs.filter(l => l.submissionId === subId);
+      }
     }
     const entries: {
       bookingId: number; clientName: string; bookingDate: string;
@@ -9509,18 +9537,16 @@ function BankLedgerTab() {
         const bal = bk.balanceCollected ? Math.max(0, tp - dep) : 0;
         const total = dep + bal;
         if (total > 0) entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "revenue", amount: total, status: bk.balanceCollected || dep >= tp ? "مكتمل" : "جزئي" });
-        if (bk.insuranceReceived && Number(bk.insuranceFee ?? 0) > 0)
-          entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "insurance", amount: Math.round(Number(bk.insuranceFee)), status: bk.insuranceRefunded ? "تم الرد" : "محتجز" });
-      } else if (bk.cashDeposited) {
-        const dep = Number(bk.depositPaid ?? 0);
-        const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
-        const bal = bk.balanceCollected ? Math.max(0, tp - dep) : 0;
-        const total = dep + bal;
-        if (total > 0) entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "cash_deposit", amount: total, status: "تم الإيداع" });
+      }
+      if (bk.insuranceReceived && Number(bk.insuranceFee ?? 0) > 0 && (bk.insurancePaymentMethod ?? "transfer") === "transfer") {
+        entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "insurance", amount: Math.round(Number(bk.insuranceFee)), status: bk.insuranceRefunded ? "تم الرد" : "محتجز" });
       }
     }
+    for (const log of scopedLogs) {
+      entries.push({ bookingId: 0, clientName: log.note ?? "إيداع نقدي", bookingDate: log.createdAt.slice(0, 10), type: "cash_deposit", amount: Math.round(Number(log.amount)), status: "تم الإيداع" });
+    }
     return entries.sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
-  }, [allBookings, unit]);
+  }, [allBookings, depositLogs, unit]);
 
   const filtered = useMemo(() => {
     if (activeTab === "all") return ledgerEntries;
@@ -9555,7 +9581,7 @@ function BankLedgerTab() {
             </button>
           ))}
         </div>
-        {bkLoading ? (
+        {bkLoading || logsLoading ? (
           <div className="p-4 space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
         ) : filtered.length === 0 ? (
           <div className="text-center text-muted-foreground text-sm py-14">
@@ -9593,7 +9619,7 @@ function BankLedgerTab() {
                     <tr key={i} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                       <td className="py-2.5 px-4 text-xs text-muted-foreground">{hijriDate}</td>
                       <td className="py-2.5 px-4 font-medium text-foreground">{e.clientName}</td>
-                      <td className="py-2.5 px-4 text-muted-foreground">#{e.bookingId}</td>
+                      <td className="py-2.5 px-4 text-muted-foreground">{e.bookingId > 0 ? `#${e.bookingId}` : "—"}</td>
                       <td className="py-2.5 px-4">
                         <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ${typeInfo.cls}`}>{typeInfo.label}</span>
                       </td>
@@ -9745,6 +9771,7 @@ function RevenueTab() {
   const [cashBreakdownOpen, setCashBreakdownOpen] = useState(false);
   const [depositCashOpen, setDepositCashOpen] = useState(false);
   const [depositingCash, setDepositingCash] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("");
   const [revSubTab, setRevSubTab] = useState<"monthly" | "receivables">("monthly");
   const showAllFuture = revSubTab === "receivables";
 
@@ -9781,6 +9808,15 @@ function RevenueTab() {
     queryKey: ["owner", "bookings-revenue"],
     queryFn: async () => {
       const r = await apiFetch("/owner/bookings");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const { data: depositLogs = [], refetch: refetchDepositLogs } = useQuery<Array<{ id: number; ownerId: number; submissionId: number | null; amount: string; note: string | null; createdAt: string }>>({
+    queryKey: ["owner", "cash-deposit-logs"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/cash-deposit-logs");
       if (!r.ok) return [];
       return r.json();
     },
@@ -10112,7 +10148,12 @@ function RevenueTab() {
       const subId = (unit as any).submissionId;
       if (subId) scoped = allBookings.filter(b => b.submissionId === subId);
     }
-    let bankTransfers = 0, cashDeposited = 0, cashUndeposited = 0;
+    let scopedLogs = depositLogs;
+    if (unit.type === "chalet") {
+      const subId = (unit as any).submissionId;
+      if (subId) scopedLogs = depositLogs.filter(l => l.submissionId === subId);
+    }
+    let bankTransfers = 0, totalCashOnHand = 0, insuranceCustody = 0;
     for (const b of scoped) {
       if (b.cancelledAt) continue;
       const dep = Number(b.depositPaid ?? 0);
@@ -10120,23 +10161,30 @@ function RevenueTab() {
       const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
       const total = dep + bal;
       if (b.paymentMethod === "cash") {
-        if (b.cashDeposited) cashDeposited += total;
-        else cashUndeposited += total;
+        totalCashOnHand += total;
       } else {
         bankTransfers += total;
       }
+      if (b.insuranceReceived && !b.insuranceRefunded && Number(b.insuranceFee ?? 0) > 0) {
+        const insAmt = Math.round(Number(b.insuranceFee));
+        const insMethod = b.insurancePaymentMethod ?? "transfer";
+        if (insMethod === "cash") {
+          totalCashOnHand += insAmt;
+        } else {
+          bankTransfers += insAmt;
+        }
+        insuranceCustody += insAmt;
+      }
     }
-    const insuranceCustody = scoped
-      .filter(b => !b.cancelledAt && b.insuranceReceived && !b.insuranceRefunded)
-      .reduce((s, b) => s + Math.round(Number(b.insuranceFee ?? 0)), 0);
+    const totalDeposited = scopedLogs.reduce((s, l) => s + Math.round(Number(l.amount)), 0);
     return {
       bankTransfers: Math.round(bankTransfers),
-      cashDeposited: Math.round(cashDeposited),
-      cashUndeposited: Math.round(cashUndeposited),
-      cashOnHand: Math.round(cashDeposited + cashUndeposited),
-      insuranceCustody,
+      cashDeposited: totalDeposited,
+      cashUndeposited: Math.max(0, Math.round(totalCashOnHand) - totalDeposited),
+      cashOnHand: Math.round(totalCashOnHand),
+      insuranceCustody: Math.round(insuranceCustody),
     };
-  }, [allBookings, unit]);
+  }, [allBookings, depositLogs, unit]);
 
   /* ── SERVICE UNIT: render service appointments revenue ── */
   if (unit.type === "service") {
@@ -10831,26 +10879,44 @@ function RevenueTab() {
             </div>
             <div className="text-xs text-muted-foreground mt-1">إجمالي الكاش غير المودَع حالياً</div>
           </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-foreground">مبلغ الإيداع (ر.س)</label>
+            <input
+              type="number"
+              min={1}
+              max={channels.cashUndeposited}
+              value={depositAmount}
+              onChange={e => setDepositAmount(e.target.value)}
+              placeholder={String(channels.cashUndeposited)}
+              className="w-full border border-border rounded-lg px-3 py-2 text-right text-sm bg-background focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-muted-foreground">
+              اترك الحقل فارغاً لإيداع المبلغ الكامل ({channels.cashUndeposited.toLocaleString("ar-SA")} ر.س)
+            </p>
+          </div>
           <p className="text-xs text-muted-foreground text-right bg-muted/40 rounded-lg p-3 leading-relaxed">
-            سيتم تسجيل هذه المبالغ كـ <strong>إيداعات نقدية</strong> في سجل الحساب البنكي، وستنتقل من عمود "كاش غير مودَع" إلى عمود "كاش تم إيداعه في البنك".
+            سيتم تسجيل الإيداع في سجل الحساب البنكي وخصمه من رصيد الكاش غير المودَع.
           </p>
           <DialogFooter className="flex gap-2 mt-2">
-            <Button variant="outline" onClick={() => setDepositCashOpen(false)} disabled={depositingCash} className="flex-1">
+            <Button variant="outline" onClick={() => { setDepositCashOpen(false); setDepositAmount(""); }} disabled={depositingCash} className="flex-1">
               إلغاء
             </Button>
             <Button
               onClick={async () => {
+                const amt = depositAmount ? Number(depositAmount) : channels.cashUndeposited;
+                if (!amt || amt <= 0) return;
                 setDepositingCash(true);
                 try {
                   const submissionId = unit.type === "chalet" ? (unit as any).submissionId : undefined;
                   const r = await apiFetch("/owner/mark-cash-deposited", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ submissionId }),
+                    body: JSON.stringify({ amount: amt, submissionId }),
                   });
                   if (r.ok) {
-                    await refetchBookings();
+                    await Promise.all([refetchBookings(), refetchDepositLogs()]);
                     setDepositCashOpen(false);
+                    setDepositAmount("");
                   }
                 } finally {
                   setDepositingCash(false);

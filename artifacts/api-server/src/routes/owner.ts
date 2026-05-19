@@ -25,6 +25,7 @@ import {
   ownerTempSessionsTable,
   ownerRefundsTable,
   bookingPaymentsTable,
+  cashDepositLogsTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
@@ -1010,6 +1011,7 @@ router.post("/bookings", async (req, res) => {
     insuranceReceived: z.boolean().default(false),
     paymentMethod: z.enum(["cash", "transfer", "pos"]).default("cash"),
     cashDeposited: z.boolean().default(false),
+    insurancePaymentMethod: z.enum(["cash", "transfer"]).default("transfer"),
     paymentReceiptUrl: z.string().nullable().optional(),
     addonIds: z.array(z.number().int().positive()).optional(),
   }).safeParse(req.body);
@@ -1149,6 +1151,7 @@ router.patch("/bookings/:id", async (req, res) => {
     notes: z.string().nullable().optional(),
     paymentMethod: z.enum(["cash", "transfer", "pos"]).optional(),
     cashDeposited: z.boolean().optional(),
+    insurancePaymentMethod: z.enum(["cash", "transfer"]).optional(),
     paymentReceiptUrl: z.string().nullable().optional(),
     // Reschedule fields
     bookingDate: z.string().min(1).optional(),
@@ -4510,54 +4513,45 @@ router.patch("/notification-settings", async (req, res) => {
   return res.json({ ok: true });
 });
 
+/* ── GET /owner/cash-deposit-logs ──────────────────────────────
+   Return all cash deposit log entries for the owner */
+router.get("/cash-deposit-logs", async (req, res) => {
+  const ownerId = req.user!.id;
+  const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
+
+  const conditions = [eq(cashDepositLogsTable.ownerId, ownerId)];
+  if (submissionId) conditions.push(eq(cashDepositLogsTable.submissionId, submissionId));
+
+  const rows = await db
+    .select()
+    .from(cashDepositLogsTable)
+    .where(and(...conditions))
+    .orderBy(desc(cashDepositLogsTable.createdAt));
+
+  return res.json(rows);
+});
+
 /* ── POST /owner/mark-cash-deposited ───────────────────────────
-   Bulk-mark all un-deposited cash bookings as deposited in the bank */
+   Record a (partial or full) cash deposit to the bank ledger */
 router.post("/mark-cash-deposited", async (req, res) => {
   const ownerId = req.user!.id;
-  const { submissionId } = req.body as { submissionId?: number };
+  const { amount, submissionId, note } = req.body as { amount: number; submissionId?: number; note?: string };
 
-  const subs = await db
-    .select({ id: chaletSubmissionsTable.id })
-    .from(chaletSubmissionsTable)
-    .where(eq(chaletSubmissionsTable.ownerId, ownerId));
-
-  if (subs.length === 0) return res.json({ updated: 0, totalAmount: 0 });
-  const subIds = subs.map(s => s.id);
-
-  const baseConditions = [
-    inArray(ownerBookingsTable.submissionId, subIds),
-    eq(ownerBookingsTable.paymentMethod, "cash"),
-    eq(ownerBookingsTable.cashDeposited, false),
-    isNull(ownerBookingsTable.cancelledAt),
-  ];
-  if (submissionId) baseConditions.push(eq(ownerBookingsTable.submissionId, Number(submissionId)));
-
-  const bookings = await db
-    .select({
-      id: ownerBookingsTable.id,
-      depositPaid: ownerBookingsTable.depositPaid,
-      totalPrice: ownerBookingsTable.totalPrice,
-      balanceCollected: ownerBookingsTable.balanceCollected,
-    })
-    .from(ownerBookingsTable)
-    .where(and(...baseConditions));
-
-  if (bookings.length === 0) return res.json({ updated: 0, totalAmount: 0 });
-
-  let totalAmount = 0;
-  for (const b of bookings) {
-    const dep = Number(b.depositPaid ?? 0);
-    const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
-    const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
-    totalAmount += dep + bal;
+  if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+    return res.status(400).json({ error: "المبلغ غير صحيح" });
   }
 
-  await db
-    .update(ownerBookingsTable)
-    .set({ cashDeposited: true })
-    .where(and(...baseConditions));
+  const [log] = await db
+    .insert(cashDepositLogsTable)
+    .values({
+      ownerId,
+      submissionId: submissionId ? Number(submissionId) : null,
+      amount: String(Math.round(Number(amount))),
+      note: note ?? "إيداع نقدي",
+    })
+    .returning();
 
-  return res.json({ updated: bookings.length, totalAmount: Math.round(totalAmount) });
+  return res.json({ ok: true, log });
 });
 
 export default router;

@@ -1,0 +1,32 @@
+"CRITICAL REFACTOR: Implement Insurance Payment Methods (Cash/Transfer), Partial Cash Deposits, and Standalone Bank Ledger.
+
+Please discard the previous specification and implement this fully consolidated financial workflow to handle both booking and insurance payment methods dynamically (Ref: image_cfa86b.png, image_d01d28.png, image_d01d45.png):
+
+1. Implement Insurance Payment Method Logic (Cash vs. Transfer):
+Requirement: Just like booking prices, the Insurance (التأمين) must now support a payment method selection: 'كاش' (Cash) or 'تحويل بنكي' (Bank Transfer).
+
+If Insurance is paid via Cash: When marked as received (insuranceReceived = true), this amount MUST automatically be added to the 'كاش لم يودع / عهدة معلقة' balance under the active month (Ref: image_cfa86b.png).
+
+If Insurance is paid via Transfer: It must bypass the cash flow and go directly into the independent Bank Ledger under the 'حوالات التأمينات' tab (Ref: image_cfa8a8.png).
+
+2. Make 'الكاش الذي لم يودع' Interactive with Partial Deposits:
+In the monthly table, the 'كاش لم يودع / عهدة معلقة' row (which now dynamically includes both Cash Rental payments + Cash Insurance payments) must have a 'تسجيل إيداع بالبنك' action button (Ref: image_d01d28.png).
+
+Clicking this button MUST open a prompt with a numeric input field labeled: 'المبلغ المراد إيداعه (SAR)' (Ref: image_d01d45.png).
+
+Partial Math Logic: If the owner inputs a partial amount (e.g., 300 SAR out of an accumulated 500 SAR Cash):
+
+Subtract 300 SAR from 'كاش لم يودع' (keeping the remaining 200 SAR pending on hand) (Ref: image_d01d28.png).
+
+Add 300 SAR to the 'الحساب البنكي / حوالات' balance.
+
+Append a new log row into the independent Bank Ledger under an 'إيداع نقدي جزئي' description.
+
+3. Separate the Bank Ledger & Fix Headers:
+Move the 'سجل الحساب البنكي' component out of the Revenue view into its own independent standalone section/tab (Ref: image_cfa8a8.png). Maintain its multi-tab filters (كل الحوالات، إيرادات الحجوزات، حوالات التأمينات).
+
+Clean up the Revenue channel table headers to be: [القناة المالية] (Financial Channel) and [المبلغ المحصّل] (Amount Collected) (Ref: image_c0a145.png).
+
+Completely keep Expenses (المصروفات) out of this entire view (Ref: image_c0a50b.png).
+
+Deploy this advanced, fully synchronized accounting state logic across the database models and dashboard UI routes now."

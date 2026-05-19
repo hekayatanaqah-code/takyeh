@@ -228,6 +228,7 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   ratedAt: timestamp("rated_at", { withTimezone: true }),
   paymentMethod: paymentMethodEnum("payment_method").default("cash"),
   cashDeposited: boolean("cash_deposited").notNull().default(false),
+  insurancePaymentMethod: text("insurance_payment_method").$type<"cash" | "transfer">().notNull().default("transfer"),
   paymentReceiptUrl: text("payment_receipt_url"),
   bookedAddons: jsonb("booked_addons").$type<Array<{ id: number; name: string; price: string; unit: string }>>(),
 });
@@ -244,6 +245,17 @@ export const ownerRefundsTable = pgTable("owner_refunds", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type OwnerRefund = typeof ownerRefundsTable.$inferSelect;
+
+/* ── Cash Deposit Logs ─────────────────────────────────────────── */
+export const cashDepositLogsTable = pgTable("cash_deposit_logs", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  submissionId: integer("submission_id"),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type CashDepositLog = typeof cashDepositLogsTable.$inferSelect;
 
 /* ── Owner Reschedule Logs ─────────────────────────────────── */
 export const ownerRescheduleLogsTable = pgTable("owner_reschedule_logs", {
