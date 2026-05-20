@@ -290,12 +290,15 @@ router.get("/contract/:bookingId", async (req, res) => {
     id: number; client_name: string; booking_date: string; duration_days: number;
     period: string | null; total_price: string | null; deposit_paid: string | null;
     insurance_fee: string | null; contract_signed: boolean;
+    contract_signer_name: string | null; contract_signer_id: string | null;
+    contract_signature_data_url: string | null; contract_signed_at: string | null;
     name_ar: string | null; cancelled_at: string | null;
   }>(sql`
     SELECT b.id, b.client_name, b.booking_date, b.duration_days, b.period,
            b.total_price, b.deposit_paid, b.insurance_fee,
-           b.contract_signed, b.cancelled_at,
-           s.name_ar
+           b.contract_signed, b.contract_signer_name, b.contract_signer_id,
+           b.contract_signature_data_url, b.contract_signed_at,
+           b.cancelled_at, s.name_ar
     FROM owner_bookings b
     LEFT JOIN chalet_submissions s ON s.id = b.submission_id
     WHERE b.id = ${id}
@@ -316,6 +319,10 @@ router.get("/contract/:bookingId", async (req, res) => {
     depositPaid: row.deposit_paid,
     insuranceFee: row.insurance_fee,
     contractSigned: row.contract_signed,
+    contractSignerName: row.contract_signer_name ?? null,
+    contractSignerId: row.contract_signer_id ?? null,
+    contractSignatureDataUrl: row.contract_signature_data_url ?? null,
+    contractSignedAt: row.contract_signed_at ?? null,
   });
 });
 

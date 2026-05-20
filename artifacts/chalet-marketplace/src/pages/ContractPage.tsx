@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
+import { useEffect } from "react";
 import { useParams } from "wouter";
-import { Loader2, CheckCircle, AlertCircle, Pen, Trash2 } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, Pen, Trash2, Download, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDualDate } from "@/lib/hijri";
@@ -21,14 +22,70 @@ interface ContractBooking {
   depositPaid: string | null;
   insuranceFee: string | null;
   contractSigned: boolean;
+  contractSignerName: string | null;
+  contractSignerId: string | null;
+  contractSignatureDataUrl: string | null;
+  contractSignedAt: string | null;
+}
+
+interface SignedData {
+  signerName: string;
+  signerId: string;
+  signatureDataUrl: string;
 }
 
 function periodLabel(p: string | null) {
   if (!p) return "";
   if (p === "morning") return "صباحي";
   if (p === "evening") return "مسائي";
-  if (p === "full") return "يوم كامل";
+  if (p === "full_day" || p === "full") return "يوم كامل";
   return p;
+}
+
+function Row({ label, value, highlight }: { label: string; value: React.ReactNode; highlight?: boolean }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className={`font-medium text-right ${highlight ? "text-primary font-bold" : "text-foreground"}`}>{value}</span>
+    </div>
+  );
+}
+
+async function downloadContractPDF(
+  booking: ContractBooking,
+  signedData: SignedData,
+  printRef: React.RefObject<HTMLDivElement | null>
+) {
+  if (!printRef.current) return;
+  const html2canvas = (await import("html2canvas")).default;
+  const { jsPDF } = await import("jspdf");
+  const canvas = await html2canvas(printRef.current, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#ffffff",
+  });
+  const imgData = canvas.toDataURL("image/png");
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const imgH = (canvas.height * pageW) / canvas.width;
+  if (imgH <= pageH) {
+    pdf.addImage(imgData, "PNG", 0, 0, pageW, imgH);
+  } else {
+    let yOffset = 0;
+    while (yOffset < canvas.height) {
+      const sliceH = Math.min((pageH / pageW) * canvas.width, canvas.height - yOffset);
+      const sliceCanvas = document.createElement("canvas");
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = sliceH;
+      const ctx = sliceCanvas.getContext("2d")!;
+      ctx.drawImage(canvas, 0, -yOffset);
+      pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", 0, 0, pageW, (sliceH * pageW) / canvas.width);
+      yOffset += sliceH;
+      if (yOffset < canvas.height) pdf.addPage();
+    }
+  }
+  pdf.save(`عقد-إيجار-${booking.id}.pdf`);
 }
 
 export default function ContractPage() {
@@ -40,10 +97,18 @@ export default function ContractPage() {
   const [fullName, setFullName] = useState("");
   const [idNumber, setIdNumber] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  /* alreadySigned = contract was signed before this session (loaded from DB) */
+  const [alreadySigned, setAlreadySigned] = useState(false);
+  /* justSigned = contract was signed just now in this session */
+  const [justSigned, setJustSigned] = useState(false);
+  /* signed data for display — populated from API (already signed) or form (just signed) */
+  const [signedData, setSignedData] = useState<SignedData | null>(null);
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const printRef = useRef<HTMLDivElement>(null);
   const isDrawing = useRef(false);
   const [hasSig, setHasSig] = useState(false);
   const [sigError, setSigError] = useState(false);
@@ -52,9 +117,19 @@ export default function ContractPage() {
     if (!bookingId) return;
     fetch(`${BASE}/api/owner/contract/${bookingId}`, { credentials: "include" })
       .then(r => r.json())
-      .then(data => {
+      .then((data: ContractBooking & { error?: string }) => {
         if (data.error) { setLoadError(data.error); }
-        else { setBooking(data); if (data.contractSigned) setSubmitted(true); }
+        else {
+          setBooking(data);
+          if (data.contractSigned) {
+            setAlreadySigned(true);
+            setSignedData({
+              signerName: data.contractSignerName ?? "",
+              signerId: data.contractSignerId ?? "",
+              signatureDataUrl: data.contractSignatureDataUrl ?? "",
+            });
+          }
+        }
         setLoading(false);
       })
       .catch(() => { setLoadError("تعذّر تحميل بيانات العقد."); setLoading(false); });
@@ -113,8 +188,7 @@ export default function ContractPage() {
   };
 
   const handleSubmit = async () => {
-    if (!fullName.trim()) return;
-    if (!idNumber.trim()) return;
+    if (!fullName.trim() || !idNumber.trim()) return;
     if (!hasSig) { setSigError(true); return; }
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -130,11 +204,25 @@ export default function ContractPage() {
       });
       const data = await res.json();
       if (!res.ok) { setSubmitError(data.error ?? "حدث خطأ أثناء الحفظ."); }
-      else { setSubmitted(true); }
+      else {
+        setSignedData({ signerName: fullName.trim(), signerId: idNumber.trim(), signatureDataUrl: sigDataUrl });
+        setJustSigned(true);
+      }
     } catch { setSubmitError("تعذّر الاتصال. تأكّد من الاتصال بالإنترنت وأعد المحاولة."); }
     finally { setSubmitting(false); }
   };
 
+  const handleDownloadPDF = async () => {
+    if (!booking || !signedData) return;
+    setPdfDownloading(true);
+    try {
+      await downloadContractPDF(booking, signedData, printRef);
+    } finally {
+      setPdfDownloading(false);
+    }
+  };
+
+  /* ── Loading ── */
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50" dir="rtl">
@@ -143,6 +231,7 @@ export default function ContractPage() {
     );
   }
 
+  /* ── Error ── */
   if (loadError || !booking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6" dir="rtl">
@@ -155,37 +244,218 @@ export default function ContractPage() {
     );
   }
 
-  if (submitted) {
+  const dualDate = formatDualDate(booking.bookingDate);
+  const fmtMoney = (v: string | null) => v ? toAr(Math.round(Number(v)).toLocaleString("en")) : "—";
+  const signedAtFormatted = (() => {
+    if (!booking.contractSignedAt) return null;
+    try {
+      const d = formatDualDate(new Date(booking.contractSignedAt).toISOString().slice(0, 10));
+      return `${d.hijri.replace(/\s*هـ\s*$/, "")} (${d.gregorian})`;
+    } catch { return null; }
+  })();
+
+  /* ── Already Signed (re-opened by anyone) ── */
+  if (alreadySigned && signedData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-green-50 p-6" dir="rtl">
-        <div className="text-center space-y-4 max-w-sm">
-          <div className="w-20 h-20 mx-auto rounded-full bg-green-100 flex items-center justify-center">
-            <CheckCircle className="w-10 h-10 text-green-600" />
+      <div className="min-h-screen bg-slate-50 pb-10" dir="rtl">
+        <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
+          {/* Header */}
+          <div className="text-center space-y-1">
+            <div className="text-3xl font-extrabold text-primary tracking-tight">تكية</div>
+            <p className="text-sm text-muted-foreground">عقد إيجار شاليه</p>
           </div>
-          <h2 className="text-xl font-bold text-green-800">تم اعتماد العقد ✓</h2>
-          <p className="text-green-700 text-sm">تمّ توقيع عقد الإيجار بنجاح. يمكنك إغلاق هذه النافذة الآن.</p>
-          <div className="bg-white rounded-2xl border border-green-200 p-4 text-right space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">العقار</span>
-              <span className="font-semibold">{booking.chaletName}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">المستأجر</span>
-              <span className="font-semibold">{booking.clientName}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">رقم الحجز</span>
-              <span className="font-semibold">#{toAr(booking.id)}</span>
+
+          {/* Already signed banner */}
+          <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 flex items-center gap-3">
+            <CheckCircle className="w-7 h-7 text-emerald-600 shrink-0" />
+            <div>
+              <p className="font-bold text-emerald-800 text-base">هذا العقد تم توقيعه واعتماده بنجاح ✓</p>
+              {signedAtFormatted && (
+                <p className="text-xs text-emerald-700 mt-0.5">تاريخ التوقيع: {signedAtFormatted}</p>
+              )}
             </div>
           </div>
+
+          {/* Printable signed contract area */}
+          <div ref={printRef} className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
+            {/* Booking summary */}
+            <div className="p-5 space-y-3 border-b border-border">
+              <h2 className="font-bold text-base text-foreground">تفاصيل الحجز</h2>
+              <div className="space-y-2 text-sm">
+                <Row label="العقار" value={booking.chaletName} />
+                <Row label="المستأجر" value={booking.clientName} />
+                <Row label="رقم الحجز" value={`#${toAr(booking.id)}`} />
+                <Row
+                  label="تاريخ الوصول"
+                  value={
+                    <span>
+                      {dualDate.hijri.replace(/\s*هـ\s*$/, "")}
+                      <span className="text-muted-foreground ms-1 text-xs">({dualDate.gregorian})</span>
+                    </span>
+                  }
+                />
+                <Row
+                  label="المدة"
+                  value={`${toAr(booking.durationDays)} ${booking.durationDays === 1 ? "يوم" : "أيام"}${booking.period ? ` · ${periodLabel(booking.period)}` : ""}`}
+                />
+                {booking.totalPrice && (
+                  <Row label="إجمالي قيمة الإيجار" value={`${fmtMoney(booking.totalPrice)} ر.س`} highlight />
+                )}
+                {booking.depositPaid && Number(booking.depositPaid) > 0 && (
+                  <Row label="العربون المدفوع" value={`${fmtMoney(booking.depositPaid)} ر.س`} />
+                )}
+                {booking.insuranceFee && Number(booking.insuranceFee) > 0 && (
+                  <Row label="مبلغ التأمين" value={`${fmtMoney(booking.insuranceFee)} ر.س`} />
+                )}
+              </div>
+            </div>
+
+            {/* Signer info (read-only) */}
+            <div className="p-5 space-y-3 border-b border-border">
+              <h2 className="font-bold text-base text-foreground flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-600" />
+                بيانات الموقِّع
+              </h2>
+              <div className="space-y-2 text-sm">
+                <Row label="الاسم الكامل" value={signedData.signerName || "—"} />
+                <Row label="رقم الهوية / الإقامة" value={<span dir="ltr">{signedData.signerId || "—"}</span>} />
+                {signedAtFormatted && (
+                  <Row label="تاريخ التوقيع" value={signedAtFormatted} />
+                )}
+              </div>
+            </div>
+
+            {/* Signature image */}
+            {signedData.signatureDataUrl && (
+              <div className="p-5 space-y-2">
+                <p className="text-sm font-bold text-foreground">✍️ التوقيع</p>
+                <div className="border-2 border-emerald-200 rounded-xl overflow-hidden bg-slate-50">
+                  <img
+                    src={signedData.signatureDataUrl}
+                    alt="توقيع المستأجر"
+                    className="w-full object-contain max-h-40"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* PDF Download */}
+          <Button
+            variant="outline"
+            className="w-full h-11 font-semibold border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            onClick={handleDownloadPDF}
+            disabled={pdfDownloading}
+          >
+            {pdfDownloading
+              ? <Loader2 className="w-4 h-4 animate-spin me-2" />
+              : <Download className="w-4 h-4 me-2" />
+            }
+            📥 تحميل نسخة من العقد (PDF)
+          </Button>
         </div>
       </div>
     );
   }
 
-  const dualDate = formatDualDate(booking.bookingDate);
-  const fmtMoney = (v: string | null) => v ? toAr(Math.round(Number(v)).toLocaleString("en")) : "—";
+  /* ── Just Signed (fresh success) ── */
+  if (justSigned && signedData) {
+    return (
+      <div className="min-h-screen bg-green-50 pb-10" dir="rtl">
+        <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
+          {/* Success header */}
+          <div className="text-center space-y-3">
+            <div className="w-20 h-20 mx-auto rounded-full bg-green-100 flex items-center justify-center">
+              <CheckCircle className="w-10 h-10 text-green-600" />
+            </div>
+            <h2 className="text-xl font-bold text-green-800">تم اعتماد العقد ✓</h2>
+            <p className="text-green-700 text-sm">تمّ توقيع عقد الإيجار بنجاح. يمكنك تحميل نسخة للاحتفاظ بها.</p>
+          </div>
 
+          {/* Printable signed contract */}
+          <div ref={printRef} className="bg-white rounded-2xl border border-green-200 shadow-sm overflow-hidden">
+            {/* Site header inside printable */}
+            <div className="bg-primary/5 px-5 py-3 border-b border-border text-center">
+              <p className="text-lg font-extrabold text-primary">تكية</p>
+              <p className="text-xs text-muted-foreground">عقد إيجار شاليه موقَّع</p>
+            </div>
+
+            {/* Booking summary */}
+            <div className="p-5 space-y-3 border-b border-border">
+              <h2 className="font-bold text-sm text-muted-foreground uppercase tracking-wide">تفاصيل الحجز</h2>
+              <div className="space-y-2 text-sm">
+                <Row label="العقار" value={booking.chaletName} />
+                <Row label="المستأجر" value={booking.clientName} />
+                <Row label="رقم الحجز" value={`#${toAr(booking.id)}`} />
+                <Row
+                  label="تاريخ الوصول"
+                  value={
+                    <span>
+                      {dualDate.hijri.replace(/\s*هـ\s*$/, "")}
+                      <span className="text-muted-foreground ms-1 text-xs">({dualDate.gregorian})</span>
+                    </span>
+                  }
+                />
+                <Row
+                  label="المدة"
+                  value={`${toAr(booking.durationDays)} ${booking.durationDays === 1 ? "يوم" : "أيام"}${booking.period ? ` · ${periodLabel(booking.period)}` : ""}`}
+                />
+                {booking.totalPrice && (
+                  <Row label="إجمالي قيمة الإيجار" value={`${fmtMoney(booking.totalPrice)} ر.س`} highlight />
+                )}
+                {booking.depositPaid && Number(booking.depositPaid) > 0 && (
+                  <Row label="العربون المدفوع" value={`${fmtMoney(booking.depositPaid)} ر.س`} />
+                )}
+                {booking.insuranceFee && Number(booking.insuranceFee) > 0 && (
+                  <Row label="مبلغ التأمين" value={`${fmtMoney(booking.insuranceFee)} ر.س`} />
+                )}
+              </div>
+            </div>
+
+            {/* Signer info */}
+            <div className="p-5 space-y-3 border-b border-border">
+              <h2 className="font-bold text-sm text-muted-foreground uppercase tracking-wide">بيانات الموقِّع</h2>
+              <div className="space-y-2 text-sm">
+                <Row label="الاسم الكامل" value={signedData.signerName} />
+                <Row label="رقم الهوية / الإقامة" value={<span dir="ltr">{signedData.signerId}</span>} />
+              </div>
+            </div>
+
+            {/* Signature */}
+            <div className="p-5 space-y-2">
+              <p className="text-sm font-bold text-foreground">✍️ التوقيع</p>
+              <div className="border-2 border-green-200 rounded-xl overflow-hidden bg-slate-50">
+                <img
+                  src={signedData.signatureDataUrl}
+                  alt="توقيع المستأجر"
+                  className="w-full object-contain max-h-40"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* PDF Download CTA */}
+          <Button
+            className="w-full h-12 text-base font-bold rounded-xl bg-green-600 hover:bg-green-700 text-white"
+            onClick={handleDownloadPDF}
+            disabled={pdfDownloading}
+          >
+            {pdfDownloading
+              ? <Loader2 className="w-5 h-5 animate-spin me-2" />
+              : <Download className="w-5 h-5 me-2" />
+            }
+            📥 تحميل نسخة من العقد (PDF)
+          </Button>
+
+          <p className="text-center text-xs text-muted-foreground pb-4">
+            يمكنك إرسال ملف PDF عبر واتساب للاحتفاظ بنسخة من العقد.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Unsigned Form ── */
   return (
     <div className="min-h-screen bg-slate-50" dir="rtl">
       <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
@@ -330,15 +600,6 @@ export default function ContractPage() {
           بالضغط على الزر أعلاه، تقرّ بأنك قرأت الشروط والأحكام ووافقت عليها.
         </p>
       </div>
-    </div>
-  );
-}
-
-function Row({ label, value, highlight }: { label: string; value: React.ReactNode; highlight?: boolean }) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className={`font-medium text-right ${highlight ? "text-primary font-bold" : "text-foreground"}`}>{value}</span>
     </div>
   );
 }
