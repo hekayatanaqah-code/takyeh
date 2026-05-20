@@ -293,12 +293,15 @@ router.get("/contract/:bookingId", async (req, res) => {
     contract_signer_name: string | null; contract_signer_id: string | null;
     contract_signature_data_url: string | null; contract_signed_at: string | null;
     name_ar: string | null; cancelled_at: string | null;
+    whatsapp_number: string | null; logo_url: string | null;
+    terms_and_conditions: string | null; location: string | null;
   }>(sql`
     SELECT b.id, b.client_name, b.booking_date, b.duration_days, b.period,
            b.total_price, b.deposit_paid, b.insurance_fee,
            b.contract_signed, b.contract_signer_name, b.contract_signer_id,
            b.contract_signature_data_url, b.contract_signed_at,
-           b.cancelled_at, s.name_ar
+           b.cancelled_at, s.name_ar, s.whatsapp_number, s.logo_url,
+           s.terms_and_conditions, s.location
     FROM owner_bookings b
     LEFT JOIN chalet_submissions s ON s.id = b.submission_id
     WHERE b.id = ${id}
@@ -312,6 +315,10 @@ router.get("/contract/:bookingId", async (req, res) => {
     id: row.id,
     clientName: row.client_name,
     chaletName: row.name_ar ?? "الشاليه",
+    chaletLocation: row.location ?? null,
+    chaletWhatsapp: row.whatsapp_number ?? null,
+    chaletLogoUrl: row.logo_url ?? null,
+    contractTerms: row.terms_and_conditions ?? null,
     bookingDate: row.booking_date,
     durationDays: row.duration_days,
     period: row.period,

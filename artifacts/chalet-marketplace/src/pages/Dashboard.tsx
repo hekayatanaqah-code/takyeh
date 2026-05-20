@@ -474,6 +474,7 @@ function ResubmitDialog({
   const [mapsUrl, setMapsUrl]                     = useState("");
   const [socialLink, setSocialLink]               = useState("");
   const [termsAndConditions, setTermsAndConditions]         = useState("");
+  const [chaletLogoUrl, setChaletLogoUrl]                   = useState("");
   const [cancellationWindowEnabled, setCancellationWindowEnabled] = useState(false);
   const [cancellationWindowHours, setCancellationWindowHours]     = useState("24");
   const [bookingPolicyText, setBookingPolicyText]                 = useState("");
@@ -510,6 +511,7 @@ function ResubmitDialog({
       setMapsUrl      (sub.mapsUrl    ?? "");
       setSocialLink   (sub.socialLink ?? "");
       setTermsAndConditions(sub.termsAndConditions ?? "");
+      setChaletLogoUrl((sub as any).logoUrl ?? "");
       setCancellationWindowEnabled(!!(sub as any).cancellationWindowEnabled);
       setCancellationWindowHours(String((sub as any).cancellationWindowHours ?? 24));
       setBookingPolicyText((sub as any).bookingPolicyText ?? "");
@@ -552,6 +554,7 @@ function ResubmitDialog({
         mapsUrl:            mapsUrl.trim()            || null,
         socialLink:         socialLink.trim()         || null,
         termsAndConditions: termsAndConditions.trim() || null,
+        logoUrl:            chaletLogoUrl.trim()      || null,
         ownerRevisionNote:  ownerRevisionNote.trim()  || null,
         cancellationWindowEnabled,
         cancellationWindowHours: cancellationWindowHours ? Number(cancellationWindowHours) : 24,
@@ -737,16 +740,40 @@ function ResubmitDialog({
             </div>
           )}
 
-          {/* ── Section: Terms ── */}
+          {/* ── Section: Contract Settings ── */}
           <div className="space-y-3">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide border-b pb-1.5">شروط وأحكام الحجز (اختياري)</p>
-            <textarea
-              value={termsAndConditions}
-              onChange={(e) => setTermsAndConditions(e.target.value)}
-              placeholder="أدخل شروط الحجز هنا..."
-              rows={3}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide border-b pb-1.5">إعدادات العقد الرقمي</p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">شعار الشاليه (رابط صورة — يظهر في رأسية العقد)</label>
+              <Input
+                value={chaletLogoUrl}
+                onChange={(e) => setChaletLogoUrl(e.target.value)}
+                placeholder="https://..."
+                dir="ltr"
+                className="h-9 text-sm"
+              />
+              {chaletLogoUrl && (
+                <div className="flex items-center gap-2 mt-1">
+                  <img
+                    src={chaletLogoUrl}
+                    alt="معاينة الشعار"
+                    className="w-12 h-12 rounded-lg object-cover border border-border"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                  <p className="text-xs text-muted-foreground">معاينة الشعار</p>
+                </div>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">بنود عقد الإيجار الرقمي (تظهر في العقد المُرسَل للعميل)</label>
+              <textarea
+                value={termsAndConditions}
+                onChange={(e) => setTermsAndConditions(e.target.value)}
+                placeholder="أدخل الشروط والأحكام الخاصة بعقد الإيجار..."
+                rows={4}
+                className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
           </div>
 
           {/* ── Section: Cancellation Policy ── */}
@@ -5271,6 +5298,23 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             </>
                           );
                         })()}
+                        {(() => {
+                          const _cUrl = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
+                          const _digits = (b.clientPhone ?? "").replace(/\D/g, "");
+                          const _waPhone = _digits.startsWith("966") ? _digits : _digits.startsWith("0") ? "966" + _digits.slice(1) : _digits ? "966" + _digits : "";
+                          const _waMsg = encodeURIComponent(`مرحباً ${b.clientName}، تم تأكيد حجزك! يرجى التوقيع على عقد الإيجار الرقمي لتفعيل الحجز:\n${_cUrl}`);
+                          return _waPhone ? (
+                            <a
+                              href={`https://wa.me/${_waPhone}?text=${_waMsg}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700 rounded-lg py-1.5 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                            >
+                              <MessageSquare className="w-3 h-3" />
+                              إرسال رابط واتساب
+                            </a>
+                          ) : null;
+                        })()}
                         <button
                           type="button"
                           onClick={() => {
@@ -6252,6 +6296,24 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                      {(() => {
+                        const _cUrl2 = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
+                        const _d2 = (b.clientPhone ?? "").replace(/\D/g, "");
+                        const _wp2 = _d2.startsWith("966") ? _d2 : _d2.startsWith("0") ? "966" + _d2.slice(1) : _d2 ? "966" + _d2 : "";
+                        const _wm2 = encodeURIComponent(`مرحباً ${b.clientName}، تم تأكيد حجزك! يرجى التوقيع على عقد الإيجار الرقمي لتفعيل الحجز:\n${_cUrl2}`);
+                        return _wp2 ? (
+                          <a
+                            href={`https://wa.me/${_wp2}?text=${_wm2}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-green-600 transition-colors p-1 rounded"
+                            aria-label="إرسال رابط العقد عبر واتساب"
+                            title="إرسال رابط العقد عبر واتساب"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </a>
+                        ) : null;
+                      })()}
                       <button
                         type="button"
                         onClick={() => {

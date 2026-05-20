@@ -14,6 +14,10 @@ interface ContractBooking {
   id: number;
   clientName: string;
   chaletName: string;
+  chaletLocation?: string | null;
+  chaletWhatsapp?: string | null;
+  chaletLogoUrl?: string | null;
+  contractTerms?: string | null;
   bookingDate: string;
   durationDays: number;
   period: string | null;
@@ -52,6 +56,176 @@ function Row({ label, value, highlight }: { label: string; value: React.ReactNod
 
 function printContract() {
   window.print();
+}
+
+function ContractLetterhead({
+  booking,
+  signedData,
+  signedAtFormatted,
+}: {
+  booking: ContractBooking;
+  signedData: SignedData;
+  signedAtFormatted: string | null;
+}) {
+  const dualDate = formatDualDate(booking.bookingDate);
+  const fmtM = (v: string | null) => (v ? toAr(Math.round(Number(v)).toLocaleString("en")) : "—");
+
+  return (
+    <div className="contract-print-area bg-white rounded-2xl border border-border shadow-sm overflow-hidden text-right" dir="rtl">
+      {/* Platform Header */}
+      <div className="bg-primary px-6 py-4 text-center">
+        <p className="text-2xl font-extrabold text-white tracking-tight">تكية</p>
+        <p className="text-xs text-white/80 mt-0.5">عقد إيجار شاليه رقمي موقَّع</p>
+      </div>
+
+      {/* Chalet Identity */}
+      <div className="flex items-center gap-4 px-5 py-4 border-b border-border bg-slate-50/70">
+        {booking.chaletLogoUrl ? (
+          <img
+            src={booking.chaletLogoUrl}
+            alt="شعار الشاليه"
+            className="w-16 h-16 rounded-xl object-cover border border-border shadow-sm shrink-0"
+          />
+        ) : (
+          <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
+            <FileText className="w-8 h-8 text-primary/50" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-lg font-bold text-foreground leading-tight">{booking.chaletName}</p>
+          {booking.chaletLocation && (
+            <p className="text-xs text-muted-foreground mt-0.5">📍 {booking.chaletLocation}</p>
+          )}
+          {booking.chaletWhatsapp && (
+            <p className="text-xs text-muted-foreground" dir="ltr">📞 {booking.chaletWhatsapp}</p>
+          )}
+        </div>
+        <div className="shrink-0 text-left">
+          <p className="text-[10px] text-muted-foreground">رقم الحجز</p>
+          <p className="text-lg font-extrabold text-primary">#{toAr(booking.id)}</p>
+        </div>
+      </div>
+
+      {/* Parties */}
+      <div className="grid grid-cols-2 divide-x-reverse divide-x border-b border-border">
+        <div className="p-4 space-y-1">
+          <p className="text-[10px] font-bold text-primary uppercase tracking-wide">الطرف الأول — المؤجِّر</p>
+          <p className="text-sm font-semibold text-foreground">{booking.chaletName}</p>
+          {booking.chaletWhatsapp && (
+            <p className="text-xs text-muted-foreground" dir="ltr">{booking.chaletWhatsapp}</p>
+          )}
+        </div>
+        <div className="p-4 space-y-1 border-r border-border">
+          <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">الطرف الثاني — المستأجِر</p>
+          <p className="text-sm font-semibold text-foreground">{signedData.signerName || "—"}</p>
+          <p className="text-xs text-muted-foreground" dir="ltr">هوية: {signedData.signerId || "—"}</p>
+        </div>
+      </div>
+
+      {/* Booking Details Table */}
+      <div className="p-5 border-b border-border">
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-3">تفاصيل الحجز</p>
+        <table className="w-full text-sm border-collapse">
+          <tbody>
+            <tr className="border-b border-border/40">
+              <td className="py-1.5 text-muted-foreground w-36">اسم المستأجر</td>
+              <td className="py-1.5 font-semibold">{booking.clientName}</td>
+            </tr>
+            <tr className="border-b border-border/40">
+              <td className="py-1.5 text-muted-foreground">تاريخ الوصول</td>
+              <td className="py-1.5 font-semibold">
+                {dualDate.hijri.replace(/\s*هـ\s*$/, "")}
+                <span className="text-muted-foreground text-xs ms-1.5">({dualDate.gregorian})</span>
+              </td>
+            </tr>
+            <tr className="border-b border-border/40">
+              <td className="py-1.5 text-muted-foreground">المدة والفترة</td>
+              <td className="py-1.5">
+                {toAr(booking.durationDays)} {booking.durationDays === 1 ? "يوم" : "أيام"}
+                {booking.period && (
+                  <span className="ms-1.5 text-primary font-medium">· {periodLabel(booking.period)}</span>
+                )}
+              </td>
+            </tr>
+            {booking.totalPrice && Number(booking.totalPrice) > 0 && (
+              <tr className="border-b border-border/40 bg-primary/5">
+                <td className="py-1.5 font-bold text-foreground">إجمالي الإيجار</td>
+                <td className="py-1.5 font-bold text-primary">{fmtM(booking.totalPrice)} ر.س</td>
+              </tr>
+            )}
+            {booking.depositPaid && Number(booking.depositPaid) > 0 && (
+              <tr className="border-b border-border/40">
+                <td className="py-1.5 text-muted-foreground">العربون المدفوع</td>
+                <td className="py-1.5">{fmtM(booking.depositPaid)} ر.س</td>
+              </tr>
+            )}
+            {booking.insuranceFee && Number(booking.insuranceFee) > 0 && (
+              <tr>
+                <td className="py-1.5 text-muted-foreground">مبلغ التأمين</td>
+                <td className="py-1.5">{fmtM(booking.insuranceFee)} ر.س</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Terms & Conditions */}
+      <div className="p-5 border-b border-border">
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-2">الشروط والأحكام</p>
+        {booking.contractTerms ? (
+          <p className="text-xs text-foreground leading-relaxed whitespace-pre-line">{booking.contractTerms}</p>
+        ) : (
+          <ul className="text-xs text-foreground space-y-1 list-disc list-inside leading-relaxed">
+            <li>يُلزَم المستأجر بالالتزام بمواعيد تسليم الشاليه المتفق عليها.</li>
+            <li>مبلغ التأمين يُستردّ كاملاً في حالة عدم وجود أضرار.</li>
+            <li>يُحظر التدخين وإقامة الحفلات داخل الشاليه.</li>
+            <li>المستأجر مسؤول عن أي أضرار تحدث خلال فترة الإقامة.</li>
+          </ul>
+        )}
+      </div>
+
+      {/* Signature & ID */}
+      <div className="p-5">
+        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-3">التوقيع والإثبات</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">توقيع المستأجر</p>
+            {signedData.signatureDataUrl ? (
+              <div className="border border-emerald-200 rounded-xl overflow-hidden bg-slate-50">
+                <img
+                  src={signedData.signatureDataUrl}
+                  alt="توقيع"
+                  className="w-full object-contain max-h-28"
+                />
+              </div>
+            ) : (
+              <div className="h-20 border rounded-xl bg-slate-50 flex items-center justify-center text-xs text-muted-foreground">
+                لا يوجد توقيع
+              </div>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">بيانات الهوية</p>
+            <div className="rounded-xl border border-border bg-slate-50 p-3 space-y-2">
+              <div>
+                <p className="text-[10px] text-muted-foreground">الاسم الكامل</p>
+                <p className="text-sm font-semibold">{signedData.signerName || "—"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">رقم الهوية / الإقامة</p>
+                <p className="text-sm font-semibold" dir="ltr">{signedData.signerId || "—"}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        {signedAtFormatted && (
+          <p className="text-xs text-muted-foreground text-center mt-4 pt-3 border-t border-border">
+            ✓ تاريخ التوقيع: {signedAtFormatted} · رقم الحجز: #{toAr(booking.id)}
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function ContractPage() {
@@ -213,14 +387,8 @@ export default function ContractPage() {
     return (
       <div className="min-h-screen bg-slate-50 pb-10" dir="rtl">
         <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
-          {/* Header */}
-          <div className="text-center space-y-1">
-            <div className="text-3xl font-extrabold text-primary tracking-tight">تكية</div>
-            <p className="text-sm text-muted-foreground">عقد إيجار شاليه</p>
-          </div>
-
-          {/* Already signed banner */}
-          <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 flex items-center gap-3">
+          {/* Status Banner */}
+          <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 flex items-center gap-3 contract-no-print">
             <CheckCircle className="w-7 h-7 text-emerald-600 shrink-0" />
             <div>
               <p className="font-bold text-emerald-800 text-base">هذا العقد تم توقيعه واعتماده بنجاح ✓</p>
@@ -230,69 +398,12 @@ export default function ContractPage() {
             </div>
           </div>
 
-          {/* Printable signed contract area */}
-          <div className="contract-print-area bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-            {/* Booking summary */}
-            <div className="p-5 space-y-3 border-b border-border">
-              <h2 className="font-bold text-base text-foreground">تفاصيل الحجز</h2>
-              <div className="space-y-2 text-sm">
-                <Row label="العقار" value={booking.chaletName} />
-                <Row label="المستأجر" value={booking.clientName} />
-                <Row label="رقم الحجز" value={`#${toAr(booking.id)}`} />
-                <Row
-                  label="تاريخ الوصول"
-                  value={
-                    <span>
-                      {dualDate.hijri.replace(/\s*هـ\s*$/, "")}
-                      <span className="text-muted-foreground ms-1 text-xs">({dualDate.gregorian})</span>
-                    </span>
-                  }
-                />
-                <Row
-                  label="المدة"
-                  value={`${toAr(booking.durationDays)} ${booking.durationDays === 1 ? "يوم" : "أيام"}${booking.period ? ` · ${periodLabel(booking.period)}` : ""}`}
-                />
-                {booking.totalPrice && (
-                  <Row label="إجمالي قيمة الإيجار" value={`${fmtMoney(booking.totalPrice)} ر.س`} highlight />
-                )}
-                {booking.depositPaid && Number(booking.depositPaid) > 0 && (
-                  <Row label="العربون المدفوع" value={`${fmtMoney(booking.depositPaid)} ر.س`} />
-                )}
-                {booking.insuranceFee && Number(booking.insuranceFee) > 0 && (
-                  <Row label="مبلغ التأمين" value={`${fmtMoney(booking.insuranceFee)} ر.س`} />
-                )}
-              </div>
-            </div>
-
-            {/* Signer info (read-only) */}
-            <div className="p-5 space-y-3 border-b border-border">
-              <h2 className="font-bold text-base text-foreground flex items-center gap-2">
-                <FileText className="w-4 h-4 text-emerald-600" />
-                بيانات الموقِّع
-              </h2>
-              <div className="space-y-2 text-sm">
-                <Row label="الاسم الكامل" value={signedData.signerName || "—"} />
-                <Row label="رقم الهوية / الإقامة" value={<span dir="ltr">{signedData.signerId || "—"}</span>} />
-                {signedAtFormatted && (
-                  <Row label="تاريخ التوقيع" value={signedAtFormatted} />
-                )}
-              </div>
-            </div>
-
-            {/* Signature image */}
-            {signedData.signatureDataUrl && (
-              <div className="p-5 space-y-2">
-                <p className="text-sm font-bold text-foreground">✍️ التوقيع</p>
-                <div className="border-2 border-emerald-200 rounded-xl overflow-hidden bg-slate-50">
-                  <img
-                    src={signedData.signatureDataUrl}
-                    alt="توقيع المستأجر"
-                    className="w-full object-contain max-h-40"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Premium Letterhead */}
+          <ContractLetterhead
+            booking={booking}
+            signedData={signedData}
+            signedAtFormatted={signedAtFormatted}
+          />
 
           {/* Print / Save as PDF */}
           <Button
@@ -313,78 +424,23 @@ export default function ContractPage() {
     return (
       <div className="min-h-screen bg-green-50 pb-10" dir="rtl">
         <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
-          {/* Success header */}
-          <div className="text-center space-y-3">
+          {/* Success Header */}
+          <div className="text-center space-y-3 contract-no-print">
             <div className="w-20 h-20 mx-auto rounded-full bg-green-100 flex items-center justify-center">
               <CheckCircle className="w-10 h-10 text-green-600" />
             </div>
             <h2 className="text-xl font-bold text-green-800">تم اعتماد العقد ✓</h2>
-            <p className="text-green-700 text-sm">تمّ توقيع عقد الإيجار بنجاح. يمكنك تحميل نسخة للاحتفاظ بها.</p>
+            <p className="text-green-700 text-sm">تمّ توقيع عقد الإيجار بنجاح. يمكنك طباعته أو حفظه كـ PDF.</p>
           </div>
 
-          {/* Printable signed contract */}
-          <div className="contract-print-area bg-white rounded-2xl border border-green-200 shadow-sm overflow-hidden">
-            {/* Site header inside printable */}
-            <div className="bg-primary/5 px-5 py-3 border-b border-border text-center">
-              <p className="text-lg font-extrabold text-primary">تكية</p>
-              <p className="text-xs text-muted-foreground">عقد إيجار شاليه موقَّع</p>
-            </div>
+          {/* Premium Letterhead */}
+          <ContractLetterhead
+            booking={booking}
+            signedData={signedData}
+            signedAtFormatted={signedAtFormatted}
+          />
 
-            {/* Booking summary */}
-            <div className="p-5 space-y-3 border-b border-border">
-              <h2 className="font-bold text-sm text-muted-foreground uppercase tracking-wide">تفاصيل الحجز</h2>
-              <div className="space-y-2 text-sm">
-                <Row label="العقار" value={booking.chaletName} />
-                <Row label="المستأجر" value={booking.clientName} />
-                <Row label="رقم الحجز" value={`#${toAr(booking.id)}`} />
-                <Row
-                  label="تاريخ الوصول"
-                  value={
-                    <span>
-                      {dualDate.hijri.replace(/\s*هـ\s*$/, "")}
-                      <span className="text-muted-foreground ms-1 text-xs">({dualDate.gregorian})</span>
-                    </span>
-                  }
-                />
-                <Row
-                  label="المدة"
-                  value={`${toAr(booking.durationDays)} ${booking.durationDays === 1 ? "يوم" : "أيام"}${booking.period ? ` · ${periodLabel(booking.period)}` : ""}`}
-                />
-                {booking.totalPrice && (
-                  <Row label="إجمالي قيمة الإيجار" value={`${fmtMoney(booking.totalPrice)} ر.س`} highlight />
-                )}
-                {booking.depositPaid && Number(booking.depositPaid) > 0 && (
-                  <Row label="العربون المدفوع" value={`${fmtMoney(booking.depositPaid)} ر.س`} />
-                )}
-                {booking.insuranceFee && Number(booking.insuranceFee) > 0 && (
-                  <Row label="مبلغ التأمين" value={`${fmtMoney(booking.insuranceFee)} ر.س`} />
-                )}
-              </div>
-            </div>
-
-            {/* Signer info */}
-            <div className="p-5 space-y-3 border-b border-border">
-              <h2 className="font-bold text-sm text-muted-foreground uppercase tracking-wide">بيانات الموقِّع</h2>
-              <div className="space-y-2 text-sm">
-                <Row label="الاسم الكامل" value={signedData.signerName} />
-                <Row label="رقم الهوية / الإقامة" value={<span dir="ltr">{signedData.signerId}</span>} />
-              </div>
-            </div>
-
-            {/* Signature */}
-            <div className="p-5 space-y-2">
-              <p className="text-sm font-bold text-foreground">✍️ التوقيع</p>
-              <div className="border-2 border-green-200 rounded-xl overflow-hidden bg-slate-50">
-                <img
-                  src={signedData.signatureDataUrl}
-                  alt="توقيع المستأجر"
-                  className="w-full object-contain max-h-40"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Print / Save as PDF CTA */}
+          {/* Print CTA */}
           <Button
             className="w-full h-12 text-base font-bold rounded-xl bg-green-600 hover:bg-green-700 text-white contract-no-print"
             onClick={printContract}
@@ -392,7 +448,6 @@ export default function ContractPage() {
             <Printer className="w-5 h-5 me-2" />
             🖨️ طباعة / حفظ كـ PDF
           </Button>
-
           <p className="text-center text-xs text-muted-foreground pb-4 contract-no-print">
             اختر "حفظ كـ PDF" في نافذة الطباعة للاحتفاظ بنسخة وإرسالها عبر واتساب.
           </p>
