@@ -262,3 +262,27 @@ input, textarea, select, [contenteditable] {
     @apply inline-flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-lg px-3 py-1.5 text-xs font-semibold;
   }
 }
+
+/* ── Contract print styles ─────────────────────────────────── */
+@media print {
+  body > * { display: none !important; }
+  .contract-print-area {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    font-family: "Noto Sans Arabic", sans-serif !important;
+    direction: rtl !important;
+    padding: 24px !important;
+    font-size: 13px !important;
+  }
+  .contract-print-area * {
+    color: #000 !important;
+    background: #fff !important;
+    border-color: #ccc !important;
+    box-shadow: none !important;
+  }
+  .contract-print-area img { max-height: 120px !important; }
+  .contract-no-print { display: none !important; }
+}

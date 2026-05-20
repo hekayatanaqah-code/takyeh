@@ -1,7 +1,6 @@
-import { useState, useRef, useCallback } from "react";
-import { useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useParams } from "wouter";
-import { Loader2, CheckCircle, AlertCircle, Pen, Trash2, Download, FileText } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, Pen, Trash2, Printer, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDualDate } from "@/lib/hijri";
@@ -51,41 +50,8 @@ function Row({ label, value, highlight }: { label: string; value: React.ReactNod
   );
 }
 
-async function downloadContractPDF(
-  booking: ContractBooking,
-  signedData: SignedData,
-  printRef: React.RefObject<HTMLDivElement | null>
-) {
-  if (!printRef.current) return;
-  const html2canvas = (await import("html2canvas")).default;
-  const { jsPDF } = await import("jspdf");
-  const canvas = await html2canvas(printRef.current, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: "#ffffff",
-  });
-  const imgData = canvas.toDataURL("image/png");
-  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  const imgH = (canvas.height * pageW) / canvas.width;
-  if (imgH <= pageH) {
-    pdf.addImage(imgData, "PNG", 0, 0, pageW, imgH);
-  } else {
-    let yOffset = 0;
-    while (yOffset < canvas.height) {
-      const sliceH = Math.min((pageH / pageW) * canvas.width, canvas.height - yOffset);
-      const sliceCanvas = document.createElement("canvas");
-      sliceCanvas.width = canvas.width;
-      sliceCanvas.height = sliceH;
-      const ctx = sliceCanvas.getContext("2d")!;
-      ctx.drawImage(canvas, 0, -yOffset);
-      pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", 0, 0, pageW, (sliceH * pageW) / canvas.width);
-      yOffset += sliceH;
-      if (yOffset < canvas.height) pdf.addPage();
-    }
-  }
-  pdf.save(`عقد-إيجار-${booking.id}.pdf`);
+function printContract() {
+  window.print();
 }
 
 export default function ContractPage() {
@@ -105,10 +71,8 @@ export default function ContractPage() {
   const [justSigned, setJustSigned] = useState(false);
   /* signed data for display — populated from API (already signed) or form (just signed) */
   const [signedData, setSignedData] = useState<SignedData | null>(null);
-  const [pdfDownloading, setPdfDownloading] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const printRef = useRef<HTMLDivElement>(null);
   const isDrawing = useRef(false);
   const [hasSig, setHasSig] = useState(false);
   const [sigError, setSigError] = useState(false);
@@ -212,16 +176,6 @@ export default function ContractPage() {
     finally { setSubmitting(false); }
   };
 
-  const handleDownloadPDF = async () => {
-    if (!booking || !signedData) return;
-    setPdfDownloading(true);
-    try {
-      await downloadContractPDF(booking, signedData, printRef);
-    } finally {
-      setPdfDownloading(false);
-    }
-  };
-
   /* ── Loading ── */
   if (loading) {
     return (
@@ -277,7 +231,7 @@ export default function ContractPage() {
           </div>
 
           {/* Printable signed contract area */}
-          <div ref={printRef} className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
+          <div className="contract-print-area bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
             {/* Booking summary */}
             <div className="p-5 space-y-3 border-b border-border">
               <h2 className="font-bold text-base text-foreground">تفاصيل الحجز</h2>
@@ -340,18 +294,14 @@ export default function ContractPage() {
             )}
           </div>
 
-          {/* PDF Download */}
+          {/* Print / Save as PDF */}
           <Button
             variant="outline"
-            className="w-full h-11 font-semibold border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-            onClick={handleDownloadPDF}
-            disabled={pdfDownloading}
+            className="w-full h-11 font-semibold border-emerald-300 text-emerald-700 hover:bg-emerald-50 contract-no-print"
+            onClick={printContract}
           >
-            {pdfDownloading
-              ? <Loader2 className="w-4 h-4 animate-spin me-2" />
-              : <Download className="w-4 h-4 me-2" />
-            }
-            📥 تحميل نسخة من العقد (PDF)
+            <Printer className="w-4 h-4 me-2" />
+            🖨️ طباعة / حفظ كـ PDF
           </Button>
         </div>
       </div>
@@ -373,7 +323,7 @@ export default function ContractPage() {
           </div>
 
           {/* Printable signed contract */}
-          <div ref={printRef} className="bg-white rounded-2xl border border-green-200 shadow-sm overflow-hidden">
+          <div className="contract-print-area bg-white rounded-2xl border border-green-200 shadow-sm overflow-hidden">
             {/* Site header inside printable */}
             <div className="bg-primary/5 px-5 py-3 border-b border-border text-center">
               <p className="text-lg font-extrabold text-primary">تكية</p>
@@ -434,21 +384,17 @@ export default function ContractPage() {
             </div>
           </div>
 
-          {/* PDF Download CTA */}
+          {/* Print / Save as PDF CTA */}
           <Button
-            className="w-full h-12 text-base font-bold rounded-xl bg-green-600 hover:bg-green-700 text-white"
-            onClick={handleDownloadPDF}
-            disabled={pdfDownloading}
+            className="w-full h-12 text-base font-bold rounded-xl bg-green-600 hover:bg-green-700 text-white contract-no-print"
+            onClick={printContract}
           >
-            {pdfDownloading
-              ? <Loader2 className="w-5 h-5 animate-spin me-2" />
-              : <Download className="w-5 h-5 me-2" />
-            }
-            📥 تحميل نسخة من العقد (PDF)
+            <Printer className="w-5 h-5 me-2" />
+            🖨️ طباعة / حفظ كـ PDF
           </Button>
 
-          <p className="text-center text-xs text-muted-foreground pb-4">
-            يمكنك إرسال ملف PDF عبر واتساب للاحتفاظ بنسخة من العقد.
+          <p className="text-center text-xs text-muted-foreground pb-4 contract-no-print">
+            اختر "حفظ كـ PDF" في نافذة الطباعة للاحتفاظ بنسخة وإرسالها عبر واتساب.
           </p>
         </div>
       </div>
