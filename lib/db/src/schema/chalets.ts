@@ -231,6 +231,11 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   insurancePaymentMethod: text("insurance_payment_method").$type<"cash" | "transfer">().notNull().default("transfer"),
   paymentReceiptUrl: text("payment_receipt_url"),
   bookedAddons: jsonb("booked_addons").$type<Array<{ id: number; name: string; price: string; unit: string }>>(),
+  contractSigned: boolean("contract_signed").notNull().default(false),
+  contractSignerName: text("contract_signer_name"),
+  contractSignerId: text("contract_signer_id"),
+  contractSignatureDataUrl: text("contract_signature_data_url"),
+  contractSignedAt: timestamp("contract_signed_at", { withTimezone: true }),
 });
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;
 

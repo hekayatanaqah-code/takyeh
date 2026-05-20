@@ -109,6 +109,11 @@ interface OwnerBooking {
   insurancePaymentMethod?: "cash" | "transfer" | null;
   paymentReceiptUrl?: string | null;
   bookedAddons?: Array<{ id: number; name: string; price: string; unit: string }> | null;
+  contractSigned?: boolean;
+  contractSignerName?: string | null;
+  contractSignerId?: string | null;
+  contractSignatureDataUrl?: string | null;
+  contractSignedAt?: string | null;
 }
 
 function getLocalDateStr(date = new Date()) {
@@ -3819,6 +3824,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
   const [deleteDialogBooking, setDeleteDialogBooking] = useState<OwnerBooking | null>(null);
+  const [contractPreviewBooking, setContractPreviewBooking] = useState<OwnerBooking | null>(null);
   const [waCancelPreview, setWaCancelPreview] = useState<{ booking: OwnerBooking; phone: string; message: string } | null>(null);
   const [rescheduleBooking, setRescheduleBooking] = useState<OwnerBooking | null>(null);
   const [showArchive, setShowArchive] = useState(false);
@@ -5266,6 +5272,27 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           );
                         })()}
                         <button
+                          type="button"
+                          onClick={() => {
+                            const url = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
+                            navigator.clipboard.writeText(url).then(() => toast({ title: "تم النسخ", description: "رابط العقد في الحافظة ✓" }));
+                          }}
+                          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-violet-700 dark:text-violet-400 border border-violet-300 dark:border-violet-700 rounded-lg py-1.5 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          نسخ رابط العقد
+                        </button>
+                        {b.contractSigned && (
+                          <button
+                            type="button"
+                            onClick={() => { setSummaryDate(null); setContractPreviewBooking(b); }}
+                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 rounded-lg py-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                          >
+                            <FileText className="w-3 h-3" />
+                            📄 تم التوقيع ✓
+                          </button>
+                        )}
+                        <button
                           onClick={() => { setSummaryDate(null); setDeleteDialogBooking(b); }}
                           className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg py-1.5 hover:bg-destructive/10 transition-colors"
                         >
@@ -6203,6 +6230,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           {b.insuranceRefunded && b.insuranceDeducted && Number(b.insuranceDeducted) > 0 && (
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">✂️ تلفيات: {fmtAR(Number(b.insuranceDeducted))} ر.س</span>
                           )}
+                          {b.contractSigned && (
+                            <button
+                              type="button"
+                              onClick={() => setContractPreviewBooking(b)}
+                              className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:opacity-80 transition-opacity"
+                            >
+                              📄 تم توقيع العقد ✓
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
@@ -6216,6 +6252,18 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const url = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
+                          navigator.clipboard.writeText(url).then(() => toast({ title: "تم النسخ", description: "رابط العقد في الحافظة ✓" }));
+                        }}
+                        className="text-muted-foreground hover:text-violet-600 transition-colors p-1 rounded"
+                        aria-label="نسخ رابط العقد"
+                        title="نسخ رابط العقد"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={() => setRescheduleBooking(b)}
                         className="text-muted-foreground hover:text-primary transition-colors p-1 rounded"
@@ -6856,6 +6904,59 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         open={!!proofTarget}
         onClose={() => setProofTarget(null)}
       />
+
+      {/* Contract Preview Dialog */}
+      {contractPreviewBooking && (
+        <Dialog open onOpenChange={(o) => !o && setContractPreviewBooking(null)}>
+          <DialogContent dir="rtl" className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                <FileText className="w-5 h-5" />
+                عقد الإيجار الموقَّع
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">المستأجر (النظام)</span>
+                  <span className="font-semibold text-foreground">{contractPreviewBooking.clientName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">الاسم الكامل</span>
+                  <span className="font-semibold text-foreground">{contractPreviewBooking.contractSignerName ?? "—"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">رقم الهوية / الإقامة</span>
+                  <span className="font-semibold text-foreground" dir="ltr">{contractPreviewBooking.contractSignerId ?? "—"}</span>
+                </div>
+                {contractPreviewBooking.contractSignedAt && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">تاريخ التوقيع</span>
+                    <span className="font-semibold text-foreground text-xs">
+                      {(() => {
+                        const d = formatDualDate(new Date(contractPreviewBooking.contractSignedAt!).toISOString().slice(0, 10));
+                        return `${d.hijri.replace(/\s*هـ\s*$/, "")} (${d.gregorian})`;
+                      })()}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {contractPreviewBooking.contractSignatureDataUrl && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-muted-foreground">✍️ التوقيع</p>
+                  <div className="border-2 border-emerald-200 dark:border-emerald-800 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-900">
+                    <img
+                      src={contractPreviewBooking.contractSignatureDataUrl}
+                      alt="توقيع المستأجر"
+                      className="w-full object-contain max-h-40"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Receipt Lightbox */}
       {receiptLightbox && (

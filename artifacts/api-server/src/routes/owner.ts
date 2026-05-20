@@ -276,6 +276,79 @@ router.post("/auto-session", async (req, res) => {
   return res.json({ token });
 });
 
+/* ── PUBLIC: Digital Contract Routes ───────────────────────────────────────
+   These are intentionally placed BEFORE requireAuth so customers can access
+   their contract link without needing an owner session.
+   ─────────────────────────────────────────────────────────────────────── */
+
+/** GET /api/owner/contract/:bookingId — returns booking summary for contract page */
+router.get("/contract/:bookingId", async (req, res) => {
+  const id = Number(req.params.bookingId);
+  if (!id || isNaN(id)) return res.status(400).json({ error: "معرّف الحجز غير صالح." });
+
+  const rows = await db.execute<{
+    id: number; client_name: string; booking_date: string; duration_days: number;
+    period: string | null; total_price: string | null; deposit_paid: string | null;
+    insurance_fee: string | null; contract_signed: boolean;
+    name_ar: string | null; cancelled_at: string | null;
+  }>(sql`
+    SELECT b.id, b.client_name, b.booking_date, b.duration_days, b.period,
+           b.total_price, b.deposit_paid, b.insurance_fee,
+           b.contract_signed, b.cancelled_at,
+           s.name_ar
+    FROM owner_bookings b
+    LEFT JOIN chalet_submissions s ON s.id = b.submission_id
+    WHERE b.id = ${id}
+    LIMIT 1
+  `);
+  const row = ((rows as any).rows as typeof rows.rows)[0];
+  if (!row) return res.status(404).json({ error: "الحجز غير موجود." });
+  if (row.cancelled_at) return res.status(410).json({ error: "هذا الحجز ملغى ولا يمكن التوقيع عليه." });
+
+  return res.json({
+    id: row.id,
+    clientName: row.client_name,
+    chaletName: row.name_ar ?? "الشاليه",
+    bookingDate: row.booking_date,
+    durationDays: row.duration_days,
+    period: row.period,
+    totalPrice: row.total_price,
+    depositPaid: row.deposit_paid,
+    insuranceFee: row.insurance_fee,
+    contractSigned: row.contract_signed,
+  });
+});
+
+/** POST /api/owner/contract/:bookingId/sign — saves signature and marks contract signed */
+router.post("/contract/:bookingId/sign", async (req, res) => {
+  const id = Number(req.params.bookingId);
+  if (!id || isNaN(id)) return res.status(400).json({ error: "معرّف الحجز غير صالح." });
+
+  const { fullName, idNumber, signatureDataUrl } = req.body ?? {};
+  if (!fullName?.trim()) return res.status(400).json({ error: "الاسم مطلوب." });
+  if (!idNumber?.trim()) return res.status(400).json({ error: "رقم الهوية مطلوب." });
+  if (!signatureDataUrl?.startsWith("data:image/")) return res.status(400).json({ error: "بيانات التوقيع غير صالحة." });
+
+  const check = await db.execute<{ cancelled_at: string | null; contract_signed: boolean }>(
+    sql`SELECT cancelled_at, contract_signed FROM owner_bookings WHERE id = ${id} LIMIT 1`
+  );
+  const row = ((check as any).rows as typeof check.rows)[0];
+  if (!row) return res.status(404).json({ error: "الحجز غير موجود." });
+  if (row.cancelled_at) return res.status(410).json({ error: "هذا الحجز ملغى." });
+
+  await db.execute(sql`
+    UPDATE owner_bookings
+    SET contract_signed = true,
+        contract_signer_name = ${fullName.trim()},
+        contract_signer_id   = ${idNumber.trim()},
+        contract_signature_data_url = ${signatureDataUrl},
+        contract_signed_at   = now()
+    WHERE id = ${id}
+  `);
+
+  return res.json({ ok: true });
+});
+
 router.use(requireAuth);
 
 /* ── Impersonation Mode check (called by Dashboard banner) ── */

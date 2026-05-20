@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, Home, LogIn, LayoutDashboard, Settings } from "lucide-react";
+import { MapPin, Menu, Home, LogIn, LayoutDashboard, Settings, Building2 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -79,6 +79,13 @@ export function Navbar() {
               );
             })}
 
+            <Link href="/add-chalet">
+              <Button size="sm" variant="outline" className="ms-2 rounded-full font-semibold border-primary/40 text-primary hover:bg-primary/10 hover:border-primary/60">
+                <Building2 className="w-4 h-4 me-1.5" />
+                أضف شاليهك
+              </Button>
+            </Link>
+
             {!isLoading && (
               isAuthenticated ? (
                 <div className="flex items-center gap-1 ms-2">
@@ -135,6 +142,19 @@ export function Navbar() {
                       {link.label}
                     </Link>
                   ))}
+
+                  <Link
+                    href="/add-chalet"
+                    onClick={() => setIsOpen(false)}
+                    className={`flex items-center px-4 py-3 rounded-xl text-base font-semibold transition-colors border ${
+                      location === "/add-chalet"
+                        ? "bg-primary/10 text-primary border-primary/30"
+                        : "text-primary border-primary/30 hover:bg-primary/10"
+                    }`}
+                  >
+                    <Building2 className="w-4 h-4 me-2" />
+                    أضف شاليهك
+                  </Link>
 
                   {!isLoading && (
                     isAuthenticated ? (
