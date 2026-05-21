@@ -18629,17 +18629,17 @@ function ContractSettingsTab() {
                     onChange={(e) => updateClause(clause.id, { enabled: e.target.checked })}
                     className="w-4 h-4 rounded accent-primary cursor-pointer shrink-0" />
                   <span className="text-base leading-none shrink-0">{emoji}</span>
-                  <span className={`text-sm font-semibold flex-1 ${clause.enabled ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
+                  <span className={`text-sm font-semibold flex-1 min-w-0 truncate pe-2 ${clause.enabled ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
                   {clause.isCustom && (
                     <button type="button" onClick={() => removeClause(clause.id)}
-                      className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 transition-colors shrink-0">
+                      className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 transition-colors shrink-0 ms-1">
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
                 {/* Editable text — only when enabled */}
                 {clause.enabled && (
-                  <div className="px-4 pb-3">
+                  <div className="px-4 pb-3 pe-4">
                     <textarea value={clause.text} rows={2} placeholder="أدخل نص البند…"
                       onChange={(e) => updateClause(clause.id, { text: e.target.value })}
                       className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-xs leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-primary/30" />
@@ -18734,13 +18734,41 @@ function ContractPreviewCard({ logoUrl, chaletName, terms }: { logoUrl: string; 
           <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: C.fg }}>عميل نموذجي</p>
         </div>
       </div>
+      {/* Booking details table */}
+      <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.border}` }}>
+        <p style={{ margin: "0 0 10px", fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>تفاصيل الحجز</p>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <tbody>
+            <tr style={{ borderBottom: "1px solid rgba(227,217,207,0.5)" }}>
+              <td style={{ padding: "5px 0", color: C.muted, width: 130 }}>اسم المستأجر</td>
+              <td style={{ padding: "5px 0", fontWeight: 600, color: C.fg }}>عميل نموذجي</td>
+            </tr>
+            <tr style={{ borderBottom: "1px solid rgba(227,217,207,0.5)" }}>
+              <td style={{ padding: "5px 0", color: C.muted }}>تاريخ الوصول</td>
+              <td style={{ padding: "5px 0", fontWeight: 600, color: C.fg }}>١ محرم ١٤٤٧ هـ</td>
+            </tr>
+            <tr style={{ borderBottom: "1px solid rgba(227,217,207,0.5)" }}>
+              <td style={{ padding: "5px 0", color: C.muted }}>مدة الإقامة</td>
+              <td style={{ padding: "5px 0", color: C.fg }}>يومان · ليلة كاملة</td>
+            </tr>
+            <tr style={{ borderBottom: "1px solid rgba(227,217,207,0.5)", background: "rgba(139,94,43,0.05)" }}>
+              <td style={{ padding: "5px 0", fontWeight: 700, color: C.fg }}>إجمالي الإيجار</td>
+              <td style={{ padding: "5px 0", fontWeight: 700, color: C.primary }}>١٢٠٠ ر.س</td>
+            </tr>
+            <tr>
+              <td style={{ padding: "5px 0", color: C.muted }}>مبلغ التأمين</td>
+              <td style={{ padding: "5px 0", color: C.fg }}>٣٠٠ ر.س</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       {/* Terms */}
       <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.border}` }}>
         <p style={{ margin: "0 0 8px", fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>الشروط والأحكام</p>
         {terms ? (
-          <p style={{ margin: 0, fontSize: 11, color: C.fg, lineHeight: 1.7, whiteSpace: "pre-line" }}>{terms}</p>
+          <p style={{ margin: 0, fontSize: 12.5, color: "#1a1008", lineHeight: 1.85, whiteSpace: "pre-line", fontWeight: 400 }}>{terms}</p>
         ) : (
-          <p style={{ margin: 0, fontSize: 11, color: C.muted, fontStyle: "italic" }}>لا توجد بنود محددة — ستُستخدم البنود الافتراضية عند التوقيع</p>
+          <p style={{ margin: 0, fontSize: 12, color: "#75604a", fontStyle: "italic", lineHeight: 1.7 }}>لا توجد بنود محددة — ستُستخدم البنود الافتراضية عند التوقيع</p>
         )}
       </div>
       {/* Signature placeholder */}
