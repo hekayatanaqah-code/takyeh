@@ -40,5 +40,6 @@ export const TAB_PERMISSION: Record<string, PermKey | "__owner__"> = {
   messageSettings: "__owner__",
   services:      "chaletManagement",
   customers:     "customerData",
-  profile:       "__owner__",
+  profile:          "__owner__",
+  contractSettings: "__owner__",
 };

@@ -70,112 +70,119 @@ function ContractLetterhead({
   const dualDate = formatDualDate(booking.bookingDate);
   const fmtM = (v: string | null) => (v ? toAr(Math.round(Number(v)).toLocaleString("en")) : "—");
 
+  /* ── Hardcoded hex colors — no CSS variables, fully html2canvas-safe ── */
+  const C = {
+    primary:    "#8b5e2b",
+    primaryFg:  "#faf7f2",
+    fg:         "#2a2018",
+    muted:      "#75604a",
+    border:     "#e3d9cf",
+    lightBg:    "#fdf9f6",
+    emerald:    "#047857",
+    white:      "#ffffff",
+  } as const;
+
+  const cell: React.CSSProperties = { padding: "6px 0", color: C.muted, width: 140 };
+  const cellVal: React.CSSProperties = { padding: "6px 0", color: C.fg };
+  const rowDiv: React.CSSProperties = { borderBottom: "1px solid rgba(227,217,207,0.5)" };
+  const secHead: React.CSSProperties = { margin: "0 0 10px", fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" };
+
   return (
-    <div className="contract-print-area bg-white rounded-2xl border border-border shadow-sm overflow-hidden text-right" dir="rtl">
-      {/* Platform Header */}
-      <div className="bg-primary px-6 py-4 text-center">
-        <p className="text-2xl font-extrabold text-white tracking-tight">تكية</p>
-        <p className="text-xs text-white/80 mt-0.5">عقد إيجار شاليه رقمي موقَّع</p>
+    <div className="contract-print-area" style={{ background: C.white, borderRadius: 16, border: `1px solid ${C.border}`, overflow: "hidden", direction: "rtl", textAlign: "right" }}>
+
+      {/* ── Platform Header ── */}
+      <div style={{ background: C.primary, padding: "14px 24px", textAlign: "center" }}>
+        <p style={{ margin: 0, fontSize: 22, fontWeight: 900, color: C.primaryFg, letterSpacing: "-0.5px" }}>تكية</p>
+        <p style={{ margin: "3px 0 0", fontSize: 11, color: "rgba(250,247,242,0.8)" }}>عقد إيجار شاليه رقمي موقَّع</p>
       </div>
 
-      {/* Chalet Identity */}
-      <div className="flex items-center gap-4 px-5 py-4 border-b border-border bg-slate-50/70">
+      {/* ── Chalet Identity ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 20px", borderBottom: `1px solid ${C.border}`, background: C.lightBg }}>
         {booking.chaletLogoUrl ? (
-          <img
-            src={booking.chaletLogoUrl}
-            alt="شعار الشاليه"
-            className="w-16 h-16 rounded-xl object-cover border border-border shadow-sm shrink-0"
-          />
+          <img src={booking.chaletLogoUrl} alt="شعار الشاليه"
+            style={{ width: 64, height: 64, borderRadius: 12, objectFit: "cover", border: `1px solid ${C.border}`, flexShrink: 0 }} />
         ) : (
-          <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
-            <FileText className="w-8 h-8 text-primary/50" />
+          <div style={{ width: 64, height: 64, borderRadius: 12, background: "rgba(139,94,43,0.1)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(139,94,43,0.2)", flexShrink: 0 }}>
+            <FileText style={{ width: 28, height: 28, color: "rgba(139,94,43,0.45)" }} />
           </div>
         )}
-        <div className="flex-1 min-w-0">
-          <p className="text-lg font-bold text-foreground leading-tight">{booking.chaletName}</p>
-          {booking.chaletLocation && (
-            <p className="text-xs text-muted-foreground mt-0.5">📍 {booking.chaletLocation}</p>
-          )}
-          {booking.chaletWhatsapp && (
-            <p className="text-xs text-muted-foreground" dir="ltr">📞 {booking.chaletWhatsapp}</p>
-          )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: C.fg }}>{booking.chaletName}</p>
+          {booking.chaletLocation && <p style={{ margin: "3px 0 0", fontSize: 11, color: C.muted }}>📍 {booking.chaletLocation}</p>}
+          {booking.chaletWhatsapp && <p style={{ margin: "2px 0 0", fontSize: 11, color: C.muted, direction: "ltr", textAlign: "left" }}>📞 {booking.chaletWhatsapp}</p>}
         </div>
-        <div className="shrink-0 text-left">
-          <p className="text-[10px] text-muted-foreground">رقم الحجز</p>
-          <p className="text-lg font-extrabold text-primary">#{toAr(booking.id)}</p>
+        <div style={{ flexShrink: 0, textAlign: "left" }}>
+          <p style={{ margin: 0, fontSize: 9, color: C.muted }}>رقم الحجز</p>
+          <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.primary }}>#{toAr(booking.id)}</p>
         </div>
       </div>
 
-      {/* Parties */}
-      <div className="grid grid-cols-2 divide-x-reverse divide-x border-b border-border">
-        <div className="p-4 space-y-1">
-          <p className="text-[10px] font-bold text-primary uppercase tracking-wide">الطرف الأول — المؤجِّر</p>
-          <p className="text-sm font-semibold text-foreground">{booking.chaletName}</p>
-          {booking.chaletWhatsapp && (
-            <p className="text-xs text-muted-foreground" dir="ltr">{booking.chaletWhatsapp}</p>
-          )}
+      {/* ── Parties ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ padding: 16 }}>
+          <p style={{ margin: "0 0 5px", fontSize: 9, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: "0.5px" }}>الطرف الأول — المؤجِّر</p>
+          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: C.fg }}>{booking.chaletName}</p>
+          {booking.chaletWhatsapp && <p style={{ margin: 0, fontSize: 11, color: C.muted, direction: "ltr", textAlign: "left" }}>{booking.chaletWhatsapp}</p>}
         </div>
-        <div className="p-4 space-y-1 border-r border-border">
-          <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">الطرف الثاني — المستأجِر</p>
-          <p className="text-sm font-semibold text-foreground">{signedData.signerName || "—"}</p>
-          <p className="text-xs text-muted-foreground" dir="ltr">هوية: {signedData.signerId || "—"}</p>
+        <div style={{ padding: 16, borderRight: `1px solid ${C.border}` }}>
+          <p style={{ margin: "0 0 5px", fontSize: 9, fontWeight: 700, color: C.emerald, textTransform: "uppercase", letterSpacing: "0.5px" }}>الطرف الثاني — المستأجِر</p>
+          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: C.fg }}>{signedData.signerName || "—"}</p>
+          <p style={{ margin: 0, fontSize: 11, color: C.muted, direction: "ltr", textAlign: "left" }}>هوية: {signedData.signerId || "—"}</p>
         </div>
       </div>
 
-      {/* Booking Details Table */}
-      <div className="p-5 border-b border-border">
-        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-3">تفاصيل الحجز</p>
-        <table className="w-full text-sm border-collapse">
+      {/* ── Booking Details Table ── */}
+      <div style={{ padding: 20, borderBottom: `1px solid ${C.border}` }}>
+        <p style={secHead}>تفاصيل الحجز</p>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <tbody>
-            <tr className="border-b border-border/40">
-              <td className="py-1.5 text-muted-foreground w-36">اسم المستأجر</td>
-              <td className="py-1.5 font-semibold">{booking.clientName}</td>
+            <tr style={rowDiv}>
+              <td style={cell}>اسم المستأجر</td>
+              <td style={{ ...cellVal, fontWeight: 600 }}>{booking.clientName}</td>
             </tr>
-            <tr className="border-b border-border/40">
-              <td className="py-1.5 text-muted-foreground">تاريخ الوصول</td>
-              <td className="py-1.5 font-semibold">
+            <tr style={rowDiv}>
+              <td style={cell}>تاريخ الوصول</td>
+              <td style={{ ...cellVal, fontWeight: 600 }}>
                 {dualDate.hijri.replace(/\s*هـ\s*$/, "")}
-                <span className="text-muted-foreground text-xs ms-1.5">({dualDate.gregorian})</span>
+                <span style={{ color: C.muted, fontSize: 11, marginRight: 6 }}>({dualDate.gregorian})</span>
               </td>
             </tr>
-            <tr className="border-b border-border/40">
-              <td className="py-1.5 text-muted-foreground">المدة والفترة</td>
-              <td className="py-1.5">
+            <tr style={rowDiv}>
+              <td style={cell}>المدة والفترة</td>
+              <td style={cellVal}>
                 {toAr(booking.durationDays)} {booking.durationDays === 1 ? "يوم" : "أيام"}
-                {booking.period && (
-                  <span className="ms-1.5 text-primary font-medium">· {periodLabel(booking.period)}</span>
-                )}
+                {booking.period && <span style={{ marginRight: 6, color: C.primary, fontWeight: 600 }}>· {periodLabel(booking.period)}</span>}
               </td>
             </tr>
             {booking.totalPrice && Number(booking.totalPrice) > 0 && (
-              <tr className="border-b border-border/40 bg-primary/5">
-                <td className="py-1.5 font-bold text-foreground">إجمالي الإيجار</td>
-                <td className="py-1.5 font-bold text-primary">{fmtM(booking.totalPrice)} ر.س</td>
+              <tr style={{ ...rowDiv, background: "rgba(139,94,43,0.05)" }}>
+                <td style={{ ...cell, fontWeight: 700, color: C.fg }}>إجمالي الإيجار</td>
+                <td style={{ ...cellVal, fontWeight: 700, color: C.primary }}>{fmtM(booking.totalPrice)} ر.س</td>
               </tr>
             )}
             {booking.depositPaid && Number(booking.depositPaid) > 0 && (
-              <tr className="border-b border-border/40">
-                <td className="py-1.5 text-muted-foreground">العربون المدفوع</td>
-                <td className="py-1.5">{fmtM(booking.depositPaid)} ر.س</td>
+              <tr style={rowDiv}>
+                <td style={cell}>العربون المدفوع</td>
+                <td style={cellVal}>{fmtM(booking.depositPaid)} ر.س</td>
               </tr>
             )}
             {booking.insuranceFee && Number(booking.insuranceFee) > 0 && (
               <tr>
-                <td className="py-1.5 text-muted-foreground">مبلغ التأمين</td>
-                <td className="py-1.5">{fmtM(booking.insuranceFee)} ر.س</td>
+                <td style={cell}>مبلغ التأمين</td>
+                <td style={cellVal}>{fmtM(booking.insuranceFee)} ر.س</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {/* Terms & Conditions */}
-      <div className="p-5 border-b border-border">
-        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-2">الشروط والأحكام</p>
+      {/* ── Terms & Conditions ── */}
+      <div style={{ padding: 20, borderBottom: `1px solid ${C.border}` }}>
+        <p style={secHead}>الشروط والأحكام</p>
         {booking.contractTerms ? (
-          <p className="text-xs text-foreground leading-relaxed whitespace-pre-line">{booking.contractTerms}</p>
+          <p style={{ margin: 0, fontSize: 11, color: C.fg, lineHeight: 1.7, whiteSpace: "pre-line" }}>{booking.contractTerms}</p>
         ) : (
-          <ul className="text-xs text-foreground space-y-1 list-disc list-inside leading-relaxed">
+          <ul style={{ margin: 0, paddingRight: 16, fontSize: 11, color: C.fg, lineHeight: 1.8 }}>
             <li>يُلزَم المستأجر بالالتزام بمواعيد تسليم الشاليه المتفق عليها.</li>
             <li>مبلغ التأمين يُستردّ كاملاً في حالة عدم وجود أضرار.</li>
             <li>يُحظر التدخين وإقامة الحفلات داخل الشاليه.</li>
@@ -184,42 +191,35 @@ function ContractLetterhead({
         )}
       </div>
 
-      {/* Signature & ID */}
-      <div className="p-5">
-        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-3">التوقيع والإثبات</p>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">توقيع المستأجر</p>
+      {/* ── Signature & ID ── */}
+      <div style={{ padding: 20 }}>
+        <p style={secHead}>التوقيع والإثبات</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div>
+            <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 500, color: C.muted }}>توقيع المستأجر</p>
             {signedData.signatureDataUrl ? (
-              <div className="border border-emerald-200 rounded-xl overflow-hidden bg-slate-50">
-                <img
-                  src={signedData.signatureDataUrl}
-                  alt="توقيع"
-                  className="w-full object-contain max-h-28"
-                />
+              <div style={{ border: "1px solid #a7f3d0", borderRadius: 12, overflow: "hidden", background: C.lightBg }}>
+                <img src={signedData.signatureDataUrl} alt="توقيع"
+                  style={{ width: "100%", objectFit: "contain", maxHeight: 112, display: "block" }} />
               </div>
             ) : (
-              <div className="h-20 border rounded-xl bg-slate-50 flex items-center justify-center text-xs text-muted-foreground">
+              <div style={{ height: 80, border: `1px solid ${C.border}`, borderRadius: 12, background: C.lightBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: C.muted }}>
                 لا يوجد توقيع
               </div>
             )}
           </div>
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">بيانات الهوية</p>
-            <div className="rounded-xl border border-border bg-slate-50 p-3 space-y-2">
-              <div>
-                <p className="text-[10px] text-muted-foreground">الاسم الكامل</p>
-                <p className="text-sm font-semibold">{signedData.signerName || "—"}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground">رقم الهوية / الإقامة</p>
-                <p className="text-sm font-semibold" dir="ltr">{signedData.signerId || "—"}</p>
-              </div>
+          <div>
+            <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 500, color: C.muted }}>بيانات الهوية</p>
+            <div style={{ borderRadius: 12, border: `1px solid ${C.border}`, background: C.lightBg, padding: 12 }}>
+              <p style={{ margin: "0 0 2px", fontSize: 9, color: C.muted }}>الاسم الكامل</p>
+              <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: C.fg }}>{signedData.signerName || "—"}</p>
+              <p style={{ margin: "0 0 2px", fontSize: 9, color: C.muted }}>رقم الهوية / الإقامة</p>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg, direction: "ltr", textAlign: "left" }}>{signedData.signerId || "—"}</p>
             </div>
           </div>
         </div>
         {signedAtFormatted && (
-          <p className="text-xs text-muted-foreground text-center mt-4 pt-3 border-t border-border">
+          <p style={{ margin: "16px 0 0", fontSize: 11, color: C.muted, textAlign: "center", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
             ✓ تاريخ التوقيع: {signedAtFormatted} · رقم الحجز: #{toAr(booking.id)}
           </p>
         )}

@@ -17682,7 +17682,8 @@ export default function Dashboard() {
     { id: "deposits",  label: "إدارة التأمينات",       icon: <Lock className="w-4 h-4" /> },
     { id: "services",  label: "إدارة الخدمات والمرافق", icon: <Plus className="w-4 h-4" /> },
     { id: "messageSettings", label: "إعدادات الرسائل الآلية", icon: <Send className="w-4 h-4" /> },
-    { id: "profile",   label: "إعدادات الحساب",      icon: <Settings className="w-4 h-4" /> },
+    { id: "profile",          label: "إعدادات الحساب",        icon: <Settings className="w-4 h-4" /> },
+    { id: "contractSettings", label: "إعدادات العقد الرقمي",  icon: <FileText className="w-4 h-4" /> },
   ] as const;
 
   const tabs = useMemo(() => {
@@ -18416,11 +18417,181 @@ export default function Dashboard() {
         {activeTab === "profile" && (
           <OwnerProfileTab />
         )}
+        {activeTab === "contractSettings" && (
+          <ContractSettingsTab />
+        )}
           </>
         )}
       </div>
     </div>
     </ImpersonationCtx.Provider>
+  );
+}
+
+/* ── Contract Settings Tab ────────────────────────────────── */
+function ContractSettingsTab() {
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: submissions = [], isLoading } = useQuery<any[]>({
+    queryKey: ["contractSettings-submissions"],
+    queryFn: async () => {
+      const r = await apiFetch("/submissions");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [logoUrl, setLogoUrl] = useState("");
+  const [terms, setTerms] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const selected = useMemo(
+    () => submissions.find((s: any) => s.id === selectedId),
+    [submissions, selectedId],
+  );
+
+  useEffect(() => {
+    if (submissions.length > 0 && selectedId === null) {
+      setSelectedId(submissions[0].id);
+    }
+  }, [submissions, selectedId]);
+
+  useEffect(() => {
+    if (selected) {
+      setLogoUrl(selected.logoUrl ?? "");
+      setTerms(selected.termsAndConditions ?? "");
+    }
+  }, [selected]);
+
+  async function handleSave() {
+    if (!selectedId) return;
+    setSaving(true);
+    try {
+      const r = await apiFetch(`/submissions/${selectedId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          logoUrl: logoUrl.trim() || null,
+          termsAndConditions: terms.trim() || null,
+        }),
+      });
+      if (!r.ok) throw new Error("save-failed");
+      qc.invalidateQueries({ queryKey: ["contractSettings-submissions"] });
+      qc.invalidateQueries({ queryKey: ["/api/submissions"] });
+      toast({ title: "تم الحفظ ✓", description: "تم تحديث إعدادات العقد الرقمي بنجاح" });
+    } catch {
+      toast({ title: "خطأ", description: "تعذّر الحفظ، يرجى المحاولة مجدداً", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-40 text-muted-foreground gap-2">
+        <Loader2 className="w-5 h-5 animate-spin" />
+        جارٍ التحميل…
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto py-6 px-4 space-y-6" dir="rtl">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <FileText className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-foreground">إعدادات العقد الرقمي</h2>
+          <p className="text-sm text-muted-foreground">تخصيص هوية الشاليه والشروط التي تظهر في عقد الإيجار</p>
+        </div>
+      </div>
+
+      {/* Chalet selector (only shown when owner has multiple) */}
+      {submissions.length > 1 && (
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground">الشاليه</label>
+          <select
+            value={selectedId ?? ""}
+            onChange={(e) => setSelectedId(Number(e.target.value))}
+            className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            {submissions.map((s: any) => (
+              <option key={s.id} value={s.id}>{s.name ?? `شاليه #${s.id}`}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Logo URL */}
+      <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-5 rounded-full bg-primary" />
+          <h3 className="font-semibold text-foreground">شعار الشاليه في العقد</h3>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2">يظهر شعار الشاليه في رأسية العقد الرقمي الموقَّع</p>
+        <div className="space-y-2">
+          <input
+            type="url"
+            dir="ltr"
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            placeholder="https://example.com/logo.png"
+            className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50"
+          />
+          {logoUrl && (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border">
+              <img
+                src={logoUrl}
+                alt="معاينة الشعار"
+                className="w-14 h-14 rounded-xl object-cover border border-border shrink-0"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+              />
+              <p className="text-xs text-muted-foreground">معاينة الشعار — تأكد من أن الرابط صحيح ويمكن الوصول إليه</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Terms */}
+      <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-5 rounded-full bg-primary" />
+          <h3 className="font-semibold text-foreground">بنود عقد الإيجار</h3>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2">
+          تظهر هذه البنود في قسم "الشروط والأحكام" داخل العقد الموقَّع. اتركها فارغة لاستخدام البنود الافتراضية.
+        </p>
+        <textarea
+          value={terms}
+          onChange={(e) => setTerms(e.target.value)}
+          rows={7}
+          placeholder={"مثال:\n• يُلزَم المستأجر بالالتزام بمواعيد تسليم الشاليه.\n• مبلغ التأمين يُستردّ كاملاً في حالة عدم وجود أضرار.\n• يُحظر التدخين وإقامة الحفلات."}
+          className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/40"
+        />
+      </div>
+
+      {/* Preview note */}
+      <div className="rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 px-4 py-3 text-xs text-amber-800 dark:text-amber-200 flex gap-2">
+        <span className="text-base leading-none">💡</span>
+        <span>يمكنك معاينة العقد النهائي عبر إرسال رابط العقد لأحد الحجوزات من تبويب <strong>التقويم والحجوزات</strong>.</span>
+      </div>
+
+      {/* Save */}
+      <button
+        type="button"
+        disabled={saving || !selectedId}
+        onClick={handleSave}
+        className="w-full rounded-xl bg-primary text-primary-foreground font-semibold py-3 text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      >
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+        {saving ? "جارٍ الحفظ…" : "حفظ إعدادات العقد"}
+      </button>
+    </div>
   );
 }
 
