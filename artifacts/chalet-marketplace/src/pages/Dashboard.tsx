@@ -18429,10 +18429,20 @@ export default function Dashboard() {
 }
 
 /* ── Contract Settings Tab ────────────────────────────────── */
+
+const CONTRACT_DEFAULT_CLAUSES = [
+  { id: "insurance",    emoji: "🔒", label: "بند التأمين والتلفيات",          defaultText: "يُلزَم المستأجر بسداد تأمين ضد الأضرار يُستردّ كاملاً عند التسليم دون أي تلفيات. يُحق للمؤجِّر خصم قيمة أي أضرار مادية من مبلغ التأمين." },
+  { id: "cancellation", emoji: "📋", label: "بند إلغاء الحجز والعربون",       defaultText: "في حالة الإلغاء قبل ٤٨ ساعة من موعد الدخول يُستردّ العربون كاملاً. الإلغاء خلال أقل من ٤٨ ساعة يُعدّ العربون حقاً مكتسباً للمؤجِّر." },
+  { id: "checkinout",   emoji: "🕐", label: "بند أوقات الدخول والخروج",       defaultText: "يُحدَّد وقت الدخول الساعة الثانية ظهراً ووقت الخروج الساعة الثانية عشرة ظهراً. أي تأخير في الإخلاء يستوجب رسوماً إضافية بالاتفاق مع المؤجِّر." },
+  { id: "liability",    emoji: "⚠️", label: "بند إخلاء المسؤولية والسلامة",  defaultText: "المستأجر مسؤول مسؤولية كاملة عن سلامة المرافق والمسبح وأجهزة الترفيه. يُمنع إقامة حفلات مقلقة للراحة أو التدخين داخل المبنى." },
+] as const;
+
+interface ContractClause { id: string; text: string; enabled: boolean; isCustom?: boolean; }
+
 function ContractSettingsTab() {
-  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
   const qc = useQueryClient();
   const { toast } = useToast();
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const { data: submissions = [], isLoading } = useQuery<any[]>({
     queryKey: ["contractSettings-submissions"],
@@ -18444,9 +18454,13 @@ function ContractSettingsTab() {
   });
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [logoUrl, setLogoUrl] = useState("");
-  const [terms, setTerms] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [logoUrl, setLogoUrl]         = useState("");
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [clauses, setClauses]         = useState<ContractClause[]>(
+    CONTRACT_DEFAULT_CLAUSES.map((c) => ({ id: c.id, text: c.defaultText, enabled: true })),
+  );
+  const [saving, setSaving]           = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const selected = useMemo(
     () => submissions.find((s: any) => s.id === selectedId),
@@ -18454,17 +18468,44 @@ function ContractSettingsTab() {
   );
 
   useEffect(() => {
-    if (submissions.length > 0 && selectedId === null) {
-      setSelectedId(submissions[0].id);
-    }
+    if (submissions.length > 0 && selectedId === null) setSelectedId(submissions[0].id);
   }, [submissions, selectedId]);
 
   useEffect(() => {
-    if (selected) {
-      setLogoUrl(selected.logoUrl ?? "");
-      setTerms(selected.termsAndConditions ?? "");
+    if (!selected) return;
+    setLogoUrl(selected.logoUrl ?? "");
+    const existing = (selected.termsAndConditions ?? "").trim();
+    const defaults: ContractClause[] = CONTRACT_DEFAULT_CLAUSES.map((c) => ({ id: c.id, text: c.defaultText, enabled: true }));
+    if (existing) {
+      const matchesADefault = CONTRACT_DEFAULT_CLAUSES.some((c) => existing.includes(c.defaultText.slice(0, 15)));
+      if (!matchesADefault) defaults.push({ id: "custom-existing", text: existing, enabled: true, isCustom: true });
     }
+    setClauses(defaults);
   }, [selected]);
+
+  const computedTerms = useMemo(
+    () => clauses.filter((c) => c.enabled).map((c) => c.text.trim()).filter(Boolean).join("\n"),
+    [clauses],
+  );
+
+  function updateClause(id: string, patch: Partial<ContractClause>) {
+    setClauses((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }
+  function addCustomClause() {
+    setClauses((prev) => [...prev, { id: `custom-${Date.now()}`, text: "", enabled: true, isCustom: true }]);
+  }
+  function removeClause(id: string) {
+    setClauses((prev) => prev.filter((c) => c.id !== id));
+  }
+
+  async function handleLogoUpload(file: File) {
+    setLogoUploading(true);
+    try {
+      const url = await uploadFile(file);
+      if (url) setLogoUrl(url);
+      else toast({ title: "خطأ", description: "تعذّر رفع الشعار، حاول مجدداً", variant: "destructive" });
+    } finally { setLogoUploading(false); }
+  }
 
   async function handleSave() {
     if (!selectedId) return;
@@ -18473,10 +18514,7 @@ function ContractSettingsTab() {
       const r = await apiFetch(`/submissions/${selectedId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          logoUrl: logoUrl.trim() || null,
-          termsAndConditions: terms.trim() || null,
-        }),
+        body: JSON.stringify({ logoUrl: logoUrl.trim() || null, termsAndConditions: computedTerms || null }),
       });
       if (!r.ok) throw new Error("save-failed");
       qc.invalidateQueries({ queryKey: ["contractSettings-submissions"] });
@@ -18484,22 +18522,22 @@ function ContractSettingsTab() {
       toast({ title: "تم الحفظ ✓", description: "تم تحديث إعدادات العقد الرقمي بنجاح" });
     } catch {
       toast({ title: "خطأ", description: "تعذّر الحفظ، يرجى المحاولة مجدداً", variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-40 text-muted-foreground gap-2">
-        <Loader2 className="w-5 h-5 animate-spin" />
-        جارٍ التحميل…
+        <Loader2 className="w-5 h-5 animate-spin" />جارٍ التحميل…
       </div>
     );
   }
 
+  const chaletName = (selected as any)?.name ?? "شاليهي";
+
   return (
     <div className="max-w-2xl mx-auto py-6 px-4 space-y-6" dir="rtl">
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -18511,15 +18549,12 @@ function ContractSettingsTab() {
         </div>
       </div>
 
-      {/* Chalet selector (only shown when owner has multiple) */}
+      {/* Chalet selector */}
       {submissions.length > 1 && (
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-foreground">الشاليه</label>
-          <select
-            value={selectedId ?? ""}
-            onChange={(e) => setSelectedId(Number(e.target.value))}
-            className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
+          <select value={selectedId ?? ""} onChange={(e) => setSelectedId(Number(e.target.value))}
+            className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
             {submissions.map((s: any) => (
               <option key={s.id} value={s.id}>{s.name ?? `شاليه #${s.id}`}</option>
             ))}
@@ -18527,70 +18562,205 @@ function ContractSettingsTab() {
         </div>
       )}
 
-      {/* Logo URL */}
+      {/* ── Logo Upload Zone ── */}
       <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
         <div className="flex items-center gap-2">
           <div className="w-1 h-5 rounded-full bg-primary" />
           <h3 className="font-semibold text-foreground">شعار الشاليه في العقد</h3>
         </div>
-        <p className="text-xs text-muted-foreground -mt-2">يظهر شعار الشاليه في رأسية العقد الرقمي الموقَّع</p>
-        <div className="space-y-2">
-          <input
-            type="url"
-            dir="ltr"
-            value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
-            placeholder="https://example.com/logo.png"
-            className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50"
-          />
-          {logoUrl && (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border">
-              <img
-                src={logoUrl}
-                alt="معاينة الشعار"
-                className="w-14 h-14 rounded-xl object-cover border border-border shrink-0"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-              />
-              <p className="text-xs text-muted-foreground">معاينة الشعار — تأكد من أن الرابط صحيح ويمكن الوصول إليه</p>
+        <p className="text-xs text-muted-foreground -mt-2">يظهر شعار الشاليه في رأسية العقد الموقَّع — PNG أو JPG</p>
+
+        <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+          onChange={async (e) => { const f = e.target.files?.[0]; if (f) await handleLogoUpload(f); e.target.value = ""; }} />
+
+        <div onClick={() => !logoUploading && logoInputRef.current?.click()}
+          className={`relative border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-3 min-h-[110px] cursor-pointer transition-colors
+            ${logoUploading ? "border-primary/30 bg-primary/5" : "border-border hover:border-primary/50 hover:bg-primary/5"}`}>
+          {logoUploading ? (
+            <><Loader2 className="w-7 h-7 animate-spin text-primary" /><p className="text-sm text-muted-foreground">جارٍ رفع الشعار…</p></>
+          ) : logoUrl ? (
+            <div className="flex items-center gap-4 p-4 w-full">
+              <img src={logoUrl} alt="شعار" className="w-16 h-16 rounded-xl object-cover border border-border shrink-0"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">تم رفع الشعار</p>
+                <p className="text-xs text-muted-foreground mt-0.5">انقر لتغيير الشعار</p>
+              </div>
+              <button type="button" onClick={(e) => { e.stopPropagation(); setLogoUrl(""); }}
+                className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 hover:text-red-600 transition-colors shrink-0">
+                <X className="w-4 h-4" />
+              </button>
             </div>
+          ) : (
+            <>
+              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center">
+                <ImageIcon className="w-6 h-6 text-muted-foreground" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium text-foreground">انقر لرفع الشعار</p>
+                <p className="text-xs text-muted-foreground mt-0.5">PNG / JPG / WebP · يظهر في رأسية العقد</p>
+              </div>
+            </>
           )}
         </div>
       </div>
 
-      {/* Terms */}
+      {/* ── Policy Clauses Builder ── */}
       <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
         <div className="flex items-center gap-2">
           <div className="w-1 h-5 rounded-full bg-primary" />
           <h3 className="font-semibold text-foreground">بنود عقد الإيجار</h3>
         </div>
         <p className="text-xs text-muted-foreground -mt-2">
-          تظهر هذه البنود في قسم "الشروط والأحكام" داخل العقد الموقَّع. اتركها فارغة لاستخدام البنود الافتراضية.
+          فعِّل البنود التي تريد إدراجها وعدِّل نصها — البنود المفعَّلة تُطبع في العقد الموقَّع
         </p>
-        <textarea
-          value={terms}
-          onChange={(e) => setTerms(e.target.value)}
-          rows={7}
-          placeholder={"مثال:\n• يُلزَم المستأجر بالالتزام بمواعيد تسليم الشاليه.\n• مبلغ التأمين يُستردّ كاملاً في حالة عدم وجود أضرار.\n• يُحظر التدخين وإقامة الحفلات."}
-          className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/40"
-        />
+
+        <div className="space-y-3">
+          {clauses.map((clause, idx) => {
+            const meta = CONTRACT_DEFAULT_CLAUSES.find((c) => c.id === clause.id);
+            const label = meta?.label ?? `بند مخصص ${idx + 1}`;
+            const emoji = meta?.emoji ?? "✏️";
+            return (
+              <div key={clause.id}
+                className={`rounded-xl border transition-all duration-150 ${clause.enabled ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20 opacity-70"}`}>
+                {/* Clause header row */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <input type="checkbox" checked={clause.enabled}
+                    onChange={(e) => updateClause(clause.id, { enabled: e.target.checked })}
+                    className="w-4 h-4 rounded accent-primary cursor-pointer shrink-0" />
+                  <span className="text-base leading-none shrink-0">{emoji}</span>
+                  <span className={`text-sm font-semibold flex-1 ${clause.enabled ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
+                  {clause.isCustom && (
+                    <button type="button" onClick={() => removeClause(clause.id)}
+                      className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 transition-colors shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                {/* Editable text — only when enabled */}
+                {clause.enabled && (
+                  <div className="px-4 pb-3">
+                    <textarea value={clause.text} rows={2} placeholder="أدخل نص البند…"
+                      onChange={(e) => updateClause(clause.id, { text: e.target.value })}
+                      className="w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-xs leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Add custom clause */}
+        <button type="button" onClick={addCustomClause}
+          className="w-full rounded-xl border-2 border-dashed border-border hover:border-primary/40 py-2.5 text-sm text-muted-foreground hover:text-primary transition-colors flex items-center justify-center gap-2">
+          <Plus className="w-4 h-4" />
+          إضافة بند إضافي مخصص
+        </button>
       </div>
 
-      {/* Preview note */}
-      <div className="rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 px-4 py-3 text-xs text-amber-800 dark:text-amber-200 flex gap-2">
-        <span className="text-base leading-none">💡</span>
-        <span>يمكنك معاينة العقد النهائي عبر إرسال رابط العقد لأحد الحجوزات من تبويب <strong>التقويم والحجوزات</strong>.</span>
+      {/* ── Action Row: Preview + Save ── */}
+      <div className="flex gap-3">
+        <button type="button" onClick={() => setShowPreview(true)}
+          className="flex-1 rounded-xl border border-border bg-background text-foreground font-medium py-3 text-sm hover:bg-muted/50 transition-colors flex items-center justify-center gap-2">
+          <Eye className="w-4 h-4" />
+          معاينة العقد الرقمي
+        </button>
+        <button type="button" disabled={saving || !selectedId} onClick={handleSave}
+          className="flex-1 rounded-xl bg-primary text-primary-foreground font-semibold py-3 text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? "جارٍ الحفظ…" : "حفظ إعدادات العقد"}
+        </button>
       </div>
 
-      {/* Save */}
-      <button
-        type="button"
-        disabled={saving || !selectedId}
-        onClick={handleSave}
-        className="w-full rounded-xl bg-primary text-primary-foreground font-semibold py-3 text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-      >
-        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-        {saving ? "جارٍ الحفظ…" : "حفظ إعدادات العقد"}
-      </button>
+      {/* ── Live Preview Modal ── */}
+      {showPreview && (
+        <Dialog open onOpenChange={(o) => !o && setShowPreview(false)}>
+          <DialogContent dir="rtl" className="max-w-lg max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-foreground">
+                <Eye className="w-5 h-5 text-primary" />
+                معاينة العقد الرقمي
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-xs text-muted-foreground -mt-1 mb-1">
+              هذه معاينة تقريبية — البيانات الفعلية (التاريخ، التوقيع، المبالغ) تظهر في العقد الحقيقي عند توقيعه
+            </p>
+            <ContractPreviewCard logoUrl={logoUrl} chaletName={chaletName} terms={computedTerms} />
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+/* ── Inline Contract Preview Card (live preview inside ContractSettingsTab modal) ── */
+function ContractPreviewCard({ logoUrl, chaletName, terms }: { logoUrl: string; chaletName: string; terms: string }) {
+  const C = {
+    primary: "#8b5e2b", primaryFg: "#faf7f2", fg: "#2a2018",
+    muted: "#75604a", border: "#e3d9cf", lightBg: "#fdf9f6", emerald: "#047857", white: "#ffffff",
+  };
+  return (
+    <div style={{ background: C.white, borderRadius: 14, border: `1px solid ${C.border}`, overflow: "hidden", direction: "rtl", textAlign: "right", fontSize: 13 }}>
+      {/* Header */}
+      <div style={{ background: C.primary, padding: "12px 20px", textAlign: "center" }}>
+        <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.primaryFg, letterSpacing: "-0.5px" }}>تكية</p>
+        <p style={{ margin: "2px 0 0", fontSize: 10, color: "rgba(250,247,242,0.8)" }}>عقد إيجار شاليه رقمي موقَّع</p>
+      </div>
+      {/* Chalet identity */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", background: C.lightBg, borderBottom: `1px solid ${C.border}` }}>
+        {logoUrl ? (
+          <img src={logoUrl} alt="شعار"
+            style={{ width: 48, height: 48, borderRadius: 10, objectFit: "cover", border: `1px solid ${C.border}`, flexShrink: 0 }}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+        ) : (
+          <div style={{ width: 48, height: 48, borderRadius: 10, background: "rgba(139,94,43,0.1)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(139,94,43,0.2)", flexShrink: 0 }}>
+            <FileText style={{ width: 20, height: 20, color: "rgba(139,94,43,0.45)" }} />
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.fg }}>{chaletName}</p>
+          <p style={{ margin: "2px 0 0", fontSize: 10, color: C.muted }}>📍 القصيم، المملكة العربية السعودية</p>
+        </div>
+        <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.primary, flexShrink: 0 }}>#١٢٣</p>
+      </div>
+      {/* Parties */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ padding: "11px 14px" }}>
+          <p style={{ margin: "0 0 4px", fontSize: 9, fontWeight: 700, color: C.primary, textTransform: "uppercase" }}>الطرف الأول — المؤجِّر</p>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: C.fg }}>{chaletName}</p>
+        </div>
+        <div style={{ padding: "11px 14px", borderRight: `1px solid ${C.border}` }}>
+          <p style={{ margin: "0 0 4px", fontSize: 9, fontWeight: 700, color: C.emerald, textTransform: "uppercase" }}>الطرف الثاني — المستأجِر</p>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: C.fg }}>عميل نموذجي</p>
+        </div>
+      </div>
+      {/* Terms */}
+      <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.border}` }}>
+        <p style={{ margin: "0 0 8px", fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>الشروط والأحكام</p>
+        {terms ? (
+          <p style={{ margin: 0, fontSize: 11, color: C.fg, lineHeight: 1.7, whiteSpace: "pre-line" }}>{terms}</p>
+        ) : (
+          <p style={{ margin: 0, fontSize: 11, color: C.muted, fontStyle: "italic" }}>لا توجد بنود محددة — ستُستخدم البنود الافتراضية عند التوقيع</p>
+        )}
+      </div>
+      {/* Signature placeholder */}
+      <div style={{ padding: "14px 18px" }}>
+        <p style={{ margin: "0 0 8px", fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>التوقيع والإثبات</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ borderRadius: 10, border: `1px solid ${C.border}`, background: C.lightBg, height: 70, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <p style={{ margin: 0, fontSize: 10, color: C.muted }}>✍️ توقيع المستأجر</p>
+          </div>
+          <div style={{ borderRadius: 10, border: `1px solid ${C.border}`, background: C.lightBg, padding: 10 }}>
+            <p style={{ margin: "0 0 2px", fontSize: 9, color: C.muted }}>الاسم الكامل</p>
+            <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 600, color: C.fg }}>عميل نموذجي</p>
+            <p style={{ margin: "0 0 2px", fontSize: 9, color: C.muted }}>رقم الهوية</p>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: C.fg }}>٠٠٠٠٠٠٠٠٠٠</p>
+          </div>
+        </div>
+        <p style={{ margin: "12px 0 0", fontSize: 10, color: C.muted, textAlign: "center", paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+          ✓ معاينة فقط · البيانات الفعلية تظهر في العقد الحقيقي عند التوقيع
+        </p>
+      </div>
     </div>
   );
 }
