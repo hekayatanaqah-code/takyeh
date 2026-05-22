@@ -18511,7 +18511,7 @@ function ContractSettingsTab() {
     if (!selectedId) return;
     setSaving(true);
     try {
-      const r = await apiFetch(`/submissions/${selectedId}`, {
+      const r = await apiFetch(`/owner/submissions/${selectedId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ logoUrl: logoUrl.trim() || null, termsAndConditions: computedTerms || null }),

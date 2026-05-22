@@ -4129,6 +4129,7 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
   if (body.propertyType !== undefined) updateData.propertyType = body.propertyType || null;
   if (body.sections !== undefined) updateData.sections = body.sections || null;
   if (body.termsAndConditions !== undefined) updateData.termsAndConditions = body.termsAndConditions || null;
+  if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl || null;
   if (body.bookingPolicyText !== undefined) updateData.bookingPolicyText = body.bookingPolicyText || null;
   if (body.cancellationWindowEnabled !== undefined) updateData.cancellationWindowEnabled = !!body.cancellationWindowEnabled;
   if (body.cancellationWindowHours !== undefined) updateData.cancellationWindowHours = body.cancellationWindowHours ? Math.max(1, Number(body.cancellationWindowHours)) : 24;
