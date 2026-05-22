@@ -223,7 +223,7 @@ function ContractLetterhead({
               <p style={{ margin: "0 0 2px", fontSize: 9, color: C.muted }}>الاسم الكامل</p>
               <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: C.fg }}>{signedData.signerName || "—"}</p>
               <p style={{ margin: "0 0 2px", fontSize: 9, color: C.muted }}>رقم الهوية / الإقامة</p>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg, direction: "ltr", textAlign: "left" }}>{signedData.signerId || "—"}</p>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg, textAlign: "right" }}>{signedData.signerId ? toAr(signedData.signerId) : "—"}</p>
             </div>
           </div>
         </div>
@@ -554,16 +554,20 @@ export default function ContractPage() {
               <label className="text-sm font-medium">رقم الهوية / الإقامة *</label>
               <Input
                 placeholder="١٠ أرقام"
-                value={idNumber}
-                onChange={e => setIdNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                value={toAr(idNumber)}
+                onChange={e => setIdNumber(
+                  e.target.value
+                    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+                    .replace(/\D/g, "")
+                    .slice(0, 10)
+                )}
                 className={`text-right ${idNumber.length > 0 && !idValid ? "border-red-400 focus-visible:ring-red-300" : ""}`}
                 inputMode="numeric"
                 maxLength={10}
-                data-no-arabic
               />
               {idNumber.length > 0 && !idValid && (
                 <p className="text-xs text-red-500 flex items-center gap-1">
-                  <span>⚠️</span> رقم الهوية يجب أن يتكوّن من ١٠ أرقام بالضبط ({idNumber.length}/10)
+                  <span>⚠️</span> رقم الهوية يجب أن يتكوّن من ١٠ أرقام بالضبط ({toAr(idNumber.length)}/١٠)
                 </p>
               )}
             </div>

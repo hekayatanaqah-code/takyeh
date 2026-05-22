@@ -5188,6 +5188,28 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       );
                       })()}
 
+                      {/* ── حالة العقد ── */}
+                      {!b.cancelledAt && (
+                        <div className={`flex items-center justify-between px-3 py-2 rounded-xl border mt-2 ${b.contractSigned ? "border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/10" : "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/10"}`}>
+                          <span className={`text-xs font-semibold ${b.contractSigned ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>
+                            حالة العقد
+                          </span>
+                          {b.contractSigned ? (
+                            <button
+                              type="button"
+                              onClick={() => { setSummaryDate(null); setContractPreviewBooking(b); }}
+                              className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 hover:opacity-80 transition-opacity"
+                            >
+                              ✅ تم التوقيع
+                            </button>
+                          ) : (
+                            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700">
+                              ⏳ بانتظار توقيع المستأجر
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* Booking management quick actions */}
                       <div className="flex gap-2 mt-2 pt-2 border-t border-border/50 flex-wrap">
                         <button
@@ -6275,14 +6297,18 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           {b.insuranceRefunded && b.insuranceDeducted && Number(b.insuranceDeducted) > 0 && (
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">✂️ تلفيات: {fmtAR(Number(b.insuranceDeducted))} ر.س</span>
                           )}
-                          {b.contractSigned && (
+                          {b.contractSigned ? (
                             <button
                               type="button"
                               onClick={() => setContractPreviewBooking(b)}
-                              className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:opacity-80 transition-opacity"
+                              className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 hover:opacity-80 transition-opacity"
                             >
-                              📄 تم توقيع العقد ✓
+                              ✅ تم التوقيع
                             </button>
+                          ) : !b.cancelledAt && (
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-300 dark:border-amber-700">
+                              ⏳ بانتظار التوقيع
+                            </span>
                           )}
                         </div>
                       </div>
