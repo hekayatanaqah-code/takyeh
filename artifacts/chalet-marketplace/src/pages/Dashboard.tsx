@@ -1587,7 +1587,6 @@ function AddBookingDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientName.trim()) { setError("يرجى إدخال اسم العميل"); return; }
     if (!clientPhone.trim()) { setError("يرجى إدخال رقم الجوال"); return; }
     if (!bookingDate) { setError("يرجى اختيار تاريخ الحجز"); return; }
     if (maintenanceBlockNote) { setError(`هذا اليوم غير متاح للحجز (صيانة/إغلاق مؤقت) — ${maintenanceBlockNote}`); return; }
@@ -1718,10 +1717,10 @@ function AddBookingDialog({
             </div>
           </div>
 
-          {/* ── Client name — required ── */}
+          {/* ── Client name — optional ── */}
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold">اسم العميل <span className="text-destructive">*</span></label>
-            <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="اسم العميل الكريم" />
+            <label className="text-sm font-semibold">اسم المستأجر</label>
+            <Input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="اسم العميل الكريم (اختياري)" />
           </div>
 
           {/* ── Date + Duration ── */}

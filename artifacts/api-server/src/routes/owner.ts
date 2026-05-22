@@ -1085,7 +1085,7 @@ router.post("/bookings", async (req, res) => {
   const ownerId = req.user!.id;
   const body = z.object({
     submissionId: z.number().int().positive().optional(),
-    clientName: z.string().min(1),
+    clientName: z.string().optional(),
     clientPhone: z.string().min(1, "رقم الجوال مطلوب"),
     bookingDate: z.string().min(1),
     durationDays: z.number().int().min(1).default(1),
@@ -1156,6 +1156,7 @@ router.post("/bookings", async (req, res) => {
     .insert(ownerBookingsTable)
     .values({
       ...restBooking,
+      clientName: restBooking.clientName?.trim() || "عميل مؤقت",
       ownerId,
       revenueAmount: revenueAmount !== undefined ? String(Math.round(revenueAmount)) : null,
       totalPrice: totalPrice !== undefined ? String(Math.round(totalPrice)) : null,
