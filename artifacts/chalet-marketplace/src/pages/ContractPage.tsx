@@ -259,6 +259,7 @@ export default function ContractPage() {
         if (data.error) { setLoadError(data.error); }
         else {
           setBooking(data);
+          if (!data.contractSigned && data.clientName) setFullName(data.clientName);
           if (data.contractSigned) {
             setAlreadySigned(true);
             setSignedData({

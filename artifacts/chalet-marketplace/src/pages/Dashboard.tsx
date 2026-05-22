@@ -5303,17 +5303,18 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           const _digits = (b.clientPhone ?? "").replace(/\D/g, "");
                           const _waPhone = _digits.startsWith("966") ? _digits : _digits.startsWith("0") ? "966" + _digits.slice(1) : _digits ? "966" + _digits : "";
                           const _waMsg = encodeURIComponent(`مرحباً ${b.clientName}، تم تأكيد حجزك! يرجى التوقيع على عقد الإيجار الرقمي لتفعيل الحجز:\n${_cUrl}`);
-                          return _waPhone ? (
+                          const _waHref = _waPhone ? `https://wa.me/${_waPhone}?text=${_waMsg}` : `https://wa.me/?text=${_waMsg}`;
+                          return (
                             <a
-                              href={`https://wa.me/${_waPhone}?text=${_waMsg}`}
+                              href={_waHref}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700 rounded-lg py-1.5 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
                             >
                               <MessageSquare className="w-3 h-3" />
-                              إرسال رابط واتساب
+                              إرسال عبر واتساب
                             </a>
-                          ) : null;
+                          );
                         })()}
                         <button
                           type="button"
@@ -6978,6 +6979,31 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-3 text-sm">
+              {/* Financial summary */}
+              {(() => {
+                const _total = Number(contractPreviewBooking.totalPrice ?? 0);
+                const _paid  = Number(contractPreviewBooking.depositPaid ?? 0);
+                const _remaining = _total - _paid;
+                if (!_total) return null;
+                return (
+                  <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">إجمالي الإيجار</span>
+                      <span className="font-semibold text-foreground">{_total.toLocaleString("ar-SA")} ر.س</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">المبلغ المدفوع</span>
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-400">{_paid.toLocaleString("ar-SA")} ر.س</span>
+                    </div>
+                    <div className="flex justify-between border-t border-amber-200 dark:border-amber-700 pt-2">
+                      <span className="font-bold text-foreground">المبلغ المتبقي</span>
+                      <span className={`font-bold ${_remaining > 0 ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}`}>
+                        {_remaining.toLocaleString("ar-SA")} ر.س
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800 rounded-xl px-4 py-3 space-y-2">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">المستأجر (النظام)</span>
