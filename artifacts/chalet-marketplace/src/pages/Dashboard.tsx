@@ -5740,33 +5740,40 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               />
             )}
 
-            {/* Legend */}
-            <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4">
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="inline-flex items-center justify-center w-14 h-5 rounded bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200 text-[10px] font-semibold">يوم كامل</span>
-                محجوز بالكامل
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="inline-flex items-center justify-center w-14 h-5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 text-[10px] font-semibold">صباحي/مسائي</span>
-                محجوز جزئياً
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="w-4 h-5 rounded bg-muted inline-block" />
-                متاح
-              </span>
-              <span className="w-px h-5 bg-border inline-block self-center" />
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="w-2.5 h-2.5 rounded-full bg-green-500 ring-1 ring-border shrink-0" />
-                محصّل بالكامل
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 ring-1 ring-border shrink-0" />
-                يوجد متبقي
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="w-2.5 h-2.5 rounded-full bg-orange-500 ring-1 ring-border shrink-0" />
-                نقدي لم يُودَع
-              </span>
+            {/* Legend — دليل الرموز والألوان */}
+            <div className="mt-4 rounded-xl border border-border bg-muted/30 dark:bg-muted/10 px-3 py-2.5">
+              <p className="text-[10px] font-bold text-muted-foreground mb-2 uppercase tracking-wide">دليل الرموز والألوان</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center justify-center w-14 h-5 rounded bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200 text-[10px] font-semibold">يوم كامل</span>
+                  محجوز بالكامل
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center justify-center w-14 h-5 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 text-[10px] font-semibold">صباحي/مسائي</span>
+                  محجوز جزئياً
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="w-4 h-5 rounded bg-muted inline-block" />
+                  متاح
+                </span>
+                <span className="w-px h-4 bg-border inline-block self-center" />
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-500 ring-1 ring-border shrink-0" />
+                  🟢 حجز مؤكد وموقع
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-1 ring-border shrink-0 animate-pulse" />
+                  ⏳ بانتظار توقيع العقد
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 ring-1 ring-border shrink-0" />
+                  💰 متبقي مبلغ غير مسدد
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="w-2.5 h-2.5 rounded-full bg-orange-500 ring-1 ring-border shrink-0" />
+                  💵 نقدي لم يُودَع في البنك
+                </span>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2">انقر على أي تاريخ لضبط الفترات أو عرض تفاصيل الحجز.</p>
 
@@ -6350,7 +6357,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             const _wp = _dg.startsWith("966") ? _dg : _dg.startsWith("0") ? "966" + _dg.slice(1) : _dg ? "966" + _dg : "";
                             const _wm = encodeURIComponent(`مرحباً ${b.clientName}، تم تأكيد حجزك! يرجى التوقيع على عقد الإيجار الرقمي لتفعيل الحجز:\n${_cu}`);
                             return (
-                              <div className="flex items-center gap-0.5">
+                              <div className="flex flex-wrap items-center gap-1.5 mt-0.5 w-full">
                                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-300 dark:border-amber-700">
                                   ⏳ بانتظار التوقيع
                                 </span>
@@ -6358,18 +6365,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                   href={_wp ? `https://wa.me/${_wp}?text=${_wm}` : `https://wa.me/?text=${_wm}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  title="إرسال العقد بالواتساب"
-                                  className="p-1 text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400 transition-colors"
+                                  className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
                                 >
-                                  <MessageSquare className="w-3.5 h-3.5" />
+                                  💬 إرسال بالواتساب
                                 </a>
                                 <button
                                   type="button"
-                                  title="نسخ رابط العقد"
                                   onClick={() => navigator.clipboard.writeText(_cu).then(() => toast({ title: "تم النسخ ✓", description: "رابط العقد في الحافظة" }))}
-                                  className="p-1 text-violet-600 hover:text-violet-700 dark:text-violet-500 dark:hover:text-violet-400 transition-colors"
+                                  className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                                 >
-                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  📋 نسخ رابط العقد
                                 </button>
                               </div>
                             );
