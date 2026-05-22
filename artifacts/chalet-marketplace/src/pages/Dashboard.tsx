@@ -2700,6 +2700,20 @@ function MiniCalendar({
     return s;
   }, [bookings]);
 
+  const pendingContractDates = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of bookings) {
+      if (!b.bookingDate || b.cancelledAt || b.contractSigned) continue;
+      const duration = Math.max(1, b.durationDays ?? 1);
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      for (let i = 0; i < duration; i++) {
+        const d = new Date(sy, sm - 1, sd + i);
+        s.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+      }
+    }
+    return s;
+  }, [bookings]);
+
   const today = new Date().toISOString().slice(0, 10);
 
   type CalCell = { date: Date; hijriDay: number } | null;
@@ -2817,6 +2831,13 @@ function MiniCalendar({
                 <span
                   className="absolute top-1 left-1 w-2 h-2 rounded-full bg-orange-500 ring-1 ring-white dark:ring-gray-900"
                   title="نقدي لم يُودَع في البنك"
+                />
+              )}
+              {/* Pending contract indicator — pulsing amber dot */}
+              {pendingContractDates.has(dateStr) && (
+                <span
+                  className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-amber-500 ring-1 ring-white dark:ring-gray-900 animate-pulse"
+                  title="عقد بانتظار توقيع المستأجر"
                 />
               )}
               {/* Payment status dot — green: fully paid, yellow: has remaining */}
@@ -2972,6 +2993,20 @@ function GregorianMiniCalendar({
     return s;
   }, [bookings]);
 
+  const pendingContractDates = useMemo(() => {
+    const s = new Set<string>();
+    for (const b of bookings) {
+      if (!b.bookingDate || b.cancelledAt || b.contractSigned) continue;
+      const duration = Math.max(1, b.durationDays ?? 1);
+      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
+      for (let i = 0; i < duration; i++) {
+        const d = new Date(sy, sm - 1, sd + i);
+        s.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+      }
+    }
+    return s;
+  }, [bookings]);
+
   const today = new Date().toISOString().slice(0, 10);
   type CalCell = { date: Date; gregDay: number; hijriDay: number } | null;
   const calCells: CalCell[] = [...Array<null>(firstDOW).fill(null), ...gregDays];
@@ -3055,6 +3090,10 @@ function GregorianMiniCalendar({
               )}
               {cashUndepositedDates.has(dateStr) && (
                 <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-orange-500 ring-1 ring-white dark:ring-gray-900" title="نقدي لم يُودَع في البنك" />
+              )}
+              {/* Pending contract indicator — pulsing amber dot */}
+              {pendingContractDates.has(dateStr) && (
+                <span className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-amber-500 ring-1 ring-white dark:ring-gray-900 animate-pulse" title="عقد بانتظار توقيع المستأجر" />
               )}
               {isBlocked && !cashUndepositedDates.has(dateStr) && (
                 hasRemainingDates.has(dateStr) ? (
@@ -6305,11 +6344,36 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             >
                               ✅ تم التوقيع
                             </button>
-                          ) : !b.cancelledAt && (
-                            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-300 dark:border-amber-700">
-                              ⏳ بانتظار التوقيع
-                            </span>
-                          )}
+                          ) : !b.cancelledAt && (() => {
+                            const _cu = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
+                            const _dg = (b.clientPhone ?? "").replace(/\D/g, "");
+                            const _wp = _dg.startsWith("966") ? _dg : _dg.startsWith("0") ? "966" + _dg.slice(1) : _dg ? "966" + _dg : "";
+                            const _wm = encodeURIComponent(`مرحباً ${b.clientName}، تم تأكيد حجزك! يرجى التوقيع على عقد الإيجار الرقمي لتفعيل الحجز:\n${_cu}`);
+                            return (
+                              <div className="flex items-center gap-0.5">
+                                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-300 dark:border-amber-700">
+                                  ⏳ بانتظار التوقيع
+                                </span>
+                                <a
+                                  href={_wp ? `https://wa.me/${_wp}?text=${_wm}` : `https://wa.me/?text=${_wm}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="إرسال العقد بالواتساب"
+                                  className="p-1 text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400 transition-colors"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                </a>
+                                <button
+                                  type="button"
+                                  title="نسخ رابط العقد"
+                                  onClick={() => navigator.clipboard.writeText(_cu).then(() => toast({ title: "تم النسخ ✓", description: "رابط العقد في الحافظة" }))}
+                                  className="p-1 text-violet-600 hover:text-violet-700 dark:text-violet-500 dark:hover:text-violet-400 transition-colors"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
