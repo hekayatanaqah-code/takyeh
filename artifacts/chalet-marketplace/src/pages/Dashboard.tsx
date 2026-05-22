@@ -5312,7 +5312,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700 rounded-lg py-1.5 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
                             >
                               <MessageSquare className="w-3 h-3" />
-                              إرسال عبر واتساب
+                              إرسال العقد بالواتساب
                             </a>
                           );
                         })()}

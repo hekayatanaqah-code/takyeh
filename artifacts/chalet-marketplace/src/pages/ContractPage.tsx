@@ -167,11 +167,20 @@ function ContractLetterhead({
               </tr>
             )}
             {booking.insuranceFee && Number(booking.insuranceFee) > 0 && (
-              <tr>
+              <tr style={rowDiv}>
                 <td style={cell}>مبلغ التأمين</td>
                 <td style={cellVal}>{fmtM(booking.insuranceFee)} ر.س</td>
               </tr>
             )}
+            {booking.totalPrice && Number(booking.totalPrice) > 0 && Number(booking.depositPaid ?? 0) > 0 && (() => {
+              const _rem = Math.max(0, Number(booking.totalPrice) - Number(booking.depositPaid ?? 0));
+              return (
+                <tr style={{ ...rowDiv, background: "rgba(139,94,43,0.08)" }}>
+                  <td style={{ ...cell, fontWeight: 700, color: "#8b5e2b" }}>المبلغ المتبقي</td>
+                  <td style={{ ...cellVal, fontWeight: 700, color: _rem > 0 ? "#b45309" : "#059669" }}>{fmtM(String(_rem))} ر.س</td>
+                </tr>
+              );
+            })()}
           </tbody>
         </table>
       </div>
@@ -259,7 +268,7 @@ export default function ContractPage() {
         if (data.error) { setLoadError(data.error); }
         else {
           setBooking(data);
-          if (!data.contractSigned && data.clientName) setFullName(data.clientName);
+          /* Name intentionally left blank — tenant fills their own full name */
           if (data.contractSigned) {
             setAlreadySigned(true);
             setSignedData({
@@ -501,6 +510,16 @@ export default function ContractPage() {
             {booking.insuranceFee && Number(booking.insuranceFee) > 0 && (
               <Row label="مبلغ التأمين" value={`${fmtMoney(booking.insuranceFee)} ر.س`} />
             )}
+            {booking.totalPrice && Number(booking.totalPrice) > 0 && Number(booking.depositPaid ?? 0) > 0 && (() => {
+              const _rem = Math.max(0, Number(booking.totalPrice) - Number(booking.depositPaid ?? 0));
+              return (
+                <Row
+                  label="المبلغ المتبقي"
+                  value={`${fmtMoney(String(_rem))} ر.س`}
+                  highlight={_rem > 0}
+                />
+              );
+            })()}
           </div>
         </div>
 
