@@ -353,6 +353,7 @@ router.post("/contract/:bookingId/sign", async (req, res) => {
   await db.execute(sql`
     UPDATE owner_bookings
     SET contract_signed = true,
+        client_name     = ${fullName.trim()},
         contract_signer_name = ${fullName.trim()},
         contract_signer_id   = ${idNumber.trim()},
         contract_signature_data_url = ${signatureDataUrl},
