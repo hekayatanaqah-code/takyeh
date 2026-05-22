@@ -4044,13 +4044,25 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const activeChaletId = showAllChalets ? null : selectedChaletId ?? ownerChalets[0]?.id ?? null;
 
   /* ── Build WhatsApp contract invitation message ── */
-  function buildContractWaMsg(bookingDate: string, submissionId: number | null | undefined, chalets: any[], contractLink: string): string {
+  function buildContractWaMsg(bookingDate: string, submissionId: number | null | undefined, chalets: any[], contractLink: string, period?: string | null): string {
     const cn = chalets?.find((c: any) => c.submissionId === submissionId)?.nameAr ?? "الشاليه";
     const arDays = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
     const dayN = arDays[new Date(bookingDate + "T12:00:00").getDay()];
-    const dateStr = bookingDate.split("-").reverse().join("/");
+    const dual = formatDualDate(bookingDate);
+    const gregorianStr = dual.gregorian;
+    const hijriStr = dual.hijri.replace(/\s*هـ\s*$/, "") + " هـ";
+    const periodMap: Record<string, string> = { morning: "صباحي", evening: "مسائي", full_day: "يوم كامل", full: "يوم كامل" };
+    const periodText = (period && periodMap[period]) || period || "-";
     return encodeURIComponent(
-      `السلام عليكم ورحمة الله وبركاته،\nنرحب بكم في ${cn} ونشكركم على اختيارنا واعتمدنا حجزكم المبدئي.\n\n🗓️ تفاصيل اليوم: ${dayN}\n📅 التاريخ: ${dateStr}\n\nولإتمام التأكيد النهائي والموثق لحجزكم، يُرجى التكرم بالدخول على رابط العقد الرقمي أدناه لتعبئة بياناتكم الرسمية والتوقيع إلكترونياً:\n🔗 ${contractLink}\n\nحياكم الله، ونتمنى لكم إقامة سعيدة وممتعة ✨`
+      `السلام عليكم ورحمة الله وبركاته،\nنرحب بكم في ${cn} ونشكركم على اختيارنا واعتمدنا حجزكم المبدئي.\n\n` +
+      `تفاصيل الحجز:\n` +
+      `- اليوم: ${dayN}\n` +
+      `- التاريخ الميلادي: ${gregorianStr}\n` +
+      `- التاريخ الهجري: ${hijriStr}\n` +
+      `- الفترة: ${periodText}\n\n` +
+      `ولإتمام التأكيد النهائي والموثق لحجزكم، يُرجى التكرم بالدخول على رابط العقد الرقمي أدناه لتعبئة بياناتكم الرسمية والتوقيع إلكترونياً:\n` +
+      `${contractLink}\n\n` +
+      `حياكم الله، ونتمنى لكم إقامة سعيدة وممتعة`
     );
   }
 
@@ -5264,7 +5276,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         const _cu = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
                         const _dg = (b.clientPhone ?? "").replace(/\D/g, "");
                         const _wp = _dg.startsWith("966") ? _dg : _dg.startsWith("0") ? "966" + _dg.slice(1) : _dg ? "966" + _dg : "";
-                        const _wm = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cu);
+                        const _wm = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cu, b.period);
                         return (
                           <div className="flex flex-wrap gap-1.5 mt-2">
                             <a href={_wp ? `https://wa.me/${_wp}?text=${_wm}` : `https://wa.me/?text=${_wm}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors">
@@ -5394,7 +5406,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           const _cUrl = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
                           const _digits = (b.clientPhone ?? "").replace(/\D/g, "");
                           const _waPhone = _digits.startsWith("966") ? _digits : _digits.startsWith("0") ? "966" + _digits.slice(1) : _digits ? "966" + _digits : "";
-                          const _waMsg = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cUrl);
+                          const _waMsg = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cUrl, b.period);
                           const _waHref = _waPhone ? `https://wa.me/${_waPhone}?text=${_waMsg}` : `https://wa.me/?text=${_waMsg}`;
                           return (
                             <a
@@ -6395,7 +6407,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             const _cu = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
                             const _dg = (b.clientPhone ?? "").replace(/\D/g, "");
                             const _wp = _dg.startsWith("966") ? _dg : _dg.startsWith("0") ? "966" + _dg.slice(1) : _dg ? "966" + _dg : "";
-                            const _wm = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cu);
+                            const _wm = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cu, b.period);
                             return (
                               <div className="flex flex-wrap items-center gap-1.5 mt-0.5 w-full">
                                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 border border-violet-300 dark:border-violet-700">
@@ -6443,7 +6455,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         const _cUrl2 = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
                         const _d2 = (b.clientPhone ?? "").replace(/\D/g, "");
                         const _wp2 = _d2.startsWith("966") ? _d2 : _d2.startsWith("0") ? "966" + _d2.slice(1) : _d2 ? "966" + _d2 : "";
-                        const _wm2 = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cUrl2);
+                        const _wm2 = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cUrl2, b.period);
                         return _wp2 ? (
                           <a
                             href={`https://wa.me/${_wp2}?text=${_wm2}`}
@@ -19127,7 +19139,7 @@ function ContractsArchiveTab() {
                       <td className="px-4 py-3 hidden sm:table-cell">
                         {b.clientPhone ? (
                           <a
-                            href={`https://wa.me/${(b.clientPhone).replace(/\D/g, "").replace(/^0/, "966")}?text=${buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, contractUrl(b.id))}`}
+                            href={`https://wa.me/${(b.clientPhone).replace(/\D/g, "").replace(/^0/, "966")}?text=${buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, contractUrl(b.id), (b as any).period)}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1 text-green-700 dark:text-green-400 hover:underline text-xs"
@@ -19178,7 +19190,7 @@ function ContractsArchiveTab() {
                           {/* WhatsApp */}
                           {b.clientPhone && (
                             <a
-                              href={`https://wa.me/${(b.clientPhone).replace(/\D/g, "").replace(/^0/, "966")}?text=${buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, contractUrl(b.id))}`}
+                              href={`https://wa.me/${(b.clientPhone).replace(/\D/g, "").replace(/^0/, "966")}?text=${buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, contractUrl(b.id), (b as any).period)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               title="إرسال رابط العقد عبر واتساب"
