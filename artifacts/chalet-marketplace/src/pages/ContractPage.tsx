@@ -283,6 +283,15 @@ export default function ContractPage() {
       .catch(() => { setLoadError("تعذّر تحميل بيانات العقد."); setLoading(false); });
   }, [bookingId]);
 
+  useEffect(() => {
+    if (booking) {
+      document.title = `${booking.chaletName} - العقد الرقمي للإيجار`;
+    } else {
+      document.title = "العقد الرقمي الموثق - منصة تكية";
+    }
+    return () => { document.title = "شاليهات القصيم - احجز شاليهك المفضل"; };
+  }, [booking]);
+
   const getPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
