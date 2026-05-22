@@ -326,8 +326,12 @@ export default function ContractPage() {
     setHasSig(false);
   };
 
+  const idDigits = idNumber.replace(/\D/g, "");
+  const idValid  = idDigits.length === 10;
+
   const handleSubmit = async () => {
-    if (!fullName.trim() || !idNumber.trim()) return;
+    if (!fullName.trim()) return;
+    if (!idValid) return;
     if (!hasSig) { setSigError(true); return; }
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -339,7 +343,7 @@ export default function ContractPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName: fullName.trim(), idNumber: idNumber.trim(), signatureDataUrl: sigDataUrl }),
+        body: JSON.stringify({ fullName: fullName.trim(), idNumber: idDigits, signatureDataUrl: sigDataUrl }),
       });
       const data = await res.json();
       if (!res.ok) { setSubmitError(data.error ?? "حدث خطأ أثناء الحفظ."); }
@@ -532,11 +536,17 @@ export default function ContractPage() {
               <Input
                 placeholder="١٠ أرقام"
                 value={idNumber}
-                onChange={e => setIdNumber(e.target.value)}
-                className="text-right"
+                onChange={e => setIdNumber(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                className={`text-right ${idNumber.length > 0 && !idValid ? "border-red-400 focus-visible:ring-red-300" : ""}`}
                 inputMode="numeric"
+                maxLength={10}
                 data-no-arabic
               />
+              {idNumber.length > 0 && !idValid && (
+                <p className="text-xs text-red-500 flex items-center gap-1">
+                  <span>⚠️</span> رقم الهوية يجب أن يتكوّن من ١٠ أرقام بالضبط ({idNumber.length}/10)
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -592,7 +602,7 @@ export default function ContractPage() {
         <Button
           className="w-full h-12 text-base font-bold rounded-xl bg-primary hover:bg-primary/90"
           onClick={handleSubmit}
-          disabled={submitting || !fullName.trim() || !idNumber.trim()}
+          disabled={submitting || !fullName.trim() || !idValid}
         >
           {submitting ? <Loader2 className="w-5 h-5 animate-spin me-2" /> : null}
           اعتماد وتوقيع العقد

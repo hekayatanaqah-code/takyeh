@@ -265,24 +265,30 @@ input, textarea, select, [contenteditable] {
 
 /* ── Contract print styles ─────────────────────────────────── */
 @media print {
-  body > * { display: none !important; }
+  /* Hide all content using visibility so nested children can override */
+  body * { visibility: hidden !important; }
+
+  /* Reveal only the contract letterhead and all its descendants */
+  .contract-print-area,
+  .contract-print-area * { visibility: visible !important; }
+
   .contract-print-area {
-    display: block !important;
     position: fixed !important;
     inset: 0 !important;
-    background: #fff !important;
-    color: #000 !important;
+    width: 100% !important;
+    background: #ffffff !important;
     font-family: "Noto Sans Arabic", sans-serif !important;
     direction: rtl !important;
     padding: 24px !important;
     font-size: 13px !important;
-  }
-  .contract-print-area * {
-    color: #000 !important;
-    background: #fff !important;
-    border-color: #ccc !important;
     box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
   }
+
+  /* Preserve inline hex colors — do NOT override color/background globally */
   .contract-print-area img { max-height: 120px !important; }
-  .contract-no-print { display: none !important; }
+
+  /* Keep UI-only controls hidden even within the print area */
+  .contract-no-print { display: none !important; visibility: hidden !important; }
 }
