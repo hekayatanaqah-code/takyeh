@@ -33,7 +33,7 @@ import {
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
-  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays, PieChart, Save,
+  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays, PieChart, Save, ScrollText,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -17710,6 +17710,7 @@ export default function Dashboard() {
     { id: "messageSettings", label: "إعدادات الرسائل الآلية", icon: <Send className="w-4 h-4" /> },
     { id: "profile",          label: "إعدادات الحساب",        icon: <Settings className="w-4 h-4" /> },
     { id: "contractSettings", label: "إعدادات العقد الرقمي",  icon: <FileText className="w-4 h-4" /> },
+    { id: "digitalContracts", label: "العقود الرقمية",         icon: <ScrollText className="w-4 h-4" /> },
   ] as const;
 
   const tabs = useMemo(() => {
@@ -18446,6 +18447,9 @@ export default function Dashboard() {
         {activeTab === "contractSettings" && (
           <ContractSettingsTab />
         )}
+        {activeTab === "digitalContracts" && (
+          <ContractsArchiveTab />
+        )}
           </>
         )}
       </div>
@@ -18814,6 +18818,256 @@ function ContractPreviewCard({ logoUrl, chaletName, terms }: { logoUrl: string; 
         <p style={{ margin: "12px 0 0", fontSize: 10, color: C.muted, textAlign: "center", paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
           ✓ معاينة فقط · البيانات الفعلية تظهر في العقد الحقيقي عند التوقيع
         </p>
+      </div>
+    </div>
+  );
+}
+
+/* ── Digital Contracts Archive Tab ───────────────────────── */
+function ContractsArchiveTab() {
+  const { toast } = useToast();
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+  function apiFetch(path: string, opts?: RequestInit) {
+    return fetch(`${BASE}/api${path}`, { credentials: "include", ...opts });
+  }
+
+  const [search, setSearch] = useState("");
+
+  const { data: bookings = [], isLoading } = useQuery<OwnerBooking[]>({
+    queryKey: ["contractsArchive-bookings"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/bookings");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return bookings;
+    return bookings.filter(
+      (b) =>
+        String(b.id).includes(q) ||
+        (b.clientName ?? "").toLowerCase().includes(q) ||
+        (b.clientPhone ?? "").replace(/\D/g, "").includes(q),
+    );
+  }, [bookings, search]);
+
+  const signed   = bookings.filter((b) => b.contractSigned).length;
+  const pending  = bookings.filter((b) => !b.contractSigned && !b.cancelledAt).length;
+  const cancelled = bookings.filter((b) => !!b.cancelledAt).length;
+
+  function contractUrl(id: number) {
+    return `${window.location.origin}${BASE}/contract/${id}`;
+  }
+
+  function copyLink(id: number) {
+    navigator.clipboard.writeText(contractUrl(id)).then(() =>
+      toast({ title: "تم النسخ ✓", description: "رابط العقد في الحافظة" }),
+    );
+  }
+
+  function openPrint(id: number) {
+    window.open(contractUrl(id), "_blank");
+  }
+
+  type StatusKey = "signed" | "pending" | "cancelled";
+  function statusBadge(b: OwnerBooking): { key: StatusKey; label: string; cls: string } {
+    if (b.cancelledAt) return { key: "cancelled", label: "ملغي",        cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-700/40" };
+    if (b.contractSigned) return { key: "signed",  label: "مُوقَّع ✓", cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700/40" };
+    return { key: "pending", label: "قيد الانتظار", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-700/40" };
+  }
+
+  const [filterStatus, setFilterStatus] = useState<StatusKey | "all">("all");
+
+  const displayed = useMemo(() => {
+    if (filterStatus === "all") return filtered;
+    return filtered.filter((b) => statusBadge(b).key === filterStatus);
+  }, [filtered, filterStatus]);
+
+  return (
+    <div className="max-w-4xl mx-auto py-6 px-4 space-y-6" dir="rtl">
+
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <ScrollText className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-foreground">أرشيف العقود الرقمية</h2>
+          <p className="text-sm text-muted-foreground">سجل كامل بجميع عقود الإيجار الموقَّعة والمعلَّقة</p>
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "مُوقَّعة", value: signed,    color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800" },
+          { label: "قيد الانتظار", value: pending,   color: "text-amber-700 dark:text-amber-400",   bg: "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800" },
+          { label: "ملغاة",   value: cancelled, color: "text-red-600 dark:text-red-400",         bg: "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800" },
+        ].map(({ label, value, color, bg }) => (
+          <div key={label} className={`rounded-xl border px-4 py-3 text-center ${bg}`}>
+            <p className={`text-2xl font-bold ${color}`}>{toAr(value)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Search + filter bar */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="ابحث بالاسم أو رقم الحجز أو الجوال…"
+            className="w-full rounded-xl border border-border bg-background pe-10 ps-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="flex gap-1.5 flex-wrap">
+          {(["all", "signed", "pending", "cancelled"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilterStatus(s)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                filterStatus === s
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
+              }`}
+            >
+              {{ all: "الكل", signed: "مُوقَّعة", pending: "انتظار", cancelled: "ملغاة" }[s]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-2xl border border-border overflow-hidden bg-card">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-40 gap-2 text-muted-foreground">
+            <Loader2 className="w-5 h-5 animate-spin" /> جارٍ التحميل…
+          </div>
+        ) : displayed.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+            <ScrollText className="w-10 h-10 opacity-20" />
+            <p className="text-sm">{search || filterStatus !== "all" ? "لا توجد نتائج مطابقة" : "لا توجد عقود حتى الآن"}</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/40 text-right">
+                  <th className="px-4 py-3 font-semibold text-muted-foreground w-16">رقم</th>
+                  <th className="px-4 py-3 font-semibold text-muted-foreground">اسم المستأجر</th>
+                  <th className="px-4 py-3 font-semibold text-muted-foreground hidden sm:table-cell">الجوال</th>
+                  <th className="px-4 py-3 font-semibold text-muted-foreground">حالة العقد</th>
+                  <th className="px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">تاريخ الحجز</th>
+                  <th className="px-4 py-3 font-semibold text-muted-foreground text-center">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayed.map((b, idx) => {
+                  const status = statusBadge(b);
+                  const dualDt = b.bookingDate ? formatDualDate(b.bookingDate) : null;
+                  return (
+                    <tr
+                      key={b.id}
+                      className={`border-b border-border/50 transition-colors hover:bg-muted/20 ${idx % 2 === 0 ? "" : "bg-muted/10"}`}
+                    >
+                      {/* ID */}
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-xs font-bold text-primary">#{toAr(b.id)}</span>
+                      </td>
+                      {/* Name */}
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-foreground">{b.clientName}</span>
+                      </td>
+                      {/* Phone */}
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        {b.clientPhone ? (
+                          <a
+                            href={`https://wa.me/${(b.clientPhone).replace(/\D/g, "").replace(/^0/, "966")}?text=${encodeURIComponent(`مرحباً ${b.clientName}، رابط عقد الإيجار الرقمي:\n${contractUrl(b.id)}`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-green-700 dark:text-green-400 hover:underline text-xs"
+                          >
+                            <MessageSquare className="w-3 h-3 shrink-0" />
+                            {b.clientPhone}
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </td>
+                      {/* Status */}
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${status.cls}`}>
+                          {status.label}
+                        </span>
+                      </td>
+                      {/* Date */}
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        {dualDt ? (
+                          <div className="text-xs">
+                            <p className="text-foreground font-medium">{dualDt.hijri.replace(/\s*هـ\s*$/, "")}</p>
+                            <p className="text-muted-foreground">{dualDt.gregorian}</p>
+                          </div>
+                        ) : "—"}
+                      </td>
+                      {/* Actions */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          {/* View / Print */}
+                          <button
+                            type="button"
+                            onClick={() => openPrint(b.id)}
+                            title="عرض وطباعة العقد"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                          {/* Copy link */}
+                          <button
+                            type="button"
+                            onClick={() => copyLink(b.id)}
+                            title="نسخ رابط العقد"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                          </button>
+                          {/* WhatsApp */}
+                          {b.clientPhone && (
+                            <a
+                              href={`https://wa.me/${(b.clientPhone).replace(/\D/g, "").replace(/^0/, "966")}?text=${encodeURIComponent(`مرحباً ${b.clientName}، رابط عقد الإيجار الرقمي:\n${contractUrl(b.id)}`)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="إرسال رابط العقد عبر واتساب"
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {/* Footer count */}
+        {!isLoading && displayed.length > 0 && (
+          <div className="px-4 py-2.5 border-t border-border/50 bg-muted/20 text-xs text-muted-foreground text-right">
+            عرض {toAr(displayed.length)} من أصل {toAr(bookings.length)} عقد
+          </div>
+        )}
       </div>
     </div>
   );
