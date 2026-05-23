@@ -311,6 +311,27 @@ router.get("/contract/:bookingId", async (req, res) => {
   if (!row) return res.status(404).json({ error: "الحجز غير موجود." });
   if (row.cancelled_at) return res.status(410).json({ error: "هذا الحجز ملغى ولا يمكن التوقيع عليه." });
 
+  // Look up previous signing history for this guest's phone (returning guest auto-fill)
+  let prevSignerName: string | null = null;
+  let prevSignerId: string | null = null;
+  if (row.client_phone && !row.contract_signed) {
+    const prevRows = await db.execute<{ contract_signer_name: string | null; contract_signer_id: string | null }>(
+      sql`SELECT contract_signer_name, contract_signer_id
+          FROM owner_bookings
+          WHERE client_phone = ${row.client_phone}
+            AND contract_signed = true
+            AND contract_signer_name IS NOT NULL
+            AND id != ${row.id}
+          ORDER BY contract_signed_at DESC
+          LIMIT 1`
+    );
+    const prevRow = ((prevRows as any).rows as typeof prevRows.rows)[0];
+    if (prevRow?.contract_signer_name) {
+      prevSignerName = prevRow.contract_signer_name;
+      prevSignerId = prevRow.contract_signer_id ?? null;
+    }
+  }
+
   return res.json({
     id: row.id,
     clientName: row.client_name,
@@ -331,6 +352,8 @@ router.get("/contract/:bookingId", async (req, res) => {
     contractSignerId: row.contract_signer_id ?? null,
     contractSignatureDataUrl: row.contract_signature_data_url ?? null,
     contractSignedAt: row.contract_signed_at ?? null,
+    prevSignerName,
+    prevSignerId,
   });
 });
 

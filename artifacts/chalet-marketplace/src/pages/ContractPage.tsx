@@ -30,6 +30,8 @@ interface ContractBooking {
   contractSignerId: string | null;
   contractSignatureDataUrl: string | null;
   contractSignedAt: string | null;
+  prevSignerName: string | null;
+  prevSignerId: string | null;
 }
 
 interface SignedData {
@@ -266,7 +268,11 @@ export default function ContractPage() {
         if (data.error) { setLoadError(data.error); }
         else {
           setBooking(data);
-          /* Name intentionally left blank — tenant fills their own full name */
+          if (!data.contractSigned) {
+            // Pre-fill from previous signing history for returning guests
+            if (data.prevSignerName) setFullName(data.prevSignerName);
+            if (data.prevSignerId) setIdNumber(data.prevSignerId);
+          }
           if (data.contractSigned) {
             setAlreadySigned(true);
             setSignedData({
