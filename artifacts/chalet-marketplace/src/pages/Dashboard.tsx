@@ -1587,42 +1587,66 @@ function AddBookingDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientPhone.trim()) { setError("يرجى إدخال رقم الجوال"); return; }
-    if (!bookingDate) { setError("يرجى اختيار تاريخ الحجز"); return; }
+    // Snapshot all state values immediately to avoid stale-closure or async-race issues
+    const snapPhone    = clientPhone.trim();
+    const snapDate     = bookingDate;
+    const snapPeriod   = period;
+    const snapPrice    = totalPrice;
+    const snapDeposit  = depositPaid;
+    const snapDuration = durationDays;
+    const snapSource   = source;
+    const snapNotes    = notes;
+    const snapSubId    = submissionId;
+    const snapInsuranceFee = insuranceFee;
+    const snapInsuranceReceived = insuranceReceived;
+    const snapInsurancePayMethod = insurancePaymentMethod;
+    const snapPayMethod = paymentMethod;
+    const snapCashDeposited = cashDeposited;
+    const snapReceiptUrl = paymentReceiptUrl;
+    const snapAddonIds = selectedAddonIds;
+    const snapAddonTotal = addonsTotalPrice;
+
+    if (!snapPhone) { setError("يرجى إدخال رقم الجوال"); return; }
+    if (!snapDate) { setError("يرجى اختيار تاريخ الحجز"); return; }
     if (maintenanceBlockNote) { setError(`هذا اليوم غير متاح للحجز (صيانة/إغلاق مؤقت) — ${maintenanceBlockNote}`); return; }
-    if (!period || period === "none") { setError("يرجى اختيار الفترة"); return; }
-    if (!totalPrice) { setError("يرجى إدخال قيمة الإيجار الأساسية"); return; }
-    if (Number(depositPaid) > 0 && !paymentMethod) { setError("الرجاء اختيار طريقة الدفع"); return; }
-    if (grandTotal !== null && Number(depositPaid) > grandTotal) {
+    const validPeriods = ["morning", "evening", "full_day"] as const;
+    const snapPeriodValid = validPeriods.includes(snapPeriod as typeof validPeriods[number]) ? (snapPeriod as typeof validPeriods[number]) : null;
+    if (!snapPeriodValid) { setError("يرجى اختيار الفترة"); return; }
+    if (!snapPrice) { setError("يرجى إدخال قيمة الإيجار الأساسية"); return; }
+    if (Number(snapDeposit) > 0 && !snapPayMethod) { setError("الرجاء اختيار طريقة الدفع"); return; }
+    if (grandTotal !== null && Number(snapDeposit) > grandTotal) {
       setError("العربون لا يمكن أن يتجاوز إجمالي قيمة الحجز");
       return;
     }
     setSaving(true); setError("");
     try {
+      const body = {
+        clientName: clientName || undefined,
+        clientPhone: snapPhone,
+        bookingDate: snapDate,
+        durationDays: snapDuration,
+        period: snapPeriodValid,
+        source: snapSource,
+        notes: snapNotes || undefined,
+        submissionId: snapSubId && snapSubId !== "none" ? Number(snapSubId) : undefined,
+        totalPrice: snapPrice ? Math.round(Number(snapPrice)) + snapAddonTotal : undefined,
+        depositPaid: snapDeposit ? Math.round(Number(snapDeposit)) : undefined,
+        insuranceFee: snapInsuranceFee ? Math.round(Number(snapInsuranceFee)) : undefined,
+        insuranceReceived: Number(snapInsuranceFee) > 0 ? snapInsuranceReceived : false,
+        insurancePaymentMethod: Number(snapInsuranceFee) > 0 && snapInsuranceReceived ? snapInsurancePayMethod : "transfer",
+        paymentMethod: snapPayMethod,
+        cashDeposited: snapPayMethod === "cash" ? snapCashDeposited : true,
+        paymentReceiptUrl: snapReceiptUrl || undefined,
+        addonIds: snapAddonIds.length > 0 ? snapAddonIds : undefined,
+      };
+      console.log("[AddBooking] submitting body:", JSON.stringify(body));
       const r = await apiFetch("/owner/bookings", {
         method: "POST",
-        body: JSON.stringify({
-          clientName,
-          clientPhone,
-          bookingDate,
-          durationDays,
-          period: period && period !== "none" ? period : undefined,
-          source,
-          notes: notes || undefined,
-          submissionId: submissionId && submissionId !== "none" ? Number(submissionId) : undefined,
-          totalPrice: totalPrice ? Math.round(Number(totalPrice)) + addonsTotalPrice : undefined,
-          depositPaid: depositPaid ? Math.round(Number(depositPaid)) : undefined,
-          insuranceFee: insuranceFee ? Math.round(Number(insuranceFee)) : undefined,
-          insuranceReceived: Number(insuranceFee) > 0 ? insuranceReceived : false,
-          insurancePaymentMethod: Number(insuranceFee) > 0 && insuranceReceived ? insurancePaymentMethod : "transfer",
-          paymentMethod,
-          cashDeposited: paymentMethod === "cash" ? cashDeposited : true,
-          paymentReceiptUrl: paymentReceiptUrl || undefined,
-          addonIds: selectedAddonIds.length > 0 ? selectedAddonIds : undefined,
-        }),
+        body: JSON.stringify(body),
       });
       if (!r.ok) {
         const errJson = await r.json().catch(() => ({}));
+        if (errJson?.details) console.error("[AddBooking] Zod details:", JSON.stringify(errJson.details));
         setError(errJson?.error ?? "حدث خطأ، يرجى المحاولة مجدداً");
         return;
       }

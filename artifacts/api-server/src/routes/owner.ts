@@ -1083,14 +1083,20 @@ router.get("/bookings/cancelled", async (req, res) => {
 });
 
 router.post("/bookings", async (req, res) => {
+  console.log("[POST /owner/bookings] raw body:", JSON.stringify(req.body));
   const ownerId = req.user!.id;
   const body = z.object({
     submissionId: z.number().int().positive().optional(),
     clientName: z.string().optional(),
-    clientPhone: z.string().min(1, "رقم الجوال مطلوب"),
-    bookingDate: z.string().min(1),
+    clientPhone: z.preprocess(
+      (v) => (typeof v === "string" ? v.trim() : v),
+      z.string().min(1, "رقم الجوال مطلوب")
+    ),
+    bookingDate: z.string().min(1, "تاريخ الحجز مطلوب"),
     durationDays: z.number().int().min(1).default(1),
-    period: z.enum(["morning", "evening", "full_day"]),
+    period: z.enum(["morning", "evening", "full_day"], {
+      errorMap: () => ({ message: "الفترة الزمنية مطلوبة (صباحي/مسائي/يوم كامل)" }),
+    }),
     source: z.enum(["platform", "external"]).default("platform"),
     notes: z.string().optional(),
     revenueAmount: z.number().nonnegative().optional(),
@@ -1105,7 +1111,10 @@ router.post("/bookings", async (req, res) => {
     addonIds: z.array(z.number().int().positive()).optional(),
   }).safeParse(req.body);
 
-  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة — رقم الجوال والفترة مطلوبان" });
+  if (!body.success) {
+    console.error("[POST /owner/bookings] Zod validation failed. body:", JSON.stringify(req.body), "errors:", JSON.stringify(body.error.flatten()));
+    return res.status(400).json({ error: "بيانات غير صحيحة — رقم الجوال والفترة مطلوبان", details: body.error.flatten() });
+  }
 
   /* ── Deposit cap: depositPaid must not exceed totalPrice (+ addons) ── */
   if (body.data.depositPaid !== undefined && body.data.totalPrice !== undefined) {
