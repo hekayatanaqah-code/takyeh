@@ -16,6 +16,7 @@ interface ContractBooking {
   clientPhone?: string | null;
   chaletName: string;
   chaletLocation?: string | null;
+  chaletDistrict?: string | null;
   chaletWhatsapp?: string | null;
   chaletLogoUrl?: string | null;
   contractTerms?: string | null;
@@ -107,9 +108,9 @@ function ContractLetterhead({
     white:      "#ffffff",
   } as const;
 
-  const cell: React.CSSProperties = { padding: "6px 0", color: C.muted, width: 140 };
-  const cellVal: React.CSSProperties = { padding: "6px 0", color: C.fg };
-  const rowDiv: React.CSSProperties = { borderBottom: "1px solid rgba(227,217,207,0.5)" };
+  const cell: React.CSSProperties = { padding: "8px 12px 8px 0", color: C.muted, width: 148, verticalAlign: "top", whiteSpace: "nowrap" };
+  const cellVal: React.CSSProperties = { padding: "8px 0", color: C.fg, fontWeight: 500 };
+  const rowDiv: React.CSSProperties = { borderBottom: `1px solid ${C.border}` };
   const secHead: React.CSSProperties = { margin: "0 0 10px", fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" };
 
   return (
@@ -133,8 +134,12 @@ function ContractLetterhead({
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: C.fg }}>{booking.chaletName}</p>
-          {booking.chaletLocation && <p style={{ margin: "3px 0 0", fontSize: 11, color: C.muted }}>📍 {booking.chaletLocation}</p>}
-          {booking.chaletWhatsapp && <p style={{ margin: "2px 0 0", fontSize: 11, color: C.muted, direction: "ltr", textAlign: "left" }}>📞 {booking.chaletWhatsapp}</p>}
+          {(booking.chaletLocation || booking.chaletDistrict) && (
+            <p style={{ margin: "3px 0 0", fontSize: 11, color: C.muted }}>
+              📍 {booking.chaletLocation ?? ""}
+              {booking.chaletDistrict ? ` — حي ${booking.chaletDistrict}` : ""}
+            </p>
+          )}
         </div>
         <div style={{ flexShrink: 0, textAlign: "left" }}>
           <p style={{ margin: 0, fontSize: 9, color: C.muted }}>رقم الحجز</p>
@@ -230,26 +235,26 @@ function ContractLetterhead({
       <div style={{ padding: 20 }}>
         <p style={secHead}>التوقيع والإثبات</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
             <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 500, color: C.muted }}>توقيع المستأجر</p>
             {signedData.signatureDataUrl ? (
-              <div style={{ border: "1px solid #a7f3d0", borderRadius: 12, overflow: "hidden", background: C.lightBg }}>
+              <div style={{ flex: 1, minHeight: 116, border: "1px solid #a7f3d0", borderRadius: 12, overflow: "hidden", background: C.lightBg, display: "flex", alignItems: "center" }}>
                 <img src={signedData.signatureDataUrl} alt="توقيع"
                   style={{ width: "100%", objectFit: "contain", maxHeight: 112, display: "block" }} />
               </div>
             ) : (
-              <div style={{ height: 80, border: `1px solid ${C.border}`, borderRadius: 12, background: C.lightBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: C.muted }}>
+              <div style={{ flex: 1, minHeight: 116, border: `1px solid ${C.border}`, borderRadius: 12, background: C.lightBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: C.muted }}>
                 لا يوجد توقيع
               </div>
             )}
           </div>
-          <div>
-            <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 500, color: C.muted }}>بيانات الهوية</p>
-            <div style={{ borderRadius: 12, border: `1px solid ${C.border}`, background: C.lightBg, padding: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 500, color: C.muted }}>بيانات الموقّع</p>
+            <div style={{ flex: 1, minHeight: 116, borderRadius: 12, border: `1px solid ${C.border}`, background: C.lightBg, padding: 14, display: "flex", flexDirection: "column", justifyContent: "center" }}>
               <p style={{ margin: "0 0 2px", fontSize: 9, color: C.muted }}>الاسم الكامل</p>
-              <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: C.fg }}>{signedData.signerName || "—"}</p>
+              <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: C.fg }}>{signedData.signerName || "—"}</p>
               <p style={{ margin: "0 0 2px", fontSize: 9, color: C.muted }}>رقم الهوية / الإقامة</p>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg, textAlign: "right" }}>{signedData.signerId ? toAr(signedData.signerId) : "—"}</p>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.fg }}>{signedData.signerId ? toAr(signedData.signerId) : "—"}</p>
             </div>
           </div>
         </div>

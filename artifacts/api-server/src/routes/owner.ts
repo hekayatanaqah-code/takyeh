@@ -295,6 +295,7 @@ router.get("/contract/:bookingId", async (req, res) => {
     name_ar: string | null; cancelled_at: string | null;
     whatsapp_number: string | null; logo_url: string | null;
     terms_and_conditions: string | null; location: string | null;
+    district: string | null;
     morning_check_in: string | null; morning_check_out: string | null;
     evening_check_in: string | null; evening_check_out: string | null;
     full_day_check_in: string | null; full_day_check_out: string | null;
@@ -304,7 +305,7 @@ router.get("/contract/:bookingId", async (req, res) => {
            b.contract_signed, b.contract_signer_name, b.contract_signer_id,
            b.contract_signature_data_url, b.contract_signed_at,
            b.cancelled_at, s.name_ar, s.whatsapp_number, s.logo_url,
-           s.terms_and_conditions, s.location,
+           s.terms_and_conditions, s.location, s.district,
            s.morning_check_in, s.morning_check_out,
            s.evening_check_in, s.evening_check_out,
            s.full_day_check_in, s.full_day_check_out
@@ -344,6 +345,7 @@ router.get("/contract/:bookingId", async (req, res) => {
     clientPhone: row.client_phone ?? null,
     chaletName: row.name_ar ?? "الشاليه",
     chaletLocation: row.location ?? null,
+    chaletDistrict: row.district ?? null,
     chaletWhatsapp: row.whatsapp_number ?? null,
     chaletLogoUrl: row.logo_url ?? null,
     contractTerms: row.terms_and_conditions ?? null,
