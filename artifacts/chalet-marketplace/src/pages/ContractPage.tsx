@@ -139,10 +139,6 @@ function ContractLetterhead({
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <tbody>
             <tr style={rowDiv}>
-              <td style={cell}>اسم المستأجر</td>
-              <td style={{ ...cellVal, fontWeight: 600 }}>{booking.clientName}</td>
-            </tr>
-            <tr style={rowDiv}>
               <td style={cell}>تاريخ الوصول</td>
               <td style={{ ...cellVal, fontWeight: 600 }}>
                 {dualDate.hijri.replace(/\s*هـ\s*$/, "")}
@@ -551,6 +547,9 @@ export default function ContractPage() {
         <div className="bg-white rounded-2xl border border-border shadow-sm p-5 space-y-4">
           <h2 className="font-bold text-base text-foreground">بيانات الموقِّع</h2>
           <div className="space-y-3">
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+              تنويه: يمكنك تعديل الاسم ورقم الهوية في حال رغبتك بتسجيل العقد باسم شخص آخر.
+            </p>
             <div className="space-y-1.5">
               <label className="text-sm font-medium">الاسم الكامل *</label>
               <Input
