@@ -26,6 +26,7 @@ interface ContractBooking {
   totalPrice: string | null;
   depositPaid: string | null;
   insuranceFee: string | null;
+  insuranceReceived: boolean | null;
   contractSigned: boolean;
   contractSignerName: string | null;
   contractSignerId: string | null;
@@ -200,7 +201,12 @@ function ContractLetterhead({
             {booking.insuranceFee && Number(booking.insuranceFee) > 0 && (
               <tr style={rowDiv}>
                 <td style={cell}>مبلغ التأمين</td>
-                <td style={cellVal}>{fmtM(booking.insuranceFee)} ر.س</td>
+                <td style={cellVal}>
+                  {fmtM(booking.insuranceFee)} ر.س
+                  {booking.insuranceReceived === false && (
+                    <span style={{ marginRight: 6, color: "#b45309", fontWeight: 600, fontSize: 11 }}>⚠️ غير مستلم</span>
+                  )}
+                </td>
               </tr>
             )}
             {booking.totalPrice && Number(booking.totalPrice) > 0 && Number(booking.depositPaid ?? 0) > 0 && (() => {
@@ -276,6 +282,7 @@ export default function ContractPage() {
 
   const [fullName, setFullName] = useState("");
   const [idNumber, setIdNumber] = useState("");
+  const [wasAutoFilled, setWasAutoFilled] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -301,8 +308,11 @@ export default function ContractPage() {
           setBooking(data);
           if (!data.contractSigned) {
             // Pre-fill from previous signing history for returning guests
-            if (data.prevSignerName) setFullName(data.prevSignerName);
-            if (data.prevSignerId) setIdNumber(data.prevSignerId);
+            if (data.prevSignerName) {
+              setFullName(data.prevSignerName);
+              if (data.prevSignerId) setIdNumber(data.prevSignerId);
+              setWasAutoFilled(true);
+            }
           }
           if (data.contractSigned) {
             setAlreadySigned(true);
@@ -551,7 +561,17 @@ export default function ContractPage() {
               <Row label="العربون المدفوع" value={`${fmtMoney(booking.depositPaid)} ر.س`} />
             )}
             {booking.insuranceFee && Number(booking.insuranceFee) > 0 && (
-              <Row label="مبلغ التأمين" value={`${fmtMoney(booking.insuranceFee)} ر.س`} />
+              <Row
+                label="مبلغ التأمين"
+                value={
+                  <span>
+                    {fmtMoney(booking.insuranceFee)} ر.س
+                    {booking.insuranceReceived === false && (
+                      <span className="ms-2 text-amber-700 font-semibold text-xs">⚠️ غير مستلم</span>
+                    )}
+                  </span>
+                }
+              />
             )}
             {booking.totalPrice && Number(booking.totalPrice) > 0 && Number(booking.depositPaid ?? 0) > 0 && (() => {
               const _rem = Math.max(0, Number(booking.totalPrice) - Number(booking.depositPaid ?? 0));
@@ -583,9 +603,11 @@ export default function ContractPage() {
         <div className="bg-white rounded-2xl border border-border shadow-sm p-5 space-y-4">
           <h2 className="font-bold text-base text-foreground">بيانات الموقِّع</h2>
           <div className="space-y-3">
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
-              تنويه: يمكنك تعديل الاسم ورقم الهوية في حال رغبتك بتسجيل العقد باسم شخص آخر.
-            </p>
+            {wasAutoFilled && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+                تنويه: يمكنك تعديل الاسم ورقم الهوية في حال رغبتك بتسجيل العقد باسم شخص آخر.
+              </p>
+            )}
             <div className="space-y-1.5">
               <label className="text-sm font-medium">الاسم الكامل *</label>
               <Input

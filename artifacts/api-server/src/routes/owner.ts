@@ -295,7 +295,7 @@ router.get("/contract/:bookingId", async (req, res) => {
     name_ar: string | null; cancelled_at: string | null;
     whatsapp_number: string | null; logo_url: string | null;
     terms_and_conditions: string | null; location: string | null;
-    district: string | null;
+    district: string | null; insurance_received: boolean | null;
     morning_check_in: string | null; morning_check_out: string | null;
     evening_check_in: string | null; evening_check_out: string | null;
     full_day_check_in: string | null; full_day_check_out: string | null;
@@ -306,6 +306,7 @@ router.get("/contract/:bookingId", async (req, res) => {
            b.contract_signature_data_url, b.contract_signed_at,
            b.cancelled_at, s.name_ar, s.whatsapp_number, s.logo_url,
            s.terms_and_conditions, s.location, s.district,
+           b.insurance_received,
            s.morning_check_in, s.morning_check_out,
            s.evening_check_in, s.evening_check_out,
            s.full_day_check_in, s.full_day_check_out
@@ -355,6 +356,7 @@ router.get("/contract/:bookingId", async (req, res) => {
     totalPrice: row.total_price,
     depositPaid: row.deposit_paid,
     insuranceFee: row.insurance_fee,
+    insuranceReceived: row.insurance_received ?? null,
     contractSigned: row.contract_signed,
     contractSignerName: row.contract_signer_name ?? null,
     contractSignerId: row.contract_signer_id ?? null,
