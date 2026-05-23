@@ -295,13 +295,19 @@ router.get("/contract/:bookingId", async (req, res) => {
     name_ar: string | null; cancelled_at: string | null;
     whatsapp_number: string | null; logo_url: string | null;
     terms_and_conditions: string | null; location: string | null;
+    morning_check_in: string | null; morning_check_out: string | null;
+    evening_check_in: string | null; evening_check_out: string | null;
+    full_day_check_in: string | null; full_day_check_out: string | null;
   }>(sql`
     SELECT b.id, b.client_name, b.client_phone, b.booking_date, b.duration_days, b.period,
            b.total_price, b.deposit_paid, b.insurance_fee,
            b.contract_signed, b.contract_signer_name, b.contract_signer_id,
            b.contract_signature_data_url, b.contract_signed_at,
            b.cancelled_at, s.name_ar, s.whatsapp_number, s.logo_url,
-           s.terms_and_conditions, s.location
+           s.terms_and_conditions, s.location,
+           s.morning_check_in, s.morning_check_out,
+           s.evening_check_in, s.evening_check_out,
+           s.full_day_check_in, s.full_day_check_out
     FROM owner_bookings b
     LEFT JOIN chalet_submissions s ON s.id = b.submission_id
     WHERE b.id = ${id}
@@ -354,6 +360,12 @@ router.get("/contract/:bookingId", async (req, res) => {
     contractSignedAt: row.contract_signed_at ?? null,
     prevSignerName,
     prevSignerId,
+    morningCheckIn: row.morning_check_in ?? null,
+    morningCheckOut: row.morning_check_out ?? null,
+    eveningCheckIn: row.evening_check_in ?? null,
+    eveningCheckOut: row.evening_check_out ?? null,
+    fullDayCheckIn: row.full_day_check_in ?? null,
+    fullDayCheckOut: row.full_day_check_out ?? null,
   });
 });
 

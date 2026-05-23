@@ -32,6 +32,12 @@ interface ContractBooking {
   contractSignedAt: string | null;
   prevSignerName: string | null;
   prevSignerId: string | null;
+  morningCheckIn: string | null;
+  morningCheckOut: string | null;
+  eveningCheckIn: string | null;
+  eveningCheckOut: string | null;
+  fullDayCheckIn: string | null;
+  fullDayCheckOut: string | null;
 }
 
 interface SignedData {
@@ -46,6 +52,22 @@ function periodLabel(p: string | null) {
   if (p === "evening") return "مسائي";
   if (p === "full_day" || p === "full") return "يوم كامل";
   return p;
+}
+
+function periodTimeSuffix(period: string | null, b: {
+  morningCheckIn: string | null; morningCheckOut: string | null;
+  eveningCheckIn: string | null; eveningCheckOut: string | null;
+  fullDayCheckIn: string | null; fullDayCheckOut: string | null;
+}): string {
+  let ci: string | null = null;
+  let co: string | null = null;
+  if (period === "morning")   { ci = b.morningCheckIn;  co = b.morningCheckOut; }
+  if (period === "evening")   { ci = b.eveningCheckIn;  co = b.eveningCheckOut; }
+  if (period === "full_day")  { ci = b.fullDayCheckIn;  co = b.fullDayCheckOut; }
+  if (!ci && !co) return "";
+  if (ci && co) return ` (من ${ci} إلى ${co})`;
+  if (ci)       return ` (من ${ci})`;
+  return ` (حتى ${co})`;
 }
 
 function Row({ label, value, highlight }: { label: string; value: React.ReactNode; highlight?: boolean }) {
@@ -151,7 +173,11 @@ function ContractLetterhead({
               <td style={cell}>المدة والفترة</td>
               <td style={cellVal}>
                 {toAr(booking.durationDays)} {booking.durationDays === 1 ? "يوم" : "أيام"}
-                {booking.period && <span style={{ marginRight: 6, color: C.primary, fontWeight: 600 }}>· {periodLabel(booking.period)}</span>}
+                {booking.period && (
+                  <span style={{ marginRight: 6, color: C.primary, fontWeight: 600 }}>
+                    · {periodLabel(booking.period)}{periodTimeSuffix(booking.period, booking)}
+                  </span>
+                )}
               </td>
             </tr>
             {booking.totalPrice && Number(booking.totalPrice) > 0 && (
@@ -499,7 +525,6 @@ export default function ContractPage() {
           <h2 className="font-bold text-base text-foreground border-b border-border pb-2">تفاصيل الحجز</h2>
           <div className="space-y-2 text-sm">
             <Row label="العقار" value={booking.chaletName} />
-            <Row label="المستأجر" value={booking.clientName} />
             <Row label="رقم الحجز" value={`#${toAr(booking.id)}`} />
             <Row
               label="تاريخ الوصول"
@@ -512,7 +537,7 @@ export default function ContractPage() {
             />
             <Row
               label="المدة"
-              value={`${toAr(booking.durationDays)} ${booking.durationDays === 1 ? "يوم" : "أيام"}${booking.period ? ` · ${periodLabel(booking.period)}` : ""}`}
+              value={`${toAr(booking.durationDays)} ${booking.durationDays === 1 ? "يوم" : "أيام"}${booking.period ? ` · ${periodLabel(booking.period)}${periodTimeSuffix(booking.period, booking)}` : ""}`}
             />
             {booking.totalPrice && (
               <Row label="إجمالي قيمة الإيجار" value={`${fmtMoney(booking.totalPrice)} ر.س`} highlight />
