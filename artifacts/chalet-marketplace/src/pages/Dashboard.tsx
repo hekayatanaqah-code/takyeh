@@ -1603,7 +1603,7 @@ function AddBookingDialog({
         method: "POST",
         body: JSON.stringify({
           clientName,
-          clientPhone: clientPhone || undefined,
+          clientPhone,
           bookingDate,
           durationDays,
           period: period && period !== "none" ? period : undefined,
