@@ -287,7 +287,7 @@ router.get("/contract/:bookingId", async (req, res) => {
   if (!id || isNaN(id)) return res.status(400).json({ error: "معرّف الحجز غير صالح." });
 
   const rows = await db.execute<{
-    id: number; client_name: string; booking_date: string; duration_days: number;
+    id: number; client_name: string; client_phone: string | null; booking_date: string; duration_days: number;
     period: string | null; total_price: string | null; deposit_paid: string | null;
     insurance_fee: string | null; contract_signed: boolean;
     contract_signer_name: string | null; contract_signer_id: string | null;
@@ -296,7 +296,7 @@ router.get("/contract/:bookingId", async (req, res) => {
     whatsapp_number: string | null; logo_url: string | null;
     terms_and_conditions: string | null; location: string | null;
   }>(sql`
-    SELECT b.id, b.client_name, b.booking_date, b.duration_days, b.period,
+    SELECT b.id, b.client_name, b.client_phone, b.booking_date, b.duration_days, b.period,
            b.total_price, b.deposit_paid, b.insurance_fee,
            b.contract_signed, b.contract_signer_name, b.contract_signer_id,
            b.contract_signature_data_url, b.contract_signed_at,
@@ -314,6 +314,7 @@ router.get("/contract/:bookingId", async (req, res) => {
   return res.json({
     id: row.id,
     clientName: row.client_name,
+    clientPhone: row.client_phone ?? null,
     chaletName: row.name_ar ?? "الشاليه",
     chaletLocation: row.location ?? null,
     chaletWhatsapp: row.whatsapp_number ?? null,

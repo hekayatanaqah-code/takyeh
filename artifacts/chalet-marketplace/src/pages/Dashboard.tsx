@@ -4966,8 +4966,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         )}
                       </div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        <span>الضيف</span>
-                        <span className="font-semibold text-foreground text-left">{b.clientName}</span>
                         {b.clientPhone && <>
                           <span>الجوال</span>
                           <span className="font-semibold text-foreground text-left">
@@ -5712,9 +5710,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               className="w-full text-right rounded-xl border border-border bg-card hover:bg-muted/40 px-3 py-2 transition-colors"
                             >
                               <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <span className="text-sm font-bold text-foreground">{b.clientName}</span>
+                                <span className="text-sm font-bold text-foreground" dir="ltr">{b.clientPhone || b.clientName}</span>
                                 <span className="text-[11px] font-semibold text-primary bg-primary/10 rounded-full px-2 py-0.5">{getBookingChaletName(b)}</span>
                               </div>
+                              {b.clientPhone && b.clientName && b.clientName !== "عميل مؤقت" && (
+                                <p className="text-xs text-muted-foreground/80 mt-0.5">{b.clientName}</p>
+                              )}
                               <p className="text-xs text-muted-foreground mt-1">
                                 {b.period === "morning" ? "🌅 صباحي" : b.period === "evening" ? "🌙 مسائي" : "☀️ يوم كامل"} · {toAr(b.durationDays ?? 1)} {b.durationDays === 1 ? "يوم" : "أيام"}
                               </p>
