@@ -17862,7 +17862,6 @@ export default function Dashboard() {
     { id: "services",  label: "إدارة الخدمات والمرافق", icon: <Plus className="w-4 h-4" /> },
     { id: "messageSettings", label: "إعدادات الرسائل الآلية", icon: <Send className="w-4 h-4" /> },
     { id: "profile",          label: "إعدادات الحساب",        icon: <Settings className="w-4 h-4" /> },
-    { id: "contractSettings", label: "إعدادات العقد الرقمي",  icon: <FileText className="w-4 h-4" /> },
     { id: "digitalContracts", label: "العقود الرقمية",         icon: <ScrollText className="w-4 h-4" /> },
   ] as const;
 
@@ -17881,6 +17880,15 @@ export default function Dashboard() {
       setActiveTab(tabs[0].id);
     }
   }, [tabs, activeTab]);
+
+  useEffect(() => {
+    function handleSwitchTab(e: Event) {
+      const tab = (e as CustomEvent).detail as string;
+      setActiveTab(tab as any);
+    }
+    window.addEventListener("switch-dashboard-tab", handleSwitchTab);
+    return () => window.removeEventListener("switch-dashboard-tab", handleSwitchTab);
+  }, []);
 
   const isLoadingAuth = authLoading || staffLoading;
 
@@ -18597,9 +18605,6 @@ export default function Dashboard() {
         {activeTab === "profile" && (
           <OwnerProfileTab />
         )}
-        {activeTab === "contractSettings" && (
-          <ContractSettingsTab />
-        )}
         {activeTab === "digitalContracts" && (
           <ContractsArchiveTab />
         )}
@@ -19021,94 +19026,213 @@ function buildContractWaMsg(
 /* ── Digital Contracts Archive Tab ───────────────────────── */
 function ContractsArchiveTab() {
   const { toast } = useToast();
+  const qc = useQueryClient();
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   function apiFetch(path: string, opts?: RequestInit) {
     return fetch(`${BASE}/api${path}`, { credentials: "include", ...opts });
   }
 
+  /* ── Logo Settings ── */
+  const { data: settSubs = [] } = useQuery<any[]>({
+    queryKey: ["contractsTab-submissions"],
+    queryFn: async () => { const r = await apiFetch("/submissions"); if (!r.ok) return []; return r.json(); },
+  });
+  const [settSubId, setSettSubId] = useState<number | null>(null);
+  const [logoUrl, setLogoUrl] = useState("");
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  useEffect(() => {
+    if (settSubs.length > 0 && settSubId === null) setSettSubId((settSubs[0] as any).id);
+  }, [settSubs, settSubId]);
+
+  const selectedSub = useMemo(() => settSubs.find((s: any) => s.id === settSubId), [settSubs, settSubId]);
+
+  useEffect(() => {
+    if (selectedSub) setLogoUrl((selectedSub as any).logoUrl ?? "");
+  }, [selectedSub]);
+
+  async function handleSaveSettings() {
+    if (!settSubId) return;
+    setSavingSettings(true);
+    try {
+      const r = await apiFetch(`/owner/submissions/${settSubId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logoUrl: logoUrl.trim() || null }),
+      });
+      if (!r.ok) throw new Error();
+      qc.invalidateQueries({ queryKey: ["contractsTab-submissions"] });
+      toast({ title: "تم الحفظ ✓", description: "تم تحديث شعار العقد بنجاح" });
+    } catch {
+      toast({ title: "خطأ", description: "تعذّر الحفظ", variant: "destructive" });
+    } finally { setSavingSettings(false); }
+  }
+
+  /* ── Bookings & Filters ── */
   const [search, setSearch] = useState("");
+  const [monthFilter, setMonthFilter] = useState<"current" | "last" | "all">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "signed" | "pending" | "cancelled">("all");
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setOpenDropdownId(null);
+      }
+    }
+    if (openDropdownId !== null) document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [openDropdownId]);
 
   const { data: bookings = [], isLoading } = useQuery<OwnerBooking[]>({
     queryKey: ["contractsArchive-bookings"],
-    queryFn: async () => {
-      const r = await apiFetch("/owner/bookings");
-      if (!r.ok) return [];
-      return r.json();
-    },
+    queryFn: async () => { const r = await apiFetch("/owner/bookings"); if (!r.ok) return []; return r.json(); },
   });
 
   const { data: ownerChalets = [] } = useQuery<any[]>({
     queryKey: ["contractsArchive-chalets"],
-    queryFn: async () => {
-      const r = await apiFetch("/owner/chalets");
-      if (!r.ok) return [];
-      return r.json();
-    },
+    queryFn: async () => { const r = await apiFetch("/owner/chalets"); if (!r.ok) return []; return r.json(); },
   });
 
   const returningPhonesSet = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const b of bookings) {
-      const p = (b as any).clientPhone ?? "";
-      if (p) counts.set(p, (counts.get(p) ?? 0) + 1);
-    }
+    for (const b of bookings) { const p = (b as any).clientPhone ?? ""; if (p) counts.set(p, (counts.get(p) ?? 0) + 1); }
     return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([p]) => p));
   }, [bookings]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return bookings;
-    return bookings.filter(
-      (b) =>
-        String(b.id).includes(q) ||
-        (b.clientName ?? "").toLowerCase().includes(q) ||
-        (b.clientPhone ?? "").replace(/\D/g, "").includes(q),
-    );
-  }, [bookings, search]);
-
-  const signed   = bookings.filter((b) => b.contractSigned).length;
-  const pending  = bookings.filter((b) => !b.contractSigned && !b.cancelledAt).length;
-  const cancelled = bookings.filter((b) => !!b.cancelledAt).length;
-
-  function contractUrl(id: number) {
-    return `${window.location.origin}${BASE}/contract/${id}`;
-  }
-
+  function contractUrl(id: number) { return `${window.location.origin}${BASE}/contract/${id}`; }
   function copyLink(id: number) {
     navigator.clipboard.writeText(contractUrl(id)).then(() =>
       toast({ title: "تم النسخ ✓", description: "رابط العقد في الحافظة" }),
     );
   }
-
-  function openPrint(id: number) {
-    window.open(contractUrl(id), "_blank");
-  }
+  function openPrint(id: number) { window.open(contractUrl(id), "_blank"); }
 
   type StatusKey = "signed" | "pending" | "cancelled";
   function statusBadge(b: OwnerBooking): { key: StatusKey; label: string; cls: string } {
-    if (b.cancelledAt) return { key: "cancelled", label: "ملغي",        cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-700/40" };
-    if (b.contractSigned) return { key: "signed",  label: "مُوقَّع ✓", cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700/40" };
-    return { key: "pending", label: "قيد الانتظار", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-700/40" };
+    if (b.cancelledAt)    return { key: "cancelled", label: "ملغي",           cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-700/40" };
+    if (b.contractSigned) return { key: "signed",    label: "مُوقَّع ✓",     cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700/40" };
+    return                       { key: "pending",   label: "قيد الانتظار", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-700/40" };
   }
 
-  const [filterStatus, setFilterStatus] = useState<StatusKey | "all">("all");
+  /* Month helpers */
+  const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  const now = new Date();
+  const currentMonthLabel = MONTHS_AR[now.getMonth()] + " " + now.getFullYear();
+  const lastMonthIdx  = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+  const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const lastMonthLabel = MONTHS_AR[lastMonthIdx] + " " + lastMonthYear;
+
+  const monthFiltered = useMemo(() => {
+    if (monthFilter === "all") return bookings;
+    const targetMonth = monthFilter === "current" ? now.getMonth() : lastMonthIdx;
+    const targetYear  = monthFilter === "current" ? now.getFullYear() : lastMonthYear;
+    return bookings.filter((b) => {
+      if (!b.bookingDate) return false;
+      const d = new Date(b.bookingDate + "T12:00:00");
+      return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
+    });
+  }, [bookings, monthFilter]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return monthFiltered;
+    return monthFiltered.filter((b) =>
+      String(b.id).includes(q) ||
+      (b.clientName ?? "").toLowerCase().includes(q) ||
+      (b.clientPhone ?? "").replace(/\D/g, "").includes(q),
+    );
+  }, [monthFiltered, search]);
 
   const displayed = useMemo(() => {
     if (filterStatus === "all") return filtered;
     return filtered.filter((b) => statusBadge(b).key === filterStatus);
   }, [filtered, filterStatus]);
 
-  return (
-    <div className="max-w-4xl mx-auto py-6 px-4 space-y-6" dir="rtl">
+  const signed    = bookings.filter((b) => b.contractSigned).length;
+  const pending   = bookings.filter((b) => !b.contractSigned && !b.cancelledAt).length;
+  const cancelled = bookings.filter((b) => !!b.cancelledAt).length;
 
-      {/* Header */}
+  return (
+    <div className="max-w-4xl mx-auto py-6 px-4 space-y-5" dir="rtl">
+
+      {/* ── Settings Panel ── */}
+      <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <Settings className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-bold text-base text-foreground">إعدادات العقد الرقمي</h3>
+            <p className="text-xs text-muted-foreground">شعار الشاليه الظاهر في رأس العقد</p>
+          </div>
+        </div>
+
+        {/* Chalet selector — only when multiple chalets exist */}
+        {settSubs.length > 1 && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">اختر الشاليه</label>
+            <select
+              value={settSubId ?? ""}
+              onChange={(e) => setSettSubId(Number(e.target.value))}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right"
+            >
+              {settSubs.map((s: any) => (
+                <option key={s.id} value={s.id}>{s.name ?? `شاليه #${s.id}`}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Logo URL */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">رابط شعار الشاليه <span className="font-normal">(اختياري)</span></label>
+          <input
+            type="url"
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            placeholder="https://example.com/logo.png"
+            className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right placeholder:text-muted-foreground/60"
+          />
+        </div>
+
+        {/* Conditions notice */}
+        <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+            📋 <span className="font-semibold">تنويه:</span> يتم سحب شروط وأحكام العقد تلقائيًا من "إعدادات الشاليه".
+          </p>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("switch-dashboard-tab", { detail: "chalets" }))}
+            className="shrink-0 text-xs font-medium text-primary border border-primary/30 bg-primary/5 rounded-lg px-3 py-1.5 hover:bg-primary/10 transition-colors whitespace-nowrap"
+          >
+            ⚙️ تعديل الشروط من إعدادات الشاليه
+          </button>
+        </div>
+
+        {/* Save */}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            disabled={savingSettings || !settSubId}
+            onClick={handleSaveSettings}
+            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {savingSettings ? "جارٍ الحفظ…" : "حفظ إعدادات العقد"}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Header ── */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
           <ScrollText className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-foreground">أرشيف العقود الرقمية</h2>
+          <h2 className="text-xl font-bold text-foreground">قائمة العقود الرقمية</h2>
           <p className="text-sm text-muted-foreground">سجل كامل بجميع عقود الإيجار الموقَّعة والمعلَّقة</p>
         </div>
       </div>
@@ -19116,9 +19240,9 @@ function ContractsArchiveTab() {
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "مُوقَّعة", value: signed,    color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800" },
+          { label: "مُوقَّعة",      value: signed,    color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800" },
           { label: "قيد الانتظار", value: pending,   color: "text-amber-700 dark:text-amber-400",   bg: "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800" },
-          { label: "ملغاة",   value: cancelled, color: "text-red-600 dark:text-red-400",         bg: "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800" },
+          { label: "ملغاة",        value: cancelled, color: "text-red-600 dark:text-red-400",       bg: "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800" },
         ].map(({ label, value, color, bg }) => (
           <div key={label} className={`rounded-xl border px-4 py-3 text-center ${bg}`}>
             <p className={`text-2xl font-bold ${color}`}>{toAr(value)}</p>
@@ -19127,23 +19251,36 @@ function ContractsArchiveTab() {
         ))}
       </div>
 
-      {/* Search + filter bar */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="ابحث بالاسم أو رقم الحجز أو الجوال…"
-            className="w-full rounded-xl border border-border bg-background pe-10 ps-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right"
-          />
-          {search && (
-            <button onClick={() => setSearch("")} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
+      {/* ── Filter Bar ── */}
+      <div className="space-y-2">
+        {/* Row 1: Month dropdown + Search */}
+        <div className="flex flex-col sm:flex-row gap-2">
+          <select
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value as "current" | "last" | "all")}
+            className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right"
+          >
+            <option value="all">جميع الأشهر</option>
+            <option value="current">الشهر الحالي — {currentMonthLabel}</option>
+            <option value="last">الشهر الماضي — {lastMonthLabel}</option>
+          </select>
+          <div className="relative flex-1">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="ابحث بالاسم أو رقم الحجز أو الجوال…"
+              className="w-full rounded-xl border border-border bg-background pe-10 ps-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
+        {/* Row 2: Status tabs */}
         <div className="flex gap-1.5 flex-wrap">
           {(["all", "signed", "pending", "cancelled"] as const).map((s) => (
             <button
@@ -19155,13 +19292,13 @@ function ContractsArchiveTab() {
                   : "bg-background border-border text-muted-foreground hover:text-foreground hover:border-primary/40"
               }`}
             >
-              {{ all: "الكل", signed: "مُوقَّعة", pending: "انتظار", cancelled: "ملغاة" }[s]}
+              {{ all: "الكل", signed: "مكتمل / موقّع", pending: "بانتظار التوقيع", cancelled: "ملغاة" }[s]}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Table */}
+      {/* ── Contracts Table ── */}
       <div className="rounded-2xl border border-border overflow-hidden bg-card">
         {isLoading ? (
           <div className="flex items-center justify-center h-40 gap-2 text-muted-foreground">
@@ -19170,10 +19307,10 @@ function ContractsArchiveTab() {
         ) : displayed.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
             <ScrollText className="w-10 h-10 opacity-20" />
-            <p className="text-sm">{search || filterStatus !== "all" ? "لا توجد نتائج مطابقة" : "لا توجد عقود حتى الآن"}</p>
+            <p className="text-sm">{search || filterStatus !== "all" || monthFilter !== "all" ? "لا توجد نتائج مطابقة" : "لا توجد عقود حتى الآن"}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" ref={dropdownRef}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-right">
@@ -19182,49 +19319,40 @@ function ContractsArchiveTab() {
                   <th className="px-4 py-3 font-semibold text-muted-foreground hidden sm:table-cell">الجوال</th>
                   <th className="px-4 py-3 font-semibold text-muted-foreground">حالة العقد</th>
                   <th className="px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">تاريخ الحجز</th>
-                  <th className="px-4 py-3 font-semibold text-muted-foreground text-center">إجراءات</th>
+                  <th className="px-4 py-3 font-semibold text-muted-foreground text-center">الإجراءات</th>
                 </tr>
               </thead>
               <tbody>
                 {displayed.map((b, idx) => {
                   const status = statusBadge(b);
                   const dualDt = b.bookingDate ? formatDualDate(b.bookingDate) : null;
+                  const waUrl = b.clientPhone
+                    ? `https://wa.me/${b.clientPhone.replace(/\D/g, "").replace(/^0/, "966")}?text=${buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, contractUrl(b.id), (b as any).period, returningPhonesSet.has((b as any).clientPhone ?? ""), (b as any).clientName)}`
+                    : null;
                   return (
                     <tr
                       key={b.id}
                       className={`border-b border-border/50 transition-colors hover:bg-muted/20 ${idx % 2 === 0 ? "" : "bg-muted/10"}`}
                     >
-                      {/* ID */}
                       <td className="px-4 py-3">
                         <span className="font-mono text-xs font-bold text-primary">#{toAr(b.id)}</span>
                       </td>
-                      {/* Name */}
                       <td className="px-4 py-3">
                         <span className="font-medium text-foreground">{b.clientName}</span>
-                      </td>
-                      {/* Phone */}
-                      <td className="px-4 py-3 hidden sm:table-cell">
-                        {b.clientPhone ? (
-                          <a
-                            href={`https://wa.me/${(b.clientPhone).replace(/\D/g, "").replace(/^0/, "966")}?text=${buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, contractUrl(b.id), (b as any).period, returningPhonesSet.has((b as any).clientPhone ?? ""), (b as any).clientName)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-green-700 dark:text-green-400 hover:underline text-xs"
-                          >
-                            <MessageSquare className="w-3 h-3 shrink-0" />
-                            {b.clientPhone}
-                          </a>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
+                        {returningPhonesSet.has((b as any).clientPhone ?? "") && (
+                          <span className="mr-1.5 text-[10px] bg-primary/10 text-primary rounded-full px-1.5 py-0.5">عميل سابق</span>
                         )}
                       </td>
-                      {/* Status */}
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        {b.clientPhone
+                          ? <span className="text-xs text-foreground">{b.clientPhone}</span>
+                          : <span className="text-muted-foreground text-xs">—</span>}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${status.cls}`}>
                           {status.label}
                         </span>
                       </td>
-                      {/* Date */}
                       <td className="px-4 py-3 hidden md:table-cell">
                         {dualDt ? (
                           <div className="text-xs">
@@ -19233,38 +19361,52 @@ function ContractsArchiveTab() {
                           </div>
                         ) : "—"}
                       </td>
-                      {/* Actions */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-1">
-                          {/* View / Print */}
+                      {/* Actions dropdown */}
+                      <td className="px-4 py-3 text-center">
+                        <div className="relative inline-block">
                           <button
                             type="button"
-                            onClick={() => openPrint(b.id)}
-                            title="عرض وطباعة العقد"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+                            onClick={() => setOpenDropdownId(openDropdownId === b.id ? null : b.id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background text-xs font-medium text-foreground hover:bg-muted/60 hover:border-primary/40 transition-colors"
                           >
-                            <ExternalLink className="w-3.5 h-3.5" />
+                            الإجراءات
+                            <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${openDropdownId === b.id ? "rotate-180" : ""}`} />
                           </button>
-                          {/* Copy link */}
-                          <button
-                            type="button"
-                            onClick={() => copyLink(b.id)}
-                            title="نسخ رابط العقد"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                          >
-                            <Archive className="w-3.5 h-3.5" />
-                          </button>
-                          {/* WhatsApp */}
-                          {b.clientPhone && (
-                            <a
-                              href={`https://wa.me/${(b.clientPhone).replace(/\D/g, "").replace(/^0/, "966")}?text=${buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, contractUrl(b.id), (b as any).period, returningPhonesSet.has((b as any).clientPhone ?? ""), (b as any).clientName)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title="إرسال رابط العقد عبر واتساب"
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
-                            >
-                              <MessageSquare className="w-3.5 h-3.5" />
-                            </a>
+                          {openDropdownId === b.id && (
+                            <div className="absolute left-0 top-full mt-1 z-50 w-48 rounded-xl border border-border bg-card shadow-lg py-1" style={{ direction: "rtl" }}>
+                              <button
+                                type="button"
+                                onClick={() => { openPrint(b.id); setOpenDropdownId(null); }}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-right text-sm hover:bg-muted/60 transition-colors text-foreground"
+                              >
+                                📄 عرض العقد
+                              </button>
+                              {waUrl && (
+                                <a
+                                  href={waUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={() => setOpenDropdownId(null)}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-right text-sm hover:bg-muted/60 transition-colors text-foreground"
+                                >
+                                  💬 إرسال عبر الواتساب
+                                </a>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => { openPrint(b.id); setOpenDropdownId(null); }}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-right text-sm hover:bg-muted/60 transition-colors text-foreground"
+                              >
+                                🖨️ طباعة العقد
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { copyLink(b.id); setOpenDropdownId(null); }}
+                                className="w-full flex items-center gap-2.5 px-3 py-2 text-right text-sm hover:bg-muted/60 transition-colors text-foreground"
+                              >
+                                🔗 نسخ رابط العقد
+                              </button>
+                            </div>
                           )}
                         </div>
                       </td>
@@ -19275,7 +19417,6 @@ function ContractsArchiveTab() {
             </table>
           </div>
         )}
-        {/* Footer count */}
         {!isLoading && displayed.length > 0 && (
           <div className="px-4 py-2.5 border-t border-border/50 bg-muted/20 text-xs text-muted-foreground text-right">
             عرض {toAr(displayed.length)} من أصل {toAr(bookings.length)} عقد
