@@ -4066,48 +4066,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const showAllChalets = selectedChaletId === "all";
   const activeChaletId = showAllChalets ? null : selectedChaletId ?? ownerChalets[0]?.id ?? null;
 
-  /* ── Build WhatsApp contract invitation message ── */
-  function buildContractWaMsg(
-    bookingDate: string,
-    submissionId: number | null | undefined,
-    chalets: any[],
-    contractLink: string,
-    period?: string | null,
-    isReturning?: boolean,
-    tenantName?: string
-  ): string {
-    const cn = chalets?.find((c: any) => c.submissionId === submissionId)?.nameAr ?? "الشاليه";
-    const arDays = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-    const dayN = arDays[new Date(bookingDate + "T12:00:00").getDay()];
-    const dual = formatDualDate(bookingDate);
-    const gregorianStr = dual.gregorian;
-    const hijriStr = dual.hijri.replace(/\s*هـ\s*$/, "") + " هـ";
-    const periodMap: Record<string, string> = {
-      morning:  "صباحي (من 8:00 صباحاً إلى 2:00 ظهراً)",
-      evening:  "مسائي (من 4:00 عصراً إلى 2:00 فجراً)",
-      full_day: "يوم كامل (من 2:00 ظهراً إلى 2:00 فجراً)",
-      full:     "يوم كامل (من 2:00 ظهراً إلى 2:00 فجراً)",
-    };
-    const periodText = (period && periodMap[period]) || period || "-";
-    const header = (isReturning && tenantName)
-      ? `يا هلا وغلا بأخونا ${tenantName}، يسعدنا تكرار زيارتكم لـ ${cn} واعتمدنا حجزكم المبدئي.\n\n`
-      : `السلام عليكم ورحمة الله وبركاته،\nنرحب بكم في ${cn} ونشكركم على اختيارنا واعتمدنا حجزكم المبدئي.\n\n`;
-    const inviteText = isReturning
-      ? "ولإتمام التأكيد النهائي والموثق لحجزكم، يرجى التكرم بالدخول على رابط العقد الرقمي أدناه لتحديث بياناتكم والتوقيع إلكترونياً:\n"
-      : "ولإتمام التأكيد النهائي والموثق لحجزكم، يرجى التكرم بالدخول على رابط العقد الرقمي أدناه لتعبئة بياناتكم الرسمية والتوقيع إلكترونياً:\n";
-    return encodeURIComponent(
-      header +
-      "تفاصيل الحجز:\n" +
-      "- اليوم: " + dayN + "\n" +
-      "- التاريخ الميلادي: " + gregorianStr + "\n" +
-      "- التاريخ الهجري: " + hijriStr + "\n" +
-      "- الفترة: " + periodText + "\n\n" +
-      inviteText +
-      contractLink + "\n\n" +
-      "حياكم الله، ونتمنى لكم إقامة سعيدة وممتعة"
-    );
-  }
-
   /* ── Build WhatsApp review message from template ── */
   const DEFAULT_WA_REVIEW = "أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} 🌟\nاضغط هنا لتقييمك: {link}";
   function buildReviewMessage(guestName: string, chaletName: string, link: string): string {
@@ -19018,6 +18976,48 @@ function ContractPreviewCard({ logoUrl, chaletName, terms }: { logoUrl: string; 
   );
 }
 
+/* ── Build WhatsApp contract invitation message (module-level for shared access) ── */
+function buildContractWaMsg(
+  bookingDate: string,
+  submissionId: number | null | undefined,
+  chalets: any[],
+  contractLink: string,
+  period?: string | null,
+  isReturning?: boolean,
+  tenantName?: string
+): string {
+  const cn = chalets?.find((c: any) => c.submissionId === submissionId)?.nameAr ?? "الشاليه";
+  const arDays = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+  const dayN = arDays[new Date(bookingDate + "T12:00:00").getDay()];
+  const dual = formatDualDate(bookingDate);
+  const gregorianStr = dual.gregorian;
+  const hijriStr = dual.hijri.replace(/\s*هـ\s*$/, "") + " هـ";
+  const periodMap: Record<string, string> = {
+    morning:  "صباحي (من 8:00 صباحاً إلى 2:00 ظهراً)",
+    evening:  "مسائي (من 4:00 عصراً إلى 2:00 فجراً)",
+    full_day: "يوم كامل (من 2:00 ظهراً إلى 2:00 فجراً)",
+    full:     "يوم كامل (من 2:00 ظهراً إلى 2:00 فجراً)",
+  };
+  const periodText = (period && periodMap[period]) || period || "-";
+  const header = (isReturning && tenantName)
+    ? `يا هلا وغلا بأخونا ${tenantName}، يسعدنا تكرار زيارتكم لـ ${cn} واعتمدنا حجزكم المبدئي.\n\n`
+    : `السلام عليكم ورحمة الله وبركاته،\nنرحب بكم في ${cn} ونشكركم على اختيارنا واعتمدنا حجزكم المبدئي.\n\n`;
+  const inviteText = isReturning
+    ? "ولإتمام التأكيد النهائي والموثق لحجزكم، يرجى التكرم بالدخول على رابط العقد الرقمي أدناه لتحديث بياناتكم والتوقيع إلكترونياً:\n"
+    : "ولإتمام التأكيد النهائي والموثق لحجزكم، يرجى التكرم بالدخول على رابط العقد الرقمي أدناه لتعبئة بياناتكم الرسمية والتوقيع إلكترونياً:\n";
+  return encodeURIComponent(
+    header +
+    "تفاصيل الحجز:\n" +
+    "- اليوم: " + dayN + "\n" +
+    "- التاريخ الميلادي: " + gregorianStr + "\n" +
+    "- التاريخ الهجري: " + hijriStr + "\n" +
+    "- الفترة: " + periodText + "\n\n" +
+    inviteText +
+    contractLink + "\n\n" +
+    "حياكم الله، ونتمنى لكم إقامة سعيدة وممتعة"
+  );
+}
+
 /* ── Digital Contracts Archive Tab ───────────────────────── */
 function ContractsArchiveTab() {
   const { toast } = useToast();
@@ -19037,6 +19037,24 @@ function ContractsArchiveTab() {
       return r.json();
     },
   });
+
+  const { data: ownerChalets = [] } = useQuery<any[]>({
+    queryKey: ["contractsArchive-chalets"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/chalets");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const returningPhonesSet = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const b of bookings) {
+      const p = (b as any).clientPhone ?? "";
+      if (p) counts.set(p, (counts.get(p) ?? 0) + 1);
+    }
+    return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([p]) => p));
+  }, [bookings]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
