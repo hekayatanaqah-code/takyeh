@@ -19041,6 +19041,8 @@ function ContractsArchiveTab() {
   const [settSubId, setSettSubId] = useState<number | null>(null);
   const [logoUrl, setLogoUrl] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (settSubs.length > 0 && settSubId === null) setSettSubId((settSubs[0] as any).id);
@@ -19052,14 +19054,14 @@ function ContractsArchiveTab() {
     if (selectedSub) setLogoUrl((selectedSub as any).logoUrl ?? "");
   }, [selectedSub]);
 
-  async function handleSaveSettings() {
+  async function handleSaveSettings(overrideLogoUrl?: string) {
     if (!settSubId) return;
     setSavingSettings(true);
     try {
       const r = await apiFetch(`/owner/submissions/${settSubId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoUrl: logoUrl.trim() || null }),
+        body: JSON.stringify({ logoUrl: (overrideLogoUrl ?? logoUrl).trim() || null }),
       });
       if (!r.ok) throw new Error();
       qc.invalidateQueries({ queryKey: ["contractsTab-submissions"] });
@@ -19067,6 +19069,24 @@ function ContractsArchiveTab() {
     } catch {
       toast({ title: "خطأ", description: "تعذّر الحفظ", variant: "destructive" });
     } finally { setSavingSettings(false); }
+  }
+
+  async function handleLogoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    try {
+      const url = await uploadFile(file);
+      if (url) {
+        setLogoUrl(url);
+        await handleSaveSettings(url);
+      } else {
+        toast({ title: "خطأ", description: "تعذّر رفع الشعار، حاول مجدداً", variant: "destructive" });
+      }
+    } finally {
+      setLogoUploading(false);
+      e.target.value = "";
+    }
   }
 
   /* ── Bookings & Filters ── */
@@ -19186,16 +19206,60 @@ function ContractsArchiveTab() {
           </div>
         )}
 
-        {/* Logo URL */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">رابط شعار الشاليه <span className="font-normal">(اختياري)</span></label>
+        {/* Logo upload */}
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground">شعار الشاليه في رأس العقد <span className="font-normal">(اختياري)</span></label>
           <input
-            type="url"
-            value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
-            placeholder="https://example.com/logo.png"
-            className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right placeholder:text-muted-foreground/60"
+            ref={logoInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={handleLogoFileChange}
           />
+          <div className="flex items-center gap-3">
+            {/* Preview thumbnail */}
+            {logoUrl ? (
+              <div className="relative shrink-0">
+                <img
+                  src={logoUrl}
+                  alt="شعار العقد"
+                  className="w-16 h-16 rounded-xl object-contain border border-border bg-muted/30 p-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => setLogoUrl("")}
+                  title="إزالة الشعار"
+                  className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs leading-none hover:bg-destructive/80 transition-colors"
+                >
+                  ×
+                </button>
+              </div>
+            ) : null}
+            {/* Upload button / drop zone */}
+            <button
+              type="button"
+              disabled={logoUploading}
+              onClick={() => logoInputRef.current?.click()}
+              className={`flex-1 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-4 transition-colors text-sm font-medium ${
+                logoUploading
+                  ? "border-primary/30 bg-primary/5 text-primary cursor-not-allowed"
+                  : "border-border hover:border-primary/50 hover:bg-primary/5 text-muted-foreground hover:text-primary cursor-pointer"
+              }`}
+            >
+              {logoUploading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  <span>جارٍ الرفع…</span>
+                </>
+              ) : (
+                <>
+                  <Camera className="w-5 h-5" />
+                  <span>{logoUrl ? "تغيير الشعار" : "رفع شعار العقد"}</span>
+                  <span className="text-xs font-normal opacity-60">PNG · JPG · WEBP</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Conditions notice */}
