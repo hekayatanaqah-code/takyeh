@@ -16656,11 +16656,18 @@ interface BookingRow {
   total_price: string;
   chalet_name: string | null;
   cancelled_at: string | null;
+  submission_id: number | null;
+  contract_signed: boolean;
+  contract_signer_id: string | null;
+  insurance_fee: string | null;
+  insurance_received: boolean | null;
+  insurance_refunded: boolean | null;
 }
 
 interface CustomerProfile {
   clientName: string;
   clientPhone: string;
+  clientIdNumber: string | null;
   totalBookings: number;
   totalRevenue: number;
   lastBookingDate: string;
@@ -16983,86 +16990,146 @@ function CustomersTab() {
                   </div>
                 </div>
 
-                {/* Stat cards */}
-                <div className="grid grid-cols-3 gap-3">
-                  {statCard(
-                    "إجمالي الحجوزات",
-                    `${toAr(profile.totalBookings)} حجز`
-                  )}
-                  {statCard(
-                    "إجمالي الإيراد",
-                    `${toAr(Math.round(profile.totalRevenue))} ر.س`
-                  )}
-                  {statCard(
-                    "آخر حجز",
-                    profile.lastBookingDate ? formatDualDate(profile.lastBookingDate).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"
-                  )}
+                {/* ── Section A: Basic Info Stats ── */}
+                <div className="grid grid-cols-2 gap-3 mt-1">
+                  {statCard("إجمالي الحجوزات", `${toAr(profile.totalBookings)} حجز`)}
+                  {statCard("إجمالي الإيراد",  `${toAr(Math.round(profile.totalRevenue))} ر.س`)}
+                </div>
+                {/* ID number + last booking */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-muted/40 rounded-xl p-4 flex flex-col gap-1">
+                    <p className="text-xs text-muted-foreground">رقم الهوية الوطنية</p>
+                    <p className="text-base font-bold text-foreground font-mono" dir="ltr">
+                      {profile.clientIdNumber ?? <span className="text-muted-foreground font-normal text-sm">غير مسجّل</span>}
+                    </p>
+                  </div>
+                  <div className="bg-muted/40 rounded-xl p-4 flex flex-col gap-1">
+                    <p className="text-xs text-muted-foreground">آخر حجز</p>
+                    <p className="text-base font-bold text-foreground">
+                      {profile.lastBookingDate ? formatDualDate(profile.lastBookingDate).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Booking history */}
-              <div className="bg-card border border-border rounded-2xl p-5">
-                <h3 className="font-bold text-sm text-foreground mb-3 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-primary" />
-                  سجل الحجوزات ({toAr(profile.bookings.length)})
-                </h3>
-                {profile.bookings.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">لا توجد حجوزات</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border text-muted-foreground text-xs">
-                          <th className="pb-2 text-right font-medium">التاريخ</th>
-                          <th className="pb-2 text-right font-medium">الشاليه</th>
-                          <th className="pb-2 text-right font-medium">الفترة</th>
-                          <th className="pb-2 text-right font-medium">المبلغ</th>
-                          <th className="pb-2 text-right font-medium">الحالة</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {profile.bookings.map((b) => (
-                          <tr key={b.id} className="hover:bg-muted/30 transition-colors">
-                            <td className="py-2.5">
-                              <span className="text-foreground font-medium block">
-                                {b.booking_date ? formatDualDate(b.booking_date).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"}
-                              </span>
-                              {b.booking_date && (
-                                <span className="text-xs text-muted-foreground">
-                                  {formatDualDate(b.booking_date).gregorian}
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2.5 text-muted-foreground truncate max-w-[120px]">
-                              {b.chalet_name ?? "—"}
-                            </td>
-                            <td className="py-2.5 text-muted-foreground">
-                              {PERIOD_LABEL[b.period] ?? b.period}
-                              {b.duration_days > 1 && ` (${toAr(b.duration_days)} أيام)`}
-                            </td>
-                            <td className="py-2.5 font-semibold text-foreground">
-                              {toAr(Math.round(Number(b.total_price)))} ر.س
-                            </td>
-                            <td className="py-2.5">
-                              {b.cancelled_at ? (
-                                <span className="text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-950/30 px-2 py-0.5 rounded-full">ملغي</span>
-                              ) : (
-                                <span className="text-xs font-semibold text-green-600 bg-green-50 dark:bg-green-950/30 px-2 py-0.5 rounded-full">مؤكد</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              {/* ── Section B: Digital Contracts Log ── */}
+              {(() => {
+                const contractBookings = profile.bookings.filter(b => b.contract_signed);
+                return (
+                  <div className="bg-card border border-border rounded-2xl p-5">
+                    <h3 className="font-bold text-sm text-foreground mb-3 flex items-center gap-2">
+                      <ScrollText className="w-4 h-4 text-primary" />
+                      سجل العقود الرقمية
+                      <span className="text-xs font-normal text-muted-foreground">({toAr(contractBookings.length)} عقد)</span>
+                    </h3>
+                    {contractBookings.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-5">لا توجد عقود موقّعة لهذا العميل</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
+                              <th className="px-3 py-2 font-medium">رقم الحجز</th>
+                              <th className="px-3 py-2 font-medium">التاريخ</th>
+                              <th className="px-3 py-2 font-medium">الشاليه</th>
+                              <th className="px-3 py-2 font-medium text-center">العقد</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {contractBookings.map((b) => {
+                              const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+                              return (
+                                <tr key={b.id} className="hover:bg-muted/20 transition-colors">
+                                  <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toAr(b.id)}</td>
+                                  <td className="px-3 py-2.5 text-xs">
+                                    <p className="text-foreground font-medium">{b.booking_date ? formatDualDate(b.booking_date).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"}</p>
+                                    {b.booking_date && <p className="text-muted-foreground">{formatDualDate(b.booking_date).gregorian}</p>}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-xs text-muted-foreground">{b.chalet_name ?? "—"}</td>
+                                  <td className="px-3 py-2.5 text-center">
+                                    <a
+                                      href={`${window.location.origin}${BASE}/contract/${b.id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 transition-colors"
+                                    >
+                                      📄 عرض العقد
+                                    </a>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
 
-              {/* Private notes */}
+              {/* ── Section C: Insurance & Deposit Log ── */}
+              {(() => {
+                const insuranceBookings = profile.bookings.filter(b => b.insurance_fee && Number(b.insurance_fee) > 0);
+                function insStatus(b: BookingRow): { label: string; cls: string } {
+                  if (!b.insurance_received) return { label: "⚠️ غير مستلم", cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400" };
+                  if (b.insurance_refunded)  return { label: "مسترد بالكامل", cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400" };
+                  if (b.cancelled_at)        return { label: "مُعاد (إلغاء)", cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400" };
+                  return { label: "نشط / بحوزة المالك", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400" };
+                }
+                return (
+                  <div className="bg-card border border-border rounded-2xl p-5">
+                    <h3 className="font-bold text-sm text-foreground mb-3 flex items-center gap-2">
+                      <Lock className="w-4 h-4 text-primary" />
+                      سجل التأمينات والعمليات
+                      <span className="text-xs font-normal text-muted-foreground">({toAr(insuranceBookings.length)} حجز)</span>
+                    </h3>
+                    {insuranceBookings.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-5">لا توجد تأمينات مسجّلة لهذا العميل</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
+                              <th className="px-3 py-2 font-medium">رقم الحجز</th>
+                              <th className="px-3 py-2 font-medium">التاريخ</th>
+                              <th className="px-3 py-2 font-medium">مبلغ التأمين</th>
+                              <th className="px-3 py-2 font-medium">الحالة</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {insuranceBookings.map((b) => {
+                              const st = insStatus(b);
+                              return (
+                                <tr key={b.id} className="hover:bg-muted/20 transition-colors">
+                                  <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toAr(b.id)}</td>
+                                  <td className="px-3 py-2.5 text-xs">
+                                    <p className="text-foreground font-medium">{b.booking_date ? formatDualDate(b.booking_date).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"}</p>
+                                    {b.booking_date && <p className="text-muted-foreground">{formatDualDate(b.booking_date).gregorian}</p>}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-foreground font-semibold text-xs">
+                                    {toAr(Math.round(Number(b.insurance_fee)))} ر.س
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${st.cls}`}>
+                                      {st.label}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ── Private Notes ── */}
               <div className="bg-card border border-border rounded-2xl p-5">
                 <h3 className="font-bold text-sm text-foreground mb-1 flex items-center gap-2">
                   <FileText className="w-4 h-4 text-primary" />
-                  ملاحظات خاصة
+                  ملاحظات داخلية
                 </h3>
                 <p className="text-xs text-muted-foreground mb-3">
                   هذه الملاحظات مخفية تماماً عن العميل — تُستخدم للتذكير والملاحظات الداخلية فقط
@@ -17070,18 +17137,13 @@ function CustomersTab() {
                 <Textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="مثال: عميل VIP، يفضّل الفترة الصباحية، التواصل عبر الجوال…"
+                  placeholder="مثال: عميل VIP، يفضّل الفترة الصباحية، تأخّر في الخروج مرة واحدة…"
                   rows={4}
                   className="text-sm resize-none"
                   dir="rtl"
                 />
                 <div className="flex justify-end mt-3">
-                  <Button
-                    size="sm"
-                    onClick={handleSaveNote}
-                    disabled={savingNote}
-                    className="gap-2"
-                  >
+                  <Button size="sm" onClick={handleSaveNote} disabled={savingNote} className="gap-2">
                     {savingNote ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
                     حفظ الملاحظة
                   </Button>
@@ -17568,7 +17630,7 @@ export default function Dashboard() {
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "profile">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "profile" | "customers" | "digitalContracts" | "notifications">("chalets");
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const [serviceFinanceMode, setServiceFinanceMode] = useState<"separate" | "consolidated">(() => (localStorage.getItem("svc_finance_mode") as any) ?? "separate");
   const [clientListMode, setClientListMode] = useState<"unified" | "separate">(() => (localStorage.getItem("svc_client_mode") as any) ?? "unified");
@@ -17859,6 +17921,7 @@ export default function Dashboard() {
     { id: "reviews",   label: "التقييمات",            icon: <Star className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات",   icon: <Calendar className="w-4 h-4" /> },
     { id: "deposits",  label: "إدارة التأمينات",       icon: <Lock className="w-4 h-4" /> },
+    { id: "customers", label: "قاعدة العملاء",        icon: <UserCheck className="w-4 h-4" /> },
     { id: "services",  label: "إدارة الخدمات والمرافق", icon: <Plus className="w-4 h-4" /> },
     { id: "messageSettings", label: "إعدادات الرسائل الآلية", icon: <Send className="w-4 h-4" /> },
     { id: "profile",          label: "إعدادات الحساب",        icon: <Settings className="w-4 h-4" /> },
@@ -18320,7 +18383,6 @@ export default function Dashboard() {
             { id: "ledger",        label: "سجل الحساب البنكي",   icon: <span className="text-base leading-none">🏦</span>, color: "text-blue-600" },
             { id: "expenses",      label: "المصروفات",             icon: <TrendingDown className="w-4 h-4" />, color: "text-red-500" },
             { id: "staff",         label: "الموظفون",              icon: <Users className="w-4 h-4" />,        color: "text-blue-600" },
-            { id: "customers",     label: "قاعدة العملاء",        icon: <UserCheck className="w-4 h-4" />,    color: "text-purple-600" },
             { id: "notifications", label: "الإشعارات",             icon: <Bell className="w-4 h-4" />,         color: "text-amber-600" },
             { id: "reports",       label: "التقارير المالية",      icon: <BarChart2 className="w-4 h-4" />,    color: "text-indigo-600" },
             { id: "support",       label: "مركز الدعم",            icon: <MessageSquare className="w-4 h-4" />, color: "text-primary" },
@@ -18449,16 +18511,6 @@ export default function Dashboard() {
                 {adminFinanceTab === "ledger"        && <BankLedgerTab />}
                 {adminFinanceTab === "expenses"      && <ExpensesTab />}
                 {adminFinanceTab === "staff"         && <StaffTab />}
-                {adminFinanceTab === "customers"     && (
-                  <div className="space-y-4">
-                    {isCrossOwner && (
-                      <div className="bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800/30 rounded-xl px-4 py-2.5 text-xs text-purple-700 dark:text-purple-400 font-semibold flex items-center gap-2">
-                        <UserCheck className="w-3.5 h-3.5" />قاعدة عملاء موحّدة — تجمع عملاء شاليهاتك وخدماتك في قائمة واحدة
-                      </div>
-                    )}
-                    <CustomersTab />
-                  </div>
-                )}
                 {adminFinanceTab === "notifications" && <NotificationsTab />}
                 {adminFinanceTab === "reports"       && <ReportsTab />}
                 {adminFinanceTab === "support"       && <OwnerSupportTab />}
@@ -18604,6 +18656,11 @@ export default function Dashboard() {
         )}
         {activeTab === "profile" && (
           <OwnerProfileTab />
+        )}
+        {activeTab === "customers" && (
+          <AdminFinanceCtx.Provider value={{ unit: { type: "all" } }}>
+            <CustomersTab />
+          </AdminFinanceCtx.Provider>
         )}
         {activeTab === "digitalContracts" && (
           <ContractsArchiveTab />

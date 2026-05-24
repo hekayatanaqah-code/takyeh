@@ -4292,10 +4292,15 @@ router.get("/customers/:phone", async (req, res) => {
       bookingDate:  ownerBookingsTable.bookingDate,
       durationDays: ownerBookingsTable.durationDays,
       period:       ownerBookingsTable.period,
-      totalPrice:   ownerBookingsTable.totalPrice,
-      submissionId: ownerBookingsTable.submissionId,
-      cancelledAt:  ownerBookingsTable.cancelledAt,
-      chaletName:   chaletSubmissionsTable.nameAr,
+      totalPrice:        ownerBookingsTable.totalPrice,
+      submissionId:      ownerBookingsTable.submissionId,
+      cancelledAt:       ownerBookingsTable.cancelledAt,
+      chaletName:        chaletSubmissionsTable.nameAr,
+      contractSigned:    ownerBookingsTable.contractSigned,
+      contractSignerId:  ownerBookingsTable.contractSignerId,
+      insuranceFee:      ownerBookingsTable.insuranceFee,
+      insuranceReceived: ownerBookingsTable.insuranceReceived,
+      insuranceRefunded: ownerBookingsTable.insuranceRefunded,
     })
     .from(ownerBookingsTable)
     .leftJoin(chaletSubmissionsTable, eq(ownerBookingsTable.submissionId, chaletSubmissionsTable.id))
@@ -4328,21 +4333,30 @@ router.get("/customers/:phone", async (req, res) => {
     .limit(1);
   const noteRow = noteRows[0];
 
+  /* Derive national ID from the most recent signed booking */
+  const clientIdNumber = bookingRows.find(b => b.contractSignerId)?.contractSignerId ?? null;
+
   return res.json({
     clientName:      clientName,
     clientPhone:     phone,
+    clientIdNumber:  clientIdNumber,
     totalBookings:   totalBookings,
     totalRevenue:    totalRevenue,
     lastBookingDate: lastBookingDate,
     bookings: bookingRows.map((b) => ({
-      id:           b.id,
-      booking_date: b.bookingDate,
-      duration_days: b.durationDays,
-      period:       b.period,
-      total_price:  String(b.totalPrice ?? "0"),
-      submission_id: b.submissionId,
-      cancelled_at: b.cancelledAt,
-      chalet_name:  b.chaletName ?? null,
+      id:                 b.id,
+      booking_date:       b.bookingDate,
+      duration_days:      b.durationDays,
+      period:             b.period,
+      total_price:        String(b.totalPrice ?? "0"),
+      submission_id:      b.submissionId,
+      cancelled_at:       b.cancelledAt,
+      chalet_name:        b.chaletName ?? null,
+      contract_signed:    b.contractSigned ?? false,
+      contract_signer_id: b.contractSignerId ?? null,
+      insurance_fee:      b.insuranceFee ? String(b.insuranceFee) : null,
+      insurance_received: b.insuranceReceived ?? null,
+      insurance_refunded: b.insuranceRefunded ?? null,
     })),
     note: noteRow?.notes ?? "",
   });
