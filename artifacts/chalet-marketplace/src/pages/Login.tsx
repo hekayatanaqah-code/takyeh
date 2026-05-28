@@ -87,14 +87,14 @@ export default function Login() {
             </label>
             <input
               type="text"
-              placeholder="اسم_المستخدم أو example@email.com"
+              placeholder="أدخل البريد أو اسم المستخدم"
               value={input}
               onChange={(e) => { setInput(e.target.value); setError(null); setIsAdminBlock(false); }}
               autoComplete="username"
-              dir="ltr"
+              dir="rtl"
               autoFocus
               required
-              className="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-left text-sm bg-white placeholder:text-[#C0C0C0]"
+              className="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-right text-sm bg-white placeholder:text-[#C0C0C0]"
             />
           </div>
 
@@ -107,15 +107,15 @@ export default function Login() {
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(null); setIsAdminBlock(false); }}
                 autoComplete="current-password"
-                dir="ltr"
+                dir="rtl"
                 required
-                className="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-left text-sm bg-white placeholder:text-[#C0C0C0] pl-10"
+                className="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-right text-sm bg-white placeholder:text-[#C0C0C0] pr-10"
               />
               <button
                 type="button"
                 tabIndex={-1}
                 onClick={() => setShowPw((v) => !v)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B0B0B0] hover:text-[#7A7A7A] transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#B0B0B0] hover:text-[#7A7A7A] transition-colors"
               >
                 {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
