@@ -1,16 +1,14 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, LogIn, Info, ShieldAlert } from "lucide-react";
+import { Eye, EyeOff, ShieldAlert, Info } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function Login() {
-  const [, navigate]      = useLocation();
-  const qc                = useQueryClient();
-  const [input, setInput] = useState("");
+  const [, navigate]    = useLocation();
+  const qc              = useQueryClient();
+  const [input, setInput]           = useState("");
   const [password, setPassword]     = useState("");
   const [showPw, setShowPw]         = useState(false);
   const [loading, setLoading]       = useState(false);
@@ -25,10 +23,8 @@ export default function Login() {
 
     setError(null);
     setIsAdminBlock(false);
-
     setLoading(true);
     try {
-      /* ── Auto-detect: email → custom owner login, username → staff/admin login ── */
       const endpoint = trimmed.includes("@") ? "/api/owner-login" : "/api/unified-login";
       const body = trimmed.includes("@")
         ? JSON.stringify({ email: trimmed, password, rememberMe })
@@ -62,68 +58,64 @@ export default function Login() {
   }
 
   return (
-    <div
-      className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex flex-col items-center justify-center px-4 py-10"
-      dir="rtl"
-    >
-      {/* ── Brand ── */}
-      <a href={`${BASE}/`} className="flex flex-col items-center mb-7 select-none group">
-        <div className="w-16 h-16 rounded-2xl bg-green-600 shadow-lg shadow-green-200 flex items-center justify-center mb-3 group-hover:shadow-green-300 transition-shadow">
-          <span className="text-white text-2xl font-extrabold">ت</span>
+    <div className="min-h-screen bg-[#FBF9F6] flex flex-col items-center justify-center p-4" dir="rtl">
+
+      {/* Logo */}
+      <a href={`${BASE}/`} className="flex flex-col items-center mb-6 select-none">
+        <div className="w-16 h-16 bg-[#8C6246] rounded-2xl flex items-center justify-center shadow-md mb-3">
+          <span className="text-white text-3xl font-bold">ت</span>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 group-hover:text-green-700 transition-colors">تكيّة</h1>
-        <p className="text-gray-500 text-sm mt-0.5">منصة إدارة الشاليهات — القصيم</p>
+        <h1 className="text-2xl font-bold text-[#2D2D2D]">تكيّة</h1>
+        <p className="text-sm text-[#7A7A7A] mt-1">منصة إدارة الشاليهات — القصيم</p>
       </a>
 
-      {/* ── Guidance banner ── */}
-      <div className="w-full max-w-sm mb-4 flex items-start gap-2.5 bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
-        <Info className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
-        <p className="text-sm text-green-800 leading-relaxed">
-          عزيزي العميل، هذا القسم مخصص لشركاء تكيّة فقط
-        </p>
+      {/* Guidance banner */}
+      <div className="w-full max-w-md bg-[#F4EFEA] border border-[#D9C3B0] text-[#734f36] px-4 py-3 rounded-xl flex items-center gap-3 mb-4 text-sm font-medium">
+        <Info className="w-5 h-5 shrink-0 text-[#8C6246]" />
+        <span>تنويه: هذا القسم مخصص لشركاء تكية فقط.</span>
       </div>
 
-      {/* ── Login card ── */}
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl shadow-gray-100 border border-gray-100 p-7">
-        <h2 className="font-bold text-gray-800 text-base mb-1">تسجيل الدخول</h2>
-        <p className="text-gray-400 text-xs mb-5">مرحباً بك مجدداً في منصة تكيّة</p>
+      {/* Login card */}
+      <div className="w-full max-w-md bg-white border border-[#EBEBEB] rounded-3xl p-8 shadow-sm">
+        <h2 className="text-xl font-bold text-[#2D2D2D] mb-1 text-center">تسجيل الدخول</h2>
+        <p className="text-xs text-[#9E9E9E] mb-6 text-center">مرحباً بك مجدداً في منصة تكيّة</p>
 
         <form onSubmit={handleLogin} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-gray-700">
+          <div>
+            <label className="block text-sm font-semibold text-[#4A4A4A] mb-2">
               البريد الإلكتروني أو اسم المستخدم
             </label>
-            <Input
+            <input
               type="text"
               placeholder="اسم_المستخدم أو example@email.com"
               value={input}
               onChange={(e) => { setInput(e.target.value); setError(null); setIsAdminBlock(false); }}
               autoComplete="username"
               dir="ltr"
-              className="h-11 text-left placeholder:text-gray-300 border-gray-200 focus:border-green-500"
-              required
               autoFocus
+              required
+              className="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-left text-sm bg-white placeholder:text-[#C0C0C0]"
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-gray-700">كلمة المرور</label>
+          <div>
+            <label className="block text-sm font-semibold text-[#4A4A4A] mb-2">كلمة المرور</label>
             <div className="relative">
-              <Input
+              <input
                 type={showPw ? "text" : "password"}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(null); setIsAdminBlock(false); }}
                 autoComplete="current-password"
                 dir="ltr"
-                className="h-11 text-left pr-10 placeholder:text-gray-300 border-gray-200 focus:border-green-500"
                 required
+                className="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-left text-sm bg-white placeholder:text-[#C0C0C0] pl-10"
               />
               <button
                 type="button"
                 tabIndex={-1}
                 onClick={() => setShowPw((v) => !v)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition-colors"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B0B0B0] hover:text-[#7A7A7A] transition-colors"
               >
                 {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -147,53 +139,52 @@ export default function Login() {
             </div>
           )}
 
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 cursor-pointer select-none group">
+          <div className="flex items-center justify-between text-xs pt-1">
+            <label className="flex items-center gap-2 text-[#7A7A7A] cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-3.5 h-3.5 rounded border-gray-300 accent-green-600 cursor-pointer"
+                className="rounded border-[#E0E0E0] accent-[#8C6246] cursor-pointer w-3.5 h-3.5"
               />
-              <span className="text-xs text-gray-500 group-hover:text-gray-700 transition-colors">تذكرني لـ ٣٠ يوم</span>
+              <span>تذكرني لـ ٣٠ يوم</span>
             </label>
-            <a
-              href={`${BASE}/forgot-password`}
-              className="text-xs text-green-600 hover:text-green-700"
-            >
+            <a href={`${BASE}/forgot-password`} className="text-[#8C6246] hover:underline font-medium">
               نسيت كلمة المرور؟
             </a>
           </div>
 
-          <Button
+          <button
             type="submit"
             disabled={loading}
-            className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl gap-2"
+            className="w-full bg-[#8C6246] hover:bg-[#734f36] disabled:opacity-60 text-white py-3.5 rounded-xl font-bold transition-all duration-300 flex items-center justify-center gap-2 shadow-sm mt-6"
           >
             {loading ? (
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
             ) : (
-              <LogIn className="w-4 h-4" />
+              <>
+                <span>دخول</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                </svg>
+              </>
             )}
-            {loading ? "جاري الدخول…" : "دخول"}
-          </Button>
+          </button>
         </form>
       </div>
 
-      <div className="flex flex-col items-center gap-2 mt-5">
-        <p className="text-sm text-gray-500">
+      {/* Footer links */}
+      <div className="flex flex-col items-center gap-2 mt-6 text-sm">
+        <p className="text-[#7A7A7A]">
           شريك جديد؟{" "}
-          <a href={`${BASE}/register`} className="text-green-600 hover:text-green-700 font-medium">
-            انضم إلينا الآن
-          </a>
+          <a href={`${BASE}/register`} className="text-[#8C6246] hover:underline font-bold">انضم إلينا الآن</a>
         </p>
-        <a href={`${BASE}/`} className="text-xs text-gray-400 underline underline-offset-2 hover:text-green-600 transition-colors">
-          العودة لتصفح منصة تكيّة
-        </a>
+        <a href={`${BASE}/`} className="text-xs text-[#9E9E9E] hover:underline">العودة لتصفح منصة تكيّة</a>
       </div>
+
     </div>
   );
 }
