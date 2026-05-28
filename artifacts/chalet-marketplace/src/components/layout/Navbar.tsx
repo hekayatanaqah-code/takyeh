@@ -1,9 +1,8 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, Home, LogIn, LayoutDashboard, Settings, Building2 } from "lucide-react";
+import { MapPin, Menu, LogIn, LayoutDashboard, Settings } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { useState } from "react";
-import { motion } from "framer-motion";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useQuery } from "@tanstack/react-query";
 import { useStaffAuth } from "@/lib/useStaffAuth";
@@ -26,13 +25,9 @@ export function Navbar() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const siteTitle  = settings.site_display_name || settings.site_title || "تكية";
-  const logoUrl    = settings.site_logo_url || "";
-  const logoSize   = settings.logo_size === "lg" ? "w-16 h-16" : settings.logo_size === "sm" ? "w-9 h-9" : "w-12 h-12";
-
-  const navLinks = [
-    { href: "/", label: "الرئيسية", icon: <Home className="w-4 h-4 me-2" /> },
-  ];
+  const siteTitle = settings.site_display_name || settings.site_title || "تكية";
+  const logoUrl   = settings.site_logo_url || "";
+  const logoSize  = settings.logo_size === "lg" ? "w-16 h-16" : settings.logo_size === "sm" ? "w-9 h-9" : "w-12 h-12";
 
   const goToLogin = () => {
     setIsOpen(false);
@@ -43,6 +38,8 @@ export function Navbar() {
     <>
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+
+          {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group">
             {logoUrl ? (
               <img
@@ -58,44 +55,17 @@ export function Navbar() {
             <span className="text-xl font-bold text-foreground tracking-tight">{siteTitle}</span>
           </Link>
 
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-1">
-            {navLinks.map((link) => {
-              const isActive = location === link.href;
-              return (
-                <Link key={link.href} href={link.href} className="relative px-4 py-2 rounded-full text-sm font-medium transition-colors hover:text-primary">
-                  <span className="flex items-center z-10 relative">
-                    {link.icon}
-                    {link.label}
-                  </span>
-                  {isActive && (
-                    <motion.div
-                      layoutId="navbar-indicator"
-                      className="absolute inset-0 bg-primary/10 rounded-full"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                    />
-                  )}
-                </Link>
-              );
-            })}
-
-            <Link href="/add-chalet">
-              <Button size="sm" variant="outline" className="ms-2 rounded-full font-semibold border-primary/40 text-primary hover:bg-primary/10 hover:border-primary/60">
-                <Building2 className="w-4 h-4 me-1.5" />
-                أضف شاليهك
-              </Button>
-            </Link>
-
+          {/* Desktop actions */}
+          <div className="hidden md:flex items-center gap-3">
             {!isLoading && (
               isAuthenticated ? (
-                <div className="flex items-center gap-1 ms-2">
+                <div className="flex items-center gap-1">
                   <Link href="/dashboard">
                     <Button size="sm" className="rounded-full font-semibold shadow-sm shadow-primary/20">
                       <LayoutDashboard className="w-4 h-4 me-1.5" />
                       لوحة التحكم
                     </Button>
                   </Link>
-                  {/* Admin panel button — visible to staff/admin only */}
                   {isStaff && (
                     <Link href="/admin">
                       <Button size="sm" variant="ghost" className="rounded-full w-9 h-9 p-0 text-muted-foreground hover:text-foreground" title="لوحة الإدارة">
@@ -105,23 +75,22 @@ export function Navbar() {
                   )}
                 </div>
               ) : (
-                <Button
-                  size="sm"
+                <button
                   onClick={goToLogin}
-                  className="ms-2 rounded-full font-semibold"
+                  className="flex items-center gap-2 bg-[#8C6246] hover:bg-[#734f36] text-white px-6 py-2.5 rounded-full font-semibold transition-all duration-300 text-[15px] shadow-sm"
                 >
-                  <LogIn className="w-4 h-4 me-1.5" />
-                  تسجيل الدخول
-                </Button>
+                  <LogIn className="w-5 h-5" />
+                  <span>تسجيل الدخول</span>
+                </button>
               )
             )}
-          </nav>
+          </div>
 
           {/* Mobile Nav */}
           <div className="md:hidden">
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="hover-elevate">
+                <Button variant="ghost" size="icon">
                   <Menu className="w-6 h-6" />
                   <span className="sr-only">فتح القائمة</span>
                 </Button>
@@ -129,33 +98,6 @@ export function Navbar() {
               <SheetContent side="right" className="w-[80vw] sm:w-[350px]">
                 <SheetTitle className="text-right mt-4 mb-6 text-xl font-bold">القائمة الرئيسية</SheetTitle>
                 <nav className="flex flex-col gap-4">
-                  {navLinks.map((link) => (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setIsOpen(false)}
-                      className={`flex items-center px-4 py-3 rounded-xl text-base font-medium transition-colors ${
-                        location === link.href ? "bg-primary/10 text-primary" : "hover:bg-secondary text-foreground"
-                      }`}
-                    >
-                      {link.icon}
-                      {link.label}
-                    </Link>
-                  ))}
-
-                  <Link
-                    href="/add-chalet"
-                    onClick={() => setIsOpen(false)}
-                    className={`flex items-center px-4 py-3 rounded-xl text-base font-semibold transition-colors border ${
-                      location === "/add-chalet"
-                        ? "bg-primary/10 text-primary border-primary/30"
-                        : "text-primary border-primary/30 hover:bg-primary/10"
-                    }`}
-                  >
-                    <Building2 className="w-4 h-4 me-2" />
-                    أضف شاليهك
-                  </Link>
-
                   {!isLoading && (
                     isAuthenticated ? (
                       <Link
@@ -173,9 +115,9 @@ export function Navbar() {
                     ) : (
                       <button
                         onClick={goToLogin}
-                        className="flex items-center px-4 py-3 rounded-xl text-base font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                        className="flex items-center gap-2 justify-center px-4 py-3 rounded-full text-base font-semibold bg-[#8C6246] hover:bg-[#734f36] text-white transition-colors shadow-sm"
                       >
-                        <LogIn className="w-4 h-4 me-2" />
+                        <LogIn className="w-5 h-5" />
                         تسجيل الدخول
                       </button>
                     )
@@ -184,6 +126,7 @@ export function Navbar() {
               </SheetContent>
             </Sheet>
           </div>
+
         </div>
       </header>
     </>
