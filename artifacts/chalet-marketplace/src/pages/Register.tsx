@@ -189,13 +189,13 @@ export default function Register() {
               : <span className="text-[#8C6246] text-5xl font-bold">ت</span>
             }
           </div>
-          <p className="text-sm text-[#7A7A7A] font-medium mt-1">منصتك المتكاملة لإدارة الحجوزات والخدمات</p>
+          <p className="text-sm text-[#555555] font-semibold mt-2">منصتك المتكاملة لإدارة الحجوزات والخدمات</p>
         </div>
 
         {/* Card */}
         <div className="w-full max-w-md bg-white border border-[#EBEBEB] rounded-3xl p-8 shadow-sm">
           <h2 className="text-xl font-bold text-[#2D2D2D] mb-1 text-center">إنشاء حساب جديد</h2>
-          <p className="text-xs text-[#9E9E9E] mb-6 text-center">
+          <p className="text-sm text-[#656565] font-medium mb-6 text-center">
             أدخل بياناتك الشخصية — ستُضاف تفاصيل النشاط بعد التفعيل
           </p>
 
@@ -242,7 +242,7 @@ export default function Register() {
                 className={`${inputCls} text-right`}
                 required
               />
-              <p className="text-[11px] text-[#9E9E9E] mt-1">سيُستخدم للدخول وإرسال رمز التحقق</p>
+              <p className="text-xs text-[#757575] font-medium mt-1">سيُستخدم للدخول وإرسال رمز التحقق</p>
             </div>
 
             {/* Password */}
@@ -268,7 +268,7 @@ export default function Register() {
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-[11px] text-[#9E9E9E] mt-1">٦ أحرف على الأقل</p>
+              <p className="text-xs text-[#757575] font-medium mt-1">٦ أحرف على الأقل</p>
             </div>
 
             {/* Confirm Password */}

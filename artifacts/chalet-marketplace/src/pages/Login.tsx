@@ -77,7 +77,7 @@ export default function Login() {
             : <span className="text-[#8C6246] text-5xl font-bold">ت</span>
           }
         </div>
-        <p className="text-sm text-[#7A7A7A] font-medium mt-1">منصتك المتكاملة لإدارة الحجوزات والخدمات</p>
+        <p className="text-sm text-[#555555] font-semibold mt-2">منصتك المتكاملة لإدارة الحجوزات والخدمات</p>
       </a>
 
       {/* Guidance banner */}
@@ -89,7 +89,7 @@ export default function Login() {
       {/* Login card */}
       <div className="w-full max-w-md bg-white border border-[#EBEBEB] rounded-3xl p-8 shadow-sm">
         <h2 className="text-xl font-bold text-[#2D2D2D] mb-1 text-center">تسجيل الدخول</h2>
-        <p className="text-xs text-[#9E9E9E] mb-6 text-center">مرحباً بك مجدداً في منصة تكيّة</p>
+        <p className="text-sm text-[#656565] font-medium mb-6 text-center">مرحباً بك مجدداً في منصة تكيّة</p>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
