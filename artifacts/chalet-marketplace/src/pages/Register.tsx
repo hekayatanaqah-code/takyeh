@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, UserCircle2, CheckCircle2, X, ScrollText, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, ScrollText } from "lucide-react";
 import { toAr, fromAr } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -86,76 +84,82 @@ export default function Register() {
     }
   }
 
+  const inputCls = "w-full px-4 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-sm bg-white placeholder:text-[#C0C0C0]";
+  const labelCls = "block text-sm font-semibold text-[#4A4A4A] mb-2";
+
   return (
     <>
-      {/* ══════════════════════════════════════════════
-          Full-Screen Terms Modal
-          ══════════════════════════════════════════════ */}
+      {/* ── Terms Modal ── */}
       {showModal && (
         <div
-          className="fixed inset-0 z-50 flex flex-col"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
           dir="rtl"
-          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+          style={{ background: "rgba(0,0,0,0.5)" }}
         >
-          <div className="flex flex-col h-full max-w-2xl w-full mx-auto my-0 sm:my-6 sm:rounded-3xl bg-white overflow-hidden shadow-2xl">
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-xl">
 
             {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-green-50 shrink-0">
+            <div className="p-6 border-b border-[#EBEBEB] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-green-600 flex items-center justify-center shrink-0">
-                  <ScrollText className="w-5 h-5 text-white" />
+                <div className="w-10 h-10 bg-[#F4EFEA] text-[#8C6246] rounded-xl flex items-center justify-center shrink-0">
+                  <ScrollText className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 text-base leading-tight">شروط استخدام المنصة</h3>
-                  <p className="text-xs text-gray-500">يُرجى القراءة الكاملة قبل الموافقة</p>
+                  <h3 className="font-bold text-[#2D2D2D]">شروط استخدام المنصة</h3>
+                  <p className="text-xs text-[#9E9E9E]">يُرجى القراءة الكاملة قبل الموافقة</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
                 disabled={loading}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-40"
-                aria-label="إغلاق"
+                className="text-[#9E9E9E] hover:text-[#2D2D2D] transition-colors disabled:opacity-40 text-lg leading-none"
               >
-                <X className="w-4 h-4" />
+                ✕
               </button>
             </div>
 
-            {/* Terms content — scrollable */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5">
+            {/* Terms content */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 text-sm text-[#4A4A4A] leading-relaxed text-right space-y-4">
               {platformTerms ? (
-                <pre className="text-gray-700 text-sm leading-loose whitespace-pre-wrap font-sans">
-                  {platformTerms}
-                </pre>
+                <pre className="whitespace-pre-wrap font-sans">{platformTerms}</pre>
               ) : (
-                <p className="text-gray-400 text-sm text-center mt-8">
-                  سيتم تحديث شروط الاستخدام قريباً.
-                </p>
+                <>
+                  <p className="font-bold text-[#2D2D2D]">اتفاقية تقديم خدمة (شريك نجاح - مالك)</p>
+                  <p>١. طبيعة الخدمة: تعد منصة "تكية" منصة وسيطة تقنية فقط، مهمتها عرض تفاصيل الشاليهات وتسويقها، وتحويل العميل الراغب في الحجز مباشرة إلى "واتساب" المالك.</p>
+                  <p>٢. مسؤولية البيانات: يقر المالك بأن جميع المعلومات والصور والأسعار المرفوعة على المنصة صحيحة وتخصه هو شخصياً.</p>
+                  <p>٣. إخلاء المسؤولية القانونية: منصة "تكية" غير مسؤولة عن أي خلاف مالي أو تعاقدي يقع بين المالك والمستأجر.</p>
+                </>
               )}
             </div>
 
             {/* Modal footer */}
-            <div className="shrink-0 border-t border-gray-100 bg-white px-6 py-4 space-y-3">
-              <p className="text-xs text-gray-500 text-center leading-relaxed">
+            <div className="p-6 border-t border-[#EBEBEB] bg-[#FBF9F6] rounded-b-3xl shrink-0">
+              <p className="text-xs text-[#9E9E9E] text-center mb-4 leading-relaxed">
                 بالنقر على «موافق، إكمال التسجيل» فإنك تُقرّ بأنك قرأت هذه الشروط وتوافق عليها بالكامل
               </p>
-              <Button
+              <button
                 type="button"
                 onClick={handleConfirmedSubmit}
                 disabled={loading}
-                className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl text-base gap-2 disabled:opacity-70"
+                className="w-full bg-[#8C6246] hover:bg-[#734f36] disabled:opacity-60 text-white py-3.5 rounded-xl font-bold transition-all duration-300 flex items-center justify-center gap-2 shadow-sm"
               >
                 {loading ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> جاري الإرسال…</>
+                  <><Loader2 className="w-5 h-5 animate-spin" /> جاري الإرسال…</>
                 ) : (
-                  <><CheckCircle2 className="w-5 h-5" /> موافق، إكمال التسجيل</>
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    موافق، إكمال التسجيل
+                  </>
                 )}
-              </Button>
+              </button>
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
                 disabled={loading}
-                className="w-full text-sm text-gray-400 hover:text-gray-600 py-1 disabled:opacity-40 transition-colors"
+                className="w-full text-center text-xs text-[#9E9E9E] hover:underline mt-3 disabled:opacity-40"
               >
                 إغلاق والعودة لتعديل البيانات
               </button>
@@ -164,91 +168,82 @@ export default function Register() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════
-          Registration Form
-          ══════════════════════════════════════════════ */}
-      <div
-        className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex flex-col items-center justify-center px-4 py-10"
-        dir="rtl"
-      >
-        <div className="flex flex-col items-center mb-6 select-none">
-          <div className="w-14 h-14 rounded-2xl bg-green-600 shadow-lg shadow-green-200 flex items-center justify-center mb-3">
-            <UserCircle2 className="w-7 h-7 text-white" />
+      {/* ── Registration Form ── */}
+      <div className="min-h-screen bg-[#FBF9F6] flex flex-col items-center justify-center p-4" dir="rtl">
+
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-16 h-16 bg-[#8C6246] rounded-2xl flex items-center justify-center shadow-md mb-3">
+            <span className="text-white text-3xl font-bold">ت</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">تكيّة</h1>
-          <p className="text-gray-500 text-sm mt-0.5">أنشئ حسابك الشخصي وابدأ رحلتك معنا</p>
+          <h1 className="text-2xl font-bold text-[#2D2D2D]">تكيّة</h1>
+          <p className="text-sm text-[#7A7A7A] mt-1">منصة إدارة الشاليهات — القصيم</p>
         </div>
 
-        <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-gray-100 p-7">
-          <h2 className="font-bold text-gray-800 text-base mb-1">إنشاء حساب جديد</h2>
-          <p className="text-gray-400 text-xs mb-5">
+        {/* Card */}
+        <div className="w-full max-w-md bg-white border border-[#EBEBEB] rounded-3xl p-8 shadow-sm">
+          <h2 className="text-xl font-bold text-[#2D2D2D] mb-1 text-center">إنشاء حساب جديد</h2>
+          <p className="text-xs text-[#9E9E9E] mb-6 text-center">
             أدخل بياناتك الشخصية — ستُضاف تفاصيل النشاط بعد التفعيل
           </p>
 
           <form onSubmit={handleSubmitClick} className="space-y-4">
+
             {/* Full Name */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">
-                الاسم الكامل <span className="text-red-500">*</span>
-              </label>
-              <Input
+            <div>
+              <label className={labelCls}>الاسم الكامل <span className="text-red-500">*</span></label>
+              <input
                 type="text"
                 placeholder="محمد عبدالله الأحمد"
                 value={form.fullName}
                 onChange={(e) => update("fullName", e.target.value)}
-                className="h-11 border-gray-200 focus:border-green-500"
+                className={`${inputCls} text-right`}
                 required
                 autoFocus
               />
             </div>
 
             {/* Phone */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">
-                رقم الجوال <span className="text-red-500">*</span>
-              </label>
-              <Input
+            <div>
+              <label className={labelCls}>رقم الجوال <span className="text-red-500">*</span></label>
+              <input
                 type="text"
                 inputMode="numeric"
                 placeholder="٠٥١٢٣٤٥٦٧٨"
                 value={toAr(form.phone)}
                 onChange={(e) => update("phone", fromAr(e.target.value))}
-                className="h-11 text-right border-gray-200 focus:border-green-500"
+                dir="ltr"
+                className={`${inputCls} text-left`}
                 required
               />
-              <p className="text-xs text-gray-400">مثال: ٠٥١٢٣٤٥٦٧٨</p>
             </div>
 
             {/* Email */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">
-                البريد الإلكتروني <span className="text-red-500">*</span>
-              </label>
-              <Input
+            <div>
+              <label className={labelCls}>البريد الإلكتروني <span className="text-red-500">*</span></label>
+              <input
                 type="email"
                 placeholder="example@email.com"
                 value={form.email}
                 onChange={(e) => update("email", e.target.value)}
                 dir="ltr"
-                className="h-11 text-left border-gray-200 focus:border-green-500"
+                className={`${inputCls} text-left`}
                 required
               />
-              <p className="text-xs text-gray-400">سيُستخدم للدخول وإرسال رمز التحقق</p>
+              <p className="text-[11px] text-[#9E9E9E] mt-1">سيُستخدم للدخول وإرسال رمز التحقق</p>
             </div>
 
             {/* Password */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">
-                كلمة المرور <span className="text-red-500">*</span>
-              </label>
+            <div>
+              <label className={labelCls}>كلمة المرور <span className="text-red-500">*</span></label>
               <div className="relative">
-                <Input
+                <input
                   type={showPw ? "text" : "password"}
                   placeholder="••••••••"
                   value={form.password}
                   onChange={(e) => update("password", e.target.value)}
                   dir="ltr"
-                  className="h-11 text-left pr-10 border-gray-200 focus:border-green-500"
+                  className={`${inputCls} text-left pl-10`}
                   required
                   minLength={6}
                 />
@@ -256,34 +251,32 @@ export default function Register() {
                   type="button"
                   tabIndex={-1}
                   onClick={() => setShowPw((v) => !v)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B0B0B0] hover:text-[#7A7A7A] transition-colors"
                 >
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-xs text-gray-400">٦ أحرف على الأقل</p>
+              <p className="text-[11px] text-[#9E9E9E] mt-1">٦ أحرف على الأقل</p>
             </div>
 
             {/* Confirm Password */}
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">
-                تأكيد كلمة المرور <span className="text-red-500">*</span>
-              </label>
+            <div>
+              <label className={labelCls}>تأكيد كلمة المرور <span className="text-red-500">*</span></label>
               <div className="relative">
-                <Input
+                <input
                   type={showCPw ? "text" : "password"}
                   placeholder="••••••••"
                   value={form.confirmPassword}
                   onChange={(e) => update("confirmPassword", e.target.value)}
                   dir="ltr"
-                  className="h-11 text-left pr-10 border-gray-200 focus:border-green-500"
+                  className={`${inputCls} text-left pl-10`}
                   required
                 />
                 <button
                   type="button"
                   tabIndex={-1}
                   onClick={() => setShowCPw((v) => !v)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B0B0B0] hover:text-[#7A7A7A] transition-colors"
                 >
                   {showCPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -291,11 +284,11 @@ export default function Register() {
             </div>
 
             {/* Terms notice */}
-            <div className="flex items-start gap-2 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
-              <ScrollText className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
-              <p className="text-xs text-gray-600 leading-relaxed">
-                سيُعرض عليك شروط استخدام المنصة للمراجعة والموافقة قبل إتمام الطلب.
-              </p>
+            <div className="bg-[#F4EFEA] border border-[#D9C3B0] text-[#734f36] p-3 rounded-xl flex items-center gap-3 text-xs font-medium">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 shrink-0 text-[#8C6246]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>سيُعرض عليك شروط استخدام المنصة للمراجعة والموافقة قبل إتمام الطلب.</span>
             </div>
 
             {error && (
@@ -304,21 +297,29 @@ export default function Register() {
               </div>
             )}
 
-            <Button
+            {/* Submit */}
+            <button
               type="submit"
-              className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl gap-2"
+              className="w-full bg-[#8C6246] hover:bg-[#734f36] text-white py-3.5 rounded-xl font-bold transition-all duration-300 flex items-center justify-center gap-2 shadow-sm mt-2"
             >
-              إرسال طلب التسجيل
-            </Button>
+              <span>المتابعة للموافقة على الشروط</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </form>
 
-          <p className="text-center text-sm text-gray-500 mt-5">
+          <p className="text-center text-sm text-[#7A7A7A] mt-6">
             لديك حساب بالفعل؟{" "}
-            <a href={`${BASE}/login`} className="text-green-600 hover:text-green-700 font-medium">
+            <a href={`${BASE}/login`} className="text-[#8C6246] hover:underline font-bold">
               تسجيل الدخول
             </a>
           </p>
         </div>
+
+        <a href={`${BASE}/`} className="text-xs text-[#9E9E9E] hover:underline mt-5">
+          العودة لتصفح منصة تكيّة
+        </a>
       </div>
     </>
   );
