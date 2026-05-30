@@ -399,6 +399,133 @@ router.post("/owner-login", async (req, res) => {
   }
 });
 
+/* ── Phone OTP helpers ──────────────────────────────────────── */
+async function createPhoneOtp(phone: string, code: string) {
+  const codeHash = hashCode(code);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  await db.execute(
+    sql`INSERT INTO phone_otp_tokens (phone, code_hash, expires_at)
+        VALUES (${phone}, ${codeHash}, ${expiresAt.toISOString()})`
+  );
+}
+
+async function verifyAndConsumePhoneOtp(phone: string, code: string): Promise<boolean> {
+  if (process.env.NODE_ENV === "development" && code.trim() === DEV_MASTER_CODE) {
+    console.log(`[PHONE-OTP-DEV] Master-code bypass for ${phone}`);
+    return true;
+  }
+  const codeHash = hashCode(code);
+  const result = await db.execute(
+    sql`SELECT id FROM phone_otp_tokens
+        WHERE phone = ${phone}
+          AND code_hash = ${codeHash}
+          AND expires_at > now()
+          AND used_at IS NULL
+        ORDER BY created_at DESC LIMIT 1`
+  );
+  const rows = (result as any).rows as Array<{ id: number }>;
+  const token = rows[0];
+  if (!token) return false;
+  await db.execute(sql`UPDATE phone_otp_tokens SET used_at = now() WHERE id = ${token.id}`);
+  return true;
+}
+
+/* ── POST /send-phone-otp ───────────────────────────────────── */
+router.post("/send-phone-otp", async (req, res) => {
+  const { email } = req.body ?? {};
+  if (!email) return res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
+  const emailLower = String(email).trim().toLowerCase();
+  try {
+    const result = await db.execute(
+      sql`SELECT id, full_name, phone, email_verified, phone_verified
+          FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
+    );
+    const rows = (result as any).rows as Array<{
+      id: number; full_name: string; phone: string;
+      email_verified: boolean; phone_verified: boolean;
+    }>;
+    const app = rows[0];
+    if (!app) return res.status(404).json({ error: "الحساب غير موجود" });
+    if (!app.email_verified) return res.status(403).json({ error: "يرجى التحقق من البريد الإلكتروني أولاً" });
+    if (app.phone_verified) return res.json({ ok: true, alreadyVerified: true, maskedPhone: maskPhone(app.phone) });
+
+    const code = generateCode();
+    await createPhoneOtp(app.phone, code);
+
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[PHONE-OTP] Code for ${app.phone} (${emailLower}): ${code}`);
+    }
+    /* TODO (production): send via WhatsApp Business API or SMS provider */
+
+    return res.json({ ok: true, maskedPhone: maskPhone(app.phone) });
+  } catch (err) {
+    console.error("[send-phone-otp]", err);
+    return res.status(500).json({ error: "حدث خطأ أثناء إرسال الرمز" });
+  }
+});
+
+function maskPhone(phone: string): string {
+  return phone.replace(/^(\d{2})\d+(\d{3})$/, "$1*****$2");
+}
+
+/* ── POST /verify-phone-otp ─────────────────────────────────── */
+router.post("/verify-phone-otp", async (req, res) => {
+  const { email, code } = req.body ?? {};
+  if (!email || !code) return res.status(400).json({ error: "البريد والرمز مطلوبان" });
+  const emailLower = String(email).trim().toLowerCase();
+  const cleanCode  = String(code).trim().replace(/\s/g, "");
+  try {
+    const result = await db.execute(
+      sql`SELECT id, phone, phone_verified FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
+    );
+    const rows = (result as any).rows as Array<{ id: number; phone: string; phone_verified: boolean }>;
+    const app = rows[0];
+    if (!app) return res.status(404).json({ error: "الحساب غير موجود" });
+    if (app.phone_verified) return res.json({ ok: true, alreadyVerified: true });
+
+    const valid = await verifyAndConsumePhoneOtp(app.phone, cleanCode);
+    if (!valid) return res.status(400).json({ error: "الرمز غير صحيح أو انتهت صلاحيته" });
+
+    await db.execute(
+      sql`UPDATE owner_applications SET phone_verified = true, phone_verified_at = now() WHERE email = ${emailLower}`
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[verify-phone-otp]", err);
+    return res.status(500).json({ error: "حدث خطأ أثناء التحقق" });
+  }
+});
+
+/* ── POST /resend-phone-otp ─────────────────────────────────── */
+router.post("/resend-phone-otp", async (req, res) => {
+  const { email } = req.body ?? {};
+  if (!email) return res.status(400).json({ error: "البريد مطلوب" });
+  const emailLower = String(email).trim().toLowerCase();
+  try {
+    const result = await db.execute(
+      sql`SELECT phone, phone_verified FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
+    );
+    const rows = (result as any).rows as Array<{ phone: string; phone_verified: boolean }>;
+    const app = rows[0];
+    if (!app) return res.status(404).json({ error: "الحساب غير موجود" });
+    if (app.phone_verified) return res.json({ ok: true, alreadyVerified: true });
+
+    await db.execute(
+      sql`UPDATE phone_otp_tokens SET used_at = now() WHERE phone = ${app.phone} AND used_at IS NULL`
+    );
+    const code = generateCode();
+    await createPhoneOtp(app.phone, code);
+
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[PHONE-OTP] Resend for ${app.phone}: ${code}`);
+    }
+    return res.json({ ok: true, maskedPhone: maskPhone(app.phone) });
+  } catch (err) {
+    console.error("[resend-phone-otp]", err);
+    return res.status(500).json({ error: "حدث خطأ أثناء إعادة الإرسال" });
+  }
+});
+
 /* ── GET /admin/applications ────────────────────────────────
    Returns all partner applications (admin only).
    ─────────────────────────────────────────────────────────── */

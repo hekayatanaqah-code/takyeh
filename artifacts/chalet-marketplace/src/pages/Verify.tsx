@@ -5,8 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const RESEND_SECONDS = 60;
-const DEV_CODE = "123456";
 const IS_DEV = import.meta.env.DEV;
+
+/* ── Arabic-Indic digit helpers ── */
+const EN_TO_AR: Record<string, string> = { '0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩' };
+const arToEn = (s: string) => s.replace(/[٠-٩]/g, n => String(n.charCodeAt(0) - 0x0660));
+const DEV_DIGITS = "١٢٣٤٥٦".split("");
 
 function getEmailFromUrl(): string {
   const params = new URLSearchParams(window.location.search);
@@ -53,8 +57,8 @@ export default function Verify() {
 
   /* ── Auto-submit when all 6 digits are filled ── */
   useEffect(() => {
-    if (code.length === 6 && !digits.includes("") && !loading && !verified) {
-      handleVerify(code);
+    if (!digits.includes("") && !loading && !verified) {
+      handleVerify(digits.join(""));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [digits]);
@@ -64,10 +68,11 @@ export default function Verify() {
     setError(null);
     setLoading(true);
     try {
+      const otpEn = arToEn(otp); // convert Arabic-Indic to ASCII for API
       const r = await fetch(`${BASE}/api/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code: otp }),
+        body: JSON.stringify({ email, code: otpEn }),
       });
       const data = await r.json();
       if (!r.ok) {
@@ -77,9 +82,7 @@ export default function Verify() {
         return;
       }
       setVerified(true);
-      setTimeout(() => {
-        window.location.href = `${BASE}/onboarding/type?email=${encodeURIComponent(email)}`;
-      }, 2800);
+      /* No auto-redirect — user clicks the button to continue */
     } catch {
       setError("تعذّر الاتصال بالخادم");
       setDigits(Array(6).fill(""));
@@ -102,7 +105,7 @@ export default function Verify() {
   function handleKeyDown(idx: number, e: React.KeyboardEvent<HTMLInputElement>) {
     if (/^\d$/.test(e.key)) {
       e.preventDefault();
-      setDigit(idx, e.key);
+      setDigit(idx, EN_TO_AR[e.key] ?? e.key); // store Arabic-Indic digit
     } else if (e.key === "Backspace") {
       e.preventDefault();
       if (digits[idx]) {
@@ -129,8 +132,9 @@ export default function Verify() {
   /* Mobile fallback: physical keyboard fires keydown with key="Unidentified",
      so we also catch the resulting onChange event */
   function handleDigitChange(idx: number, val: string) {
-    const digit = val.replace(/\D/g, "").slice(-1);
-    setDigit(idx, digit);
+    // Accept Arabic-Indic or English digits, always store as Arabic-Indic
+    const en = arToEn(val).replace(/\D/g, "").slice(-1);
+    setDigit(idx, EN_TO_AR[en] ?? "");
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
@@ -173,38 +177,40 @@ export default function Verify() {
           <div className="w-20 h-20 rounded-full bg-[#F5EEE9] flex items-center justify-center mb-5">
             <ShieldCheck className="w-11 h-11 text-[#8C6246]" />
           </div>
-          <h2 className="text-xl font-bold text-[#2D2D2D] mb-2">تم التحقق بنجاح ✓</h2>
+          <h2 className="text-xl font-bold text-[#2D2D2D] mb-2">تم التحقق من البريد ✓</h2>
           <p className="text-[#656565] text-sm leading-relaxed mb-6">
             تم التحقق من بريدك الإلكتروني بنجاح.
-            <br className="mb-1" />
-            جاري الانتقال لإعداد حسابك…
+            <br />
+            الخطوة التالية: تفعيل رقم جوالك عبر الواتساب.
           </p>
           <div className="w-full bg-[#F5EEE9] border border-[#D9C3B0] rounded-2xl p-4 mb-6 text-right">
             <div className="flex items-center gap-2 mb-3">
               <ClipboardList className="w-4 h-4 text-[#8C6246] shrink-0" />
-              <p className="text-xs font-semibold text-[#734f36]">ما الذي سيحدث بعد التفعيل؟</p>
+              <p className="text-xs font-semibold text-[#734f36]">خطوات إعداد حسابك</p>
             </div>
-            <ol className="space-y-1.5">
+            <ol className="space-y-2">
               {[
-                "حدّد نوع نشاطك — شاليهات أو خدمات أو كلاهما",
-                "أضف شاليهك أو خدمتك مع الصور والتفاصيل",
-                "استقبل الحجوزات مباشرة من لوحة التحكم",
+                { label: "تفعيل البريد الإلكتروني", done: true },
+                { label: "تفعيل رقم الجوال عبر الواتساب", done: false },
+                { label: "تحديد نوع نشاطك وإعداد حسابك", done: false },
               ].map((step, i) => (
-                <li key={i} className="flex items-start gap-2 text-xs text-[#656565]">
-                  <span className="w-5 h-5 rounded-full bg-[#D9C3B0] text-[#734f36] font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
-                    {i + 1}
+                <li key={i} className="flex items-center gap-2 text-xs">
+                  <span className={`w-5 h-5 rounded-full font-bold text-[10px] flex items-center justify-center shrink-0 ${step.done ? "bg-[#8C6246] text-white" : "bg-[#D9C3B0] text-[#734f36]"}`}>
+                    {step.done ? "✓" : i + 1}
                   </span>
-                  {step}
+                  <span className={step.done ? "text-[#8C6246] font-medium line-through" : "text-[#555555] font-medium"}>
+                    {step.label}
+                  </span>
                 </li>
               ))}
             </ol>
           </div>
           <button
-            onClick={() => navigate("/login")}
+            onClick={() => { window.location.href = `${BASE}/verify-phone?email=${encodeURIComponent(email)}`; }}
             className="w-full h-11 bg-[#8C6246] hover:bg-[#7A5538] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
           >
-            <ArrowRight className="w-4 h-4 rotate-180" />
-            العودة لصفحة الدخول
+            المتابعة لإعداد الحساب
+            <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -238,7 +244,7 @@ export default function Verify() {
         </div>
 
         {/* ── 6 individual digit inputs ── */}
-        <div className="flex items-center justify-center gap-2 mb-5 ltr" dir="ltr">
+        <div className="flex items-center justify-center gap-2 mb-5" dir="ltr">
           {digits.map((d, i) => (
             <input
               key={i}
@@ -249,13 +255,14 @@ export default function Verify() {
               maxLength={2}
               value={d}
               disabled={loading}
+              data-no-arabic=""
               autoComplete={i === 0 ? "one-time-code" : "off"}
               onPaste={i === 0 ? handlePaste : undefined}
               onChange={(e) => handleDigitChange(i, e.target.value)}
               onKeyDown={(e) => handleKeyDown(i, e)}
               onFocus={(e) => e.target.select()}
               className={[
-                "w-11 h-14 text-center text-xl font-bold rounded-xl border-2 transition-all outline-none",
+                "w-11 h-14 text-center text-2xl font-bold rounded-xl border-2 transition-all outline-none",
                 "focus:border-[#8C6246] focus:ring-2 focus:ring-[#8C6246]/20",
                 loading ? "opacity-50 cursor-not-allowed bg-gray-50" : "bg-white cursor-text",
                 d ? "border-[#8C6246] bg-[#FBF9F6] text-[#2D2D2D]" : "border-[#E0E0E0] text-[#2D2D2D]",
@@ -268,13 +275,10 @@ export default function Verify() {
         {IS_DEV && (
           <button
             type="button"
-            onClick={() => {
-              const devDigits = DEV_CODE.split("");
-              setDigits(devDigits);
-            }}
+            onClick={() => setDigits(DEV_DIGITS)}
             className="w-full mb-4 py-2 rounded-xl border border-dashed border-[#D9C3B0] bg-[#FBF9F6] text-xs text-[#8C6246] font-medium hover:bg-[#F5EEE9] transition-colors"
           >
-            🛠 بيئة تطوير — اضغط لملء الكود التجريبي: {DEV_CODE}
+            🛠 بيئة تطوير — اضغط لملء الكود التجريبي: ١٢٣٤٥٦
           </button>
         )}
 

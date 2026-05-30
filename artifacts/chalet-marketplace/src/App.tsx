@@ -30,6 +30,7 @@ import Login from "./pages/Login";
 import AdminPortal from "./pages/AdminPortal";
 import Register from "./pages/Register";
 import Verify from "./pages/Verify";
+import VerifyPhone from "./pages/VerifyPhone";
 import OnboardingType from "./pages/OnboardingType";
 import OnboardingWelcome from "./pages/OnboardingWelcome";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -87,6 +88,7 @@ function Router() {
       <Route path="/staff-login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/verify" component={Verify} />
+      <Route path="/verify-phone" component={VerifyPhone} />
       <Route path="/onboarding/type" component={OnboardingType} />
       <Route path="/onboarding/welcome" component={OnboardingWelcome} />
       <Route path="/forgot-password">{() => <ForgotPassword portalType="public" />}</Route>
