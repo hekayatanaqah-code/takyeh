@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Eye, EyeOff, ShieldAlert, Info } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -8,6 +8,15 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 export default function Login() {
   const [, navigate]    = useLocation();
   const qc              = useQueryClient();
+  const { data: settings = {} } = useQuery<Record<string, string>>({
+    queryKey: ["page-content"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include" });
+      return r.ok ? r.json() : {};
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+  const logoUrl = settings.site_logo_url || "";
   const [input, setInput]           = useState("");
   const [password, setPassword]     = useState("");
   const [showPw, setShowPw]         = useState(false);
@@ -62,8 +71,11 @@ export default function Login() {
 
       {/* Logo */}
       <a href={`${BASE}/`} className="flex flex-col items-center mb-6 select-none">
-        <div className="w-16 h-16 bg-[#8C6246] rounded-2xl flex items-center justify-center shadow-md mb-3">
-          <span className="text-white text-3xl font-bold">ت</span>
+        <div className="w-20 h-20 bg-[#8C6246] rounded-2xl flex items-center justify-center shadow-md mb-3 overflow-hidden p-2">
+          {logoUrl
+            ? <img src={logoUrl} alt="شعار تكيّة" className="w-full h-full object-contain" />
+            : <span className="text-white text-3xl font-bold">ت</span>
+          }
         </div>
         <h1 className="text-2xl font-bold text-[#2D2D2D]">تكيّة</h1>
         <p className="text-sm text-[#7A7A7A] mt-1">منصة إدارة الشاليهات — القصيم</p>
