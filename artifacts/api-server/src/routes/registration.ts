@@ -78,6 +78,45 @@ async function getSettings(keys: string[]): Promise<Record<string, string>> {
   return Object.fromEntries(rows.map(r => [r.key, r.value]));
 }
 
+/* ── POST /auth/check-exists ────────────────────────────────
+   Pre-validation: checks email + phone availability before the
+   user opens the terms modal. Returns field-level errors.
+   ─────────────────────────────────────────────────────────── */
+router.post("/auth/check-exists", async (req, res) => {
+  const { email, phone } = req.body ?? {};
+  const errors: { email?: string; phone?: string } = {};
+
+  try {
+    if (email) {
+      const emailLower = String(email).trim().toLowerCase();
+      const emailCheck = await db.execute(
+        sql`SELECT id FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
+      );
+      if (((emailCheck as any).rows as any[]).length > 0) {
+        errors.email = "هذا البريد الإلكتروني مسجّل مسبقاً";
+      }
+    }
+
+    if (phone) {
+      const phoneClean = String(phone).trim().replace(/\s+/g, "");
+      const phoneCheck = await db.execute(
+        sql`SELECT id FROM owner_applications WHERE phone = ${phoneClean} LIMIT 1`
+      );
+      if (((phoneCheck as any).rows as any[]).length > 0) {
+        errors.phone = "رقم الجوال هذا مسجّل مسبقاً";
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return res.status(422).json({ errors });
+    }
+    return res.json({ available: true });
+  } catch (err) {
+    console.error("[auth/check-exists] Error:", err);
+    return res.status(500).json({ error: "تعذّر التحقق، يرجى المحاولة مجدداً" });
+  }
+});
+
 /* ── POST /register-owner ───────────────────────────────────
    Public registration — only personal info required.
    Business details are collected after account activation.

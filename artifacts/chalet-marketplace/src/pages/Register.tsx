@@ -27,7 +27,9 @@ export default function Register() {
   const [showPw, setShowPw]               = useState(false);
   const [showCPw, setShowCPw]             = useState(false);
   const [loading, setLoading]             = useState(false);
+  const [checking, setChecking]           = useState(false);
   const [error, setError]                 = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors]     = useState<{ email?: string; phone?: string }>({});
   const [platformTerms, setPlatformTerms] = useState<string>("");
   const [showModal, setShowModal]         = useState(false);
   const scrollRef                         = useRef<HTMLDivElement>(null);
@@ -44,6 +46,9 @@ export default function Register() {
   function update(field: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
     setError(null);
+    if (field === "email" || field === "phone") {
+      setFieldErrors((fe) => ({ ...fe, [field]: undefined }));
+    }
   }
 
   function validateForm(): string | null {
@@ -60,11 +65,37 @@ export default function Register() {
     return null;
   }
 
-  function handleSubmitClick(e: React.FormEvent) {
+  async function handleSubmitClick(e: React.FormEvent) {
     e.preventDefault();
     const err = validateForm();
     if (err) { setError(err); return; }
     setError(null);
+    setFieldErrors({});
+
+    setChecking(true);
+    try {
+      const r = await fetch(`${BASE}/api/auth/check-exists`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: form.email.trim(), phone: form.phone.trim() }),
+      });
+      const data = await r.json();
+
+      if (r.status === 422 && data.errors) {
+        setFieldErrors(data.errors);
+        return;
+      }
+      if (!r.ok) {
+        setError(data.error ?? "تعذّر التحقق من البيانات، يرجى المحاولة مرة أخرى");
+        return;
+      }
+    } catch {
+      setError("تعذّر الاتصال بالخادم. يرجى المحاولة مرة أخرى");
+      return;
+    } finally {
+      setChecking(false);
+    }
+
     setShowModal(true);
     setTimeout(() => scrollRef.current?.scrollTo({ top: 0 }), 50);
   }
@@ -225,9 +256,12 @@ export default function Register() {
                 value={toAr(form.phone)}
                 onChange={(e) => update("phone", fromAr(e.target.value))}
                 dir="ltr"
-                className={`${inputCls} text-left`}
+                className={`${inputCls} text-left ${fieldErrors.phone ? "border-red-400 focus:border-red-400" : ""}`}
                 required
               />
+              {fieldErrors.phone && (
+                <p className="text-xs text-red-500 font-medium mt-1">{fieldErrors.phone}</p>
+              )}
             </div>
 
             {/* Email */}
@@ -239,10 +273,13 @@ export default function Register() {
                 value={form.email}
                 onChange={(e) => update("email", e.target.value)}
                 dir="rtl"
-                className={`${inputCls} text-right`}
+                className={`${inputCls} text-right ${fieldErrors.email ? "border-red-400 focus:border-red-400" : ""}`}
                 required
               />
-              <p className="text-xs text-[#757575] font-medium mt-1">سيُستخدم للدخول وإرسال رمز التحقق</p>
+              {fieldErrors.email
+                ? <p className="text-xs text-red-500 font-medium mt-1">{fieldErrors.email}</p>
+                : <p className="text-xs text-[#757575] font-medium mt-1">سيُستخدم للدخول وإرسال رمز التحقق</p>
+              }
             </div>
 
             {/* Password */}
@@ -312,12 +349,19 @@ export default function Register() {
             {/* Submit */}
             <button
               type="submit"
-              className="w-full bg-[#8C6246] hover:bg-[#734f36] text-white py-3.5 rounded-xl font-bold transition-all duration-300 flex items-center justify-center gap-2 shadow-sm mt-2"
+              disabled={checking}
+              className="w-full bg-[#8C6246] hover:bg-[#734f36] disabled:opacity-60 text-white py-3.5 rounded-xl font-bold transition-all duration-300 flex items-center justify-center gap-2 shadow-sm mt-2"
             >
-              <span>المتابعة للموافقة على الشروط</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
+              {checking ? (
+                <><Loader2 className="w-5 h-5 animate-spin" /> جاري التحقق…</>
+              ) : (
+                <>
+                  <span>المتابعة للموافقة على الشروط</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </>
+              )}
             </button>
           </form>
 
