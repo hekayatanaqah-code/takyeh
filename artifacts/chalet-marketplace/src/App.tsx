@@ -30,6 +30,8 @@ import Login from "./pages/Login";
 import AdminPortal from "./pages/AdminPortal";
 import Register from "./pages/Register";
 import Verify from "./pages/Verify";
+import OnboardingType from "./pages/OnboardingType";
+import OnboardingWelcome from "./pages/OnboardingWelcome";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 
@@ -85,6 +87,8 @@ function Router() {
       <Route path="/staff-login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/verify" component={Verify} />
+      <Route path="/onboarding/type" component={OnboardingType} />
+      <Route path="/onboarding/welcome" component={OnboardingWelcome} />
       <Route path="/forgot-password">{() => <ForgotPassword portalType="public" />}</Route>
       <Route path="/forgot-password/admin">{() => <ForgotPassword portalType="admin" />}</Route>
       <Route path="/reset-password" component={ResetPassword} />

@@ -68,6 +68,10 @@ export default function Verify() {
         return;
       }
       setVerified(true);
+      /* Auto-advance to onboarding after a short delay */
+      setTimeout(() => {
+        window.location.href = `${BASE}/onboarding/type?email=${encodeURIComponent(email)}`;
+      }, 2800);
     } catch {
       setError("تعذّر الاتصال بالخادم");
       setCode("");

@@ -78,6 +78,31 @@ async function getSettings(keys: string[]): Promise<Record<string, string>> {
   return Object.fromEntries(rows.map(r => [r.key, r.value]));
 }
 
+/* ── PATCH /onboarding/type ─────────────────────────────────
+   Updates business_type on owner_applications for a given email.
+   Called after the user picks their activity type in onboarding.
+   ─────────────────────────────────────────────────────────── */
+router.patch("/onboarding/type", async (req, res) => {
+  const { email, businessType } = req.body ?? {};
+  if (!email || !businessType) {
+    return res.status(400).json({ error: "البريد ونوع النشاط مطلوبان" });
+  }
+  const allowed = ["chalet", "service", "both"];
+  if (!allowed.includes(String(businessType))) {
+    return res.status(400).json({ error: "نوع نشاط غير صحيح" });
+  }
+  const emailLower = String(email).trim().toLowerCase();
+  try {
+    await db.execute(
+      sql`UPDATE owner_applications SET business_type = ${String(businessType)} WHERE email = ${emailLower}`
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[onboarding/type] Error:", err);
+    return res.status(500).json({ error: "تعذّر الحفظ" });
+  }
+});
+
 /* ── POST /auth/check-exists ────────────────────────────────
    Pre-validation: checks email + phone availability before the
    user opens the terms modal. Returns field-level errors.
