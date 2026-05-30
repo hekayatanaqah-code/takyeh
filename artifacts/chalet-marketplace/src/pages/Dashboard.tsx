@@ -17777,8 +17777,30 @@ export default function Dashboard() {
     enabled: (isAuthenticated || isImpersonating) && !actAsStaff,
   });
 
+  /* ── Owner profile: fetch business_type for conditional rendering ── */
+  const { data: ownerProfile } = useQuery<{ businessType?: string }>({
+    queryKey: ["owner", "profile-btype"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/profile");
+      return r.ok ? r.json() : {};
+    },
+    enabled: (isAuthenticated || isImpersonating) && !actAsStaff,
+  });
+  /* "chalet" | "service" | "both" — default to "both" until loaded */
+  const businessType = ownerProfile?.businessType ?? "both";
+  const canSeeChalets  = businessType !== "service";
+  const canSeeServices = businessType !== "chalet";
+
   /* Cross-owner logic: user has BOTH chalets AND service providers */
   const isCrossOwner = (ownerChalets?.length ?? 0) > 0 && myApprovedProviders.length > 0;
+
+  /* Auto-set dashMode based on businessType when profile loads */
+  useEffect(() => {
+    if (!ownerProfile) return;
+    if (businessType === "service" && dashMode === "chalets") setDashMode("services");
+    if (businessType === "chalet" && dashMode === "services") setDashMode("chalets");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerProfile]);
 
   /* Auto-select first service when entering services mode */
   useEffect(() => {
@@ -18167,41 +18189,45 @@ export default function Dashboard() {
             transition={{ delay: 0.05 }}
             className="flex flex-wrap items-center gap-1 mb-6 bg-muted rounded-2xl p-1 w-fit max-w-full"
           >
-            {/* Chalets mode */}
-            <button
-              onClick={() => setDashMode("chalets")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                dashMode === "chalets"
-                  ? "bg-background text-primary shadow-sm ring-1 ring-border"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Building2 className="w-4 h-4" />
-              إدارة شاليهاتي
-              {(submissions?.length ?? 0) > 0 && (
-                <span className="text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5 font-semibold">
-                  {toAr(submissions?.length ?? 0)}
-                </span>
-              )}
-            </button>
-            {/* Services mode */}
-            <button
-              onClick={() => setDashMode("services")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                dashMode === "services"
-                  ? "bg-background text-amber-600 shadow-sm ring-1 ring-border"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Star className="w-4 h-4" />
-              إدارة خدماتي
-              {(myApprovedProviders.length + myServiceSubmissions.filter(s => s.status === "pending").length) > 0 && (
-                <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full px-2 py-0.5 font-semibold">
-                  {toAr(myApprovedProviders.length + myServiceSubmissions.length)}
-                </span>
-              )}
-            </button>
-            {/* Admin Finance mode */}
+            {/* Chalets mode — hidden for service-only accounts */}
+            {canSeeChalets && (
+              <button
+                onClick={() => setDashMode("chalets")}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                  dashMode === "chalets"
+                    ? "bg-background text-primary shadow-sm ring-1 ring-border"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Building2 className="w-4 h-4" />
+                إدارة شاليهاتي
+                {(submissions?.length ?? 0) > 0 && (
+                  <span className="text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5 font-semibold">
+                    {toAr(submissions?.length ?? 0)}
+                  </span>
+                )}
+              </button>
+            )}
+            {/* Services mode — hidden for chalet-only accounts */}
+            {canSeeServices && (
+              <button
+                onClick={() => setDashMode("services")}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                  dashMode === "services"
+                    ? "bg-background text-amber-600 shadow-sm ring-1 ring-border"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Star className="w-4 h-4" />
+                إدارة خدماتي
+                {(myApprovedProviders.length + myServiceSubmissions.filter(s => s.status === "pending").length) > 0 && (
+                  <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full px-2 py-0.5 font-semibold">
+                    {toAr(myApprovedProviders.length + myServiceSubmissions.length)}
+                  </span>
+                )}
+              </button>
+            )}
+            {/* Admin Finance mode — always visible */}
             <button
               onClick={() => setDashMode("admin-finance")}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
@@ -18572,8 +18598,8 @@ export default function Dashboard() {
           <NotificationSettingsSection />
         )}
 
-        {/* ── My Services Summary Card (in chalets mode only) ── */}
-        {!actAsStaff && dashMode === "chalets" && (myServiceSubmissions.length > 0 || myApprovedProviders.length > 0) && (
+        {/* ── My Services Summary Card (in chalets mode only, hidden for chalet-only accounts) ── */}
+        {!actAsStaff && canSeeServices && dashMode === "chalets" && (myServiceSubmissions.length > 0 || myApprovedProviders.length > 0) && (
           <motion.button
             type="button"
             initial={{ opacity: 0, y: 6 }}
