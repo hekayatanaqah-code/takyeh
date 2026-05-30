@@ -120,13 +120,13 @@ export default function Login() {
                 autoComplete="current-password"
                 dir="rtl"
                 required
-                className="w-full pr-4 pl-10 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-right text-sm bg-white placeholder:text-[#C0C0C0]"
+                className="w-full ps-4 pe-10 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-right text-sm bg-white placeholder:text-[#C0C0C0]"
               />
               <button
                 type="button"
                 tabIndex={-1}
                 onClick={() => setShowPw((v) => !v)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B0B0B0] hover:text-[#7A7A7A] transition-colors"
+                className="absolute end-3 top-1/2 -translate-y-1/2 text-[#B0B0B0] hover:text-[#7A7A7A] transition-colors"
               >
                 {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -189,7 +189,7 @@ export default function Login() {
 
       {/* Footer links */}
       <div className="flex flex-col items-center gap-2 mt-6 text-sm">
-        <p className="text-sm text-[#555555] font-medium">
+        <p className="text-base text-[#555555] font-medium">
           شريك جديد؟{" "}
           <a href={`${BASE}/register`} className="text-[#8C6246] hover:underline font-bold">انضم إلينا الآن</a>
         </p>
