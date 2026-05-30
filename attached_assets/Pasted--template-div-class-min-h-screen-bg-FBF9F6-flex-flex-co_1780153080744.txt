@@ -1,0 +1,69 @@
+<template>
+  <div class="min-h-screen bg-[#FBF9F6] flex flex-col items-center justify-center p-4 font-sans" dir="rtl">
+    <!-- شعار المنصة الموحد باللون البني -->
+    <div class="flex flex-col items-center mb-6">
+      <div class="w-16 h-16 bg-[#8C6246] rounded-2xl flex items-center justify-center shadow-md mb-3">
+        <span class="text-white text-3xl font-bold">ت</span>
+      </div>
+      <h1 class="text-2xl font-bold text-[#2D2D2D]">تكيّة</h1>
+      <p class="text-sm text-[#7A7A7A] mt-1">منصة إدارة الشاليهات — القصيم</p>
+    </div>
+
+    <!-- صندوق التنويه لشركاء تكية -->
+    <div class="w-full max-w-md bg-[#F4EFEA] border border-[#D9C3B0] text-[#734f36] px-4 py-3 rounded-xl flex items-center gap-3 mb-4 text-sm font-medium">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 shrink-0 text-[#8C6246]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span>تنويه: هذا القسم مخصص لشركاء تكية فقط.</span>
+    </div>
+
+    <!-- كرت تسجيل الدخول بعد حذف "اسم المستخدم" نهائياً -->
+    <div class="w-full max-w-md bg-white border border-[#EBEBEB] rounded-3xl p-8 shadow-sm">
+      <h2 class="text-xl font-bold text-[#2D2D2D] mb-1 text-center">تسجيل الدخول</h2>
+      <p class="text-xs text-[#9E9E9E] mb-6 text-center">مرحباً بك مجدداً في منصة تكيّة</p>
+
+      <form @submit.prevent="handleLogin" class="space-y-4">
+        <!-- تم توحيد الحقل على البريد الإلكتروني فقط ليتطابق مع بيانات التسجيل -->
+        <div>
+          <label class="block text-sm font-semibold text-[#4A4A4A] mb-2">البريد الإلكتروني</label>
+          <input 
+            type="email" 
+            placeholder="أدخل بريدك الإلكتروني" 
+            class="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-right" 
+            dir="rtl" 
+          />
+        </div>
+
+        <!-- حقل كلمة المرور -->
+        <div>
+          <label class="block text-sm font-semibold text-[#4A4A4A] mb-2">كلمة المرور</label>
+          <div class="relative">
+            <input type="password" placeholder="••••••••" class="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-left" dir="ltr" />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-xs pt-1">
+          <label class="flex items-center gap-2 text-[#7A7A7A] cursor-pointer">
+            <input type="checkbox" class="rounded border-[#E0E0E0] text-[#8C6246] focus:ring-[#8C6246]" />
+            <span>تذكرني لـ ٣٠ يوم</span>
+          </label>
+          <a href="/forgot-password" class="text-[#8C6246] hover:underline font-medium">نسيت كلمة المرور؟</a>
+        </div>
+
+        <!-- زر الدخول الفخم -->
+        <button type="submit" class="w-full bg-[#8C6246] hover:bg-[#734f36] text-white py-3.5 rounded-xl font-bold transition-all duration-300 flex items-center justify-center gap-2 shadow-sm mt-6">
+          <span>دخول</span>
+          <svg xmlns="http://www.w3.org/2000/xl" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      </form>
+    </div>
+
+    <!-- الروابط السفلية -->
+    <div class="flex flex-col items-center gap-2 mt-6 text-sm">
+      <p class="text-[#7A7A7A]">شريك جديد؟ <a href="/register" class="text-[#8C6246] hover:underline font-bold">انضم إلينا الآن</a></p>
+      <a href="/" class="text-xs text-[#9E9E9E] hover:underline">العودة لتصفح منصة تكيّة</a>
+    </div>
+  </div>
+</template>

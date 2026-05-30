@@ -83,11 +83,11 @@ export default function Login() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-[#4A4A4A] mb-2">
-              البريد الإلكتروني أو اسم المستخدم
+              البريد الإلكتروني
             </label>
             <input
               type="text"
-              placeholder="أدخل البريد أو اسم المستخدم"
+              placeholder="أدخل بريدك الإلكتروني"
               value={input}
               onChange={(e) => { setInput(e.target.value); setError(null); setIsAdminBlock(false); }}
               autoComplete="username"
