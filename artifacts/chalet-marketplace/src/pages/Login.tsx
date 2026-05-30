@@ -71,14 +71,13 @@ export default function Login() {
 
       {/* Logo */}
       <a href={`${BASE}/`} className="flex flex-col items-center mb-6 select-none">
-        <div className="w-20 h-20 bg-[#8C6246] rounded-2xl flex items-center justify-center shadow-md mb-3 overflow-hidden p-2">
+        <div className="w-24 h-24 flex items-center justify-center mb-3">
           {logoUrl
             ? <img src={logoUrl} alt="شعار تكيّة" className="w-full h-full object-contain" />
-            : <span className="text-white text-3xl font-bold">ت</span>
+            : <span className="text-[#8C6246] text-5xl font-bold">ت</span>
           }
         </div>
-        <h1 className="text-2xl font-bold text-[#2D2D2D]">تكيّة</h1>
-        <p className="text-sm text-[#7A7A7A] mt-1">منصة إدارة الشاليهات — القصيم</p>
+        <p className="text-sm text-[#7A7A7A] font-medium mt-1">منصة إدارة الشاليهات — القصيم</p>
       </a>
 
       {/* Guidance banner */}
