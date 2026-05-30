@@ -88,8 +88,7 @@ export default function Verify() {
     }
   }, [email, loading]);
 
-  function handleDigitChange(idx: number, val: string) {
-    const digit = val.replace(/\D/g, "").slice(-1);
+  function setDigit(idx: number, digit: string) {
     const next = [...digits];
     next[idx] = digit;
     setDigits(next);
@@ -99,23 +98,39 @@ export default function Verify() {
     }
   }
 
+  /* Desktop: intercept key presses directly — most reliable path */
   function handleKeyDown(idx: number, e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Backspace") {
+    if (/^\d$/.test(e.key)) {
+      e.preventDefault();
+      setDigit(idx, e.key);
+    } else if (e.key === "Backspace") {
+      e.preventDefault();
       if (digits[idx]) {
         const next = [...digits];
         next[idx] = "";
         setDigits(next);
+        if (error) setError(null);
       } else if (idx > 0) {
         inputRefs.current[idx - 1]?.focus();
         const next = [...digits];
         next[idx - 1] = "";
         setDigits(next);
+        if (error) setError(null);
       }
     } else if (e.key === "ArrowLeft" && idx < 5) {
+      e.preventDefault();
       inputRefs.current[idx + 1]?.focus();
     } else if (e.key === "ArrowRight" && idx > 0) {
+      e.preventDefault();
       inputRefs.current[idx - 1]?.focus();
     }
+  }
+
+  /* Mobile fallback: physical keyboard fires keydown with key="Unidentified",
+     so we also catch the resulting onChange event */
+  function handleDigitChange(idx: number, val: string) {
+    const digit = val.replace(/\D/g, "").slice(-1);
+    setDigit(idx, digit);
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
@@ -265,7 +280,7 @@ export default function Verify() {
 
         {/* Progress hint */}
         {code.replace(/\s/g, "").length > 0 && digits.includes("") && (
-          <p className="text-center text-xs text-[#9E9E9E] mb-3">
+          <p className="text-center text-xs text-[#555555] mb-3">
             {digits.filter(d => d !== "").length}/٦ أرقام
           </p>
         )}
@@ -301,7 +316,7 @@ export default function Verify() {
 
         {/* Resend */}
         <div className="flex flex-col items-center gap-2 mt-2">
-          <p className="text-xs text-[#9E9E9E]">لم تستلم الرمز؟</p>
+          <p className="text-xs text-[#555555] font-medium">لم تستلم الرمز؟</p>
           {canResend ? (
             <button
               onClick={handleResend}
@@ -312,7 +327,7 @@ export default function Verify() {
               {resending ? "جاري الإرسال…" : "إعادة إرسال الرمز"}
             </button>
           ) : (
-            <p className="text-xs text-[#9E9E9E]">
+            <p className="text-xs text-[#555555] font-medium">
               إعادة الإرسال بعد{" "}
               <span className="font-bold text-[#8C6246] tabular-nums">{countdown}</span>
               {" "}ثانية
@@ -320,7 +335,7 @@ export default function Verify() {
           )}
         </div>
 
-        <p className="text-center text-xs text-[#C0C0C0] mt-5">
+        <p className="text-center text-xs text-[#555555] font-medium mt-5">
           إذا لم يصل الرمز، تحقق من مجلد الرسائل غير المرغوب فيها
         </p>
       </div>
