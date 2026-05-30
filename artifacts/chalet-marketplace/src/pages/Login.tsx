@@ -77,7 +77,7 @@ export default function Login() {
             : <span className="text-[#8C6246] text-5xl font-bold">ت</span>
           }
         </div>
-        <p className="text-sm text-[#7A7A7A] font-medium mt-1">منصة إدارة الشاليهات — القصيم</p>
+        <p className="text-sm text-[#7A7A7A] font-medium mt-1">منصتك المتكاملة لإدارة الحجوزات والخدمات</p>
       </a>
 
       {/* Guidance banner */}
