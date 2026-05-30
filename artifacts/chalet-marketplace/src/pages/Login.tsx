@@ -118,9 +118,9 @@ export default function Login() {
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(null); setIsAdminBlock(false); }}
                 autoComplete="current-password"
-                dir="ltr"
+                dir="rtl"
                 required
-                className="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-left text-sm bg-white placeholder:text-[#C0C0C0] pl-10"
+                className="w-full pr-4 pl-10 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-right text-sm bg-white placeholder:text-[#C0C0C0]"
               />
               <button
                 type="button"
@@ -189,7 +189,7 @@ export default function Login() {
 
       {/* Footer links */}
       <div className="flex flex-col items-center gap-2 mt-6 text-sm">
-        <p className="text-[#7A7A7A]">
+        <p className="text-sm text-[#555555] font-medium">
           شريك جديد؟{" "}
           <a href={`${BASE}/register`} className="text-[#8C6246] hover:underline font-bold">انضم إلينا الآن</a>
         </p>
