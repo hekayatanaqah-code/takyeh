@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
-import { CheckCircle2, Mail, RefreshCw, ArrowRight, ShieldCheck, ClipboardList } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { toAr } from "@/lib/utils";
+import { CheckCircle2, Mail, RefreshCw, ShieldCheck, ClipboardList, ArrowRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const RESEND_SECONDS = 60;
+const DEV_CODE = "123456";
+const IS_DEV = import.meta.env.DEV;
 
 function getEmailFromUrl(): string {
   const params = new URLSearchParams(window.location.search);
@@ -16,18 +17,26 @@ export default function Verify() {
   const [, navigate] = useLocation();
   const email = getEmailFromUrl();
 
-  const [code, setCode]           = useState("");
+  const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
   const [loading, setLoading]     = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [verified, setVerified]   = useState(false);
   const [countdown, setCountdown] = useState(RESEND_SECONDS);
   const [canResend, setCanResend] = useState(false);
-  const inputRef                  = useRef<HTMLInputElement>(null);
+  const inputRefs = useRef<Array<HTMLInputElement | null>>(Array(6).fill(null));
 
-  /* ── Auto-focus the hidden input on mount ── */
+  const { data: pageContent } = useQuery<{ site_logo_url?: string }>({
+    queryKey: ["page-content"],
+    queryFn: () => fetch(`${BASE}/api/page-content`).then((r) => r.json()),
+  });
+  const logoUrl = pageContent?.site_logo_url;
+
+  const code = digits.join("");
+
+  /* ── Auto-focus first box on mount ── */
   useEffect(() => {
-    setTimeout(() => inputRef.current?.focus(), 300);
+    setTimeout(() => inputRefs.current[0]?.focus(), 300);
   }, []);
 
   /* ── Countdown timer ── */
@@ -42,13 +51,13 @@ export default function Verify() {
     if (!email) navigate("/register");
   }, [email, navigate]);
 
-  /* ── Auto-submit when all 6 digits are entered ── */
+  /* ── Auto-submit when all 6 digits are filled ── */
   useEffect(() => {
-    if (code.length === 6 && !loading && !verified) {
+    if (code.length === 6 && !digits.includes("") && !loading && !verified) {
       handleVerify(code);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [digits]);
 
   const handleVerify = useCallback(async (otp: string) => {
     if (loading) return;
@@ -63,22 +72,62 @@ export default function Verify() {
       const data = await r.json();
       if (!r.ok) {
         setError(data.error ?? "الرمز غير صحيح");
-        setCode("");
-        setTimeout(() => inputRef.current?.focus(), 100);
+        setDigits(Array(6).fill(""));
+        setTimeout(() => inputRefs.current[0]?.focus(), 100);
         return;
       }
       setVerified(true);
-      /* Auto-advance to onboarding after a short delay */
       setTimeout(() => {
         window.location.href = `${BASE}/onboarding/type?email=${encodeURIComponent(email)}`;
       }, 2800);
     } catch {
       setError("تعذّر الاتصال بالخادم");
-      setCode("");
+      setDigits(Array(6).fill(""));
     } finally {
       setLoading(false);
     }
   }, [email, loading]);
+
+  function handleDigitChange(idx: number, val: string) {
+    const digit = val.replace(/\D/g, "").slice(-1);
+    const next = [...digits];
+    next[idx] = digit;
+    setDigits(next);
+    if (error) setError(null);
+    if (digit && idx < 5) {
+      inputRefs.current[idx + 1]?.focus();
+    }
+  }
+
+  function handleKeyDown(idx: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace") {
+      if (digits[idx]) {
+        const next = [...digits];
+        next[idx] = "";
+        setDigits(next);
+      } else if (idx > 0) {
+        inputRefs.current[idx - 1]?.focus();
+        const next = [...digits];
+        next[idx - 1] = "";
+        setDigits(next);
+      }
+    } else if (e.key === "ArrowLeft" && idx < 5) {
+      inputRefs.current[idx + 1]?.focus();
+    } else if (e.key === "ArrowRight" && idx > 0) {
+      inputRefs.current[idx - 1]?.focus();
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const next = Array(6).fill("");
+    pasted.split("").forEach((d, i) => { next[i] = d; });
+    setDigits(next);
+    const focusIdx = Math.min(pasted.length, 5);
+    setTimeout(() => inputRefs.current[focusIdx]?.focus(), 50);
+  }
 
   async function handleResend() {
     if (!canResend || resending) return;
@@ -92,8 +141,8 @@ export default function Verify() {
       });
       setCountdown(RESEND_SECONDS);
       setCanResend(false);
-      setCode("");
-      setTimeout(() => inputRef.current?.focus(), 100);
+      setDigits(Array(6).fill(""));
+      setTimeout(() => inputRefs.current[0]?.focus(), 100);
     } catch {
       setError("فشل إعادة الإرسال، حاول مرة أخرى");
     } finally {
@@ -101,46 +150,33 @@ export default function Verify() {
     }
   }
 
-  function handleCodeChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value.replace(/\D/g, "").slice(0, 6);
-    setCode(val);
-    if (error) setError(null);
-  }
-
-  /* ── Visual digit display (6 boxes built from the single input value) ── */
-  const displayDigits = Array(6).fill("").map((_, i) => code[i] ?? "");
-
   /* ── Success Screen ── */
   if (verified) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex items-center justify-center px-4" dir="rtl">
-        <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-gray-100 p-8 flex flex-col items-center text-center">
-          <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mb-5">
-            <ShieldCheck className="w-11 h-11 text-green-600" />
+      <div className="min-h-screen bg-[#FBF9F6] flex items-center justify-center px-4" dir="rtl">
+        <div className="w-full max-w-md bg-white border border-[#EBEBEB] rounded-3xl shadow-sm p-8 flex flex-col items-center text-center">
+          <div className="w-20 h-20 rounded-full bg-[#F5EEE9] flex items-center justify-center mb-5">
+            <ShieldCheck className="w-11 h-11 text-[#8C6246]" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">تم التحقق بنجاح ✓</h2>
-          <p className="text-gray-500 text-sm leading-relaxed mb-6">
+          <h2 className="text-xl font-bold text-[#2D2D2D] mb-2">تم التحقق بنجاح ✓</h2>
+          <p className="text-[#656565] text-sm leading-relaxed mb-6">
             تم التحقق من بريدك الإلكتروني بنجاح.
             <br className="mb-1" />
-            طلبك الآن قيد المراجعة من فريق الإدارة، وستصلك رسالة ترحيب على{" "}
-            <span className="text-green-700 font-medium">{email}</span>{" "}
-            تتضمن خطوات إعداد نشاطك فور التفعيل.
+            جاري الانتقال لإعداد حسابك…
           </p>
-
-          {/* Onboarding preview */}
-          <div className="w-full bg-green-50 border border-green-100 rounded-2xl p-4 mb-6 text-right">
+          <div className="w-full bg-[#F5EEE9] border border-[#D9C3B0] rounded-2xl p-4 mb-6 text-right">
             <div className="flex items-center gap-2 mb-3">
-              <ClipboardList className="w-4 h-4 text-green-600 shrink-0" />
-              <p className="text-xs font-semibold text-green-800">ما الذي سيحدث بعد التفعيل؟</p>
+              <ClipboardList className="w-4 h-4 text-[#8C6246] shrink-0" />
+              <p className="text-xs font-semibold text-[#734f36]">ما الذي سيحدث بعد التفعيل؟</p>
             </div>
             <ol className="space-y-1.5">
               {[
-                "أضف شاليهك — الصور والتفاصيل والموقع",
-                "حدّد الأسعار والمواسم",
+                "حدّد نوع نشاطك — شاليهات أو خدمات أو كلاهما",
+                "أضف شاليهك أو خدمتك مع الصور والتفاصيل",
                 "استقبل الحجوزات مباشرة من لوحة التحكم",
               ].map((step, i) => (
-                <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
-                  <span className="w-5 h-5 rounded-full bg-green-200 text-green-800 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                <li key={i} className="flex items-start gap-2 text-xs text-[#656565]">
+                  <span className="w-5 h-5 rounded-full bg-[#D9C3B0] text-[#734f36] font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
                     {i + 1}
                   </span>
                   {step}
@@ -148,92 +184,89 @@ export default function Verify() {
               ))}
             </ol>
           </div>
-
-          <Button
+          <button
             onClick={() => navigate("/login")}
-            className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl gap-2"
+            className="w-full h-11 bg-[#8C6246] hover:bg-[#7A5538] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
           >
             <ArrowRight className="w-4 h-4 rotate-180" />
             العودة لصفحة الدخول
-          </Button>
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 flex flex-col items-center justify-center px-4 py-10" dir="rtl">
-      {/* Brand */}
-      <div className="flex flex-col items-center mb-7 select-none">
-        <div className="w-14 h-14 rounded-2xl bg-green-600 shadow-lg shadow-green-200 flex items-center justify-center mb-3">
-          <ShieldCheck className="w-7 h-7 text-white" />
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900">تكيّة</h1>
-        <p className="text-gray-500 text-sm mt-0.5">التحقق من البريد الإلكتروني</p>
+    <div className="min-h-screen bg-[#FBF9F6] flex flex-col items-center justify-center px-4 py-10" dir="rtl">
+
+      {/* Logo */}
+      <div className="mb-7 select-none flex flex-col items-center gap-1">
+        {logoUrl ? (
+          <img src={logoUrl} alt="تكيّة" className="h-16 object-contain" />
+        ) : (
+          <div className="w-14 h-14 rounded-2xl bg-[#8C6246] flex items-center justify-center text-white text-2xl font-bold">ت</div>
+        )}
+        <p className="text-sm text-[#8C6246] font-medium">منصتك المتكاملة لإدارة الحجوزات والخدمات</p>
       </div>
 
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl border border-gray-100 p-7">
+      {/* Card */}
+      <div className="w-full max-w-md bg-white border border-[#EBEBEB] rounded-3xl p-8 shadow-sm">
+
         {/* Header */}
         <div className="flex flex-col items-center text-center mb-7">
-          <div className="w-14 h-14 rounded-full bg-green-50 border-2 border-green-200 flex items-center justify-center mb-4">
-            <Mail className="w-7 h-7 text-green-600" />
+          <div className="w-14 h-14 rounded-2xl bg-[#F5EEE9] flex items-center justify-center mb-4">
+            <Mail className="w-7 h-7 text-[#8C6246]" />
           </div>
-          <h2 className="font-bold text-gray-800 text-base mb-1">أدخل رمز التحقق</h2>
-          <p className="text-gray-400 text-xs leading-relaxed">
-            أرسلنا رمزاً مكوناً من ٦ أرقام إلى
-            <br />
-            <span className="text-gray-600 font-medium" dir="ltr">{email}</span>
-          </p>
+          <h2 className="text-xl font-bold text-[#2D2D2D] mb-1">أدخل رمز التحقق</h2>
+          <p className="text-sm text-[#656565] font-semibold mb-1">تم إرسال رمز مكوّن من ٦ أرقام إلى</p>
+          <p className="text-sm text-[#8C6246] font-medium" dir="ltr">{email}</p>
         </div>
 
-        {/* ── 6-box OTP display backed by a single hidden input ── */}
-        <div
-          className="relative flex items-center justify-center gap-2 mb-5 cursor-text"
-          dir="ltr"
-          onClick={() => inputRef.current?.focus()}
-          role="group"
-          aria-label="رمز التحقق"
-        >
-          {/* Hidden single input — receives ALL keyboard/touch input */}
-          <input
-            ref={inputRef}
-            type="tel"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            autoComplete="one-time-code"
-            maxLength={6}
-            value={code}
-            onChange={handleCodeChange}
-            disabled={loading}
-            aria-label="أدخل رمز التحقق المكون من ٦ أرقام"
-            className="absolute opacity-0 w-full h-full top-0 left-0 cursor-text z-10"
-            style={{ fontSize: "16px" }}
-          />
-
-          {/* Visual digit boxes */}
-          {displayDigits.map((d, i) => (
-            <div
+        {/* ── 6 individual digit inputs ── */}
+        <div className="flex items-center justify-center gap-2 mb-5 ltr" dir="ltr">
+          {digits.map((d, i) => (
+            <input
               key={i}
-              aria-hidden="true"
+              ref={(el) => { inputRefs.current[i] = el; }}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={2}
+              value={d}
+              disabled={loading}
+              autoComplete={i === 0 ? "one-time-code" : "off"}
+              onPaste={i === 0 ? handlePaste : undefined}
+              onChange={(e) => handleDigitChange(i, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(i, e)}
+              onFocus={(e) => e.target.select()}
               className={[
-                "w-11 h-14 flex items-center justify-center text-xl font-bold rounded-xl border-2 transition-all select-none pointer-events-none",
-                loading ? "opacity-50" : "",
-                d
-                  ? "border-green-500 bg-green-50 text-gray-900"
-                  : i === code.length && !loading
-                    ? "border-green-400 ring-2 ring-green-100 bg-white text-gray-900"
-                    : "border-gray-200 bg-gray-50 text-gray-300",
+                "w-11 h-14 text-center text-xl font-bold rounded-xl border-2 transition-all outline-none",
+                "focus:border-[#8C6246] focus:ring-2 focus:ring-[#8C6246]/20",
+                loading ? "opacity-50 cursor-not-allowed bg-gray-50" : "bg-white cursor-text",
+                d ? "border-[#8C6246] bg-[#FBF9F6] text-[#2D2D2D]" : "border-[#E0E0E0] text-[#2D2D2D]",
               ].join(" ")}
-            >
-              {d || (i === code.length && !loading ? "|" : "")}
-            </div>
+            />
           ))}
         </div>
 
-        {/* OTP progress hint */}
-        {code.length > 0 && code.length < 6 && (
-          <p className="text-center text-xs text-gray-400 mb-3">
-            {toAr(String(code.length))}/٦ أرقام
+        {/* Dev hint */}
+        {IS_DEV && (
+          <button
+            type="button"
+            onClick={() => {
+              const devDigits = DEV_CODE.split("");
+              setDigits(devDigits);
+            }}
+            className="w-full mb-4 py-2 rounded-xl border border-dashed border-[#D9C3B0] bg-[#FBF9F6] text-xs text-[#8C6246] font-medium hover:bg-[#F5EEE9] transition-colors"
+          >
+            🛠 بيئة تطوير — اضغط لملء الكود التجريبي: {DEV_CODE}
+          </button>
+        )}
+
+        {/* Progress hint */}
+        {code.replace(/\s/g, "").length > 0 && digits.includes("") && (
+          <p className="text-center text-xs text-[#9E9E9E] mb-3">
+            {digits.filter(d => d !== "").length}/٦ أرقام
           </p>
         )}
 
@@ -244,9 +277,9 @@ export default function Verify() {
           </div>
         )}
 
-        {/* Loading indicator */}
+        {/* Loading */}
         {loading && (
-          <div className="text-center text-green-600 text-sm mb-4 flex items-center justify-center gap-2">
+          <div className="text-center text-[#8C6246] text-sm mb-4 flex items-center justify-center gap-2">
             <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
@@ -255,47 +288,40 @@ export default function Verify() {
           </div>
         )}
 
-        {/* Verify button (also auto-submits when all 6 filled) */}
-        {code.length === 6 && !loading && (
-          <Button
+        {/* Verify button */}
+        {!digits.includes("") && !loading && (
+          <button
             onClick={() => handleVerify(code)}
-            className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl gap-2 mb-4"
+            className="w-full h-11 bg-[#8C6246] hover:bg-[#7A5538] text-white font-bold rounded-xl flex items-center justify-center gap-2 mb-4 transition-colors"
           >
             <CheckCircle2 className="w-4 h-4" />
             تحقق وأكمل التسجيل
-          </Button>
-        )}
-
-        {/* Tap-to-focus hint */}
-        {code.length === 0 && !loading && (
-          <p className="text-center text-xs text-green-600 mb-3 font-medium animate-pulse">
-            اضغط على المربعات وابدأ الكتابة
-          </p>
+          </button>
         )}
 
         {/* Resend */}
-        <div className="flex flex-col items-center gap-2">
-          <p className="text-xs text-gray-400">لم تستلم الرمز؟</p>
+        <div className="flex flex-col items-center gap-2 mt-2">
+          <p className="text-xs text-[#9E9E9E]">لم تستلم الرمز؟</p>
           {canResend ? (
             <button
               onClick={handleResend}
               disabled={resending}
-              className="flex items-center gap-1.5 text-sm text-green-600 hover:text-green-700 font-medium disabled:opacity-60"
+              className="flex items-center gap-1.5 text-sm text-[#8C6246] hover:text-[#7A5538] font-medium disabled:opacity-60 transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${resending ? "animate-spin" : ""}`} />
               {resending ? "جاري الإرسال…" : "إعادة إرسال الرمز"}
             </button>
           ) : (
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-[#9E9E9E]">
               إعادة الإرسال بعد{" "}
-              <span className="font-bold text-green-600 tabular-nums">{toAr(String(countdown))}</span>
+              <span className="font-bold text-[#8C6246] tabular-nums">{countdown}</span>
               {" "}ثانية
             </p>
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-5">
-          إذا لم يصل الرمز، تحقق من صندوق البريد الإلكتروني وفولدر الرسائل غير المرغوب فيها
+        <p className="text-center text-xs text-[#C0C0C0] mt-5">
+          إذا لم يصل الرمز، تحقق من مجلد الرسائل غير المرغوب فيها
         </p>
       </div>
     </div>

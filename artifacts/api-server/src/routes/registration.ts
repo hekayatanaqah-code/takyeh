@@ -28,6 +28,8 @@ async function createOtp(email: string, code: string) {
 }
 
 async function isDevModeEnabled(): Promise<boolean> {
+  /* Always active in development environment */
+  if (process.env.NODE_ENV === "development") return true;
   try {
     const result = await db.execute(
       sql`SELECT value FROM site_settings WHERE key = 'otp_dev_mode' LIMIT 1`
