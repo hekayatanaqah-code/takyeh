@@ -223,11 +223,11 @@ export default function Register() {
               <label className={labelCls}>البريد الإلكتروني <span className="text-red-500">*</span></label>
               <input
                 type="email"
-                placeholder="example@email.com"
+                placeholder="أدخل بريدك الإلكتروني"
                 value={form.email}
                 onChange={(e) => update("email", e.target.value)}
-                dir="ltr"
-                className={`${inputCls} text-left`}
+                dir="rtl"
+                className={`${inputCls} text-right`}
                 required
               />
               <p className="text-[11px] text-[#9E9E9E] mt-1">سيُستخدم للدخول وإرسال رمز التحقق</p>
