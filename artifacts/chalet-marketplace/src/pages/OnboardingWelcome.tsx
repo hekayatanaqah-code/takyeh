@@ -91,11 +91,11 @@ export default function OnboardingWelcome() {
             </div>
             <div>
               <p className="font-bold text-[#2D2D2D] text-sm">أول شهر مجاناً</p>
-              <p className="text-xs text-[#734f36]">لا رسوم حتى إتمام التفعيل</p>
+              <p className="text-xs text-[#734f36] font-medium">تبدأ فترتك المجانية فور إطلاق نشاطك واستقبال الحجوزات</p>
             </div>
           </div>
-          <p className="text-xs text-[#656565] leading-relaxed">
-            يمكنك إضافة عقارك أو خدمتك الآن والاستمتاع بكامل مزايا المنصة مجاناً طوال الشهر الأول بعد التفعيل.
+          <p className="text-xs text-[#555555] leading-relaxed font-medium">
+            يمكنك إضافة عقارك أو خدمتك الآن والاستمتاع بكامل مزايا المنصة مجاناً طوال الشهر الأول من تفعيل استقبال الحجوزات.
           </p>
         </div>
 
@@ -126,7 +126,7 @@ export default function OnboardingWelcome() {
         <button
           type="button"
           onClick={() => navigate("/dashboard")}
-          className="w-full text-center text-xs text-[#9E9E9E] hover:text-[#555555] hover:underline mt-4 transition-colors"
+          className="w-full text-center text-sm text-[#656565] font-medium hover:text-[#2D2D2D] hover:underline mt-4 transition-colors"
         >
           تخطّ الآن — سأضيف لاحقاً من لوحة التحكم
         </button>
