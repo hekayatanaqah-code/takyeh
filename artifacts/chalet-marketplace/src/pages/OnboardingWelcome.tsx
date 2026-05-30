@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Gift, Building2, Wrench, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Gift, Building2, Wrench, Layers2, ArrowLeft, CheckCircle2 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -23,12 +23,20 @@ export default function OnboardingWelcome() {
   });
   const logoUrl = settings.site_logo_url || "";
 
+  const isBoth   = type === "both";
   const isChalet = type === "chalet";
-  const addPath  = isChalet ? "/add-chalet" : "/add-service-provider";
-  const addLabel = isChalet ? "أضف أول عقارك الآن" : "أضف أول خدمة الآن";
-  const TypeIcon = isChalet ? Building2 : Wrench;
 
-  const steps = isChalet
+  const addPath  = isBoth ? "/add-chalet" : isChalet ? "/add-chalet" : "/add-service-provider";
+  const addLabel = isBoth ? "ابدأ بتجهيز حسابك الآن" : isChalet ? "أضف أول عقارك الآن" : "أضف أول خدمة الآن";
+  const TypeIcon = isBoth ? Layers2 : isChalet ? Building2 : Wrench;
+
+  const steps = isBoth
+    ? [
+        "أضف عقارك الأول — الصور والتفاصيل والموقع",
+        "أضف خدماتك — الوصف والصور والأسعار",
+        "أدر الحجوزات والطلبات من لوحة تحكم موحّدة",
+      ]
+    : isChalet
     ? [
         "أضف شاليهك — الصور والتفاصيل والموقع",
         "حدّد الأسعار والمواسم والإتاحة",
