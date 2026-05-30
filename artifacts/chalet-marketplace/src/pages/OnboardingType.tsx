@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Wrench, ChevronLeft, Loader2 } from "lucide-react";
+import { Building2, Wrench, Layers2, ChevronLeft, Loader2 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -10,20 +10,26 @@ function getParams() {
   return { email: p.get("email") ?? "" };
 }
 
-type BizType = "chalet" | "service";
+type BizType = "chalet" | "service" | "both";
 
 const options: { type: BizType; icon: React.ReactNode; label: string; desc: string }[] = [
   {
     type: "chalet",
-    icon: <Building2 className="w-8 h-8" />,
-    label: "عقار / شاليه",
+    icon: <Building2 className="w-7 h-7" />,
+    label: "مالك عقار",
     desc: "أدر حجوزات شاليهاتك أو استراحاتك من لوحة تحكم واحدة",
   },
   {
     type: "service",
-    icon: <Wrench className="w-8 h-8" />,
+    icon: <Wrench className="w-7 h-7" />,
     label: "مزوّد خدمات",
     desc: "قدّم خدماتك المرتبطة بالسياحة والترفيه بمرونة كاملة",
+  },
+  {
+    type: "both",
+    icon: <Layers2 className="w-7 h-7" />,
+    label: "كلاهما معاً",
+    desc: "تملك عقارات وتقدّم خدمات في آنٍ واحد — لوحة تحكم موحّدة",
   },
 ];
 
