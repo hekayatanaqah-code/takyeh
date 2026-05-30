@@ -123,7 +123,7 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
         ) : (
           <div className="w-14 h-14 rounded-2xl bg-[#8C6246] flex items-center justify-center text-white text-2xl font-bold mb-1">ت</div>
         )}
-        <p className="text-xs text-[#9E9E9E] font-medium">منصتك المتكاملة لإدارة الحجوزات والخدمات</p>
+        <p className="text-sm text-[#8C6246] font-medium">منصتك المتكاملة لإدارة الحجوزات والخدمات</p>
       </div>
 
       {/* Card */}

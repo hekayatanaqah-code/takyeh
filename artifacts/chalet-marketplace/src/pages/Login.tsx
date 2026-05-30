@@ -77,7 +77,7 @@ export default function Login() {
             : <span className="text-[#8C6246] text-5xl font-bold">ت</span>
           }
         </div>
-        <p className="text-sm text-[#555555] font-semibold mt-2">منصتك المتكاملة لإدارة الحجوزات والخدمات</p>
+        <p className="text-sm text-[#8C6246] font-medium mt-2">منصتك المتكاملة لإدارة الحجوزات والخدمات</p>
       </a>
 
       {/* Guidance banner */}
