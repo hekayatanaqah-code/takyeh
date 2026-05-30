@@ -89,7 +89,7 @@ export default function Login() {
       {/* Login card */}
       <div className="w-full max-w-md bg-white border border-[#EBEBEB] rounded-3xl p-8 shadow-sm">
         <h2 className="text-xl font-bold text-[#2D2D2D] mb-1 text-center">تسجيل الدخول</h2>
-        <p className="text-sm text-[#656565] font-medium mb-6 text-center">مرحباً بك مجدداً في منصة تكيّة</p>
+        <p className="text-sm text-[#656565] font-semibold mb-6 text-center">مرحباً بك مجدداً في منصة تكيّة</p>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
@@ -118,15 +118,15 @@ export default function Login() {
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(null); setIsAdminBlock(false); }}
                 autoComplete="current-password"
-                dir="rtl"
+                dir="ltr"
                 required
-                className="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-right text-sm bg-white placeholder:text-[#C0C0C0] pr-10"
+                className="w-full px-4 py-3 border border-[#E0E0E0] rounded-xl focus:outline-none focus:border-[#8C6246] transition-colors text-left text-sm bg-white placeholder:text-[#C0C0C0] pl-10"
               />
               <button
                 type="button"
                 tabIndex={-1}
                 onClick={() => setShowPw((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#B0B0B0] hover:text-[#7A7A7A] transition-colors"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B0B0B0] hover:text-[#7A7A7A] transition-colors"
               >
                 {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -193,7 +193,7 @@ export default function Login() {
           شريك جديد؟{" "}
           <a href={`${BASE}/register`} className="text-[#8C6246] hover:underline font-bold">انضم إلينا الآن</a>
         </p>
-        <a href={`${BASE}/`} className="text-xs text-[#9E9E9E] hover:underline">العودة لتصفح منصة تكيّة</a>
+        <a href={`${BASE}/`} className="text-sm text-[#656565] font-medium hover:text-[#2D2D2D] hover:underline transition-colors">العودة لتصفح منصة تكيّة</a>
       </div>
 
     </div>
