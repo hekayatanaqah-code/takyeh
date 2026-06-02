@@ -29,6 +29,7 @@ import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { extractCoordsFromMapsUrl } from "../lib/extractMapCoords";
 
 declare global {
   namespace Express {
@@ -363,6 +364,11 @@ router.patch("/submissions/:id/status", async (req, res) => {
     }
 
     if (submission) {
+      /* Extract real GPS coordinates from the owner's Google Maps link */
+      const coords = submission.mapsUrl
+        ? await extractCoordsFromMapsUrl(submission.mapsUrl)
+        : null;
+
       await db.insert(chaletsTable).values({
         submissionId: submission.id,
         nameAr: submission.nameAr,
@@ -400,6 +406,8 @@ router.patch("/submissions/:id/status", async (req, res) => {
         socialLink: submission.socialLink ?? null,
         termsAndConditions: submission.termsAndConditions ?? null,
         isVerified: false,
+        latitude: coords ? String(coords[0]) : null,
+        longitude: coords ? String(coords[1]) : null,
       }).onConflictDoNothing();
     }
   }
