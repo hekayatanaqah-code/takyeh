@@ -7,6 +7,17 @@ import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
 import { toAr } from "@/lib/utils";
 import { toHijri } from "@/lib/hijri";
 import { resolveAmenity } from "@/lib/amenityUtils";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
+import { MapContainer, TileLayer, Marker } from "react-leaflet";
+
+/* Fix leaflet default icon when bundled with Vite */
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl:       "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl:     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -244,17 +255,12 @@ export default function ChaletDetail() {
   const catInfo  = chalet.category ? (CATEGORY_MAP[chalet.category]  ?? { ar: chalet.category,  icon: "🏠" }) : null;
   const secInfo  = chalet.sections ? (SECTIONS_MAP[chalet.sections]  ?? { ar: chalet.sections,   icon: "👥" }) : null;
 
-  /* Google Map — exact coords if available, else name-based fallback */
+  /* Map — Leaflet for exact coords, Google Maps fallback otherwise */
   const hasCoords = chalet.latitude != null && chalet.longitude != null;
-  const mapQuery  = hasCoords
-    ? `${chalet.latitude},${chalet.longitude}`
-    : encodeURIComponent([chalet.nameAr, chalet.district, chalet.location, "القصيم"].filter(Boolean).join(" "));
-  const mapSrc    = hasCoords
-    ? `https://maps.google.com/maps?q=loc:${mapQuery}&output=embed&hl=ar&z=16`
-    : `https://maps.google.com/maps?q=${mapQuery}&output=embed&hl=ar&z=14&iwloc=near`;
   const googleMapsLink = hasCoords
     ? `https://www.google.com/maps?q=${chalet.latitude},${chalet.longitude}`
-    : `https://www.google.com/maps/search/?api=1&query=${mapQuery}`;
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([chalet.nameAr, chalet.district, chalet.location, "القصيم"].filter(Boolean).join(" "))}`;
+  const fallbackMapSrc = `https://maps.google.com/maps?q=${encodeURIComponent([chalet.nameAr, chalet.district, chalet.location, "القصيم"].filter(Boolean).join(" "))}&output=embed&hl=ar&z=14&iwloc=near`;
 
   /* ── Build the WhatsApp message ── */
   const buildWaMessage = () => {
@@ -614,16 +620,30 @@ export default function ChaletDetail() {
                   <span>📍</span>{[chalet.district, chalet.location, "القصيم"].filter(Boolean).join("، ")}
                 </p>
               )}
-              <div style={{ borderRadius: 16, overflow: "hidden", border: "1px solid #e5e7eb", boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }}>
-                <iframe
-                  title="موقع الشاليه"
-                  src={mapSrc}
-                  width="100%"
-                  height="340"
-                  style={{ display: "block", border: "none" }}
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
+              <div style={{ borderRadius: 16, overflow: "hidden", border: "1px solid #e5e7eb", boxShadow: "0 2px 10px rgba(0,0,0,0.06)", height: 340 }}>
+                {hasCoords ? (
+                  <MapContainer
+                    center={[chalet.latitude as number, chalet.longitude as number]}
+                    zoom={16}
+                    style={{ height: "100%", width: "100%" }}
+                    zoomControl={true}
+                    scrollWheelZoom={false}
+                    attributionControl={false}
+                  >
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    <Marker position={[chalet.latitude as number, chalet.longitude as number]} />
+                  </MapContainer>
+                ) : (
+                  <iframe
+                    title="موقع الشاليه"
+                    src={fallbackMapSrc}
+                    width="100%"
+                    height="340"
+                    style={{ display: "block", border: "none" }}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                )}
               </div>
             </div>
 
