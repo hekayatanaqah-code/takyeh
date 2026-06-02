@@ -620,7 +620,7 @@ export default function ChaletDetail() {
                   <span>📍</span>{[chalet.district, chalet.location, "القصيم"].filter(Boolean).join("، ")}
                 </p>
               )}
-              <div style={{ borderRadius: 16, overflow: "hidden", border: "1px solid #e5e7eb", boxShadow: "0 2px 10px rgba(0,0,0,0.06)", height: 340 }}>
+              <div style={{ borderRadius: 16, overflow: "hidden", border: "1px solid #e5e7eb", boxShadow: "0 2px 10px rgba(0,0,0,0.06)", height: 340, isolation: "isolate", zIndex: 0, position: "relative" }}>
                 {hasCoords ? (
                   <MapContainer
                     center={[chalet.latitude as number, chalet.longitude as number]}
@@ -935,7 +935,7 @@ export default function ChaletDetail() {
       {termsModalOpen && (
         <div
           onClick={() => setTermsModalOpen(false)}
-          style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
+          style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
         >
           <div
             onClick={e => e.stopPropagation()}
