@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { MapPin, Phone, Mail, Instagram, Twitter } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { toHijriComponents } from "@/lib/hijri";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -138,7 +139,15 @@ export function Footer() {
         </div>
 
         <div className="border-t border-background/20 mt-12 pt-6 text-center text-sm text-background/50">
-          <p>© {new Intl.DateTimeFormat("ar-SA", { year: "numeric" }).format(new Date())} {settings.footer_title || settings.site_title || "شاليهات القصيم"}. {settings.copyright_text || "جميع الحقوق محفوظة."}</p>
+          {(() => {
+            const now = new Date();
+            const hijriYear = toHijriComponents(now).year.toLocaleString("ar-SA");
+            const gregYear  = now.getFullYear().toLocaleString("ar-SA");
+            const siteName  = settings.footer_title || settings.site_title || "تكيّة";
+            return (
+              <p>© {hijriYear} هـ - {gregYear} م {siteName}. {settings.copyright_text || "جميع الحقوق محفوظة."}</p>
+            );
+          })()}
         </div>
       </div>
     </footer>
