@@ -24,7 +24,7 @@ import {
   contactInquiriesTable,
   ownerTempSessionsTable,
 } from "@workspace/db/schema";
-import { eq, inArray, and, gt, lt, ne, sql } from "drizzle-orm";
+import { eq, inArray, and, gt, lt, ne, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
@@ -499,12 +499,15 @@ router.get("/chalets", async (req, res) => {
 
   const today = todayStr();
   const activeRows = rows.map((row) => {
+    if (row.deletedAt) {
+      return { ...row, adminStatus: "deleted" as const, isPausedNow: false, hiddenByOwner: false, pausedDays: 0, pauseAlert: false };
+    }
     const paused = isPausedNow(row, today);
     const pausedDays = paused && row.pausedFrom ? daysInclusive(row.pausedFrom, today) : 0;
     const hiddenByOwner = row.isActive === false;
     return {
       ...row,
-      adminStatus: paused || hiddenByOwner ? "paused" : "active",
+      adminStatus: (paused || hiddenByOwner ? "paused" : "active") as "paused" | "active",
       isPausedNow: paused,
       hiddenByOwner,
       pausedDays,
@@ -572,6 +575,17 @@ router.patch("/chalets/:id/verify", async (req, res) => {
   return res.json({ ok: true });
 });
 
+router.patch("/chalets/:id/soft-delete", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id || id <= 0) return res.status(400).json({ error: "معرّف غير صحيح" });
+  const body = z.object({ reason: z.string().trim().min(3, "سبب الحذف مطلوب (٣ أحرف على الأقل)") }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: body.error.errors[0].message });
+  await db.update(chaletsTable)
+    .set({ deletedAt: new Date(), deleteReason: body.data.reason, isActive: false })
+    .where(eq(chaletsTable.id, id));
+  return res.json({ ok: true });
+});
+
 /* ── Owners ──────────────────────────────────────────────── */
 
 router.get("/owners", async (_req, res) => {
@@ -593,7 +607,7 @@ router.get("/owners", async (_req, res) => {
   const appRows = await db.execute<{
     id: number; full_name: string; phone: string; created_at: string;
   }>(
-    sql`SELECT id, full_name, phone, created_at FROM owner_applications ORDER BY created_at ASC`
+    sql`SELECT id, full_name, phone, created_at FROM owner_applications WHERE deleted_at IS NULL ORDER BY created_at ASC`
   );
   const appByOwnerId = new Map<string, { fullName: string; phone: string; createdAt: string }>();
   for (const a of (appRows as any).rows) {
@@ -661,6 +675,18 @@ router.get("/owners", async (_req, res) => {
   }
 
   return res.json(result);
+});
+
+router.patch("/owners/:id/soft-delete", async (req, res) => {
+  const rawId = String(req.params.id);
+  const numId = Number(rawId.replace(/^owner_/, ""));
+  if (!numId || isNaN(numId)) return res.status(400).json({ error: "معرّف غير صحيح" });
+  const body = z.object({ reason: z.string().trim().min(3, "سبب الحذف مطلوب (٣ أحرف على الأقل)") }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: body.error.errors[0].message });
+  await db.execute(sql`
+    UPDATE owner_applications SET deleted_at = NOW(), delete_reason = ${body.data.reason} WHERE id = ${numId}
+  `);
+  return res.json({ ok: true });
 });
 
 /* ── Cities ──────────────────────────────────────────────── */

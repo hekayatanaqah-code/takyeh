@@ -1351,6 +1351,68 @@ function normalisePropertyType(raw: string | null | undefined): "chalet" | "farm
   return "chalet"; /* safe fallback */
 }
 
+function DeleteSafeModal({
+  target, entityLabel, onConfirm, onClose, isLoading = false,
+}: {
+  target: { name: string }; entityLabel: string;
+  onConfirm: (reason: string) => void; onClose: () => void; isLoading?: boolean;
+}) {
+  const [reason, setReason] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+  const canDelete = reason.trim().length >= 3 && confirmText === "حذف";
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="bg-slate-900 border border-slate-700 text-slate-100 max-w-md w-full" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-400">
+            <Trash2 className="w-5 h-5" />
+            تأكيد حذف {entityLabel}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 mt-2">
+          <div className="bg-red-950/30 border border-red-800/50 rounded-xl p-3 text-sm text-red-200">
+            ⚠️ سيتم حذف <span className="font-bold text-white">{target.name}</span> بشكل ناعم — يُخفى من كل الواجهات مع الاحتفاظ بالبيانات للتقارير والعقود.
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm text-slate-300 font-medium block">سبب الحذف <span className="text-red-400">*</span></label>
+            <Textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="اكتب سبب الحذف بوضوح..."
+              className="bg-slate-800 border-slate-600 text-slate-100 placeholder:text-slate-500 resize-none"
+              rows={3}
+              dir="rtl"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm text-slate-300 font-medium block">
+              للتأكيد، اكتب كلمة <span className="font-bold text-red-300">حذف</span> في الحقل أدناه
+            </label>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="حذف"
+              className="bg-slate-800 border-slate-600 text-slate-100 placeholder:text-slate-500"
+              dir="rtl"
+            />
+          </div>
+          <div className="flex gap-2 justify-end pt-1">
+            <Button variant="outline" onClick={onClose} className="border-slate-600 text-slate-300 hover:bg-slate-700">إلغاء</Button>
+            <Button
+              disabled={!canDelete || isLoading}
+              onClick={() => canDelete && onConfirm(reason.trim())}
+              className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-40"
+            >
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : <Trash2 className="w-4 h-4 ml-1" />}
+              تأكيد الحذف
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [impersonating, setImpersonating] = useState<string | null>(null);
   const [search, setSearch]               = useState("");
@@ -1359,6 +1421,8 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [typeFilter, setTypeFilter]       = useState("all");
   const [selected, setSelected]           = useState<Set<string>>(new Set());
   const [archiveOwner, setArchiveOwner]   = useState<{ id: string; name: string } | null>(null);
+  const [deleteOwnerTarget, setDeleteOwnerTarget] = useState<{ id: string; name: string } | null>(null);
+  const qc = useQueryClient();
 
   /* ── Fetch owners ── */
   const { data: owners = [], isLoading } = useQuery({
@@ -1460,6 +1524,15 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       setImpersonating(null);
     }
   }
+
+  const softDeleteOwner = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      const r = await apiFetch(`/admin/owners/${id}/soft-delete`, { method: "PATCH", body: JSON.stringify({ reason }) });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error ?? "فشل الحذف"); }
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "owners"] }); setDeleteOwnerTarget(null); },
+    onError: (e: Error) => alert(e.message),
+  });
 
   if (isLoading) {
     return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-slate-400 w-8 h-8" /></div>;
@@ -1707,6 +1780,14 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                         دخول للحساب
                       </button>
                     )}
+                    <button
+                      onClick={() => setDeleteOwnerTarget({ id: owner.ownerId, name: owner.ownerName })}
+                      title="حذف المالك"
+                      className="flex items-center gap-1.5 text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      حذف
+                    </button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -1714,6 +1795,16 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
           </TableBody>
         </Table>
       </div>
+
+      {deleteOwnerTarget && (
+        <DeleteSafeModal
+          target={deleteOwnerTarget}
+          entityLabel="المالك"
+          isLoading={softDeleteOwner.isPending}
+          onClose={() => setDeleteOwnerTarget(null)}
+          onConfirm={(reason) => softDeleteOwner.mutate({ id: deleteOwnerTarget.id, reason })}
+        />
+      )}
 
       {/* Owner Archive Dialog */}
       {archiveOwner && (
@@ -3325,6 +3416,7 @@ function SettingsTab() {
 function ChaletsVerifyTab() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<"active" | "pending" | "paused" | "deleted">("active");
+  const [deleteChaletTarget, setDeleteChaletTarget] = useState<{ id: number; name: string } | null>(null);
   const [cityFilter, setCityFilter]         = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
 
@@ -3356,6 +3448,15 @@ function ChaletsVerifyTab() {
       return r.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "chalets"] }),
+  });
+
+  const softDeleteChalet = useMutation({
+    mutationFn: async ({ id, reason }: { id: number; reason: string }) => {
+      const r = await apiFetch(`/admin/chalets/${id}/soft-delete`, { method: "PATCH", body: JSON.stringify({ reason }) });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error ?? "فشل الحذف"); }
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "chalets"] }); setDeleteChaletTarget(null); },
+    onError: (e: Error) => alert(e.message),
   });
 
   const uniqueLocations = useMemo(() => {
@@ -3501,12 +3602,13 @@ function ChaletsVerifyTab() {
               <TableHead className="text-slate-300 text-right font-semibold">الحالة</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">الإيقاف المؤقت</TableHead>
               <TableHead className="text-slate-300 text-center font-semibold">توثيق</TableHead>
+              <TableHead className="text-slate-300 text-center font-semibold">حذف</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredChalets.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-slate-400 py-12">لا توجد شاليهات ضمن هذا التصنيف</TableCell>
+                <TableCell colSpan={7} className="text-center text-slate-400 py-12">لا توجد شاليهات ضمن هذا التصنيف</TableCell>
               </TableRow>
             ) : filteredChalets.map((c) => {
               const adminStatus = c.adminStatus ?? "active";
@@ -3563,11 +3665,32 @@ function ChaletsVerifyTab() {
                     <span className="text-xs text-slate-500">غير منشور</span>
                   )}
                 </TableCell>
+                <TableCell className="text-center">
+                  {adminStatus !== "deleted" && c.id > 0 && (
+                    <button
+                      onClick={() => setDeleteChaletTarget({ id: c.id, name: c.nameAr })}
+                      title="حذف ناعم"
+                      className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </TableCell>
               </TableRow>
             );})}
           </TableBody>
         </Table>
       </div>
+
+      {deleteChaletTarget && (
+        <DeleteSafeModal
+          target={deleteChaletTarget}
+          entityLabel="الشاليه"
+          isLoading={softDeleteChalet.isPending}
+          onClose={() => setDeleteChaletTarget(null)}
+          onConfirm={(reason) => softDeleteChalet.mutate({ id: deleteChaletTarget.id, reason })}
+        />
+      )}
     </div>
   );
 }

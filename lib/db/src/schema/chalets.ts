@@ -68,6 +68,8 @@ export const chaletsTable = pgTable("chalets", {
   isActive: boolean("is_active").notNull().default(true),
   pausedFrom: text("paused_from"),
   pausedUntil: text("paused_until"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deleteReason: text("delete_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
