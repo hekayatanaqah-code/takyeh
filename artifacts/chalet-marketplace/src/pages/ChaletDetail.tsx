@@ -244,9 +244,17 @@ export default function ChaletDetail() {
   const catInfo  = chalet.category ? (CATEGORY_MAP[chalet.category]  ?? { ar: chalet.category,  icon: "🏠" }) : null;
   const secInfo  = chalet.sections ? (SECTIONS_MAP[chalet.sections]  ?? { ar: chalet.sections,   icon: "👥" }) : null;
 
-  /* Google Map */
-  const mapQuery = encodeURIComponent([chalet.nameAr, chalet.district, chalet.location, "القصيم"].filter(Boolean).join(" "));
-  const mapSrc   = `https://maps.google.com/maps?q=${mapQuery}&output=embed&hl=ar&z=14`;
+  /* Google Map — exact coords if available, else name-based fallback */
+  const hasCoords = chalet.latitude != null && chalet.longitude != null;
+  const mapQuery  = hasCoords
+    ? `${chalet.latitude},${chalet.longitude}`
+    : encodeURIComponent([chalet.nameAr, chalet.district, chalet.location, "القصيم"].filter(Boolean).join(" "));
+  const mapSrc    = hasCoords
+    ? `https://maps.google.com/maps?q=${mapQuery}&output=embed&hl=ar&z=16`
+    : `https://maps.google.com/maps?q=${mapQuery}&output=embed&hl=ar&z=14`;
+  const googleMapsLink = hasCoords
+    ? `https://www.google.com/maps?q=${chalet.latitude},${chalet.longitude}`
+    : `https://www.google.com/maps/search/?api=1&query=${mapQuery}`;
 
   /* ── Build the WhatsApp message ── */
   const buildWaMessage = () => {
@@ -580,7 +588,27 @@ export default function ChaletDetail() {
 
             {/* ── Google Map ── */}
             <div style={CARD}>
-              <h2 style={SEC}>الموقع</h2>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                <h2 style={{ ...SEC, margin: 0 }}>الموقع</h2>
+                <a
+                  href={googleMapsLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "7px 14px", borderRadius: 10,
+                    background: "#8C6246", color: "#fff",
+                    fontSize: 13, fontWeight: 700, textDecoration: "none",
+                    boxShadow: "0 2px 6px rgba(140,98,70,0.3)",
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                    <circle cx="12" cy="9" r="2.5"/>
+                  </svg>
+                  فتح في قوقل ماب
+                </a>
+              </div>
               {(chalet.location || chalet.district) && (
                 <p style={{ margin: "0 0 14px", fontSize: 14, color: "#6b7280", display: "flex", alignItems: "center", gap: 6 }}>
                   <span>📍</span>{[chalet.district, chalet.location, "القصيم"].filter(Boolean).join("، ")}
@@ -591,7 +619,7 @@ export default function ChaletDetail() {
                   title="موقع الشاليه"
                   src={mapSrc}
                   width="100%"
-                  height="300"
+                  height="340"
                   style={{ display: "block", border: "none" }}
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
