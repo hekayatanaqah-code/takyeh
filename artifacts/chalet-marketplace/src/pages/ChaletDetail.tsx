@@ -250,8 +250,8 @@ export default function ChaletDetail() {
     ? `${chalet.latitude},${chalet.longitude}`
     : encodeURIComponent([chalet.nameAr, chalet.district, chalet.location, "القصيم"].filter(Boolean).join(" "));
   const mapSrc    = hasCoords
-    ? `https://maps.google.com/maps?q=${mapQuery}&output=embed&hl=ar&z=16`
-    : `https://maps.google.com/maps?q=${mapQuery}&output=embed&hl=ar&z=14`;
+    ? `https://maps.google.com/maps?q=${mapQuery}&output=embed&hl=ar&z=16&iwloc=near`
+    : `https://maps.google.com/maps?q=${mapQuery}&output=embed&hl=ar&z=14&iwloc=near`;
   const googleMapsLink = hasCoords
     ? `https://www.google.com/maps?q=${chalet.latitude},${chalet.longitude}`
     : `https://www.google.com/maps/search/?api=1&query=${mapQuery}`;
@@ -606,7 +606,7 @@ export default function ChaletDetail() {
                     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
                     <circle cx="12" cy="9" r="2.5"/>
                   </svg>
-                  فتح في قوقل ماب
+                  خرائط Google
                 </a>
               </div>
               {(chalet.location || chalet.district) && (
