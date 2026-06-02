@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { SlidersHorizontal, FilterX, CheckSquare, Square, CalendarDays, LayoutGrid, Map as MapIcon, MapPin } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
@@ -53,6 +53,8 @@ export default function Chalets() {
   const [filterMaxPrice, setFilterMaxPrice] = useState<string>(searchParams.get("maxPrice") || "");
   const [filterDate, setFilterDate]         = useState<string>(searchParams.get("checkIn") || "");
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
+  const PAGE_SIZE = 12;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["catalog", "cities"],
@@ -112,6 +114,11 @@ export default function Chalets() {
   useEffect(() => {
     refetch();
   }, [filterCity, filterDate, filterPeriod, refetch]);
+
+  /* Reset visible count whenever any filter changes */
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [filterCity, filterDistrict, filterCategory, filterSections, filterPeriod, filterDate, filterMaxPrice, filterAmenities]);
 
   /* ── Next Available: city + date but no results ──────────────────
      Calls /api/chalets/next-available which returns:
@@ -375,7 +382,7 @@ export default function Chalets() {
       {amenitiesCatalog.length > 0 && (
         <div className="space-y-3">
           <label className="text-sm font-semibold text-foreground">المرافق والمميزات</label>
-          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
             {amenitiesCatalog.map((amenity) => {
               const checked = filterAmenities.has(amenity.key);
               return (
@@ -661,16 +668,32 @@ export default function Chalets() {
                   )}
                 </>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {filteredChalets.map((chalet) => (
-                    <ChaletCard
-                      key={chalet.id}
-                      chalet={chalet}
-                      selectedPeriod={filterPeriod !== "all" ? (filterPeriod as "morning" | "evening" | "full_day") : undefined}
-                      searchDate={filterDate || undefined}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {filteredChalets.slice(0, visibleCount).map((chalet) => (
+                      <ChaletCard
+                        key={chalet.id}
+                        chalet={chalet}
+                        selectedPeriod={filterPeriod !== "all" ? (filterPeriod as "morning" | "evening" | "full_day") : undefined}
+                        searchDate={filterDate || undefined}
+                      />
+                    ))}
+                  </div>
+                  {visibleCount < filteredChalets.length && (
+                    <div className="mt-8 flex flex-col items-center gap-2">
+                      <p className="text-sm text-muted-foreground">
+                        عرض {Math.min(visibleCount, filteredChalets.length)} من أصل {filteredChalets.length} شاليه
+                      </p>
+                      <Button
+                        variant="outline"
+                        className="gap-2 border-primary/30 text-primary hover:bg-primary/5 px-8"
+                        onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
+                      >
+                        عرض المزيد
+                      </Button>
+                    </div>
+                  )}
+                </>
               )
             )}
           </div>

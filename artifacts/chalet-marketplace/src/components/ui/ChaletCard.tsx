@@ -117,20 +117,22 @@ export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardPro
 
           {/* ── Price Box ──────────────────────── */}
           {hasDayPrices ? (
-            <div className="rounded-xl bg-primary/5 border border-primary/15 px-3.5 py-2.5 mb-3 space-y-1">
+            <div className="rounded-xl bg-primary/5 border border-primary/15 px-3.5 py-2.5 mb-3 space-y-1.5">
               {weekdayPrice && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">📅 وسط الأسبوع</span>
-                  <span className="font-bold text-foreground">
-                    يبدأ من <span className="text-primary">{weekdayPrice}</span> ر.س
+                <div className="flex items-center justify-between gap-3 text-sm min-w-0">
+                  <span className="text-muted-foreground shrink-0">📅 وسط الأسبوع</span>
+                  <span className="font-bold text-foreground whitespace-nowrap">
+                    <span className="text-primary">{weekdayPrice}</span>
+                    <span className="text-xs font-normal text-muted-foreground"> ر.س</span>
                   </span>
                 </div>
               )}
               {weekendPrice && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">🎉 نهاية الأسبوع</span>
-                  <span className="font-bold text-foreground">
-                    يبدأ من <span className="text-primary">{weekendPrice}</span> ر.س
+                <div className="flex items-center justify-between gap-3 text-sm min-w-0">
+                  <span className="text-muted-foreground shrink-0">🎉 نهاية الأسبوع</span>
+                  <span className="font-bold text-foreground whitespace-nowrap">
+                    <span className="text-primary">{weekendPrice}</span>
+                    <span className="text-xs font-normal text-muted-foreground"> ر.س</span>
                   </span>
                 </div>
               )}
