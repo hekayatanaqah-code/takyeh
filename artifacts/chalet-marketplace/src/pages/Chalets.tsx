@@ -525,7 +525,7 @@ export default function Chalets() {
                                 </p>
                               )}
                               <a
-                                href={`${BASE}/chalet/${chalet.id}`}
+                                href={`${BASE}/chalets/${chalet.id}`}
                                 style={{ display: "block", textAlign: "center", fontSize: 12, fontWeight: 700, background: "#8C6246", color: "#ffffff", padding: "7px 12px", borderRadius: 8, textDecoration: "none", lineHeight: 1.4 }}
                               >
                                 عرض التفاصيل
