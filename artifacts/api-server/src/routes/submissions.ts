@@ -186,7 +186,20 @@ router.post("/", async (req, res) => {
   }
 
   const data = result.data;
-  const ownerId = req.isAuthenticated() ? req.user.id : null;
+
+  /* Resolve ownerId: prefer temp-session cookie (owner portal), then authenticated session */
+  let ownerId: string | null = req.isAuthenticated() ? req.user.id : null;
+  if (!ownerId) {
+    const tempToken = (req as any).cookies?.owner_temp_session;
+    if (tempToken) {
+      const r = await db.execute<{ owner_id: string }>(
+        sql`SELECT owner_id FROM owner_temp_sessions
+            WHERE token = ${tempToken} AND expires_at > now() LIMIT 1`
+      );
+      const row = ((r as any).rows as Array<{ owner_id: string }>)[0];
+      if (row?.owner_id) ownerId = row.owner_id;
+    }
+  }
 
   /* ── Full-scan duplicate check — collect ALL conflicts before returning ── */
   const dupFields: string[] = [];

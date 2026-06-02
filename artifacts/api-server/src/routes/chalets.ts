@@ -273,6 +273,8 @@ router.get("/", async (req, res) => {
     eveningCheckOut: row.eveningCheckOut ?? null,
     fullDayCheckIn: row.fullDayCheckIn ?? null,
     fullDayCheckOut: row.fullDayCheckOut ?? null,
+    latitude: row.latitude != null ? Number(row.latitude) : null,
+    longitude: row.longitude != null ? Number(row.longitude) : null,
   }));
 
   res.json(data);
@@ -515,6 +517,8 @@ router.get("/:id", async (req, res) => {
     eveningCheckOut: row.eveningCheckOut ?? null,
     fullDayCheckIn: row.fullDayCheckIn ?? null,
     fullDayCheckOut: row.fullDayCheckOut ?? null,
+    latitude: row.latitude != null ? Number(row.latitude) : null,
+    longitude: row.longitude != null ? Number(row.longitude) : null,
   };
 
   res.json(data);
