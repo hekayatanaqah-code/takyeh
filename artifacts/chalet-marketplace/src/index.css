@@ -303,3 +303,7 @@ input, textarea, select, [contenteditable] {
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #7a5239; }
 .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #8C6246 transparent; }
+
+/* ── Leaflet popup: prevent bottom clipping ── */
+.leaflet-popup-content-wrapper { overflow: visible !important; }
+.leaflet-popup-content { overflow: visible !important; margin: 12px 14px !important; }

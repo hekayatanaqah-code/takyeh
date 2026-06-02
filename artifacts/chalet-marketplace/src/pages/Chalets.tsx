@@ -507,18 +507,26 @@ export default function Chalets() {
                       const jitterLng = hasRealCoords ? 0 : Math.cos(chalet.id * 1.7) * 0.018;
                       return (
                         <Marker key={chalet.id} position={[coords[0] + jitterLat, coords[1] + jitterLng]}>
-                          <Popup>
-                            <div dir="rtl" className="text-right min-w-[180px]">
-                              <p style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 4 }}>{chalet.nameAr}</p>
-                              <p style={{ fontSize: 12, color: "#374151", fontWeight: 500, marginBottom: 6 }}>{chalet.location}</p>
+                          <Popup minWidth={200}>
+                            <div dir="rtl" style={{ textAlign: "right", width: 200, paddingBottom: 6, boxSizing: "border-box" }}>
+                              {/* Name + Logo row */}
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                {(chalet as any).logoUrl && (
+                                  <div style={{ width: 32, height: 32, borderRadius: "50%", border: "1.5px solid #e5e7eb", background: "#f9fafb", overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <img src={(chalet as any).logoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                                  </div>
+                                )}
+                                <p style={{ fontWeight: 700, fontSize: 14, color: "#111827", margin: 0, flex: 1 }}>{chalet.nameAr}</p>
+                              </div>
+                              <p style={{ fontSize: 12, color: "#374151", fontWeight: 500, margin: "0 0 6px" }}>{chalet.location}</p>
                               {chalet.priceWeekday && (
-                                <p style={{ fontSize: 12, color: "#5c3d25", fontWeight: 700, marginBottom: 2 }}>
+                                <p style={{ fontSize: 12, color: "#5c3d25", fontWeight: 700, margin: "0 0 8px" }}>
                                   يبدأ من {Number(chalet.priceWeekday).toLocaleString("ar-SA")} ر.س
                                 </p>
                               )}
                               <a
                                 href={`${BASE}/chalet/${chalet.id}`}
-                                style={{ display: "block", marginTop: 8, textAlign: "center", fontSize: 12, fontWeight: 700, background: "#8C6246", color: "#ffffff", padding: "6px 12px", borderRadius: 8, textDecoration: "none" }}
+                                style={{ display: "block", textAlign: "center", fontSize: 12, fontWeight: 700, background: "#8C6246", color: "#ffffff", padding: "7px 12px", borderRadius: 8, textDecoration: "none", lineHeight: 1.4 }}
                               >
                                 عرض التفاصيل
                               </a>
