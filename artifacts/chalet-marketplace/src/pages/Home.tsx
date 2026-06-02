@@ -375,31 +375,31 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* ── Row 2: sections (conditional) + date + days + search ── */}
-                <div className="flex flex-col md:flex-row gap-3 items-stretch">
-
-                  {/* Sections — conditional */}
-                  {showSectionsField && (
-                    <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3 flex-1">
-                      <span className="text-base shrink-0">🔑</span>
-                      <div className="w-full min-w-0">
-                        <p className="text-xs font-semibold text-muted-foreground text-right mb-1">عدد الأقسام</p>
-                        <Select value={searchSections} onValueChange={setSearchSections}>
-                          <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm">
-                            <SelectValue placeholder="الكل" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">الكل</SelectItem>
-                            <SelectItem value="قسم واحد">🔑 قسم واحد</SelectItem>
-                            <SelectItem value="قسمين منفصلة">🔑🔑 قسمين منفصلة</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                {/* ── Row 2: sections (conditional, full width) ── */}
+                {showSectionsField && (
+                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                    <span className="text-base shrink-0">🔑</span>
+                    <div className="w-full min-w-0">
+                      <p className="text-xs font-semibold text-muted-foreground text-right mb-1">عدد الأقسام</p>
+                      <Select value={searchSections} onValueChange={setSearchSections}>
+                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm">
+                          <SelectValue placeholder="الكل" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">الكل</SelectItem>
+                          <SelectItem value="قسم واحد">🔑 قسم واحد</SelectItem>
+                          <SelectItem value="قسمين منفصلة">🔑🔑 قسمين منفصلة</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {/* Booking date */}
-                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3 flex-1">
+                {/* ── Row 3: date + days (equal width) + search button (remaining) ── */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-stretch">
+
+                  {/* Booking date — 1 col */}
+                  <div className="md:col-span-1 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
                     <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="flex-1 min-w-0">
                       <DualCalendarPicker
@@ -411,8 +411,8 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Number of days counter */}
-                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3 shrink-0">
+                  {/* Number of days — 1 col */}
+                  <div className="md:col-span-1 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center justify-center gap-3">
                     <div className="flex flex-col items-center gap-1">
                       <p className="text-xs font-semibold text-muted-foreground whitespace-nowrap">عدد الأيام</p>
                       <div className="flex items-center gap-3" dir="ltr">
@@ -440,11 +440,11 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Search button */}
-                  <div className="flex flex-col gap-1 shrink-0">
+                  {/* Search button — spans remaining 2 cols */}
+                  <div className="col-span-1 md:col-span-2 flex flex-col gap-1">
                     <Button
                       onClick={handleSearch}
-                      className="h-full py-3 px-8 rounded-xl text-base font-bold shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
+                      className="w-full h-full py-3.5 px-8 rounded-xl text-base font-bold shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
                     >
                       <Search className="w-5 h-5 me-2" />
                       ابحث الآن
@@ -554,7 +554,7 @@ export default function Home() {
                     {/* Search button */}
                     <Button
                       onClick={handleServiceSearch}
-                      className="h-auto md:h-full py-4 px-8 rounded-xl text-lg font-bold shadow-lg bg-amber-700 hover:bg-amber-800 text-white transition-all shrink-0"
+                      className="h-auto md:h-full py-4 px-8 rounded-xl text-lg font-bold shadow-lg bg-[#8C6246] hover:bg-[#734f36] text-white transition-all shrink-0"
                     >
                       <Search className="w-5 h-5 me-2" />
                       ابحث عن خدمة

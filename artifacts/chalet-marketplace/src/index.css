@@ -98,8 +98,8 @@ input, textarea, select, [contenteditable] {
   --muted: 35 30% 92%;
   --muted-foreground: 24 10% 45%;
   
-  --accent: 142 71% 45%;         /* WhatsApp Green / Accent */
-  --accent-foreground: 0 0% 100%;
+  --accent: 24 33% 91%;          /* Warm beige accent */
+  --accent-foreground: 24 33% 25%;
   
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
