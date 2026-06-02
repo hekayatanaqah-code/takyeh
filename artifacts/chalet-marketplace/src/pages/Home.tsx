@@ -450,7 +450,7 @@ export default function Home() {
                       ابحث الآن
                     </Button>
                     {searchError && (
-                      <p className="text-xs text-amber-300 font-medium text-center px-1 animate-pulse">
+                      <p className="text-xs text-red-300 font-medium text-center px-1 animate-pulse">
                         {searchError}
                       </p>
                     )}
@@ -466,7 +466,7 @@ export default function Home() {
                   className="mt-3 text-sm text-white/90 font-medium"
                 >
                   حجز لمدة{" "}
-                  <span className="font-bold text-primary">
+                  <span className="font-bold text-[#D4A96A]">
                     {toArabicNum(numDays)} {numDays === 1 ? "يوم" : "أيام"}
                   </span>
                   {" "}· تبدأ من{" "}
