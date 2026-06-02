@@ -509,16 +509,16 @@ export default function Chalets() {
                         <Marker key={chalet.id} position={[coords[0] + jitterLat, coords[1] + jitterLng]}>
                           <Popup>
                             <div dir="rtl" className="text-right min-w-[180px]">
-                              <p className="font-bold text-sm mb-1">{chalet.nameAr}</p>
-                              <p className="text-xs text-gray-500 mb-2">{chalet.location}</p>
+                              <p style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 4 }}>{chalet.nameAr}</p>
+                              <p style={{ fontSize: 12, color: "#374151", fontWeight: 500, marginBottom: 6 }}>{chalet.location}</p>
                               {chalet.priceWeekday && (
-                                <p className="text-xs text-primary font-semibold">
+                                <p style={{ fontSize: 12, color: "#5c3d25", fontWeight: 700, marginBottom: 2 }}>
                                   يبدأ من {Number(chalet.priceWeekday).toLocaleString("ar-SA")} ر.س
                                 </p>
                               )}
                               <a
                                 href={`${BASE}/chalet/${chalet.id}`}
-                                className="block mt-2 text-center text-xs bg-primary text-white py-1.5 px-3 rounded-lg hover:bg-primary/90 transition-colors"
+                                style={{ display: "block", marginTop: 8, textAlign: "center", fontSize: 12, fontWeight: 700, background: "#8C6246", color: "#ffffff", padding: "6px 12px", borderRadius: 8, textDecoration: "none" }}
                               >
                                 عرض التفاصيل
                               </a>
