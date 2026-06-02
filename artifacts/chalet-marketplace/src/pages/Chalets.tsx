@@ -439,12 +439,14 @@ export default function Chalets() {
 
           {/* Desktop Sidebar */}
           <aside className="hidden lg:block w-72 shrink-0">
-            <div className="bg-card border border-border/50 rounded-2xl p-6 sticky top-24 shadow-sm">
-              <div className="flex items-center gap-2 mb-6 pb-4 border-b border-border/50">
+            <div className="bg-card border border-border/50 rounded-2xl shadow-sm sticky top-4 max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+              <div className="flex items-center gap-2 px-6 pt-6 pb-4 border-b border-border/50 shrink-0">
                 <SlidersHorizontal className="w-5 h-5 text-primary" />
                 <h2 className="text-lg font-bold">تصفية النتائج</h2>
               </div>
-              <FilterControls />
+              <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin">
+                <FilterControls />
+              </div>
             </div>
           </aside>
 
