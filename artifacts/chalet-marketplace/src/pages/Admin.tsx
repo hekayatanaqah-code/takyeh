@@ -119,6 +119,8 @@ interface Submission {
   fullDayCheckIn?: string | null;
   fullDayCheckOut?: string | null;
   dailyPrices?: Record<string, Record<string, number>> | null;
+  logoUrl?: string | null;
+  videoUrl?: string | null;
 }
 
 interface AdminChalet {
@@ -466,19 +468,34 @@ function SubmissionReviewModal({
         >
           {/* ── Sticky Header ───────────────────────────── */}
           <div className="shrink-0 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-6 py-4">
-            <h2 className="text-xl font-bold text-white leading-tight">{s.nameAr}</h2>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <StatusBadge status={s.status} />
-              {s.createdAt && ( /* submission date */
-                <span className="text-slate-400 text-xs">
-                  {fmtDate(s.createdAt)}
-                </span>
+            <div className="flex items-center gap-3">
+              {s.logoUrl && (
+                <div className="w-12 h-12 rounded-xl border border-slate-600 bg-white flex items-center justify-center shrink-0 overflow-hidden cursor-pointer"
+                  onClick={() => setLightboxUrl(s.logoUrl!)}
+                  title="عرض الشعار بالحجم الكامل"
+                >
+                  <img src={s.logoUrl} alt="شعار الشاليه" className="max-w-full max-h-full object-contain p-0.5" />
+                </div>
               )}
-              {s.pricePerNight && (
-                <span className="text-amber-400 text-xs font-semibold">
-                  {Number(s.pricePerNight).toLocaleString("ar-SA")} ر.س / ليلة
-                </span>
-              )}
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xl font-bold text-white leading-tight">{s.nameAr}</h2>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <StatusBadge status={s.status} />
+                  {s.createdAt && (
+                    <span className="text-slate-400 text-xs">{fmtDate(s.createdAt)}</span>
+                  )}
+                  {s.pricePerNight && (
+                    <span className="text-amber-400 text-xs font-semibold">
+                      {Number(s.pricePerNight).toLocaleString("ar-SA")} ر.س / ليلة
+                    </span>
+                  )}
+                  {s.logoUrl && (
+                    <span className="text-emerald-400 text-xs flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" /> يوجد شعار
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
