@@ -1,0 +1,1 @@
+- [Logo pipeline gap pattern](logo-pipeline-gap.md) — admin approval flows that copy submission→chaletsTable must explicitly list every field; omissions silently store NULL.
