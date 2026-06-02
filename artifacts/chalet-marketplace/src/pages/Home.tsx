@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
-import { MapPin, Search, Calendar, Plus, Minus, Tag, Shield, Clock, Zap, Globe, Heart, CreditCard, Star, Users, Home as HomeIcon, Phone, CheckCircle, Eye } from "lucide-react";
+import { MapPin, Search, Calendar, Plus, Minus, Tag, Shield, Clock, Zap, Globe, Heart, CreditCard, Star, Users, Home as HomeIcon, Phone, CheckCircle, Eye, Building2, Wrench } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -261,21 +261,21 @@ export default function Home() {
               {/* ── Hero Tabs ── */}
               <div className="flex items-center justify-center gap-2 mb-5">
                 {(["properties", "services"] as const).map((tab) => {
-                  const label   = tab === "properties" ? "أماكن" : "خدمات";
-                  const icon    = tab === "properties" ? "🏠" : "🛎️";
-                  const active  = heroTab === tab;
+                  const label  = tab === "properties" ? "أماكن" : "خدمات";
+                  const Icon   = tab === "properties" ? Building2 : Wrench;
+                  const active = heroTab === tab;
                   return (
                     <button
                       key={tab}
                       type="button"
                       onClick={() => setHeroTab(tab)}
-                      className={`flex items-center gap-2 px-7 py-2.5 rounded-full text-sm font-bold border transition-all duration-200 focus:outline-none shadow-md ${
+                      className={`flex items-center gap-2 px-7 py-2.5 rounded-full text-sm font-bold border transition-all duration-200 focus:outline-none ${
                         active
-                          ? "bg-amber-700 border-amber-600 text-white shadow-amber-900/40"
-                          : "bg-white/10 backdrop-blur-sm border-white/30 text-white/80 hover:bg-white/20 hover:text-white"
+                          ? "bg-[#8C6246] border-[#8C6246] text-white shadow-md shadow-[#8C6246]/40"
+                          : "bg-white/10 backdrop-blur-sm border-white/30 text-white/75 hover:bg-white/20 hover:text-white"
                       }`}
                     >
-                      <span>{icon}</span>
+                      <Icon className="w-4 h-4 shrink-0" />
                       {label}
                     </button>
                   );
@@ -286,173 +286,175 @@ export default function Home() {
               {heroTab === "properties" && (<>
 
               {/* ── Search Card ─────────────────────────────────────── */}
-              <div className="bg-white/10 backdrop-blur-md border border-white/20 p-2 md:p-3 rounded-2xl shadow-2xl flex flex-col md:flex-row flex-wrap gap-3">
+              <div className="bg-white/10 backdrop-blur-md border border-white/20 p-3 rounded-2xl shadow-2xl flex flex-col gap-3">
 
-                {/* City */}
-                <div className="flex-1 min-w-[140px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
-                  <MapPin className="w-5 h-5 text-muted-foreground shrink-0" />
-                  <div className="w-full">
-                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">المدينة</p>
-                    <Select value={searchCity} onValueChange={(v) => { setSearchCity(v); setSearchDistrict(""); }}>
-                      <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
-                        <SelectValue placeholder="اختر المدينة" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">جميع المدن</SelectItem>
-                        {cities.map((city) => (
-                          <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                {/* ── Row 1: location + category + period ── */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+
+                  {/* City */}
+                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                    <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="w-full min-w-0">
+                      <p className="text-xs font-semibold text-muted-foreground text-right mb-1">المدينة</p>
+                      <Select value={searchCity} onValueChange={(v) => { setSearchCity(v); setSearchDistrict(""); }}>
+                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm">
+                          <SelectValue placeholder="اختر المدينة" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">جميع المدن</SelectItem>
+                          {cities.map((city) => (
+                            <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                </div>
 
-                {/* District */}
-                <div className="flex-1 min-w-[140px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
-                  <MapPin className="w-5 h-5 text-primary/70 shrink-0" />
-                  <div className="w-full">
-                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الحي</p>
-                    <Select
-                      value={searchDistrict}
-                      onValueChange={setSearchDistrict}
-                      disabled={!selectedCityId}
-                    >
-                      <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
-                        <SelectValue placeholder="الكل" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">الكل</SelectItem>
-                        {districts.map((d) => (
-                          <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Category */}
-                <div className="flex-1 min-w-[180px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-start gap-3">
-                  <Tag className="w-5 h-5 text-muted-foreground shrink-0 mt-1" />
-                  <div className="w-full">
-                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الفئة</p>
-                    <Select value={searchCategory} onValueChange={(v) => { setSearchCategory(v); setSearchSections(""); }}>
-                      <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm !whitespace-normal [&>span]:!line-clamp-none [&>span]:!whitespace-normal">
-                        <SelectValue placeholder="جميع الفئات" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">جميع الفئات</SelectItem>
-                        {categories.length === 0 && (
-                          <>
-                            <SelectItem value="شالية">شالية</SelectItem>
-                            <SelectItem value="مزرعة">مزرعة</SelectItem>
-                            <SelectItem value="استراحة">استراحة</SelectItem>
-                          </>
-                        )}
-                        {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.nameAr}>{cat.emoji || "🏠"} {cat.nameAr}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Sections — conditional: only when selected category has showSectionFilter */}
-                <div
-                  className={`overflow-hidden transition-all duration-300 ease-in-out ${showSectionsField ? "flex-1 min-w-[140px] opacity-100 max-w-[200px]" : "max-w-0 opacity-0 pointer-events-none"}`}
-                >
-                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3 h-full">
-                    <span className="text-base shrink-0">🔑</span>
-                    <div className="w-full">
-                      <p className="text-xs font-semibold text-muted-foreground text-right mb-1">عدد الأقسام</p>
-                      <Select value={searchSections} onValueChange={setSearchSections}>
-                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
+                  {/* District */}
+                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                    <MapPin className="w-4 h-4 text-primary/70 shrink-0" />
+                    <div className="w-full min-w-0">
+                      <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الحي</p>
+                      <Select value={searchDistrict} onValueChange={setSearchDistrict} disabled={!selectedCityId}>
+                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm">
                           <SelectValue placeholder="الكل" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">الكل</SelectItem>
-                          <SelectItem value="قسم واحد">🔑 قسم واحد</SelectItem>
-                          <SelectItem value="قسمين منفصلة">🔑🔑 قسمين منفصلة</SelectItem>
+                          {districts.map((d) => (
+                            <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Category */}
+                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                    <Tag className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="w-full min-w-0">
+                      <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الفئة</p>
+                      <Select value={searchCategory} onValueChange={(v) => { setSearchCategory(v); setSearchSections(""); }}>
+                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm !whitespace-normal [&>span]:!line-clamp-none [&>span]:!whitespace-normal">
+                          <SelectValue placeholder="جميع الفئات" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">جميع الفئات</SelectItem>
+                          {categories.length === 0 && (
+                            <>
+                              <SelectItem value="شالية">شالية</SelectItem>
+                              <SelectItem value="مزرعة">مزرعة</SelectItem>
+                              <SelectItem value="استراحة">استراحة</SelectItem>
+                            </>
+                          )}
+                          {categories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.nameAr}>{cat.emoji || "🏠"} {cat.nameAr}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Period */}
+                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                    <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="w-full min-w-0">
+                      <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الفترة</p>
+                      <Select value={searchPeriod} onValueChange={setSearchPeriod}>
+                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm">
+                          <SelectValue placeholder="جميع الفترات" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">جميع الفترات</SelectItem>
+                          <SelectItem value="morning">🌅 صباحي</SelectItem>
+                          <SelectItem value="evening">🌙 مسائي</SelectItem>
+                          <SelectItem value="full_day">☀️ يوم كامل</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
                 </div>
 
-                {/* Period */}
-                <div className="flex-1 min-w-[130px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
-                  <Tag className="w-5 h-5 text-muted-foreground shrink-0" />
-                  <div className="w-full">
-                    <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الفترة</p>
-                    <Select value={searchPeriod} onValueChange={setSearchPeriod}>
-                      <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
-                        <SelectValue placeholder="جميع الفترات" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">جميع الفترات</SelectItem>
-                        <SelectItem value="morning">🌅 صباحي</SelectItem>
-                        <SelectItem value="evening">🌙 مسائي</SelectItem>
-                        <SelectItem value="full_day">☀️ يوم كامل</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                {/* ── Row 2: sections (conditional) + date + days + search ── */}
+                <div className="flex flex-col md:flex-row gap-3 items-stretch">
 
-                {/* Booking date */}
-                <div className="flex-1 min-w-[160px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
-                  <Calendar className="w-5 h-5 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <DualCalendarPicker
-                      value={bookingDate}
-                      onChange={setBookingDate}
-                      placeholder="يوم الحجز"
-                      label="يوم الحجز"
-                    />
-                  </div>
-                </div>
+                  {/* Sections — conditional */}
+                  {showSectionsField && (
+                    <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3 flex-1">
+                      <span className="text-base shrink-0">🔑</span>
+                      <div className="w-full min-w-0">
+                        <p className="text-xs font-semibold text-muted-foreground text-right mb-1">عدد الأقسام</p>
+                        <Select value={searchSections} onValueChange={setSearchSections}>
+                          <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm">
+                            <SelectValue placeholder="الكل" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">الكل</SelectItem>
+                            <SelectItem value="قسم واحد">🔑 قسم واحد</SelectItem>
+                            <SelectItem value="قسمين منفصلة">🔑🔑 قسمين منفصلة</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
 
-                {/* Number of days counter */}
-                <div className="bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3 shrink-0">
-                  <div className="flex flex-col items-center w-full gap-1">
-                    <p className="text-xs font-semibold text-muted-foreground whitespace-nowrap">عدد الأيام</p>
-                    <div className="flex items-center gap-3" dir="ltr">
-                      <button
-                        type="button"
-                        onClick={() => setNumDays((n) => Math.max(1, n - 1))}
-                        disabled={numDays <= 1}
-                        className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        aria-label="تقليل عدد الأيام"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="text-xl font-bold text-foreground w-8 text-center tabular-nums">
-                        {toArabicNum(numDays)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setNumDays((n) => n + 1)}
-                        className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-foreground hover:bg-accent transition-colors"
-                        aria-label="زيادة عدد الأيام"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
+                  {/* Booking date */}
+                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3 flex-1">
+                    <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <DualCalendarPicker
+                        value={bookingDate}
+                        onChange={setBookingDate}
+                        placeholder="يوم الحجز"
+                        label="يوم الحجز"
+                      />
                     </div>
                   </div>
-                </div>
 
-                {/* Search button */}
-                <div className="flex flex-col gap-1 shrink-0">
-                  <Button
-                    onClick={handleSearch}
-                    className="h-auto md:h-full py-4 px-8 rounded-xl text-lg font-bold shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
-                  >
-                    <Search className="w-5 h-5 me-2" />
-                    ابحث الآن
-                  </Button>
-                  {searchError && (
-                    <p className="text-xs text-amber-300 font-medium text-center px-1 animate-pulse">
-                      {searchError}
-                    </p>
-                  )}
+                  {/* Number of days counter */}
+                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3 shrink-0">
+                    <div className="flex flex-col items-center gap-1">
+                      <p className="text-xs font-semibold text-muted-foreground whitespace-nowrap">عدد الأيام</p>
+                      <div className="flex items-center gap-3" dir="ltr">
+                        <button
+                          type="button"
+                          onClick={() => setNumDays((n) => Math.max(1, n - 1))}
+                          disabled={numDays <= 1}
+                          className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          aria-label="تقليل عدد الأيام"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="text-xl font-bold text-foreground w-8 text-center tabular-nums">
+                          {toArabicNum(numDays)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setNumDays((n) => n + 1)}
+                          className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-foreground hover:bg-accent transition-colors"
+                          aria-label="زيادة عدد الأيام"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Search button */}
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <Button
+                      onClick={handleSearch}
+                      className="h-full py-3 px-8 rounded-xl text-base font-bold shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
+                    >
+                      <Search className="w-5 h-5 me-2" />
+                      ابحث الآن
+                    </Button>
+                    {searchError && (
+                      <p className="text-xs text-amber-300 font-medium text-center px-1 animate-pulse">
+                        {searchError}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 
