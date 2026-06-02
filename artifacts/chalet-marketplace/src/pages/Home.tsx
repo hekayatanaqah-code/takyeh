@@ -168,8 +168,16 @@ export default function Home() {
   };
 
   const handleSearch = () => {
-    if (!bookingDate) {
-      setSearchError("يرجى تحديد تاريخ الحجز للمتابعة");
+    const cityOk = searchCity && searchCity !== "all" && searchCity.trim() !== "";
+    const dateOk = bookingDate && bookingDate.trim() !== "";
+    if (!cityOk || !dateOk) {
+      setSearchError(
+        !cityOk && !dateOk
+          ? "يرجى تحديد المدينة وتاريخ الحجز للمتابعة"
+          : !cityOk
+          ? "يرجى تحديد المدينة للمتابعة"
+          : "يرجى تحديد تاريخ الحجز للمتابعة"
+      );
       return;
     }
     setSearchError("");
