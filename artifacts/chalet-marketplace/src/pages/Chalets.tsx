@@ -25,17 +25,18 @@ L.Icon.Default.mergeOptions({
 
 /* Al-Qassim city coordinates lookup */
 const CITY_COORDS: Record<string, [number, number]> = {
-  "بريدة": [26.3292, 43.9743],
-  "عنيزة": [26.0842, 43.9937],
-  "الرس": [25.8639, 43.4975],
-  "المذنب": [25.8635, 43.2977],
-  "الشماسية": [25.8977, 43.3947],
-  "البكيرية": [26.1495, 43.6518],
+  "بريدة":        [26.3292, 43.9743],
+  "عنيزة":        [26.0842, 43.9937],
+  "الرس":         [25.8639, 43.4975],
+  "المذنب":       [25.8635, 43.2977],
+  "الشماسية":     [25.8977, 43.3947],
+  "البكيرية":     [26.1495, 43.6518],
   "رياض الخبراء": [25.9239, 43.6118],
-  "عيون الجواء": [26.0569, 43.3878],
-  "الأسياح": [25.9667, 43.7833],
-  "ضرية": [26.0003, 42.5736],
-  "النبهانية": [25.8500, 43.8000],
+  "عيون الجواء":  [26.0569, 43.3878],
+  "الأسياح":      [25.9667, 43.7833],
+  "ضرية":         [26.0003, 42.5736],
+  "النبهانية":    [25.8500, 43.8000],
+  "البدائع":      [26.0039, 43.7467],
 };
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -466,14 +467,14 @@ export default function Chalets() {
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === "grid" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   <LayoutGrid className="w-4 h-4" />
-                  <span className="hidden sm:inline">شبكة</span>
+                  <span className="hidden sm:inline">عرض القائمة</span>
                 </button>
                 <button
                   onClick={() => setViewMode("map")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === "map" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   <MapIcon className="w-4 h-4" />
-                  <span className="hidden sm:inline">خريطة</span>
+                  <span className="hidden sm:inline">عرض الخريطة</span>
                 </button>
               </div>
             </div>
@@ -500,10 +501,12 @@ export default function Chalets() {
                       const cityCoords = CITY_COORDS[chalet.location];
                       const coords: [number, number] | null = lat && lng ? [lat, lng] : cityCoords ?? null;
                       if (!coords) return null;
-                      /* Jitter chalets in the same city so they don't stack */
-                      const jitter = (chalet.id % 100) * 0.002 - 0.1;
+                      /* When falling back to city center, spread markers in a circle so they don't stack */
+                      const hasRealCoords = !!(lat && lng);
+                      const jitterLat = hasRealCoords ? 0 : Math.sin(chalet.id * 2.3) * 0.018;
+                      const jitterLng = hasRealCoords ? 0 : Math.cos(chalet.id * 1.7) * 0.018;
                       return (
-                        <Marker key={chalet.id} position={[coords[0] + jitter, coords[1] + jitter]}>
+                        <Marker key={chalet.id} position={[coords[0] + jitterLat, coords[1] + jitterLng]}>
                           <Popup>
                             <div dir="rtl" className="text-right min-w-[180px]">
                               <p className="font-bold text-sm mb-1">{chalet.nameAr}</p>
