@@ -76,13 +76,25 @@ export function Footer() {
 
           {/* Navigation Links */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b border-background/20 pb-2 inline-block">روابط مفيدة</h3>
-            <ul className="space-y-2">
-              <li><Link href="/about" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">من نحن</Link></li>
-              <li><Link href="/faq" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">أسئلة شائعة</Link></li>
-              <li><Link href="/terms" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">شروط الاستخدام</Link></li>
-              <li><Link href="/privacy" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">سياسة الخصوصية</Link></li>
-              <li><Link href="/contact" className="text-background/70 hover:text-primary transition-colors inline-block text-sm">اتصل بنا</Link></li>
+            <h3 className="text-lg font-semibold border-b border-background/20 pb-2 block">روابط مفيدة</h3>
+            <ul className="flex flex-col gap-3">
+              {[
+                { href: "/about",   label: "من نحن" },
+                { href: "/faq",     label: "أسئلة شائعة" },
+                { href: "/terms",   label: "شروط الاستخدام" },
+                { href: "/privacy", label: "سياسة الخصوصية" },
+                { href: "/contact", label: "اتصل بنا" },
+              ].map(({ href, label }) => (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    className="flex items-center gap-2 text-background/70 hover:text-primary transition-colors text-sm group"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-background/30 group-hover:bg-primary transition-colors flex-shrink-0" />
+                    {label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 

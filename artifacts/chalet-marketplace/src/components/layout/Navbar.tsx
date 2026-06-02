@@ -74,7 +74,7 @@ export function Navbar() {
                     </Link>
                   )}
                 </div>
-              ) : (
+              ) : location === "/" ? (
                 <button
                   onClick={goToLogin}
                   className="flex items-center gap-2 bg-[#8C6246] hover:bg-[#734f36] text-white px-6 py-2.5 rounded-full font-semibold transition-all duration-300 text-[15px] shadow-sm"
@@ -82,7 +82,7 @@ export function Navbar() {
                   <LogIn className="w-5 h-5" />
                   <span>تسجيل الدخول</span>
                 </button>
-              )
+              ) : null
             )}
           </div>
 
@@ -112,7 +112,7 @@ export function Navbar() {
                         <LayoutDashboard className="w-4 h-4 me-2" />
                         لوحة التحكم
                       </Link>
-                    ) : (
+                    ) : location === "/" ? (
                       <button
                         onClick={goToLogin}
                         className="flex items-center gap-2 justify-center px-4 py-3 rounded-full text-base font-semibold bg-[#8C6246] hover:bg-[#734f36] text-white transition-colors shadow-sm"
@@ -120,7 +120,7 @@ export function Navbar() {
                         <LogIn className="w-5 h-5" />
                         تسجيل الدخول
                       </button>
-                    )
+                    ) : null
                   )}
                 </nav>
               </SheetContent>

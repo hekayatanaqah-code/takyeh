@@ -498,7 +498,7 @@ export default function ChaletDetail() {
             {chalet.descriptionAr && (
               <div style={CARD}>
                 <h2 style={SEC}>عن الشاليه</h2>
-                <p style={{ margin: 0, color: "#4b5563", fontSize: 14, lineHeight: 2 }}>{chalet.descriptionAr}</p>
+                <p style={{ margin: 0, color: "#374151", fontSize: 16, lineHeight: 2.1 }}>{chalet.descriptionAr}</p>
               </div>
             )}
 
