@@ -392,7 +392,30 @@ export default function ChaletDetail() {
             {/* Title + Info bar + Quick stats */}
             <div style={CARD}>
 
-              <h1 style={{ margin: 0, fontSize: 30, fontWeight: 900, color: "#111827", lineHeight: 1.25 }}>{chalet.nameAr}</h1>
+              {/* Name + Logo row */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                {(() => {
+                  const logoUrl = (chalet as any).logoUrl as string | null | undefined;
+                  if (!logoUrl) return null;
+                  return (
+                    <div style={{
+                      width: 64, height: 64, borderRadius: "50%",
+                      border: "2px solid #e5e7eb",
+                      background: "#f9fafb",
+                      overflow: "hidden",
+                      flexShrink: 0,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <img
+                        src={logoUrl}
+                        alt={`شعار ${chalet.nameAr}`}
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                      />
+                    </div>
+                  );
+                })()}
+                <h1 style={{ margin: 0, fontSize: 30, fontWeight: 900, color: "#111827", lineHeight: 1.25 }}>{chalet.nameAr}</h1>
+              </div>
 
               {(chalet.location || chalet.district) && (
                 <p style={{ margin: "8px 0 0", fontSize: 14, color: "#6b7280", display: "flex", alignItems: "center", gap: 6 }}>
