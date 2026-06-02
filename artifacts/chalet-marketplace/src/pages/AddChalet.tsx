@@ -144,6 +144,11 @@ export default function AddChalet() {
   const [video, setVideo] = useState<UploadedVideo | null>(null);
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string>("");
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string>("");
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const TERMS_PLACEHOLDER = "يمنع التدخين داخل الشاليه\nوقت تسجيل الخروج الساعة ١٠:٠٠ صباحاً\nيمنع إحضار الحيوانات الأليفة\nالضيوف المسموح بهم فقط كما هو محدد عند الحجز\nأي أضرار تلحق بالمكان تُحسب على الضيف";
 
@@ -440,6 +445,29 @@ export default function AddChalet() {
     setVideoError(null);
   };
 
+  const handleLogoInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setLogoError("يرجى اختيار ملف صورة صالح"); return; }
+    if (file.size > 2 * 1024 * 1024) { setLogoError("حجم الشعار يتجاوز 2MB"); return; }
+    setLogoError(null);
+    setIsUploadingLogo(true);
+    const preview = URL.createObjectURL(file);
+    setLogoPreview(preview);
+    const url = await uploadFile(file);
+    if (url) { setLogoUrl(url); }
+    else { setLogoUrl(""); setLogoError("فشل رفع الشعار. يرجى المحاولة مرة أخرى."); }
+    setIsUploadingLogo(false);
+  };
+
+  const removeLogo = () => {
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+    setLogoUrl("");
+    setLogoPreview("");
+    setLogoError(null);
+  };
+
   const buildPayload = (locationOverride?: string, districtOverride?: string) => {
     const successfulPhotoObjs = photos.filter((p) => p.url && p.url !== "error");
     const successfulPhotos = successfulPhotoObjs.map((p) => p.url);
@@ -493,6 +521,7 @@ export default function AddChalet() {
       photos: successfulPhotos,
       photoCaptions,
       videoUrl: successfulVideo,
+      logoUrl: logoUrl || undefined,
     };
   };
 
@@ -629,6 +658,7 @@ export default function AddChalet() {
     setLegalAccepted(false);
     setVideo(null);
     setVideoError(null);
+    removeLogo();
     setHasBedrooms(false);
     setBedroomCount("");
     setMaxGuestsInput("");
@@ -638,7 +668,7 @@ export default function AddChalet() {
   };
 
   const canAddMore = photos.length < MAX_PHOTOS && !isUploading;
-  const allUploaded = photos.every((p) => p.url !== "") && !isUploadingVideo && (video ? video.url !== "" : true);
+  const allUploaded = photos.every((p) => p.url !== "") && !isUploadingVideo && !isUploadingLogo && (video ? video.url !== "" : true);
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
@@ -1492,6 +1522,61 @@ export default function AddChalet() {
                     {videoError && (
                       <p className="text-sm text-destructive mt-2">{videoError}</p>
                     )}
+                  </div>
+
+                  {/* ── Logo Upload ── */}
+                  <div className="mt-6 pt-5 border-t border-border">
+                    <p className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
+                      🏷️ شعار الشاليه (لوجو)
+                      <span className="font-normal text-muted-foreground text-xs">(اختياري — يظهر في نتائج البحث والعقود)</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-3">يُفضّل PNG بخلفية شفافة أو جودة عالية · حتى 2MB</p>
+
+                    {logoPreview ? (
+                      <div className="relative inline-flex items-center gap-3 bg-muted/40 rounded-xl border border-border px-4 py-3">
+                        <div className="w-14 h-14 rounded-lg overflow-hidden border border-border bg-white flex items-center justify-center shrink-0 relative">
+                          <img src={logoPreview} alt="شعار الشاليه" className="max-w-full max-h-full object-contain" />
+                          {isUploadingLogo && (
+                            <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center">
+                              <Loader2 className="w-5 h-5 text-white animate-spin" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          {logoUrl && !isUploadingLogo && (
+                            <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                              تم رفع الشعار بنجاح
+                            </span>
+                          )}
+                          {isUploadingLogo && (
+                            <span className="text-xs text-muted-foreground">جاري الرفع...</span>
+                          )}
+                          <button type="button" onClick={removeLogo} className="text-xs text-destructive hover:underline text-right">
+                            حذف الشعار
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => logoInputRef.current?.click()}
+                        className="border-2 border-dashed border-border rounded-xl p-5 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all inline-flex items-center gap-3"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-xl shrink-0">🏷️</div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-foreground">اختيار شعار الشاليه</p>
+                          <p className="text-xs text-muted-foreground">PNG / JPG / WebP</p>
+                        </div>
+                      </div>
+                    )}
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleLogoInput}
+                    />
+                    {logoError && <p className="text-sm text-destructive mt-2">{logoError}</p>}
                   </div>
                 </div>
 

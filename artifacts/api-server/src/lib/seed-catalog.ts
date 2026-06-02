@@ -52,6 +52,9 @@ export async function seedCatalogIfEmpty() {
   await db.execute(sql`ALTER TABLE chalet_submissions ADD COLUMN IF NOT EXISTS cancellation_window_hours INTEGER DEFAULT 24`);
   await db.execute(sql`ALTER TABLE chalet_submissions ADD COLUMN IF NOT EXISTS booking_policy_text TEXT`);
 
+  /* ── Chalet logo column ── */
+  await db.execute(sql`ALTER TABLE chalet_submissions ADD COLUMN IF NOT EXISTS logo_url TEXT`);
+
   /* ── Owner Refunds table ── */
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS owner_refunds (

@@ -30,6 +30,7 @@ export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardPro
 
   const district = (chalet as any).district as string | null | undefined;
   const category = (chalet as any).category as string | null | undefined;
+  const logoUrl = (chalet as any).logoUrl as string | null | undefined;
   const isVerified = Boolean((chalet as any).isVerified);
   const propertyType = (chalet as any).propertyType as string | null | undefined;
   const sections = (chalet as any).sections as string | null | undefined;
@@ -111,9 +112,16 @@ export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardPro
         </div>
 
         <CardContent className="p-5">
-          <h3 className="font-bold text-lg text-foreground line-clamp-1 group-hover:text-primary transition-colors mb-3">
-            {chalet.nameAr}
-          </h3>
+          <div className="flex items-center gap-2 mb-3">
+            {logoUrl && (
+              <div className="w-8 h-8 rounded-md border border-border bg-white flex items-center justify-center shrink-0 overflow-hidden">
+                <img src={logoUrl} alt="شعار" className="max-w-full max-h-full object-contain" />
+              </div>
+            )}
+            <h3 className="font-bold text-lg text-foreground line-clamp-1 group-hover:text-primary transition-colors flex-1">
+              {chalet.nameAr}
+            </h3>
+          </div>
 
           {/* ── Price Box ──────────────────────── */}
           {hasDayPrices ? (
