@@ -506,6 +506,7 @@ router.get("/:id", async (req, res) => {
     seasonalDisclaimer: row.seasonalDisclaimer ?? true,
     termsAndConditions: row.termsAndConditions ?? null,
     socialLink: row.socialLink ?? null,
+    logoUrl: row.logoUrl ?? null,
     checkInTime: row.checkInTime ?? null,
     checkOutTime: row.checkOutTime ?? null,
     morningCheckIn: row.morningCheckIn ?? null,
