@@ -18452,7 +18452,7 @@ export default function Dashboard() {
               </div>
 
               {/* Tab bar */}
-              <div className="flex flex-wrap gap-x-1 gap-y-1 border-b border-border pb-2 -mx-1 px-1">
+              <div className="flex flex-wrap gap-x-1 gap-y-3 border-b border-border pb-3 -mx-1 px-1">
                 {afTabs.map(tab => (
                   <button
                     key={tab.id}
