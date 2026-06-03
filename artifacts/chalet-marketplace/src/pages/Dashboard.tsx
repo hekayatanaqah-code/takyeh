@@ -1008,21 +1008,23 @@ function PauseChaletDialog({
         </div>
       </div>
       <DialogFooter className="gap-2 flex-wrap">
-        {chalet.pausedFrom && (
-          <Button type="button" variant="outline" onClick={() => submit(true)} disabled={saving} className="border-green-300 text-green-700 hover:bg-green-50">
-            إلغاء الإيقاف
+        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>إغلاق</Button>
+        {chalet.pausedFrom ? (
+          <Button type="button" onClick={() => submit(true)} disabled={saving} className="gap-1.5 bg-green-600 hover:bg-green-700 text-white">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            إلغاء الإيقاف وتنشيط الشاليه
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            onClick={() => submit(false)}
+            disabled={saving || !pausedFrom || (!!pausedUntil && pausedUntil < pausedFrom)}
+            className="gap-1.5 bg-orange-600 hover:bg-orange-700 text-white"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <PauseCircle className="w-4 h-4" />}
+            حفظ الإيقاف
           </Button>
         )}
-        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>إغلاق</Button>
-        <Button
-          type="button"
-          onClick={() => submit(false)}
-          disabled={saving || !pausedFrom || (!!pausedUntil && pausedUntil < pausedFrom)}
-          className="gap-1.5 bg-orange-600 hover:bg-orange-700 text-white"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <PauseCircle className="w-4 h-4" />}
-          حفظ الإيقاف
-        </Button>
       </DialogFooter>
     </DialogContent>
   );
@@ -1341,15 +1343,28 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                         <Lock className="w-3.5 h-3.5" />
                         إغلاق أيام
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 rounded-xl text-xs h-8 border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-300 dark:hover:bg-orange-950/20"
-                        onClick={() => setPauseTarget({ ...approvedChalet, nameAr: sub.nameAr })}
-                      >
-                        <PauseCircle className="w-3.5 h-3.5" />
-                        إيقاف مؤقت
-                      </Button>
+                      {pausedNow ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 rounded-xl text-xs h-8 border-green-400 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-300 dark:hover:bg-green-950/20"
+                          onClick={() => handlePauseChalet(approvedChalet.id, null, null, true)}
+                          disabled={togglingId === approvedChalet.id}
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          تنشيط الشاليه
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 rounded-xl text-xs h-8 border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-300 dark:hover:bg-orange-950/20"
+                          onClick={() => setPauseTarget({ ...approvedChalet, nameAr: sub.nameAr })}
+                        >
+                          <PauseCircle className="w-3.5 h-3.5" />
+                          إيقاف مؤقت
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
