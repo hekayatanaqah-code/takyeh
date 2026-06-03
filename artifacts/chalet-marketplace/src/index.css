@@ -307,3 +307,7 @@ input, textarea, select, [contenteditable] {
 /* ── Leaflet popup: prevent bottom clipping ── */
 .leaflet-popup-content-wrapper { overflow: visible !important; }
 .leaflet-popup-content { overflow: visible !important; margin: 12px 14px !important; }
+
+/* ── Scrollbar: hidden visually but still scrollable ───────────────── */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

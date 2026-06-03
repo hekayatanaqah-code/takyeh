@@ -1230,7 +1230,12 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                   {sub.createdAt && (
                     <span className="flex items-center gap-1.5">
                       <Calendar className="w-3.5 h-3.5" />
-                      {new Date(sub.createdAt).toLocaleDateString("ar-SA")}
+                      {(() => {
+                        const d = new Date(sub.createdAt);
+                        const hijri = d.toLocaleDateString("ar-SA-u-ca-islamic", { day: "numeric", month: "long", year: "numeric" });
+                        const gregorian = d.toLocaleDateString("ar", { day: "numeric", month: "long", year: "numeric" });
+                        return `${hijri} هـ / ${gregorian} م`;
+                      })()}
                     </span>
                   )}
                 </div>
@@ -18376,7 +18381,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* ERP Tab bar */}
-                      <div className="flex gap-0.5 border-b border-border overflow-x-auto pb-0 -mx-1 px-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+                      <div className="flex gap-0.5 border-b border-border overflow-x-auto pb-0 -mx-1 px-1 scrollbar-hide">
                         {serviceErpTabs.map(tab => (
                           <button key={tab.id} type="button"
                             onClick={() => setSelectedServiceTab(tab.id)}
@@ -18447,7 +18452,7 @@ export default function Dashboard() {
               </div>
 
               {/* Tab bar */}
-              <div className="flex gap-1 border-b border-border overflow-x-auto pb-0 -mx-1 px-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+              <div className="flex gap-1 border-b border-border overflow-x-auto pb-0 -mx-1 px-1 scrollbar-hide">
                 {afTabs.map(tab => (
                   <button
                     key={tab.id}
@@ -18643,7 +18648,7 @@ export default function Dashboard() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-8 border-b border-border overflow-x-auto pb-0 -mx-1 px-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+        <div className="flex gap-1 mb-8 border-b border-border overflow-x-auto pb-0 -mx-1 px-1 scrollbar-hide">
           {tabs.map((tab) => (
             <button
               key={tab.id}
