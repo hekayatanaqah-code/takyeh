@@ -124,6 +124,26 @@ function isCurrentPause(chalet: { pausedFrom?: string | null; pausedUntil?: stri
   return !!chalet.pausedFrom && chalet.pausedFrom <= dateStr && (!chalet.pausedUntil || chalet.pausedUntil >= dateStr);
 }
 
+function groupBlockedDatesIntoRanges(
+  blocks: Array<{ id: number; dateStr: string; notes: string | null }>,
+  fromDate?: string,
+) {
+  const today = fromDate ?? getLocalDateStr();
+  const filtered = blocks
+    .filter((b) => b.notes && b.dateStr >= today)
+    .sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+  if (!filtered.length) return [] as Array<{ startDate: string; endDate: string; notes: string; ids: number[] }>;
+  const ranges: Array<{ startDate: string; endDate: string; notes: string; ids: number[] }> = [];
+  let start = filtered[0].dateStr, end = filtered[0].dateStr, note = filtered[0].notes!, ids = [filtered[0].id];
+  for (let i = 1; i < filtered.length; i++) {
+    const diff = Math.round((new Date(filtered[i].dateStr).getTime() - new Date(end).getTime()) / 86400000);
+    if (diff === 1 && filtered[i].notes === note) { end = filtered[i].dateStr; ids.push(filtered[i].id); }
+    else { ranges.push({ startDate: start, endDate: end, notes: note, ids }); start = end = filtered[i].dateStr; note = filtered[i].notes!; ids = [filtered[i].id]; }
+  }
+  ranges.push({ startDate: start, endDate: end, notes: note, ids });
+  return ranges;
+}
+
 interface OwnerMessageSettings {
   waEnabled: boolean;
   waPhone: string;
@@ -847,13 +867,46 @@ function ResubmitDialog({
   );
 }
 
+function BlockedRangeRow({
+  range,
+  onUnblock,
+}: {
+  range: { startDate: string; endDate: string; notes: string; ids: number[] };
+  onUnblock?: (startDate: string, endDate: string) => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs" dir="rtl">
+      <span className="text-foreground leading-relaxed">
+        🔒 <strong>{range.notes}</strong>
+        <span className="block text-muted-foreground mt-0.5">
+          {formatDualDate(range.startDate).hijri.replace(/\s*هـ\s*$/, "")} هـ
+          {" — "}{formatDualDate(range.endDate).hijri}
+        </span>
+      </span>
+      <button type="button" disabled={busy || !onUnblock}
+        onClick={async () => {
+          if (!onUnblock) return;
+          setBusy(true);
+          try { await onUnblock(range.startDate, range.endDate); }
+          finally { setBusy(false); }
+        }}
+        className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-green-400 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-300 dark:hover:bg-green-950/20 font-bold transition-colors whitespace-nowrap shrink-0 disabled:opacity-50">
+        {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : "إلغاء الإغلاق 🔓"}
+      </button>
+    </div>
+  );
+}
+
 function BlockDatesDialog({
-  open, chalet, onClose, onBlocked,
+  open, chalet, onClose, onBlocked, chaletBlocks, onUnblockRange,
 }: {
   open: boolean;
   chalet: { id: number; nameAr: string } | null;
   onClose: () => void;
   onBlocked: () => void;
+  chaletBlocks?: Array<{ id: number; dateStr: string; notes: string | null }>;
+  onUnblockRange?: (startDate: string, endDate: string) => Promise<void>;
 }) {
   const { toast } = useToast();
   const [startDate, setStartDate] = useState("");
@@ -938,6 +991,24 @@ function BlockDatesDialog({
             );
           })()}
         </div>
+
+        {/* Upcoming blocked periods */}
+        {(() => {
+          const ranges = groupBlockedDatesIntoRanges(chaletBlocks ?? []);
+          if (!ranges.length) return null;
+          return (
+            <div className="border-t border-border pt-3 space-y-2">
+              <p className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5" />
+                الفترات المغلقة حالياً
+              </p>
+              {ranges.map((range, i) => (
+                <BlockedRangeRow key={i} range={range} onUnblock={onUnblockRange} />
+              ))}
+            </div>
+          );
+        })()}
+
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => { onClose(); reset(); }}>إلغاء</Button>
           <Button
@@ -1109,6 +1180,31 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
     },
   });
 
+  const { data: allBlocks = [] } = useQuery<Array<{ id: number; chaletId: number; dateStr: string; notes: string | null }>>({
+    queryKey: ["owner", "availability"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/availability");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  async function handleUnblockRange(chaletId: number, startDate: string, endDate: string) {
+    try {
+      const r = await apiFetch("/owner/availability/range", {
+        method: "DELETE",
+        body: JSON.stringify({ chaletId, startDate, endDate }),
+      });
+      if (!r.ok) throw new Error("فشل إلغاء الإغلاق");
+      qc.invalidateQueries({ queryKey: ["owner", "availability"] });
+      const startFmt = formatDualDate(startDate);
+      const endFmt   = formatDualDate(endDate);
+      toast({ title: "تم إعادة فتح الأيام ✓", description: `من ${startFmt.hijri} إلى ${endFmt.hijri}` });
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    }
+  }
+
   const atChaletLimit = planLimits
     ? (submissions?.length ?? 0) >= planLimits.chaletLimit
     : false;
@@ -1171,6 +1267,8 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
         chalet={blockTarget}
         onClose={() => setBlockTarget(null)}
         onBlocked={() => qc.invalidateQueries({ queryKey: ["owner", "availability"] })}
+        chaletBlocks={blockTarget ? allBlocks.filter((b) => b.chaletId === blockTarget.id) : []}
+        onUnblockRange={blockTarget ? (s, e) => handleUnblockRange(blockTarget.id, s, e) : undefined}
       />
       <Dialog open={!!pauseTarget} onOpenChange={(v) => { if (!v) setPauseTarget(null); }}>
         <PauseChaletDialog
@@ -1300,6 +1398,34 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                     </span>
                   </div>
                 )}
+
+                {/* Active/upcoming block alert strip */}
+                {isApproved && (() => {
+                  const chaletBlockRanges = groupBlockedDatesIntoRanges(
+                    allBlocks.filter((b) => b.chaletId === approvedChalet.id),
+                  );
+                  if (!chaletBlockRanges.length) return null;
+                  const today = getLocalDateStr();
+                  const active = chaletBlockRanges.find((r) => r.startDate <= today && r.endDate >= today);
+                  const upcoming = chaletBlockRanges.find((r) => r.startDate > today);
+                  const shown = active ?? upcoming;
+                  if (!shown) return null;
+                  return (
+                    <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 px-3 py-2 text-xs">
+                      <span className="text-gray-700 dark:text-gray-300 font-medium leading-relaxed">
+                        🔒 مغلق ({shown.notes}) — {formatDualDate(shown.startDate).hijri.replace(/\s*هـ\s*$/, "")} هـ إلى {formatDualDate(shown.endDate).hijri}
+                        {chaletBlockRanges.length > 1 && (
+                          <span className="mr-1 text-gray-500">({toAr(chaletBlockRanges.length)} فترات)</span>
+                        )}
+                      </span>
+                      <button type="button"
+                        onClick={() => handleUnblockRange(approvedChalet.id, shown.startDate, shown.endDate)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-green-400 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-300 dark:hover:bg-green-950/20 font-bold transition-colors whitespace-nowrap shrink-0">
+                        إعادة فتح 🔓
+                      </button>
+                    </div>
+                  );
+                })()}
 
                 {/* Delete confirmation inline */}
                 {deleteConfirmId === (approvedChalet?.id ?? -1) && (
