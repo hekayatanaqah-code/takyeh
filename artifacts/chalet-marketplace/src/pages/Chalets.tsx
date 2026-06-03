@@ -256,61 +256,9 @@ export default function Chalets() {
   })();
 
   const FilterControls = () => (
-    <div className="space-y-8">
+    <div className="space-y-6">
 
-      {/* ── Booking Date ── */}
-      <div className="space-y-3">
-        <label className="text-sm font-semibold text-foreground">تاريخ الحجز</label>
-        <div className="relative">
-          <DualCalendarPicker
-            value={filterDate}
-            onChange={setFilterDate}
-            placeholder="اختر تاريخ الحجز"
-            className="rounded-md border border-input bg-background px-3 pr-10 py-2.5 text-sm hover:bg-accent/30 transition-colors"
-          />
-          <CalendarDays className="absolute top-1/2 -translate-y-1/2 right-3 w-4 h-4 text-primary pointer-events-none" />
-        </div>
-        {filterDate && (
-          <button
-            type="button"
-            onClick={() => setFilterDate("")}
-            className="text-xs text-destructive hover:underline"
-          >
-            مسح التاريخ
-          </button>
-        )}
-      </div>
-
-      <div className="space-y-3">
-        <label className="text-sm font-semibold text-foreground">المدينة</label>
-        <Select value={filterCity} onValueChange={(v) => { setFilterCity(v); setFilterDistrict("all"); }}>
-          <SelectTrigger className="bg-background">
-            <SelectValue placeholder="اختر المدينة" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">جميع المدن</SelectItem>
-            {cities.map((city) => (
-              <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-3">
-        <label className="text-sm font-semibold text-foreground">الحي</label>
-        <Select value={filterDistrict} onValueChange={setFilterDistrict} disabled={!selectedCityId}>
-          <SelectTrigger className="bg-background">
-            <SelectValue placeholder="الكل" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">الكل</SelectItem>
-            {districts.map((d) => (
-              <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
+      {/* 1. الفئة */}
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">الفئة</label>
         <Select value={filterCategory} onValueChange={setFilterCategory}>
@@ -333,6 +281,7 @@ export default function Chalets() {
         </Select>
       </div>
 
+      {/* 2. الفترة */}
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">الفترة</label>
         <Select value={filterPeriod} onValueChange={setFilterPeriod}>
@@ -348,6 +297,7 @@ export default function Chalets() {
         </Select>
       </div>
 
+      {/* 3. عدد الأقسام */}
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">عدد الأقسام</label>
         <Select value={filterSections} onValueChange={setFilterSections}>
@@ -362,6 +312,23 @@ export default function Chalets() {
         </Select>
       </div>
 
+      {/* 4. الحي */}
+      <div className="space-y-3">
+        <label className="text-sm font-semibold text-foreground">الحي</label>
+        <Select value={filterDistrict} onValueChange={setFilterDistrict} disabled={!selectedCityId}>
+          <SelectTrigger className="bg-background">
+            <SelectValue placeholder="الكل" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">الكل</SelectItem>
+            {districts.map((d) => (
+              <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* الميزانية */}
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">الميزانية القصوى (ريال)</label>
         <div className="relative">
@@ -380,6 +347,7 @@ export default function Chalets() {
         <p className="text-xs text-muted-foreground">يُقارن بسعر وسط الأسبوع</p>
       </div>
 
+      {/* المرافق */}
       {amenitiesCatalog.length > 0 && (
         <div className="space-y-3">
           <label className="text-sm font-semibold text-foreground">المرافق والمميزات</label>
@@ -403,6 +371,42 @@ export default function Chalets() {
           </div>
         </div>
       )}
+
+      {/* ── تاريخ الحجز + المدينة (compact — محددان مسبقاً) ── */}
+      <div className="border-t border-border/50 pt-4 space-y-4">
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">تاريخ الحجز</label>
+          <div className="relative">
+            <DualCalendarPicker
+              value={filterDate}
+              onChange={setFilterDate}
+              placeholder="اختر تاريخ الحجز"
+              className="rounded-md border border-input bg-background px-3 pr-8 py-2 text-xs hover:bg-accent/30 transition-colors"
+            />
+            <CalendarDays className="absolute top-1/2 -translate-y-1/2 right-2.5 w-3.5 h-3.5 text-primary pointer-events-none" />
+          </div>
+          {filterDate && (
+            <button type="button" onClick={() => setFilterDate("")} className="text-xs text-destructive hover:underline">
+              مسح التاريخ
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">المدينة</label>
+          <Select value={filterCity} onValueChange={(v) => { setFilterCity(v); setFilterDistrict("all"); }}>
+            <SelectTrigger className="bg-background h-8 text-xs">
+              <SelectValue placeholder="اختر المدينة" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">جميع المدن</SelectItem>
+              {cities.map((city) => (
+                <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       <Button variant="outline" className="w-full text-destructive border-destructive/20 hover:bg-destructive/10" onClick={resetFilters}>
         <FilterX className="w-4 h-4 me-2" />
@@ -477,6 +481,30 @@ export default function Chalets() {
                   <span className="hidden sm:inline">عرض الخريطة</span>
                 </button>
               </div>
+            </div>
+
+            {/* ── Horizontal filter chips ── */}
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-3 [&::-webkit-scrollbar]:hidden" dir="rtl">
+              {[{ v: "all", l: "جميع الفئات" }, ...categories.map(c => ({ v: c.nameAr, l: c.nameAr }))].map(o => (
+                <button key={o.v} onClick={() => setFilterCategory(o.v)}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${filterCategory === o.v ? "bg-primary text-primary-foreground border-primary" : "bg-background text-foreground border-border hover:border-primary/40 hover:bg-primary/5"}`}>
+                  {o.l}
+                </button>
+              ))}
+              <div className="w-px bg-border/60 shrink-0 self-stretch my-0.5" />
+              {[{ v: "all", l: "كل الفترات" }, { v: "morning", l: "🌅 صباحي" }, { v: "evening", l: "🌙 مسائي" }, { v: "full_day", l: "☀️ يوم كامل" }].map(o => (
+                <button key={o.v} onClick={() => setFilterPeriod(o.v)}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${filterPeriod === o.v ? "bg-primary text-primary-foreground border-primary" : "bg-background text-foreground border-border hover:border-primary/40 hover:bg-primary/5"}`}>
+                  {o.l}
+                </button>
+              ))}
+              <div className="w-px bg-border/60 shrink-0 self-stretch my-0.5" />
+              {[{ v: "all", l: "كل الأقسام" }, { v: "قسم واحد", l: "🔑 قسم واحد" }, { v: "قسمين منفصلة", l: "🔑🔑 قسمين" }].map(o => (
+                <button key={o.v} onClick={() => setFilterSections(o.v)}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${filterSections === o.v ? "bg-primary text-primary-foreground border-primary" : "bg-background text-foreground border-border hover:border-primary/40 hover:bg-primary/5"}`}>
+                  {o.l}
+                </button>
+              ))}
             </div>
 
             {/* ── Map View ── */}
