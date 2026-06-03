@@ -163,6 +163,18 @@ export default function OwnerChaletDetail() {
     staleTime: 10 * 60 * 1000,
   });
 
+  const { data: siteSettings = {} } = useQuery<Record<string, string>>({
+    queryKey: ["page-content"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include" });
+      return r.ok ? r.json() : {};
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const siteTitle = siteSettings.site_display_name || siteSettings.site_title || "تكية";
+  const logoUrl   = siteSettings.site_logo_url || "";
+
   const storageBase = BASE;
 
   if (isLoading) {
@@ -195,27 +207,32 @@ export default function OwnerChaletDetail() {
       {/* ── Top bar ── */}
       <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <Link href="/dashboard">
-              <button className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted/60 transition-colors text-muted-foreground">
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </Link>
-            <div className="min-w-0">
-              <h1 className="font-bold text-base leading-tight truncate">{sub.nameAr}</h1>
-              <div className="flex items-center gap-2 mt-0.5">
-                {statusBadge(sub.status)}
+          {/* Logo + back button */}
+          <Link href="/dashboard" className="flex items-center gap-2 group shrink-0">
+            <div className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-muted/60 transition-colors text-muted-foreground">
+              <ArrowRight className="w-4 h-4" />
+            </div>
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt={siteTitle}
+                className="w-8 h-8 object-contain rounded-lg group-hover:scale-105 transition-transform duration-200"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform duration-200">
+                <MapPin className="w-4 h-4 text-primary-foreground" />
               </div>
+            )}
+            <span className="text-sm font-bold text-foreground hidden sm:block">{siteTitle}</span>
+          </Link>
+
+          {/* Chalet name + status */}
+          <div className="flex-1 min-w-0 text-center sm:text-right">
+            <h1 className="font-bold text-base leading-tight truncate">{sub.nameAr}</h1>
+            <div className="flex items-center justify-center sm:justify-end gap-2 mt-0.5">
+              {statusBadge(sub.status)}
             </div>
           </div>
-          <Button
-            size="sm"
-            className="gap-1.5 rounded-xl shrink-0"
-            onClick={() => navigate(editUrl)}
-          >
-            <Edit2 className="w-3.5 h-3.5" />
-            تعديل
-          </Button>
         </div>
       </div>
 
