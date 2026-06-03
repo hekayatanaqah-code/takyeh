@@ -924,11 +924,19 @@ function BlockDatesDialog({
             </div>
             <Input className="mt-2" placeholder="تفاصيل إضافية... (اختياري)" value={extraNotes} onChange={(e) => setExtraNotes(e.target.value)} />
           </div>
-          {startDate && endDate && startDate <= endDate && (
-            <div className="rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
-              سيتم إغلاق {toAr(Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1)} يوم من {startDate.split("-").reverse().join("/")} إلى {endDate.split("-").reverse().join("/")}
-            </div>
-          )}
+          {startDate && endDate && startDate <= endDate && (() => {
+            const days = Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1;
+            const startFmt = formatDualDate(startDate);
+            const endFmt   = formatDualDate(endDate);
+            return (
+              <div className="rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed" dir="rtl">
+                سيتم إغلاق {toAr(days)} {days === 1 ? "يوم" : "أيام"} من
+                {" "}({startFmt.hijri} / {startFmt.gregorian})
+                {" "}إلى
+                {" "}({endFmt.hijri} / {endFmt.gregorian})
+              </div>
+            );
+          })()}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => { onClose(); reset(); }}>إلغاء</Button>
