@@ -1216,10 +1216,15 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                     <MapPin className="w-3.5 h-3.5" />
                     {sub.location}{sub.district ? ` - ${sub.district}` : ""}
                   </span>
-                  {sub.pricePerNight && (
+                  {sub.pricePerNight && Number(sub.pricePerNight) > 0 ? (
                     <span className="flex items-center gap-1.5">
                       <DollarSign className="w-3.5 h-3.5" />
                       {toAr(Number(sub.pricePerNight))} ر.س
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <DollarSign className="w-3.5 h-3.5" />
+                      حسب الفترات
                     </span>
                   )}
                   {sub.createdAt && (
@@ -18157,12 +18162,18 @@ export default function Dashboard() {
                     </Button>
                   </Link>
                 )}
-                <Link href="/add-service-provider">
-                  <Button className="rounded-xl font-semibold text-sm">
-                    <Plus className="w-4 h-4 me-1.5" />
-                    إضافة خدمة
+                {planLimits && (myServiceSubmissions?.length ?? 0) >= planLimits.serviceLimit ? (
+                  <Button className="rounded-xl font-semibold text-sm opacity-60 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted" onClick={() => setShowHeaderUpgrade("service")}>
+                    🔒 إضافة خدمة
                   </Button>
-                </Link>
+                ) : (
+                  <Link href="/add-service-provider">
+                    <Button className="rounded-xl font-semibold text-sm">
+                      <Plus className="w-4 h-4 me-1.5" />
+                      إضافة خدمة
+                    </Button>
+                  </Link>
+                )}
               </>
             )}
             <Button
@@ -18365,7 +18376,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* ERP Tab bar */}
-                      <div className="flex gap-0.5 border-b border-border overflow-x-auto pb-0 -mx-1 px-1">
+                      <div className="flex gap-0.5 border-b border-border overflow-x-auto pb-0 -mx-1 px-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
                         {serviceErpTabs.map(tab => (
                           <button key={tab.id} type="button"
                             onClick={() => setSelectedServiceTab(tab.id)}
@@ -18436,7 +18447,7 @@ export default function Dashboard() {
               </div>
 
               {/* Tab bar */}
-              <div className="flex gap-1 border-b border-border overflow-x-auto pb-0 -mx-1 px-1">
+              <div className="flex gap-1 border-b border-border overflow-x-auto pb-0 -mx-1 px-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
                 {afTabs.map(tab => (
                   <button
                     key={tab.id}
@@ -18632,7 +18643,7 @@ export default function Dashboard() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-8 border-b border-border overflow-x-auto pb-0 -mx-1 px-1">
+        <div className="flex gap-1 mb-8 border-b border-border overflow-x-auto pb-0 -mx-1 px-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
           {tabs.map((tab) => (
             <button
               key={tab.id}

@@ -60,12 +60,21 @@ export function Navbar() {
             {!isLoading && (
               isAuthenticated ? (
                 <div className="flex items-center gap-1">
-                  <Link href="/dashboard">
-                    <Button size="sm" className="rounded-full font-semibold shadow-sm shadow-primary/20">
-                      <LayoutDashboard className="w-4 h-4 me-1.5" />
-                      لوحة التحكم
-                    </Button>
-                  </Link>
+                  {location.startsWith("/dashboard") || location.startsWith("/add-chalet") || location.startsWith("/add-service") ? (
+                    <Link href="/">
+                      <Button size="sm" variant="outline" className="rounded-full font-semibold shadow-sm">
+                        <MapPin className="w-4 h-4 me-1.5" />
+                        تصفح المنصة
+                      </Button>
+                    </Link>
+                  ) : (
+                    <Link href="/dashboard">
+                      <Button size="sm" className="rounded-full font-semibold shadow-sm shadow-primary/20">
+                        <LayoutDashboard className="w-4 h-4 me-1.5" />
+                        لوحة التحكم
+                      </Button>
+                    </Link>
+                  )}
                   {isStaff && (
                     <Link href="/admin">
                       <Button size="sm" variant="ghost" className="rounded-full w-9 h-9 p-0 text-muted-foreground hover:text-foreground" title="لوحة الإدارة">
