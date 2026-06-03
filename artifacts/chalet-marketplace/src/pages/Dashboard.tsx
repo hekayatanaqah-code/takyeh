@@ -859,17 +859,19 @@ function BlockDatesDialog({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("صيانة");
+  const [extraNotes, setExtraNotes] = useState("");
   const [loading, setLoading] = useState(false);
 
-  function reset() { setStartDate(""); setEndDate(""); setReason("صيانة"); }
+  function reset() { setStartDate(""); setEndDate(""); setReason("صيانة"); setExtraNotes(""); }
 
   async function handleBlock() {
     if (!chalet || !startDate || !endDate) return;
     setLoading(true);
+    const combinedNotes = extraNotes.trim() ? `${reason} — ${extraNotes.trim()}` : reason;
     try {
       const r = await apiFetch("/owner/availability/bulk", {
         method: "POST",
-        body: JSON.stringify({ chaletId: chalet.id, startDate, endDate, notes: reason }),
+        body: JSON.stringify({ chaletId: chalet.id, startDate, endDate, notes: combinedNotes }),
       });
       if (!r.ok) { toast({ title: "حدث خطأ", variant: "destructive" }); return; }
       const data = await r.json();
@@ -896,7 +898,7 @@ function BlockDatesDialog({
               <DualCalendarPicker
                 value={startDate}
                 onChange={setStartDate}
-                placeholder="من تاريخ"
+                placeholder="اختر تاريخ البداية"
                 label="من تاريخ"
               />
             </div>
@@ -904,7 +906,7 @@ function BlockDatesDialog({
               <DualCalendarPicker
                 value={endDate}
                 onChange={setEndDate}
-                placeholder="إلى تاريخ"
+                placeholder="اختر تاريخ النهاية"
                 label="إلى تاريخ"
                 minDate={startDate || undefined}
               />
@@ -920,7 +922,7 @@ function BlockDatesDialog({
                 </button>
               ))}
             </div>
-            <Input className="mt-2" placeholder="أو اكتب سبباً آخر..." value={reason} onChange={(e) => setReason(e.target.value)} />
+            <Input className="mt-2" placeholder="تفاصيل إضافية... (اختياري)" value={extraNotes} onChange={(e) => setExtraNotes(e.target.value)} />
           </div>
           {startDate && endDate && startDate <= endDate && (
             <div className="rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
