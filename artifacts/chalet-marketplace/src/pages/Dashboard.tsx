@@ -18381,7 +18381,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* ERP Tab bar */}
-                      <div className="flex gap-0.5 border-b border-border overflow-x-auto pb-0 -mx-1 px-1 scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
+                      <div className="flex flex-wrap gap-x-0.5 gap-y-1 border-b border-border pb-2 -mx-1 px-1">
                         {serviceErpTabs.map(tab => (
                           <button key={tab.id} type="button"
                             onClick={() => setSelectedServiceTab(tab.id)}
@@ -18452,7 +18452,7 @@ export default function Dashboard() {
               </div>
 
               {/* Tab bar */}
-              <div className="flex gap-1 border-b border-border overflow-x-auto pb-0 -mx-1 px-1 scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
+              <div className="flex flex-wrap gap-x-1 gap-y-1 border-b border-border pb-2 -mx-1 px-1">
                 {afTabs.map(tab => (
                   <button
                     key={tab.id}
@@ -18648,7 +18648,7 @@ export default function Dashboard() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-8 border-b border-border overflow-x-auto pb-0 -mx-1 px-1 scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
+        <div className="flex flex-wrap gap-x-1 gap-y-1 mb-6 border-b border-border pb-2 -mx-1 px-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
