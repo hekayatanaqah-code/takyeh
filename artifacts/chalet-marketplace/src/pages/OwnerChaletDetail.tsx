@@ -163,18 +163,6 @@ export default function OwnerChaletDetail() {
     staleTime: 10 * 60 * 1000,
   });
 
-  const { data: siteSettings = {} } = useQuery<Record<string, string>>({
-    queryKey: ["page-content"],
-    queryFn: async () => {
-      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include" });
-      return r.ok ? r.json() : {};
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const siteTitle = siteSettings.site_display_name || siteSettings.site_title || "تكية";
-  const logoUrl   = siteSettings.site_logo_url || "";
-
   const storageBase = BASE;
 
   if (isLoading) {
@@ -206,33 +194,37 @@ export default function OwnerChaletDetail() {
     <div className="min-h-screen bg-background" dir="rtl">
       {/* ── Top bar ── */}
       <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          {/* Logo + back button */}
-          <Link href="/dashboard" className="flex items-center gap-2 group shrink-0">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-muted/60 transition-colors text-muted-foreground">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
+          {/* Back arrow — standalone at far right (RTL start) */}
+          <Link href="/dashboard" className="shrink-0">
+            <button className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-muted/60 transition-colors text-muted-foreground">
               <ArrowRight className="w-4 h-4" />
-            </div>
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt={siteTitle}
-                className="w-8 h-8 object-contain rounded-lg group-hover:scale-105 transition-transform duration-200"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform duration-200">
-                <MapPin className="w-4 h-4 text-primary-foreground" />
-              </div>
-            )}
-            <span className="text-sm font-bold text-foreground hidden sm:block">{siteTitle}</span>
+            </button>
           </Link>
 
-          {/* Chalet name + status */}
-          <div className="flex-1 min-w-0 text-center sm:text-right">
-            <h1 className="font-bold text-base leading-tight truncate">{sub.nameAr}</h1>
-            <div className="flex items-center justify-center sm:justify-end gap-2 mt-0.5">
-              {statusBadge(sub.status)}
+          {/* Chalet logo + name + status — centered */}
+          <div className="flex-1 flex items-center justify-center gap-3 min-w-0">
+            {sub.logoUrl ? (
+              <img
+                src={(sub.logoUrl as string).startsWith("http") ? sub.logoUrl : `${storageBase}${sub.logoUrl}`}
+                alt={sub.nameAr}
+                className="w-10 h-10 rounded-full object-cover border-2 border-border shadow-sm shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center shrink-0">
+                <Building2 className="w-5 h-5 text-primary" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <h1 className="font-bold text-base leading-tight truncate">{sub.nameAr}</h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                {statusBadge(sub.status)}
+              </div>
             </div>
           </div>
+
+          {/* Spacer to balance back button */}
+          <div className="w-9 shrink-0" />
         </div>
       </div>
 
