@@ -202,25 +202,21 @@ export default function OwnerChaletDetail() {
             </button>
           </Link>
 
-          {/* Chalet logo + name + status — centered */}
-          <div className="flex-1 flex items-center justify-center gap-3 min-w-0">
+          {/* Chalet logo + name + badge — all in one horizontal row, centered */}
+          <div className="flex-1 flex items-center justify-center gap-2.5 overflow-hidden">
             {sub.logoUrl ? (
               <img
                 src={(sub.logoUrl as string).startsWith("http") ? sub.logoUrl : `${storageBase}${sub.logoUrl}`}
                 alt={sub.nameAr}
-                className="w-10 h-10 rounded-full object-cover border-2 border-border shadow-sm shrink-0"
+                className="w-9 h-9 rounded-full object-cover border-2 border-border shadow-sm shrink-0"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center shrink-0">
-                <Building2 className="w-5 h-5 text-primary" />
+              <div className="w-9 h-9 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center shrink-0">
+                <Building2 className="w-4.5 h-4.5 text-primary" />
               </div>
             )}
-            <div className="min-w-0">
-              <h1 className="font-bold text-base leading-tight truncate">{sub.nameAr}</h1>
-              <div className="flex items-center gap-2 mt-0.5">
-                {statusBadge(sub.status)}
-              </div>
-            </div>
+            <h1 className="font-bold text-base leading-none truncate shrink min-w-0">{sub.nameAr}</h1>
+            <div className="shrink-0">{statusBadge(sub.status)}</div>
           </div>
 
           {/* Spacer to balance back button */}
