@@ -309,5 +309,7 @@ input, textarea, select, [contenteditable] {
 .leaflet-popup-content { overflow: visible !important; margin: 12px 14px !important; }
 
 /* ── Scrollbar: hidden visually but still scrollable ───────────────── */
-.scrollbar-hide::-webkit-scrollbar { display: none; }
-.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+}
