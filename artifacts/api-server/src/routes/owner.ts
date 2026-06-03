@@ -1968,6 +1968,32 @@ router.post("/availability", async (req, res) => {
   return res.status(201).json(row);
 });
 
+/* ── Availability: Delete Range (unblock dates) — must be before /:id ── */
+router.delete("/availability/range", async (req, res) => {
+  const ownerId = req.user!.id;
+  const body = z.object({
+    chaletId: z.number().int().positive(),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  }).safeParse(req.body);
+
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const { chaletId, startDate, endDate } = body.data;
+
+  await db.delete(chaletAvailabilityTable)
+    .where(
+      and(
+        eq(chaletAvailabilityTable.ownerId, ownerId),
+        eq(chaletAvailabilityTable.chaletId, chaletId),
+        gte(chaletAvailabilityTable.dateStr, startDate),
+        lte(chaletAvailabilityTable.dateStr, endDate),
+        isNotNull(chaletAvailabilityTable.notes),
+      )
+    );
+
+  return res.json({ ok: true });
+});
+
 router.delete("/availability/:id", async (req, res) => {
   const ownerId = req.user!.id;
   const id = Number(req.params.id);
@@ -2032,32 +2058,6 @@ router.post("/availability/bulk", async (req, res) => {
   }
 
   return res.status(201).json({ blocked: created.length, dates });
-});
-
-/* ── Availability: Delete Range (unblock dates) ─────────────── */
-router.delete("/availability/range", async (req, res) => {
-  const ownerId = req.user!.id;
-  const body = z.object({
-    chaletId: z.number().int().positive(),
-    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  }).safeParse(req.body);
-
-  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
-  const { chaletId, startDate, endDate } = body.data;
-
-  await db.delete(chaletAvailabilityTable)
-    .where(
-      and(
-        eq(chaletAvailabilityTable.ownerId, ownerId),
-        eq(chaletAvailabilityTable.chaletId, chaletId),
-        gte(chaletAvailabilityTable.dateStr, startDate),
-        lte(chaletAvailabilityTable.dateStr, endDate),
-        isNotNull(chaletAvailabilityTable.notes),
-      )
-    );
-
-  return res.json({ ok: true });
 });
 
 /* ── Chalet Seasons ─────────────────────────────────────────── */
