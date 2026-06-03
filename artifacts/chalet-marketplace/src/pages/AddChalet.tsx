@@ -732,13 +732,13 @@ export default function AddChalet() {
                 <button
                   type="button"
                   onClick={() => navigate(`/my-chalet/${editId}`)}
-                  className="w-9 h-9 rounded-full flex items-center justify-center bg-primary/10 hover:bg-primary/20 transition-colors text-primary"
+                  className="w-9 h-9 rounded-full flex items-center justify-center bg-primary/10 hover:bg-primary/20 transition-colors text-primary shrink-0"
                 >
                   <ArrowRight className="w-4 h-4" />
                 </button>
                 <div>
-                  <p className="font-bold text-base text-foreground">تعديل بيانات الشاليه</p>
-                  <p className="text-xs text-muted-foreground">التعديلات تُحفظ فوراً وتنعكس على صفحة الشاليه</p>
+                  <p className="font-bold text-base text-foreground">العودة لتفاصيل الشاليه (إلغاء)</p>
+                  <p className="text-xs text-muted-foreground">التعديلات لن تُحفظ إلا بعد الضغط على زر الحفظ أسفل الصفحة</p>
                 </div>
               </div>
             ) : (
@@ -995,7 +995,8 @@ export default function AddChalet() {
                           value={form.descriptionAr}
                           onChange={(e) => handleChange("descriptionAr", e.target.value)}
                           required
-                          className="min-h-[120px] text-base pr-10 resize-none"
+                          className="min-h-[120px] text-base pr-10 resize-none overflow-hidden"
+                          onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }}
                         />
                       </div>
                     </div>
@@ -1012,8 +1013,9 @@ export default function AddChalet() {
                         placeholder={TERMS_PLACEHOLDER}
                         value={form.termsAndConditions}
                         onChange={(e) => handleChange("termsAndConditions", e.target.value)}
-                        className="min-h-[140px] text-sm resize-none leading-relaxed"
+                        className="min-h-[140px] text-sm resize-none overflow-hidden leading-relaxed"
                         dir="rtl"
+                        onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }}
                       />
                       <p className="text-xs text-muted-foreground">
                         اكتب كل شرط في سطر مستقل. تظهر هذه الشروط في صفحة الشاليه وفي رسالة تأكيد الحجز.
@@ -1039,7 +1041,7 @@ export default function AddChalet() {
                           onCheckedChange={() => toggleAmenity(key)}
                           className="shrink-0"
                         />
-                        <span className="text-sm font-medium text-foreground leading-tight">
+                        <span className="text-base font-medium text-foreground leading-tight">
                           {labelAr}
                         </span>
                       </label>
@@ -1051,7 +1053,7 @@ export default function AddChalet() {
                         onCheckedChange={() => toggleAmenity("__other__")}
                         className="shrink-0"
                       />
-                      <span className="text-sm font-medium text-foreground leading-tight">أخرى</span>
+                      <span className="text-base font-medium text-foreground leading-tight">أخرى</span>
                     </label>
                   </div>
                   {selectedAmenities.has("__other__") && (
