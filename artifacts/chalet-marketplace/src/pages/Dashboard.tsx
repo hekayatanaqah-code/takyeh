@@ -16430,17 +16430,18 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
     setNameAr(s.nameAr ?? "");
     setStartDate(s.startDate ?? "");
     setEndDate(s.endDate ?? "");
-    setPriceMorning(s.priceMorning ? String(s.priceMorning) : "");
-    setPriceEvening(s.priceEvening ? String(s.priceEvening) : "");
-    setPriceFullDay(s.priceFullDay ? String(s.priceFullDay) : "");
+    const toInt = (v: any) => v ? String(Math.round(Number(v))) : "";
+    setPriceMorning(toInt(s.priceMorning));
+    setPriceEvening(toInt(s.priceEvening));
+    setPriceFullDay(toInt(s.priceFullDay));
     const dp = s.dailyPrices as Record<string, DayPrice> | null;
     if (dp) {
       const filled: Record<string, { morning: string; evening: string; fullDay: string }> = {};
       Object.entries(dp).forEach(([date, entry]) => {
         filled[date] = {
-          morning: entry.morning != null ? String(entry.morning) : "",
-          evening: entry.evening != null ? String(entry.evening) : "",
-          fullDay: entry.fullDay != null ? String(entry.fullDay) : "",
+          morning: entry.morning != null ? String(Math.round(entry.morning)) : "",
+          evening: entry.evening != null ? String(Math.round(entry.evening)) : "",
+          fullDay: entry.fullDay != null ? String(Math.round(entry.fullDay)) : "",
         };
       });
       setDailyPricesState(filled);
