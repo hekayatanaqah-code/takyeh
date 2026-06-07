@@ -15254,6 +15254,22 @@ interface OwnerChalet { id: number; nameAr: string; photos: string[]; waReviewTe
 
 const DEFAULT_REVIEW_TEMPLATE = "أهلاً [اسم_الضيف]، يسعدنا تقييمك لتجربتك في [اسم_الشاليه] 🌟\nاضغط هنا لتقييمك: [الرابط]";
 
+function fmtDT(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const { year: hy, month: hm, day: hd } = toHijriComponents(d);
+    const pad = (n: number) => toArN(String(n).padStart(2, "0"));
+    const hijriStr = `${toArN(hy)}/${pad(hm)}/${pad(hd)} هـ`;
+    const gy = d.getFullYear(); const gm = d.getMonth() + 1; const gd = d.getDate();
+    const gregStr = `${toArN(gy)}/${pad(gm)}/${pad(gd)} م`;
+    const hours = d.getHours(); const mins = d.getMinutes();
+    const isPM = hours >= 12; const h12 = hours % 12 || 12;
+    const timeStr = `${pad(h12)}:${pad(mins)} ${isPM ? "م" : "ص"}`;
+    return `${hijriStr} - ${gregStr} (${timeStr})`;
+  } catch { return iso; }
+}
+
 interface OwnerReviewRow {
   id: number;
   chaletId: number;
@@ -15324,8 +15340,8 @@ function InvitationsTable({ invitations, onDelete, deleteIsPending }: { invitati
                       {inv.used ? "مستخدم" : "معلق"}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-muted-foreground text-xs">
-                    {new Date(inv.createdAt).toLocaleDateString("ar-SA", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                  <td className="px-4 py-2.5 text-muted-foreground text-[11px] leading-relaxed">
+                    {fmtDT(inv.createdAt)}
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1">
@@ -15721,8 +15737,8 @@ function ReviewsTab() {
                           تم الإبلاغ
                         </span>
                       )}
-                      <span className="text-xs text-muted-foreground mr-auto">
-                        {new Date(rev.createdAt).toLocaleDateString("ar-SA")}
+                      <span className="text-[11px] text-muted-foreground mr-auto leading-relaxed">
+                        {fmtDT(rev.createdAt)}
                       </span>
                     </div>
 
