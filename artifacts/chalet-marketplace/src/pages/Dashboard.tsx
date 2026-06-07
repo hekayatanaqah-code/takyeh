@@ -2638,7 +2638,7 @@ function ManageInsuranceDialog({
 
 /* ── Block Date Dialog ───────────────────────── */
 function BlockDateDialog({
-  open, onClose, dateStr, chaletId, existing, onSaved,
+  open, onClose, dateStr, chaletId, existing, onSaved, bookedPeriod,
 }: {
   open: boolean;
   onClose: () => void;
@@ -2646,6 +2646,7 @@ function BlockDateDialog({
   chaletId: number;
   existing?: ChaletAvailability | null;
   onSaved: () => void;
+  bookedPeriod?: string | null;
 }) {
   const [morning, setMorning] = useState(existing?.periodMorning ?? false);
   const [evening, setEvening] = useState(existing?.periodEvening ?? false);
@@ -2679,7 +2680,19 @@ function BlockDateDialog({
     }
   };
 
-  const labelDate = new Date(dateStr + "T12:00:00").toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const dateObj = new Date(dateStr + "T12:00:00");
+  const weekday = dateObj.toLocaleDateString("ar-SA", { weekday: "long" });
+  const { hijri, gregorian } = formatDualDate(dateObj);
+  const labelDate = `${weekday}، ${hijri} | ${gregorian} م`;
+
+  const allPeriods = [
+    { key: "morning" as const,  label: "🌅 صباحي",    state: morning,  set: setMorning },
+    { key: "evening" as const,  label: "🌙 مسائي",    state: evening,  set: setEvening },
+    { key: "full_day" as const, label: "☀️ يوم كامل", state: fullDay,  set: setFullDay },
+  ];
+  const visiblePeriods = bookedPeriod
+    ? allPeriods.filter(p => p.key !== bookedPeriod)
+    : allPeriods;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -2691,12 +2704,8 @@ function BlockDateDialog({
           <p className="text-sm text-muted-foreground">{labelDate}</p>
           <p className="text-xs text-foreground font-medium">اختر الفترات المراد إغلاقها (تعطيل الإتاحة):</p>
           <div className="space-y-3">
-            {[
-              { key: "morning" as const,  label: "🌅 صباحي",     state: morning,  set: setMorning },
-              { key: "evening" as const,  label: "🌙 مسائي",     state: evening,  set: setEvening },
-              { key: "full_day" as const, label: "☀️ يوم كامل",  state: fullDay,  set: setFullDay },
-            ].map(({ label, state, set }) => (
-              <label key={label} className="flex items-center gap-3 cursor-pointer group">
+            {visiblePeriods.map(({ key, label, state, set }) => (
+              <label key={key} className="flex items-center gap-3 cursor-pointer group">
                 <div
                   onClick={() => set(!state)}
                   className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer ${
@@ -4062,6 +4071,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     };
   }, [calHijriYear, calHijriMonth, dashCalType, calGregYear, calGregMonth]);
   const [blockDateStr, setBlockDateStr] = useState<string | null>(null);
+  const [blockDateBookingPeriod, setBlockDateBookingPeriod] = useState<string | null>(null);
   const [chalUnblockDay, setChalUnblockDay] = useState<{ ds: string; avId: number } | null>(null);
   const [unblockingChal, setUnblockingChal] = useState(false);
   const [summaryDate, setSummaryDate] = useState<string | null>(null);
@@ -5571,7 +5581,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               </div>
               <DialogFooter className="flex flex-row gap-2 justify-start mt-1">
                 <Button variant="outline" size="sm" onClick={() => setSummaryDate(null)}>إغلاق</Button>
-                <Button variant="outline" size="sm" onClick={() => { setSummaryDate(null); setBlockDateStr(summaryDate); }}>
+                <Button variant="outline" size="sm" onClick={() => { const bkg = sumBkgs.find(b => b.checkIn <= summaryDate! && summaryDate! <= b.checkOut); setSummaryDate(null); setBlockDateBookingPeriod(bkg?.period ?? null); setBlockDateStr(summaryDate); }}>
                   ضبط الإتاحة
                 </Button>
                 <Button
@@ -7436,13 +7446,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       {blockDateStr && activeChaletId && (
         <BlockDateDialog
           open={!!blockDateStr}
-          onClose={() => setBlockDateStr(null)}
+          onClose={() => { setBlockDateStr(null); setBlockDateBookingPeriod(null); }}
           dateStr={blockDateStr}
           chaletId={activeChaletId}
           existing={blockEntry}
+          bookedPeriod={blockDateBookingPeriod}
           onSaved={() => {
             qc.invalidateQueries({ queryKey: ["owner", "availability", activeChaletId] });
             setBlockDateStr(null);
+            setBlockDateBookingPeriod(null);
           }}
         />
       )}
