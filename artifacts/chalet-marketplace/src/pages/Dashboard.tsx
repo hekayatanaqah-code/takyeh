@@ -33,7 +33,7 @@ import {
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
-  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays, PieChart, Save, ScrollText,
+  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays, PieChart, Save, ScrollText, Check,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -2689,7 +2689,7 @@ function BlockDateDialog({
         </DialogHeader>
         <div className="space-y-4 mt-1">
           <p className="text-sm text-muted-foreground">{labelDate}</p>
-          <p className="text-xs text-foreground font-medium">حدد الفترات المحجوزة (غير المتاحة):</p>
+          <p className="text-xs text-foreground font-medium">اختر الفترات المراد إغلاقها (تعطيل الإتاحة):</p>
           <div className="space-y-3">
             {[
               { key: "morning" as const,  label: "🌅 صباحي",     state: morning,  set: setMorning },
@@ -2700,12 +2700,12 @@ function BlockDateDialog({
                 <div
                   onClick={() => set(!state)}
                   className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer ${
-                    state ? "bg-destructive border-destructive" : "border-border group-hover:border-destructive/50"
+                    state ? "bg-primary border-primary" : "border-border group-hover:border-primary/50"
                   }`}
                 >
-                  {state && <XCircle className="w-3.5 h-3.5 text-white" />}
+                  {state && <Check className="w-3.5 h-3.5 text-white" />}
                 </div>
-                <span className="text-sm font-medium">{label} — محجوز</span>
+                <span className="text-sm font-medium">{label}</span>
               </label>
             ))}
           </div>
@@ -5571,7 +5571,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               </div>
               <DialogFooter className="flex flex-row gap-2 justify-start mt-1">
                 <Button variant="outline" size="sm" onClick={() => setSummaryDate(null)}>إغلاق</Button>
-                <Button variant="ghost" size="sm" onClick={() => { setSummaryDate(null); setBlockDateStr(summaryDate); }}>
+                <Button variant="outline" size="sm" onClick={() => { setSummaryDate(null); setBlockDateStr(summaryDate); }}>
                   ضبط الإتاحة
                 </Button>
                 <Button
