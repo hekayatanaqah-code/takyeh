@@ -5535,22 +5535,22 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           );
                         })()}
                         {!isPastBooking && (
-                          <button
-                            onClick={() => { setSummaryDate(null); setRescheduleBooking(b); }}
-                            className="flex items-center justify-center gap-1.5 text-xs font-medium text-primary border border-primary/30 rounded-lg py-2 hover:bg-primary/10 transition-colors text-center leading-tight"
-                          >
-                            <RotateCcw className="w-3 h-3 shrink-0" />
-                            إعادة جدولة
-                          </button>
-                        )}
-                        {!isPastBooking && (
-                          <button
-                            onClick={() => { setSummaryDate(null); setDeleteDialogBooking(b); }}
-                            className="flex items-center justify-center gap-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg py-2 hover:bg-destructive/10 transition-colors text-center leading-tight"
-                          >
-                            <XCircle className="w-3 h-3 shrink-0" />
-                            إلغاء
-                          </button>
+                          <div className="col-span-2 flex gap-1.5">
+                            <button
+                              onClick={() => { setSummaryDate(null); setRescheduleBooking(b); }}
+                              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-primary border border-primary/30 rounded-lg py-2 hover:bg-primary/10 transition-colors"
+                            >
+                              <RotateCcw className="w-3 h-3 shrink-0" />
+                              إعادة جدولة
+                            </button>
+                            <button
+                              onClick={() => { setSummaryDate(null); setDeleteDialogBooking(b); }}
+                              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg py-2 hover:bg-destructive/10 transition-colors"
+                            >
+                              <XCircle className="w-3 h-3 shrink-0" />
+                              إلغاء
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
