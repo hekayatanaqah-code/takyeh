@@ -2702,22 +2702,34 @@ function BlockDateDialog({
           <p className="text-xs text-foreground font-medium">اختر الفترات المراد إغلاقها (تعطيل الإتاحة):</p>
           <div className="space-y-3">
             {allPeriods.map(({ key, label, state, set }) => {
-              const isBooked = bookedPeriod === key;
+              // When opened from a booking context:
+              // - the booked period itself → disabled + always checked
+              // - full_day → disabled (can't close whole day when half is booked)
+              // - other partial period → active + toggleable
+              const isBookedPeriod = bookedPeriod === key;
+              const isFullDayBlocked = bookedPeriod && bookedPeriod !== "full_day" && key === "full_day";
+              const isDisabled = !!(isBookedPeriod || isFullDayBlocked);
+              const forceChecked = isBookedPeriod;
               return (
-                <div key={key} className={`flex items-center gap-3 ${isBooked ? "opacity-50 pointer-events-none select-none" : "cursor-pointer group"}`} onClick={() => { if (!isBooked) set(!state); }}>
+                <div
+                  key={key}
+                  className={`flex items-center gap-3 ${isDisabled ? "opacity-50 pointer-events-none select-none" : "cursor-pointer group"}`}
+                  onClick={() => { if (!isDisabled) set(!state); }}
+                >
                   <div
                     className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${
-                      isBooked
-                        ? "bg-gray-400 border-gray-400"
+                      isDisabled
+                        ? "bg-gray-300 border-gray-300 dark:bg-gray-600 dark:border-gray-600"
                         : state
                           ? "bg-primary border-primary"
                           : "border-border group-hover:border-primary/50"
                     }`}
                   >
-                    {(state || isBooked) && <Check className="w-3.5 h-3.5 text-white" />}
+                    {(forceChecked || (!isDisabled && state)) && <Check className="w-3.5 h-3.5 text-white" />}
                   </div>
                   <span className="text-sm font-medium">{label}</span>
-                  {isBooked && <span className="text-xs text-muted-foreground">(محجوز - غير قابل للتعديل)</span>}
+                  {isBookedPeriod && <span className="text-xs text-muted-foreground mr-1">(محجوز)</span>}
+                  {isFullDayBlocked && <span className="text-xs text-muted-foreground mr-1">(غير متاح)</span>}
                 </div>
               );
             })}
