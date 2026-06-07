@@ -5442,29 +5442,17 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             إدارة التأمين
                           </button>
                         )}
-                        {activeChaletId && !b.ratedAt && (
-                          <button
-                            disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
-                            onClick={() => { setSummaryDate(null); sendReviewRequest(b); }}
-                            className="flex items-center justify-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 border border-teal-300 dark:border-teal-700 rounded-lg py-2 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-50 text-center leading-tight"
-                          >
-                            {reviewPendingId === b.id
-                              ? <Loader2 className="w-3 h-3 animate-spin" />
-                              : reviewSentIds.has(b.id)
-                                ? <CheckCircle className="w-3 h-3" />
-                                : <Star className="w-3 h-3" />}
-                            {reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "إرسال رابط التقييم"}
-                          </button>
-                        )}
                         {/* Installment payments — modal */}
                         {(() => {
                           const dep2 = Number(b.depositPaid ?? 0);
                           const total2 = b.totalPrice !== null ? Number(b.totalPrice) : null;
-                          if (total2 === null || total2 <= dep2) return null;
-                          const bkPmts = paymentsByBooking[b.id] ?? [];
+                          const hasInstallments = total2 !== null && total2 > dep2;
+                          const bkPmts = hasInstallments ? (paymentsByBooking[b.id] ?? []) : [];
                           const totalPaid2 = bkPmts.reduce((s, p) => s + Number(p.amount), 0);
-                          const remDyn2 = Math.max(0, total2 - dep2 - totalPaid2);
-                          const isFullyPaid2 = b.balanceCollected || remDyn2 <= 0;
+                          const remDyn2 = hasInstallments ? Math.max(0, total2! - dep2 - totalPaid2) : 0;
+                          const isFullyPaid2 = !hasInstallments || b.balanceCollected || remDyn2 <= 0;
+                          const showAddPayBtn = hasInstallments && !isFullyPaid2 && !isReadOnly && calPayTarget !== b.id;
+                          const showReviewBtn = !!(activeChaletId && !b.ratedAt);
                           return (
                             <>
                               {bkPmts.length > 0 && (
@@ -5525,11 +5513,35 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                                       </button>
                                     </div>
                                   </div>
-                                ) : (
-                                  <button type="button" onClick={() => { setCalPayTarget(b.id); setCalPayAmt(String(remDyn2)); setCalPayDate(new Date().toISOString().slice(0, 10)); setCalPayMethod("cash"); setCalPayDeposited(false); }} className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-700 rounded-lg py-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                                    <CheckCircle className="w-3 h-3" /> + إضافة دفعة ({toArN(Math.round(remDyn2))} ر.س)
-                                  </button>
-                                )
+                                ) : null
+                              )}
+                              {/* review + add-payment combined row */}
+                              {(showReviewBtn || showAddPayBtn) && (
+                                <div className="col-span-2 flex gap-1.5">
+                                  {showReviewBtn && (
+                                    <button
+                                      disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                                      onClick={() => { setSummaryDate(null); sendReviewRequest(b); }}
+                                      className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 border border-teal-300 dark:border-teal-700 rounded-lg py-2 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-50"
+                                    >
+                                      {reviewPendingId === b.id
+                                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                                        : reviewSentIds.has(b.id)
+                                          ? <CheckCircle className="w-3 h-3" />
+                                          : <Star className="w-3 h-3" />}
+                                      {reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "إرسال رابط التقييم"}
+                                    </button>
+                                  )}
+                                  {showAddPayBtn && (
+                                    <button
+                                      type="button"
+                                      onClick={() => { setCalPayTarget(b.id); setCalPayAmt(String(remDyn2)); setCalPayDate(new Date().toISOString().slice(0, 10)); setCalPayMethod("cash"); setCalPayDeposited(false); }}
+                                      className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-700 rounded-lg py-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                    >
+                                      <CheckCircle className="w-3 h-3" /> + إضافة دفعة ({toArN(Math.round(remDyn2))} ر.س)
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </>
                           );
