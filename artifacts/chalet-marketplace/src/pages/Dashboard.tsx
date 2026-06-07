@@ -5377,27 +5377,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               )}
                             </div>
                           )}
-                          {/* insurance partial-deposit inline row for modal */}
-                          {b.insuranceReceived && (b.insurancePaymentMethod ?? "transfer") === "cash" && !b.insuranceRefunded && !isReadOnly && (() => {
-                            const iAmt = Math.round(Number(b.insuranceFee ?? 0));
-                            const iDep = perBookingInsuranceDeposited.get(b.id) ?? 0;
-                            const iRem = Math.max(0, iAmt - iDep);
-                            if (iRem <= 0) return null;
-                            return (
-                              <div className="border-t border-blue-200 dark:border-blue-800 pt-1.5 flex items-center justify-between gap-2">
-                                <p className="text-[10px] text-blue-700 dark:text-blue-400">
-                                  {iDep > 0 ? `تأمين — متبقي: ${toEasternArabic(iRem.toLocaleString("ar-SA"))} ر.س` : `تأمين كاش (${toEasternArabic(iAmt.toLocaleString("ar-SA"))} ر.س) لم يُودَع`}
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={() => openBookingDepositDialog(b.id, iRem, iAmt, b.submissionId, `إيداع تأمين كاش — ${b.clientName}`)}
-                                  className="shrink-0 text-[10px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-2 py-1 transition-colors"
-                                >
-                                  🏦 {iDep > 0 ? "إيداع المتبقي" : "إيداع التأمين"}
-                                </button>
-                              </div>
-                            );
-                          })()}
                           {b.paymentReceiptUrl && (
                             <div className="border-t border-green-200 dark:border-green-800 pt-1.5 flex items-center gap-2">
                               <p className="text-[10px] text-muted-foreground">إيصال:</p>
@@ -5441,15 +5420,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         const _wp = _dg.startsWith("966") ? _dg : _dg.startsWith("0") ? "966" + _dg.slice(1) : _dg ? "966" + _dg : "";
                         const _wm = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cu, b.period, returningPhonesSet.has(b.clientPhone ?? ""), b.clientName);
                         return (
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            <a href={_wp ? `https://wa.me/${_wp}?text=${_wm}` : `https://wa.me/?text=${_wm}`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors">
-                              💬 إرسال بالواتساب
+                          <div className="flex gap-1.5 mt-2">
+                            <a href={_wp ? `https://wa.me/${_wp}?text=${_wm}` : `https://wa.me/?text=${_wm}`} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors">
+                              💬 إرسال العقد بالواتساب
                             </a>
-                            <button type="button" onClick={() => navigator.clipboard.writeText(_cu).then(() => toast({ title: "تم النسخ ✓", description: "رابط العقد في الحافظة" }))} className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                            <button type="button" onClick={() => navigator.clipboard.writeText(_cu).then(() => toast({ title: "تم النسخ ✓", description: "رابط العقد في الحافظة" }))} className="flex-1 flex items-center justify-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                               📋 نسخ رابط العقد
-                            </button>
-                            <button type="button" onClick={() => { setSummaryDate(null); setRescheduleBooking(b); }} className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-primary/5 text-primary border border-primary/20 hover:bg-primary/10 dark:bg-primary/10 dark:hover:bg-primary/20 transition-colors">
-                              🔄 إعادة الجدولة
                             </button>
                           </div>
                         );
@@ -5558,6 +5534,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             </>
                           );
                         })()}
+                        {!isPastBooking && (
+                          <button
+                            onClick={() => { setSummaryDate(null); setRescheduleBooking(b); }}
+                            className="flex items-center justify-center gap-1.5 text-xs font-medium text-primary border border-primary/30 rounded-lg py-2 hover:bg-primary/10 transition-colors text-center leading-tight"
+                          >
+                            <RotateCcw className="w-3 h-3 shrink-0" />
+                            إعادة جدولة
+                          </button>
+                        )}
                         {!isPastBooking && (
                           <button
                             onClick={() => { setSummaryDate(null); setDeleteDialogBooking(b); }}
