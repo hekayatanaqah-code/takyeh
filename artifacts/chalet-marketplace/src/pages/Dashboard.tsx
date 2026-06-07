@@ -16559,7 +16559,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
         <div className="bg-card border border-dashed border-border rounded-2xl py-10 text-center">
           <Sun className="w-9 h-9 text-muted-foreground/40 mx-auto mb-3" />
           <p className="text-sm text-muted-foreground">لا توجد مواسم مضافة بعد</p>
-          <p className="text-xs text-muted-foreground/60 mt-1">أضف موسماً كالإجازات والأعياد بأسعار خاصة</p>
+          <p className="text-xs text-muted-foreground mt-1">أضف موسماً كالإجازات والأعياد بأسعار خاصة</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -16639,8 +16639,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
       <div className="rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/40 px-4 py-3 flex items-start gap-3">
         <Activity className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
         <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
-          عند إضافة حجز في نطاق تاريخ موسم، يظهر تنبيه بالسعر الموسمي تلقائياً في نافذة الحجز.
-          يمكنك استخدامه لتطبيق أسعار الأعياد والإجازات والمواسم دون الحاجة لتغيير السعر الأساسي.
+          عند تحديد نطاق تاريخ معين كموسم، سيتم تطبيق أسعار الأعياد والإجازات تلقائياً في نافذة الحجوزات دون الحاجة لتغيير سعرك الأساسي.
         </p>
       </div>
 
@@ -18097,7 +18096,7 @@ export default function Dashboard() {
 
   const allTabs = [
     { id: "chalets",   label: "شاليهاتي",           icon: <Building2 className="w-4 h-4" /> },
-    { id: "seasons",   label: "المواسم والأسعار",    icon: <Sun className="w-4 h-4" /> },
+    { id: "seasons",   label: "المواسم والأعياد",    icon: <Sun className="w-4 h-4" /> },
     { id: "reviews",   label: "التقييمات",            icon: <Star className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات",   icon: <Calendar className="w-4 h-4" /> },
     { id: "deposits",  label: "إدارة التأمينات",       icon: <Lock className="w-4 h-4" /> },
@@ -18491,7 +18490,7 @@ export default function Dashboard() {
                   const selectedProvider = myApprovedProviders.find(p => p.id === selectedServiceId);
                   const serviceErpTabs = [
                     { id: "details",   label: "تفاصيل الخدمة",    icon: <Edit2 className="w-3.5 h-3.5" /> },
-                    { id: "seasons",   label: "المواسم والأسعار",  icon: <Sunrise className="w-3.5 h-3.5" /> },
+                    { id: "seasons",   label: "المواسم والأعياد",  icon: <Sunrise className="w-3.5 h-3.5" /> },
                     { id: "calendar",  label: "التقويم والحجوزات", icon: <Calendar className="w-3.5 h-3.5" /> },
                     { id: "insurance", label: "إدارة التأمينات",   icon: <Shield className="w-3.5 h-3.5" /> },
                   ];
