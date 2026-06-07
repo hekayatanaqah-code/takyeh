@@ -5072,6 +5072,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const popDur = Math.max(1, b.durationDays ?? 1);
                   const popEndD = new Date(new Date(b.bookingDate + "T00:00:00").getTime() + (popDur - 1) * 86400000);
                   const popEndStr = `${popEndD.getFullYear()}-${String(popEndD.getMonth() + 1).padStart(2, "0")}-${String(popEndD.getDate()).padStart(2, "0")}`;
+                  const isPastBooking = popEndStr < new Date().toLocaleDateString("en-CA");
                   const popStartH = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
                   const popStartG = formatDualDate(b.bookingDate).gregorian;
                   const popEndH   = formatDualDate(popEndStr).hijri.replace(/\s*هـ\s*$/, "");
@@ -5433,8 +5434,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           )}
                         </div>
                       )}
-                      {/* Contract quick actions — shown when signature pending */}
-                      {!b.cancelledAt && !b.contractSigned && (() => {
+                      {/* Contract quick actions — shown when signature pending and booking is upcoming */}
+                      {!b.cancelledAt && !b.contractSigned && !isPastBooking && (() => {
                         const _cu = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
                         const _dg = (b.clientPhone ?? "").replace(/\D/g, "");
                         const _wp = _dg.startsWith("966") ? _dg : _dg.startsWith("0") ? "966" + _dg.slice(1) : _dg ? "966" + _dg : "";
@@ -5557,13 +5558,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             </>
                           );
                         })()}
-                        <button
-                          onClick={() => { setSummaryDate(null); setDeleteDialogBooking(b); }}
-                          className="flex items-center justify-center gap-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg py-2 hover:bg-destructive/10 transition-colors text-center leading-tight"
-                        >
-                          <XCircle className="w-3 h-3 shrink-0" />
-                          إلغاء
-                        </button>
+                        {!isPastBooking && (
+                          <button
+                            onClick={() => { setSummaryDate(null); setDeleteDialogBooking(b); }}
+                            className="flex items-center justify-center gap-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg py-2 hover:bg-destructive/10 transition-colors text-center leading-tight"
+                          >
+                            <XCircle className="w-3 h-3 shrink-0" />
+                            إلغاء
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
