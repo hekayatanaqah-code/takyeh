@@ -16671,11 +16671,17 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
 
             {/* Date range */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
-                <DualCalendarPicker value={startDate} onChange={setStartDate} placeholder="من تاريخ" label="من تاريخ" />
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">من تاريخ</label>
+                <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
+                  <DualCalendarPicker value={startDate} onChange={setStartDate} placeholder="يوم / شهر / سنة" />
+                </div>
               </div>
-              <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
-                <DualCalendarPicker value={endDate} onChange={setEndDate} placeholder="إلى تاريخ" label="إلى تاريخ" minDate={startDate || undefined} />
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">إلى تاريخ</label>
+                <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
+                  <DualCalendarPicker value={endDate} onChange={setEndDate} placeholder="يوم / شهر / سنة" minDate={startDate || undefined} />
+                </div>
               </div>
             </div>
 
