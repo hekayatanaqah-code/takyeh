@@ -15252,7 +15252,7 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
 /* ── Reviews Tab ─────────────────────────────── */
 interface OwnerChalet { id: number; nameAr: string; photos: string[]; waReviewTemplate: string | null }
 
-const DEFAULT_REVIEW_TEMPLATE = "أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} 🌟\nاضغط هنا لتقييمك: {link}";
+const DEFAULT_REVIEW_TEMPLATE = "أهلاً [اسم_الضيف]، يسعدنا تقييمك لتجربتك في [اسم_الشاليه] 🌟\nاضغط هنا لتقييمك: [الرابط]";
 
 interface OwnerReviewRow {
   id: number;
@@ -15311,7 +15311,7 @@ function InvitationsTable({ invitations, onDelete, deleteIsPending }: { invitati
                 <th className="text-right px-4 py-2 font-medium">الاسم</th>
                 <th className="text-right px-4 py-2 font-medium">الحالة</th>
                 <th className="text-right px-4 py-2 font-medium">التاريخ</th>
-                <th className="text-right px-4 py-2 font-medium">إجراء</th>
+                <th className="text-center px-4 py-2 font-medium">إجراء</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -15499,8 +15499,11 @@ function ReviewsTab() {
       siteSettings.wa_review_template ??
       DEFAULT_REVIEW_TEMPLATE;
     const text = template
+      .replace(/\[الرابط\]/g, link)
       .replace(/\{link\}/g, link)
+      .replace(/\[اسم_الشاليه\]/g, chalet.nameAr ?? "شاليهنا")
       .replace(/\{chalet_name\}/g, chalet.nameAr ?? "شاليهنا")
+      .replace(/\[اسم_الضيف\]/g, "")
       .replace(/\{guest_name\}/g, "");
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
@@ -15629,7 +15632,7 @@ function ReviewsTab() {
                 <div className="flex items-center gap-2">
                   <MessageSquare className="w-4 h-4 text-muted-foreground" />
                   <p className="text-sm font-semibold text-foreground">رسالة واتساب مخصصة</p>
-                  <span className="text-xs text-muted-foreground mr-auto">ضع {"{link}"} حيث تريد الرابط</span>
+                  <span className="text-xs text-muted-foreground mr-auto">ضع [الرابط] حيث تريد رابط التقييم</span>
                 </div>
                 <Textarea
                   dir="rtl"
@@ -15765,7 +15768,8 @@ function ReviewsTab() {
                         <div className="flex gap-2">
                           <Button
                             size="sm"
-                            className="gap-1.5"
+                            variant="default"
+                            className={`gap-1.5 transition-opacity duration-150 ${(replyDraft[rev.id] ?? "").trim() ? "opacity-100" : "opacity-40"}`}
                             disabled={replyMutation.isPending || !(replyDraft[rev.id] ?? "").trim()}
                             onClick={() => replyMutation.mutate({ reviewId: rev.id, reply: (replyDraft[rev.id] ?? "").trim() })}
                           >
@@ -15798,17 +15802,18 @@ function ReviewsTab() {
                             className="text-sm resize-none"
                           />
                           <div className="flex items-center gap-2">
-                            <button
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={reportMutation.isPending || !reportReasonDraft.trim()}
                               onClick={() => {
                                 if (!reportReasonDraft.trim()) return;
                                 reportMutation.mutate({ reviewId: rev.id, reason: reportReasonDraft.trim() });
                               }}
-                              disabled={reportMutation.isPending || !reportReasonDraft.trim()}
-                              className="text-red-600 hover:text-red-700 font-semibold disabled:opacity-40"
                             >
                               {reportMutation.isPending ? "جاري..." : "إرسال البلاغ"}
-                            </button>
-                            <button onClick={() => { setReportConfirmId(null); setReportReasonDraft(""); }} className="text-muted-foreground">إلغاء</button>
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => { setReportConfirmId(null); setReportReasonDraft(""); }}>إلغاء</Button>
                           </div>
                         </div>
                       ) : (
