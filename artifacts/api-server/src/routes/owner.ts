@@ -2137,6 +2137,54 @@ router.post("/seasons", async (req, res) => {
   return res.status(201).json(row);
 });
 
+router.put("/seasons/:id", async (req, res) => {
+  const ownerId = req.user!.id;
+  const id = Number(req.params.id);
+  const dayPriceSchema = z.object({
+    morning: z.number().nonnegative().optional(),
+    evening: z.number().nonnegative().optional(),
+    fullDay: z.number().nonnegative().optional(),
+  });
+  const body = z.object({
+    nameAr: z.string().min(1),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    priceMorning: z.number().nonnegative().optional(),
+    priceEvening: z.number().nonnegative().optional(),
+    priceFullDay: z.number().nonnegative().optional(),
+    dailyPrices: z.record(z.string(), dayPriceSchema).optional(),
+    period: z.enum(["morning", "evening", "full_day"]).optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  if (body.data.endDate < body.data.startDate) return res.status(400).json({ error: "تاريخ النهاية قبل البداية" });
+  const { priceMorning, priceEvening, priceFullDay, dailyPrices } = body.data;
+  const hasDailyPrice = dailyPrices && Object.values(dailyPrices).some(dp => dp.morning || dp.evening || dp.fullDay);
+  if (!priceMorning && !priceEvening && !priceFullDay && !hasDailyPrice) {
+    return res.status(400).json({ error: "يجب تحديد سعر واحد على الأقل" });
+  }
+  const allDayPrices = dailyPrices ? Object.values(dailyPrices) : [];
+  const minDayPrice = allDayPrices.length
+    ? Math.min(...allDayPrices.flatMap(dp => [dp.morning, dp.evening, dp.fullDay].filter(Boolean) as number[]))
+    : null;
+  const primaryPrice = priceFullDay ?? priceMorning ?? priceEvening ?? minDayPrice ?? 0;
+  const [row] = await db.update(chaletSeasonsTable)
+    .set({
+      nameAr: body.data.nameAr,
+      startDate: body.data.startDate,
+      endDate: body.data.endDate,
+      price: String(primaryPrice),
+      priceMorning: priceMorning != null ? String(priceMorning) : null,
+      priceEvening: priceEvening != null ? String(priceEvening) : null,
+      priceFullDay: priceFullDay != null ? String(priceFullDay) : null,
+      dailyPrices: dailyPrices && Object.keys(dailyPrices).length > 0 ? dailyPrices : null,
+      period: body.data.period ?? null,
+    })
+    .where(and(eq(chaletSeasonsTable.id, id), eq(chaletSeasonsTable.ownerId, ownerId)))
+    .returning();
+  if (!row) return res.status(404).json({ error: "الموسم غير موجود" });
+  return res.json(row);
+});
+
 router.delete("/seasons/:id", async (req, res) => {
   const ownerId = req.user!.id;
   const id = Number(req.params.id);

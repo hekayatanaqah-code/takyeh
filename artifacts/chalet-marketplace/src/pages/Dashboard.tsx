@@ -16409,6 +16409,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
   const { toast } = useToast();
   const [selectedSubId, setSelectedSubId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [editSeasonId, setEditSeasonId] = useState<number | null>(null);
   const [nameAr, setNameAr] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -16417,6 +16418,38 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
   const [priceFullDay, setPriceFullDay] = useState("");
   const [dailyPricesState, setDailyPricesState] = useState<Record<string, { morning: string; evening: string; fullDay: string }>>({});
   const [saving, setSaving] = useState(false);
+
+  function resetForm() {
+    setNameAr(""); setStartDate(""); setEndDate("");
+    setPriceMorning(""); setPriceEvening(""); setPriceFullDay("");
+    setDailyPricesState({});
+    setEditSeasonId(null);
+  }
+
+  function openEdit(s: any) {
+    setNameAr(s.nameAr ?? "");
+    setStartDate(s.startDate ?? "");
+    setEndDate(s.endDate ?? "");
+    setPriceMorning(s.priceMorning ? String(s.priceMorning) : "");
+    setPriceEvening(s.priceEvening ? String(s.priceEvening) : "");
+    setPriceFullDay(s.priceFullDay ? String(s.priceFullDay) : "");
+    const dp = s.dailyPrices as Record<string, DayPrice> | null;
+    if (dp) {
+      const filled: Record<string, { morning: string; evening: string; fullDay: string }> = {};
+      Object.entries(dp).forEach(([date, entry]) => {
+        filled[date] = {
+          morning: entry.morning != null ? String(entry.morning) : "",
+          evening: entry.evening != null ? String(entry.evening) : "",
+          fullDay: entry.fullDay != null ? String(entry.fullDay) : "",
+        };
+      });
+      setDailyPricesState(filled);
+    } else {
+      setDailyPricesState({});
+    }
+    setEditSeasonId(s.id);
+    setAddOpen(true);
+  }
 
   const activeSubId = selectedSubId ?? ownerChalets[0]?.submissionId ?? null;
 
@@ -16492,26 +16525,24 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
         if (dp.fullDay) entry.fullDay = Number(dp.fullDay);
         if (Object.keys(entry).length > 0) dpPayload[ds] = entry;
       });
-      const r = await apiFetch("/owner/seasons", {
-        method: "POST",
-        body: JSON.stringify({
-          submissionId: activeSubId,
-          nameAr: nameAr.trim(),
-          startDate,
-          endDate,
-          priceMorning: normPrice(priceMorning),
-          priceEvening: normPrice(priceEvening),
-          priceFullDay: normPrice(priceFullDay),
-          dailyPrices: Object.keys(dpPayload).length > 0 ? dpPayload : undefined,
-        }),
-      });
+      const url = editSeasonId ? `/owner/seasons/${editSeasonId}` : "/owner/seasons";
+      const method = editSeasonId ? "PUT" : "POST";
+      const body: Record<string, unknown> = {
+        nameAr: nameAr.trim(),
+        startDate,
+        endDate,
+        priceMorning: normPrice(priceMorning),
+        priceEvening: normPrice(priceEvening),
+        priceFullDay: normPrice(priceFullDay),
+        dailyPrices: Object.keys(dpPayload).length > 0 ? dpPayload : undefined,
+      };
+      if (!editSeasonId) body.submissionId = activeSubId;
+      const r = await apiFetch(url, { method, body: JSON.stringify(body) });
       if (!r.ok) { const e = await r.json(); toast({ title: e.error ?? "خطأ", variant: "destructive" }); return; }
       qc.invalidateQueries({ queryKey: ["owner", "seasons"] });
-      toast({ title: "تم إضافة الموسم بنجاح" });
+      toast({ title: editSeasonId ? "تم تحديث الموسم بنجاح" : "تم إضافة الموسم بنجاح" });
       setAddOpen(false);
-      setNameAr(""); setStartDate(""); setEndDate("");
-      setPriceMorning(""); setPriceEvening(""); setPriceFullDay("");
-      setDailyPricesState({});
+      resetForm();
     } finally { setSaving(false); }
   }
 
@@ -16532,7 +16563,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
           <h3 className="font-bold text-foreground text-lg">المواسم والأعياد</h3>
           <p className="text-sm text-muted-foreground">حدد فترات بأسعار خاصة تُطبَّق تلقائياً على الحجوزات</p>
         </div>
-        <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5 rounded-xl">
+        <Button size="sm" onClick={() => { resetForm(); setAddOpen(true); }} className="gap-1.5 rounded-xl">
           <Plus className="w-4 h-4" />
           إضافة موسم
         </Button>
@@ -16602,7 +16633,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
                               {toAr(minP)} ر.س / يوم
                             </span>
                           )}
-                          <span className="text-muted-foreground/60">· {toAr(dpEntries.length)} يوم بأسعار مفصّلة</span>
+                          <span className="text-muted-foreground/60">· {toAr(days)} {days === 1 ? "يوم" : "أيام"} بأسعار مفصّلة</span>
                         </div>
                       );
                     }
@@ -16618,7 +16649,15 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
                     );
                   })()}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted w-8 h-8"
+                    onClick={() => openEdit(s)}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
                   <Button
                     size="icon"
                     variant="ghost"
@@ -16644,12 +16683,12 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
       </div>
 
       {/* Add Season Dialog */}
-      <Dialog open={addOpen} onOpenChange={(v) => { if (!v) { setAddOpen(false); setDailyPricesState({}); } }}>
+      <Dialog open={addOpen} onOpenChange={(v) => { if (!v) { setAddOpen(false); resetForm(); } }}>
         <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Sun className="w-4 h-4 text-amber-500" />
-              إضافة موسم جديد
+              {editSeasonId ? "تعديل الموسم" : "إضافة موسم جديد"}
             </DialogTitle>
             <DialogDescription>حدد اسم الموسم ونطاق التواريخ وأسعار كل يوم</DialogDescription>
           </DialogHeader>
@@ -16780,7 +16819,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
           </div>
 
           <DialogFooter className="gap-2 shrink-0 pt-2 border-t border-border">
-            <Button variant="outline" onClick={() => { setAddOpen(false); setDailyPricesState({}); }}>إلغاء</Button>
+            <Button variant="outline" onClick={() => { setAddOpen(false); resetForm(); }}>إلغاء</Button>
             <Button
               disabled={
                 !nameAr.trim() || !startDate || !endDate || startDate > endDate ||
@@ -16790,8 +16829,8 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
               onClick={handleAdd}
               className="gap-1.5"
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              حفظ الموسم
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : editSeasonId ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {editSeasonId ? "حفظ التغييرات" : "حفظ الموسم"}
             </Button>
           </DialogFooter>
         </DialogContent>
