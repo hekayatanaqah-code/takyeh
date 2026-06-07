@@ -5455,20 +5455,20 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       })()}
 
                       {/* Booking management quick actions */}
-                      <div className="flex gap-2 mt-2 pt-2 border-t border-border/50 flex-wrap">
+                      <div className="grid grid-cols-2 gap-1.5 mt-2 pt-2 border-t border-border/50">
                         <button
                           onClick={() => { setSummaryDate(null); setRescheduleBooking(b); }}
-                          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-primary border border-primary/30 rounded-lg py-1.5 hover:bg-primary/10 transition-colors"
+                          className="flex items-center justify-center gap-1.5 text-xs font-medium text-primary border border-primary/30 rounded-lg py-2 hover:bg-primary/10 transition-colors text-center leading-tight"
                         >
-                          <RotateCcw className="w-3 h-3" />
+                          <RotateCcw className="w-3 h-3 shrink-0" />
                           إعادة جدولة
                         </button>
                         {b.insuranceFee && Number(b.insuranceFee) > 0 && !b.insuranceRefunded && (
                           <button
                             onClick={() => { setSummaryDate(null); setInsuranceTarget(b); }}
-                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-700 rounded-lg py-1.5 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+                            className="flex items-center justify-center gap-1.5 text-xs font-medium text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-700 rounded-lg py-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors text-center leading-tight"
                           >
-                            <Lock className="w-3 h-3" />
+                            <Lock className="w-3 h-3 shrink-0" />
                             إدارة التأمين
                           </button>
                         )}
@@ -5476,7 +5476,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <button
                             disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
                             onClick={() => { setSummaryDate(null); sendReviewRequest(b); }}
-                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 border border-teal-300 dark:border-teal-700 rounded-lg py-1.5 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-50"
+                            className="flex items-center justify-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 border border-teal-300 dark:border-teal-700 rounded-lg py-2 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-50 text-center leading-tight"
                           >
                             {reviewPendingId === b.id
                               ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -5575,9 +5575,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               href={_waHref}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700 rounded-lg py-1.5 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                              className="flex items-center justify-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700 rounded-lg py-2 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors text-center leading-tight"
                             >
-                              <MessageSquare className="w-3 h-3" />
+                              <MessageSquare className="w-3 h-3 shrink-0" />
                               إرسال العقد بالواتساب
                             </a>
                           );
@@ -5588,26 +5588,16 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             const url = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
                             navigator.clipboard.writeText(url).then(() => toast({ title: "تم النسخ", description: "رابط العقد في الحافظة ✓" }));
                           }}
-                          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-violet-700 dark:text-violet-400 border border-violet-300 dark:border-violet-700 rounded-lg py-1.5 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+                          className="flex items-center justify-center gap-1.5 text-xs font-medium text-violet-700 dark:text-violet-400 border border-violet-300 dark:border-violet-700 rounded-lg py-2 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors text-center leading-tight"
                         >
-                          <ExternalLink className="w-3 h-3" />
+                          <ExternalLink className="w-3 h-3 shrink-0" />
                           نسخ رابط العقد
                         </button>
-                        {b.contractSigned && (
-                          <button
-                            type="button"
-                            onClick={() => { setSummaryDate(null); setContractPreviewBooking(b); }}
-                            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 rounded-lg py-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
-                          >
-                            <FileText className="w-3 h-3" />
-                            📄 تم التوقيع ✓
-                          </button>
-                        )}
                         <button
                           onClick={() => { setSummaryDate(null); setDeleteDialogBooking(b); }}
-                          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg py-1.5 hover:bg-destructive/10 transition-colors"
+                          className="flex items-center justify-center gap-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg py-2 hover:bg-destructive/10 transition-colors text-center leading-tight"
                         >
-                          <XCircle className="w-3 h-3" />
+                          <XCircle className="w-3 h-3 shrink-0" />
                           إلغاء
                         </button>
                       </div>
