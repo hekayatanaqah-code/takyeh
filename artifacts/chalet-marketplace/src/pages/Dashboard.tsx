@@ -16656,9 +16656,10 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
 
           <div className="overflow-y-auto flex-1 space-y-4 py-2 pl-1">
             {/* Name */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-sm font-medium">اسم الموسم</label>
-              <div className="flex gap-2 flex-wrap">
+              <Input placeholder="اسم الموسم..." value={nameAr} onChange={(e) => setNameAr(e.target.value)} />
+              <div className="flex gap-2 flex-wrap pt-1">
                 {["عيد الأضحى", "عيد الفطر", "رمضان", "الإجازة الصيفية", "نهاية السنة", "الإجازة الشتوية"].map((n) => (
                   <button key={n} onClick={() => setNameAr(n)}
                     className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${nameAr === n ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-foreground"}`}>
@@ -16666,7 +16667,6 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
                   </button>
                 ))}
               </div>
-              <Input className="mt-2" placeholder="اسم الموسم..." value={nameAr} onChange={(e) => setNameAr(e.target.value)} />
             </div>
 
             {/* Date range */}
@@ -16703,7 +16703,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
                   <div key={label} className="space-y-1">
                     <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">{label}</span>
                     <Input
-                      type="text" inputMode="numeric" placeholder="٠"
+                      type="text" inputMode="numeric" placeholder=""
                       value={val ? toAr(val) : ""}
                       onChange={(e) => (set as (v: string) => void)(toWest(e.target.value))}
                       className="h-8 text-right text-sm"
