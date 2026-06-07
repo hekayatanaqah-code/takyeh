@@ -5483,7 +5483,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               : reviewSentIds.has(b.id)
                                 ? <CheckCircle className="w-3 h-3" />
                                 : <Star className="w-3 h-3" />}
-                            {reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "طلب تقييم"}
+                            {reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "إرسال رابط التقييم"}
                           </button>
                         )}
                         {/* Installment payments — modal */}
@@ -6002,23 +6002,21 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     <div className="space-y-1">
                       <label className="text-xs text-muted-foreground">وقت الدخول</label>
                       <input
-                        type="text"
+                        type="time"
                         value={morningCheckIn}
                         onChange={(e) => setMorningCheckIn(e.target.value)}
-                        placeholder="مثال: ٢:٠٠ م"
                         className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        dir="rtl"
+                        dir="ltr"
                       />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs text-muted-foreground">وقت الخروج</label>
                       <input
-                        type="text"
+                        type="time"
                         value={morningCheckOut}
                         onChange={(e) => setMorningCheckOut(e.target.value)}
-                        placeholder="مثال: ١٠:٠٠ ص"
                         className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        dir="rtl"
+                        dir="ltr"
                       />
                     </div>
                   </div>
@@ -6031,23 +6029,21 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     <div className="space-y-1">
                       <label className="text-xs text-muted-foreground">وقت الدخول</label>
                       <input
-                        type="text"
+                        type="time"
                         value={eveningCheckIn}
                         onChange={(e) => setEveningCheckIn(e.target.value)}
-                        placeholder="مثال: ٤:٠٠ م"
                         className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        dir="rtl"
+                        dir="ltr"
                       />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs text-muted-foreground">وقت الخروج</label>
                       <input
-                        type="text"
+                        type="time"
                         value={eveningCheckOut}
                         onChange={(e) => setEveningCheckOut(e.target.value)}
-                        placeholder="مثال: ١٢:٠٠ ص"
                         className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        dir="rtl"
+                        dir="ltr"
                       />
                     </div>
                   </div>
@@ -6060,23 +6056,21 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     <div className="space-y-1">
                       <label className="text-xs text-muted-foreground">وقت الدخول</label>
                       <input
-                        type="text"
+                        type="time"
                         value={fullDayCheckIn}
                         onChange={(e) => setFullDayCheckIn(e.target.value)}
-                        placeholder="مثال: ٢:٠٠ م"
                         className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        dir="rtl"
+                        dir="ltr"
                       />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs text-muted-foreground">وقت الخروج</label>
                       <input
-                        type="text"
+                        type="time"
                         value={fullDayCheckOut}
                         onChange={(e) => setFullDayCheckOut(e.target.value)}
-                        placeholder="مثال: ١٢:٠٠ ص"
                         className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
-                        dir="rtl"
+                        dir="ltr"
                       />
                     </div>
                   </div>
@@ -6931,7 +6925,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           ) : (
                             <Star className="w-3.5 h-3.5" />
                           )}
-                          {reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "طلب تقييم"}
+                          {reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "إرسال رابط التقييم"}
                         </button>
                       )
                     )}
