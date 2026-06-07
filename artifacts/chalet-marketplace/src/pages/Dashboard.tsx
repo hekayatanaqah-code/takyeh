@@ -2713,7 +2713,8 @@ function BlockDateDialog({
               return (
                 <div
                   key={key}
-                  className={`flex items-center gap-3 ${isDisabled ? "opacity-30 pointer-events-none select-none" : "cursor-pointer group"}`}
+                  className={`flex items-center gap-3 ${isDisabled ? "select-none" : "cursor-pointer group"}`}
+                  style={isDisabled ? { opacity: 0.3, pointerEvents: "none", userSelect: "none" } : {}}
                   onClick={() => { if (!isDisabled) set(!state); }}
                 >
                   <div
