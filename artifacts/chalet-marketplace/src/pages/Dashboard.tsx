@@ -5456,13 +5456,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
                       {/* Booking management quick actions */}
                       <div className="grid grid-cols-2 gap-1.5 mt-2 pt-2 border-t border-border/50">
-                        <button
-                          onClick={() => { setSummaryDate(null); setRescheduleBooking(b); }}
-                          className="flex items-center justify-center gap-1.5 text-xs font-medium text-primary border border-primary/30 rounded-lg py-2 hover:bg-primary/10 transition-colors text-center leading-tight"
-                        >
-                          <RotateCcw className="w-3 h-3 shrink-0" />
-                          إعادة جدولة
-                        </button>
                         {b.insuranceFee && Number(b.insuranceFee) > 0 && !b.insuranceRefunded && (
                           <button
                             onClick={() => { setSummaryDate(null); setInsuranceTarget(b); }}
@@ -5564,35 +5557,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             </>
                           );
                         })()}
-                        {(() => {
-                          const _cUrl = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
-                          const _digits = (b.clientPhone ?? "").replace(/\D/g, "");
-                          const _waPhone = _digits.startsWith("966") ? _digits : _digits.startsWith("0") ? "966" + _digits.slice(1) : _digits ? "966" + _digits : "";
-                          const _waMsg = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cUrl, b.period, returningPhonesSet.has(b.clientPhone ?? ""), b.clientName);
-                          const _waHref = _waPhone ? `https://wa.me/${_waPhone}?text=${_waMsg}` : `https://wa.me/?text=${_waMsg}`;
-                          return (
-                            <a
-                              href={_waHref}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center justify-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700 rounded-lg py-2 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors text-center leading-tight"
-                            >
-                              <MessageSquare className="w-3 h-3 shrink-0" />
-                              إرسال العقد بالواتساب
-                            </a>
-                          );
-                        })()}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const url = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
-                            navigator.clipboard.writeText(url).then(() => toast({ title: "تم النسخ", description: "رابط العقد في الحافظة ✓" }));
-                          }}
-                          className="flex items-center justify-center gap-1.5 text-xs font-medium text-violet-700 dark:text-violet-400 border border-violet-300 dark:border-violet-700 rounded-lg py-2 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors text-center leading-tight"
-                        >
-                          <ExternalLink className="w-3 h-3 shrink-0" />
-                          نسخ رابط العقد
-                        </button>
                         <button
                           onClick={() => { setSummaryDate(null); setDeleteDialogBooking(b); }}
                           className="flex items-center justify-center gap-1.5 text-xs font-medium text-destructive border border-destructive/30 rounded-lg py-2 hover:bg-destructive/10 transition-colors text-center leading-tight"
