@@ -2682,17 +2682,14 @@ function BlockDateDialog({
 
   const dateObj = new Date(dateStr + "T12:00:00");
   const weekday = dateObj.toLocaleDateString("ar-SA", { weekday: "long" });
-  const { hijri, gregorian } = formatDualDate(dateObj);
+  const { hijri, gregorian } = formatDualDate(dateStr);
   const labelDate = `${weekday}، ${hijri} | ${gregorian} م`;
 
-  const allPeriods = [
-    { key: "morning" as const,  label: "🌅 صباحي",    state: morning,  set: setMorning },
-    { key: "evening" as const,  label: "🌙 مسائي",    state: evening,  set: setEvening },
-    { key: "full_day" as const, label: "☀️ يوم كامل", state: fullDay,  set: setFullDay },
+  const allPeriods: { key: "morning" | "evening" | "full_day"; label: string; state: boolean; set: (v: boolean) => void }[] = [
+    { key: "morning",  label: "🌅 صباحي",    state: morning,  set: setMorning },
+    { key: "evening",  label: "🌙 مسائي",    state: evening,  set: setEvening },
+    { key: "full_day", label: "☀️ يوم كامل", state: fullDay,  set: setFullDay },
   ];
-  const visiblePeriods = bookedPeriod
-    ? allPeriods.filter(p => p.key !== bookedPeriod)
-    : allPeriods;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -2704,19 +2701,27 @@ function BlockDateDialog({
           <p className="text-sm text-muted-foreground">{labelDate}</p>
           <p className="text-xs text-foreground font-medium">اختر الفترات المراد إغلاقها (تعطيل الإتاحة):</p>
           <div className="space-y-3">
-            {visiblePeriods.map(({ key, label, state, set }) => (
-              <label key={key} className="flex items-center gap-3 cursor-pointer group">
-                <div
-                  onClick={() => set(!state)}
-                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer ${
-                    state ? "bg-primary border-primary" : "border-border group-hover:border-primary/50"
-                  }`}
-                >
-                  {state && <Check className="w-3.5 h-3.5 text-white" />}
-                </div>
-                <span className="text-sm font-medium">{label}</span>
-              </label>
-            ))}
+            {allPeriods.map(({ key, label, state, set }) => {
+              const isBooked = bookedPeriod === key;
+              return (
+                <label key={key} className={`flex items-center gap-3 ${isBooked ? "opacity-60 cursor-not-allowed" : "cursor-pointer group"}`}>
+                  <div
+                    onClick={() => { if (!isBooked) set(!state); }}
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                      isBooked
+                        ? "bg-gray-400 border-gray-400 cursor-not-allowed"
+                        : state
+                          ? "bg-primary border-primary cursor-pointer"
+                          : "border-border group-hover:border-primary/50 cursor-pointer"
+                    }`}
+                  >
+                    {(state || isBooked) && <Check className="w-3.5 h-3.5 text-white" />}
+                  </div>
+                  <span className="text-sm font-medium">{label}</span>
+                  {isBooked && <span className="text-xs text-muted-foreground">(محجوز)</span>}
+                </label>
+              );
+            })}
           </div>
           <div className="space-y-1.5">
             <label className="text-xs text-muted-foreground">ملاحظة (اختياري)</label>
