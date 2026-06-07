@@ -5436,7 +5436,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         {b.insuranceFee && Number(b.insuranceFee) > 0 && !b.insuranceRefunded && (
                           <button
                             onClick={() => { setSummaryDate(null); setInsuranceTarget(b); }}
-                            className="flex items-center justify-center gap-1.5 text-xs font-medium text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-700 rounded-lg py-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors text-center leading-tight"
+                            className="col-span-2 flex items-center justify-center gap-1.5 text-xs font-medium text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-700 rounded-lg py-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
                           >
                             <Lock className="w-3 h-3 shrink-0" />
                             إدارة التأمين
