@@ -4570,15 +4570,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     if (dashCalType === "gregorian") {
       const firstH = calMonthDays[0] ? toHijriComponents(calMonthDays[0].date) : null;
       const lastH = calMonthDays.length > 0 ? toHijriComponents(calMonthDays[calMonthDays.length - 1].date) : null;
-      const fLabel = firstH ? `${HIJRI_MONTHS_AR[firstH.month - 1]} ${firstH.year}` : "";
-      const lLabel = lastH ? `${HIJRI_MONTHS_AR[lastH.month - 1]} ${lastH.year}` : "";
-      return fLabel === lLabel ? `${fLabel} هـ` : `${fLabel} – ${lLabel} هـ`;
+      const fLabel = firstH ? `${HIJRI_MONTHS_AR[firstH.month - 1]} ${firstH.year} هـ` : "";
+      const lLabel = lastH ? `${HIJRI_MONTHS_AR[lastH.month - 1]} ${lastH.year} هـ` : "";
+      return fLabel === lLabel ? fLabel : `${fLabel} - ${lLabel}`;
     }
     return `${HIJRI_MONTHS_AR[calHijriMonth - 1]} ${calHijriYear} هـ`;
   }, [dashCalType, calMonthDays, calHijriMonth, calHijriYear]);
   const monthLabel = dashCalType === "gregorian"
-    ? `${monthLabelGreg} · ${monthLabelHijri}`
-    : `${monthLabelHijri} · ${monthLabelGreg}`;
+    ? `${monthLabelGreg} م (${monthLabelHijri})`
+    : `${monthLabelHijri} (${monthLabelGreg} م)`;
 
   const filteredBookings = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
