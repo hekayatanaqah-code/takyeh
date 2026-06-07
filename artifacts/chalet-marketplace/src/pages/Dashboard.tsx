@@ -2704,22 +2704,21 @@ function BlockDateDialog({
             {allPeriods.map(({ key, label, state, set }) => {
               const isBooked = bookedPeriod === key;
               return (
-                <label key={key} className={`flex items-center gap-3 ${isBooked ? "opacity-60 cursor-not-allowed" : "cursor-pointer group"}`}>
+                <div key={key} className={`flex items-center gap-3 ${isBooked ? "opacity-50 pointer-events-none select-none" : "cursor-pointer group"}`} onClick={() => { if (!isBooked) set(!state); }}>
                   <div
-                    onClick={() => { if (!isBooked) set(!state); }}
-                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${
                       isBooked
-                        ? "bg-gray-400 border-gray-400 cursor-not-allowed"
+                        ? "bg-gray-400 border-gray-400"
                         : state
-                          ? "bg-primary border-primary cursor-pointer"
-                          : "border-border group-hover:border-primary/50 cursor-pointer"
+                          ? "bg-primary border-primary"
+                          : "border-border group-hover:border-primary/50"
                     }`}
                   >
                     {(state || isBooked) && <Check className="w-3.5 h-3.5 text-white" />}
                   </div>
                   <span className="text-sm font-medium">{label}</span>
-                  {isBooked && <span className="text-xs text-muted-foreground">(محجوز)</span>}
-                </label>
+                  {isBooked && <span className="text-xs text-muted-foreground">(محجوز - غير قابل للتعديل)</span>}
+                </div>
               );
             })}
           </div>
