@@ -34,6 +34,7 @@ import {
   Instagram,
   ShieldCheck,
   ArrowRight,
+  ArrowLeft,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -216,6 +217,40 @@ export default function AddChalet() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [editSaving, setEditSaving] = useState(false);
   const [editSaved, setEditSaved] = useState(false);
+
+  /* ── Multi-step wizard (new submission only; edit mode shows all) ── */
+  const [step, setStep] = useState(1);
+  const TOTAL_STEPS = 4;
+
+  const validateStep1 = (): Record<string, string[]> => {
+    const errs: Record<string, string[]> = {};
+    if (!form.nameAr.trim()) errs.nameAr = ["اسم الشاليه مطلوب"];
+    const finalLoc = citySelectVal === "__other__" ? customCity.trim() : form.location;
+    if (!finalLoc) errs.location = ["المدينة مطلوبة"];
+    if (!propertyType) errs.propertyType = ["نوع العقار مطلوب"];
+    if (!sections) errs.sections = ["عدد الأقسام مطلوب"];
+    return errs;
+  };
+
+  const goNext = () => {
+    if (step === 1) {
+      const errs = validateStep1();
+      if (Object.keys(errs).length > 0) {
+        setFieldErrors(errs);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+    }
+    setFieldErrors({});
+    setStep(s => Math.min(s + 1, TOTAL_STEPS));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const goBack = () => {
+    setFieldErrors({});
+    setStep(s => Math.max(s - 1, 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   /* ── Edit mode ── */
   const search = useSearch();
@@ -758,7 +793,37 @@ export default function AddChalet() {
             <div className="bg-card border border-border rounded-3xl p-6 md:p-10 shadow-sm">
               <form onSubmit={handleSubmit} className="space-y-8">
 
-                {/* Section: Basic Info */}
+                {/* ── Step Progress Bar (new submission only) ── */}
+                {!isEditMode && (
+                  <div className="mb-2">
+                    <div className="flex items-center justify-between mb-3">
+                      {[
+                        { n: 1, label: "المعلومات الأساسية" },
+                        { n: 2, label: "المرافق والأسعار" },
+                        { n: 3, label: "الصور والوسائط" },
+                        { n: 4, label: "المراجعة والإرسال" },
+                      ].map(({ n, label }) => {
+                        const done = step > n;
+                        const active = step === n;
+                        return (
+                          <div key={n} className="flex flex-col items-center gap-1.5 flex-1">
+                            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${done ? "bg-primary text-primary-foreground" : active ? "bg-primary text-primary-foreground ring-4 ring-primary/20" : "bg-muted text-muted-foreground"}`}>
+                              {done ? "✓" : n}
+                            </div>
+                            <span className={`text-[10px] text-center leading-tight hidden sm:block ${active ? "text-primary font-semibold" : done ? "text-primary/70" : "text-muted-foreground"}`}>{label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-primary transition-all duration-500 rounded-full" style={{ width: `${((step - 1) / 3) * 100}%` }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Section: Basic Info — Step 1 */}
+                {(step === 1 || isEditMode) && <>
+
                 <div>
                   <h2 className="text-lg font-bold text-foreground mb-5 pb-3 border-b border-border flex items-center gap-2">
                     <Home className="w-5 h-5 text-primary" />
@@ -1023,6 +1088,11 @@ export default function AddChalet() {
                     </div>
                   </div>
                 </div>
+
+                </>}
+
+                {/* Section: Amenities + Contact & Pricing — Step 2 */}
+                {(step === 2 || isEditMode) && <>
 
                 {/* Section: Amenities */}
                 <div>
@@ -1317,6 +1387,11 @@ export default function AddChalet() {
                   </div>
                 </div>
 
+                </>}
+
+                {/* Section: Photos & Video — Step 3 */}
+                {(step === 3 || isEditMode) && <>
+
                 {/* Section: Photos & Video */}
                 <div>
                   <h2 className="text-lg font-bold text-foreground mb-2 pb-3 border-b border-border flex items-center gap-2">
@@ -1582,6 +1657,11 @@ export default function AddChalet() {
                   </div>
                 </div>
 
+                </>}
+
+                {/* Legal + Review — Step 4 */}
+                {(step === 4 || isEditMode) && <>
+
                 {/* ── Legal Declaration ──────────────────────── */}
                 <div className={`rounded-2xl border-2 p-5 transition-colors ${legalAccepted ? "border-primary/40 bg-primary/5" : "border-border bg-secondary/40"}`}>
                   <label className="flex items-start gap-4 cursor-pointer">
@@ -1640,31 +1720,52 @@ export default function AddChalet() {
                   </div>
                 )}
 
-                {/* Submit */}
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="w-full h-14 text-lg font-bold rounded-2xl shadow-lg shadow-primary/20"
-                  disabled={(isEditMode ? editSaving : mutation.isPending) || isUploading || isUploadingVideo || !allUploaded || !legalAccepted || !propertyType || !sections || (!form.mapsUrl && !isEditMode)}
-                >
-                  {(isEditMode ? editSaving : mutation.isPending) ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      {isEditMode ? "جاري الحفظ..." : "جاري الإرسال..."}
-                    </span>
-                  ) : isUploading ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      انتظر اكتمال رفع الصور...
-                    </span>
-                  ) : isEditMode ? (
-                    "حفظ التعديلات"
-                  ) : (
-                    "إرسال طلب التسجيل"
-                  )}
-                </Button>
+                </>}
 
-                {!isEditMode && (
+                {/* ── Navigation Footer ── */}
+                <div className="flex items-center justify-between gap-3 pt-3 border-t border-border">
+                  {isEditMode ? (
+                    <Button
+                      type="submit"
+                      size="lg"
+                      className="w-full h-12 text-base font-bold rounded-2xl shadow-lg shadow-primary/20"
+                      disabled={editSaving || isUploading || isUploadingVideo || !allUploaded || !legalAccepted}
+                    >
+                      {editSaving ? (
+                        <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> جاري الحفظ...</span>
+                      ) : "حفظ التعديلات"}
+                    </Button>
+                  ) : (
+                    <>
+                      {step > 1 ? (
+                        <Button type="button" variant="outline" onClick={goBack} className="flex items-center gap-2 h-11 px-5">
+                          <ArrowRight className="w-4 h-4" /> رجوع
+                        </Button>
+                      ) : <div />}
+
+                      {step < TOTAL_STEPS ? (
+                        <Button type="button" onClick={goNext} className="flex items-center gap-2 h-11 px-8">
+                          التالي <ArrowLeft className="w-4 h-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          type="submit"
+                          size="lg"
+                          className="h-12 text-base font-bold rounded-2xl shadow-lg shadow-primary/20 flex-1"
+                          disabled={mutation.isPending || isUploading || isUploadingVideo || !allUploaded || !legalAccepted || !propertyType || !sections || !form.mapsUrl}
+                        >
+                          {mutation.isPending ? (
+                            <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> جاري الإرسال...</span>
+                          ) : isUploading ? (
+                            <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> انتظر اكتمال رفع الصور...</span>
+                          ) : "إرسال طلب التسجيل"}
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {step === TOTAL_STEPS && !isEditMode && (
                   <p className="text-center text-sm text-muted-foreground">
                     بالضغط على إرسال، أنت توافق على مراجعة بياناتك من قِبل فريقنا
                   </p>
