@@ -5138,6 +5138,13 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         )}
                       </div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>الاسم</span>
+                        <span className="font-semibold text-left">
+                          {b.clientName && b.clientName !== "عميل مؤقت"
+                            ? <span className="text-foreground">{b.clientName}</span>
+                            : <span className="text-muted-foreground/50 italic">بانتظار توقيع العقد</span>
+                          }
+                        </span>
                         {b.clientPhone && <>
                           <span>الجوال</span>
                           <span className="font-semibold text-foreground text-left">
