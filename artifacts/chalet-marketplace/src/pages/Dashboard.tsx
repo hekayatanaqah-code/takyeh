@@ -1826,18 +1826,18 @@ function AddBookingDialog({
     <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); reset(); } }}>
       <DialogContent dir="rtl" className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-1.5">
             {onBack && (
               <button
                 type="button"
                 onClick={() => { onBack(); onClose(); reset(); }}
-                className="flex items-center gap-2 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 border-2 border-primary/30 transition-colors rounded-xl px-4 py-2 shrink-0"
+                className="self-start flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 hover:bg-primary/8 transition-colors rounded-lg px-2.5 py-1.5 border border-primary/20 bg-primary/5"
               >
-                <span className="text-lg leading-none">🔙</span>
+                <span className="text-sm">🔙</span>
                 <span>العودة للحجز</span>
               </button>
             )}
-            <DialogTitle className="text-right text-base flex-1">إضافة حجز يدوي</DialogTitle>
+            <DialogTitle className="text-right text-base">إضافة حجز يدوي</DialogTitle>
           </div>
         </DialogHeader>
 
@@ -5077,7 +5077,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           "☀️ يوم كامل";
         return (
           <Dialog open onOpenChange={() => setSummaryDate(null)}>
-            <DialogContent className="max-w-sm w-[calc(100%-2rem)] overflow-y-auto max-h-[88vh]" dir="rtl">
+            <DialogContent className="max-w-sm" dir="rtl">
               <DialogHeader>
                 <DialogTitle className="text-base font-bold leading-snug">
                   حجوزات {sumHijri.replace(/\s*هـ\s*$/, "")} هـ
