@@ -1524,7 +1524,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
 
 /* ── Add Booking Dialog ──────────────────────── */
 function AddBookingDialog({
-  open, onClose, submissions, onAdded, existingBookings, prefilledDate, prefilledChaletId, availabilityBlocks, prefilledPeriod,
+  open, onClose, submissions, onAdded, existingBookings, prefilledDate, prefilledChaletId, availabilityBlocks, prefilledPeriod, onBack,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1535,6 +1535,7 @@ function AddBookingDialog({
   prefilledChaletId?: string | null;
   availabilityBlocks?: ChaletAvailability[];
   prefilledPeriod?: string | null;
+  onBack?: (() => void) | null;
 }) {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
@@ -1825,7 +1826,19 @@ function AddBookingDialog({
     <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); reset(); } }}>
       <DialogContent dir="rtl" className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-right text-base">إضافة حجز يدوي</DialogTitle>
+          <div className="flex items-center gap-2">
+            {onBack && (
+              <button
+                type="button"
+                onClick={() => { onBack(); onClose(); reset(); }}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-lg px-2 py-1 hover:bg-muted"
+              >
+                <span>→</span>
+                <span>العودة للحجز</span>
+              </button>
+            )}
+            <DialogTitle className="text-right text-base flex-1">إضافة حجز يدوي</DialogTitle>
+          </div>
         </DialogHeader>
 
         {/* ── Chalet + Date header banner ── */}
@@ -3247,8 +3260,8 @@ function GregorianMiniCalendar({
           if (!isManualBlock) {
             if (fullDayBlocked) pRows.push({ label: "يوم كامل", guest: fullDayGuest ? fullDayGuest.trim().split(/\s+/)[0] : "", amber: false });
             else {
-              if (morningBlocked) pRows.push({ label: "صباحي", guest: morningGuest ? morningGuest.trim().split(/\s+/)[0] : "", amber: true });
-              if (eveningBlocked) pRows.push({ label: "مسائي", guest: eveningGuest ? eveningGuest.trim().split(/\s+/)[0] : "", amber: true });
+              if (morningBlocked) pRows.push({ label: morningGuest === null ? "🔒 صباحي" : "صباحي", guest: morningGuest ? morningGuest.trim().split(/\s+/)[0] : "", amber: true });
+              if (eveningBlocked) pRows.push({ label: eveningGuest === null ? "🔒 مسائي" : "مسائي", guest: eveningGuest ? eveningGuest.trim().split(/\s+/)[0] : "", amber: true });
             }
           }
           const cleanPeriods = cleaningTimePeriods.get(dateStr);
@@ -4061,6 +4074,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [addOpen, setAddOpen] = useState(false);
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
   const [prefilledPeriod, setPrefilledPeriod] = useState<string | null>(null);
+  const [backToSummaryDate, setBackToSummaryDate] = useState<string | null>(null);
   const [selectedChaletId, setSelectedChaletId] = useState<number | "all" | null>(null);
   const [calendarMode, setCalendarMode] = useState<"calendar" | "agenda">("calendar");
   const [agendaScope, setAgendaScope] = useState<"week" | "month">("week");
@@ -5032,7 +5046,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
       <AddBookingDialog
         open={addOpen}
-        onClose={() => { setAddOpen(false); setPrefilledDate(null); setPrefilledPeriod(null); }}
+        onClose={() => { setAddOpen(false); setPrefilledDate(null); setPrefilledPeriod(null); setBackToSummaryDate(null); }}
         submissions={bookableSubmissions}
         onAdded={() => {
           qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
@@ -5043,6 +5057,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         prefilledChaletId={activeChalet?.submissionId ? String(activeChalet.submissionId) : undefined}
         availabilityBlocks={availability}
         prefilledPeriod={prefilledPeriod}
+        onBack={backToSummaryDate ? (() => { const d = backToSummaryDate; setBackToSummaryDate(null); setSummaryDate(d); }) : null}
       />
 
       {/* Day Booking Summary Dialog */}
@@ -5621,28 +5636,39 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   : null;
                 const freePeriodLabel = freePeriod === "morning" ? "الصباحية" : freePeriod === "evening" ? "المسائية" : null;
 
+                // Check if free period is already blocked in availability
+                const isFreePeriodBlocked = (() => {
+                  if (!freePeriod || !summaryDate) return false;
+                  const avail = availability.find(a => a.dateStr === summaryDate);
+                  if (!avail) return false;
+                  return freePeriod === "morning" ? !!avail.periodMorning : !!avail.periodEvening;
+                })();
+
                 const handleBookFree = () => {
-                  setPrefilledDate(summaryDate);
+                  const capturedDate = summaryDate!;
+                  setBackToSummaryDate(capturedDate);
+                  setPrefilledDate(capturedDate);
                   setPrefilledPeriod(freePeriod);
                   setSummaryDate(null);
                   setAddOpen(true);
                 };
 
-                const handleBlockFree = async () => {
+                const handleToggleBlockFree = async () => {
                   if (!activeChaletId || !freePeriod || !summaryDate) return;
                   const existing = availability.find(a => a.dateStr === summaryDate);
+                  const shouldBlock = !isFreePeriodBlocked;
                   await apiFetch("/owner/availability", {
                     method: "POST",
                     body: JSON.stringify({
                       chaletId: activeChaletId,
                       dateStr: summaryDate,
-                      periodMorning: freePeriod === "morning" ? true : (existing?.periodMorning ?? false),
-                      periodEvening: freePeriod === "evening" ? true : (existing?.periodEvening ?? false),
+                      periodMorning: freePeriod === "morning" ? shouldBlock : (existing?.periodMorning ?? false),
+                      periodEvening: freePeriod === "evening" ? shouldBlock : (existing?.periodEvening ?? false),
                       periodFullDay: false,
                     }),
                   });
                   qc.invalidateQueries({ queryKey: ["owner", "availability", activeChaletId] });
-                  setSummaryDate(null);
+                  // Don't close dialog — re-render shows updated toggle state
                 };
 
                 return (
@@ -5650,23 +5676,30 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     <Button variant="outline" size="sm" onClick={() => setSummaryDate(null)}>إغلاق</Button>
                     {freePeriod && freePeriodLabel && (
                       <>
+                        {!isFreePeriodBlocked && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 text-primary border-primary/40 hover:bg-primary/10"
+                            onClick={handleBookFree}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            حجز الفترة {freePeriodLabel}
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"
-                          className="gap-1.5 text-primary border-primary/40 hover:bg-primary/10"
-                          onClick={handleBookFree}
+                          className={isFreePeriodBlocked
+                            ? "gap-1.5 text-green-700 border-green-400 hover:bg-green-50 dark:text-green-400 dark:border-green-600 dark:hover:bg-green-900/20"
+                            : "gap-1.5 text-orange-700 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20"}
+                          onClick={handleToggleBlockFree}
                         >
-                          <Plus className="w-3.5 h-3.5" />
-                          حجز الفترة {freePeriodLabel}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5 text-orange-700 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20"
-                          onClick={handleBlockFree}
-                        >
-                          <Settings className="w-3.5 h-3.5" />
-                          إغلاق الفترة {freePeriodLabel}
+                          {isFreePeriodBlocked ? (
+                            <><span>🔓</span> فتح الفترة {freePeriodLabel}</>
+                          ) : (
+                            <><Settings className="w-3.5 h-3.5" /> إغلاق الفترة {freePeriodLabel}</>
+                          )}
                         </Button>
                       </>
                     )}
