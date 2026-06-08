@@ -5077,7 +5077,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           "☀️ يوم كامل";
         return (
           <Dialog open onOpenChange={() => setSummaryDate(null)}>
-            <DialogContent className="max-w-sm" dir="rtl">
+            <DialogContent className="max-w-sm overflow-hidden" dir="rtl">
               <DialogHeader>
                 <DialogTitle className="text-base font-bold leading-snug">
                   حجوزات {sumHijri.replace(/\s*هـ\s*$/, "")} هـ
@@ -5152,9 +5152,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           </>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground [&>span]:min-w-0 [&>span]:overflow-hidden">
                         <span>الاسم</span>
-                        <span className="font-semibold text-left">
+                        <span className="font-semibold text-left truncate">
                           {b.clientName && b.clientName !== "عميل مؤقت"
                             ? <span className="text-foreground">{b.clientName}</span>
                             : <span className="text-muted-foreground/50 italic">بانتظار توقيع العقد</span>
@@ -5162,8 +5162,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         </span>
                         {b.clientPhone && <>
                           <span>الجوال</span>
-                          <span className="font-semibold text-foreground text-left">
-                            <span className="inline-flex items-center justify-end gap-1.5 w-full">
+                          <span className="font-semibold text-foreground text-left min-w-0 overflow-hidden">
+                            <span className="flex items-center justify-end gap-1.5 max-w-full">
                               <span dir="ltr">{toAr(b.clientPhone)}</span>
                               <span className="relative" dir="rtl">
                                 <button
