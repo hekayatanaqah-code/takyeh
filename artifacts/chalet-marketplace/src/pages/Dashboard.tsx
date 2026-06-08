@@ -1524,7 +1524,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
 
 /* ── Add Booking Dialog ──────────────────────── */
 function AddBookingDialog({
-  open, onClose, submissions, onAdded, existingBookings, prefilledDate, prefilledChaletId, availabilityBlocks,
+  open, onClose, submissions, onAdded, existingBookings, prefilledDate, prefilledChaletId, availabilityBlocks, prefilledPeriod,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1534,6 +1534,7 @@ function AddBookingDialog({
   prefilledDate?: string | null;
   prefilledChaletId?: string | null;
   availabilityBlocks?: ChaletAvailability[];
+  prefilledPeriod?: string | null;
 }) {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
@@ -1676,12 +1677,13 @@ function AddBookingDialog({
     }
   }, [morningDisabled, eveningDisabled, fullDayDisabled, period]);
 
-  // Pre-fill date and chalet when opened from calendar click
+  // Pre-fill date, chalet and period when opened from calendar click or booking footer
   useEffect(() => {
     if (open && prefilledDate) setBookingDate(prefilledDate);
     if (open && prefilledChaletId) setSubmissionId(prefilledChaletId);
-    if (!open) { setBookingDate(""); }
-  }, [open, prefilledDate, prefilledChaletId]);
+    if (open && prefilledPeriod) setPeriod(prefilledPeriod);
+    if (!open) { setBookingDate(""); setPeriod(""); }
+  }, [open, prefilledDate, prefilledChaletId, prefilledPeriod]);
 
   /* ── Auto-fill price when period or date changes ── */
   useEffect(() => {
@@ -4058,6 +4060,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
+  const [prefilledPeriod, setPrefilledPeriod] = useState<string | null>(null);
   const [selectedChaletId, setSelectedChaletId] = useState<number | "all" | null>(null);
   const [calendarMode, setCalendarMode] = useState<"calendar" | "agenda">("calendar");
   const [agendaScope, setAgendaScope] = useState<"week" | "month">("week");
@@ -5029,7 +5032,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
       <AddBookingDialog
         open={addOpen}
-        onClose={() => { setAddOpen(false); setPrefilledDate(null); }}
+        onClose={() => { setAddOpen(false); setPrefilledDate(null); setPrefilledPeriod(null); }}
         submissions={bookableSubmissions}
         onAdded={() => {
           qc.invalidateQueries({ queryKey: ["owner", "bookings"] });
@@ -5039,6 +5042,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         prefilledDate={prefilledDate}
         prefilledChaletId={activeChalet?.submissionId ? String(activeChalet.submissionId) : undefined}
         availabilityBlocks={availability}
+        prefilledPeriod={prefilledPeriod}
       />
 
       {/* Day Booking Summary Dialog */}
@@ -5596,20 +5600,65 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   );
                 })}
               </div>
-              <DialogFooter className="flex flex-row gap-2 justify-start mt-1">
-                <Button variant="outline" size="sm" onClick={() => setSummaryDate(null)}>إغلاق</Button>
-                <Button variant="outline" size="sm" onClick={() => { const bkg = sumBkgs.find(b => b.checkIn <= summaryDate! && summaryDate! <= b.checkOut); setSummaryDate(null); setBlockDateBookingPeriod(bkg?.period ?? null); setBlockDateStr(summaryDate); }}>
-                  ضبط الإتاحة
-                </Button>
-                <Button
-                  size="sm"
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5"
-                  onClick={() => { setPrefilledDate(summaryDate); setSummaryDate(null); setAddOpen(true); }}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  إضافة حجز
-                </Button>
-              </DialogFooter>
+              {(() => {
+                // Determine the booked period for summaryDate
+                const bkgOnDay = sumBkgs.find(b => b.checkIn <= summaryDate! && summaryDate! <= b.checkOut);
+                const bookedP = bkgOnDay?.period ?? null;
+                const freePeriod = bookedP === "evening" ? "morning" : bookedP === "morning" ? "evening" : null;
+                const freePeriodLabel = freePeriod === "morning" ? "الصباحية" : freePeriod === "evening" ? "المسائية" : null;
+
+                const handleBookFree = () => {
+                  setPrefilledDate(summaryDate);
+                  setPrefilledPeriod(freePeriod);
+                  setSummaryDate(null);
+                  setAddOpen(true);
+                };
+
+                const handleBlockFree = async () => {
+                  if (!activeChaletId || !freePeriod || !summaryDate) return;
+                  const existing = availability.find(a => a.dateStr === summaryDate);
+                  await apiFetch("/owner/availability", {
+                    method: "POST",
+                    body: JSON.stringify({
+                      chaletId: activeChaletId,
+                      dateStr: summaryDate,
+                      periodMorning: freePeriod === "morning" ? true : (existing?.periodMorning ?? false),
+                      periodEvening: freePeriod === "evening" ? true : (existing?.periodEvening ?? false),
+                      periodFullDay: false,
+                    }),
+                  });
+                  qc.invalidateQueries({ queryKey: ["owner", "availability", activeChaletId] });
+                  setSummaryDate(null);
+                };
+
+                return (
+                  <DialogFooter className="flex flex-row flex-wrap gap-2 justify-start mt-1">
+                    <Button variant="outline" size="sm" onClick={() => setSummaryDate(null)}>إغلاق</Button>
+                    {freePeriod && freePeriodLabel && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-primary border-primary/40 hover:bg-primary/10"
+                          onClick={handleBookFree}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          حجز الفترة {freePeriodLabel}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-orange-700 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20"
+                          onClick={handleBlockFree}
+                        >
+                          <Settings className="w-3.5 h-3.5" />
+                          إغلاق الفترة {freePeriodLabel}
+                        </Button>
+                      </>
+                    )}
+                  </DialogFooter>
+                );
+              })()}
             </DialogContent>
           </Dialog>
         );
