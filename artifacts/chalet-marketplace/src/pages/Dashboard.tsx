@@ -5608,10 +5608,17 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 })}
               </div>
               {(() => {
-                // Determine the booked period for summaryDate
-                const bkgOnDay = sumBkgs.find(b => b.checkIn <= summaryDate! && summaryDate! <= b.checkOut);
-                const bookedP = bkgOnDay?.period ?? null;
-                const freePeriod = bookedP === "evening" ? "morning" : bookedP === "morning" ? "evening" : null;
+                // sumBkgs is already filtered for summaryDate — use it directly
+                const bookedPeriods = sumBkgs.map(b => b.period).filter(Boolean);
+                const hasFullDay = bookedPeriods.includes("full_day");
+                const hasMorning = bookedPeriods.includes("morning");
+                const hasEvening = bookedPeriods.includes("evening");
+                // free period = the unbooked half (null when both halves taken or full_day)
+                const freePeriod = (hasFullDay || (hasMorning && hasEvening))
+                  ? null
+                  : hasMorning ? "evening"
+                  : hasEvening ? "morning"
+                  : null;
                 const freePeriodLabel = freePeriod === "morning" ? "الصباحية" : freePeriod === "evening" ? "المسائية" : null;
 
                 const handleBookFree = () => {
