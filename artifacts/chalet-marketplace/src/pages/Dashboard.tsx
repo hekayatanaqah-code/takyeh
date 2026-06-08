@@ -5110,7 +5110,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   </div>
                 );
               })()}
-              <div className="space-y-3 mt-1 w-full">
+              <div className="space-y-3 mt-1 w-full min-w-0 overflow-x-hidden">
                 {sumBkgs.map((b, bi) => {
                   const total = b.totalPrice ? Math.round(Number(b.totalPrice)) : null;
                   const dep   = b.depositPaid ? Math.round(Number(b.depositPaid)) : null;
@@ -5126,7 +5126,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const modalMessageTemplates = getManualWhatsAppTemplates(b);
                   const sendModalWhatsAppTemplate = (templateBody: string) => openManualWhatsAppTemplate(b, templateBody);
                   return (
-                    <div key={b.id} className={`rounded-xl border p-3 space-y-1.5 ${bi > 0 ? "mt-2" : ""} ${
+                    <div key={b.id} className={`rounded-xl border p-3 space-y-1.5 min-w-0 overflow-hidden w-full ${bi > 0 ? "mt-2" : ""} ${
                       b.period === "morning" ? "border-amber-200 bg-amber-50 dark:bg-amber-900/20" :
                       b.period === "evening" ? "border-blue-200 bg-blue-50 dark:bg-blue-900/20" :
                       "border-red-200 bg-red-50 dark:bg-red-900/20"
