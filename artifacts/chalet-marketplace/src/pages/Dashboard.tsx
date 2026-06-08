@@ -1831,9 +1831,9 @@ function AddBookingDialog({
               <button
                 type="button"
                 onClick={() => { onBack(); onClose(); reset(); }}
-                className="flex items-center gap-2 text-sm font-semibold text-foreground bg-muted hover:bg-accent border border-border transition-colors rounded-xl px-3 py-2 shrink-0"
+                className="flex items-center gap-2 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 border-2 border-primary/30 transition-colors rounded-xl px-4 py-2 shrink-0"
               >
-                <span className="text-base">🔙</span>
+                <span className="text-lg leading-none">🔙</span>
                 <span>العودة للحجز</span>
               </button>
             )}
@@ -5077,7 +5077,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           "☀️ يوم كامل";
         return (
           <Dialog open onOpenChange={() => setSummaryDate(null)}>
-            <DialogContent className="max-w-sm" dir="rtl">
+            <DialogContent className="max-w-sm w-[calc(100%-2rem)] overflow-y-auto max-h-[88vh]" dir="rtl">
               <DialogHeader>
                 <DialogTitle className="text-base font-bold leading-snug">
                   حجوزات {sumHijri.replace(/\s*هـ\s*$/, "")} هـ
@@ -5110,7 +5110,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   </div>
                 );
               })()}
-              <div className="space-y-3 mt-1">
+              <div className="space-y-3 mt-1 w-full">
                 {sumBkgs.map((b, bi) => {
                   const total = b.totalPrice ? Math.round(Number(b.totalPrice)) : null;
                   const dep   = b.depositPaid ? Math.round(Number(b.depositPaid)) : null;
