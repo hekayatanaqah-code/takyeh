@@ -1831,9 +1831,9 @@ function AddBookingDialog({
               <button
                 type="button"
                 onClick={() => { onBack(); onClose(); reset(); }}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-lg px-2 py-1 hover:bg-muted"
+                className="flex items-center gap-2 text-sm font-semibold text-foreground bg-muted hover:bg-accent border border-border transition-colors rounded-xl px-3 py-2 shrink-0"
               >
-                <span>→</span>
+                <span className="text-base">🔙</span>
                 <span>العودة للحجز</span>
               </button>
             )}
@@ -5672,15 +5672,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 };
 
                 return (
-                  <DialogFooter className="flex flex-row flex-wrap gap-2 justify-start mt-1">
-                    <Button variant="outline" size="sm" onClick={() => setSummaryDate(null)}>إغلاق</Button>
+                  <DialogFooter className="flex flex-col gap-2 mt-1">
+                    {/* Row 1: Smart action buttons side-by-side */}
                     {freePeriod && freePeriodLabel && (
-                      <>
+                      <div className="flex flex-row gap-2 w-full">
                         {!isFreePeriodBlocked && (
                           <Button
                             variant="outline"
                             size="sm"
-                            className="gap-1.5 text-primary border-primary/40 hover:bg-primary/10"
+                            className="flex-1 gap-1.5 text-primary border-primary/40 hover:bg-primary/10"
                             onClick={handleBookFree}
                           >
                             <Plus className="w-3.5 h-3.5" />
@@ -5690,9 +5690,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         <Button
                           variant="outline"
                           size="sm"
-                          className={isFreePeriodBlocked
+                          className={`flex-1 ${isFreePeriodBlocked
                             ? "gap-1.5 text-green-700 border-green-400 hover:bg-green-50 dark:text-green-400 dark:border-green-600 dark:hover:bg-green-900/20"
-                            : "gap-1.5 text-orange-700 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20"}
+                            : "gap-1.5 text-orange-700 border-orange-300 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/20"}`}
                           onClick={handleToggleBlockFree}
                         >
                           {isFreePeriodBlocked ? (
@@ -5701,8 +5701,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             <><Settings className="w-3.5 h-3.5" /> إغلاق الفترة {freePeriodLabel}</>
                           )}
                         </Button>
-                      </>
+                      </div>
                     )}
+                    {/* Row 2: Close button — full width */}
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => setSummaryDate(null)}>إغلاق</Button>
                   </DialogFooter>
                 );
               })()}
