@@ -67,14 +67,15 @@ export function arabicTimeTo24h(time: string | null | undefined): string {
     const [h, m] = s.split(":").map(Number);
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   }
-  // Arabic 12-h: "6 ص", "6ص", "4 م", "4م"
-  const match = s.match(/^(\d+)\s*([صم])$/);
+  // Arabic 12-h with optional minutes: "6 ص", "6:30 ص", "4م", "4:15م"
+  const match = s.match(/^(\d+)(?::(\d{2}))?\s*([صم])$/);
   if (!match) return "";
   let h = parseInt(match[1]);
-  const isPm = match[2] === "م";
+  const m = match[2] ? parseInt(match[2]) : 0;
+  const isPm = match[3] === "م";
   if (isPm)  { if (h !== 12) h += 12; }
   else        { if (h === 12) h  = 0; }  // 12 ص = midnight
-  return `${String(h).padStart(2, "0")}:00`;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 /**
@@ -89,10 +90,12 @@ export function time24hToArabic(time: string | null | undefined): string {
   const match = time.match(/^(\d{1,2}):(\d{2})$/);
   if (!match) return time.trim();
   let h = parseInt(match[1]);
+  const m = parseInt(match[2]);
   const period = h < 12 ? "ص" : "م";
   let displayH = h % 12;
   if (displayH === 0) displayH = 12;
-  return toAr(displayH) + " " + period;
+  const minutesPart = m > 0 ? ":" + toAr(String(m).padStart(2, "0")) : "";
+  return toAr(displayH) + minutesPart + " " + period;
 }
 
 /**
