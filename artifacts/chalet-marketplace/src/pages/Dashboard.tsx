@@ -6089,8 +6089,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       <input
                         type="time"
                         value={morningCheckIn}
-                        onChange={(e) => setMorningCheckIn(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        readOnly
+                        disabled
+                        className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-xs cursor-not-allowed opacity-70"
                         dir="ltr"
                       />
                     </div>
@@ -6099,8 +6100,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       <input
                         type="time"
                         value={morningCheckOut}
-                        onChange={(e) => setMorningCheckOut(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        readOnly
+                        disabled
+                        className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-xs cursor-not-allowed opacity-70"
                         dir="ltr"
                       />
                     </div>
@@ -6116,8 +6118,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       <input
                         type="time"
                         value={eveningCheckIn}
-                        onChange={(e) => setEveningCheckIn(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        readOnly
+                        disabled
+                        className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-xs cursor-not-allowed opacity-70"
                         dir="ltr"
                       />
                     </div>
@@ -6126,8 +6129,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       <input
                         type="time"
                         value={eveningCheckOut}
-                        onChange={(e) => setEveningCheckOut(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        readOnly
+                        disabled
+                        className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-xs cursor-not-allowed opacity-70"
                         dir="ltr"
                       />
                     </div>
@@ -6143,8 +6147,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       <input
                         type="time"
                         value={fullDayCheckIn}
-                        onChange={(e) => setFullDayCheckIn(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        readOnly
+                        disabled
+                        className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-xs cursor-not-allowed opacity-70"
                         dir="ltr"
                       />
                     </div>
@@ -6153,31 +6158,19 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       <input
                         type="time"
                         value={fullDayCheckOut}
-                        onChange={(e) => setFullDayCheckOut(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        readOnly
+                        disabled
+                        className="w-full bg-muted/50 border border-border rounded-xl px-3 py-2 text-xs cursor-not-allowed opacity-70"
                         dir="ltr"
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <Button
-                    size="sm"
-                    onClick={saveTimes}
-                    disabled={savingTimes}
-                    className="rounded-xl text-xs h-8"
-                  >
-                    {savingTimes ? <Loader2 className="w-3.5 h-3.5 animate-spin me-1.5" /> : null}
-                    حفظ الأوقات
-                  </Button>
-                  {timesSaved && (
-                    <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <CheckCircle className="w-3.5 h-3.5" />
-                      تم الحفظ بنجاح
-                    </span>
-                  )}
-                </div>
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                  <span>✏️</span>
+                  لتعديل الأوقات انتقل إلى <strong>تعديل بيانات الشاليه</strong>
+                </p>
               </div>
 
               {/* ── Buffer / Cleaning Time Policy ── */}
