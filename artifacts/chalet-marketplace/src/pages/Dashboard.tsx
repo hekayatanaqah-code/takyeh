@@ -5161,10 +5161,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       </div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground [&>span]:min-w-0 [&>span]:overflow-hidden [&>span:nth-child(even)]:text-left">
                         <span>الاسم</span>
-                        <span className="font-semibold text-left truncate">
+                        <span className="font-semibold text-left min-w-0 overflow-hidden text-ellipsis">
                           {b.clientName && b.clientName !== "عميل مؤقت"
                             ? <span className="text-foreground">{b.clientName}</span>
-                            : <span className="text-muted-foreground/50 italic">بانتظار توقيع العقد</span>
+                            : <span className="text-muted-foreground/70 italic text-[0.7rem]">بانتظار توقيع العقد</span>
                           }
                         </span>
                         {b.clientPhone && <>
@@ -5233,33 +5233,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <span className="col-span-2 text-foreground/70 italic text-[0.7rem]">{b.notes}</span>
                         </>}
                       </div>
-                      {/* WhatsApp template list — inline, outside the grid to avoid overflow clipping */}
-                      {openMessageMenuId === b.id && b.clientPhone && (
-                        <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50/40 dark:bg-green-900/10 mt-1.5 overflow-hidden">
-                          {modalMessageTemplates.length > 0 ? (
-                            modalMessageTemplates.map((tpl) => (
-                              <button
-                                key={tpl.id}
-                                type="button"
-                                onClick={() => sendModalWhatsAppTemplate(tpl.body)}
-                                className="w-full text-right px-3 py-2 text-xs font-medium text-foreground hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors block"
-                              >
-                                {tpl.title}
-                              </button>
-                            ))
-                          ) : (
-                            <p className="px-3 py-2 text-xs text-muted-foreground text-right">أضف قالباً من إعدادات الرسائل</p>
-                          )}
-                          <div className="h-px bg-green-200 dark:bg-green-800" />
-                          <button
-                            type="button"
-                            onClick={() => openReceiptWhatsApp(b)}
-                            className="w-full text-right px-3 py-2 text-xs font-medium text-foreground hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors block"
-                          >
-                            إيصال واتساب مفصل
-                          </button>
-                        </div>
-                      )}
                       {/* Insurance / Deposit block */}
                       {b.insuranceFee && Number(b.insuranceFee) > 0 && (() => {
                         const insAmt = Number(b.insuranceFee);
@@ -5628,6 +5601,41 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   );
                 })}
               </div>
+              {/* WhatsApp template panel – outside scroll container, shrink-0, never causes scrollbar */}
+              {openMessageMenuId !== null && (() => {
+                const openB = sumBkgs.find(b => b.id === openMessageMenuId);
+                if (!openB) return null;
+                const outerTemplates = getManualWhatsAppTemplates(openB);
+                return (
+                  <div className="shrink-0 rounded-xl border border-green-200 dark:border-green-800 bg-card shadow-md overflow-hidden mt-1 mb-0.5">
+                    <div className="flex items-center justify-between px-3 py-1.5 bg-green-50/80 dark:bg-green-900/20 border-b border-green-100 dark:border-green-800/60">
+                      <span className="text-[11px] font-bold text-green-700 dark:text-green-400 flex items-center gap-1">
+                        <MessageSquare className="w-3 h-3" /> إرسال عبر الواتساب
+                      </span>
+                      <button type="button" onClick={() => setOpenMessageMenuId(null)} className="text-muted-foreground hover:text-foreground">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="p-1">
+                      {outerTemplates.length > 0 ? outerTemplates.map(tpl => (
+                        <button key={tpl.id} type="button"
+                          onClick={() => { openManualWhatsAppTemplate(openB, tpl.body); setOpenMessageMenuId(null); }}
+                          className="w-full text-right px-3 py-1.5 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors">
+                          {tpl.title}
+                        </button>
+                      )) : (
+                        <p className="px-3 py-2 text-xs text-muted-foreground text-right">أضف قالباً من إعدادات الرسائل</p>
+                      )}
+                      <div className="h-px bg-border my-0.5" />
+                      <button type="button"
+                        onClick={() => { openReceiptWhatsApp(openB); setOpenMessageMenuId(null); }}
+                        className="w-full text-right px-3 py-1.5 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors">
+                        إيصال واتساب مفصل
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
               {(() => {
                 // sumBkgs is already filtered for summaryDate — use it directly
                 const bookedPeriods = sumBkgs.map(b => b.period).filter(Boolean);
