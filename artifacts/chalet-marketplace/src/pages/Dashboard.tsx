@@ -5169,22 +5169,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         </span>
                         {b.clientPhone && <>
                           <span>الجوال</span>
-                          <span className="font-semibold text-foreground text-left min-w-0 overflow-hidden">
-                            <span className="inline-flex items-center gap-1.5 max-w-full">
-                              <span dir="ltr" className="shrink-0">{toAr(b.clientPhone)}</span>
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); setOpenMessageMenuId(openMessageMenuId === b.id ? null : b.id); }}
-                                className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-full px-2 py-0.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors shrink-0"
-                                aria-label="إرسال عبر الواتساب"
-                                title="إرسال عبر الواتساب"
-                              >
-                                <MessageSquare className="w-3 h-3" />
-                                واتساب
-                                <ChevronDown className="w-2.5 h-2.5" />
-                              </button>
-                            </span>
-                          </span>
+                          <span dir="ltr" className="font-semibold text-foreground text-left">{toAr(b.clientPhone)}</span>
                         </>}
                         {total !== null && (() => {
                           const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
@@ -5578,6 +5563,50 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             </>
                           );
                         })()}
+                        {/* Custom WhatsApp message dropup */}
+                        {b.clientPhone && (() => {
+                          const _d2 = (b.clientPhone ?? "").replace(/\D/g, "");
+                          return (
+                            <div className="col-span-2 relative">
+                              {openMessageMenuId === b.id && (
+                                <div className="absolute bottom-full right-0 mb-1 w-full rounded-xl border border-green-200 dark:border-green-800 bg-card shadow-xl z-50 overflow-hidden">
+                                  <div className="flex items-center justify-between px-3 py-1.5 bg-green-50 dark:bg-green-900/20 border-b border-green-100 dark:border-green-800/60">
+                                    <span className="text-[11px] font-bold text-green-700 dark:text-green-400">💬 إرسال رسالة</span>
+                                    <button type="button" onClick={() => setOpenMessageMenuId(null)} className="text-muted-foreground hover:text-foreground p-0.5">
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                  <div className="p-1">
+                                    {modalMessageTemplates.length > 0 ? modalMessageTemplates.map(tpl => (
+                                      <button key={tpl.id} type="button"
+                                        onClick={() => { sendModalWhatsAppTemplate(tpl.body); setOpenMessageMenuId(null); }}
+                                        className="w-full text-right px-3 py-1.5 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors">
+                                        {tpl.title}
+                                      </button>
+                                    )) : (
+                                      <p className="px-3 py-2 text-xs text-muted-foreground text-right">أضف قالباً من إعدادات الرسائل</p>
+                                    )}
+                                    <div className="h-px bg-border my-0.5" />
+                                    <button type="button"
+                                      onClick={() => { openReceiptWhatsApp(b); setOpenMessageMenuId(null); }}
+                                      className="w-full text-right px-3 py-1.5 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors">
+                                      إيصال واتساب مفصل
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setOpenMessageMenuId(openMessageMenuId === b.id ? null : b.id); }}
+                                className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" />
+                                إرسال رسالة مخصصة
+                                <ChevronDown className={`w-3 h-3 transition-transform ${openMessageMenuId === b.id ? "rotate-180" : ""}`} />
+                              </button>
+                            </div>
+                          );
+                        })()}
                         {!isPastBooking && (
                           <div className="col-span-2 flex gap-1.5">
                             <button
@@ -5601,41 +5630,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   );
                 })}
               </div>
-              {/* WhatsApp template panel – outside scroll container, shrink-0, never causes scrollbar */}
-              {openMessageMenuId !== null && (() => {
-                const openB = sumBkgs.find(b => b.id === openMessageMenuId);
-                if (!openB) return null;
-                const outerTemplates = getManualWhatsAppTemplates(openB);
-                return (
-                  <div className="shrink-0 rounded-xl border border-green-200 dark:border-green-800 bg-card shadow-md overflow-hidden mt-1 mb-0.5">
-                    <div className="flex items-center justify-between px-3 py-1.5 bg-green-50/80 dark:bg-green-900/20 border-b border-green-100 dark:border-green-800/60">
-                      <span className="text-[11px] font-bold text-green-700 dark:text-green-400 flex items-center gap-1">
-                        <MessageSquare className="w-3 h-3" /> إرسال عبر الواتساب
-                      </span>
-                      <button type="button" onClick={() => setOpenMessageMenuId(null)} className="text-muted-foreground hover:text-foreground">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="p-1">
-                      {outerTemplates.length > 0 ? outerTemplates.map(tpl => (
-                        <button key={tpl.id} type="button"
-                          onClick={() => { openManualWhatsAppTemplate(openB, tpl.body); setOpenMessageMenuId(null); }}
-                          className="w-full text-right px-3 py-1.5 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors">
-                          {tpl.title}
-                        </button>
-                      )) : (
-                        <p className="px-3 py-2 text-xs text-muted-foreground text-right">أضف قالباً من إعدادات الرسائل</p>
-                      )}
-                      <div className="h-px bg-border my-0.5" />
-                      <button type="button"
-                        onClick={() => { openReceiptWhatsApp(openB); setOpenMessageMenuId(null); }}
-                        className="w-full text-right px-3 py-1.5 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors">
-                        إيصال واتساب مفصل
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()}
+
               {(() => {
                 // sumBkgs is already filtered for summaryDate — use it directly
                 const bookedPeriods = sumBkgs.map(b => b.period).filter(Boolean);
