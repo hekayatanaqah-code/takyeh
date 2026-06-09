@@ -72,12 +72,16 @@ export default function RealDialog() {
           </div>
 
           {/* Buttons */}
-          <div className="flex gap-2">
-            <button className="flex-1 text-[11px] py-2 border border-gray-200 rounded-lg text-gray-600 text-center">+ حجز الفترة الصباحية</button>
-            <button className="flex-1 text-[11px] py-2 border border-orange-300 rounded-lg text-orange-700 text-center">⚙ إغلاق الفترة الصباحية</button>
+          {/* Footer — flex-col sm:flex-col sm:items-stretch */}
+          <div className="flex flex-col gap-2 mt-1">
+            {/* Row 1: action buttons side-by-side, equal width */}
+            <div className="flex flex-row gap-2 w-full">
+              <button className="flex-1 text-[11px] py-2 border border-primary/40 rounded-lg text-primary text-center">+ حجز الفترة الصباحية</button>
+              <button className="flex-1 text-[11px] py-2 border border-orange-300 rounded-lg text-orange-700 text-center">⚙ إغلاق الفترة الصباحية</button>
+            </div>
+            {/* Row 2: close button full width */}
+            <button className="w-full text-[11px] py-2 border border-gray-200 rounded-lg text-gray-500">إغلاق</button>
           </div>
-
-          <button className="w-full text-[11px] py-2 border border-gray-200 rounded-lg text-gray-500">إغلاق</button>
         </div>
       </div>
 

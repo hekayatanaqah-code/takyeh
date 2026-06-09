@@ -5672,7 +5672,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 };
 
                 return (
-                  <DialogFooter className="flex flex-col gap-2 mt-1">
+                  <DialogFooter className="flex flex-col sm:flex-col sm:items-stretch gap-2 mt-1">
                     {/* Row 1: Smart action buttons side-by-side */}
                     {freePeriod && freePeriodLabel && (
                       <div className="flex flex-row gap-2 w-full">
