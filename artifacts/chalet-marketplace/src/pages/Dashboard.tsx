@@ -19378,19 +19378,30 @@ function buildContractWaMsg(
   isReturning?: boolean,
   tenantName?: string
 ): string {
-  const cn = chalets?.find((c: any) => c.submissionId === submissionId)?.nameAr ?? "الشاليه";
+  const chalet = chalets?.find((c: any) => c.submissionId === submissionId);
+  const cn = chalet?.nameAr ?? "الشاليه";
   const arDays = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
   const dayN = arDays[new Date(bookingDate + "T12:00:00").getDay()];
   const dual = formatDualDate(bookingDate);
   const gregorianStr = dual.gregorian;
   const hijriStr = dual.hijri.replace(/\s*هـ\s*$/, "") + " هـ";
+  /* ── Build period text dynamically from chalet time fields ── */
+  const _t = (v: string | null | undefined) => (v ?? "").trim() || null;
+  const mIn  = _t(chalet?.morningCheckIn);
+  const mOut = _t(chalet?.morningCheckOut);
+  const eIn  = _t(chalet?.eveningCheckIn);
+  const eOut = _t(chalet?.eveningCheckOut);
+  const fIn  = _t(chalet?.fullDayCheckIn);
+  const fOut = _t(chalet?.fullDayCheckOut);
+  const _range = (ci: string | null, co: string | null) =>
+    ci && co ? ` (من ${ci} إلى ${co})` : ci ? ` (من ${ci})` : co ? ` (إلى ${co})` : "";
   const periodMap: Record<string, string> = {
-    morning:  "صباحي (من 8:00 صباحاً إلى 2:00 ظهراً)",
-    evening:  "مسائي (من 4:00 عصراً إلى 2:00 فجراً)",
-    full_day: "يوم كامل (من 2:00 ظهراً إلى 2:00 فجراً)",
-    full:     "يوم كامل (من 2:00 ظهراً إلى 2:00 فجراً)",
+    morning:  "صباحي"   + _range(mIn, mOut),
+    evening:  "مسائي"   + _range(eIn, eOut),
+    full_day: "يوم كامل" + _range(fIn, fOut),
+    full:     "يوم كامل" + _range(fIn, fOut),
   };
-  const periodText = (period && periodMap[period]) || period || "-";
+  const periodText = (period && periodMap[period]?.trim()) || period || "-";
   const header = (isReturning && tenantName)
     ? `يا هلا وغلا بأخونا ${tenantName}، يسعدنا تكرار زيارتكم لـ ${cn} واعتمدنا حجزكم المبدئي.\n\n`
     : `السلام عليكم ورحمة الله وبركاته،\nنرحب بكم في ${cn} ونشكركم على اختيارنا واعتمدنا حجزكم المبدئي.\n\n`;
