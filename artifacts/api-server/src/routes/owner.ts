@@ -4254,8 +4254,12 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
   if (body.fullDayCheckIn !== undefined) updateData.fullDayCheckIn = body.fullDayCheckIn || null;
   if (body.fullDayCheckOut !== undefined) updateData.fullDayCheckOut = body.fullDayCheckOut || null;
 
-  /* ── Reminder fields live in chaletsTable, not chaletSubmissionsTable ── */
+  /* ── Some fields live in chaletsTable, not chaletSubmissionsTable ── */
   const hasReminder = body.reminderEnabled !== undefined || body.reminderDays !== undefined;
+  const hasTimesInBody =
+    body.morningCheckIn !== undefined || body.morningCheckOut !== undefined ||
+    body.eveningCheckIn !== undefined || body.eveningCheckOut !== undefined ||
+    body.fullDayCheckIn !== undefined || body.fullDayCheckOut !== undefined;
 
   if (Object.keys(updateData).length > 0) {
     await db
@@ -4269,6 +4273,18 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
     if (body.reminderEnabled !== undefined) reminderPatch.reminderEnabled = !!body.reminderEnabled;
     if (body.reminderDays !== undefined) reminderPatch.reminderDays = Math.max(1, Math.min(7, Number(body.reminderDays) || 1));
     await db.update(chaletsTable).set(reminderPatch).where(eq(chaletsTable.submissionId, submissionId));
+  }
+
+  /* ── Mirror time fields to chaletsTable so the live calendar stays in sync ── */
+  if (hasTimesInBody) {
+    const timesPatch: Record<string, string | null> = {};
+    if (body.morningCheckIn !== undefined) timesPatch.morningCheckIn = body.morningCheckIn || null;
+    if (body.morningCheckOut !== undefined) timesPatch.morningCheckOut = body.morningCheckOut || null;
+    if (body.eveningCheckIn !== undefined) timesPatch.eveningCheckIn = body.eveningCheckIn || null;
+    if (body.eveningCheckOut !== undefined) timesPatch.eveningCheckOut = body.eveningCheckOut || null;
+    if (body.fullDayCheckIn !== undefined) timesPatch.fullDayCheckIn = body.fullDayCheckIn || null;
+    if (body.fullDayCheckOut !== undefined) timesPatch.fullDayCheckOut = body.fullDayCheckOut || null;
+    await db.update(chaletsTable).set(timesPatch).where(eq(chaletsTable.submissionId, submissionId));
   }
 
   return res.json({ ok: true });

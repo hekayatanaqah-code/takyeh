@@ -8,6 +8,9 @@ The `chaletsTable` columns `morningCheckIn`, `morningCheckOut`, `eveningCheckIn`
 
 **Do NOT change the DB storage format.** Convert only at the UI boundary.
 
+## Dual-table sync pattern
+Time fields exist in **both** `chaletSubmissionsTable` (draft/edit source) and `chaletsTable` (live/approved source). `PATCH /owner/submissions/:id` writes to `chaletSubmissionsTable` only by default. Any field that lives in BOTH tables must be explicitly mirrored to `chaletsTable` in that route — exactly like `reminderEnabled/reminderDays`. Without this mirror, edits in AddChalet are invisible to the calendar and public pages even after a hard refresh, because `/owner/chalets` reads from `chaletsTable`.
+
 ## How to apply
 - **Loading into a `<input type="time">`**: call `arabicTimeTo24h(value)` from `@/lib/utils` to get `"HH:MM"`.
 - **Saving back to the API**: call `time24hToArabic(value)` from `@/lib/utils` to restore the Arabic string.
