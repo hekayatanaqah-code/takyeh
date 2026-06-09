@@ -5168,10 +5168,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         </span>
                         {b.clientPhone && <>
                           <span>الجوال</span>
-                          <span className="font-semibold text-foreground text-left min-w-0 overflow-hidden">
-                            <span className="flex items-center justify-start gap-1.5 max-w-full">
-                              <span dir="ltr">{toAr(b.clientPhone)}</span>
-                              <span className="relative" dir="rtl">
+                          <span className="font-semibold text-foreground text-left min-w-0 overflow-visible">
+                            <span className="flex items-center justify-start gap-1.5 w-full min-w-0">
+                              <span dir="ltr" className="min-w-0 shrink truncate">{toAr(b.clientPhone)}</span>
+                              <span className="relative shrink-0" dir="rtl">
                                 <button
                                   type="button"
                                   onClick={() => setOpenMessageMenuId(openMessageMenuId === b.id ? null : b.id)}
