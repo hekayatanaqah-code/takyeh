@@ -25,6 +25,7 @@ import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
   User, LogOut, LogIn, Plus, MapPin, Calendar, Clock, CheckCircle,
   XCircle, Home, BookOpen, Trash2, Building2, Globe, Phone, AlertTriangle,
@@ -5168,48 +5169,37 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         </span>
                         {b.clientPhone && <>
                           <span>الجوال</span>
-                          <span className="font-semibold text-foreground text-left min-w-0 overflow-visible">
-                            <span className="flex items-center justify-start gap-1.5 w-full min-w-0">
-                              <span dir="ltr" className="min-w-0 shrink truncate">{toAr(b.clientPhone)}</span>
-                              <span className="relative shrink-0" dir="rtl">
-                                <button
-                                  type="button"
-                                  onClick={() => setOpenMessageMenuId(openMessageMenuId === b.id ? null : b.id)}
-                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-full px-2 py-0.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
-                                  aria-label="إرسال عبر الواتساب"
-                                  title="إرسال عبر الواتساب"
-                                >
-                                  <MessageSquare className="w-3 h-3" />
-                                  واتساب
-                                  <ChevronDown className="w-2.5 h-2.5" />
-                                </button>
-                                {openMessageMenuId === b.id && (
-                                  <div className="absolute left-0 top-full mt-1 z-50 w-56 max-w-[calc(100vw-3rem)] max-h-48 overflow-y-auto rounded-xl border border-border bg-card shadow-xl p-1.5">
-                                    {modalMessageTemplates.length > 0 ? (
-                                      modalMessageTemplates.map((tpl) => (
-                                        <button
-                                          key={tpl.id}
-                                          type="button"
-                                          onClick={() => sendModalWhatsAppTemplate(tpl.body)}
-                                          className="w-full text-right px-3 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors"
-                                        >
-                                          {tpl.title}
-                                        </button>
-                                      ))
-                                    ) : (
-                                      <p className="px-3 py-2 text-xs text-muted-foreground">أضف قالباً من إعدادات الرسائل</p>
-                                    )}
-                                    <div className="h-px bg-border my-1" />
-                                    <button
-                                      type="button"
-                                      onClick={() => openReceiptWhatsApp(b)}
-                                      className="w-full text-right px-3 py-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors"
-                                    >
-                                      إيصال واتساب مفصل
-                                    </button>
-                                  </div>
-                                )}
-                              </span>
+                          <span className="font-semibold text-foreground text-left min-w-0 overflow-hidden">
+                            <span className="flex items-center justify-start gap-1.5 max-w-full">
+                              <span dir="ltr">{toAr(b.clientPhone)}</span>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-full px-2 py-0.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                                    aria-label="إرسال عبر الواتساب"
+                                    title="إرسال عبر الواتساب"
+                                  >
+                                    <MessageSquare className="w-3 h-3" />
+                                    واتساب
+                                    <ChevronDown className="w-2.5 h-2.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" side="bottom" className="w-56 max-h-48 overflow-y-auto" dir="rtl">
+                                  {modalMessageTemplates.length > 0 ? (
+                                    modalMessageTemplates.map((tpl) => (
+                                      <DropdownMenuItem key={tpl.id} onSelect={() => sendModalWhatsAppTemplate(tpl.body)} className="text-right cursor-pointer">
+                                        {tpl.title}
+                                      </DropdownMenuItem>
+                                    ))
+                                  ) : (
+                                    <DropdownMenuItem disabled className="text-right text-muted-foreground">أضف قالباً من إعدادات الرسائل</DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem onSelect={() => openReceiptWhatsApp(b)} className="text-right cursor-pointer">
+                                    إيصال واتساب مفصل
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </span>
                           </span>
                         </>}
