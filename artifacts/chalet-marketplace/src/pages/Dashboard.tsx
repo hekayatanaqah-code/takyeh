@@ -4428,6 +4428,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         }),
       });
       await qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
+      await qc.invalidateQueries({ queryKey: ["chalet-detail", activeChaletId] });
+      await qc.invalidateQueries({ queryKey: ["chalet-master", activeChaletId] });
+      await qc.invalidateQueries({ queryKey: ["chalets"] });
       setTimesSaved(true);
       setTimeout(() => setTimesSaved(false), 3000);
     } finally {
