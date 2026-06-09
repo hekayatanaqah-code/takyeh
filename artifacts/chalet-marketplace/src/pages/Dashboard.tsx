@@ -4389,10 +4389,13 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [newExPeriods, setNewExPeriods] = useState<string[]>(["morning", "evening"]);
   const [newExAction, setNewExAction] = useState<"disable" | "enable">("disable");
 
-  // Sync fields when active chalet changes
+  // Sync fields when active chalet changes OR when chalet data first loads
   const prevChaletRef = useRef<number | null>(null);
-  if (activeChaletId !== prevChaletRef.current) {
+  const prevChaletLoadedRef = useRef<boolean>(false);
+  const chaletLoaded = !!activeChalet;
+  if (activeChaletId !== prevChaletRef.current || (chaletLoaded && !prevChaletLoadedRef.current)) {
     prevChaletRef.current = activeChaletId;
+    prevChaletLoadedRef.current = chaletLoaded;
     setMorningCheckIn(activeChalet?.morningCheckIn ?? "");
     setMorningCheckOut(activeChalet?.morningCheckOut ?? "");
     setEveningCheckIn(activeChalet?.eveningCheckIn ?? "");
