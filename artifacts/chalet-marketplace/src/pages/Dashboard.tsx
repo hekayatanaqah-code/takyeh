@@ -5152,9 +5152,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           </>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground [&>span]:min-w-0 [&>span]:overflow-hidden [&>span:nth-child(even)]:text-start">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted-foreground [&>span]:min-w-0 [&>span]:overflow-hidden [&>span:nth-child(even)]:text-left">
                         <span>الاسم</span>
-                        <span className="font-semibold text-start truncate">
+                        <span className="font-semibold text-left truncate">
                           {b.clientName && b.clientName !== "عميل مؤقت"
                             ? <span className="text-foreground">{b.clientName}</span>
                             : <span className="text-muted-foreground/50 italic">بانتظار توقيع العقد</span>
@@ -5162,7 +5162,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         </span>
                         {b.clientPhone && <>
                           <span>الجوال</span>
-                          <span className="font-semibold text-foreground text-start min-w-0 overflow-hidden">
+                          <span className="font-semibold text-foreground text-left min-w-0 overflow-hidden">
                             <span className="flex items-center justify-start gap-1.5 max-w-full">
                               <span dir="ltr">{toAr(b.clientPhone)}</span>
                               <span className="relative" dir="rtl">
@@ -5215,40 +5215,40 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           return hasAddons ? (
                             <>
                               <span>قيمة الإيجار</span>
-                              <span className="font-semibold text-foreground text-start">{baseRent.toLocaleString("ar-SA")} ر.س</span>
+                              <span className="font-semibold text-foreground text-left">{baseRent.toLocaleString("ar-SA")} ر.س</span>
                               {addons.flatMap(a => [
                                 <span key={`al-${a.id}`} className="pr-3 text-muted-foreground/60 truncate">↪ {a.name}</span>,
-                                <span key={`ap-${a.id}`} className="text-foreground/80 text-start text-[0.68rem]">
+                                <span key={`ap-${a.id}`} className="text-foreground/80 text-left text-[0.68rem]">
                                   {a.unit === "خدمة مجانية" || Number(a.price) === 0 ? "مجاني" : `${Math.round(Number(a.price)).toLocaleString("ar-SA")} ر.س`}
                                 </span>,
                               ])}
                               {addonsTotal > 0 && <>
                                 <span className="text-muted-foreground">إجمالي الخدمات</span>
-                                <span className="text-foreground text-start">{addonsTotal.toLocaleString("ar-SA")} ر.س</span>
+                                <span className="text-foreground text-left">{addonsTotal.toLocaleString("ar-SA")} ر.س</span>
                               </>}
                               <span className="font-semibold text-foreground border-t border-border/50 pt-1">الإجمالي الكلي</span>
-                              <span className="font-bold text-foreground text-start border-t border-border/50 pt-1">{total.toLocaleString("ar-SA")} ر.س</span>
+                              <span className="font-bold text-foreground text-left border-t border-border/50 pt-1">{total.toLocaleString("ar-SA")} ر.س</span>
                             </>
                           ) : (
                             <>
                               <span>الإجمالي</span>
-                              <span className="font-semibold text-foreground text-start">{total.toLocaleString("ar-SA")} ر.س</span>
+                              <span className="font-semibold text-foreground text-left">{total.toLocaleString("ar-SA")} ر.س</span>
                             </>
                           );
                         })()}
                         {dep !== null && dep > 0 && <>
                           <span>العربون</span>
-                          <span className="font-semibold text-foreground text-start">{dep.toLocaleString("ar-SA")} ر.س</span>
+                          <span className="font-semibold text-foreground text-left">{dep.toLocaleString("ar-SA")} ر.س</span>
                         </>}
                         {bal !== null && bal > 0 && <>
                           <span>المتبقي</span>
-                          <span className={`font-semibold text-start ${b.balanceCollected ? "text-green-600" : "text-orange-500"}`}>
+                          <span className={`font-semibold text-left ${b.balanceCollected ? "text-green-600" : "text-orange-500"}`}>
                             {bal.toLocaleString("ar-SA")} ر.س {b.balanceCollected ? "✓" : ""}
                           </span>
                         </>}
                         {b.source === "external" && <>
                           <span>المصدر</span>
-                          <span className="font-semibold text-foreground text-start">خارجي</span>
+                          <span className="font-semibold text-foreground text-left">خارجي</span>
                         </>}
                         {b.notes && <>
                           <span className="col-span-2 text-foreground/70 italic text-[0.7rem]">{b.notes}</span>
