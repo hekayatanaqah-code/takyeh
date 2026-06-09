@@ -5170,36 +5170,19 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         {b.clientPhone && <>
                           <span>الجوال</span>
                           <span className="font-semibold text-foreground text-left min-w-0 overflow-hidden">
-                            <span className="flex items-center justify-start gap-1.5 max-w-full">
-                              <span dir="ltr">{toAr(b.clientPhone)}</span>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-full px-2 py-0.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
-                                    aria-label="إرسال عبر الواتساب"
-                                    title="إرسال عبر الواتساب"
-                                  >
-                                    <MessageSquare className="w-3 h-3" />
-                                    واتساب
-                                    <ChevronDown className="w-2.5 h-2.5" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" side="bottom" className="w-56 max-h-48 overflow-y-auto" dir="rtl">
-                                  {modalMessageTemplates.length > 0 ? (
-                                    modalMessageTemplates.map((tpl) => (
-                                      <DropdownMenuItem key={tpl.id} onSelect={() => sendModalWhatsAppTemplate(tpl.body)} className="text-right cursor-pointer">
-                                        {tpl.title}
-                                      </DropdownMenuItem>
-                                    ))
-                                  ) : (
-                                    <DropdownMenuItem disabled className="text-right text-muted-foreground">أضف قالباً من إعدادات الرسائل</DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem onSelect={() => openReceiptWhatsApp(b)} className="text-right cursor-pointer">
-                                    إيصال واتساب مفصل
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                            <span className="inline-flex items-center gap-1.5 max-w-full">
+                              <span dir="ltr" className="shrink-0">{toAr(b.clientPhone)}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setOpenMessageMenuId(openMessageMenuId === b.id ? null : b.id); }}
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-full px-2 py-0.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors shrink-0"
+                                aria-label="إرسال عبر الواتساب"
+                                title="إرسال عبر الواتساب"
+                              >
+                                <MessageSquare className="w-3 h-3" />
+                                واتساب
+                                <ChevronDown className="w-2.5 h-2.5" />
+                              </button>
                             </span>
                           </span>
                         </>}
@@ -5250,6 +5233,33 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           <span className="col-span-2 text-foreground/70 italic text-[0.7rem]">{b.notes}</span>
                         </>}
                       </div>
+                      {/* WhatsApp template list — inline, outside the grid to avoid overflow clipping */}
+                      {openMessageMenuId === b.id && b.clientPhone && (
+                        <div className="rounded-lg border border-green-200 dark:border-green-800 bg-green-50/40 dark:bg-green-900/10 mt-1.5 overflow-hidden">
+                          {modalMessageTemplates.length > 0 ? (
+                            modalMessageTemplates.map((tpl) => (
+                              <button
+                                key={tpl.id}
+                                type="button"
+                                onClick={() => sendModalWhatsAppTemplate(tpl.body)}
+                                className="w-full text-right px-3 py-2 text-xs font-medium text-foreground hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors block"
+                              >
+                                {tpl.title}
+                              </button>
+                            ))
+                          ) : (
+                            <p className="px-3 py-2 text-xs text-muted-foreground text-right">أضف قالباً من إعدادات الرسائل</p>
+                          )}
+                          <div className="h-px bg-green-200 dark:bg-green-800" />
+                          <button
+                            type="button"
+                            onClick={() => openReceiptWhatsApp(b)}
+                            className="w-full text-right px-3 py-2 text-xs font-medium text-foreground hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors block"
+                          >
+                            إيصال واتساب مفصل
+                          </button>
+                        </div>
+                      )}
                       {/* Insurance / Deposit block */}
                       {b.insuranceFee && Number(b.insuranceFee) > 0 && (() => {
                         const insAmt = Number(b.insuranceFee);
