@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { HijriDatePicker } from "@/components/HijriDatePicker";
 import { formatDualDate, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents } from "@/lib/hijri";
-import { toAr, fromAr } from "@/lib/utils";
+import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -4396,12 +4396,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   if (activeChaletId !== prevChaletRef.current || (chaletLoaded && !prevChaletLoadedRef.current)) {
     prevChaletRef.current = activeChaletId;
     prevChaletLoadedRef.current = chaletLoaded;
-    setMorningCheckIn(activeChalet?.morningCheckIn ?? "");
-    setMorningCheckOut(activeChalet?.morningCheckOut ?? "");
-    setEveningCheckIn(activeChalet?.eveningCheckIn ?? "");
-    setEveningCheckOut(activeChalet?.eveningCheckOut ?? "");
-    setFullDayCheckIn(activeChalet?.fullDayCheckIn ?? "");
-    setFullDayCheckOut(activeChalet?.fullDayCheckOut ?? "");
+    setMorningCheckIn(arabicTimeTo24h(activeChalet?.morningCheckIn));
+    setMorningCheckOut(arabicTimeTo24h(activeChalet?.morningCheckOut));
+    setEveningCheckIn(arabicTimeTo24h(activeChalet?.eveningCheckIn));
+    setEveningCheckOut(arabicTimeTo24h(activeChalet?.eveningCheckOut));
+    setFullDayCheckIn(arabicTimeTo24h(activeChalet?.fullDayCheckIn));
+    setFullDayCheckOut(arabicTimeTo24h(activeChalet?.fullDayCheckOut));
     setTimesSaved(false);
     setBufferPolicyEnabled(activeChalet?.bufferPolicyEnabled ?? false);
     setBufferBlockNextMorningFullDay(activeChalet?.bufferBlockNextMorningFullDay ?? false);
@@ -4419,12 +4419,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       await apiFetch(`/owner/chalets/${activeChaletId}/times`, {
         method: "PATCH",
         body: JSON.stringify({
-          morningCheckIn: morningCheckIn.trim() || null,
-          morningCheckOut: morningCheckOut.trim() || null,
-          eveningCheckIn: eveningCheckIn.trim() || null,
-          eveningCheckOut: eveningCheckOut.trim() || null,
-          fullDayCheckIn: fullDayCheckIn.trim() || null,
-          fullDayCheckOut: fullDayCheckOut.trim() || null,
+          morningCheckIn: time24hToArabic(morningCheckIn) || null,
+          morningCheckOut: time24hToArabic(morningCheckOut) || null,
+          eveningCheckIn: time24hToArabic(eveningCheckIn) || null,
+          eveningCheckOut: time24hToArabic(eveningCheckOut) || null,
+          fullDayCheckIn: time24hToArabic(fullDayCheckIn) || null,
+          fullDayCheckOut: time24hToArabic(fullDayCheckOut) || null,
         }),
       });
       await qc.invalidateQueries({ queryKey: ["owner", "chalets"] });

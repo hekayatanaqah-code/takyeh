@@ -1,1 +1,2 @@
 - [Logo pipeline gap pattern](logo-pipeline-gap.md) — admin approval flows that copy submission→chaletsTable must explicitly list every field; omissions silently store NULL.
+- [Arabic time storage format](arabic-time-format.md) — DB stores times as Arabic text ("٦ ص", "٤ م"); always convert at the UI boundary, never change DB format.
