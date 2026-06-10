@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useCallback, createContext, useContext, type ReactElement } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback, createContext, useContext, Fragment, type ReactElement } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
@@ -122,6 +122,22 @@ interface OwnerBooking {
 
 function getLocalDateStr(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+const GREGORIAN_MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"] as const;
+
+function getBookingMonthKey(dateStr: string, calView: "hijri" | "gregorian"): string {
+  const d = new Date(dateStr + "T00:00:00");
+  if (calView === "gregorian") return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const h = toHijriComponents(d);
+  return `${h.year}-${String(h.month).padStart(2, "0")}`;
+}
+
+function getBookingMonthLabel(key: string, calView: "hijri" | "gregorian"): string {
+  const [yearStr, monthStr] = key.split("-");
+  const year = Number(yearStr), month = Number(monthStr);
+  if (calView === "gregorian") return `${GREGORIAN_MONTHS_AR[month - 1]} ${year} م`;
+  return `${HIJRI_MONTHS_AR[month - 1]} ${year} هـ`;
 }
 
 function isCurrentPause(chalet: { pausedFrom?: string | null; pausedUntil?: string | null }, dateStr = getLocalDateStr()) {
@@ -4125,6 +4141,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [showArchive, setShowArchive] = useState(false);
   const [archiveTab, setArchiveTab] = useState<"cancelled" | "rescheduled" | "completed">("cancelled");
   const [bookingPage, setBookingPage] = useState(0);
+  const [bookingCalView, setBookingCalView] = useState<"hijri" | "gregorian">("hijri");
   const [searchQuery, setSearchQuery] = useState("");
   const [calDepositSaving, setCalDepositSaving] = useState<number | null>(null);
   const [bookingDepositTarget, setBookingDepositTarget] = useState<{ bookingId: number; maxAmount: number; totalCash: number; submissionId?: number | null; label?: string } | null>(null);
@@ -4653,10 +4670,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         const nameMatch = b.clientName?.toLowerCase().includes(q);
         const phoneMatch = b.clientPhone?.toLowerCase().includes(q);
         const chaletMatch = getBookingChaletName(b).toLowerCase().includes(q);
-        if (!nameMatch && !phoneMatch && !chaletMatch) return false;
+        const hijriMatch = formatDualDate(b.bookingDate).hijri.toLowerCase().includes(q);
+        const gregMatch  = formatDualDate(b.bookingDate).gregorian.toLowerCase().includes(q);
+        if (!nameMatch && !phoneMatch && !chaletMatch && !hijriMatch && !gregMatch) return false;
       }
       return true;
-    });
+    }).sort((a, b) => a.bookingDate.localeCompare(b.bookingDate));
   }, [bookings, filterFrom, filterTo, searchQuery, ownerChalets]);
 
   const completedBookings = useMemo(() => {
@@ -4671,10 +4690,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         const nameMatch = b.clientName?.toLowerCase().includes(q);
         const phoneMatch = b.clientPhone?.toLowerCase().includes(q);
         const chaletMatch = getBookingChaletName(b).toLowerCase().includes(q);
-        if (!nameMatch && !phoneMatch && !chaletMatch) return false;
+        const hijriMatch = formatDualDate(b.bookingDate).hijri.toLowerCase().includes(q);
+        const gregMatch  = formatDualDate(b.bookingDate).gregorian.toLowerCase().includes(q);
+        if (!nameMatch && !phoneMatch && !chaletMatch && !hijriMatch && !gregMatch) return false;
       }
       return true;
-    });
+    }).sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
   }, [bookings, searchQuery, ownerChalets]);
 
   const totalBookingPages = Math.max(1, Math.ceil(filteredBookings.length / BOOKINGS_PER_PAGE));
@@ -6426,6 +6447,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               <span className="text-xs font-normal text-muted-foreground mr-2">({toAr(filteredBookings.length)} نتيجة)</span>
             )}
           </h3>
+          <button
+            onClick={() => setBookingCalView(v => v === "hijri" ? "gregorian" : "hijri")}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border border-border bg-muted/30 hover:bg-muted/60 transition-colors whitespace-nowrap shrink-0"
+          >
+            {bookingCalView === "hijri" ? "📅 هجري" : "📅 ميلادي"}
+          </button>
           {/* Date range filter */}
           <div className="flex items-end gap-2 flex-wrap">
             <div className="min-w-[130px]">
@@ -6469,7 +6496,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         ) : (
           <>
           <div className="space-y-3">
-            {pagedBookings.map((b) => {
+            {(() => { let _pmk = ""; return pagedBookings.map((b) => {
+              const _mk = getBookingMonthKey(b.bookingDate, bookingCalView);
+              const _sd = _mk !== _pmk; _pmk = _mk;
               const tp = b.totalPrice ? Number(b.totalPrice) : null;
               const dp = b.depositPaid ? Number(b.depositPaid) : null;
               const ins = b.insuranceFee ? Number(b.insuranceFee) : null;
@@ -6587,8 +6616,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               };
 
               return (
+                <Fragment key={b.id}>
+                {_sd && (
+                  <div className="flex items-center gap-2 mt-2 mb-0.5">
+                    <span className="text-[11px] font-bold text-primary/60 whitespace-nowrap">{getBookingMonthLabel(_mk, bookingCalView)}</span>
+                    <div className="flex-1 h-px bg-border/60" />
+                  </div>
+                )}
                 <motion.div
-                  key={b.id}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="bg-card border border-border rounded-xl p-4 space-y-3"
@@ -7130,8 +7165,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     })()}
                   </div>
                 </motion.div>
+                </Fragment>
               );
-            })}
+            }); })()}
           </div>
           {filteredBookings.length > BOOKINGS_PER_PAGE && (
             <div className="flex items-center justify-between pt-3 mt-1" dir="ltr">
@@ -7200,17 +7236,20 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               <div className="px-5 pb-5 pt-3 space-y-3">
                 {(() => {
                   const q = searchQuery.trim().toLowerCase();
-                  const filtered = q
+                  const filtered = (q
                     ? cancelledBookings.filter((b) =>
                         b.clientName?.toLowerCase().includes(q) || b.clientPhone?.toLowerCase().includes(q)
                       )
-                    : cancelledBookings;
+                    : [...cancelledBookings]).sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
                   if (filtered.length === 0) return (
                     <p className="text-sm text-muted-foreground py-4 text-center">
                       {q ? "لا توجد نتائج مطابقة" : "لا توجد حجوزات ملغاة"}
                     </p>
                   );
+                  let _cPmk = "";
                   return filtered.map((b) => {
+                  const _cMk = getBookingMonthKey(b.bookingDate, bookingCalView);
+                  const _cSd = _cMk !== _cPmk; _cPmk = _cMk;
                   const dur = b.durationDays ?? 1;
                   const endD = new Date(new Date(b.bookingDate + "T00:00:00").getTime() + (dur - 1) * 86400000);
                   const endStr = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, "0")}-${String(endD.getDate()).padStart(2, "0")}`;
@@ -7230,7 +7269,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   })() : "";
                   const periodLabel = b.period ? ({ morning: "صباحي", evening: "مسائي", full_day: "يوم كامل" }[b.period] ?? b.period) : "";
                   return (
-                    <div key={b.id} className="bg-muted/30 border border-dashed border-destructive/30 rounded-xl p-3 space-y-2">
+                    <Fragment key={b.id}>
+                    {_cSd && (
+                      <div className="flex items-center gap-2 mt-1 mb-0.5">
+                        <span className="text-[11px] font-bold text-muted-foreground/70 whitespace-nowrap">{getBookingMonthLabel(_cMk, bookingCalView)}</span>
+                        <div className="flex-1 h-px bg-border/60" />
+                      </div>
+                    )}
+                    <div className="bg-muted/30 border border-dashed border-destructive/30 rounded-xl p-3 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0 space-y-1">
                           <p className="text-sm font-semibold text-foreground line-through decoration-destructive/50">{b.clientName}</p>
@@ -7280,6 +7326,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         </div>
                       </div>
                     </div>
+                    </Fragment>
                   );
                   });
                 })()}
@@ -7291,17 +7338,20 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               <div className="px-5 pb-5 pt-3 space-y-3">
                 {(() => {
                   const q = searchQuery.trim().toLowerCase();
-                  const filteredLog = q
+                  const filteredLog = (q
                     ? rescheduleLog.filter((log) =>
                         log.clientName?.toLowerCase().includes(q) || log.clientPhone?.toLowerCase().includes(q)
                       )
-                    : rescheduleLog;
+                    : [...rescheduleLog]).sort((a, b) => new Date(b.rescheduledAt).getTime() - new Date(a.rescheduledAt).getTime());
                   if (filteredLog.length === 0) return (
                     <p className="text-sm text-muted-foreground py-4 text-center">
                       {q ? "لا توجد نتائج مطابقة" : "لا توجد سجلات إعادة جدولة"}
                     </p>
                   );
+                  let _rPmk = "";
                   return filteredLog.map((log) => {
+                  const _rMk = getBookingMonthKey(log.newDate, bookingCalView);
+                  const _rSd = _rMk !== _rPmk; _rPmk = _rMk;
                   const oldHijri = formatDualDate(log.oldDate).hijri.replace(/\s*هـ\s*$/, "");
                   const newHijri = formatDualDate(log.newDate).hijri.replace(/\s*هـ\s*$/, "");
                   const oldGreg  = formatDualDate(log.oldDate).gregorian;
@@ -7317,7 +7367,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const newEndD = new Date(new Date(log.newDate + "T00:00:00").getTime() + (log.newDuration - 1) * 86400000);
                   const newEndStr = `${newEndD.getFullYear()}-${String(newEndD.getMonth() + 1).padStart(2, "0")}-${String(newEndD.getDate()).padStart(2, "0")}`;
                   return (
-                    <div key={log.id} className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2.5">
+                    <Fragment key={log.id}>
+                    {_rSd && (
+                      <div className="flex items-center gap-2 mt-1 mb-0.5">
+                        <span className="text-[11px] font-bold text-muted-foreground/70 whitespace-nowrap">{getBookingMonthLabel(_rMk, bookingCalView)}</span>
+                        <div className="flex-1 h-px bg-border/60" />
+                      </div>
+                    )}
+                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2.5">
                       {/* Header */}
                       <div className="space-y-0.5">
                         <div className="flex items-start justify-between gap-2">
@@ -7375,6 +7432,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         </button>
                       )}
                     </div>
+                    </Fragment>
                   );
                   });
                 })()}
@@ -7388,7 +7446,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   <p className="text-sm text-muted-foreground py-4 text-center">
                     {searchQuery ? "لا توجد نتائج مطابقة" : "لا توجد حجوزات مكتملة بعد"}
                   </p>
-                ) : completedBookings.map((b) => {
+                ) : (() => { let _comPmk = ""; return completedBookings.map((b) => {
+                  const _comMk = getBookingMonthKey(b.bookingDate, bookingCalView);
+                  const _comSd = _comMk !== _comPmk; _comPmk = _comMk;
                   const bookingChaletName = getBookingChaletName(b);
                   const dur = b.durationDays ?? 1;
                   const hijriDate = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
@@ -7396,7 +7456,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const periodLabel = b.period ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[b.period] ?? b.period) : "";
                   const tp = b.totalPrice ? Number(b.totalPrice) : null;
                   return (
-                    <div key={b.id} className="bg-muted/20 border border-border/60 rounded-xl p-3 space-y-2">
+                    <Fragment key={b.id}>
+                    {_comSd && (
+                      <div className="flex items-center gap-2 mt-1 mb-0.5">
+                        <span className="text-[11px] font-bold text-muted-foreground/70 whitespace-nowrap">{getBookingMonthLabel(_comMk, bookingCalView)}</span>
+                        <div className="flex-1 h-px bg-border/60" />
+                      </div>
+                    )}
+                    <div className="bg-muted/20 border border-border/60 rounded-xl p-3 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex flex-wrap items-center gap-1.5">
@@ -7439,8 +7506,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         )}
                       </div>
                     </div>
+                    </Fragment>
                   );
-                })}
+                  }); })()}
               </div>
             )}
           </div>
