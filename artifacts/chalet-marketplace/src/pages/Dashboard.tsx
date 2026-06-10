@@ -115,6 +115,9 @@ interface OwnerBooking {
   contractSignerId?: string | null;
   contractSignatureDataUrl?: string | null;
   contractSignedAt?: string | null;
+  isRescheduled?: boolean;
+  originalDate?: string | null;
+  rescheduleReason?: string | null;
 }
 
 function getLocalDateStr(date = new Date()) {
@@ -4120,7 +4123,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [waCancelPreview, setWaCancelPreview] = useState<{ booking: OwnerBooking; phone: string; message: string } | null>(null);
   const [rescheduleBooking, setRescheduleBooking] = useState<OwnerBooking | null>(null);
   const [showArchive, setShowArchive] = useState(false);
-  const [archiveTab, setArchiveTab] = useState<"cancelled" | "rescheduled">("cancelled");
+  const [archiveTab, setArchiveTab] = useState<"cancelled" | "rescheduled" | "completed">("cancelled");
+  const [bookingPage, setBookingPage] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [calDepositSaving, setCalDepositSaving] = useState<number | null>(null);
   const [bookingDepositTarget, setBookingDepositTarget] = useState<{ bookingId: number; maxAmount: number; totalCash: number; submissionId?: number | null; label?: string } | null>(null);
@@ -4631,9 +4635,18 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     ? `${monthLabelGreg} م (${monthLabelHijri})`
     : `${monthLabelHijri} (${monthLabelGreg} م)`;
 
+  const BOOKINGS_PER_PAGE = 5;
+
   const filteredBookings = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
+    const today = getLocalDateStr();
     return bookings.filter((b) => {
+      // Exclude past (completed) bookings — they move to archive "المكتملة" tab
+      const endD = new Date(b.bookingDate + "T00:00:00");
+      endD.setDate(endD.getDate() + (b.durationDays ?? 1) - 1);
+      const endStr = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, "0")}-${String(endD.getDate()).padStart(2, "0")}`;
+      if (endStr < today) return false;
+
       if (filterFrom && b.bookingDate < filterFrom) return false;
       if (filterTo && b.bookingDate > filterTo) return false;
       if (q) {
@@ -4645,6 +4658,32 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       return true;
     });
   }, [bookings, filterFrom, filterTo, searchQuery, ownerChalets]);
+
+  const completedBookings = useMemo(() => {
+    const today = getLocalDateStr();
+    const q = searchQuery.trim().toLowerCase();
+    return bookings.filter((b) => {
+      const endD = new Date(b.bookingDate + "T00:00:00");
+      endD.setDate(endD.getDate() + (b.durationDays ?? 1) - 1);
+      const endStr = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, "0")}-${String(endD.getDate()).padStart(2, "0")}`;
+      if (endStr >= today) return false;
+      if (q) {
+        const nameMatch = b.clientName?.toLowerCase().includes(q);
+        const phoneMatch = b.clientPhone?.toLowerCase().includes(q);
+        const chaletMatch = getBookingChaletName(b).toLowerCase().includes(q);
+        if (!nameMatch && !phoneMatch && !chaletMatch) return false;
+      }
+      return true;
+    });
+  }, [bookings, searchQuery, ownerChalets]);
+
+  const totalBookingPages = Math.max(1, Math.ceil(filteredBookings.length / BOOKINGS_PER_PAGE));
+  const pagedBookings = useMemo(() => {
+    const start = bookingPage * BOOKINGS_PER_PAGE;
+    return filteredBookings.slice(start, start + BOOKINGS_PER_PAGE);
+  }, [filteredBookings, bookingPage]);
+
+  useEffect(() => { setBookingPage(0); }, [searchQuery, filterFrom, filterTo]);
 
   const getManualWhatsAppTemplates = (booking: OwnerBooking) => messageSettings.waEnabled ? [
     { id: "confirmation", title: "تأكيد الحجز", body: messageSettings.bookingConfirmationTemplate },
@@ -6428,8 +6467,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
             )}
           </div>
         ) : (
+          <>
           <div className="space-y-3">
-            {filteredBookings.map((b) => {
+            {pagedBookings.map((b) => {
               const tp = b.totalPrice ? Number(b.totalPrice) : null;
               const dp = b.depositPaid ? Number(b.depositPaid) : null;
               const ins = b.insuranceFee ? Number(b.insuranceFee) : null;
@@ -6625,6 +6665,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           )}
                           {b.insuranceRefunded && b.insuranceDeducted && Number(b.insuranceDeducted) > 0 && (
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">✂️ تلفيات: {fmtAR(Number(b.insuranceDeducted))} ر.س</span>
+                          )}
+                          {b.isRescheduled && (
+                            <span
+                              title={b.originalDate ? `التاريخ الأصلي: ${formatDualDate(b.originalDate).hijri}${b.rescheduleReason ? ` • السبب: ${b.rescheduleReason}` : ""}` : "تم إعادة جدولة هذا الحجز"}
+                              className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800 cursor-help"
+                            >
+                              🔄 مُعاد جدولته
+                            </span>
                           )}
                         </div>
                       </div>
@@ -7085,6 +7133,29 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               );
             })}
           </div>
+          {filteredBookings.length > BOOKINGS_PER_PAGE && (
+            <div className="flex items-center justify-between pt-3 mt-1" dir="ltr">
+              <button
+                onClick={() => setBookingPage(p => Math.max(0, p - 1))}
+                disabled={bookingPage === 0}
+                className="flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-xl border border-border bg-background hover:bg-muted/50 disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Prev
+              </button>
+              <span className="text-xs font-medium text-muted-foreground" dir="rtl">
+                صفحة {toAr(bookingPage + 1)} من {toAr(totalBookingPages)}
+                <span className="text-muted-foreground/60 mr-1">({toAr(filteredBookings.length)} حجز)</span>
+              </span>
+              <button
+                onClick={() => setBookingPage(p => Math.min(totalBookingPages - 1, p + 1))}
+                disabled={bookingPage >= totalBookingPages - 1}
+                className="flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-xl border border-border bg-background hover:bg-muted/50 disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
+              >
+                Next →
+              </button>
+            </div>
+          )}
+          </>
         )}
       </div>
 
@@ -7115,6 +7186,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${archiveTab === "rescheduled" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/40"}`}
               >
                 إعادة الجدولة
+              </button>
+              <button
+                onClick={() => setArchiveTab("completed")}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${archiveTab === "completed" ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400" : "text-muted-foreground hover:bg-muted/40"}`}
+              >
+                المكتملة
               </button>
             </div>
 
@@ -7301,6 +7378,69 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   );
                   });
                 })()}
+              </div>
+            )}
+
+            {/* Completed Tab */}
+            {archiveTab === "completed" && (
+              <div className="px-5 pb-5 pt-3 space-y-3">
+                {completedBookings.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    {searchQuery ? "لا توجد نتائج مطابقة" : "لا توجد حجوزات مكتملة بعد"}
+                  </p>
+                ) : completedBookings.map((b) => {
+                  const bookingChaletName = getBookingChaletName(b);
+                  const dur = b.durationDays ?? 1;
+                  const hijriDate = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
+                  const gregDate  = formatDualDate(b.bookingDate).gregorian;
+                  const periodLabel = b.period ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[b.period] ?? b.period) : "";
+                  const tp = b.totalPrice ? Number(b.totalPrice) : null;
+                  return (
+                    <div key={b.id} className="bg-muted/20 border border-border/60 rounded-xl p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="text-sm font-semibold text-foreground">{b.clientName}</p>
+                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                              <Home className="w-2.5 h-2.5" />
+                              {bookingChaletName}
+                            </span>
+                            {b.isRescheduled && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                                🔄 مُعاد جدولته
+                              </span>
+                            )}
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                              ✓ مكتمل
+                            </span>
+                          </div>
+                          {b.clientPhone && (
+                            <p className="text-xs text-muted-foreground" dir="ltr">📞 {toAr(b.clientPhone)}</p>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            📅 {hijriDate} هـ <span className="opacity-60">({gregDate})</span>
+                            {" · "}{toAr(dur)} {dur === 1 ? "يوم" : "أيام"}
+                            {periodLabel ? ` · ${periodLabel}` : ""}
+                          </p>
+                          {tp !== null && (
+                            <p className="text-xs font-semibold text-foreground">
+                              💰 {tp.toLocaleString("ar-SA")} ر.س
+                            </p>
+                          )}
+                        </div>
+                        {messageSettings.waEnabled && b.clientPhone && (
+                          <button
+                            onClick={() => openManualWhatsAppTemplate(b, messageSettings.bookingConfirmationTemplate, "")}
+                            className="shrink-0 flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg px-2.5 py-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                          >
+                            <MessageSquare className="w-3 h-3" />
+                            واتساب
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

@@ -1108,7 +1108,35 @@ router.get("/bookings", async (req, res) => {
     .from(ownerBookingsTable)
     .where(and(inArray(ownerBookingsTable.ownerId, allOwnerIds), isNull(ownerBookingsTable.cancelledAt)))
     .orderBy(ownerBookingsTable.createdAt);
-  return res.json(rows.reverse());
+
+  // Enrich: which bookings have been rescheduled at least once?
+  const bookingIds = rows.map(r => r.id);
+  const logMap = new Map<number, { oldDate: string; reason: string }>();
+  if (bookingIds.length > 0) {
+    const logs = await db
+      .select({
+        bookingId: ownerRescheduleLogsTable.bookingId,
+        oldDate: ownerRescheduleLogsTable.oldDate,
+        reason: ownerRescheduleLogsTable.reason,
+      })
+      .from(ownerRescheduleLogsTable)
+      .where(inArray(ownerRescheduleLogsTable.bookingId, bookingIds))
+      .orderBy(desc(ownerRescheduleLogsTable.rescheduledAt));
+    for (const log of logs) {
+      if (!logMap.has(log.bookingId)) {
+        logMap.set(log.bookingId, { oldDate: log.oldDate, reason: log.reason ?? "" });
+      }
+    }
+  }
+
+  const enriched = rows.map(r => ({
+    ...r,
+    isRescheduled: logMap.has(r.id),
+    originalDate: logMap.get(r.id)?.oldDate ?? null,
+    rescheduleReason: logMap.get(r.id)?.reason ?? null,
+  }));
+
+  return res.json(enriched.reverse());
 });
 
 router.get("/bookings/cancelled", async (req, res) => {
