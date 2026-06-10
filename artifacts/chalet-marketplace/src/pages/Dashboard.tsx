@@ -4142,6 +4142,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [archiveTab, setArchiveTab] = useState<"cancelled" | "rescheduled" | "completed">("cancelled");
   const [bookingPage, setBookingPage] = useState(0);
   const [bookingCalView, setBookingCalView] = useState<"hijri" | "gregorian">("hijri");
+  const [bookingMonthFilter, setBookingMonthFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [calDepositSaving, setCalDepositSaving] = useState<number | null>(null);
   const [bookingDepositTarget, setBookingDepositTarget] = useState<{ bookingId: number; maxAmount: number; totalCash: number; submissionId?: number | null; label?: string } | null>(null);
@@ -4698,13 +4699,26 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     }).sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
   }, [bookings, searchQuery, ownerChalets]);
 
-  const totalBookingPages = Math.max(1, Math.ceil(filteredBookings.length / BOOKINGS_PER_PAGE));
+  const availableMonthKeys = useMemo(() => {
+    const seen = new Set<string>();
+    filteredBookings.forEach(b => seen.add(getBookingMonthKey(b.bookingDate, bookingCalView)));
+    return Array.from(seen).sort();
+  }, [filteredBookings, bookingCalView]);
+
+  const monthFilteredBookings = useMemo(() => {
+    if (bookingMonthFilter === "all") return filteredBookings;
+    return filteredBookings.filter(b => getBookingMonthKey(b.bookingDate, bookingCalView) === bookingMonthFilter);
+  }, [filteredBookings, bookingMonthFilter, bookingCalView]);
+
+  const totalBookingPages = Math.max(1, Math.ceil(monthFilteredBookings.length / BOOKINGS_PER_PAGE));
   const pagedBookings = useMemo(() => {
     const start = bookingPage * BOOKINGS_PER_PAGE;
-    return filteredBookings.slice(start, start + BOOKINGS_PER_PAGE);
-  }, [filteredBookings, bookingPage]);
+    return monthFilteredBookings.slice(start, start + BOOKINGS_PER_PAGE);
+  }, [monthFilteredBookings, bookingPage]);
 
   useEffect(() => { setBookingPage(0); }, [searchQuery, filterFrom, filterTo]);
+  useEffect(() => { setBookingPage(0); setBookingMonthFilter("all"); }, [bookingCalView]);
+  useEffect(() => { setBookingPage(0); }, [bookingMonthFilter]);
 
   const getManualWhatsAppTemplates = (booking: OwnerBooking) => messageSettings.waEnabled ? [
     { id: "confirmation", title: "تأكيد الحجز", body: messageSettings.bookingConfirmationTemplate },
@@ -6453,6 +6467,17 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
           >
             {bookingCalView === "hijri" ? "📅 هجري" : "📅 ميلادي"}
           </button>
+          <select
+            value={bookingMonthFilter}
+            onChange={(e) => setBookingMonthFilter(e.target.value)}
+            dir="rtl"
+            className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-border bg-muted/30 hover:bg-muted/60 transition-colors cursor-pointer shrink-0"
+          >
+            <option value="all">كل الشهور</option>
+            {availableMonthKeys.map(key => (
+              <option key={key} value={key}>{getBookingMonthLabel(key, bookingCalView)}</option>
+            ))}
+          </select>
           {/* Date range filter */}
           <div className="flex items-end gap-2 flex-wrap">
             <div className="min-w-[130px]">
@@ -7169,25 +7194,25 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               );
             }); })()}
           </div>
-          {filteredBookings.length > BOOKINGS_PER_PAGE && (
-            <div className="flex items-center justify-between pt-3 mt-1" dir="ltr">
+          {monthFilteredBookings.length > BOOKINGS_PER_PAGE && (
+            <div className="flex items-center justify-between pt-3 mt-1" dir="rtl">
               <button
                 onClick={() => setBookingPage(p => Math.max(0, p - 1))}
                 disabled={bookingPage === 0}
                 className="flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-xl border border-border bg-background hover:bg-muted/50 disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
               >
-                ← Prev
+                → السابق
               </button>
               <span className="text-xs font-medium text-muted-foreground" dir="rtl">
                 صفحة {toAr(bookingPage + 1)} من {toAr(totalBookingPages)}
-                <span className="text-muted-foreground/60 mr-1">({toAr(filteredBookings.length)} حجز)</span>
+                <span className="text-muted-foreground/60 mr-1">({toAr(monthFilteredBookings.length)} حجز)</span>
               </span>
               <button
                 onClick={() => setBookingPage(p => Math.min(totalBookingPages - 1, p + 1))}
                 disabled={bookingPage >= totalBookingPages - 1}
                 className="flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-xl border border-border bg-background hover:bg-muted/50 disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
               >
-                Next →
+                التالي ←
               </button>
             </div>
           )}
