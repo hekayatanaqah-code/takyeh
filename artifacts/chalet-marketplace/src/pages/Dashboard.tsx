@@ -136,8 +136,8 @@ function getBookingMonthKey(dateStr: string, calView: "hijri" | "gregorian"): st
 function getBookingMonthLabel(key: string, calView: "hijri" | "gregorian"): string {
   const [yearStr, monthStr] = key.split("-");
   const year = Number(yearStr), month = Number(monthStr);
-  if (calView === "gregorian") return `${GREGORIAN_MONTHS_AR[month - 1]} ${year} م`;
-  return `${HIJRI_MONTHS_AR[month - 1]} ${year} هـ`;
+  if (calView === "gregorian") return `${GREGORIAN_MONTHS_AR[month - 1]} ${toArN(year)} م`;
+  return `${HIJRI_MONTHS_AR[month - 1]} ${toArN(year)} هـ`;
 }
 
 function isCurrentPause(chalet: { pausedFrom?: string | null; pausedUntil?: string | null }, dateStr = getLocalDateStr()) {
@@ -6455,47 +6455,40 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
             </button>
           )}
         </div>
-        <div className="flex flex-wrap items-end gap-3 mb-4">
-          <h3 className="font-bold text-foreground flex-1">قائمة الحجوزات
+        <div className="mb-4 space-y-2">
+          <h3 className="font-bold text-foreground">قائمة الحجوزات
             {searchQuery && filteredBookings.length > 0 && (
               <span className="text-xs font-normal text-muted-foreground mr-2">({toAr(filteredBookings.length)} نتيجة)</span>
             )}
           </h3>
-          <button
-            onClick={() => setBookingCalView(v => v === "hijri" ? "gregorian" : "hijri")}
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border border-border bg-muted/30 hover:bg-muted/60 transition-colors whitespace-nowrap shrink-0"
-          >
-            {bookingCalView === "hijri" ? "📅 هجري" : "📅 ميلادي"}
-          </button>
-          <select
-            value={bookingMonthFilter}
-            onChange={(e) => setBookingMonthFilter(e.target.value)}
-            dir="rtl"
-            className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-border bg-muted/30 hover:bg-muted/60 transition-colors cursor-pointer shrink-0"
-          >
-            <option value="all">كل الشهور</option>
-            {availableMonthKeys.map(key => (
-              <option key={key} value={key}>{getBookingMonthLabel(key, bookingCalView)}</option>
-            ))}
-          </select>
-          {/* Date range filter */}
-          <div className="flex items-end gap-2 flex-wrap">
-            <div className="min-w-[130px]">
-              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">من تاريخ</label>
-              <div className="rounded-xl border border-border bg-background px-3 py-2 min-h-[2.25rem] flex items-center text-sm">
-                <DualCalendarPicker value={filterFrom} onChange={setFilterFrom} placeholder="أي تاريخ" />
-              </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setBookingCalView(v => v === "hijri" ? "gregorian" : "hijri")}
+              className="h-9 flex items-center gap-1.5 text-xs font-semibold px-3 rounded-xl border border-border bg-muted/30 hover:bg-muted/60 transition-colors whitespace-nowrap shrink-0"
+            >
+              {bookingCalView === "hijri" ? "📅 هجري" : "📅 ميلادي"}
+            </button>
+            <select
+              value={bookingMonthFilter}
+              onChange={(e) => setBookingMonthFilter(e.target.value)}
+              dir="rtl"
+              className="h-9 text-xs font-semibold px-2.5 rounded-xl border border-border bg-muted/30 hover:bg-muted/60 transition-colors cursor-pointer shrink-0"
+            >
+              <option value="all">كل الشهور</option>
+              {availableMonthKeys.map(key => (
+                <option key={key} value={key}>{getBookingMonthLabel(key, bookingCalView)}</option>
+              ))}
+            </select>
+            <div className="h-9 rounded-xl border border-border bg-background px-3 flex items-center text-sm min-w-[130px] shrink-0">
+              <DualCalendarPicker value={filterFrom} onChange={setFilterFrom} placeholder="من تاريخ" />
             </div>
-            <div className="min-w-[130px]">
-              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">إلى تاريخ</label>
-              <div className="rounded-xl border border-border bg-background px-3 py-2 min-h-[2.25rem] flex items-center text-sm">
-                <DualCalendarPicker value={filterTo} onChange={setFilterTo} placeholder="أي تاريخ" />
-              </div>
+            <div className="h-9 rounded-xl border border-border bg-background px-3 flex items-center text-sm min-w-[130px] shrink-0">
+              <DualCalendarPicker value={filterTo} onChange={setFilterTo} placeholder="إلى تاريخ" />
             </div>
             {(filterFrom || filterTo) && (
               <button
                 onClick={() => { setFilterFrom(""); setFilterTo(""); }}
-                className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-xl px-3 py-2 min-h-[2.25rem] transition-colors"
+                className="h-9 text-xs text-muted-foreground hover:text-foreground border border-border rounded-xl px-3 transition-colors shrink-0"
               >
                 مسح
               </button>
