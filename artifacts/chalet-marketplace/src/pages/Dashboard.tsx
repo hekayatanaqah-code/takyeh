@@ -6479,11 +6479,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 <option key={key} value={key}>{getBookingMonthLabel(key, bookingCalView)}</option>
               ))}
             </select>
-            <div className="h-9 rounded-xl border border-border bg-background px-3 flex items-center text-sm min-w-[130px] shrink-0">
-              <DualCalendarPicker value={filterFrom} onChange={setFilterFrom} placeholder="من تاريخ" />
+            <div className="h-9 rounded-xl border border-border bg-background px-3 flex items-center text-sm min-w-[130px] shrink-0 overflow-hidden">
+              <DualCalendarPicker value={filterFrom} onChange={setFilterFrom} placeholder="من تاريخ" compact />
             </div>
-            <div className="h-9 rounded-xl border border-border bg-background px-3 flex items-center text-sm min-w-[130px] shrink-0">
-              <DualCalendarPicker value={filterTo} onChange={setFilterTo} placeholder="إلى تاريخ" />
+            <div className="h-9 rounded-xl border border-border bg-background px-3 flex items-center text-sm min-w-[130px] shrink-0 overflow-hidden">
+              <DualCalendarPicker value={filterTo} onChange={setFilterTo} placeholder="إلى تاريخ" compact />
             </div>
             {(filterFrom || filterTo) && (
               <button

@@ -48,6 +48,7 @@ interface DualCalendarPickerProps {
   minDate?: string;
   label?: string;
   className?: string;
+  compact?: boolean;
 }
 
 /* ── Main component ── */
@@ -58,6 +59,7 @@ export function DualCalendarPicker({
   minDate,
   label,
   className,
+  compact = false,
 }: DualCalendarPickerProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -105,17 +107,22 @@ export function DualCalendarPicker({
           type="button"
           className={cn(
             "w-full text-right bg-transparent border-0 p-0 cursor-pointer outline-none",
+            compact && "h-full flex items-center",
             className,
           )}
         >
-          {label && (
+          {label && !compact && (
             <p className="text-xs font-semibold text-muted-foreground mb-1">{label}</p>
           )}
           {value ? (
-            <div>
-              <p className="text-sm font-bold text-foreground leading-tight">{hijri}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{gregorian}</p>
-            </div>
+            compact ? (
+              <p className="text-sm font-semibold text-foreground truncate leading-none">{hijri}</p>
+            ) : (
+              <div>
+                <p className="text-sm font-bold text-foreground leading-tight">{hijri}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{gregorian}</p>
+              </div>
+            )
           ) : (
             <p className="text-sm text-muted-foreground font-medium">{placeholder}</p>
           )}
