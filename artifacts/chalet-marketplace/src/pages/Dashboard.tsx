@@ -6560,15 +6560,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 flex-wrap">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-semibold text-foreground leading-tight">{b.clientName}</p>
-                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 text-[11px] font-bold">
-                              <Home className="w-3 h-3" />
-                              {bookingChaletName}
-                            </span>
-                          </div>
-                          {b.clientPhone && <p className="text-xs text-muted-foreground" dir="ltr">{toAr(b.clientPhone)}</p>}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+                          <p className="font-semibold text-foreground leading-tight">{b.clientName}</p>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 text-[11px] font-bold shrink-0">
+                            <Home className="w-3 h-3" />
+                            {bookingChaletName}
+                          </span>
+                          {b.clientPhone && (
+                            <span className="text-sm font-semibold text-foreground shrink-0" dir="ltr">{toAr(b.clientPhone)}</span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${b.source === "platform" ? "bg-primary/10 text-primary" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
@@ -6626,61 +6626,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           {b.insuranceRefunded && b.insuranceDeducted && Number(b.insuranceDeducted) > 0 && (
                             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">✂️ تلفيات: {fmtAR(Number(b.insuranceDeducted))} ر.س</span>
                           )}
-                          {b.contractSigned ? (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <button
-                                type="button"
-                                onClick={() => setContractPreviewBooking(b)}
-                                className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 hover:opacity-80 transition-opacity"
-                              >
-                                ✅ تم التوقيع
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setRescheduleBooking(b)}
-                                className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-primary/5 text-primary border border-primary/20 hover:bg-primary/10 dark:bg-primary/10 dark:hover:bg-primary/20 transition-colors"
-                              >
-                                🔄 إعادة الجدولة
-                              </button>
-                            </div>
-                          ) : !b.cancelledAt && (() => {
-                            const _cu = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
-                            const _dg = (b.clientPhone ?? "").replace(/\D/g, "");
-                            const _wp = _dg.startsWith("966") ? _dg : _dg.startsWith("0") ? "966" + _dg.slice(1) : _dg ? "966" + _dg : "";
-                            const _wm = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cu, b.period, returningPhonesSet.has(b.clientPhone ?? ""), b.clientName);
-                            return (
-                              <div className="flex flex-wrap items-center gap-2 mt-1.5 w-full">
-                                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 border border-violet-300 dark:border-violet-700">
-                                  ⏳ بانتظار التوقيع
-                                </span>
-                                <a
-                                  href={_wp ? `https://wa.me/${_wp}?text=${_wm}` : `https://wa.me/?text=${_wm}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
-                                >
-                                  💬 إرسال بالواتساب
-                                </a>
-                                <button
-                                  type="button"
-                                  onClick={() => navigator.clipboard.writeText(_cu).then(() => toast({ title: "تم النسخ ✓", description: "رابط العقد في الحافظة" }))}
-                                  className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                >
-                                  📋 نسخ رابط العقد
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setRescheduleBooking(b)}
-                                  className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-primary/5 text-primary border border-primary/20 hover:bg-primary/10 dark:bg-primary/10 dark:hover:bg-primary/20 transition-colors"
-                                >
-                                  🔄 إعادة الجدولة
-                                </button>
-                              </div>
-                            );
-                          })()}
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDualDate(b.bookingDate).hijri} [{formatDualDate(b.bookingDate).gregorian}]</span>
                         <span>{toAr(b.durationDays)} {b.durationDays === 1 ? "يوم" : "أيام"}</span>
                         {b.period && (
@@ -6690,46 +6638,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0 mt-0.5">
-                      {(() => {
-                        const _cUrl2 = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
-                        const _d2 = (b.clientPhone ?? "").replace(/\D/g, "");
-                        const _wp2 = _d2.startsWith("966") ? _d2 : _d2.startsWith("0") ? "966" + _d2.slice(1) : _d2 ? "966" + _d2 : "";
-                        const _wm2 = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cUrl2, b.period, returningPhonesSet.has(b.clientPhone ?? ""), b.clientName);
-                        return _wp2 ? (
-                          <a
-                            href={`https://wa.me/${_wp2}?text=${_wm2}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-muted-foreground hover:text-green-600 transition-colors p-1 rounded"
-                            aria-label="إرسال رابط العقد عبر واتساب"
-                            title="إرسال رابط العقد عبر واتساب"
-                          >
-                            <MessageSquare className="w-3.5 h-3.5" />
-                          </a>
-                        ) : null;
-                      })()}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const url = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
-                          navigator.clipboard.writeText(url).then(() => toast({ title: "تم النسخ", description: "رابط العقد في الحافظة ✓" }));
-                        }}
-                        className="text-muted-foreground hover:text-violet-600 transition-colors p-1 rounded"
-                        aria-label="نسخ رابط العقد"
-                        title="نسخ رابط العقد"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteDialogBooking(b)}
-                        className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded"
-                        aria-label="إلغاء الحجز"
-                        title="إلغاء الحجز"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setDeleteDialogBooking(b)}
+                      className="shrink-0 text-muted-foreground hover:text-destructive transition-colors p-1.5 rounded-lg hover:bg-destructive/10"
+                      aria-label="إلغاء الحجز"
+                      title="إلغاء الحجز"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
 
                   {/* Multi-day duration summary */}
@@ -6949,7 +6865,60 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   })()}
 
                   {/* Action buttons */}
-                  <div className="flex flex-wrap gap-2.5 pt-2 border-t border-border/40 mt-1">
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-border/40 mt-1">
+                    {/* Contract status actions */}
+                    {b.contractSigned ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setContractPreviewBooking(b)}
+                          className="flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                        >
+                          ✅ تم التوقيع
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRescheduleBooking(b)}
+                          className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-primary/5 text-primary border border-primary/20 hover:bg-primary/10 dark:bg-primary/10 dark:hover:bg-primary/20 transition-colors"
+                        >
+                          🔄 إعادة الجدولة
+                        </button>
+                      </>
+                    ) : !b.cancelledAt && (() => {
+                      const _cuB = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
+                      const _dgB = (b.clientPhone ?? "").replace(/\D/g, "");
+                      const _wpB = _dgB.startsWith("966") ? _dgB : _dgB.startsWith("0") ? "966" + _dgB.slice(1) : _dgB ? "966" + _dgB : "";
+                      const _wmB = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cuB, b.period, returningPhonesSet.has(b.clientPhone ?? ""), b.clientName);
+                      return (
+                        <>
+                          <span className="flex items-center text-xs font-bold px-2.5 py-1 rounded-lg bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400 border border-violet-200 dark:border-violet-800">
+                            ⏳ بانتظار التوقيع
+                          </span>
+                          <a
+                            href={_wpB ? `https://wa.me/${_wpB}?text=${_wmB}` : `https://wa.me/?text=${_wmB}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
+                          >
+                            💬 واتساب العقد
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard.writeText(_cuB).then(() => toast({ title: "تم النسخ ✓", description: "رابط العقد في الحافظة" }))}
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            📋 نسخ الرابط
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRescheduleBooking(b)}
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-primary/5 text-primary border border-primary/20 hover:bg-primary/10 dark:bg-primary/10 dark:hover:bg-primary/20 transition-colors"
+                          >
+                            🔄 إعادة الجدولة
+                          </button>
+                        </>
+                      );
+                    })()}
                     <div className="relative">
                       <button
                         onClick={() => setOpenMessageMenuId(openMessageMenuId === b.id ? null : b.id)}
