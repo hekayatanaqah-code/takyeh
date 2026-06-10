@@ -7299,44 +7299,44 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         <div className="flex-1 min-w-0 space-y-1">
                           <p className="text-sm font-semibold text-foreground line-through decoration-destructive/50">{b.clientName}</p>
                           {b.clientPhone && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1" dir="ltr">
+                            <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium flex items-center gap-1" dir="ltr">
                               <span className="not-italic">📞</span> {toAr(b.clientPhone)}
                             </p>
                           )}
                           {dur === 1 ? (
-                            <p className="text-xs text-muted-foreground">
-                              {startHijri} هـ <span className="opacity-60">({startGreg})</span>{periodLabel ? ` · ${periodLabel}` : ""}
+                            <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium">
+                              {startHijri} هـ <span className="opacity-75">({startGreg})</span>{periodLabel ? ` · ${periodLabel}` : ""}
                             </p>
                           ) : (
-                            <div className="text-xs text-muted-foreground space-y-0.5">
-                              <p className="font-medium">لمدة {toAr(dur)} أيام{periodLabel ? ` · ${periodLabel}` : ""}</p>
-                              <p>من: {startHijri} هـ <span className="opacity-60">({startGreg})</span></p>
-                              <p>إلى: {endHijri} هـ <span className="opacity-60">({endGreg})</span></p>
+                            <div className="text-xs text-zinc-700 dark:text-zinc-300 space-y-0.5">
+                              <p className="font-semibold">لمدة {toAr(dur)} أيام{periodLabel ? ` · ${periodLabel}` : ""}</p>
+                              <p className="font-medium">من: {startHijri} هـ <span className="opacity-75">({startGreg})</span></p>
+                              <p className="font-medium">إلى: {endHijri} هـ <span className="opacity-75">({endGreg})</span></p>
                             </div>
                           )}
                           {b.cancelReason && (
-                            <p className="text-xs text-destructive/90 bg-destructive/5 border border-destructive/15 rounded px-2 py-1.5 leading-relaxed break-words">
-                              <span className="font-semibold">سبب الإلغاء:</span> {b.cancelReason}
+                            <p className="text-xs text-destructive bg-destructive/8 border border-destructive/20 rounded px-2 py-1.5 leading-relaxed break-words font-medium">
+                              <span className="font-bold">سبب الإلغاء:</span> {b.cancelReason}
                             </p>
                           )}
                           {cancelledDateStr && (
-                            <p className="text-[11px] text-muted-foreground/60">أُلغي في {cancelledDateStr}</p>
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">أُلغي في {cancelledDateStr}</p>
                           )}
                         </div>
-                        <div className="flex flex-col gap-1.5 items-end shrink-0">
+                        <div className="flex flex-row items-center gap-2 shrink-0">
                           {messageSettings.waEnabled && b.clientPhone && (
                             <button
                               onClick={() => openManualWhatsAppTemplate(b, messageSettings.cancellationTemplate, b.cancelReason || "")}
-                              className="flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg px-2.5 py-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                              className="flex items-center gap-1 text-xs font-semibold text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg px-2.5 py-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors whitespace-nowrap"
                             >
                               <MessageSquare className="w-3 h-3" />
-                              إشعار الإلغاء
+                              إشعار
                             </button>
                           )}
                           <button
                             onClick={() => restoreBooking.mutate(b.id)}
                             disabled={restoreBooking.isPending}
-                            className="flex items-center gap-1 text-xs font-medium text-primary border border-primary/30 rounded-lg px-2.5 py-1.5 hover:bg-primary/10 transition-colors disabled:opacity-50"
+                            className="flex items-center gap-1 text-xs font-semibold text-primary border border-primary/30 rounded-lg px-2.5 py-1.5 hover:bg-primary/10 transition-colors disabled:opacity-50 whitespace-nowrap"
                           >
                             <RotateCcw className="w-3 h-3" />
                             استعادة
@@ -7394,60 +7394,61 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     )}
                     <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2.5">
                       {/* Header */}
-                      <div className="space-y-0.5">
-                        <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-0.5 flex-1 min-w-0">
                           <p className="text-sm font-semibold text-foreground">{log.clientName}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {log.clientPhone && (
+                              <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium" dir="ltr">📞 {toAr(log.clientPhone)}</p>
+                            )}
+                            <p className="text-[11px] text-zinc-600 dark:text-zinc-400 font-medium">
+                              <span className="font-semibold">جُدِّل في:</span> {logHijri} هـ <span className="opacity-80">({logGreg})</span>
+                            </p>
+                          </div>
                         </div>
-                        {log.clientPhone && (
-                          <p className="text-xs text-muted-foreground" dir="ltr">📞 {toAr(log.clientPhone)}</p>
+                        {messageSettings.waEnabled && log.clientPhone && (
+                          <button
+                            onClick={() => openRescheduleLogWhatsApp(log)}
+                            className="shrink-0 flex items-center gap-1 text-xs font-semibold text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg px-2.5 py-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors whitespace-nowrap"
+                          >
+                            <MessageSquare className="w-3 h-3" />
+                            إشعار
+                          </button>
                         )}
-                        <p className="text-[11px] text-muted-foreground/70">
-                          <span className="font-semibold">تاريخ إعادة الجدولة:</span> {logHijri} هـ <span className="opacity-70">({logGreg})</span>
-                        </p>
                       </div>
                       {/* Old → New date cards */}
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div className="bg-muted/50 rounded-lg p-2.5 space-y-1">
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">التاريخ القديم</p>
-                          <p className="font-semibold text-foreground">{oldHijri} هـ</p>
-                          <p className="text-muted-foreground/70">{oldGreg}</p>
+                          <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">التاريخ القديم</p>
+                          <p className="font-bold text-zinc-800 dark:text-zinc-200">{oldHijri} هـ</p>
+                          <p className="text-zinc-600 dark:text-zinc-400 font-medium">{oldGreg}</p>
                           {log.oldDuration > 1 && (
                             <>
-                              <p className="text-muted-foreground">إلى: {formatDualDate(oldEndStr).hijri.replace(/\s*هـ\s*$/, "")} هـ</p>
-                              <p className="text-muted-foreground/60">{formatDualDate(oldEndStr).gregorian}</p>
+                              <p className="text-zinc-600 dark:text-zinc-400 font-medium">إلى: {formatDualDate(oldEndStr).hijri.replace(/\s*هـ\s*$/, "")} هـ</p>
+                              <p className="text-zinc-500 dark:text-zinc-500">{formatDualDate(oldEndStr).gregorian}</p>
                             </>
                           )}
-                          <p className="text-muted-foreground">{toAr(log.oldDuration)} {log.oldDuration === 1 ? "يوم" : "أيام"}{pLabel(log.oldPeriod) ? ` · ${pLabel(log.oldPeriod)}` : ""}</p>
+                          <p className="text-zinc-600 dark:text-zinc-400 font-medium">{toAr(log.oldDuration)} {log.oldDuration === 1 ? "يوم" : "أيام"}{pLabel(log.oldPeriod) ? ` · ${pLabel(log.oldPeriod)}` : ""}</p>
                         </div>
                         <div className="bg-primary/10 rounded-lg p-2.5 space-y-1">
                           <p className="text-[10px] font-bold text-primary uppercase tracking-wide">التاريخ الجديد</p>
-                          <p className="font-semibold text-foreground">{newHijri} هـ</p>
-                          <p className="text-muted-foreground/70">{newGreg}</p>
+                          <p className="font-bold text-zinc-800 dark:text-zinc-200">{newHijri} هـ</p>
+                          <p className="text-zinc-600 dark:text-zinc-400 font-medium">{newGreg}</p>
                           {log.newDuration > 1 && (
                             <>
-                              <p className="text-muted-foreground">إلى: {formatDualDate(newEndStr).hijri.replace(/\s*هـ\s*$/, "")} هـ</p>
-                              <p className="text-muted-foreground/60">{formatDualDate(newEndStr).gregorian}</p>
+                              <p className="text-zinc-600 dark:text-zinc-400 font-medium">إلى: {formatDualDate(newEndStr).hijri.replace(/\s*هـ\s*$/, "")} هـ</p>
+                              <p className="text-zinc-500 dark:text-zinc-500">{formatDualDate(newEndStr).gregorian}</p>
                             </>
                           )}
-                          <p className="text-muted-foreground">{toAr(log.newDuration)} {log.newDuration === 1 ? "يوم" : "أيام"}{pLabel(log.newPeriod) ? ` · ${pLabel(log.newPeriod)}` : ""}</p>
+                          <p className="text-zinc-600 dark:text-zinc-400 font-medium">{toAr(log.newDuration)} {log.newDuration === 1 ? "يوم" : "أيام"}{pLabel(log.newPeriod) ? ` · ${pLabel(log.newPeriod)}` : ""}</p>
                         </div>
                       </div>
                       {/* Reason — fully visible, no truncation */}
                       {log.reason && (
                         <div className="bg-background border border-primary/15 rounded-lg px-3 py-2">
                           <p className="text-[10px] font-bold text-primary uppercase tracking-wide mb-1">سبب التعديل</p>
-                          <p className="text-xs text-foreground leading-relaxed break-words">{log.reason}</p>
+                          <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium leading-relaxed break-words">{log.reason}</p>
                         </div>
-                      )}
-                      {/* WhatsApp button */}
-                      {messageSettings.waEnabled && log.clientPhone && (
-                        <button
-                          onClick={() => openRescheduleLogWhatsApp(log)}
-                          className="flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors w-full justify-center"
-                        >
-                          <MessageSquare className="w-3 h-3" />
-                          إشعار التعديل
-                        </button>
                       )}
                     </div>
                     </Fragment>
@@ -7481,34 +7482,36 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         <div className="flex-1 h-px bg-border/60" />
                       </div>
                     )}
-                    <div className="bg-muted/20 border border-border/60 rounded-xl p-3 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <p className="text-sm font-semibold text-foreground">{b.clientName}</p>
-                            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
-                              <Home className="w-2.5 h-2.5" />
-                              {bookingChaletName}
-                            </span>
-                            {b.isRescheduled && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-                                🔄 مُعاد جدولته
-                              </span>
-                            )}
-                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                              ✓ مكتمل
-                            </span>
-                          </div>
+                    <div className="bg-muted/20 border border-border/60 rounded-xl p-3 space-y-1.5">
+                      {/* Name + badges row */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="text-sm font-semibold text-foreground">{b.clientName}</p>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
+                          <Home className="w-2.5 h-2.5" />
+                          {bookingChaletName}
+                        </span>
+                        {b.isRescheduled && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                            🔄 مُعاد جدولته
+                          </span>
+                        )}
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                          ✓ مكتمل
+                        </span>
+                      </div>
+                      {/* Phone + WA button on one row */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3 flex-wrap min-w-0">
                           {b.clientPhone && (
-                            <p className="text-xs text-muted-foreground" dir="ltr">📞 {toAr(b.clientPhone)}</p>
+                            <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium" dir="ltr">📞 {toAr(b.clientPhone)}</p>
                           )}
-                          <p className="text-xs text-muted-foreground">
-                            📅 {hijriDate} هـ <span className="opacity-60">({gregDate})</span>
+                          <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium">
+                            📅 {hijriDate} هـ <span className="opacity-75">({gregDate})</span>
                             {" · "}{toAr(dur)} {dur === 1 ? "يوم" : "أيام"}
                             {periodLabel ? ` · ${periodLabel}` : ""}
                           </p>
                           {tp !== null && (
-                            <p className="text-xs font-semibold text-foreground">
+                            <p className="text-xs font-bold text-foreground">
                               💰 {tp.toLocaleString("ar-SA")} ر.س
                             </p>
                           )}
@@ -7516,7 +7519,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                         {messageSettings.waEnabled && b.clientPhone && (
                           <button
                             onClick={() => openManualWhatsAppTemplate(b, messageSettings.bookingConfirmationTemplate, "")}
-                            className="shrink-0 flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg px-2.5 py-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                            className="shrink-0 flex items-center gap-1 text-xs font-semibold text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-lg px-2.5 py-1.5 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors whitespace-nowrap"
                           >
                             <MessageSquare className="w-3 h-3" />
                             واتساب
