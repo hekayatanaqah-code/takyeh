@@ -6649,7 +6649,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                             const _wp = _dg.startsWith("966") ? _dg : _dg.startsWith("0") ? "966" + _dg.slice(1) : _dg ? "966" + _dg : "";
                             const _wm = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cu, b.period, returningPhonesSet.has(b.clientPhone ?? ""), b.clientName);
                             return (
-                              <div className="flex flex-wrap items-center gap-1.5 mt-0.5 w-full">
+                              <div className="flex flex-wrap items-center gap-2 mt-1.5 w-full">
                                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 border border-violet-300 dark:border-violet-700">
                                   ⏳ بانتظار التوقيع
                                 </span>
@@ -6875,7 +6875,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                     const fullyDep = remaining === 0;
                     if (totalCashB <= 0 && !b.cashDeposited) return null;
                     return (
-                    <div className={`rounded-lg border p-3 space-y-2 ${fullyDep ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" : "bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700"}`}>
+                    <div className={`rounded-lg border p-3.5 space-y-2.5 ${fullyDep ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800" : "bg-amber-50 dark:bg-amber-900/10 border-amber-300 dark:border-amber-700"}`}>
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2">
                           <span className="text-base">{fullyDep ? "🏦" : "💵"}</span>
@@ -6949,7 +6949,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   })()}
 
                   {/* Action buttons */}
-                  <div className="flex flex-wrap gap-2 pt-1">
+                  <div className="flex flex-wrap gap-2.5 pt-2 border-t border-border/40 mt-1">
                     <div className="relative">
                       <button
                         onClick={() => setOpenMessageMenuId(openMessageMenuId === b.id ? null : b.id)}
@@ -7020,7 +7020,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       return (
                         <>
                           {bkPmtsL.length > 0 && (
-                            <div className="w-full border border-green-200 dark:border-green-800 rounded-xl p-3 space-y-1.5 bg-green-50 dark:bg-green-900/10">
+                            <div className="w-full border border-green-200 dark:border-green-800 rounded-xl p-3.5 space-y-2 bg-green-50 dark:bg-green-900/10">
                               <p className="text-xs font-bold text-green-700 dark:text-green-400">💰 الدفعات المحصّلة:</p>
                               {bkPmtsL.map(p => (
                                 <div key={p.id} className="flex items-center gap-2 flex-wrap">
