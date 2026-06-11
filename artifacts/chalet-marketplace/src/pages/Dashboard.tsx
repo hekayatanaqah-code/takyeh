@@ -7298,11 +7298,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0 space-y-1">
                           <p className="text-sm font-semibold text-foreground line-through decoration-destructive/50">{b.clientName}</p>
-                          {b.clientPhone && (
-                            <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium flex items-center gap-1" dir="ltr">
-                              <span className="not-italic">📞</span> {toAr(b.clientPhone)}
-                            </p>
-                          )}
                           {dur === 1 ? (
                             <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium">
                               {startHijri} هـ <span className="opacity-75">({startGreg})</span>{periodLabel ? ` · ${periodLabel}` : ""}
@@ -7324,6 +7319,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                           )}
                         </div>
                         <div className="flex flex-row items-center gap-2 shrink-0">
+                          {b.clientPhone && (
+                            <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium flex items-center gap-1" dir="ltr">
+                              <span>📞</span> {toAr(b.clientPhone)}
+                            </p>
+                          )}
                           {messageSettings.waEnabled && b.clientPhone && (
                             <button
                               onClick={() => openManualWhatsAppTemplate(b, messageSettings.cancellationTemplate, b.cancelReason || "")}
@@ -7402,7 +7402,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                               <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium" dir="ltr">📞 {toAr(log.clientPhone)}</p>
                             )}
                             <p className="text-[11px] text-zinc-600 dark:text-zinc-400 font-medium">
-                              <span className="font-semibold">جُدِّل في:</span> {logHijri} هـ <span className="opacity-80">({logGreg})</span>
+                              <span className="font-semibold">أُعيدت جدولته في:</span> {logHijri} هـ <span className="opacity-80">({logGreg})</span>
                             </p>
                           </div>
                         </div>
