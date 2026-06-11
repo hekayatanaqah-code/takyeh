@@ -5213,7 +5213,14 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                       "border-red-200 bg-red-50 dark:bg-red-900/20"
                     }`}>
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-bold">{periodName(b.period)}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-sm font-bold">{periodName(b.period)}</p>
+                          {b.isRescheduled && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800 whitespace-nowrap">
+                              🔄 مُعاد جدولته
+                            </span>
+                          )}
+                        </div>
                         {ownerChalets.length > 1 && (() => {
                           const bChaletName = ownerChalets.find((c: any) => c.submissionId === b.submissionId)?.nameAr;
                           return bChaletName ? (
