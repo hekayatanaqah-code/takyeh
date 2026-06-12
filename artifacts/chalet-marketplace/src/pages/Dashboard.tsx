@@ -16182,6 +16182,7 @@ function DepositsTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMonth, setFilterMonth] = useState("");
   const [filterChalet, setFilterChalet] = useState("all");
+  const [calendarMode, setCalendarMode] = useState<"hijri" | "gregorian">("hijri");
   const [currentPage, setCurrentPage] = useState(1);
 
   const { data: deposits = [], isLoading } = useQuery<DepositEntry[]>({
@@ -16286,9 +16287,17 @@ function DepositsTab() {
 
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
-    deposits.forEach((d) => { if (d.bookingDate) months.add(d.bookingDate.slice(0, 7)); });
+    deposits.forEach((d) => {
+      if (!d.bookingDate) return;
+      if (calendarMode === "gregorian") {
+        months.add(d.bookingDate.slice(0, 7));
+      } else {
+        const h = toHijriComponents(new Date(d.bookingDate + "T00:00:00"));
+        months.add(`${h.year}-${String(h.month).padStart(2, "0")}`);
+      }
+    });
     return Array.from(months).sort().reverse();
-  }, [deposits]);
+  }, [deposits, calendarMode]);
 
   const availableChalets = useMemo(() => {
     const map = new Map<string, string>();
@@ -16298,14 +16307,20 @@ function DepositsTab() {
     return Array.from(map.entries());
   }, [deposits]);
 
-  const monthParts = (ym: string): { hijri: string; gregorian: string } => {
+  const monthParts = (ym: string): { primary: string; secondary: string } => {
     const [y, m] = ym.split("-").map(Number);
+    if (calendarMode === "hijri") {
+      return {
+        primary: `${HIJRI_MONTHS_AR[m - 1]} ${toArN(y)} هـ`,
+        secondary: "",
+      };
+    }
     const mid = new Date(y, m - 1, 15);
     const gregName = mid.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
     const h = toHijriComponents(mid);
     return {
-      hijri: `${HIJRI_MONTHS_AR[h.month - 1]} ${toArN(h.year)} هـ`,
-      gregorian: `${gregName} ${toArN(y)}`,
+      primary: `${HIJRI_MONTHS_AR[h.month - 1]} ${toArN(h.year)} هـ`,
+      secondary: `${gregName} ${toArN(y)}`,
     };
   };
 
@@ -16313,18 +16328,36 @@ function DepositsTab() {
     let result = deposits;
     if (filterStatus === "pending") result = result.filter((d) => !d.insuranceRefunded);
     if (filterStatus === "resolved") result = result.filter((d) => d.insuranceRefunded);
-    if (filterMonth) result = result.filter((d) => d.bookingDate?.startsWith(filterMonth));
+    if (filterMonth) {
+      if (calendarMode === "gregorian") {
+        result = result.filter((d) => d.bookingDate?.startsWith(filterMonth));
+      } else {
+        result = result.filter((d) => {
+          if (!d.bookingDate) return false;
+          const h = toHijriComponents(new Date(d.bookingDate + "T00:00:00"));
+          return `${h.year}-${String(h.month).padStart(2, "0")}` === filterMonth;
+        });
+      }
+    }
     if (filterChalet !== "all") result = result.filter((d) => String(d.submissionId) === filterChalet);
     if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      result = result.filter((d) =>
-        d.clientName?.toLowerCase().includes(q) ||
-        d.clientPhone?.includes(q) ||
-        (d.clientPhone ?? "").replace(/\D/g, "").includes(q.replace(/\D/g, ""))
-      );
+      const rawQ = searchQuery.trim();
+      const norm = (s: string) =>
+        s.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).toLowerCase();
+      const qNorm = norm(rawQ);
+      const qDigits = qNorm.replace(/\D/g, "");
+      result = result.filter((d) => {
+        if (norm(d.clientName ?? "").includes(qNorm)) return true;
+        if (d.clientPhone && norm(d.clientPhone).includes(qNorm)) return true;
+        if (qDigits.length > 0) {
+          const ph = norm(d.clientPhone ?? "").replace(/\D/g, "");
+          if (ph.includes(qDigits)) return true;
+        }
+        return false;
+      });
     }
     return result;
-  }, [deposits, filterStatus, filterMonth, filterChalet, searchQuery]);
+  }, [deposits, filterStatus, filterMonth, filterChalet, searchQuery, calendarMode]);
 
   const PAGE_SIZE = 10;
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -16435,31 +16468,51 @@ function DepositsTab() {
               : `لا توجد نتائج لـ «${searchQuery}»`}
           </p>
         )}
-        {/* Month + Chalet dropdowns */}
+        {/* Calendar toggle + Month dropdown + Chalet */}
         <div className="flex gap-2 flex-wrap items-center">
+          {/* Calendar mode toggle */}
+          <div className="flex rounded-lg overflow-hidden border border-border">
+            {(["hijri", "gregorian"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => { setCalendarMode(mode); setFilterMonth(""); setCurrentPage(1); }}
+                className={`text-xs px-3 py-1.5 font-medium transition-colors ${
+                  calendarMode === mode
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-background text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {mode === "hijri" ? "هجري" : "ميلادي"}
+              </button>
+            ))}
+          </div>
+
+          {/* Month dropdown */}
           {availableMonths.length > 0 && (
             <Select
               value={filterMonth || "__all__"}
               onValueChange={(v) => { setFilterMonth(v === "__all__" ? "" : v); setCurrentPage(1); }}
             >
-              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[155px] max-w-[220px]" dir="rtl">
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[150px] max-w-[220px]" dir="rtl">
                 {filterMonth ? (
-                  <span className="text-sm font-medium">{monthParts(filterMonth).hijri}</span>
+                  <span className="text-sm font-medium">{monthParts(filterMonth).primary}</span>
                 ) : (
-                  <span className="text-sm text-muted-foreground">📅 كل الشهور</span>
+                  <span className="text-sm text-muted-foreground">كل الشهور</span>
                 )}
               </SelectTrigger>
               <SelectContent dir="rtl" align="end">
                 <SelectItem value="__all__">
-                  <span className="text-sm">📅 كل الشهور</span>
+                  <span className="text-sm">كل الشهور</span>
                 </SelectItem>
                 {availableMonths.map((ym) => {
-                  const { hijri, gregorian } = monthParts(ym);
+                  const { primary, secondary } = monthParts(ym);
                   return (
                     <SelectItem key={ym} value={ym}>
                       <div className="flex flex-col items-end gap-0.5 py-0.5">
-                        <span className="font-semibold text-sm leading-tight">{hijri}</span>
-                        <span className="text-xs text-muted-foreground leading-tight">{gregorian}</span>
+                        <span className="font-semibold text-sm leading-tight">{primary}</span>
+                        {secondary && (
+                          <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>
+                        )}
                       </div>
                     </SelectItem>
                   );
@@ -16467,11 +16520,13 @@ function DepositsTab() {
               </SelectContent>
             </Select>
           )}
+
+          {/* Chalet dropdown */}
           {availableChalets.length > 1 && (
             <select
               value={filterChalet}
               onChange={(e) => { setFilterChalet(e.target.value); setCurrentPage(1); }}
-              className="text-sm rounded-lg border border-border bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="text-sm rounded-lg border border-border bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 h-9"
               dir="rtl"
             >
               <option value="all">🏡 كل الشاليهات</option>
@@ -16480,10 +16535,12 @@ function DepositsTab() {
               ))}
             </select>
           )}
+
+          {/* Clear filters */}
           {(searchQuery || filterMonth || filterChalet !== "all" || filterStatus !== "all") && (
             <button
               onClick={() => { setSearchQuery(""); setFilterMonth(""); setFilterChalet("all"); setFilterStatus("all"); setCurrentPage(1); }}
-              className="text-sm px-3 py-1.5 rounded-lg font-medium border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 transition-colors"
+              className="text-sm px-3 py-1.5 rounded-lg font-medium border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 transition-colors h-9"
             >✕ مسح الفلاتر</button>
           )}
         </div>
