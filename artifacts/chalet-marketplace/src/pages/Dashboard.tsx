@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { HijriDatePicker } from "@/components/HijriDatePicker";
-import { formatDualDate, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents } from "@/lib/hijri";
+import { formatDualDate, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents, getHijriMonthGregorianRange } from "@/lib/hijri";
 import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -16309,21 +16309,47 @@ function DepositsTab() {
 
   const monthParts = (ym: string): { primary: string; secondary: string } => {
     const [y, m] = ym.split("-").map(Number);
+    const gregMonthName = (gy: number, gm: number) =>
+      new Date(gy, gm, 15).toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
+
     if (calendarMode === "hijri") {
-      // Primary: Hijri — secondary: none (Hijri mode shows only Hijri months)
-      return {
-        primary: `${HIJRI_MONTHS_AR[m - 1]} ${toArN(y)} هـ`,
-        secondary: "",
-      };
+      // Primary: Hijri month name + year
+      const primary = `${HIJRI_MONTHS_AR[m - 1]} ${toArN(y)} هـ`;
+      // Secondary: overlapping Gregorian months
+      const { start, end } = getHijriMonthGregorianRange(y, m);
+      let secondary = "";
+      if (start && end) {
+        const s = new Date(start + "T00:00:00");
+        const e = new Date(end + "T00:00:00");
+        const sY = s.getFullYear(), sM = s.getMonth();
+        const eY = e.getFullYear(), eM = e.getMonth();
+        if (sY === eY && sM === eM) {
+          secondary = `${gregMonthName(sY, sM)} ${toArN(sY)}`;
+        } else if (sY === eY) {
+          secondary = `${gregMonthName(sY, sM)} / ${gregMonthName(eY, eM)} ${toArN(sY)}`;
+        } else {
+          secondary = `${gregMonthName(sY, sM)} ${toArN(sY)} / ${gregMonthName(eY, eM)} ${toArN(eY)}`;
+        }
+      }
+      return { primary, secondary };
     }
-    // Gregorian mode: Primary = Gregorian month, secondary = matching Hijri
-    const mid = new Date(y, m - 1, 15);
-    const gregName = mid.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
-    const h = toHijriComponents(mid);
-    return {
-      primary: `${gregName} ${toArN(y)}`,
-      secondary: `${HIJRI_MONTHS_AR[h.month - 1]} ${toArN(h.year)} هـ`,
-    };
+
+    // Gregorian mode: Primary = Gregorian month + year
+    const primary = `${gregMonthName(y, m - 1)} ${toArN(y)}`;
+    // Secondary: overlapping Hijri months
+    const firstDay = new Date(y, m - 1, 1);
+    const lastDay = new Date(y, m, 0);
+    const h1 = toHijriComponents(firstDay);
+    const h2 = toHijriComponents(lastDay);
+    let secondary = "";
+    if (h1.year === h2.year && h1.month === h2.month) {
+      secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
+    } else if (h1.year === h2.year) {
+      secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
+    } else {
+      secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
+    }
+    return { primary, secondary };
   };
 
   const filtered = useMemo(() => {
