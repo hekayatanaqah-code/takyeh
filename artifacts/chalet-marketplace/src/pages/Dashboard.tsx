@@ -16298,14 +16298,15 @@ function DepositsTab() {
     return Array.from(map.entries());
   }, [deposits]);
 
-  const monthLabel = (ym: string) => {
+  const monthParts = (ym: string): { hijri: string; gregorian: string } => {
     const [y, m] = ym.split("-").map(Number);
     const mid = new Date(y, m - 1, 15);
     const gregName = mid.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
-    const gregYear = y;
     const h = toHijriComponents(mid);
-    const hijriName = HIJRI_MONTHS_AR[h.month - 1];
-    return `${hijriName} ${toArN(h.year)} هـ — ${gregName} ${toArN(gregYear)}`;
+    return {
+      hijri: `${HIJRI_MONTHS_AR[h.month - 1]} ${toArN(h.year)} هـ`,
+      gregorian: `${gregName} ${toArN(y)}`,
+    };
   };
 
   const filtered = useMemo(() => {
@@ -16427,20 +16428,44 @@ function DepositsTab() {
             >✕</button>
           )}
         </div>
+        {searchQuery && !isLoading && (
+          <p className="text-xs px-1 text-muted-foreground">
+            {filtered.length > 0
+              ? `${toArN(filtered.length)} نتيجة مطابقة`
+              : `لا توجد نتائج لـ «${searchQuery}»`}
+          </p>
+        )}
         {/* Month + Chalet dropdowns */}
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
           {availableMonths.length > 0 && (
-            <select
-              value={filterMonth}
-              onChange={(e) => { setFilterMonth(e.target.value); setCurrentPage(1); }}
-              className="text-sm rounded-lg border border-border bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              dir="rtl"
+            <Select
+              value={filterMonth || "__all__"}
+              onValueChange={(v) => { setFilterMonth(v === "__all__" ? "" : v); setCurrentPage(1); }}
             >
-              <option value="">📅 كل الشهور</option>
-              {availableMonths.map((ym) => (
-                <option key={ym} value={ym}>{monthLabel(ym)}</option>
-              ))}
-            </select>
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[155px] max-w-[220px]" dir="rtl">
+                {filterMonth ? (
+                  <span className="text-sm font-medium">{monthParts(filterMonth).hijri}</span>
+                ) : (
+                  <span className="text-sm text-muted-foreground">📅 كل الشهور</span>
+                )}
+              </SelectTrigger>
+              <SelectContent dir="rtl" align="end">
+                <SelectItem value="__all__">
+                  <span className="text-sm">📅 كل الشهور</span>
+                </SelectItem>
+                {availableMonths.map((ym) => {
+                  const { hijri, gregorian } = monthParts(ym);
+                  return (
+                    <SelectItem key={ym} value={ym}>
+                      <div className="flex flex-col items-end gap-0.5 py-0.5">
+                        <span className="font-semibold text-sm leading-tight">{hijri}</span>
+                        <span className="text-xs text-muted-foreground leading-tight">{gregorian}</span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
           )}
           {availableChalets.length > 1 && (
             <select
