@@ -16310,17 +16310,19 @@ function DepositsTab() {
   const monthParts = (ym: string): { primary: string; secondary: string } => {
     const [y, m] = ym.split("-").map(Number);
     if (calendarMode === "hijri") {
+      // Primary: Hijri — secondary: none (Hijri mode shows only Hijri months)
       return {
         primary: `${HIJRI_MONTHS_AR[m - 1]} ${toArN(y)} هـ`,
         secondary: "",
       };
     }
+    // Gregorian mode: Primary = Gregorian month, secondary = matching Hijri
     const mid = new Date(y, m - 1, 15);
     const gregName = mid.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
     const h = toHijriComponents(mid);
     return {
-      primary: `${HIJRI_MONTHS_AR[h.month - 1]} ${toArN(h.year)} هـ`,
-      secondary: `${gregName} ${toArN(y)}`,
+      primary: `${gregName} ${toArN(y)}`,
+      secondary: `${HIJRI_MONTHS_AR[h.month - 1]} ${toArN(h.year)} هـ`,
     };
   };
 
