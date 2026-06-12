@@ -16581,41 +16581,59 @@ function DepositsTab() {
 
           <div className="space-y-4 py-2">
             {/* Amount */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">مبلغ الخصم (ر.س) *</label>
-              <Input
-                type="text"
-                inputMode="numeric"
-                placeholder={`أقصى مبلغ: ${deductDialog ? fmtMoney(Number(deductDialog.insuranceFee)) : 0}`}
-                value={toAr(deductAmount)}
-                onChange={(e) => {
-                  const raw = e.target.value
-                    .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
-                    .replace(/[^\d.]/g, "");
-                  setDeductAmount(raw);
-                }}
-                className="text-right"
-              />
-              {/* Live formula preview */}
-              {deductAmount && deductDialog && Number(deductAmount) > 0 && (
-                <div className="bg-muted/50 rounded-lg px-3 py-2 text-sm space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">الأصلي</span>
-                    <span className="font-medium">{fmtMoney(Number(deductDialog.insuranceFee))} ر.س</span>
+            {(() => {
+              const maxIns = deductDialog ? Number(deductDialog.insuranceFee) : 0;
+              const enteredVal = Number(deductAmount) || 0;
+              const overMax = enteredVal > maxIns;
+              return (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">مبلغ الخصم (ر.س) *</label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  dir="ltr"
+                  placeholder={`أقصى مبلغ: ${toArN(maxIns)}`}
+                  value={deductAmount ? toArN(deductAmount) : ""}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                      .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+                      .replace(/[^\d]/g, "");
+                    const num = Number(raw);
+                    if (raw === "" || num <= maxIns) {
+                      setDeductAmount(raw);
+                    } else {
+                      setDeductAmount(String(maxIns));
+                    }
+                  }}
+                  className={`text-right ${overMax ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                />
+                {overMax && (
+                  <p className="text-xs text-red-600 font-medium">
+                    ⚠️ لا يمكن أن يتجاوز مبلغ الخصم قيمة التأمين الأصلية ({toArN(maxIns)} ر.س)
+                  </p>
+                )}
+                {/* Live formula preview */}
+                {deductAmount && deductDialog && enteredVal > 0 && (
+                  <div className="bg-muted/50 rounded-lg px-3 py-2 text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">الأصلي</span>
+                      <span className="font-medium">{toArN(maxIns)} ر.س</span>
+                    </div>
+                    <div className="flex justify-between text-red-600">
+                      <span>الخصم</span>
+                      <span className="font-medium">− {toArN(enteredVal)} ر.س</span>
+                    </div>
+                    <div className="flex justify-between border-t border-border pt-1 font-bold">
+                      <span>المستردّ</span>
+                      <span className={Math.max(0, maxIns - enteredVal) > 0 ? "text-green-600" : "text-muted-foreground"}>
+                        {toArN(Math.max(0, maxIns - enteredVal))} ر.س
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-red-600">
-                    <span>الخصم</span>
-                    <span className="font-medium">− {fmtMoney(Number(deductAmount))} ر.س</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-1 font-bold">
-                    <span>المستردّ</span>
-                    <span className={Math.max(0, Number(deductDialog.insuranceFee) - Number(deductAmount)) > 0 ? "text-green-600" : "text-muted-foreground"}>
-                      {fmtMoney(Math.max(0, Number(deductDialog.insuranceFee) - Number(deductAmount)))} ر.س
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+              );
+            })()}
 
             {/* Reason */}
             <div className="space-y-1.5">
