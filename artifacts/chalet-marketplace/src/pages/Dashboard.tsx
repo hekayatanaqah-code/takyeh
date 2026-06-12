@@ -6469,8 +6469,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         </div>
         <div className="mb-4 space-y-2">
           <h3 className="font-bold text-foreground">قائمة الحجوزات
-            {searchQuery && filteredBookings.length > 0 && (
-              <span className="text-xs font-normal text-muted-foreground mr-2">({toAr(filteredBookings.length)} نتيجة)</span>
+            {(searchQuery || bookingMonthFilter !== "all") && monthFilteredBookings.length > 0 && (
+              <span className="text-xs font-normal text-muted-foreground mr-2">({toAr(monthFilteredBookings.length)} نتيجة)</span>
             )}
           </h3>
           <div className="flex items-center gap-2 flex-wrap">
