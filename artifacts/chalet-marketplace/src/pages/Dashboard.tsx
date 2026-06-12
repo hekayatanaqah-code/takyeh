@@ -17521,6 +17521,7 @@ function CustomersTab() {
   const [profile, setProfile]         = useState<CustomerProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError]     = useState(false);
+  const [profileTab, setProfileTab]   = useState<"bookings" | "contracts" | "insurance">("bookings");
   const [note, setNote]               = useState("");
   const [savingNote, setSavingNote]   = useState(false);
 
@@ -17840,177 +17841,191 @@ function CustomersTab() {
                 </div>
               </div>
 
-              {/* ── Section A2: All Bookings Log ── */}
-              <div className="bg-card border border-border rounded-2xl p-5">
-                <h3 className="font-bold text-sm text-foreground mb-3 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-primary" />
-                  سجل الحجوزات
-                  <span className="text-xs font-normal text-muted-foreground">({toAr(profile.bookings.length)} حجز)</span>
-                </h3>
-                {profile.bookings.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-5">لا توجد حجوزات لهذا العميل</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
-                          <th className="px-3 py-2 font-medium">رقم الحجز</th>
-                          <th className="px-3 py-2 font-medium">تاريخ الحجز</th>
-                          <th className="px-3 py-2 font-medium">الشاليه</th>
-                          <th className="px-3 py-2 font-medium text-center">الحالة</th>
-                          <th className="px-3 py-2 font-medium text-left">الإجمالي</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {profile.bookings.map((b) => {
-                          const isCancelled = !!b.cancelled_at;
-                          const dual = b.booking_date ? formatDualDate(b.booking_date) : null;
-                          return (
-                            <tr key={b.id} className="hover:bg-muted/20 transition-colors">
-                              <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toAr(b.id)}</td>
-                              <td className="px-3 py-2.5 text-xs">
-                                {dual ? (
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="font-medium text-foreground">{dual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
-                                    <span className="text-muted-foreground">{dual.gregorian}</span>
-                                  </div>
-                                ) : <span className="text-muted-foreground">—</span>}
-                              </td>
-                              <td className="px-3 py-2.5 text-xs text-foreground">{b.chalet_name ?? "—"}</td>
-                              <td className="px-3 py-2.5 text-center">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
-                                  isCancelled
-                                    ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800"
-                                    : "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800"
-                                }`}>
-                                  {isCancelled ? "ملغى" : "نشط"}
-                                </span>
-                              </td>
-                              <td className="px-3 py-2.5 text-xs font-semibold text-foreground text-left">
-                                {toAr(Math.round(Number(b.total_price)))} ر.س
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Section B: Digital Contracts Log ── */}
+              {/* ── Tabbed Sections: Bookings / Contracts / Insurance ── */}
               {(() => {
-                const contractBookings = profile.bookings.filter(b => b.contract_signed);
-                return (
-                  <div className="bg-card border border-border rounded-2xl p-5">
-                    <h3 className="font-bold text-sm text-foreground mb-3 flex items-center gap-2">
-                      <ScrollText className="w-4 h-4 text-primary" />
-                      سجل العقود الرقمية
-                      <span className="text-xs font-normal text-muted-foreground">({toAr(contractBookings.length)} عقد)</span>
-                    </h3>
-                    {contractBookings.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-5">لا توجد عقود موقّعة لهذا العميل</p>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
-                              <th className="px-3 py-2 font-medium">رقم الحجز</th>
-                              <th className="px-3 py-2 font-medium">التاريخ</th>
-                              <th className="px-3 py-2 font-medium">الشاليه</th>
-                              <th className="px-3 py-2 font-medium text-center">العقد</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border">
-                            {contractBookings.map((b) => {
-                              const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-                              return (
-                                <tr key={b.id} className="hover:bg-muted/20 transition-colors">
-                                  <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toAr(b.id)}</td>
-                                  <td className="px-3 py-2.5 text-xs">
-                                    <p className="text-foreground font-medium">{b.booking_date ? formatDualDate(b.booking_date).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"}</p>
-                                    {b.booking_date && <p className="text-muted-foreground">{formatDualDate(b.booking_date).gregorian}</p>}
-                                  </td>
-                                  <td className="px-3 py-2.5 text-xs text-muted-foreground">{b.chalet_name ?? "—"}</td>
-                                  <td className="px-3 py-2.5 text-center">
-                                    <a
-                                      href={`${window.location.origin}${BASE}/contract/${b.id}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 transition-colors"
-                                    >
-                                      📄 عرض العقد
-                                    </a>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* ── Section C: Insurance & Deposit Log ── */}
-              {(() => {
+                const contractBookings  = profile.bookings.filter(b => b.contract_signed);
                 const insuranceBookings = profile.bookings.filter(b => b.insurance_fee && Number(b.insurance_fee) > 0);
-                function insStatus(b: BookingRow): { label: string; cls: string } {
-                  if (!b.insurance_received) return { label: "⚠️ غير مستلم", cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400" };
-                  if (b.insurance_refunded)  return { label: "مسترد بالكامل", cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400" };
-                  if (b.cancelled_at)        return { label: "مُعاد (إلغاء)", cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400" };
-                  return { label: "نشط / بحوزة المالك", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400" };
-                }
+                const insStatus = (b: BookingRow): { label: string; cls: string } => {
+                  if (!b.insurance_received) return { label: "⚠️ غير مستلم",   cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400" };
+                  if (b.insurance_refunded)  return { label: "مسترد بالكامل",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400" };
+                  if (b.cancelled_at)        return { label: "مُعاد (إلغاء)",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400" };
+                  return                            { label: "بحوزة المالك",    cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400" };
+                };
+                const bookingStatus = (b: BookingRow): { label: string; cls: string } => {
+                  if (b.cancelled_at) return { label: "ملغى", cls: "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800" };
+                  return              { label: "نشط",  cls: "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800" };
+                };
+                const durationLabel = (days: number) => {
+                  if (days === 1) return "يوم واحد";
+                  if (days === 2) return "يومان";
+                  if (days <= 10) return `${toArN(days)} أيام`;
+                  return `${toArN(days)} يوم`;
+                };
+                const tabs = [
+                  { id: "bookings",  label: "سجل الحجوزات",  count: profile.bookings.length },
+                  { id: "contracts", label: "العقود الرقمية", count: contractBookings.length },
+                  { id: "insurance", label: "سجل التأمينات", count: insuranceBookings.length },
+                ] as const;
                 return (
-                  <div className="bg-card border border-border rounded-2xl p-5">
-                    <h3 className="font-bold text-sm text-foreground mb-3 flex items-center gap-2">
-                      <Lock className="w-4 h-4 text-primary" />
-                      سجل التأمينات والعمليات
-                      <span className="text-xs font-normal text-muted-foreground">({toAr(insuranceBookings.length)} حجز)</span>
-                    </h3>
-                    {insuranceBookings.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-5">لا توجد تأمينات مسجّلة لهذا العميل</p>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
-                              <th className="px-3 py-2 font-medium">رقم الحجز</th>
-                              <th className="px-3 py-2 font-medium">التاريخ</th>
-                              <th className="px-3 py-2 font-medium">مبلغ التأمين</th>
-                              <th className="px-3 py-2 font-medium">الحالة</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border">
-                            {insuranceBookings.map((b) => {
-                              const st = insStatus(b);
-                              return (
-                                <tr key={b.id} className="hover:bg-muted/20 transition-colors">
-                                  <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toAr(b.id)}</td>
-                                  <td className="px-3 py-2.5 text-xs">
-                                    <p className="text-foreground font-medium">{b.booking_date ? formatDualDate(b.booking_date).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"}</p>
-                                    {b.booking_date && <p className="text-muted-foreground">{formatDualDate(b.booking_date).gregorian}</p>}
-                                  </td>
-                                  <td className="px-3 py-2.5 text-foreground font-semibold text-xs">
-                                    {toAr(Math.round(Number(b.insurance_fee)))} ر.س
-                                  </td>
-                                  <td className="px-3 py-2.5">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${st.cls}`}>
-                                      {st.label}
-                                    </span>
-                                  </td>
+                  <div className="bg-card border border-border rounded-2xl overflow-hidden">
+                    {/* Tab bar */}
+                    <div className="flex border-b border-border bg-muted/20">
+                      {tabs.map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => setProfileTab(t.id)}
+                          className={`flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
+                            profileTab === t.id
+                              ? "border-b-2 border-primary text-primary bg-background"
+                              : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                          }`}
+                        >
+                          {t.label}
+                          <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-bold ${
+                            profileTab === t.id ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                          }`}>{toArN(t.count)}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="p-4">
+                      {/* ── Tab: Bookings ── */}
+                      {profileTab === "bookings" && (
+                        profile.bookings.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-6">لا توجد حجوزات لهذا العميل</p>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
+                                  <th className="px-3 py-2 font-medium">رقم الحجز</th>
+                                  <th className="px-3 py-2 font-medium">التاريخ والمدة</th>
+                                  <th className="px-3 py-2 font-medium">الشاليه</th>
+                                  <th className="px-3 py-2 font-medium text-center">الحالة</th>
+                                  <th className="px-3 py-2 font-medium text-left">الإجمالي</th>
                                 </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+                              </thead>
+                              <tbody className="divide-y divide-border">
+                                {profile.bookings.map((b) => {
+                                  const st   = bookingStatus(b);
+                                  const dual = b.booking_date ? formatDualDate(b.booking_date) : null;
+                                  return (
+                                    <tr key={b.id} className="hover:bg-muted/20 transition-colors">
+                                      <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toArN(b.id)}</td>
+                                      <td className="px-3 py-2.5 text-xs">
+                                        {dual ? (
+                                          <div className="flex flex-col gap-0.5">
+                                            <span className="font-medium text-foreground">{dual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                                            <span className="text-muted-foreground">{dual.gregorian}</span>
+                                            <span className="text-muted-foreground/70">{durationLabel(b.duration_days)} · {PERIOD_LABEL[b.period] ?? b.period}</span>
+                                          </div>
+                                        ) : <span className="text-muted-foreground">—</span>}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-xs text-foreground">{b.chalet_name ?? "—"}</td>
+                                      <td className="px-3 py-2.5 text-center">
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${st.cls}`}>
+                                          {st.label}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2.5 text-xs font-semibold text-foreground text-left">
+                                        {toArN(Math.round(Number(b.total_price)))} ر.س
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )
+                      )}
+
+                      {/* ── Tab: Contracts ── */}
+                      {profileTab === "contracts" && (
+                        contractBookings.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-6">لا توجد عقود موقّعة لهذا العميل</p>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
+                                  <th className="px-3 py-2 font-medium">رقم الحجز</th>
+                                  <th className="px-3 py-2 font-medium">التاريخ</th>
+                                  <th className="px-3 py-2 font-medium">الشاليه</th>
+                                  <th className="px-3 py-2 font-medium text-center">العقد</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-border">
+                                {contractBookings.map((b) => (
+                                  <tr key={b.id} className="hover:bg-muted/20 transition-colors">
+                                    <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toArN(b.id)}</td>
+                                    <td className="px-3 py-2.5 text-xs">
+                                      <p className="font-medium text-foreground">{b.booking_date ? formatDualDate(b.booking_date).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"}</p>
+                                      {b.booking_date && <p className="text-muted-foreground">{formatDualDate(b.booking_date).gregorian}</p>}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{b.chalet_name ?? "—"}</td>
+                                    <td className="px-3 py-2.5 text-center">
+                                      <a
+                                        href={`${window.location.origin}${BASE}/contract/${b.id}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 transition-colors"
+                                      >
+                                        📄 عرض العقد
+                                      </a>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )
+                      )}
+
+                      {/* ── Tab: Insurance ── */}
+                      {profileTab === "insurance" && (
+                        insuranceBookings.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-6">لا توجد تأمينات مسجّلة لهذا العميل</p>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
+                                  <th className="px-3 py-2 font-medium">رقم الحجز</th>
+                                  <th className="px-3 py-2 font-medium">التاريخ</th>
+                                  <th className="px-3 py-2 font-medium">مبلغ التأمين</th>
+                                  <th className="px-3 py-2 font-medium">الحالة</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-border">
+                                {insuranceBookings.map((b) => {
+                                  const st = insStatus(b);
+                                  return (
+                                    <tr key={b.id} className="hover:bg-muted/20 transition-colors">
+                                      <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toArN(b.id)}</td>
+                                      <td className="px-3 py-2.5 text-xs">
+                                        <p className="font-medium text-foreground">{b.booking_date ? formatDualDate(b.booking_date).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"}</p>
+                                        {b.booking_date && <p className="text-muted-foreground">{formatDualDate(b.booking_date).gregorian}</p>}
+                                      </td>
+                                      <td className="px-3 py-2.5 text-foreground font-semibold text-xs">
+                                        {toArN(Math.round(Number(b.insurance_fee)))} ر.س
+                                      </td>
+                                      <td className="px-3 py-2.5">
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${st.cls}`}>
+                                          {st.label}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )
+                      )}
+                    </div>
                   </div>
                 );
               })()}
-
               {/* ── Private Notes ── */}
               <div className="bg-card border border-border rounded-2xl p-5">
                 <h3 className="font-bold text-sm text-foreground mb-1 flex items-center gap-2">
