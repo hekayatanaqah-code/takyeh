@@ -16179,6 +16179,10 @@ function DepositsTab() {
   const [uploading, setUploading] = useState(false);
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "resolved">("all");
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterMonth, setFilterMonth] = useState("");
+  const [filterChalet, setFilterChalet] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { data: deposits = [], isLoading } = useQuery<DepositEntry[]>({
     queryKey: ["owner", "deposits"],
@@ -16280,11 +16284,46 @@ function DepositsTab() {
     }
   };
 
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    deposits.forEach((d) => { if (d.bookingDate) months.add(d.bookingDate.slice(0, 7)); });
+    return Array.from(months).sort().reverse();
+  }, [deposits]);
+
+  const availableChalets = useMemo(() => {
+    const map = new Map<string, string>();
+    deposits.forEach((d) => {
+      if (d.submissionId) map.set(String(d.submissionId), d.chaletTitle ?? `شاليه #${d.submissionId}`);
+    });
+    return Array.from(map.entries());
+  }, [deposits]);
+
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" });
+  };
+
   const filtered = useMemo(() => {
-    if (filterStatus === "pending") return deposits.filter((d) => !d.insuranceRefunded);
-    if (filterStatus === "resolved") return deposits.filter((d) => d.insuranceRefunded);
-    return deposits;
-  }, [deposits, filterStatus]);
+    let result = deposits;
+    if (filterStatus === "pending") result = result.filter((d) => !d.insuranceRefunded);
+    if (filterStatus === "resolved") result = result.filter((d) => d.insuranceRefunded);
+    if (filterMonth) result = result.filter((d) => d.bookingDate?.startsWith(filterMonth));
+    if (filterChalet !== "all") result = result.filter((d) => String(d.submissionId) === filterChalet);
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter((d) =>
+        d.clientName?.toLowerCase().includes(q) ||
+        d.clientPhone?.includes(q) ||
+        (d.clientPhone ?? "").replace(/\D/g, "").includes(q.replace(/\D/g, ""))
+      );
+    }
+    return result;
+  }, [deposits, filterStatus, filterMonth, filterChalet, searchQuery]);
+
+  const PAGE_SIZE = 10;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pagedFiltered = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const pendingCount = deposits.filter((d) => !d.insuranceRefunded).length;
 
@@ -16329,11 +16368,11 @@ function DepositsTab() {
         )}
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards — dynamic: reflects active filters */}
       {deposits.length > 0 && (() => {
-        const totalDeposits = deposits.reduce((s, d) => s + Number(d.insuranceFee), 0);
-        const totalDeducted = deposits.reduce((s, d) => s + Number(d.insuranceDeducted ?? 0), 0);
-        const totalRefundable = deposits
+        const totalDeposits  = filtered.reduce((s, d) => s + Number(d.insuranceFee), 0);
+        const totalDeducted  = filtered.reduce((s, d) => s + Number(d.insuranceDeducted ?? 0), 0);
+        const totalRefundable = filtered
           .filter((d) => !d.insuranceRefunded && !d.cancelledAt)
           .reduce((s, d) => s + Number(d.insuranceFee), 0);
         const totalReturned = Math.max(0, totalDeposits - totalDeducted - totalRefundable);
@@ -16363,12 +16402,62 @@ function DepositsTab() {
         );
       })()}
 
-      {/* Filter */}
+      {/* Search + Filters */}
+      <div className="space-y-2">
+        {/* Search bar */}
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+            placeholder="🔍 بحث باسم العميل أو رقم الجوال..."
+            className="w-full rounded-xl border border-border bg-background px-4 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            dir="rtl"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => { setSearchQuery(""); setCurrentPage(1); }}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
+            >✕</button>
+          )}
+        </div>
+        {/* Month + Chalet dropdowns */}
+        <div className="flex gap-2 flex-wrap">
+          {availableMonths.length > 0 && (
+            <select
+              value={filterMonth}
+              onChange={(e) => { setFilterMonth(e.target.value); setCurrentPage(1); }}
+              className="text-sm rounded-lg border border-border bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              dir="rtl"
+            >
+              <option value="">📅 كل الشهور</option>
+              {availableMonths.map((ym) => (
+                <option key={ym} value={ym}>{monthLabel(ym)}</option>
+              ))}
+            </select>
+          )}
+          {availableChalets.length > 1 && (
+            <select
+              value={filterChalet}
+              onChange={(e) => { setFilterChalet(e.target.value); setCurrentPage(1); }}
+              className="text-sm rounded-lg border border-border bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              dir="rtl"
+            >
+              <option value="all">🏡 كل الشاليهات</option>
+              {availableChalets.map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      </div>
+
+      {/* Status Filter */}
       <div className="flex gap-2 flex-wrap">
         {(["all", "pending", "resolved"] as const).map((s) => (
           <button
             key={s}
-            onClick={() => setFilterStatus(s)}
+            onClick={() => { setFilterStatus(s); setCurrentPage(1); }}
             className={`text-sm px-3 py-1.5 rounded-full font-medium transition-colors ${
               filterStatus === s
                 ? "bg-primary text-primary-foreground"
@@ -16378,6 +16467,12 @@ function DepositsTab() {
             {s === "all" ? "الكل" : s === "pending" ? "🔒 معلّق" : "✅ مُنتهٍ"}
           </button>
         ))}
+        {(searchQuery || filterMonth || filterChalet !== "all") && (
+          <button
+            onClick={() => { setSearchQuery(""); setFilterMonth(""); setFilterChalet("all"); setCurrentPage(1); }}
+            className="text-sm px-3 py-1.5 rounded-full font-medium bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 transition-colors"
+          >✕ مسح الفلاتر</button>
+        )}
       </div>
 
       {/* Loading */}
@@ -16397,7 +16492,7 @@ function DepositsTab() {
       )}
 
       {/* Cards */}
-      {!isLoading && filtered.map((d) => {
+      {!isLoading && pagedFiltered.map((d) => {
         const status = getStatus(d);
         const isCancelled = !!d.cancelledAt;
         const ins = Number(d.insuranceFee);
@@ -16544,6 +16639,29 @@ function DepositsTab() {
         );
       })}
 
+      {/* Pagination */}
+      {!isLoading && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-2" dir="rtl">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={safePage <= 1}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium border border-border bg-background hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            → السابق
+          </button>
+          <span className="text-sm text-muted-foreground px-2">
+            صفحة {toArN(safePage)} من {toArN(totalPages)}
+          </span>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={safePage >= totalPages}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium border border-border bg-background hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            التالي ←
+          </button>
+        </div>
+      )}
+
       {/* Refund Confirm Dialog */}
       <Dialog open={!!refundConfirm} onOpenChange={(o) => !o && setRefundConfirm(null)}>
         <DialogContent dir="rtl" className="max-w-sm">
@@ -16598,12 +16716,7 @@ function DepositsTab() {
                     const raw = e.target.value
                       .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
                       .replace(/[^\d]/g, "");
-                    const num = Number(raw);
-                    if (raw === "" || num <= maxIns) {
-                      setDeductAmount(raw);
-                    } else {
-                      setDeductAmount(String(maxIns));
-                    }
+                    setDeductAmount(raw);
                   }}
                   className={`text-right ${overMax ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                 />
@@ -16702,7 +16815,7 @@ function DepositsTab() {
             <Button
               className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
               onClick={handleDeduct}
-              disabled={patchMutation.isPending || uploading}
+              disabled={patchMutation.isPending || uploading || (deductDialog ? Number(deductAmount) > Number(deductDialog.insuranceFee) : false) || !deductAmount || Number(deductAmount) <= 0}
             >
               {patchMutation.isPending
                 ? <Loader2 className="w-4 h-4 animate-spin" />
