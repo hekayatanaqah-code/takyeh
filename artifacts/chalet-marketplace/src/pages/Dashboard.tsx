@@ -2588,13 +2588,15 @@ function ManageInsuranceDialog({
             <div>
               <label className="block text-sm font-medium mb-1">المبلغ المخصوم (ر.س)</label>
               <input
-                type="text" inputMode="numeric" pattern="[0-9]*"
+                type="text" inputMode="numeric" dir="ltr"
                 value={deductAmount}
                 onChange={e => {
-                  const raw = e.target.value.replace(/[^0-9]/g, "");
-                  setDeductAmount(raw);
+                  const normalized = e.target.value
+                    .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+                    .replace(/[^0-9]/g, "");
+                  setDeductAmount(normalized);
                 }}
-                className="w-full rounded-md border px-3 py-2 text-left text-base"
+                className="w-full rounded-md border px-3 py-2 text-right text-base"
                 placeholder={`أقصى مبلغ: ${toArN(insurance)}`}
               />
             </div>
