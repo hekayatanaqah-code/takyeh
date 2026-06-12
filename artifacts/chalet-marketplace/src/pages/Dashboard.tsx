@@ -2559,7 +2559,7 @@ function ManageInsuranceDialog({
           <div className="flex flex-col gap-4 py-2">
             <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-center">
               <div className="text-2xl font-bold text-green-700">{formatAmount(booking.insuranceFee)}</div>
-              <div className="text-sm text-green-600 mt-1">سيتم إرجاع كامل مبلغ التأمين للعميل</div>
+              <div className="text-sm text-green-800 dark:text-green-200 mt-1 font-medium">سيتم إرجاع كامل مبلغ التأمين للعميل</div>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => setMode("choose")} disabled={saving}>رجوع</Button>
@@ -2576,11 +2576,11 @@ function ManageInsuranceDialog({
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-center">
                 <div className="text-xs text-red-500">المخصوم (تلفيات)</div>
-                <div className="text-xl font-bold text-red-700">{formatAmount(deductVal)}</div>
+                <div className="text-xl font-bold text-red-700">{toArN(deductVal)} ر.س</div>
               </div>
               <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-center">
                 <div className="text-xs text-green-500">المُرجَع للعميل</div>
-                <div className="text-xl font-bold text-green-700">{formatAmount(remaining)}</div>
+                <div className="text-xl font-bold text-green-700">{toArN(remaining)} ر.س</div>
               </div>
             </div>
 
@@ -2588,11 +2588,14 @@ function ManageInsuranceDialog({
             <div>
               <label className="block text-sm font-medium mb-1">المبلغ المخصوم (ر.س)</label>
               <input
-                type="number" min="0" max={insurance} step="1" inputMode="numeric"
+                type="text" inputMode="numeric" pattern="[0-9]*"
                 value={deductAmount}
-                onChange={e => setDeductAmount(e.target.value)}
+                onChange={e => {
+                  const raw = e.target.value.replace(/[^0-9]/g, "");
+                  setDeductAmount(raw);
+                }}
                 className="w-full rounded-md border px-3 py-2 text-left text-base"
-                placeholder={`أقصى مبلغ: ${insurance}`}
+                placeholder={`أقصى مبلغ: ${toArN(insurance)}`}
               />
             </div>
 
@@ -2661,7 +2664,7 @@ function ManageInsuranceDialog({
                 onClick={handleDeduct}
                 disabled={saving || uploading || deductVal <= 0 || deductVal > insurance}
               >
-                {saving ? "جاري الحفظ..." : "✂️ تأكيد الخصم"}
+                {saving ? "جاري الحفظ..." : "✅ تأكيد الخصم"}
               </Button>
             </div>
           </div>
