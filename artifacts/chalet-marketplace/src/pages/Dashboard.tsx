@@ -17741,14 +17741,13 @@ function CustomersTab() {
                 {c.last_booking_date && (() => {
                   const { hijri, gregorian } = formatDualDate(c.last_booking_date);
                   return (
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {src === "service" ? "آخر موعد:" : "آخر حجز:"}{" "}
-                      <span className="text-foreground/80">
+                    <div className="mt-1 flex flex-col gap-0">
+                      <p className="text-xs text-muted-foreground">{src === "service" ? "آخر موعد:" : "آخر حجز:"}</p>
+                      <p className="text-xs font-medium text-foreground/90 leading-snug">
                         {hijri.replace(/\s*هـ\s*$/, "")} هـ
-                      </span>
-                      <span className="mx-1 opacity-40">/</span>
-                      <span>{gregorian}</span>
-                    </p>
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-snug">{gregorian}</p>
+                    </div>
                   );
                 })()}
               </button>
@@ -17821,7 +17820,7 @@ function CustomersTab() {
 
                 {/* ── Section A: Basic Info Stats ── */}
                 <div className="grid grid-cols-2 gap-3 mt-1">
-                  {statCard("إجمالي الحجوزات", `${toAr(profile.totalBookings)} حجز`)}
+                  {statCard("إجمالي الحجوزات", `${toAr(profile.bookings.length)} حجز`)}
                   {statCard("إجمالي الإيراد",  `${toAr(Math.round(profile.totalRevenue))} ر.س`)}
                 </div>
                 {/* ID number + last booking */}
@@ -17839,6 +17838,64 @@ function CustomersTab() {
                     </p>
                   </div>
                 </div>
+              </div>
+
+              {/* ── Section A2: All Bookings Log ── */}
+              <div className="bg-card border border-border rounded-2xl p-5">
+                <h3 className="font-bold text-sm text-foreground mb-3 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-primary" />
+                  سجل الحجوزات
+                  <span className="text-xs font-normal text-muted-foreground">({toAr(profile.bookings.length)} حجز)</span>
+                </h3>
+                {profile.bookings.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-5">لا توجد حجوزات لهذا العميل</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
+                          <th className="px-3 py-2 font-medium">رقم الحجز</th>
+                          <th className="px-3 py-2 font-medium">تاريخ الحجز</th>
+                          <th className="px-3 py-2 font-medium">الشاليه</th>
+                          <th className="px-3 py-2 font-medium text-center">الحالة</th>
+                          <th className="px-3 py-2 font-medium text-left">الإجمالي</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {profile.bookings.map((b) => {
+                          const isCancelled = !!b.cancelled_at;
+                          const dual = b.booking_date ? formatDualDate(b.booking_date) : null;
+                          return (
+                            <tr key={b.id} className="hover:bg-muted/20 transition-colors">
+                              <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toAr(b.id)}</td>
+                              <td className="px-3 py-2.5 text-xs">
+                                {dual ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="font-medium text-foreground">{dual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                                    <span className="text-muted-foreground">{dual.gregorian}</span>
+                                  </div>
+                                ) : <span className="text-muted-foreground">—</span>}
+                              </td>
+                              <td className="px-3 py-2.5 text-xs text-foreground">{b.chalet_name ?? "—"}</td>
+                              <td className="px-3 py-2.5 text-center">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                                  isCancelled
+                                    ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800"
+                                    : "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800"
+                                }`}>
+                                  {isCancelled ? "ملغى" : "نشط"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2.5 text-xs font-semibold text-foreground text-left">
+                                {toAr(Math.round(Number(b.total_price)))} ر.س
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               {/* ── Section B: Digital Contracts Log ── */}
