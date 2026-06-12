@@ -16300,7 +16300,12 @@ function DepositsTab() {
 
   const monthLabel = (ym: string) => {
     const [y, m] = ym.split("-").map(Number);
-    return new Date(y, m - 1, 1).toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" });
+    const mid = new Date(y, m - 1, 15);
+    const gregName = mid.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
+    const gregYear = y;
+    const h = toHijriComponents(mid);
+    const hijriName = HIJRI_MONTHS_AR[h.month - 1];
+    return `${hijriName} ${toArN(h.year)} هـ — ${gregName} ${toArN(gregYear)}`;
   };
 
   const filtered = useMemo(() => {
@@ -16411,8 +16416,9 @@ function DepositsTab() {
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
             placeholder="🔍 بحث باسم العميل أو رقم الجوال..."
-            className="w-full rounded-xl border border-border bg-background px-4 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-xl border border-border bg-background px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
             dir="rtl"
+            autoComplete="off"
           />
           {searchQuery && (
             <button
@@ -16449,6 +16455,12 @@ function DepositsTab() {
               ))}
             </select>
           )}
+          {(searchQuery || filterMonth || filterChalet !== "all" || filterStatus !== "all") && (
+            <button
+              onClick={() => { setSearchQuery(""); setFilterMonth(""); setFilterChalet("all"); setFilterStatus("all"); setCurrentPage(1); }}
+              className="text-sm px-3 py-1.5 rounded-lg font-medium border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 transition-colors"
+            >✕ مسح الفلاتر</button>
+          )}
         </div>
       </div>
 
@@ -16467,12 +16479,6 @@ function DepositsTab() {
             {s === "all" ? "الكل" : s === "pending" ? "🔒 معلّق" : "✅ مُنتهٍ"}
           </button>
         ))}
-        {(searchQuery || filterMonth || filterChalet !== "all") && (
-          <button
-            onClick={() => { setSearchQuery(""); setFilterMonth(""); setFilterChalet("all"); setCurrentPage(1); }}
-            className="text-sm px-3 py-1.5 rounded-full font-medium bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 transition-colors"
-          >✕ مسح الفلاتر</button>
-        )}
       </div>
 
       {/* Loading */}
@@ -16486,8 +16492,17 @@ function DepositsTab() {
       {!isLoading && filtered.length === 0 && (
         <div className="text-center py-16 text-muted-foreground">
           <Lock className="w-12 h-12 mx-auto mb-3 opacity-20" />
-          <p className="font-medium">لا توجد تأمينات {filterStatus !== "all" ? "في هذه الفئة" : ""}</p>
-          <p className="text-sm mt-1">ستظهر هنا الحجوزات التي تحتوي على مبلغ تأمين</p>
+          {searchQuery ? (
+            <>
+              <p className="font-medium">لا توجد نتائج لـ «{searchQuery}»</p>
+              <p className="text-sm mt-1">جرّب البحث باسم العميل أو رقم الجوال</p>
+            </>
+          ) : (
+            <>
+              <p className="font-medium">لا توجد تأمينات {filterStatus !== "all" ? "في هذه الفئة" : ""}</p>
+              <p className="text-sm mt-1">ستظهر هنا الحجوزات التي تحتوي على مبلغ تأمين</p>
+            </>
+          )}
         </div>
       )}
 
