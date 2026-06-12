@@ -2589,7 +2589,7 @@ function ManageInsuranceDialog({
               <label className="block text-sm font-medium mb-1">المبلغ المخصوم (ر.س)</label>
               <input
                 type="text" inputMode="numeric" dir="ltr"
-                value={deductAmount}
+                value={deductAmount ? toArN(deductAmount) : ""}
                 onChange={e => {
                   const normalized = e.target.value
                     .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
