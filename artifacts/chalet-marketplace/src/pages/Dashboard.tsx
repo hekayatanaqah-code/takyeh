@@ -16336,8 +16336,9 @@ function DepositsTab() {
         const totalRefundable = deposits
           .filter((d) => !d.insuranceRefunded && !d.cancelledAt)
           .reduce((s, d) => s + Number(d.insuranceFee), 0);
+        const totalReturned = Math.max(0, totalDeposits - totalDeducted - totalRefundable);
         return (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-xl p-3 text-center">
               <div className="text-xs text-orange-600 dark:text-orange-400 font-medium mb-1">إجمالي التأمينات</div>
               <div className="text-lg font-bold text-orange-700 dark:text-orange-300">{fmtMoney(totalDeposits)}</div>
@@ -16351,6 +16352,11 @@ function DepositsTab() {
             <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-center">
               <div className="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">محتجز (معلّق)</div>
               <div className="text-lg font-bold text-amber-700 dark:text-amber-300">{fmtMoney(totalRefundable)}</div>
+              <div className="text-xs text-muted-foreground">ر.س</div>
+            </div>
+            <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-xl p-3 text-center">
+              <div className="text-xs text-green-600 dark:text-green-400 font-medium mb-1">المبالغ المُعادة</div>
+              <div className="text-lg font-bold text-green-700 dark:text-green-300">{fmtMoney(totalReturned)}</div>
               <div className="text-xs text-muted-foreground">ر.س</div>
             </div>
           </div>
@@ -16467,7 +16473,9 @@ function DepositsTab() {
                 </div>
               )}
               <div className="border-t border-border/50 mt-2 pt-2 flex items-center justify-between text-sm">
-                <span className="font-semibold text-foreground">المبلغ المُستردّ</span>
+                <span className="font-semibold text-foreground">
+                  {status === "pending" ? "المبلغ المُستردّ" : "المبلغ المُعاد للعميل"}
+                </span>
                 <span className={`font-bold text-lg ${refundable > 0 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}>
                   {fmtMoney(refundable)} ر.س
                 </span>
