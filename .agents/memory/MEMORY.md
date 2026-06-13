@@ -1,2 +1,5 @@
 - [Logo pipeline gap pattern](logo-pipeline-gap.md) — admin approval flows that copy submission→chaletsTable must explicitly list every field; omissions silently store NULL.
 - [Arabic time storage format](arabic-time-format.md) — DB stores times as Arabic text ("٦ ص", "٤ م"); always convert at the UI boundary, never change DB format.
+- [Calendar prefs DB integration](calendar-prefs-db.md) — bookingsCalPref/reportsCalPref stored in owner_applications; seeded into localStorage+state on profile load; PATCH /owner/profile/calendar-prefs to save.
+- [OwnerProfileTab isolation pattern](owner-profile-tab-isolation.md) — OwnerProfileTab is a standalone component; cannot access parent state; use local useState seeded from localStorage for prefs shared with parent.
+- [Hijri/Gregorian dual display pattern](hijri-gregorian-dual.md) — toggle drives which calendar is bold/primary; secondary shows overlap months with correct era suffix (هـ / م).
