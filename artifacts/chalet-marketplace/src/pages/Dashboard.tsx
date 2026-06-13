@@ -17524,6 +17524,8 @@ function CustomersTab() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError]     = useState(false);
   const [profileTab, setProfileTab]   = useState<"bookings" | "contracts" | "insurance">("bookings");
+  const [profileBookingMonth, setProfileBookingMonth] = useState<string>("all");
+  const [profileBookingPage, setProfileBookingPage]   = useState(1);
   const [note, setNote]               = useState("");
   const [savingNote, setSavingNote]   = useState(false);
 
@@ -17626,6 +17628,8 @@ function CustomersTab() {
     setProfile(null);
     setProfileError(false);
     setProfileLoading(true);
+    setProfileBookingMonth("all");
+    setProfileBookingPage(1);
     try {
       const r = await apiFetch(`/owner/customers/${encodeURIComponent(phone)}`);
       if (r.ok) {
@@ -17894,73 +17898,164 @@ function CustomersTab() {
 
                     <div className="p-4">
                       {/* ── Tab: Bookings ── */}
-                      {profileTab === "bookings" && (
-                        profile.bookings.length === 0 ? (
-                          <p className="text-sm text-muted-foreground text-center py-6">لا توجد حجوزات لهذا العميل</p>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
-                                  <th className="px-3 py-2 font-medium">رقم الحجز</th>
-                                  <th className="px-3 py-2 font-medium">التاريخ والمدة</th>
-                                  <th className="px-3 py-2 font-medium">الشاليه</th>
-                                  <th className="px-3 py-2 font-medium text-center">الحالة</th>
-                                  <th className="px-3 py-2 font-medium text-left">الإجمالي</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-border">
-                                {profile.bookings.map((b) => {
-                                  const st       = bookingStatus(b);
-                                  const toRiyadhDate = (ts: string) =>
-                                    new Date(ts).toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
-                                  const dual        = b.booking_date   ? formatDualDate(b.booking_date) : null;
-                                  const cancelDual  = b.cancelled_at   ? formatDualDate(toRiyadhDate(b.cancelled_at))  : null;
-                                  const origDual    = b.original_date  ? formatDualDate(b.original_date.slice(0, 10))  : null;
-                                  const reschedDual = b.rescheduled_at ? formatDualDate(toRiyadhDate(b.rescheduled_at)) : null;
-                                  return (
-                                    <tr key={b.id} className="hover:bg-muted/20 transition-colors">
-                                      <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary align-top">#{toArN(b.id)}</td>
-                                      <td className="px-3 py-2.5 text-xs align-top">
-                                        {dual ? (
-                                          <div className="flex flex-col gap-0.5">
-                                            <span className="font-medium text-foreground">{dual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
-                                            <span className="text-muted-foreground">{dual.gregorian}</span>
-                                            <span className="text-muted-foreground/70">{durationLabel(b.duration_days)} · {PERIOD_LABEL[b.period] ?? b.period}</span>
-                                            {cancelDual && (
-                                              <div className="flex flex-col mt-0.5 gap-0 whitespace-nowrap">
-                                                <span className="text-red-700"><span className="font-semibold">تم الإلغاء:</span> {cancelDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
-                                                <span className="text-red-700"><span className="font-semibold">الموافق:</span> {cancelDual.gregorian} م</span>
-                                              </div>
-                                            )}
-                                            {origDual && (
-                                              <div className="flex flex-col mt-0.5 gap-0 whitespace-nowrap">
-                                                <span className="text-blue-700"><span className="font-semibold">الموعد السابق:</span> {origDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
-                                                {reschedDual && (
-                                                  <span className="text-blue-700"><span className="font-semibold">تاريخ التعديل:</span> {reschedDual.hijri.replace(/\s*هـ\s*$/, "")} هـ | {reschedDual.gregorian} م</span>
+                      {profileTab === "bookings" && (() => {
+                        if (profile.bookings.length === 0)
+                          return <p className="text-sm text-muted-foreground text-center py-6">لا توجد حجوزات لهذا العميل</p>;
+
+                        /* ── build month options (overlap logic) ── */
+                        const monthKeySet = new Set<string>();
+                        profile.bookings.forEach(b => {
+                          if (!b.booking_date) return;
+                          const s = new Date(b.booking_date + "T00:00:00");
+                          const e = new Date(s);
+                          e.setDate(e.getDate() + Math.max((b.duration_days || 1) - 1, 0));
+                          const cur = new Date(s.getFullYear(), s.getMonth(), 1);
+                          const last = new Date(e.getFullYear(), e.getMonth(), 1);
+                          while (cur <= last) {
+                            monthKeySet.add(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`);
+                            cur.setMonth(cur.getMonth() + 1);
+                          }
+                        });
+                        const monthOptions = [...monthKeySet].sort((a, b) => b.localeCompare(a));
+                        const getMonthLabel = (key: string) => {
+                          const d = new Date(key + "-01T00:00:00");
+                          const h = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(d);
+                          const g = new Intl.DateTimeFormat("ar-SA", { month: "long", year: "numeric", calendar: "gregory" }).format(d);
+                          return `${h} | ${g}`;
+                        };
+
+                        /* ── filter by selected month (overlap) ── */
+                        const filteredBkgs = profileBookingMonth === "all" ? profile.bookings : profile.bookings.filter(b => {
+                          if (!b.booking_date) return false;
+                          const s = new Date(b.booking_date + "T00:00:00");
+                          const e = new Date(s);
+                          e.setDate(e.getDate() + Math.max((b.duration_days || 1) - 1, 0));
+                          const [y, m] = profileBookingMonth.split("-").map(Number);
+                          const ms = new Date(y, m - 1, 1);
+                          const me = new Date(y, m, 0);
+                          return s <= me && e >= ms;
+                        });
+
+                        /* ── pagination ── */
+                        const PAGE_SIZE = 10;
+                        const totalPages = Math.max(1, Math.ceil(filteredBkgs.length / PAGE_SIZE));
+                        const safePage   = Math.min(profileBookingPage, totalPages);
+                        const pagedBkgs  = filteredBkgs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+                        const toRiyadhDate = (ts: string) => new Date(ts).toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+
+                        return (
+                          <div className="flex flex-col gap-3">
+                            {/* ── Month filter bar ── */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Select value={profileBookingMonth} onValueChange={v => { setProfileBookingMonth(v); setProfileBookingPage(1); }}>
+                                <SelectTrigger className="h-8 text-xs w-auto min-w-[200px]">
+                                  <SelectValue placeholder="تصفية حسب الشهر" />
+                                </SelectTrigger>
+                                <SelectContent align="end">
+                                  <SelectItem value="all">جميع الأشهر</SelectItem>
+                                  {monthOptions.map(key => (
+                                    <SelectItem key={key} value={key}>{getMonthLabel(key)}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <span className="text-xs text-muted-foreground">
+                                {filteredBkgs.length === profile.bookings.length
+                                  ? `${toArN(profile.bookings.length)} حجز`
+                                  : `${toArN(filteredBkgs.length)} من ${toArN(profile.bookings.length)} حجز`}
+                              </span>
+                            </div>
+
+                            {/* ── Table ── */}
+                            {filteredBkgs.length === 0 ? (
+                              <p className="text-sm text-muted-foreground text-center py-6">لا توجد حجوزات في هذا الشهر</p>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
+                                      <th className="px-3 py-2 font-medium">رقم الحجز</th>
+                                      <th className="px-3 py-2 font-medium">التاريخ والمدة</th>
+                                      <th className="px-3 py-2 font-medium">الشاليه</th>
+                                      <th className="px-3 py-2 font-medium text-center">الحالة</th>
+                                      <th className="px-3 py-2 font-medium text-left">الإجمالي</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border">
+                                    {pagedBkgs.map((b) => {
+                                      const st         = bookingStatus(b);
+                                      const dual       = b.booking_date   ? formatDualDate(b.booking_date) : null;
+                                      const cancelDual = b.cancelled_at   ? formatDualDate(toRiyadhDate(b.cancelled_at))  : null;
+                                      const origDual   = b.original_date  ? formatDualDate(b.original_date.slice(0, 10))  : null;
+                                      const reschedDual= b.rescheduled_at ? formatDualDate(toRiyadhDate(b.rescheduled_at)) : null;
+                                      return (
+                                        <tr key={b.id} className="hover:bg-muted/20 transition-colors">
+                                          <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary align-top">#{toArN(b.id)}</td>
+                                          <td className="px-3 py-2.5 text-xs align-top">
+                                            {dual ? (
+                                              <div className="flex flex-col gap-0.5">
+                                                <span className="font-medium text-foreground">{dual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                                                <span className="text-muted-foreground">{dual.gregorian}</span>
+                                                <span className="text-muted-foreground/70">{durationLabel(b.duration_days)} · {PERIOD_LABEL[b.period] ?? b.period}</span>
+                                                {cancelDual && (
+                                                  <div className="flex flex-col mt-0.5 gap-0 whitespace-nowrap">
+                                                    <span className="text-red-700"><span className="font-semibold">تم الإلغاء:</span> {cancelDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                                                    <span className="text-red-700"><span className="font-semibold">الموافق:</span> {cancelDual.gregorian} م</span>
+                                                  </div>
+                                                )}
+                                                {origDual && (
+                                                  <div className="flex flex-col mt-0.5 gap-0 whitespace-nowrap">
+                                                    <span className="text-blue-700"><span className="font-semibold">الموعد السابق:</span> {origDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                                                    {reschedDual && (
+                                                      <span className="text-blue-700"><span className="font-semibold">تاريخ التعديل:</span> {reschedDual.hijri.replace(/\s*هـ\s*$/, "")} هـ | {reschedDual.gregorian} م</span>
+                                                    )}
+                                                  </div>
                                                 )}
                                               </div>
-                                            )}
-                                          </div>
-                                        ) : <span className="text-muted-foreground">—</span>}
-                                      </td>
-                                      <td className="px-3 py-2.5 text-xs text-foreground align-top">{b.chalet_name ?? "—"}</td>
-                                      <td className="px-3 py-2.5 text-center align-top">
-                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${st.cls}`}>
-                                          {st.label}
-                                        </span>
-                                      </td>
-                                      <td className="px-3 py-2.5 text-xs font-semibold text-foreground text-left align-top">
-                                        {toArN(Math.round(Number(b.total_price)))} ر.س
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
+                                            ) : <span className="text-muted-foreground">—</span>}
+                                          </td>
+                                          <td className="px-3 py-2.5 text-xs text-foreground align-top">{b.chalet_name ?? "—"}</td>
+                                          <td className="px-3 py-2.5 text-center align-top">
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${st.cls}`}>
+                                              {st.label}
+                                            </span>
+                                          </td>
+                                          <td className="px-3 py-2.5 text-xs font-semibold text-foreground text-left align-top">
+                                            {toArN(Math.round(Number(b.total_price)))} ر.س
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+
+                            {/* ── Pagination ── */}
+                            {totalPages > 1 && (
+                              <div className="flex items-center justify-center gap-1 pt-1 flex-wrap">
+                                <Button variant="outline" size="sm" className="h-7 px-2 text-xs"
+                                  disabled={safePage <= 1}
+                                  onClick={() => setProfileBookingPage(safePage - 1)}>
+                                  السابق
+                                </Button>
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                                  <Button key={p} size="sm"
+                                    variant={p === safePage ? "default" : "outline"}
+                                    className="h-7 w-7 p-0 text-xs"
+                                    onClick={() => setProfileBookingPage(p)}>
+                                    {toArN(p)}
+                                  </Button>
+                                ))}
+                                <Button variant="outline" size="sm" className="h-7 px-2 text-xs"
+                                  disabled={safePage >= totalPages}
+                                  onClick={() => setProfileBookingPage(safePage + 1)}>
+                                  التالي
+                                </Button>
+                              </div>
+                            )}
                           </div>
-                        )
-                      )}
+                        );
+                      })()}
 
                       {/* ── Tab: Contracts ── */}
                       {profileTab === "contracts" && (
