@@ -20283,6 +20283,7 @@ function ContractsArchiveTab() {
   );
   const [contractMonth, setContractMonth] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<"all" | "signed" | "pending" | "cancelled">("all");
+  const [page, setPage] = useState(1);
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -20355,6 +20356,15 @@ function ContractsArchiveTab() {
     if (filterStatus === "all") return filtered;
     return filtered.filter((b) => statusBadge(b).key === filterStatus);
   }, [filtered, filterStatus]);
+
+  const PAGE_SIZE = 10;
+  const totalPages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE));
+  const paginated = useMemo(
+    () => displayed.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [displayed, page],
+  );
+
+  useEffect(() => { setPage(1); }, [search, contractMonth, contractCalView, filterStatus]);
 
   const signed    = bookings.filter((b) => b.contractSigned).length;
   const pending   = bookings.filter((b) => !b.contractSigned && !b.cancelledAt).length;
@@ -20627,7 +20637,7 @@ function ContractsArchiveTab() {
                 </tr>
               </thead>
               <tbody>
-                {displayed.map((b, idx) => {
+                {paginated.map((b, idx) => {
                   const status = statusBadge(b);
                   const dualDt = b.bookingDate ? formatDualDate(b.bookingDate) : null;
                   const waUrl = b.clientPhone
@@ -20731,14 +20741,53 @@ function ContractsArchiveTab() {
           </div>
         )}
         {!isLoading && displayed.length > 0 && (
-          <div className="px-4 py-2.5 border-t border-border/50 bg-muted/20 text-xs text-muted-foreground text-right">
-            {(() => {
-              const d = displayed.length, t = bookings.length;
-              const noun = (n: number) => n >= 3 && n <= 10 ? "عقود" : "عقد";
-              return d === t
-                ? `${toAr(t)} ${noun(t)}`
-                : `عرض ${toAr(d)} ${noun(d)} من أصل ${toAr(t)} ${noun(t)}`;
-            })()}
+          <div className="px-4 py-3 border-t border-border/50 bg-muted/20 flex items-center justify-between gap-2 flex-wrap" dir="rtl">
+            {/* Counter */}
+            <span className="text-xs text-muted-foreground">
+              {(() => {
+                const from = (page - 1) * PAGE_SIZE + 1;
+                const to   = Math.min(page * PAGE_SIZE, displayed.length);
+                const t    = displayed.length;
+                const noun = (n: number) => n >= 3 && n <= 10 ? "عقود" : "عقد";
+                return t <= PAGE_SIZE
+                  ? `${toAr(t)} ${noun(t)}`
+                  : `عرض ${toAr(from)} - ${toAr(to)} من أصل ${toAr(t)} ${noun(t)}`;
+              })()}
+            </span>
+            {/* Page nav */}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={page === 1}
+                  onClick={() => setPage(p => p - 1)}
+                  className="h-7 px-2.5 rounded-lg border border-border text-xs font-semibold bg-background text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >السابق</button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(n => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
+                  .reduce<(number | "…")[]>((acc, n, i, arr) => {
+                    if (i > 0 && (n as number) - (arr[i - 1] as number) > 1) acc.push("…");
+                    acc.push(n);
+                    return acc;
+                  }, [])
+                  .map((n, i) =>
+                    n === "…"
+                      ? <span key={`sep-${i}`} className="text-xs text-muted-foreground px-1">…</span>
+                      : <button
+                          key={n}
+                          type="button"
+                          onClick={() => setPage(n as number)}
+                          className={`h-7 w-7 rounded-lg border text-xs font-semibold transition-colors ${page === n ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-foreground hover:bg-muted"}`}
+                        >{toAr(n as number)}</button>
+                  )}
+                <button
+                  type="button"
+                  disabled={page === totalPages}
+                  onClick={() => setPage(p => p + 1)}
+                  className="h-7 px-2.5 rounded-lg border border-border text-xs font-semibold bg-background text-foreground hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >التالي</button>
+              </div>
+            )}
           </div>
         )}
       </div>
