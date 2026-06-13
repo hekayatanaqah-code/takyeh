@@ -20285,6 +20285,7 @@ function ContractsArchiveTab() {
   const [filterStatus, setFilterStatus] = useState<"all" | "signed" | "pending" | "cancelled">("all");
   const [page, setPage] = useState(1);
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
+  const [dropdownFlipUp, setDropdownFlipUp] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -20689,14 +20690,22 @@ function ContractsArchiveTab() {
                         <div className="relative inline-block">
                           <button
                             type="button"
-                            onClick={() => setOpenDropdownId(openDropdownId === b.id ? null : b.id)}
+                            onClick={(e) => {
+                              if (openDropdownId === b.id) {
+                                setOpenDropdownId(null);
+                              } else {
+                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                setDropdownFlipUp(window.innerHeight - rect.bottom < 200);
+                                setOpenDropdownId(b.id);
+                              }
+                            }}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background text-xs font-medium text-foreground hover:bg-muted/60 hover:border-primary/40 transition-colors"
                           >
                             الإجراءات
                             <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${openDropdownId === b.id ? "rotate-180" : ""}`} />
                           </button>
                           {openDropdownId === b.id && (
-                            <div className="absolute left-0 top-full mt-1 z-50 w-48 rounded-xl border border-border bg-card shadow-lg py-1" style={{ direction: "rtl" }}>
+                            <div className={`absolute left-0 z-50 w-48 rounded-xl border border-border bg-card shadow-lg py-1 ${dropdownFlipUp ? "bottom-full mb-1" : "top-full mt-1"}`} style={{ direction: "rtl" }}>
                               <button
                                 type="button"
                                 onClick={() => { openPrint(b.id); setOpenDropdownId(null); }}
