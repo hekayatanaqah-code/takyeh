@@ -17929,15 +17929,15 @@ function CustomersTab() {
                                             <span className="text-muted-foreground/70">{durationLabel(b.duration_days)} · {PERIOD_LABEL[b.period] ?? b.period}</span>
                                             {cancelDual && (
                                               <div className="flex flex-col mt-0.5 gap-0">
-                                                <span className="text-red-500/80">تم الإلغاء بتاريخ: {cancelDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
-                                                <span className="text-red-400/70">الموافق: {cancelDual.gregorian} م</span>
+                                                <span className="text-red-700"><span className="font-semibold">تم الإلغاء بتاريخ:</span> {cancelDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                                                <span className="text-red-700"><span className="font-semibold">الموافق:</span> {cancelDual.gregorian} م</span>
                                               </div>
                                             )}
                                             {origDual && (
                                               <div className="flex flex-col mt-0.5 gap-0">
-                                                <span className="text-blue-500/80">الموعد السابق: {origDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                                                <span className="text-blue-700"><span className="font-semibold">الموعد السابق:</span> {origDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
                                                 {reschedDual && (
-                                                  <span className="text-blue-400/70">تاريخ التعديل: {reschedDual.hijri.replace(/\s*هـ\s*$/, "")} هـ ({reschedDual.gregorian} م)</span>
+                                                  <span className="text-blue-700"><span className="font-semibold">تاريخ التعديل:</span> {reschedDual.hijri.replace(/\s*هـ\s*$/, "")} هـ | {reschedDual.gregorian} م</span>
                                                 )}
                                               </div>
                                             )}
