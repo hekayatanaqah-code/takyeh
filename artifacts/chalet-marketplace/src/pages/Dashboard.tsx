@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef, useCallback, createContext, useContext, Fragment, type ReactElement } from "react";
+import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
@@ -20284,19 +20285,15 @@ function ContractsArchiveTab() {
   const [contractMonth, setContractMonth] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<"all" | "signed" | "pending" | "cancelled">("all");
   const [page, setPage] = useState(1);
-  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
-  const [dropdownFlipUp, setDropdownFlipUp] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ id: number; right: number; top: number; up: boolean } | null>(null);
 
   useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpenDropdownId(null);
-      }
-    }
-    if (openDropdownId !== null) document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [openDropdownId]);
+    if (!dropdownPos) return;
+    const close = () => setDropdownPos(null);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => { window.removeEventListener("scroll", close, true); window.removeEventListener("resize", close); };
+  }, [dropdownPos]);
 
   const { data: bookings = [], isLoading } = useQuery<OwnerBooking[]>({
     queryKey: ["contractsArchive-bookings"],
@@ -20625,7 +20622,7 @@ function ContractsArchiveTab() {
             <p className="text-sm">{search || filterStatus !== "all" || contractMonth !== "all" ? "لا توجد نتائج مطابقة" : "لا توجد عقود حتى الآن"}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto" ref={dropdownRef}>
+          <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-right">
@@ -20691,54 +20688,66 @@ function ContractsArchiveTab() {
                           <button
                             type="button"
                             onClick={(e) => {
-                              if (openDropdownId === b.id) {
-                                setOpenDropdownId(null);
+                              if (dropdownPos?.id === b.id) {
+                                setDropdownPos(null);
                               } else {
                                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                setDropdownFlipUp(window.innerHeight - rect.bottom < 200);
-                                setOpenDropdownId(b.id);
+                                const up = window.innerHeight - rect.bottom < 200;
+                                setDropdownPos({
+                                  id: b.id,
+                                  right: window.innerWidth - rect.right,
+                                  top: up ? window.innerHeight - rect.top + 4 : rect.bottom + 4,
+                                  up,
+                                });
                               }
                             }}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background text-xs font-medium text-foreground hover:bg-muted/60 hover:border-primary/40 transition-colors"
                           >
                             الإجراءات
-                            <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${openDropdownId === b.id ? "rotate-180" : ""}`} />
+                            <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${dropdownPos?.id === b.id ? "rotate-180" : ""}`} />
                           </button>
-                          {openDropdownId === b.id && (
-                            <div className={`absolute left-0 z-50 w-48 rounded-xl border border-border bg-card shadow-lg py-1 ${dropdownFlipUp ? "bottom-full mb-1" : "top-full mt-1"}`} style={{ direction: "rtl" }}>
-                              <button
-                                type="button"
-                                onClick={() => { openPrint(b.id); setOpenDropdownId(null); }}
-                                className="w-full flex items-center gap-2.5 px-3 py-2 text-right text-sm hover:bg-muted/60 transition-colors text-foreground"
+                          {dropdownPos?.id === b.id && createPortal(
+                            <>
+                              <div className="fixed inset-0 z-[9998]" onClick={() => setDropdownPos(null)} />
+                              <div
+                                className="fixed z-[9999] w-48 rounded-xl border border-border bg-card shadow-xl py-1"
+                                style={{ direction: "rtl", right: dropdownPos.right, ...(dropdownPos.up ? { bottom: dropdownPos.top } : { top: dropdownPos.top }) }}
                               >
-                                📄 عرض العقد
-                              </button>
-                              {waUrl && (
-                                <a
-                                  href={waUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={() => setOpenDropdownId(null)}
+                                <button
+                                  type="button"
+                                  onClick={() => { openPrint(b.id); setDropdownPos(null); }}
                                   className="w-full flex items-center gap-2.5 px-3 py-2 text-right text-sm hover:bg-muted/60 transition-colors text-foreground"
                                 >
-                                  💬 إرسال عبر الواتساب
-                                </a>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => { openPrint(b.id); setOpenDropdownId(null); }}
-                                className="w-full flex items-center gap-2.5 px-3 py-2 text-right text-sm hover:bg-muted/60 transition-colors text-foreground"
-                              >
-                                🖨️ طباعة العقد
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { copyLink(b.id); setOpenDropdownId(null); }}
-                                className="w-full flex items-center gap-2.5 px-3 py-2 text-right text-sm hover:bg-muted/60 transition-colors text-foreground"
-                              >
-                                🔗 نسخ رابط العقد
-                              </button>
-                            </div>
+                                  📄 عرض العقد
+                                </button>
+                                {waUrl && (
+                                  <a
+                                    href={waUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => setDropdownPos(null)}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-right text-sm hover:bg-muted/60 transition-colors text-foreground"
+                                  >
+                                    💬 إرسال عبر الواتساب
+                                  </a>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => { openPrint(b.id); setDropdownPos(null); }}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-right text-sm hover:bg-muted/60 transition-colors text-foreground"
+                                >
+                                  🖨️ طباعة العقد
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { copyLink(b.id); setDropdownPos(null); }}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-right text-sm hover:bg-muted/60 transition-colors text-foreground"
+                                >
+                                  🔗 نسخ رابط العقد
+                                </button>
+                              </div>
+                            </>,
+                            document.body
                           )}
                         </div>
                       </td>
