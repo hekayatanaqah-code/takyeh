@@ -17740,7 +17740,11 @@ function CustomersTab() {
                       </span>
                     )}
                     <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                      {toAr(Number(c.total_bookings))} {src === "service" ? "موعد" : "حجز"}
+                      {(() => {
+                        const n = Number(c.total_bookings);
+                        if (src === "service") return `${toAr(n)} موعد`;
+                        return `${toAr(n)} ${n >= 3 && n <= 10 ? "حجوزات" : "حجز"}`;
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -17844,7 +17848,12 @@ function CustomersTab() {
                   <div className="bg-muted/40 rounded-xl p-4 flex flex-col gap-1">
                     <p className="text-xs text-muted-foreground">آخر حجز</p>
                     <p className="text-base font-bold text-foreground">
-                      {profile.lastBookingDate ? formatDualDate(profile.lastBookingDate).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"}
+                      {profile.lastBookingDate ? (() => {
+                        const d = formatDualDate(profile.lastBookingDate);
+                        return profileCalView === "gregorian"
+                          ? d.gregorian + " م"
+                          : d.hijri.replace(/\s*هـ\s*$/, "") + " هـ";
+                      })() : "—"}
                     </p>
                   </div>
                 </div>
