@@ -17912,9 +17912,12 @@ function CustomersTab() {
                               <tbody className="divide-y divide-border">
                                 {profile.bookings.map((b) => {
                                   const st       = bookingStatus(b);
-                                  const dual     = b.booking_date ? formatDualDate(b.booking_date) : null;
-                                  const cancelDual  = b.cancelled_at   ? formatDualDate(b.cancelled_at)   : null;
-                                  const origDual    = b.original_date  ? formatDualDate(b.original_date)  : null;
+                                  const toRiyadhDate = (ts: string) =>
+                                    new Date(ts).toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
+                                  const dual        = b.booking_date   ? formatDualDate(b.booking_date) : null;
+                                  const cancelDual  = b.cancelled_at   ? formatDualDate(toRiyadhDate(b.cancelled_at))  : null;
+                                  const origDual    = b.original_date  ? formatDualDate(b.original_date.slice(0, 10))  : null;
+                                  const reschedDual = b.rescheduled_at ? formatDualDate(toRiyadhDate(b.rescheduled_at)) : null;
                                   return (
                                     <tr key={b.id} className="hover:bg-muted/20 transition-colors">
                                       <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary align-top">#{toArN(b.id)}</td>
@@ -17925,10 +17928,19 @@ function CustomersTab() {
                                             <span className="text-muted-foreground">{dual.gregorian}</span>
                                             <span className="text-muted-foreground/70">{durationLabel(b.duration_days)} · {PERIOD_LABEL[b.period] ?? b.period}</span>
                                             {cancelDual && (
-                                              <span className="text-red-500/80 mt-0.5">تاريخ الإلغاء: {cancelDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                                              <span className="text-red-500/80 mt-0.5">
+                                                تم الإلغاء بتاريخ: {cancelDual.hijri.replace(/\s*هـ\s*$/, "")} هـ | {cancelDual.gregorian}
+                                              </span>
                                             )}
-                                            {origDual && (
-                                              <span className="text-blue-500/80 mt-0.5">كان أصلاً: {origDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                                            {origDual && reschedDual && (
+                                              <span className="text-blue-500/80 mt-0.5">
+                                                الموعد السابق: {origDual.hijri.replace(/\s*هـ\s*$/, "")} هـ (تاريخ التعديل: {reschedDual.hijri.replace(/\s*هـ\s*$/, "")} هـ | {reschedDual.gregorian})
+                                              </span>
+                                            )}
+                                            {origDual && !reschedDual && (
+                                              <span className="text-blue-500/80 mt-0.5">
+                                                الموعد السابق: {origDual.hijri.replace(/\s*هـ\s*$/, "")} هـ
+                                              </span>
                                             )}
                                           </div>
                                         ) : <span className="text-muted-foreground">—</span>}
