@@ -17491,6 +17491,8 @@ interface BookingRow {
   insurance_fee: string | null;
   insurance_received: boolean | null;
   insurance_refunded: boolean | null;
+  original_date: string | null;
+  rescheduled_at: string | null;
 }
 
 interface CustomerProfile {
@@ -17613,7 +17615,8 @@ function CustomersTab() {
   }, [customers, svcClients]);
 
   const filtered = mergedCustomers.filter((c) => {
-    const matchSearch = c.client_name.includes(search) || c.client_phone.includes(search);
+    const normalizedSearch = search.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+    const matchSearch = c.client_name.includes(normalizedSearch) || c.client_phone.includes(normalizedSearch);
     const matchSource = !showServices || sourceFilter === "all" || c.source === sourceFilter || (sourceFilter === "chalet" && c.source === "both") || (sourceFilter === "service" && c.source === "both");
     return matchSearch && matchSource;
   });
@@ -17852,8 +17855,9 @@ function CustomersTab() {
                   return                            { label: "بحوزة المالك",    cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400" };
                 };
                 const bookingStatus = (b: BookingRow): { label: string; cls: string } => {
-                  if (b.cancelled_at) return { label: "ملغى", cls: "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800" };
-                  return              { label: "نشط",  cls: "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800" };
+                  if (b.cancelled_at)  return { label: "ملغى",           cls: "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800" };
+                  if (b.original_date) return { label: "معاد جدولته",    cls: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800" };
+                  return                      { label: "نشط",             cls: "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800" };
                 };
                 const durationLabel = (days: number) => {
                   if (days === 1) return "يوم واحد";
@@ -17907,27 +17911,35 @@ function CustomersTab() {
                               </thead>
                               <tbody className="divide-y divide-border">
                                 {profile.bookings.map((b) => {
-                                  const st   = bookingStatus(b);
-                                  const dual = b.booking_date ? formatDualDate(b.booking_date) : null;
+                                  const st       = bookingStatus(b);
+                                  const dual     = b.booking_date ? formatDualDate(b.booking_date) : null;
+                                  const cancelDual  = b.cancelled_at   ? formatDualDate(b.cancelled_at)   : null;
+                                  const origDual    = b.original_date  ? formatDualDate(b.original_date)  : null;
                                   return (
                                     <tr key={b.id} className="hover:bg-muted/20 transition-colors">
-                                      <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toArN(b.id)}</td>
-                                      <td className="px-3 py-2.5 text-xs">
+                                      <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary align-top">#{toArN(b.id)}</td>
+                                      <td className="px-3 py-2.5 text-xs align-top">
                                         {dual ? (
                                           <div className="flex flex-col gap-0.5">
                                             <span className="font-medium text-foreground">{dual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
                                             <span className="text-muted-foreground">{dual.gregorian}</span>
                                             <span className="text-muted-foreground/70">{durationLabel(b.duration_days)} · {PERIOD_LABEL[b.period] ?? b.period}</span>
+                                            {cancelDual && (
+                                              <span className="text-red-500/80 mt-0.5">تاريخ الإلغاء: {cancelDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                                            )}
+                                            {origDual && (
+                                              <span className="text-blue-500/80 mt-0.5">كان أصلاً: {origDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                                            )}
                                           </div>
                                         ) : <span className="text-muted-foreground">—</span>}
                                       </td>
-                                      <td className="px-3 py-2.5 text-xs text-foreground">{b.chalet_name ?? "—"}</td>
-                                      <td className="px-3 py-2.5 text-center">
+                                      <td className="px-3 py-2.5 text-xs text-foreground align-top">{b.chalet_name ?? "—"}</td>
+                                      <td className="px-3 py-2.5 text-center align-top">
                                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${st.cls}`}>
                                           {st.label}
                                         </span>
                                       </td>
-                                      <td className="px-3 py-2.5 text-xs font-semibold text-foreground text-left">
+                                      <td className="px-3 py-2.5 text-xs font-semibold text-foreground text-left align-top">
                                         {toArN(Math.round(Number(b.total_price)))} ر.س
                                       </td>
                                     </tr>

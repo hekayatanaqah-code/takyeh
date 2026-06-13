@@ -4404,6 +4404,26 @@ router.get("/customers/:phone", async (req, res) => {
     )
     .orderBy(desc(ownerBookingsTable.bookingDate));
 
+  /* ── Fetch reschedule logs for these bookings ── */
+  const bookingIds = bookingRows.map(b => b.id);
+  const rescheduleLogMap = new Map<number, { oldDate: string; rescheduledAt: string }>();
+  if (bookingIds.length > 0) {
+    const logs = await db
+      .select({
+        bookingId:    ownerRescheduleLogsTable.bookingId,
+        oldDate:      ownerRescheduleLogsTable.oldDate,
+        rescheduledAt: ownerRescheduleLogsTable.rescheduledAt,
+      })
+      .from(ownerRescheduleLogsTable)
+      .where(inArray(ownerRescheduleLogsTable.bookingId, bookingIds))
+      .orderBy(desc(ownerRescheduleLogsTable.rescheduledAt));
+    for (const log of logs) {
+      if (!rescheduleLogMap.has(log.bookingId)) {
+        rescheduleLogMap.set(log.bookingId, { oldDate: log.oldDate, rescheduledAt: String(log.rescheduledAt) });
+      }
+    }
+  }
+
   if (bookingRows.length === 0) return res.status(404).json({ error: "العميل غير موجود" });
 
   /* ── Compute aggregate stats in JS ── */
@@ -4449,6 +4469,8 @@ router.get("/customers/:phone", async (req, res) => {
       insurance_fee:      b.insuranceFee ? String(b.insuranceFee) : null,
       insurance_received: b.insuranceReceived ?? null,
       insurance_refunded: b.insuranceRefunded ?? null,
+      original_date:      rescheduleLogMap.get(b.id)?.oldDate ?? null,
+      rescheduled_at:     rescheduleLogMap.get(b.id)?.rescheduledAt ?? null,
     })),
     note: noteRow?.notes ?? "",
   });
