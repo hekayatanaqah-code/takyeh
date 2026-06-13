@@ -551,9 +551,9 @@ router.get("/profile", async (req, res) => {
          for the same owner (matching by userId in chalet_submissions) */
       let phone = "";
       const oaResult = await db.execute(
-        sql`SELECT full_name, phone, email, whatsapp_news_subscribe, business_type FROM owner_applications WHERE email = ${email} LIMIT 1`
+        sql`SELECT full_name, phone, email, whatsapp_news_subscribe, business_type, bookings_cal_pref, reports_cal_pref FROM owner_applications WHERE email = ${email} LIMIT 1`
       );
-      const oaRow = ((oaResult as any).rows as Array<{ full_name: string; phone: string; email: string; whatsapp_news_subscribe: boolean; business_type: string }>)[0];
+      const oaRow = ((oaResult as any).rows as Array<{ full_name: string; phone: string; email: string; whatsapp_news_subscribe: boolean; business_type: string; bookings_cal_pref: string; reports_cal_pref: string }>)[0];
       if (!oaRow) {
         return res.json({ fullName: req.user?.firstName ?? "", phone: "", email: email, noApplication: true });
       }
@@ -566,7 +566,7 @@ router.get("/profile", async (req, res) => {
         phone = ((csResult as any).rows as Array<{ whatsapp_number: string }>)[0]?.whatsapp_number ?? "";
       }
       console.log(`[GET /owner/profile] owner_applications path: email=${email} phone=${phone}`);
-      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email, whatsappNewsSubscribe: oaRow.whatsapp_news_subscribe ?? false, businessType: oaRow.business_type ?? "both" });
+      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email, whatsappNewsSubscribe: oaRow.whatsapp_news_subscribe ?? false, businessType: oaRow.business_type ?? "both", bookingsCalPref: oaRow.bookings_cal_pref ?? "hijri", reportsCalPref: oaRow.reports_cal_pref ?? "gregorian" });
     }
 
     /* ── Path 2: Replit OIDC owner — look up via chalet_submissions ── */
@@ -713,6 +713,28 @@ router.patch("/profile/whatsapp-subscribe", requireAuth, async (req, res) => {
     return res.json({ ok: true, subscribe: !!subscribe });
   } catch (err) {
     console.error("[PATCH /owner/profile/whatsapp-subscribe]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+/* ── PATCH /owner/profile/calendar-prefs — save calendar preferences ── */
+router.patch("/profile/calendar-prefs", requireAuth, async (req, res) => {
+  try {
+    const currentEmail = await resolveOwnerEmail(req);
+    if (!currentEmail) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
+    const { bookingsCalPref, reportsCalPref } = req.body as { bookingsCalPref?: string; reportsCalPref?: string };
+    const valid = ["hijri", "gregorian"];
+    if (bookingsCalPref && !valid.includes(bookingsCalPref)) return res.status(400).json({ error: "قيمة غير صالحة" });
+    if (reportsCalPref  && !valid.includes(reportsCalPref))  return res.status(400).json({ error: "قيمة غير صالحة" });
+    if (bookingsCalPref !== undefined) {
+      await db.execute(sql`UPDATE owner_applications SET bookings_cal_pref = ${bookingsCalPref} WHERE email = ${currentEmail}`);
+    }
+    if (reportsCalPref !== undefined) {
+      await db.execute(sql`UPDATE owner_applications SET reports_cal_pref = ${reportsCalPref} WHERE email = ${currentEmail}`);
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[PATCH /owner/profile/calendar-prefs]", err);
     return res.status(500).json({ error: "حدث خطأ" });
   }
 });

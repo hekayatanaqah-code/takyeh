@@ -18853,8 +18853,8 @@ export default function Dashboard() {
     enabled: (isAuthenticated || isImpersonating) && !actAsStaff,
   });
 
-  /* ── Owner profile: fetch business_type for conditional rendering ── */
-  const { data: ownerProfile } = useQuery<{ businessType?: string }>({
+  /* ── Owner profile: fetch business_type + calendar prefs ── */
+  const { data: ownerProfile } = useQuery<{ businessType?: string; bookingsCalPref?: string; reportsCalPref?: string }>({
     queryKey: ["owner", "profile-btype"],
     queryFn: async () => {
       const r = await apiFetch("/owner/profile");
@@ -18870,11 +18870,22 @@ export default function Dashboard() {
   /* Cross-owner logic: user has BOTH chalets AND service providers */
   const isCrossOwner = (ownerChalets?.length ?? 0) > 0 && myApprovedProviders.length > 0;
 
-  /* Auto-set dashMode based on businessType when profile loads */
+  /* Auto-set dashMode based on businessType when profile loads; also seed calendar prefs from DB */
   useEffect(() => {
     if (!ownerProfile) return;
     if (businessType === "service" && dashMode === "chalets") setDashMode("services");
     if (businessType === "chalet" && dashMode === "services") setDashMode("chalets");
+    /* Seed calendar prefs from DB — DB is source of truth, overrides localStorage */
+    if (ownerProfile.bookingsCalPref) {
+      const bPref = ownerProfile.bookingsCalPref as "hijri" | "gregorian";
+      localStorage.setItem("dashCalDefaultType", bPref);
+      setDashCalType(bPref);
+    }
+    if (ownerProfile.reportsCalPref) {
+      const rPref = ownerProfile.reportsCalPref as "gregorian" | "hijri";
+      localStorage.setItem("revCalType", rPref);
+      setCalType(rPref);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerProfile]);
 
@@ -20952,6 +20963,14 @@ function OwnerProfileTab() {
   const [waSubscribe,     setWaSubscribe]     = useState(false);
   const [savingSubscribe, setSavingSubscribe] = useState(false);
 
+  /* ── Calendar preferences (seeded from DB via localStorage on load) ── */
+  const [bookingsCalPrefLocal, setBookingsCalPrefLocal] = useState<"hijri" | "gregorian">(
+    (localStorage.getItem("dashCalDefaultType") as "hijri" | "gregorian") ?? "hijri"
+  );
+  const [reportsCalPrefLocal, setReportsCalPrefLocal] = useState<"gregorian" | "hijri">(
+    (localStorage.getItem("revCalType") as "gregorian" | "hijri") ?? "gregorian"
+  );
+
   /* ── page-level state ── */
   const [loading,    setLoading]    = useState(true);
   const [saving,     setSaving]     = useState(false);
@@ -21232,16 +21251,18 @@ function OwnerProfileTab() {
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">التقويم الأساسي للحجوزات</label>
               <div className="flex rounded-lg border border-border overflow-hidden text-sm w-fit">
-                <button
-                  type="button"
-                  onClick={() => { localStorage.setItem("dashCalDefaultType", "hijri"); window.dispatchEvent(new Event("storage")); }}
-                  className={`px-4 py-2 font-semibold transition-colors ${(localStorage.getItem("dashCalDefaultType") ?? "hijri") === "hijri" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
-                >هجري</button>
-                <button
-                  type="button"
-                  onClick={() => { localStorage.setItem("dashCalDefaultType", "gregorian"); window.dispatchEvent(new Event("storage")); }}
-                  className={`px-4 py-2 font-semibold transition-colors ${localStorage.getItem("dashCalDefaultType") === "gregorian" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
-                >ميلادي</button>
+                {(["hijri", "gregorian"] as const).map(v => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => {
+                      setBookingsCalPrefLocal(v);
+                      localStorage.setItem("dashCalDefaultType", v);
+                      apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ bookingsCalPref: v }) });
+                    }}
+                    className={`px-4 py-2 font-semibold transition-colors ${bookingsCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                  >{v === "hijri" ? "هجري" : "ميلادي"}</button>
+                ))}
               </div>
               <p className="text-[11px] text-muted-foreground">يحدد نوع التقويم في تبويب «التقويم» عند بدء الجلسة.</p>
             </div>
@@ -21249,16 +21270,18 @@ function OwnerProfileTab() {
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">التقويم الأساسي للتقارير المالية</label>
               <div className="flex rounded-lg border border-border overflow-hidden text-sm w-fit">
-                <button
-                  type="button"
-                  onClick={() => { localStorage.setItem("revCalType", "gregorian"); window.dispatchEvent(new Event("storage")); }}
-                  className={`px-4 py-2 font-semibold transition-colors ${(localStorage.getItem("revCalType") ?? "gregorian") === "gregorian" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
-                >ميلادي</button>
-                <button
-                  type="button"
-                  onClick={() => { localStorage.setItem("revCalType", "hijri"); window.dispatchEvent(new Event("storage")); }}
-                  className={`px-4 py-2 font-semibold transition-colors ${localStorage.getItem("revCalType") === "hijri" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
-                >هجري</button>
+                {(["gregorian", "hijri"] as const).map(v => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => {
+                      setReportsCalPrefLocal(v);
+                      localStorage.setItem("revCalType", v);
+                      apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ reportsCalPref: v }) });
+                    }}
+                    className={`px-4 py-2 font-semibold transition-colors ${reportsCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                  >{v === "hijri" ? "هجري" : "ميلادي"}</button>
+                ))}
               </div>
               <p className="text-[11px] text-muted-foreground">يحدد نوع التقويم في تبويب «التقارير المالية» عند بدء الجلسة.</p>
             </div>
