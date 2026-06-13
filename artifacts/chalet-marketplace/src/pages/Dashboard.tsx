@@ -17830,7 +17830,7 @@ function CustomersTab() {
 
                 {/* ── Section A: Basic Info Stats ── */}
                 <div className="grid grid-cols-2 gap-3 mt-1">
-                  {statCard("إجمالي الحجوزات", `${toAr(profile.bookings.length)} حجز`)}
+                  {statCard("إجمالي الحجوزات", (() => { const n = profile.bookings.length; return `${toAr(n)} ${n >= 3 && n <= 10 ? "حجوزات" : "حجز"}`; })())}
                   {statCard("إجمالي الإيراد",  `${toAr(Math.round(profile.totalRevenue))} ر.س`)}
                 </div>
                 {/* ID number + last booking */}
@@ -17956,10 +17956,10 @@ function CustomersTab() {
                                     const [ys, ms] = profileBookingMonth.split("-").map(Number);
                                     return profileCalView === "hijri"
                                       ? <span>{HIJRI_MONTHS_AR[ms - 1]} {toArN(ys)} هـ</span>
-                                      : <span>{GREGORIAN_MONTHS_AR[ms - 1]} {toArN(ys)}</span>;
+                                      : <span>{GREGORIAN_MONTHS_AR[ms - 1]} {toArN(ys)} م</span>;
                                   })() : <span className="text-muted-foreground">كل الشهور</span>}
                                 </SelectTrigger>
-                                <SelectContent dir="rtl" align="end">
+                                <SelectContent dir="rtl" align="end" className="z-[100]">
                                   <SelectItem value="all"><span className="text-sm">كل الشهور</span></SelectItem>
                                   {monthOptions.map(key => {
                                     const [ys, ms] = key.split("-").map(Number);
@@ -17972,12 +17972,12 @@ function CustomersTab() {
                                       if (start && end) {
                                         const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
                                         const [sY, sM, eY, eM] = [s.getFullYear(), s.getMonth(), e.getFullYear(), e.getMonth()];
-                                        if (sY === eY && sM === eM) secondary = `${gName(sY, sM)} ${toArN(sY)}`;
-                                        else if (sY === eY) secondary = `${gName(sY, sM)} / ${gName(eY, eM)} ${toArN(sY)}`;
-                                        else secondary = `${gName(sY, sM)} ${toArN(sY)} / ${gName(eY, eM)} ${toArN(eY)}`;
+                                        if (sY === eY && sM === eM) secondary = `${gName(sY, sM)} ${toArN(sY)} م`;
+                                        else if (sY === eY) secondary = `${gName(sY, sM)} / ${gName(eY, eM)} ${toArN(sY)} م`;
+                                        else secondary = `${gName(sY, sM)} ${toArN(sY)} م / ${gName(eY, eM)} ${toArN(eY)} م`;
                                       }
                                     } else {
-                                      primary = `${GREGORIAN_MONTHS_AR[ms - 1]} ${toArN(ys)}`;
+                                      primary = `${GREGORIAN_MONTHS_AR[ms - 1]} ${toArN(ys)} م`;
                                       const h1 = toHijriComponents(new Date(ys, ms - 1, 1));
                                       const h2 = toHijriComponents(new Date(ys, ms, 0));
                                       if (h1.year === h2.year && h1.month === h2.month)
@@ -18011,14 +18011,21 @@ function CustomersTab() {
                               <p className="text-sm text-muted-foreground text-center py-6">لا توجد حجوزات في هذا الشهر</p>
                             ) : (
                               <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="w-full text-sm table-fixed">
+                                  <colgroup>
+                                    <col className="w-[52px]" />
+                                    <col className="w-[160px]" />
+                                    <col />
+                                    <col className="w-[64px]" />
+                                    <col className="w-[72px]" />
+                                  </colgroup>
                                   <thead>
                                     <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
-                                      <th className="px-3 py-2 font-medium">رقم الحجز</th>
-                                      <th className="px-3 py-2 font-medium">التاريخ والمدة</th>
-                                      <th className="px-3 py-2 font-medium">الشاليه</th>
-                                      <th className="px-3 py-2 font-medium text-center">الحالة</th>
-                                      <th className="px-3 py-2 font-medium text-left">الإجمالي</th>
+                                      <th className="px-2 py-2 font-medium">رقم الحجز</th>
+                                      <th className="px-2 py-2 font-medium">التاريخ والمدة</th>
+                                      <th className="px-2 py-2 font-medium">الشاليه</th>
+                                      <th className="px-2 py-2 font-medium text-center">الحالة</th>
+                                      <th className="px-2 py-2 font-medium text-left whitespace-nowrap">الإجمالي</th>
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-border">
@@ -18030,8 +18037,8 @@ function CustomersTab() {
                                       const reschedDual= b.rescheduled_at ? formatDualDate(toRiyadhDate(b.rescheduled_at)) : null;
                                       return (
                                         <tr key={b.id} className="hover:bg-muted/20 transition-colors">
-                                          <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary align-top">#{toArN(b.id)}</td>
-                                          <td className="px-3 py-2.5 text-xs align-top">
+                                          <td className="px-2 py-2.5 font-mono text-xs font-bold text-primary align-top">#{toArN(b.id)}</td>
+                                          <td className="px-2 py-2.5 text-xs align-top">
                                             {dual ? (
                                               <div className="flex flex-col gap-0.5">
                                                 <span className="font-medium text-foreground">{dual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
@@ -18054,13 +18061,13 @@ function CustomersTab() {
                                               </div>
                                             ) : <span className="text-muted-foreground">—</span>}
                                           </td>
-                                          <td className="px-3 py-2.5 text-xs text-foreground align-top">{b.chalet_name ?? "—"}</td>
-                                          <td className="px-3 py-2.5 text-center align-top">
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${st.cls}`}>
+                                          <td className="px-2 py-2.5 text-xs text-foreground align-top truncate">{b.chalet_name ?? "—"}</td>
+                                          <td className="px-2 py-2.5 text-center align-top">
+                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-semibold border ${st.cls}`}>
                                               {st.label}
                                             </span>
                                           </td>
-                                          <td className="px-3 py-2.5 text-xs font-semibold text-foreground text-left align-top">
+                                          <td className="px-2 py-2.5 text-xs font-semibold text-foreground text-left align-top whitespace-nowrap">
                                             {toArN(Math.round(Number(b.total_price)))} ر.س
                                           </td>
                                         </tr>
