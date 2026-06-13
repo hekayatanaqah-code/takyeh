@@ -20342,7 +20342,7 @@ function ContractsArchiveTab() {
   }, [bookings, contractMonth, contractCalView]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim().toLowerCase().replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
     if (!q) return monthFiltered;
     return monthFiltered.filter((b) =>
       String(b.id).includes(q) ||
