@@ -17524,6 +17524,7 @@ function CustomersTab() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError]     = useState(false);
   const [profileTab, setProfileTab]   = useState<"bookings" | "contracts" | "insurance">("bookings");
+  const [profileCalView, setProfileCalView]           = useState<"hijri" | "gregorian">("hijri");
   const [profileBookingMonth, setProfileBookingMonth] = useState<string>("all");
   const [profileBookingPage, setProfileBookingPage]   = useState(1);
   const [note, setNote]               = useState("");
@@ -17628,6 +17629,7 @@ function CustomersTab() {
     setProfile(null);
     setProfileError(false);
     setProfileLoading(true);
+    setProfileCalView("hijri");
     setProfileBookingMonth("all");
     setProfileBookingPage(1);
     try {
@@ -17902,39 +17904,23 @@ function CustomersTab() {
                         if (profile.bookings.length === 0)
                           return <p className="text-sm text-muted-foreground text-center py-6">لا توجد حجوزات لهذا العميل</p>;
 
-                        /* ── build month options (overlap logic) ── */
+                        /* ── build month options (start-date key, same as main bookings) ── */
                         const monthKeySet = new Set<string>();
                         profile.bookings.forEach(b => {
-                          if (!b.booking_date) return;
-                          const s = new Date(b.booking_date + "T00:00:00");
-                          const e = new Date(s);
-                          e.setDate(e.getDate() + Math.max((b.duration_days || 1) - 1, 0));
-                          const cur = new Date(s.getFullYear(), s.getMonth(), 1);
-                          const last = new Date(e.getFullYear(), e.getMonth(), 1);
-                          while (cur <= last) {
-                            monthKeySet.add(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`);
-                            cur.setMonth(cur.getMonth() + 1);
-                          }
+                          if (b.booking_date) monthKeySet.add(getBookingMonthKey(b.booking_date, profileCalView));
                         });
-                        const monthOptions = [...monthKeySet].sort((a, b) => b.localeCompare(a));
-                        const getMonthLabel = (key: string) => {
-                          const d = new Date(key + "-01T00:00:00");
-                          const h = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(d);
-                          const g = new Intl.DateTimeFormat("ar-SA", { month: "long", year: "numeric", calendar: "gregory" }).format(d);
-                          return `${h} | ${g}`;
-                        };
+                        const monthOptions = [...monthKeySet].sort((a, b) => a.localeCompare(b)); // ascending: oldest first
 
-                        /* ── filter by selected month (overlap) ── */
-                        const filteredBkgs = profileBookingMonth === "all" ? profile.bookings : profile.bookings.filter(b => {
-                          if (!b.booking_date) return false;
-                          const s = new Date(b.booking_date + "T00:00:00");
-                          const e = new Date(s);
-                          e.setDate(e.getDate() + Math.max((b.duration_days || 1) - 1, 0));
-                          const [y, m] = profileBookingMonth.split("-").map(Number);
-                          const ms = new Date(y, m - 1, 1);
-                          const me = new Date(y, m, 0);
-                          return s <= me && e >= ms;
-                        });
+                        /* ── filter by selected month ── */
+                        const filteredBkgs = profileBookingMonth === "all"
+                          ? profile.bookings
+                          : profile.bookings.filter(b =>
+                              b.booking_date && getBookingMonthKey(b.booking_date, profileCalView) === profileBookingMonth
+                            );
+
+                        /* ── pluralization ── */
+                        const bkgCountLabel = (n: number) =>
+                          n >= 3 && n <= 10 ? `${toArN(n)} حجوزات` : `${toArN(n)} حجز`;
 
                         /* ── pagination ── */
                         const PAGE_SIZE = 10;
@@ -17945,23 +17931,78 @@ function CustomersTab() {
 
                         return (
                           <div className="flex flex-col gap-3">
-                            {/* ── Month filter bar ── */}
+                            {/* ── Filter bar: identical to main bookings component ── */}
                             <div className="flex items-center gap-2 flex-wrap">
+                              {/* هجري / ميلادي toggle */}
+                              <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
+                                {(["hijri", "gregorian"] as const).map((mode) => (
+                                  <button
+                                    key={mode}
+                                    onClick={() => { setProfileCalView(mode); setProfileBookingMonth("all"); setProfileBookingPage(1); }}
+                                    className={`text-xs px-3 py-1.5 h-9 font-medium transition-colors ${
+                                      profileCalView === mode
+                                        ? "bg-primary text-primary-foreground"
+                                        : "bg-background text-muted-foreground hover:bg-muted"
+                                    }`}
+                                  >
+                                    {mode === "hijri" ? "هجري" : "ميلادي"}
+                                  </button>
+                                ))}
+                              </div>
+                              {/* Month dropdown */}
                               <Select value={profileBookingMonth} onValueChange={v => { setProfileBookingMonth(v); setProfileBookingPage(1); }}>
-                                <SelectTrigger className="h-8 text-xs w-auto min-w-[200px]">
-                                  <SelectValue placeholder="تصفية حسب الشهر" />
+                                <SelectTrigger className="h-9 text-xs font-semibold rounded-xl border-border min-w-[160px] max-w-[220px] shrink-0" dir="rtl">
+                                  {profileBookingMonth !== "all" ? (() => {
+                                    const [ys, ms] = profileBookingMonth.split("-").map(Number);
+                                    return profileCalView === "hijri"
+                                      ? <span>{HIJRI_MONTHS_AR[ms - 1]} {toArN(ys)} هـ</span>
+                                      : <span>{GREGORIAN_MONTHS_AR[ms - 1]} {toArN(ys)}</span>;
+                                  })() : <span className="text-muted-foreground">كل الشهور</span>}
                                 </SelectTrigger>
-                                <SelectContent align="end">
-                                  <SelectItem value="all">جميع الأشهر</SelectItem>
-                                  {monthOptions.map(key => (
-                                    <SelectItem key={key} value={key}>{getMonthLabel(key)}</SelectItem>
-                                  ))}
+                                <SelectContent dir="rtl" align="end">
+                                  <SelectItem value="all"><span className="text-sm">كل الشهور</span></SelectItem>
+                                  {monthOptions.map(key => {
+                                    const [ys, ms] = key.split("-").map(Number);
+                                    const gName = (gy: number, gm: number) =>
+                                      new Date(gy, gm, 15).toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
+                                    let primary = "", secondary = "";
+                                    if (profileCalView === "hijri") {
+                                      primary = `${HIJRI_MONTHS_AR[ms - 1]} ${toArN(ys)} هـ`;
+                                      const { start, end } = getHijriMonthGregorianRange(ys, ms);
+                                      if (start && end) {
+                                        const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
+                                        const [sY, sM, eY, eM] = [s.getFullYear(), s.getMonth(), e.getFullYear(), e.getMonth()];
+                                        if (sY === eY && sM === eM) secondary = `${gName(sY, sM)} ${toArN(sY)}`;
+                                        else if (sY === eY) secondary = `${gName(sY, sM)} / ${gName(eY, eM)} ${toArN(sY)}`;
+                                        else secondary = `${gName(sY, sM)} ${toArN(sY)} / ${gName(eY, eM)} ${toArN(eY)}`;
+                                      }
+                                    } else {
+                                      primary = `${GREGORIAN_MONTHS_AR[ms - 1]} ${toArN(ys)}`;
+                                      const h1 = toHijriComponents(new Date(ys, ms - 1, 1));
+                                      const h2 = toHijriComponents(new Date(ys, ms, 0));
+                                      if (h1.year === h2.year && h1.month === h2.month)
+                                        secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
+                                      else if (h1.year === h2.year)
+                                        secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
+                                      else
+                                        secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
+                                    }
+                                    return (
+                                      <SelectItem key={key} value={key}>
+                                        <div className="flex flex-col items-end gap-0.5 py-0.5">
+                                          <span className="font-semibold text-sm leading-tight">{primary}</span>
+                                          {secondary && <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>}
+                                        </div>
+                                      </SelectItem>
+                                    );
+                                  })}
                                 </SelectContent>
                               </Select>
+                              {/* Count */}
                               <span className="text-xs text-muted-foreground">
                                 {filteredBkgs.length === profile.bookings.length
-                                  ? `${toArN(profile.bookings.length)} حجز`
-                                  : `${toArN(filteredBkgs.length)} من ${toArN(profile.bookings.length)} حجز`}
+                                  ? bkgCountLabel(profile.bookings.length)
+                                  : `${bkgCountLabel(filteredBkgs.length)} من ${bkgCountLabel(profile.bookings.length)}`}
                               </span>
                             </div>
 
