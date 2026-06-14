@@ -150,16 +150,24 @@ function ContractLetterhead({
 
       {/* ── Parties ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ padding: 16 }}>
-          <p style={{ margin: "0 0 5px", fontSize: 9, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: "0.5px" }}>الطرف الأول — المؤجِّر</p>
-          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: C.fg }}>{booking.chaletName}</p>
-          {booking.chaletWhatsapp && <p style={{ margin: 0, fontSize: 11, color: C.muted, direction: "ltr", textAlign: "left" }}>{booking.chaletWhatsapp}</p>}
+        {/* Lessor */}
+        <div style={{ padding: "18px 12px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 4 }}>
+          <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: C.primary, letterSpacing: "0.3px" }}>الطرف الأول — المؤجِّر</p>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.fg }}>{booking.chaletName}</p>
+          {booking.chaletWhatsapp && (
+            <p style={{ margin: 0, fontSize: 12, color: C.muted, direction: "ltr" }}>{booking.chaletWhatsapp}</p>
+          )}
         </div>
-        <div style={{ padding: 16, borderRight: `1px solid ${C.border}` }}>
-          <p style={{ margin: "0 0 5px", fontSize: 9, fontWeight: 700, color: C.emerald, textTransform: "uppercase", letterSpacing: "0.5px" }}>الطرف الثاني — المستأجِر</p>
-          <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 600, color: C.fg }}>{signedData.signerName || "—"}</p>
-          <p style={{ margin: "0 0 2px", fontSize: 11, color: C.muted, direction: "ltr", textAlign: "left" }}>هوية: {signedData.signerId || "—"}</p>
-          {booking.clientPhone && <p style={{ margin: 0, fontSize: 11, color: C.muted, direction: "ltr", textAlign: "left" }}>جوال: {booking.clientPhone}</p>}
+        {/* Tenant */}
+        <div style={{ padding: "18px 12px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 4, borderRight: `1px solid ${C.border}` }}>
+          <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: C.emerald, letterSpacing: "0.3px" }}>الطرف الثاني — المستأجِر</p>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.fg }}>{signedData.signerName || "—"}</p>
+          {booking.clientPhone && (
+            <p style={{ margin: 0, fontSize: 12, color: C.muted, direction: "ltr" }}>جوال: {booking.clientPhone}</p>
+          )}
+          {signedData.signerId && (
+            <p style={{ margin: 0, fontSize: 12, color: C.muted, direction: "ltr" }}>هوية: {toAr(signedData.signerId)}</p>
+          )}
         </div>
       </div>
 
@@ -269,7 +277,7 @@ function ContractLetterhead({
           </div>
         </div>
         {signedAtFormatted && (
-          <p style={{ margin: "16px 0 0", fontSize: 11, color: C.muted, textAlign: "center", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+          <p style={{ margin: "16px 0 0", fontSize: 13, fontWeight: 600, color: "#2a2018", textAlign: "center", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
             ✓ تاريخ التوقيع: {signedAtFormatted} · رقم الحجز: #{toAr(booking.id)}
           </p>
         )}
