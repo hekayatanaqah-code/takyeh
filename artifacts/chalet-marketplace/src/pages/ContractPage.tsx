@@ -118,7 +118,7 @@ function ContractLetterhead({
     <div className="contract-print-area" style={{ background: C.white, borderRadius: 16, border: `1px solid ${C.border}`, overflow: "hidden", direction: "rtl", textAlign: "right" }}>
 
       {/* ── Platform Header ── */}
-      <div style={{ background: C.primary, padding: "14px 24px", textAlign: "center" }}>
+      <div className="contract-header" style={{ background: C.primary, padding: "14px 24px", textAlign: "center" }}>
         <p style={{ margin: 0, fontSize: 22, fontWeight: 900, color: "#ffffff", letterSpacing: "-0.5px" }}>تكية</p>
         <p style={{ margin: "3px 0 0", fontSize: 14, color: "#ffffff" }}>عقد إيجار شاليه رقمي موقَّع</p>
       </div>

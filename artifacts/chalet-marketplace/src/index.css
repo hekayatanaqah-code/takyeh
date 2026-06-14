@@ -316,9 +316,16 @@ input, textarea, select, [contenteditable] {
     color: #1a1209 !important;
   }
 
-  /* Exception: header banner — keep white text on brown background */
-  .contract-print-area > div > div:first-child p {
+  /* Exception: header banner — keep white text on brown background.
+     .contract-header is a DIRECT child of .contract-print-area. */
+  .contract-header p {
     color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .contract-header {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* ② Parties section — phone & ID numbers: larger + bold */
