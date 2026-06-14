@@ -179,9 +179,33 @@ interface OwnerMessageSettings {
 
 const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{من_التاريخ}", "{إلى_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ_م}", "{اسم_اليوم_من}", "{اسم_اليوم_إلى}", "{الفترة_القديمة}", "{الفترة_الجديدة}", "{الإيجار}", "{إجمالي_الخدمات}", "{تفاصيل_الخدمات}", "{الإجمالي_الكلي}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
 
+const PREVIEW_SAMPLE_DATA: Record<string, string> = {
+  "{اسم_العميل}": "محمد بن أحمد",
+  "{اسم_العقار}": "شاليه الياسمين",
+  "{التاريخ}": "الجمعة ٦ صفر ١٤٤٧",
+  "{سبب_الإلغاء}": "ظروف طارئة",
+  "{المبلغ_المسترد}": "٥٠٠",
+  "{سبب_التعديل}": "طلب العميل",
+  "{من_التاريخ}": "٦ صفر ١٤٤٧",
+  "{إلى_التاريخ}": "٨ صفر ١٤٤٧",
+  "{من_التاريخ_م}": "١ أغسطس ٢٠٢٥",
+  "{إلى_التاريخ_م}": "٣ أغسطس ٢٠٢٥",
+  "{اسم_اليوم_من}": "الجمعة",
+  "{اسم_اليوم_إلى}": "الأحد",
+  "{الفترة_القديمة}": "مسائية",
+  "{الفترة_الجديدة}": "كاملة",
+  "{الإيجار}": "٨٠٠",
+  "{إجمالي_الخدمات}": "١٥٠",
+  "{تفاصيل_الخدمات}": "شيشة: ٥٠ ر.س\nمسبح: ١٠٠ ر.س",
+  "{الإجمالي_الكلي}": "٩٥٠",
+  "{التأمين}": "٢٠٠",
+  "{المدفوع}": "٣٠٠",
+  "{المتبقي}": "٨٥٠",
+};
+
 /* ── Canonical default template bodies (shared by settings defaults + RescheduleDialog fallback) ── */
-const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\n💰 تفاصيل المبالغ:\nقيمة الإيجار: {قيمة_الإيجار} ريال.\nقيمة الإضافات: {إجمالي_الخدمات} ريال.\nالإجمالي الكلي: {الإجمالي_الكلي} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
-const DEFAULT_MODIFICATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}، تم تعديل حجزك في {اسم_العقار} بناءً على ({سبب_التعديل}).\n\nالحجز السابق: يوم {اسم_اليوم_من} ({من_التاريخ} | {من_التاريخ_م}) - فترة {الفترة_القديمة}.\n\nالحجز الجديد: يوم {اسم_اليوم_إلى} ({إلى_التاريخ} | {إلى_التاريخ_م}) - فترة {الفترة_الجديدة}.\n\nقيمة الإيجار: {الإيجار} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي للدفع عند الوصول: {المتبقي} ريال.";
+const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل} 👋\nتم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}، ونسعد باستقبالك.\n\n💰 تفاصيل المبالغ:\n• قيمة الإيجار: {الإيجار} ريال\n• قيمة الإضافات: {إجمالي_الخدمات} ريال\n• الإجمالي الكلي: {الإجمالي_الكلي} ريال\n• مبلغ التأمين: {التأمين} ريال\n• المبلغ المدفوع: {المدفوع} ريال\n• المتبقي للدفع عند الوصول: {المتبقي} ريال\n\nشكراً لاختياركم، نتطلع للقائكم قريباً 🏡";
+const DEFAULT_MODIFICATION_TEMPLATE_BODY = "مرحباً {اسم_العميل} 👋\nتم تعديل حجزك في {اسم_العقار} بناءً على ({سبب_التعديل}).\n\n📅 الحجز السابق:\nيوم {اسم_اليوم_من} ({من_التاريخ} | {من_التاريخ_م}) - فترة {الفترة_القديمة}\n\n📅 الحجز الجديد:\nيوم {اسم_اليوم_إلى} ({إلى_التاريخ} | {إلى_التاريخ_م}) - فترة {الفترة_الجديدة}\n\n💰 تفاصيل المبالغ:\n• قيمة الإيجار: {الإيجار} ريال\n• مبلغ التأمين: {التأمين} ريال\n• المبلغ المدفوع: {المدفوع} ريال\n• المتبقي للدفع عند الوصول: {المتبقي} ريال";
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   waEnabled: false,
@@ -189,7 +213,7 @@ const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   bookingConfirmationEnabled: true,
   bookingConfirmationTemplate: DEFAULT_CONFIRMATION_TEMPLATE_BODY,
   changeNoticeEnabled: true,
-  cancellationTemplate: "مرحباً {اسم_العميل}، نود إشعارك بإلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}.\n\nالسبب: {سبب_الإلغاء}.\n\nتفاصيل المبالغ المُستردّة:\n• استرداد العربون: {استرداد_العربون} ريال\n• استرداد التأمين: {استرداد_التأمين} ريال\n• إجمالي المبلغ المسترد: {إجمالي_المسترد} ريال",
+  cancellationTemplate: "مرحباً {اسم_العميل} 👋\nنود إشعارك بأنه تم إلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ}.\n\nالسبب: {سبب_الإلغاء}\n\n💰 المبلغ المُسترد: {المبلغ_المسترد} ريال\n\nنعتذر عن الإزعاج، ونتمنى أن تتاح فرصة أخرى للتعاون 🙏",
   modificationTemplate: DEFAULT_MODIFICATION_TEMPLATE_BODY,
   customTemplates: [],
   attachmentNote: "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
@@ -18411,6 +18435,45 @@ function NotificationSettingsSection() {
   );
 }
 
+function WhatsAppPreview({ text }: { text: string }) {
+  const preview = useMemo(() => {
+    if (!text.trim()) return "";
+    let result = text;
+    Object.entries(PREVIEW_SAMPLE_DATA).forEach(([key, val]) => {
+      result = result.split(key).join(val);
+    });
+    return result;
+  }, [text]);
+
+  if (!preview.trim()) return null;
+
+  return (
+    <div className="mt-3 rounded-2xl bg-[#e5ddd5] dark:bg-zinc-800 p-3 pb-4">
+      <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2.5 flex items-center gap-1.5">
+        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+        معاينة الرسالة في واتساب
+      </p>
+      <div className="flex justify-end">
+        <div
+          className="relative max-w-[88%] rounded-2xl rounded-tr-sm px-3.5 py-2.5 shadow-sm text-sm leading-relaxed whitespace-pre-wrap"
+          dir="rtl"
+          style={{
+            background: "#dcf8c6",
+            color: "#111b21",
+            fontFamily: "'Segoe UI', Tahoma, sans-serif",
+            wordBreak: "break-word",
+          }}
+        >
+          {preview}
+          <span className="block text-left text-[10px] mt-1.5" style={{ color: "#667781" }}>
+            ١١:٣٠ ص ✓✓
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OwnerMessageSettingsTab() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -18534,7 +18597,7 @@ function OwnerMessageSettingsTab() {
           <h3 className="text-base font-bold text-foreground">المتغيرات المدعومة داخل الرسائل</h3>
           <div className="flex flex-wrap gap-2 mt-3">
             {MESSAGE_VARIABLES.map((v) => (
-              <span key={v} className="px-2.5 py-1 rounded-lg bg-muted text-xs font-mono text-foreground" dir="ltr">{v}</span>
+              <span key={v} className="px-3 py-1.5 rounded-full bg-muted text-xs font-mono text-foreground" dir="ltr">{v}</span>
             ))}
           </div>
         </div>
@@ -18554,16 +18617,17 @@ function OwnerMessageSettingsTab() {
             dir="rtl"
             disabled={isReadOnly}
           />
-          <div className="flex flex-wrap gap-1.5 items-center">
+          <div className="flex flex-wrap gap-2 items-center">
             {MESSAGE_VARIABLES.map((v) => (
-              <button key={v} type="button" onClick={() => insertVariable("bookingConfirmationTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
+              <button key={v} type="button" onClick={() => insertVariable("bookingConfirmationTemplate", v)} className="px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-xs font-mono hover:bg-secondary/80 transition-colors" dir="ltr">
                 {v}
               </button>
             ))}
-            <button type="button" onClick={() => resetToDefault("bookingConfirmationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1 rounded-md border border-dashed border-muted-foreground/40 text-[11px] text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+            <button type="button" onClick={() => resetToDefault("bookingConfirmationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1.5 rounded-full border border-dashed border-muted-foreground/40 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
               ↺ استعادة الافتراضي
             </button>
           </div>
+          <WhatsAppPreview text={form.bookingConfirmationTemplate} />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
@@ -18581,16 +18645,17 @@ function OwnerMessageSettingsTab() {
             dir="rtl"
             disabled={isReadOnly}
           />
-          <div className="flex flex-wrap gap-1.5 items-center">
+          <div className="flex flex-wrap gap-2 items-center">
             {MESSAGE_VARIABLES.map((v) => (
-              <button key={v} type="button" onClick={() => insertVariable("cancellationTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
+              <button key={v} type="button" onClick={() => insertVariable("cancellationTemplate", v)} className="px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-xs font-mono hover:bg-secondary/80 transition-colors" dir="ltr">
                 {v}
               </button>
             ))}
-            <button type="button" onClick={() => resetToDefault("cancellationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1 rounded-md border border-dashed border-muted-foreground/40 text-[11px] text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+            <button type="button" onClick={() => resetToDefault("cancellationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1.5 rounded-full border border-dashed border-muted-foreground/40 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
               ↺ استعادة الافتراضي
             </button>
           </div>
+          <WhatsAppPreview text={form.cancellationTemplate} />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
@@ -18607,16 +18672,17 @@ function OwnerMessageSettingsTab() {
             dir="rtl"
             disabled={isReadOnly}
           />
-          <div className="flex flex-wrap gap-1.5 items-center">
+          <div className="flex flex-wrap gap-2 items-center">
             {MESSAGE_VARIABLES.map((v) => (
-              <button key={v} type="button" onClick={() => insertVariable("modificationTemplate", v)} className="px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[11px] font-mono hover:bg-secondary/80" dir="ltr">
+              <button key={v} type="button" onClick={() => insertVariable("modificationTemplate", v)} className="px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-xs font-mono hover:bg-secondary/80 transition-colors" dir="ltr">
                 {v}
               </button>
             ))}
-            <button type="button" onClick={() => resetToDefault("modificationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1 rounded-md border border-dashed border-muted-foreground/40 text-[11px] text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+            <button type="button" onClick={() => resetToDefault("modificationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1.5 rounded-full border border-dashed border-muted-foreground/40 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
               ↺ استعادة الافتراضي
             </button>
           </div>
+          <WhatsAppPreview text={form.modificationTemplate} />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4">
