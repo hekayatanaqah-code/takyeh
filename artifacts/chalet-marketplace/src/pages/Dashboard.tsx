@@ -18880,7 +18880,6 @@ export default function Dashboard() {
     if (ownerProfile.bookingsCalPref) {
       const bPref = ownerProfile.bookingsCalPref as "hijri" | "gregorian";
       localStorage.setItem("dashCalDefaultType", bPref);
-      setDashCalType(bPref);
     }
     if (ownerProfile.reportsCalPref) {
       const rPref = ownerProfile.reportsCalPref as "gregorian" | "hijri";
