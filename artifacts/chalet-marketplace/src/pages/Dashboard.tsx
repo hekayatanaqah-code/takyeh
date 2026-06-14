@@ -18747,10 +18747,25 @@ function OwnerMessageSettingsTab() {
                   <Textarea
                     value={tpl.body}
                     onChange={(e) => updateCustomTemplate(tpl.id, { body: e.target.value })}
-                    rows={3}
+                    rows={5}
                     dir="rtl"
                     disabled={isReadOnly}
+                    className="resize-none"
                   />
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {MESSAGE_VARIABLES.map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => !isReadOnly && updateCustomTemplate(tpl.id, { body: `${tpl.body} ${v}`.trim() })}
+                        className="px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-xs font-mono hover:bg-secondary/80 transition-colors"
+                        dir="ltr"
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                  <WhatsAppPreview text={tpl.body} />
                 </div>
               ))}
             </div>
