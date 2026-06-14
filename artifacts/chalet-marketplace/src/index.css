@@ -296,21 +296,61 @@ input, textarea, select, [contenteditable] {
     width: 100% !important;
     height: 100% !important;
     /* Inner breathing room replaces the removed @page margins */
-    padding: 8mm 9mm !important;
+    padding: 7mm 9mm !important;
     background: #ffffff !important;
     font-family: "Noto Sans Arabic", sans-serif !important;
     direction: rtl !important;
-    /* Scale down slightly so all content fits on one A4 page */
-    font-size: 10.5px !important;
-    zoom: 0.87;
+    /* Slightly larger base so text is sharp — zoom compensates for A4 fit */
+    font-size: 12px !important;
+    zoom: 0.84;
     box-shadow: none !important;
     border-radius: 0 !important;
-    /* Allow content to be visible — never clip */
     overflow: visible !important;
   }
 
+  /* ① Darken ALL text in print area — overrides inline muted/grey colors */
+  .contract-print-area p,
+  .contract-print-area td,
+  .contract-print-area li,
+  .contract-print-area span {
+    color: #1a1209 !important;
+  }
+
+  /* ② Parties section — phone & ID numbers: larger + bold */
+  .contract-print-area > div > div:nth-child(2) p:not(:first-child) {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #1a1209 !important;
+  }
+
+  /* ③ Booking table — label cells: bold + dark */
+  .contract-print-area table td:first-child {
+    font-weight: 700 !important;
+    font-size: 12px !important;
+    color: #1a1209 !important;
+  }
+  /* Booking table — value cells: slightly larger */
+  .contract-print-area table td:last-child {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    color: #1a1209 !important;
+  }
+
+  /* ④ Terms list items: readable size */
+  .contract-print-area li {
+    font-size: 11.5px !important;
+    color: #1a1209 !important;
+    line-height: 1.75 !important;
+  }
+
+  /* ⑤ Signature card content — name, ID label, ID value */
+  .contract-print-area > div > div:last-child p {
+    font-size: 12.5px !important;
+    color: #1a1209 !important;
+  }
+
   /* Scale down images & signature canvas to stay within A4 */
-  .contract-print-area img   { max-height: 90px !important; }
+  .contract-print-area img    { max-height: 90px !important; }
   .contract-print-area canvas { max-height: 90px !important; }
 
   /* Prevent signature + ID card from being split across pages */
