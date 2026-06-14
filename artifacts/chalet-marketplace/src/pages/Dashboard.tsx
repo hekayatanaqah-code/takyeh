@@ -18616,8 +18616,9 @@ function OwnerMessageSettingsTab() {
             rows={5}
             dir="rtl"
             disabled={isReadOnly}
+            className="resize-none"
           />
-          <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex flex-wrap gap-3 items-center">
             {MESSAGE_VARIABLES.map((v) => (
               <button key={v} type="button" onClick={() => insertVariable("bookingConfirmationTemplate", v)} className="px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-xs font-mono hover:bg-secondary/80 transition-colors" dir="ltr">
                 {v}
@@ -18644,8 +18645,9 @@ function OwnerMessageSettingsTab() {
             rows={4}
             dir="rtl"
             disabled={isReadOnly}
+            className="resize-none"
           />
-          <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex flex-wrap gap-3 items-center">
             {MESSAGE_VARIABLES.map((v) => (
               <button key={v} type="button" onClick={() => insertVariable("cancellationTemplate", v)} className="px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-xs font-mono hover:bg-secondary/80 transition-colors" dir="ltr">
                 {v}
@@ -18671,8 +18673,9 @@ function OwnerMessageSettingsTab() {
             rows={6}
             dir="rtl"
             disabled={isReadOnly}
+            className="resize-none"
           />
-          <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex flex-wrap gap-3 items-center">
             {MESSAGE_VARIABLES.map((v) => (
               <button key={v} type="button" onClick={() => insertVariable("modificationTemplate", v)} className="px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-xs font-mono hover:bg-secondary/80 transition-colors" dir="ltr">
                 {v}
