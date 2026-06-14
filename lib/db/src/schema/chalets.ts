@@ -628,6 +628,8 @@ export const chaletServicesTable = pgTable("chalet_services", {
   imageUrl: text("image_url"),
   galleryPhotos: jsonb("gallery_photos").$type<Array<{ url: string; caption: string }>>(),
   isActive: boolean("is_active").notNull().default(true),
+  minPersons: integer("min_persons"),
+  maxPersons: integer("max_persons"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ChaletService = typeof chaletServicesTable.$inferSelect;

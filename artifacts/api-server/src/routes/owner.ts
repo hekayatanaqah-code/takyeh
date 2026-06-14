@@ -4598,7 +4598,7 @@ router.get("/submission-addons/:submissionId", async (req, res) => {
   return res.json(addons);
 });
 
-const galleryPhotoSchema = z.array(z.object({ url: z.string().url(), caption: z.string().max(200) })).max(10).optional();
+const galleryPhotoSchema = z.array(z.object({ url: z.string().min(1), caption: z.string().max(200) })).max(10).optional();
 
 /* POST /owner/chalets/:chaletId/services */
 router.post("/chalets/:chaletId/services", async (req, res) => {
@@ -4611,8 +4611,10 @@ router.post("/chalets/:chaletId/services", async (req, res) => {
     description: z.string().max(500).optional(),
     price: z.number({ invalid_type_error: "السعر يجب أن يكون رقمًا" }).nonnegative("السعر لا يمكن أن يكون سالبًا"),
     unit: z.string().max(100).optional(),
-    imageUrl: z.string().url().optional().or(z.literal("")),
+    imageUrl: z.string().optional().or(z.literal("")),
     galleryPhotos: galleryPhotoSchema,
+    minPersons: z.number().int().nonnegative().nullable().optional(),
+    maxPersons: z.number().int().nonnegative().nullable().optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
@@ -4632,6 +4634,8 @@ router.post("/chalets/:chaletId/services", async (req, res) => {
     unit: body.unit ?? "مرة واحدة",
     imageUrl: body.imageUrl || null,
     galleryPhotos: body.galleryPhotos ?? null,
+    minPersons: body.minPersons ?? null,
+    maxPersons: body.maxPersons ?? null,
   }).returning();
   return res.status(201).json(service);
 });
@@ -4648,9 +4652,11 @@ router.patch("/chalets/:chaletId/services/:serviceId", async (req, res) => {
     description: z.string().max(500).nullable().optional(),
     price: z.number().nonnegative().optional(),
     unit: z.string().max(100).optional(),
-    imageUrl: z.string().url().nullable().optional().or(z.literal("")),
+    imageUrl: z.string().nullable().optional().or(z.literal("")),
     galleryPhotos: galleryPhotoSchema.or(z.null()).optional(),
     isActive: z.boolean().optional(),
+    minPersons: z.number().int().nonnegative().nullable().optional(),
+    maxPersons: z.number().int().nonnegative().nullable().optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
@@ -4670,6 +4676,8 @@ router.patch("/chalets/:chaletId/services/:serviceId", async (req, res) => {
   if (body.imageUrl !== undefined) patch.imageUrl = body.imageUrl || null;
   if (body.galleryPhotos !== undefined) patch.galleryPhotos = body.galleryPhotos;
   if (body.isActive !== undefined) patch.isActive = body.isActive;
+  if (body.minPersons !== undefined) patch.minPersons = body.minPersons;
+  if (body.maxPersons !== undefined) patch.maxPersons = body.maxPersons;
   const [updated] = await db.update(chaletServicesTable).set(patch).where(and(eq(chaletServicesTable.id, serviceId), eq(chaletServicesTable.chaletId, chaletId))).returning();
   if (!updated) return res.status(404).json({ error: "not found" });
   return res.json(updated);

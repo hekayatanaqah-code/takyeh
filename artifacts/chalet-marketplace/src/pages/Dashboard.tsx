@@ -7893,6 +7893,8 @@ interface ChaletServiceRow {
   galleryPhotos: Array<{ url: string; caption: string }> | null;
   isActive: boolean;
   createdAt: string;
+  minPersons: number | null;
+  maxPersons: number | null;
 }
 
 const SERVICE_CATEGORY_OPTIONS = [
@@ -7922,6 +7924,7 @@ const BLANK_SVC_FORM = {
   name: "", category: "", categoryCustom: "", description: "",
   price: "", unit: "رسوم ثابتة", imageUrl: "",
   gallery: [] as Array<{ url: string; caption: string; uploading?: boolean }>,
+  minPersons: "", maxPersons: "",
 };
 
 function ChaletServicesTab() {
@@ -7977,6 +7980,8 @@ function ChaletServicesTab() {
       unit: svc.unit,
       imageUrl: svc.imageUrl ?? "",
       gallery: svc.galleryPhotos ?? [],
+      minPersons: svc.minPersons != null ? String(svc.minPersons) : "",
+      maxPersons: svc.maxPersons != null ? String(svc.maxPersons) : "",
     });
     setFieldErrors({});
     setEditingId(svc.id);
@@ -7995,6 +8000,8 @@ function ChaletServicesTab() {
       unit: form.unit,
       imageUrl: form.imageUrl || undefined,
       galleryPhotos: form.gallery.filter((g) => g.url).map(({ url, caption }) => ({ url, caption })),
+      minPersons: form.unit === "لكل شخص" && form.minPersons !== "" ? Number(form.minPersons) : null,
+      maxPersons: form.unit === "لكل شخص" && form.maxPersons !== "" ? Number(form.maxPersons) : null,
     };
   }
 
@@ -8235,6 +8242,36 @@ function ChaletServicesTab() {
               </div>
             </div>
 
+            {/* Row 2b: min/max persons — only for "لكل شخص" */}
+            {form.unit === "لكل شخص" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">الحد الأدنى للأشخاص <span className="text-muted-foreground/60">(اختياري)</span></label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="مثال: ٢"
+                    value={toAr(form.minPersons)}
+                    onChange={(e) => setForm((f) => ({ ...f, minPersons: e.target.value.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[^\d]/g, "") }))}
+                    className={inputCls("minPersons") + " text-right"}
+                  />
+                  {fieldErrors.minPersons && <p className="text-[11px] text-destructive">{fieldErrors.minPersons}</p>}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">الحد الأقصى للأشخاص <span className="text-muted-foreground/60">(اختياري)</span></label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="مثال: ١٠"
+                    value={toAr(form.maxPersons)}
+                    onChange={(e) => setForm((f) => ({ ...f, maxPersons: e.target.value.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[^\d]/g, "") }))}
+                    className={inputCls("maxPersons") + " text-right"}
+                  />
+                  {fieldErrors.maxPersons && <p className="text-[11px] text-destructive">{fieldErrors.maxPersons}</p>}
+                </div>
+              </div>
+            )}
+
             {/* Row 3: description */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">وصف الخدمة (اختياري)</label>
@@ -8324,7 +8361,11 @@ function ChaletServicesTab() {
               </button>
             </div>
             {saveService.isError && (saveService.error as Error).message !== "validation" && (
-              <p className="text-xs text-destructive text-center">{(saveService.error as Error).message}</p>
+              <p className="text-xs text-destructive text-center">
+                {Object.keys(fieldErrors).length > 0
+                  ? "يوجد خطأ في الحقول — راجع الحقول المُميّزة أعلاه"
+                  : (saveService.error as Error).message}
+              </p>
             )}
           </div>
         )}
