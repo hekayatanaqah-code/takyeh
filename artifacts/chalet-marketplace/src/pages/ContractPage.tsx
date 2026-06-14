@@ -214,7 +214,7 @@ function ContractLetterhead({
               return (
                 <tr style={{ ...rowDiv, background: "rgba(139,94,43,0.08)" }}>
                   <td style={{ ...cell, fontWeight: 700, color: "#8b5e2b" }}>المبلغ المتبقي</td>
-                  <td style={{ ...cellVal, fontWeight: 700, color: _rem > 0 ? "#b45309" : "#059669" }}>{fmtM(String(_rem))} ر.س</td>
+                  <td style={{ ...cellVal, fontWeight: 700, color: _rem > 0 ? "#b45309" : "#059669" }}>{_rem === 0 ? "٠" : fmtM(String(_rem))} ر.س</td>
                 </tr>
               );
             })()}
@@ -578,7 +578,7 @@ export default function ContractPage() {
               return (
                 <Row
                   label="المبلغ المتبقي"
-                  value={`${fmtMoney(String(_rem))} ر.س`}
+                  value={`${_rem === 0 ? "٠" : fmtMoney(String(_rem))} ر.س`}
                   highlight={_rem > 0}
                 />
               );
@@ -601,7 +601,7 @@ export default function ContractPage() {
 
         {/* Signer Info */}
         <div className="bg-white rounded-2xl border border-border shadow-sm p-5 space-y-4">
-          <h2 className="font-bold text-base text-foreground">بيانات الموقِّع</h2>
+          <h2 className="font-bold text-base text-foreground">بيانات المستأجر</h2>
           <div className="space-y-3">
             {wasAutoFilled && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
@@ -614,7 +614,7 @@ export default function ContractPage() {
                 placeholder="أدخل اسمك الكامل"
                 value={fullName}
                 onChange={e => setFullName(e.target.value)}
-                className="text-right"
+                className="text-right px-3"
                 data-no-arabic
               />
             </div>
@@ -629,7 +629,7 @@ export default function ContractPage() {
                     .replace(/\D/g, "")
                     .slice(0, 10)
                 )}
-                className={`text-right ${idNumber.length > 0 && !idValid ? "border-red-400 focus-visible:ring-red-300" : ""}`}
+                className={`text-right px-3 ${idNumber.length > 0 && !idValid ? "border-red-400 focus-visible:ring-red-300" : ""}`}
                 inputMode="numeric"
                 maxLength={10}
               />
@@ -679,7 +679,7 @@ export default function ContractPage() {
           </div>
           {sigError && <p className="text-xs text-red-500">يرجى رسم توقيعك أولاً.</p>}
           {!hasSig && !sigError && (
-            <p className="text-xs text-muted-foreground text-center">اسحب بإصبعك داخل المستطيل أعلاه للتوقيع</p>
+            <p className="text-xs text-muted-foreground text-center">وقّع بإصبعك داخل المستطيل أعلاه</p>
           )}
         </div>
 
