@@ -264,8 +264,22 @@ input, textarea, select, [contenteditable] {
 }
 
 /* ── Contract print styles ─────────────────────────────────── */
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
 @media print {
-  /* Hide all content using visibility so nested children can override */
+  /* Strip browser-added URL / date / title headers & footers */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide all non-contract content */
   body * { visibility: hidden !important; }
 
   /* Reveal only the contract letterhead and all its descendants */
@@ -273,23 +287,39 @@ input, textarea, select, [contenteditable] {
   .contract-print-area * { visibility: visible !important; }
 
   .contract-print-area {
+    /* Fill the A4 page exactly — @page margin:0 removes browser chrome */
     position: fixed !important;
-    inset: 0 !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
     width: 100% !important;
+    height: 100% !important;
+    /* Inner breathing room replaces the removed @page margins */
+    padding: 8mm 9mm !important;
     background: #ffffff !important;
     font-family: "Noto Sans Arabic", sans-serif !important;
     direction: rtl !important;
-    padding: 24px !important;
-    font-size: 13px !important;
+    /* Scale down slightly so all content fits on one A4 page */
+    font-size: 10.5px !important;
+    zoom: 0.87;
     box-shadow: none !important;
     border-radius: 0 !important;
+    /* Allow content to be visible — never clip */
     overflow: visible !important;
   }
 
-  /* Preserve inline hex colors — do NOT override color/background globally */
-  .contract-print-area img { max-height: 120px !important; }
+  /* Scale down images & signature canvas to stay within A4 */
+  .contract-print-area img   { max-height: 90px !important; }
+  .contract-print-area canvas { max-height: 90px !important; }
 
-  /* Keep UI-only controls hidden even within the print area */
+  /* Prevent signature + ID card from being split across pages */
+  .contract-print-area > div > div:last-child {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Keep UI-only controls fully hidden */
   .contract-no-print { display: none !important; visibility: hidden !important; }
 }
 
