@@ -210,8 +210,8 @@ const PREVIEW_SAMPLE_DATA: Record<string, string> = {
 };
 
 /* ── Canonical default template bodies (shared by settings defaults + RescheduleDialog fallback) ── */
-const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً بك {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} ليوم {اسم_اليوم_من} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\nالفترة: {الفترة_الجديدة}\n\n💰 تفاصيل المبالغ:\n• قيمة الإيجار: {الإيجار} ريال\n• قيمة الإضافات: {إجمالي_الخدمات} ريال\n• الإجمالي الكلي: {الإجمالي_الكلي} ريال\n• مبلغ التأمين: {التأمين} ريال\n• المبلغ المدفوع: {المدفوع} ريال\n• المتبقي للدفع عند الوصول: {المتبقي} ريال\n\nشكراً لاختياركم، نتطلع للقائكم قريباً 🏡";
-const DEFAULT_MODIFICATION_TEMPLATE_BODY = "مرحباً {اسم_العميل} 👋\nتم تعديل حجزك في {اسم_العقار} بناءً على ({سبب_التعديل}).\n\n📅 الحجز السابق:\nيوم {اسم_اليوم_من} ({من_التاريخ} | {من_التاريخ_م}) - فترة {الفترة_القديمة}\n\n📅 الحجز الجديد:\nيوم {اسم_اليوم_إلى} ({إلى_التاريخ} | {إلى_التاريخ_م}) - فترة {الفترة_الجديدة}\n\n💰 تفاصيل المبالغ:\n• قيمة الإيجار: {الإيجار} ريال\n• مبلغ التأمين: {التأمين} ريال\n• المبلغ المدفوع: {المدفوع} ريال\n• المتبقي للدفع عند الوصول: {المتبقي} ريال";
+const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}\n\nتم تأكيد حجزك في {اسم_العقار}\nفي يوم {اسم_اليوم_من} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\nالفترة: {الفترة_الجديدة}\n\n• الإيجار: {الإيجار} ريال\n• الإضافات: {إجمالي_الخدمات} ريال\n• الإجمالي: {الإجمالي_الكلي} ريال\n• التأمين: {التأمين} ريال\n• المدفوع: {المدفوع} ريال\n• المتبقي للدفع عند الوصول: {المتبقي} ريال\n\nشكراً لاختياركم 🎉\nأمنياتنا لكم بإقامة مانعة 🙏";
+const DEFAULT_MODIFICATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}،\nتم تعديل حجزك في {اسم_العقار}\nبناءً على ({سبب_التعديل}).\n\nالحجز السابق: يوم {اسم_اليوم_من} ({من_التاريخ}) | ({من_التاريخ_م}) - فترة {الفترة_القديمة}.\n\nالحجز الجديد: يوم {اسم_اليوم_إلى} ({إلى_التاريخ}) | ({إلى_التاريخ_م}) - فترة {الفترة_الجديدة}.\n\nالإيجار: {الإيجار} ريال.\nالتأمين: {التأمين} ريال.\nالمدفوع: {المدفوع} ريال.\nالمتبقي: {المتبقي} ريال.";
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   waEnabled: false,
@@ -219,7 +219,7 @@ const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   bookingConfirmationEnabled: true,
   bookingConfirmationTemplate: DEFAULT_CONFIRMATION_TEMPLATE_BODY,
   changeNoticeEnabled: true,
-  cancellationTemplate: "مرحباً {اسم_العميل} 👋\nنود إشعارك بأنه تم إلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\n\nالسبب: {سبب_الإلغاء}\n\n💰 المبلغ المُسترد: {المبلغ_المسترد} ريال\n\nنعتذر عن الإزعاج، ونتمنى أن تتاح فرصة أخرى للتعاون 🙏",
+  cancellationTemplate: "مرحباً {اسم_العميل} 👋\nنود إشعارك بأنه تم إلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\n\nالسبب : {سبب_الإلغاء}\n\nالمبلغ المُسترد : {المبلغ_المسترد} ريال\n\nنعتذر عن الإزعاج، ونتمنى أن نراكم في أيام قادمة",
   modificationTemplate: DEFAULT_MODIFICATION_TEMPLATE_BODY,
   customTemplates: [],
   attachmentNote: "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
@@ -18504,13 +18504,13 @@ function OwnerMessageSettingsTab() {
   useEffect(() => {
     if (data) {
       const base = { ...DEFAULT_OWNER_MESSAGE_SETTINGS, ...data };
-      if (!data.bookingConfirmationTemplate?.includes("{التاريخ_م}")) {
+      if (!data.bookingConfirmationTemplate?.includes("أمنياتنا لكم")) {
         base.bookingConfirmationTemplate = DEFAULT_CONFIRMATION_TEMPLATE_BODY;
       }
-      if (!data.cancellationTemplate?.includes("{التاريخ_م}")) {
+      if (!data.cancellationTemplate?.includes("نراكم في أيام قادمة")) {
         base.cancellationTemplate = DEFAULT_OWNER_MESSAGE_SETTINGS.cancellationTemplate;
       }
-      if (!data.modificationTemplate?.includes("{من_التاريخ_م}")) {
+      if (!data.modificationTemplate?.includes("الحجز السابق: يوم")) {
         base.modificationTemplate = DEFAULT_MODIFICATION_TEMPLATE_BODY;
       }
       setForm(base);
