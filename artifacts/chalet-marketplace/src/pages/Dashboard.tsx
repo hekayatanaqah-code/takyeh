@@ -18884,7 +18884,6 @@ export default function Dashboard() {
     if (ownerProfile.reportsCalPref) {
       const rPref = ownerProfile.reportsCalPref as "gregorian" | "hijri";
       localStorage.setItem("revCalType", rPref);
-      setCalType(rPref);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerProfile]);
