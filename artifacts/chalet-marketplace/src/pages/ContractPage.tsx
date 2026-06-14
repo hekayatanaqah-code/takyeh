@@ -119,8 +119,8 @@ function ContractLetterhead({
 
       {/* ── Platform Header ── */}
       <div style={{ background: C.primary, padding: "14px 24px", textAlign: "center" }}>
-        <p style={{ margin: 0, fontSize: 22, fontWeight: 900, color: C.primaryFg, letterSpacing: "-0.5px" }}>تكية</p>
-        <p style={{ margin: "3px 0 0", fontSize: 11, color: "rgba(250,247,242,0.8)" }}>عقد إيجار شاليه رقمي موقَّع</p>
+        <p style={{ margin: 0, fontSize: 22, fontWeight: 900, color: "#ffffff", letterSpacing: "-0.5px" }}>تكية</p>
+        <p style={{ margin: "3px 0 0", fontSize: 14, color: "#ffffff" }}>عقد إيجار شاليه رقمي موقَّع</p>
       </div>
 
       {/* ── Chalet Identity ── */}

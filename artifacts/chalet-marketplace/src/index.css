@@ -316,6 +316,11 @@ input, textarea, select, [contenteditable] {
     color: #1a1209 !important;
   }
 
+  /* Exception: header banner — keep white text on brown background */
+  .contract-print-area > div > div:first-child p {
+    color: #ffffff !important;
+  }
+
   /* ② Parties section — phone & ID numbers: larger + bold */
   .contract-print-area > div > div:nth-child(2) p:not(:first-child) {
     font-size: 13px !important;
