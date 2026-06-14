@@ -18502,7 +18502,19 @@ function OwnerMessageSettingsTab() {
   });
 
   useEffect(() => {
-    if (data) setForm({ ...DEFAULT_OWNER_MESSAGE_SETTINGS, ...data });
+    if (data) {
+      const base = { ...DEFAULT_OWNER_MESSAGE_SETTINGS, ...data };
+      if (!data.bookingConfirmationTemplate?.includes("{التاريخ_م}")) {
+        base.bookingConfirmationTemplate = DEFAULT_CONFIRMATION_TEMPLATE_BODY;
+      }
+      if (!data.cancellationTemplate?.includes("{التاريخ_م}")) {
+        base.cancellationTemplate = DEFAULT_OWNER_MESSAGE_SETTINGS.cancellationTemplate;
+      }
+      if (!data.modificationTemplate?.includes("{من_التاريخ_م}")) {
+        base.modificationTemplate = DEFAULT_MODIFICATION_TEMPLATE_BODY;
+      }
+      setForm(base);
+    }
   }, [data]);
 
   const save = useMutation({
