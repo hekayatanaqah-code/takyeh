@@ -161,7 +161,7 @@ export default function ChaletDetail() {
     staleTime: 60 * 1000,
   });
 
-  interface ChaletAddon { id: number; name: string; category: string | null; description: string | null; price: string; unit: string; }
+  interface ChaletAddon { id: number; name: string; category: string | null; description: string | null; price: string; unit: string; imageUrl: string | null; minPersons: number | null; maxPersons: number | null; }
   const { data: chaletAddons = [] } = useQuery<ChaletAddon[]>({
     queryKey: ["chalet-addons", id],
     queryFn: async () => {
@@ -524,25 +524,41 @@ export default function ChaletDetail() {
             {chaletAddons.length > 0 && (
               <div style={CARD}>
                 <h2 style={SEC}>خدمات إضافية متوفرة عند الطلب</h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
                   {chaletAddons.map(svc => {
                     const isFree = svc.unit === "خدمة مجانية" || Number(svc.price) === 0;
+                    const imgSrc = svc.imageUrl
+                      ? (svc.imageUrl.startsWith("http") ? svc.imageUrl : `${window.location.origin}${svc.imageUrl}`)
+                      : null;
                     return (
-                      <div key={svc.id} style={{ borderRadius: 14, border: "1.5px solid #e5e7eb", background: "#fafafa", padding: "14px 16px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                          <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#111827", lineHeight: 1.4 }}>{svc.name}</p>
-                          <span style={{
-                            background: isFree ? "#f0fdf4" : "#fefce8",
-                            color: isFree ? "#15803d" : "#92400e",
-                            border: `1.5px solid ${isFree ? "#bbf7d0" : "#fde68a"}`,
-                            borderRadius: 8, padding: "3px 9px", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", flexShrink: 0,
-                          }}>
-                            {isFree ? "🎁 خدمة مجانية" : `${Number(svc.price).toLocaleString("ar-SA")} ر.س / ${svc.unit}`}
-                          </span>
-                        </div>
-                        {svc.description && (
-                          <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6b7280", lineHeight: 1.6 }}>{svc.description}</p>
+                      <div key={svc.id} style={{ borderRadius: 14, border: "1.5px solid #e5e7eb", background: "#fafafa", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                        {/* Thumbnail */}
+                        {imgSrc && (
+                          <div style={{ width: "100%", height: 130, overflow: "hidden", flexShrink: 0 }}>
+                            <img
+                              src={imgSrc}
+                              alt={svc.name}
+                              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                            />
+                          </div>
                         )}
+                        {/* Body */}
+                        <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                            <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#111827", lineHeight: 1.4 }}>{svc.name}</p>
+                            <span style={{
+                              background: isFree ? "#f0fdf4" : "#fefce8",
+                              color: isFree ? "#15803d" : "#92400e",
+                              border: `1.5px solid ${isFree ? "#bbf7d0" : "#fde68a"}`,
+                              borderRadius: 8, padding: "3px 9px", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", flexShrink: 0,
+                            }}>
+                              {isFree ? "🎁 مجانية" : `${Number(svc.price).toLocaleString("ar-SA")} ر.س / ${svc.unit}`}
+                            </span>
+                          </div>
+                          {svc.description && (
+                            <p style={{ margin: 0, fontSize: 13, color: "#6b7280", lineHeight: 1.6 }}>{svc.description}</p>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
