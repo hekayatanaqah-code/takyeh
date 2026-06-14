@@ -226,7 +226,11 @@ function ContractLetterhead({
       <div style={{ padding: 20, borderBottom: `1px solid ${C.border}` }}>
         <p style={secHead}>الشروط والأحكام</p>
         {booking.contractTerms ? (
-          <p style={{ margin: 0, fontSize: 11, color: C.fg, lineHeight: 1.7, whiteSpace: "pre-line" }}>{booking.contractTerms}</p>
+          <ul style={{ margin: 0, paddingRight: 16, fontSize: 11, color: C.fg, lineHeight: 1.8, listStyleType: "disc" }}>
+            {booking.contractTerms.split("\n").filter(l => l.trim()).map((line, i) => (
+              <li key={i}>{line.replace(/^#+\s*/, "")}</li>
+            ))}
+          </ul>
         ) : (
           <ul style={{ margin: 0, paddingRight: 16, fontSize: 11, color: C.fg, lineHeight: 1.8 }}>
             <li>يُلزَم المستأجر بالالتزام بمواعيد تسليم الشاليه المتفق عليها.</li>
@@ -255,7 +259,7 @@ function ContractLetterhead({
             )}
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 500, color: C.muted }}>بيانات الموقّع</p>
+            <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 500, color: C.muted }}>بيانات المستأجر</p>
             <div style={{ flex: 1, minHeight: 116, borderRadius: 12, border: `1px solid ${C.border}`, background: C.lightBg, padding: 14, display: "flex", flexDirection: "column", justifyContent: "center" }}>
               <p style={{ margin: "0 0 2px", fontSize: 9, color: C.muted }}>الاسم الكامل</p>
               <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: C.fg }}>{signedData.signerName || "—"}</p>
@@ -480,7 +484,7 @@ export default function ContractPage() {
             onClick={printContract}
           >
             <Printer className="w-4 h-4 me-2" />
-            🖨️ طباعة / حفظ كـ PDF
+            🖨️ طباعة / حفظ بصيغة PDF
           </Button>
         </div>
       </div>
@@ -498,7 +502,7 @@ export default function ContractPage() {
               <CheckCircle className="w-10 h-10 text-green-600" />
             </div>
             <h2 className="text-xl font-bold text-green-800">تم اعتماد العقد ✓</h2>
-            <p className="text-green-700 text-sm">تمّ توقيع عقد الإيجار بنجاح. يمكنك طباعته أو حفظه كـ PDF.</p>
+            <p className="text-green-700 text-sm">تمّ توقيع عقد الإيجار بنجاح. يمكنك طباعته أو حفظه بصيغة PDF.</p>
           </div>
 
           {/* Premium Letterhead */}
@@ -514,10 +518,10 @@ export default function ContractPage() {
             onClick={printContract}
           >
             <Printer className="w-5 h-5 me-2" />
-            🖨️ طباعة / حفظ كـ PDF
+            🖨️ طباعة / حفظ بصيغة PDF
           </Button>
           <p className="text-center text-xs text-muted-foreground pb-4 contract-no-print">
-            اختر "حفظ كـ PDF" في نافذة الطباعة للاحتفاظ بنسخة وإرسالها عبر واتساب.
+            اختر "حفظ بصيغة PDF" في نافذة الطباعة للاحتفاظ بنسخة وإرسالها عبر واتساب.
           </p>
         </div>
       </div>
@@ -589,14 +593,22 @@ export default function ContractPage() {
         {/* Policies */}
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
           <h3 className="font-bold text-sm text-amber-800">📋 الشروط والأحكام</h3>
-          <ul className="text-xs text-amber-900 space-y-1.5 list-disc list-inside leading-relaxed">
-            <li>يُلزَم المستأجر بالالتزام بمواعيد تسليم الشاليه المتفق عليها.</li>
-            <li>مبلغ التأمين يُستردّ كاملاً في حالة عدم وجود أضرار أو مخالفات.</li>
-            <li>يُحظر إقامة الحفلات الصاخبة أو الأنشطة التي تُخل بالنظام العام.</li>
-            <li>التدخين ممنوع داخل الشاليه بالكامل.</li>
-            <li>في حالة الإلغاء، يُطبَّق نظام الاسترداد وفق سياسة مالك العقار.</li>
-            <li>المستأجر مسؤول عن أي أضرار تحدث خلال فترة الإقامة.</li>
-          </ul>
+          {booking.contractTerms ? (
+            <ul className="text-xs text-amber-900 space-y-1.5 list-disc list-inside leading-relaxed">
+              {booking.contractTerms.split("\n").filter(l => l.trim()).map((line, i) => (
+                <li key={i}>{line.replace(/^#+\s*/, "")}</li>
+              ))}
+            </ul>
+          ) : (
+            <ul className="text-xs text-amber-900 space-y-1.5 list-disc list-inside leading-relaxed">
+              <li>يُلزَم المستأجر بالالتزام بمواعيد تسليم الشاليه المتفق عليها.</li>
+              <li>مبلغ التأمين يُستردّ كاملاً في حالة عدم وجود أضرار أو مخالفات.</li>
+              <li>يُحظر إقامة الحفلات الصاخبة أو الأنشطة التي تُخل بالنظام العام.</li>
+              <li>التدخين ممنوع داخل الشاليه بالكامل.</li>
+              <li>في حالة الإلغاء، يُطبَّق نظام الاسترداد وفق سياسة مالك العقار.</li>
+              <li>المستأجر مسؤول عن أي أضرار تحدث خلال فترة الإقامة.</li>
+            </ul>
+          )}
         </div>
 
         {/* Signer Info */}
