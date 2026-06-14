@@ -177,12 +177,13 @@ interface OwnerMessageSettings {
   attachmentNote: string;
 }
 
-const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{التاريخ}", "{من_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ}", "{إلى_التاريخ_م}", "{الفترة}", "{اسم_اليوم_من}", "{اسم_اليوم_إلى}", "{الفترة_القديمة}", "{الفترة_الجديدة}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{الإيجار}", "{إجمالي_الخدمات}", "{تفاصيل_الخدمات}", "{الإجمالي_الكلي}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
+const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{اسم_اليوم_من}", "{التاريخ}", "{التاريخ_م}", "{من_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ}", "{إلى_التاريخ_م}", "{اسم_اليوم_إلى}", "{الفترة}", "{الفترة_الجديدة}", "{الفترة_القديمة}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{الإيجار}", "{إجمالي_الخدمات}", "{تفاصيل_الخدمات}", "{الإجمالي_الكلي}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
 
 const PREVIEW_SAMPLE_DATA: Record<string, string> = {
   "{اسم_العميل}": "محمد بن أحمد",
   "{اسم_العقار}": "شاليه الياسمين",
-  "{التاريخ}": "الجمعة ٦ صفر ١٤٤٧",
+  "{التاريخ}": "٦ صفر ١٤٤٧",
+  "{التاريخ_م}": "١ أغسطس ٢٠٢٥",
   "{من_التاريخ}": "٦ صفر ١٤٤٧",
   "{من_التاريخ_م}": "١ أغسطس ٢٠٢٥",
   "{إلى_التاريخ}": "٨ صفر ١٤٤٧",
@@ -209,7 +210,7 @@ const PREVIEW_SAMPLE_DATA: Record<string, string> = {
 };
 
 /* ── Canonical default template bodies (shared by settings defaults + RescheduleDialog fallback) ── */
-const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل} 👋\nتم تأكيد حجزك في {اسم_العقار}، ونسعد باستقبالك.\n\n📅 التاريخ: {من_التاريخ} هـ | {من_التاريخ_م} م\n🕐 الفترة: {الفترة}\n\n💰 تفاصيل المبالغ:\n• قيمة الإيجار: {الإيجار} ريال\n• قيمة الإضافات: {إجمالي_الخدمات} ريال\n• الإجمالي الكلي: {الإجمالي_الكلي} ريال\n• مبلغ التأمين: {التأمين} ريال\n• المبلغ المدفوع: {المدفوع} ريال\n• المتبقي للدفع عند الوصول: {المتبقي} ريال\n\nشكراً لاختياركم، نتطلع للقائكم قريباً 🏡";
+const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً بك {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} ليوم {اسم_اليوم_من} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\nالفترة: {الفترة_الجديدة}\n\n💰 تفاصيل المبالغ:\n• قيمة الإيجار: {الإيجار} ريال\n• قيمة الإضافات: {إجمالي_الخدمات} ريال\n• الإجمالي الكلي: {الإجمالي_الكلي} ريال\n• مبلغ التأمين: {التأمين} ريال\n• المبلغ المدفوع: {المدفوع} ريال\n• المتبقي للدفع عند الوصول: {المتبقي} ريال\n\nشكراً لاختياركم، نتطلع للقائكم قريباً 🏡";
 const DEFAULT_MODIFICATION_TEMPLATE_BODY = "مرحباً {اسم_العميل} 👋\nتم تعديل حجزك في {اسم_العقار} بناءً على ({سبب_التعديل}).\n\n📅 الحجز السابق:\nيوم {اسم_اليوم_من} ({من_التاريخ} | {من_التاريخ_م}) - فترة {الفترة_القديمة}\n\n📅 الحجز الجديد:\nيوم {اسم_اليوم_إلى} ({إلى_التاريخ} | {إلى_التاريخ_م}) - فترة {الفترة_الجديدة}\n\n💰 تفاصيل المبالغ:\n• قيمة الإيجار: {الإيجار} ريال\n• مبلغ التأمين: {التأمين} ريال\n• المبلغ المدفوع: {المدفوع} ريال\n• المتبقي للدفع عند الوصول: {المتبقي} ريال";
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
@@ -218,7 +219,7 @@ const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   bookingConfirmationEnabled: true,
   bookingConfirmationTemplate: DEFAULT_CONFIRMATION_TEMPLATE_BODY,
   changeNoticeEnabled: true,
-  cancellationTemplate: "مرحباً {اسم_العميل} 👋\nنود إشعارك بأنه تم إلغاء حجزك في {اسم_العقار}.\n\n📅 التاريخ: {من_التاريخ} هـ | {من_التاريخ_م} م\n\nالسبب: {سبب_الإلغاء}\n\n💰 المبلغ المُسترد: {المبلغ_المسترد} ريال\n\nنعتذر عن الإزعاج، ونتمنى أن تتاح فرصة أخرى للتعاون 🙏",
+  cancellationTemplate: "مرحباً {اسم_العميل} 👋\nنود إشعارك بأنه تم إلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\n\nالسبب: {سبب_الإلغاء}\n\n💰 المبلغ المُسترد: {المبلغ_المسترد} ريال\n\nنعتذر عن الإزعاج، ونتمنى أن تتاح فرصة أخرى للتعاون 🙏",
   modificationTemplate: DEFAULT_MODIFICATION_TEMPLATE_BODY,
   customTemplates: [],
   attachmentNote: "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
@@ -4806,10 +4807,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     const _bRemaining = Math.max(0, _bTotal + insuranceFee - _bPaid);
     const _fmt = (n: number) => n > 0 ? n.toLocaleString("ar-SA") : "—";
     const totalRefund = depositRefund + insuranceFee;
+    const _periodAr = (() => { const p = b.period; return p === "morning" ? "صباحية" : p === "evening" ? "مسائية" : p === "full_day" ? "يوم كامل" : "—"; });
     return templateBody
       .replace(/\{اسم_العميل\}/g, b.clientName ?? "")
       .replace(/\{اسم_العقار\}/g, getBookingChaletName(b))
-      .replace(/\{التاريخ\}/g, getBookingDateText(b))
+      .replace(/\{التاريخ\}/g, startHijri)
+      .replace(/\{التاريخ_م\}/g, startGreg)
       .replace(/\{سبب_الإلغاء\}/g, reason || b.cancelReason || "حسب الاتفاق")
       .replace(/\{اسم_اليوم_من\}/g, getArabicDayName(b.bookingDate))
       .replace(/\{اسم_اليوم_إلى\}/g, getArabicDayName(endStr))
@@ -4822,9 +4825,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       .replace(/\{المدفوع\}/g, _fmt(_bPaid))
       .replace(/\{المتبقي\}/g, _fmt(_bRemaining))
       .replace(/\{سبب_التعديل\}/g, reason || "—")
-      .replace(/\{الفترة\}/g, (() => { const p = b.period; return p === "morning" ? "صباحية" : p === "evening" ? "مسائية" : p === "full_day" ? "يوم كامل" : "—"; })())
+      .replace(/\{الفترة\}/g, _periodAr())
       .replace(/\{الفترة_القديمة\}/g, "—")
-      .replace(/\{الفترة_الجديدة\}/g, "—")
+      .replace(/\{الفترة_الجديدة\}/g, _periodAr())
       .replace(/\{استرداد_العربون\}/g, _fmt(depositRefund))
       .replace(/\{استرداد_التأمين\}/g, _fmt(insuranceFee))
       .replace(/\{إجمالي_المسترد\}/g, _fmt(totalRefund))
@@ -4863,10 +4866,12 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       if (_bAddonsTotal > 0) lines.push(`إجمالي الخدمات: ${_bAddonsTotal.toLocaleString("ar-SA")} ريال.`);
       return lines.join("\n") + "\n";
     })();
+    const _periodAr = (() => { const p = b.period; return p === "morning" ? "صباحية" : p === "evening" ? "مسائية" : p === "full_day" ? "يوم كامل" : "—"; });
     const msg = templateBody
       .replace(/\{اسم_العميل\}/g, b.clientName ?? "")
       .replace(/\{اسم_العقار\}/g, getBookingChaletName(b))
-      .replace(/\{التاريخ\}/g, getBookingDateText(b))
+      .replace(/\{التاريخ\}/g, startHijri)
+      .replace(/\{التاريخ_م\}/g, startGreg)
       .replace(/\{سبب_الإلغاء\}/g, reason || b.cancelReason || "حسب الاتفاق")
       .replace(/\{اسم_اليوم_من\}/g, getArabicDayName(b.bookingDate))
       .replace(/\{اسم_اليوم_إلى\}/g, getArabicDayName(endStr))
@@ -4883,9 +4888,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       .replace(/\{المدفوع\}/g, _fmt(_bPaid))
       .replace(/\{المتبقي\}/g, _fmt(_bRemaining))
       .replace(/\{سبب_التعديل\}/g, reason || "—")
-      .replace(/\{الفترة\}/g, (() => { const p = b.period; return p === "morning" ? "صباحية" : p === "evening" ? "مسائية" : p === "full_day" ? "يوم كامل" : "—"; })())
+      .replace(/\{الفترة\}/g, _periodAr())
       .replace(/\{الفترة_القديمة\}/g, "—")
-      .replace(/\{الفترة_الجديدة\}/g, "—")
+      .replace(/\{الفترة_الجديدة\}/g, _periodAr())
       .replace(/\{استرداد_العربون\}/g, (() => {
         const dep = refundAmount != null ? refundAmount : (b.cancelRefundAmount ? Number(b.cancelRefundAmount) : 0);
         return dep > 0 ? dep.toLocaleString("ar-SA") : "—";
