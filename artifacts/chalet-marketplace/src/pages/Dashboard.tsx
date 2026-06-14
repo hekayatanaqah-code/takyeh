@@ -8155,7 +8155,7 @@ function ChaletServicesTab() {
 
             {/* Row 1: name + category */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">اسم الخدمة <span className="text-destructive">*</span></label>
                 <input
                   type="text"
@@ -8167,7 +8167,7 @@ function ChaletServicesTab() {
                 {fieldErrors.name && <p className="text-[11px] text-destructive">{fieldErrors.name}</p>}
               </div>
 
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">الفئة</label>
                 <select
                   value={form.category}
@@ -8181,7 +8181,7 @@ function ChaletServicesTab() {
 
               {/* Custom category input — only when "أخرى" is selected */}
               {form.category === "أخرى" && (
-                <div className="space-y-1 sm:col-span-2">
+                <div className="space-y-2 sm:col-span-2">
                   <label className="text-xs font-medium text-muted-foreground">اسم الفئة المخصصة <span className="text-destructive">*</span></label>
                   <input
                     type="text"
@@ -8198,10 +8198,10 @@ function ChaletServicesTab() {
 
             {/* Row 2: price + unit */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">
-                  السعر (ر.س) <span className="text-destructive">*</span>
-                  {form.unit === "خدمة مجانية" && <span className="text-green-600 mr-1">(صفر للخدمات المجانية)</span>}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                  <span>السعر (ر.س) <span className="text-destructive">*</span></span>
+                  {form.unit === "خدمة مجانية" && <span className="text-green-600">(صفر للخدمات المجانية)</span>}
                 </label>
                 <input
                   type="text"
@@ -8219,7 +8219,7 @@ function ChaletServicesTab() {
                 />
                 {fieldErrors.price && <p className="text-[11px] text-destructive">{fieldErrors.price}</p>}
               </div>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">نوع الرسوم</label>
                 <select
                   value={form.unit}
@@ -8236,7 +8236,7 @@ function ChaletServicesTab() {
             </div>
 
             {/* Row 3: description */}
-            <div className="space-y-1">
+            <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground">وصف الخدمة (اختياري)</label>
               <input
                 type="text"
