@@ -109,7 +109,7 @@ function ServiceImageCarousel({ images, name }: { images: string[]; name: string
       <img
         src={images[idx]}
         alt={name}
-        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "opacity 0.2s" }}
+        style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", transition: "opacity 0.2s" }}
       />
       {images.length > 1 && (
         <>
