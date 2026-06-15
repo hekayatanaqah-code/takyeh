@@ -99,6 +99,48 @@ const SEC: React.CSSProperties = {
   paddingRight: 12,
 };
 
+/* ── Service Image Carousel ── */
+function ServiceImageCarousel({ images, name }: { images: string[]; name: string }) {
+  const [idx, setIdx] = useState(0);
+  if (images.length === 0) return null;
+  const go = (delta: number) => setIdx((i) => (i + delta + images.length) % images.length);
+  return (
+    <div style={{ position: "relative", width: "100%", height: 155, flexShrink: 0, overflow: "hidden", background: "#f3f4f6" }}>
+      <img
+        src={images[idx]}
+        alt={name}
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "opacity 0.2s" }}
+      />
+      {images.length > 1 && (
+        <>
+          <button
+            onClick={() => go(-1)}
+            style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.35)", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", color: "#fff", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
+            aria-label="السابق"
+          >‹</button>
+          <button
+            onClick={() => go(1)}
+            style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.35)", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", color: "#fff", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
+            aria-label="التالي"
+          >›</button>
+          <div style={{ position: "absolute", bottom: 7, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 5 }}>
+            {images.map((_, i) => (
+              <span
+                key={i}
+                onClick={() => setIdx(i)}
+                style={{ width: i === idx ? 18 : 7, height: 7, borderRadius: 4, background: i === idx ? "#fff" : "rgba(255,255,255,0.55)", cursor: "pointer", transition: "all 0.2s", display: "block" }}
+              />
+            ))}
+          </div>
+          <div style={{ position: "absolute", top: 7, right: 8, background: "rgba(0,0,0,0.4)", borderRadius: 6, padding: "2px 7px", fontSize: 11, color: "#fff", fontWeight: 700 }}>
+            {idx + 1}/{images.length}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════
    ChaletDetail
 ═══════════════════════════════════════════════════════════ */
@@ -161,7 +203,7 @@ export default function ChaletDetail() {
     staleTime: 60 * 1000,
   });
 
-  interface ChaletAddon { id: number; name: string; category: string | null; description: string | null; price: string; unit: string; imageUrl: string | null; minPersons: number | null; maxPersons: number | null; }
+  interface ChaletAddon { id: number; name: string; category: string | null; description: string | null; price: string; unit: string; imageUrl: string | null; galleryPhotos: Array<{ url: string; caption: string }> | null; minPersons: number | null; maxPersons: number | null; }
   const { data: chaletAddons = [] } = useQuery<ChaletAddon[]>({
     queryKey: ["chalet-addons", id],
     queryFn: async () => {
@@ -524,26 +566,20 @@ export default function ChaletDetail() {
             {chaletAddons.length > 0 && (
               <div style={CARD}>
                 <h2 style={SEC}>خدمات إضافية متوفرة عند الطلب</h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
                   {chaletAddons.map(svc => {
                     const isFree = svc.unit === "خدمة مجانية" || Number(svc.price) === 0;
-                    const imgSrc = svc.imageUrl
-                      ? (svc.imageUrl.startsWith("http") ? svc.imageUrl : `${window.location.origin}${svc.imageUrl}`)
-                      : null;
+                    const toAbs = (u: string) => u.startsWith("http") ? u : `${window.location.origin}${u}`;
+                    const allImages = [
+                      ...(svc.imageUrl ? [toAbs(svc.imageUrl)] : []),
+                      ...(svc.galleryPhotos ?? []).map(p => toAbs(p.url)),
+                    ];
                     return (
                       <div key={svc.id} style={{ borderRadius: 14, border: "1.5px solid #e5e7eb", background: "#fafafa", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-                        {/* Thumbnail */}
-                        {imgSrc && (
-                          <div style={{ width: "100%", height: 130, overflow: "hidden", flexShrink: 0 }}>
-                            <img
-                              src={imgSrc}
-                              alt={svc.name}
-                              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                            />
-                          </div>
-                        )}
+                        {/* Image carousel */}
+                        <ServiceImageCarousel images={allImages} name={svc.name} />
                         {/* Body */}
-                        <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+                        <div style={{ padding: "13px 15px", display: "flex", flexDirection: "column", gap: 7, flex: 1 }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                             <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#111827", lineHeight: 1.4 }}>{svc.name}</p>
                             <span style={{

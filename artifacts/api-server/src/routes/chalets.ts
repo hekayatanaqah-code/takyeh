@@ -536,6 +536,7 @@ router.get("/:id/services", async (req, res) => {
     price: chaletServicesTable.price,
     unit: chaletServicesTable.unit,
     imageUrl: chaletServicesTable.imageUrl,
+    galleryPhotos: chaletServicesTable.galleryPhotos,
     minPersons: chaletServicesTable.minPersons,
     maxPersons: chaletServicesTable.maxPersons,
   }).from(chaletServicesTable)
