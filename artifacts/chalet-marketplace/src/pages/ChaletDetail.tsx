@@ -105,11 +105,18 @@ function ServiceImageCarousel({ images, name }: { images: string[]; name: string
   if (images.length === 0) return null;
   const go = (delta: number) => setIdx((i) => (i + delta + images.length) % images.length);
   return (
-    <div style={{ position: "relative", width: "100%", height: 155, flexShrink: 0, overflow: "hidden", background: "#f3f4f6" }}>
+    <div style={{ position: "relative", width: "100%", height: 155, flexShrink: 0, overflow: "hidden", background: "#111" }}>
+      {/* Blurred background layer */}
+      <img
+        src={images[idx]}
+        aria-hidden="true"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "blur(14px)", transform: "scale(1.12)", opacity: 0.75, pointerEvents: "none" }}
+      />
+      {/* Foreground image — full dimensions, no crop */}
       <img
         src={images[idx]}
         alt={name}
-        style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", transition: "opacity 0.2s" }}
+        style={{ position: "relative", width: "100%", height: "100%", objectFit: "contain", display: "block", transition: "opacity 0.2s" }}
       />
       {images.length > 1 && (
         <>
