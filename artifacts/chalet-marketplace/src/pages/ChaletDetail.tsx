@@ -105,29 +105,23 @@ function ServiceImageCarousel({ images, name }: { images: string[]; name: string
   if (images.length === 0) return null;
   const go = (delta: number) => setIdx((i) => (i + delta + images.length) % images.length);
   return (
-    <div style={{ position: "relative", width: "100%", height: 155, flexShrink: 0, overflow: "hidden", background: "#111" }}>
-      {/* Blurred background layer */}
-      <img
-        src={images[idx]}
-        aria-hidden="true"
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "blur(14px)", transform: "scale(1.12)", opacity: 0.75, pointerEvents: "none" }}
-      />
-      {/* Foreground image — full dimensions, no crop */}
+    <div style={{ position: "relative", width: "100%", height: 155, flexShrink: 0, overflow: "hidden", background: "#fff" }}>
+      {/* Image — full dimensions, no crop */}
       <img
         src={images[idx]}
         alt={name}
-        style={{ position: "relative", width: "100%", height: "100%", objectFit: "contain", display: "block", transition: "opacity 0.2s" }}
+        style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", transition: "opacity 0.2s" }}
       />
       {images.length > 1 && (
         <>
           <button
             onClick={() => go(-1)}
-            style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.35)", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", color: "#fff", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
+            style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.85)", border: "1px solid #e5e7eb", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", color: "#374151", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.12)" }}
             aria-label="السابق"
           >‹</button>
           <button
             onClick={() => go(1)}
-            style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.35)", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", color: "#fff", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
+            style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.85)", border: "1px solid #e5e7eb", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", color: "#374151", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.12)" }}
             aria-label="التالي"
           >›</button>
           <div style={{ position: "absolute", bottom: 7, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 5 }}>
@@ -135,11 +129,11 @@ function ServiceImageCarousel({ images, name }: { images: string[]; name: string
               <span
                 key={i}
                 onClick={() => setIdx(i)}
-                style={{ width: i === idx ? 18 : 7, height: 7, borderRadius: 4, background: i === idx ? "#fff" : "rgba(255,255,255,0.55)", cursor: "pointer", transition: "all 0.2s", display: "block" }}
+                style={{ width: i === idx ? 18 : 7, height: 7, borderRadius: 4, background: i === idx ? "#8C6246" : "#d1d5db", cursor: "pointer", transition: "all 0.2s", display: "block" }}
               />
             ))}
           </div>
-          <div style={{ position: "absolute", top: 7, right: 8, background: "rgba(0,0,0,0.4)", borderRadius: 6, padding: "2px 7px", fontSize: 11, color: "#fff", fontWeight: 700 }}>
+          <div style={{ position: "absolute", top: 7, right: 8, background: "rgba(0,0,0,0.18)", borderRadius: 6, padding: "2px 7px", fontSize: 11, color: "#374151", fontWeight: 700 }}>
             {idx + 1}/{images.length}
           </div>
         </>
