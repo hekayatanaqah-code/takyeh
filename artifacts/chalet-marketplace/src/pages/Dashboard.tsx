@@ -21224,7 +21224,7 @@ function OwnerProfileTab() {
       .catch(() => setFetchError("تعذّر الاتصال بالخادم"))
       .finally(() => setLoading(false));
     apiFetch("/owner/notification-settings")
-      .then(async (r) => { if (r.ok) { const nd = await r.json(); setWaReviewEnabled(nd.waEnabled ?? false); setWaSupportEnabled(nd.waSupportEnabled ?? false); setWaUnifiedPhone(nd.waPhone ?? ""); } })
+      .then(async (r) => { if (r.ok) { const nd = await r.json(); setWaReviewEnabled(nd.waEnabled ?? false); setWaSupportEnabled(nd.waSupportEnabled ?? false); const raw = nd.waPhone ?? ""; setWaUnifiedPhone(raw.startsWith("966") ? "0" + raw.slice(3) : raw); } })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -21239,6 +21239,10 @@ function OwnerProfileTab() {
 
   function toLatinDigits(val: string): string {
     return val.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+  }
+
+  function toArabicDigits(val: string): string {
+    return val.replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[parseInt(d)]);
   }
 
   async function saveWaSettings() {
@@ -21511,13 +21515,12 @@ function OwnerProfileTab() {
               <label className="text-xs font-semibold text-foreground">رقم الواتساب</label>
               <input
                 type="tel"
-                placeholder="05xxxxxxxx"
-                value={waUnifiedPhone}
-                onChange={(e) => setWaUnifiedPhone(toLatinDigits(e.target.value))}
-                dir="ltr"
-                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="٠٥xxxxxxxx"
+                value={toArabicDigits(waUnifiedPhone)}
+                onChange={(e) => setWaUnifiedPhone(e.target.value)}
+                dir="rtl"
+                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary"
               />
-              <p className="text-[11px] text-muted-foreground">أدخل رقمك كما هو (مثال: 0501234567) — سيُحوَّل تلقائياً إلى الصيغة الدولية عند الحفظ.</p>
             </div>
 
             {/* Save button */}
