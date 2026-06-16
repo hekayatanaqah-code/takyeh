@@ -10893,7 +10893,8 @@ function RevenueTab() {
   const [depositAmount, setDepositAmount] = useState("");
   const [revSubTab, setRevSubTab] = useState<"monthly" | "receivables">("monthly");
   const showAllFuture = revSubTab === "receivables";
-  const [pendingFilterMonth, setPendingFilterMonth] = useState<string>("all");
+  const [pendingFilterMonth, setPendingFilterMonth] = useState<string>("");
+  const [pendingCalType, setPendingCalType] = useState<"hijri" | "gregorian">("gregorian");
 
   const { data: financial, isLoading: finLoading, refetch: refetchFinancial } = useQuery<{
     totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
@@ -10984,27 +10985,67 @@ function RevenueTab() {
       .sort((a, bk) => (a.bookingDate ?? "").localeCompare(bk.bookingDate ?? ""));
   }, [allBookings, unit]);
 
-  /* Month options for pending receivables filter — dual Hijri/Gregorian */
-  const pendingMonthOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const opts: { val: string; label: string }[] = [];
-    for (const bk of allReceivables) {
-      const ym = bk.bookingDate?.slice(0, 7) ?? "";
-      if (!ym || seen.has(ym)) continue;
-      seen.add(ym);
-      const d = new Date(ym + "-15T12:00:00");
-      const hijriPart = d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
-      const gregPart = d.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions);
-      opts.push({ val: ym, label: `${hijriPart} هـ - ${gregPart} م` });
-    }
-    return opts.sort((a, b) => b.val.localeCompare(a.val));
-  }, [allReceivables]);
+  /* Available months for pending receivables filter — keyed by active calendar type */
+  const pendingAvailableMonths = useMemo(() => {
+    const months = new Set<string>();
+    allReceivables.forEach(bk => {
+      if (!bk.bookingDate) return;
+      if (pendingCalType === "gregorian") {
+        months.add(bk.bookingDate.slice(0, 7));
+      } else {
+        const h = toHijriComponents(new Date(bk.bookingDate + "T00:00:00"));
+        months.add(`${h.year}-${String(h.month).padStart(2, "0")}`);
+      }
+    });
+    return Array.from(months).sort().reverse();
+  }, [allReceivables, pendingCalType]);
 
-  const filteredReceivables = useMemo(() =>
-    pendingFilterMonth === "all"
-      ? allReceivables
-      : allReceivables.filter(bk => bk.bookingDate?.startsWith(pendingFilterMonth)),
-  [allReceivables, pendingFilterMonth]);
+  const pendingMonthParts = (ym: string): { primary: string; secondary: string } => {
+    const [y, m] = ym.split("-").map(Number);
+    const gregMonthName = (gy: number, gm: number) =>
+      new Date(gy, gm, 15).toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
+    if (pendingCalType === "hijri") {
+      const primary = `${HIJRI_MONTHS_AR[m - 1]} ${toArN(y)} هـ`;
+      const { start, end } = getHijriMonthGregorianRange(y, m);
+      let secondary = "";
+      if (start && end) {
+        const s = new Date(start + "T00:00:00");
+        const e = new Date(end + "T00:00:00");
+        const sY = s.getFullYear(), sM = s.getMonth();
+        const eY = e.getFullYear(), eM = e.getMonth();
+        if (sY === eY && sM === eM) secondary = `${gregMonthName(sY, sM)} ${toArN(sY)}`;
+        else if (sY === eY) secondary = `${gregMonthName(sY, sM)} / ${gregMonthName(eY, eM)} ${toArN(sY)}`;
+        else secondary = `${gregMonthName(sY, sM)} ${toArN(sY)} / ${gregMonthName(eY, eM)} ${toArN(eY)}`;
+      }
+      return { primary, secondary };
+    }
+    const primary = `${gregMonthName(y, m - 1)} ${toArN(y)}`;
+    const firstDay = new Date(y, m - 1, 1);
+    const lastDay = new Date(y, m, 0);
+    const h1 = toHijriComponents(firstDay);
+    const h2 = toHijriComponents(lastDay);
+    let secondary = "";
+    if (h1.year === h2.year && h1.month === h2.month) {
+      secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
+    } else if (h1.year === h2.year) {
+      secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
+    } else {
+      secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
+    }
+    return { primary, secondary };
+  };
+
+  const filteredReceivables = useMemo(() => {
+    if (!pendingFilterMonth) return allReceivables;
+    if (pendingCalType === "gregorian") {
+      return allReceivables.filter(bk => bk.bookingDate?.startsWith(pendingFilterMonth));
+    }
+    return allReceivables.filter(bk => {
+      if (!bk.bookingDate) return false;
+      const h = toHijriComponents(new Date(bk.bookingDate + "T00:00:00"));
+      return `${h.year}-${String(h.month).padStart(2, "0")}` === pendingFilterMonth;
+    });
+  }, [allReceivables, pendingFilterMonth, pendingCalType]);
 
   const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings", "cancelled"],
@@ -11563,17 +11604,49 @@ function RevenueTab() {
           <div className="flex items-center gap-2 px-5 py-4 border-b border-border flex-wrap">
             <Clock className="w-4 h-4 text-amber-500 shrink-0" />
             <h3 className="font-bold text-sm text-foreground">المبالغ المتبقية على الضيوف</h3>
-            <select
-              value={pendingFilterMonth}
-              onChange={e => setPendingFilterMonth(e.target.value)}
-              className="h-7 text-xs border border-border rounded-lg bg-background text-foreground px-2 focus:outline-none focus:ring-1 focus:ring-primary ms-1"
-              dir="rtl"
-            >
-              <option value="all">جميع الشهور</option>
-              {pendingMonthOptions.map(o => (
-                <option key={o.val} value={o.val}>{o.label}</option>
+            {/* Calendar type toggle */}
+            <div className="flex rounded-lg overflow-hidden border border-border text-xs ms-1">
+              {(["gregorian", "hijri"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => { setPendingCalType(mode); setPendingFilterMonth(""); }}
+                  className={`px-3 py-1.5 font-medium transition-colors ${pendingCalType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                >
+                  {mode === "gregorian" ? "ميلادي" : "هجري"}
+                </button>
               ))}
-            </select>
+            </div>
+            {/* Month dropdown */}
+            {pendingAvailableMonths.length > 0 && (
+              <Select
+                value={pendingFilterMonth || "__all__"}
+                onValueChange={v => setPendingFilterMonth(v === "__all__" ? "" : v)}
+              >
+                <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[150px] max-w-[220px]" dir="rtl">
+                  {pendingFilterMonth ? (
+                    <span className="text-sm font-medium">{pendingMonthParts(pendingFilterMonth).primary}</span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">كل الشهور</span>
+                  )}
+                </SelectTrigger>
+                <SelectContent dir="rtl" align="end">
+                  <SelectItem value="__all__">
+                    <span className="text-sm">كل الشهور</span>
+                  </SelectItem>
+                  {pendingAvailableMonths.map(ym => {
+                    const { primary, secondary } = pendingMonthParts(ym);
+                    return (
+                      <SelectItem key={ym} value={ym}>
+                        <div className="flex flex-col items-end gap-0.5 py-0.5">
+                          <span className="font-semibold text-sm leading-tight">{primary}</span>
+                          {secondary && <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            )}
             {filteredReceivables.length > 0 && (
               <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 rounded-full ms-auto font-semibold">
                 {filteredReceivables.length} ضيف
