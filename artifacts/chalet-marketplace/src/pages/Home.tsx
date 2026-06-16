@@ -3,6 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { MapPin, Search, Calendar, Plus, Minus, Tag, Shield, Clock, Zap, Globe, Heart, CreditCard, Star, Users, Home as HomeIcon, Phone, CheckCircle, Eye, Building2, Wrench } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
+import { toGregorianStr } from "@/lib/hijri";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -91,6 +92,7 @@ export default function Home() {
   const [searchCategory, setSearchCategory] = useState<string>("");
   const [searchSections, setSearchSections] = useState<string>("");
   const [searchPeriod, setSearchPeriod]     = useState<string>("");
+  const todayStr = toGregorianStr(new Date());
   const [bookingDate, setBookingDate]       = useState<string>("");
   const [searchError, setSearchError]       = useState<string>("");
   const [numDays, setNumDays]               = useState<number>(1);
@@ -415,6 +417,7 @@ export default function Home() {
                         onChange={setBookingDate}
                         placeholder="يوم الحجز"
                         label="يوم الحجز"
+                        minDate={todayStr}
                       />
                     </div>
                   </div>
@@ -555,6 +558,7 @@ export default function Home() {
                           onChange={setSvcDate}
                           placeholder="تاريخ الخدمة"
                           label="التاريخ"
+                          minDate={todayStr}
                         />
                       </div>
                     </div>
