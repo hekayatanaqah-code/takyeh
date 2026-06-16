@@ -11543,7 +11543,7 @@ function RevenueTab() {
             <button
               onClick={() => setRevSubTab("monthly")}
               className={`px-3 py-1.5 font-semibold transition-colors ${revSubTab === "monthly" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
-            >التصفية الشهرية</button>
+            >الحسابات الشهرية</button>
             <button
               onClick={() => setRevSubTab("receivables")}
               className={`px-3 py-1.5 font-semibold transition-colors flex items-center gap-1 ${revSubTab === "receivables" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
@@ -11555,29 +11555,75 @@ function RevenueTab() {
             </button>
           </div>
           {/* Calendar toggle — hidden in all-future mode */}
-          {!showAllFuture && <div className="flex rounded-lg border border-border overflow-hidden text-xs">
-            <button
-              onClick={() => { setCalType("gregorian"); localStorage.setItem("revCalType", "gregorian"); setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50); }}
-              className={`px-3 py-1.5 font-medium transition-colors ${calType === "gregorian" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
-            >م</button>
-            <button
-              onClick={() => { setCalType("hijri"); localStorage.setItem("revCalType", "hijri"); setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50); }}
-              className={`px-3 py-1.5 font-medium transition-colors ${calType === "hijri" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
-            >هـ</button>
-          </div>}
+          {!showAllFuture && (
+            <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+              {(["gregorian", "hijri"] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => { setCalType(mode); localStorage.setItem("revCalType", mode); setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50); }}
+                  className={`px-3 py-1.5 font-medium transition-colors ${calType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                >
+                  {mode === "gregorian" ? "ميلادي" : "هجري"}
+                </button>
+              ))}
+            </div>
+          )}
           {/* Month selector — hidden in all-future mode */}
           {!showAllFuture && (calType === "gregorian" ? (
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="h-9 text-sm w-52"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {monthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[150px] max-w-[220px]" dir="rtl">
+                {selectedMonth ? (
+                  <span className="text-sm font-medium">
+                    {(() => { const [y,m] = selectedMonth.split("-").map(Number); return new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",year:"numeric",calendar:"gregory"}); })()}
+                  </span>
+                ) : <span className="text-sm text-muted-foreground">اختر الشهر</span>}
+              </SelectTrigger>
+              <SelectContent dir="rtl" align="end">
+                {monthOptions.map(o => {
+                  const [y,m] = o.val.split("-").map(Number);
+                  const gregPrimary = new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",year:"numeric",calendar:"gregory"});
+                  const h1 = toHijriComponents(new Date(y,m-1,1));
+                  const h2 = toHijriComponents(new Date(y,m,0));
+                  const hijriSec = (h1.year===h2.year&&h1.month===h2.month)
+                    ? `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} هـ`
+                    : h1.year===h2.year
+                      ? `${HIJRI_MONTHS_AR[h1.month-1]} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h1.year)} هـ`
+                      : `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h2.year)} هـ`;
+                  return (
+                    <SelectItem key={o.val} value={o.val}>
+                      <div className="flex flex-col items-end gap-0.5 py-0.5">
+                        <span className="font-semibold text-sm leading-tight">{o.isFuture ? `🔮 ${gregPrimary}` : gregPrimary}</span>
+                        {hijriSec && <span className="text-xs text-muted-foreground leading-tight">{hijriSec}</span>}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           ) : (
             <Select value={selectedHijriMonth} onValueChange={setSelectedHijriMonth}>
-              <SelectTrigger className="h-9 text-sm w-44"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {hijriMonthOptions.map(o => <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>)}
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[150px] max-w-[220px]" dir="rtl">
+                {selectedHijriMonth
+                  ? <span className="text-sm font-medium">{selectedHijriMonth}</span>
+                  : <span className="text-sm text-muted-foreground">اختر الشهر</span>}
+              </SelectTrigger>
+              <SelectContent dir="rtl" align="end">
+                {hijriMonthOptions.map(o => {
+                  const gregYm = hijriToGregorianMap[o.key];
+                  let gregSec = "";
+                  if (gregYm) {
+                    const [gy,gm] = gregYm.split("-").map(Number);
+                    gregSec = new Date(gy,gm-1,15).toLocaleDateString("ar-SA",{month:"long",year:"numeric",calendar:"gregory"});
+                  }
+                  return (
+                    <SelectItem key={o.key} value={o.key}>
+                      <div className="flex flex-col items-end gap-0.5 py-0.5">
+                        <span className="font-semibold text-sm leading-tight">{o.isFuture ? `🔮 ${o.key}` : o.key}</span>
+                        {gregSec && <span className="text-xs text-muted-foreground leading-tight">{gregSec}</span>}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           ))}
