@@ -18429,63 +18429,7 @@ function NotificationSettingsSection() {
     },
   });
 
-  return (
-    <div className="mb-4 border border-border rounded-2xl overflow-hidden bg-card">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-accent/30 transition-colors text-sm"
-      >
-        <Bell className="w-4 h-4 text-muted-foreground" />
-        <span className="font-semibold text-foreground flex-1 text-right">إعدادات الإشعارات</span>
-        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-      </button>
-      {open && (
-        <div className="border-t border-border px-5 py-4 space-y-4">
-          {isLoading ? (
-            <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-          ) : (
-            <>
-              {/* WhatsApp toggle */}
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">إشعارات الواتساب</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">تلقّي إشعار على الواتساب عند كل حجز أو تقييم جديد</p>
-                </div>
-                <Switch checked={waEnabled} onCheckedChange={setWaEnabled} />
-              </div>
-
-              {/* Phone number field (only when enabled) */}
-              {waEnabled && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">رقم الواتساب (بصيغة دولية)</label>
-                  <input
-                    type="tel"
-                    placeholder="مثال: 966501234567"
-                    value={waPhone}
-                    onChange={(e) => setWaPhone(e.target.value)}
-                    dir="ltr"
-                    className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <p className="text-[11px] text-muted-foreground">سيصلك رابط الإشعار على هذا الرقم عبر wa.me</p>
-                </div>
-              )}
-
-              <div className="flex justify-end">
-                <button
-                  onClick={() => save.mutate()}
-                  disabled={save.isPending}
-                  className="flex items-center gap-1.5 text-sm font-medium bg-primary text-primary-foreground px-4 py-1.5 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
-                >
-                  {save.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                  حفظ الإعدادات
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
+  return null;
 }
 
 function WhatsAppPreview({ text }: { text: string }) {
@@ -21241,9 +21185,11 @@ function OwnerProfileTab() {
   const [sendingOtp, setSendingOtp]     = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);
 
-  /* ── WhatsApp news subscribe toggle ── */
+  /* ── WhatsApp notification settings (unified) ── */
   const [waSubscribe,     setWaSubscribe]     = useState(false);
-  const [savingSubscribe, setSavingSubscribe] = useState(false);
+  const [waReviewEnabled, setWaReviewEnabled] = useState(false);
+  const [waUnifiedPhone,  setWaUnifiedPhone]  = useState("");
+  const [savingWa,        setSavingWa]        = useState(false);
 
   /* ── Calendar preferences (seeded from DB via localStorage on load) ── */
   const [bookingsCalPrefLocal, setBookingsCalPrefLocal] = useState<"hijri" | "gregorian">(
@@ -21276,20 +21222,29 @@ function OwnerProfileTab() {
       })
       .catch(() => setFetchError("تعذّر الاتصال بالخادم"))
       .finally(() => setLoading(false));
+    apiFetch("/owner/notification-settings")
+      .then(async (r) => { if (r.ok) { const nd = await r.json(); setWaReviewEnabled(nd.waEnabled ?? false); setWaUnifiedPhone(nd.waPhone ?? ""); } })
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function toggleWaSubscribe(checked: boolean) {
-    setSavingSubscribe(true);
-    setWaSubscribe(checked);
+  async function saveWaSettings() {
+    setSavingWa(true);
     try {
-      const r = await apiFetch("/owner/profile/whatsapp-subscribe", {
-        method: "PATCH",
-        body: JSON.stringify({ subscribe: checked }),
-      });
-      if (!r.ok) { setWaSubscribe(!checked); toast({ title: "خطأ", description: "تعذّر حفظ التفضيل", variant: "destructive" }); }
-      else { toast({ title: checked ? "تم الاشتراك ✓" : "تم إلغاء الاشتراك", description: checked ? "سنتواصل معك عبر الواتساب بآخر أخبار تكية" : "لن تصلك رسائل أخبار تكية" }); }
-    } finally { setSavingSubscribe(false); }
+      await Promise.all([
+        apiFetch("/owner/notification-settings", {
+          method: "PATCH",
+          body: JSON.stringify({ waEnabled: waReviewEnabled, waPhone: waUnifiedPhone.trim() || null }),
+        }),
+        apiFetch("/owner/profile/whatsapp-subscribe", {
+          method: "PATCH",
+          body: JSON.stringify({ subscribe: waSubscribe }),
+        }),
+      ]);
+      toast({ title: "تم الحفظ ✓", description: "تم تحديث إعدادات الإشعارات عبر الواتساب" });
+    } catch {
+      toast({ title: "خطأ", description: "تعذّر حفظ الإعدادات", variant: "destructive" });
+    } finally { setSavingWa(false); }
   }
 
   /* dirty-detection */
@@ -21487,35 +21442,68 @@ function OwnerProfileTab() {
           </>
         )}
 
-        {/* ══════════ WhatsApp News Subscribe ══════════ */}
+        {/* ══════════ إعدادات الإشعارات عبر الواتساب ══════════ */}
         {secureStep === "idle" && (
-          <div className="border-t border-border pt-5">
-            <label className="flex items-start gap-3 cursor-pointer select-none group">
+          <div className="border-t border-border pt-5 space-y-4">
+            {/* Header */}
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-green-500 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              <p className="text-sm font-bold text-foreground">إعدادات الإشعارات عبر الواتساب</p>
+            </div>
+
+            {/* Toggle 1: Review notifications */}
+            <label className="flex items-start gap-3 cursor-pointer select-none">
               <div className="relative mt-0.5 flex-shrink-0">
-                <input
-                  type="checkbox"
-                  checked={waSubscribe}
-                  disabled={savingSubscribe}
-                  onChange={(e) => toggleWaSubscribe(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className={`w-10 h-6 rounded-full transition-colors ${waSubscribe ? "bg-green-500" : "bg-muted-foreground/30"} peer-focus-visible:ring-2 ring-ring relative`}>
+                <input type="checkbox" checked={waReviewEnabled} onChange={(e) => setWaReviewEnabled(e.target.checked)} className="sr-only" />
+                <div className={`w-10 h-6 rounded-full transition-colors ${waReviewEnabled ? "bg-green-500" : "bg-muted-foreground/30"} relative`}>
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${waReviewEnabled ? "right-1" : "left-1"}`} />
+                </div>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground">إشعارات التقييمات <span className="text-xs font-normal text-muted-foreground">(من الزبائن)</span></p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">تلقّي إشعار على الواتساب عند قيام أحد الزبائن بكتابة تقييم جديد لشاليهك.</p>
+              </div>
+            </label>
+
+            {/* Toggle 2: News / platform subscribe */}
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <div className="relative mt-0.5 flex-shrink-0">
+                <input type="checkbox" checked={waSubscribe} onChange={(e) => setWaSubscribe(e.target.checked)} className="sr-only" />
+                <div className={`w-10 h-6 rounded-full transition-colors ${waSubscribe ? "bg-green-500" : "bg-muted-foreground/30"} relative`}>
                   <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${waSubscribe ? "right-1" : "left-1"}`} />
                 </div>
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                  <svg className="w-4 h-4 text-green-500 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                  </svg>
-                  الاشتراك في أخبار تكيّة عبر الواتساب
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  أوافق على تلقّي تحديثات المنصة وتذكيرات التجديد وعروض الأشتراك عبر واتساب.
-                </p>
-                {savingSubscribe && <p className="text-xs text-primary mt-1 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> جاري الحفظ...</p>}
+                <p className="text-sm font-semibold text-foreground">أخبار تكيّة والتذكيرات <span className="text-xs font-normal text-muted-foreground">(من المنصة)</span></p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">الاشتراك في أخبار تكيّة عبر الواتساب وتلقّي تذكيرات التجديد وعروض الاشتراك.</p>
               </div>
             </label>
+
+            {/* Unified phone number */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">رقم الواتساب (بصيغة دولية)</label>
+              <input
+                type="tel"
+                placeholder="مثال: 966501234567"
+                value={waUnifiedPhone}
+                onChange={(e) => setWaUnifiedPhone(e.target.value)}
+                dir="ltr"
+                className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <p className="text-[11px] text-muted-foreground">أدخل رقم الواتساب كاملاً مع رمز الدولة (مثال: 966501234567). يُطبَّق على إشعارات التقييمات.</p>
+            </div>
+
+            {/* Save button */}
+            <div className="flex justify-end">
+              <button
+                onClick={saveWaSettings}
+                disabled={savingWa}
+                className="flex items-center gap-1.5 text-sm font-semibold bg-primary text-primary-foreground px-5 py-2 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {savingWa ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                حفظ الإعدادات
+              </button>
+            </div>
           </div>
         )}
 
