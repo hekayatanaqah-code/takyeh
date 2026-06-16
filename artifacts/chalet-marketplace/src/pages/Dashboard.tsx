@@ -11671,16 +11671,25 @@ function RevenueTab() {
                 <tbody>
                   {filteredReceivables.map(bk => {
                     const _bkDual = bk.bookingDate ? formatDualDate(bk.bookingDate) : null;
+                    const _hijriStr = _bkDual?.hijri.replace(/\s*هـ\s*$/, "") ?? "";
+                    const _gregStr  = _bkDual?.gregorian ?? "";
                     return (
                       <tr key={bk.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                         <td className="py-3 px-4 font-medium text-foreground">{bk.clientName}</td>
                         <td className="py-3 px-4 text-muted-foreground">#{bk.id}</td>
-                        <td className="py-3 px-4 text-xs text-muted-foreground leading-tight whitespace-nowrap">
+                        <td className="py-3 px-4 text-xs leading-tight whitespace-nowrap">
                           {_bkDual ? (
-                            <>
-                              <span className="block">{_bkDual.hijri.replace(/\s*هـ\s*$/, "")}</span>
-                              <span className="block opacity-60">({_bkDual.gregorian})</span>
-                            </>
+                            pendingCalType === "gregorian" ? (
+                              <>
+                                <span className="block font-semibold text-foreground">{_gregStr}</span>
+                                <span className="block opacity-60 text-muted-foreground">({_hijriStr})</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="block font-semibold text-foreground">{_hijriStr}</span>
+                                <span className="block opacity-60 text-muted-foreground">({_gregStr})</span>
+                              </>
+                            )
                           ) : "—"}
                         </td>
                         <td className="py-3 px-4 text-left">
