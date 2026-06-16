@@ -4,3 +4,4 @@
 - [OwnerProfileTab isolation pattern](owner-profile-tab-isolation.md) — OwnerProfileTab is a standalone component; cannot access parent state; use local useState seeded from localStorage for prefs shared with parent.
 - [Hijri/Gregorian dual display pattern](hijri-gregorian-dual.md) — toggle drives which calendar is bold/primary; secondary shows overlap months with correct era suffix (هـ / م).
 - [Print CSS header protection](print-css-header-protection.md) — use named class on header div, not structural selectors; add print-color-adjust: exact to preserve colors in PDF.
+- [WhatsApp phone display pattern](wa-phone-display.md) — display as Arabic-Indic (toArabicDigits on value), load as local 0xxx (strip 966 prefix), save via normalizeWaPhone which handles both digit types.
