@@ -11262,11 +11262,8 @@ function RevenueTab() {
   }, [monthBookings]);
 
   const channels = useMemo(() => {
-    let scoped = allBookings;
-    if (unit.type === "chalet") {
-      const subId = (unit as any).submissionId;
-      if (subId) scoped = allBookings.filter(b => b.submissionId === subId);
-    }
+    // Use monthBookings (same scope as big3) so bankTransfers + cashOnHand = big3.collected
+    const scoped = monthBookings;
     let scopedLogs = depositLogs;
     if (unit.type === "chalet") {
       const subId = (unit as any).submissionId;
@@ -11296,14 +11293,16 @@ function RevenueTab() {
       }
     }
     const totalDeposited = scopedLogs.reduce((s, l) => s + Math.round(Number(l.amount)), 0);
+    const bankRounded = Math.round(bankTransfers);
+    // كاش لم يودع = المبالغ المحصلة - (الحساب البنكي + كاش تم إيداعه)
     return {
-      bankTransfers: Math.round(bankTransfers),
+      bankTransfers: bankRounded,
       cashDeposited: totalDeposited,
-      cashUndeposited: Math.max(0, Math.round(totalCashOnHand) - totalDeposited),
+      cashUndeposited: Math.max(0, big3.collected - bankRounded - totalDeposited),
       cashOnHand: Math.round(totalCashOnHand),
       insuranceCustody: Math.round(insuranceCustody),
     };
-  }, [allBookings, depositLogs, unit]);
+  }, [monthBookings, depositLogs, unit, big3.collected]);
 
   /* ── SERVICE UNIT: render service appointments revenue ── */
   if (unit.type === "service") {
