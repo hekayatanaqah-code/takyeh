@@ -21186,10 +21186,11 @@ function OwnerProfileTab() {
   const [verifyingOtp, setVerifyingOtp] = useState(false);
 
   /* ── WhatsApp notification settings (unified) ── */
-  const [waSubscribe,     setWaSubscribe]     = useState(false);
-  const [waReviewEnabled, setWaReviewEnabled] = useState(false);
-  const [waUnifiedPhone,  setWaUnifiedPhone]  = useState("");
-  const [savingWa,        setSavingWa]        = useState(false);
+  const [waSubscribe,      setWaSubscribe]      = useState(false);
+  const [waReviewEnabled,  setWaReviewEnabled]  = useState(false);
+  const [waSupportEnabled, setWaSupportEnabled] = useState(false);
+  const [waUnifiedPhone,   setWaUnifiedPhone]   = useState("");
+  const [savingWa,         setSavingWa]         = useState(false);
 
   /* ── Calendar preferences (seeded from DB via localStorage on load) ── */
   const [bookingsCalPrefLocal, setBookingsCalPrefLocal] = useState<"hijri" | "gregorian">(
@@ -21223,10 +21224,22 @@ function OwnerProfileTab() {
       .catch(() => setFetchError("تعذّر الاتصال بالخادم"))
       .finally(() => setLoading(false));
     apiFetch("/owner/notification-settings")
-      .then(async (r) => { if (r.ok) { const nd = await r.json(); setWaReviewEnabled(nd.waEnabled ?? false); setWaUnifiedPhone(nd.waPhone ?? ""); } })
+      .then(async (r) => { if (r.ok) { const nd = await r.json(); setWaReviewEnabled(nd.waEnabled ?? false); setWaSupportEnabled(nd.waSupportEnabled ?? false); setWaUnifiedPhone(nd.waPhone ?? ""); } })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function normalizeWaPhone(raw: string): string | null {
+    const digits = raw.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/\D/g, "");
+    if (!digits) return null;
+    if (digits.startsWith("0")) return "966" + digits.slice(1);
+    if (digits.startsWith("5") && digits.length === 9) return "966" + digits;
+    return digits;
+  }
+
+  function toLatinDigits(val: string): string {
+    return val.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+  }
 
   async function saveWaSettings() {
     setSavingWa(true);
@@ -21234,7 +21247,7 @@ function OwnerProfileTab() {
       await Promise.all([
         apiFetch("/owner/notification-settings", {
           method: "PATCH",
-          body: JSON.stringify({ waEnabled: waReviewEnabled, waPhone: waUnifiedPhone.trim() || null }),
+          body: JSON.stringify({ waEnabled: waReviewEnabled, waSupportEnabled, waPhone: normalizeWaPhone(waUnifiedPhone) }),
         }),
         apiFetch("/owner/profile/whatsapp-subscribe", {
           method: "PATCH",
@@ -21479,18 +21492,32 @@ function OwnerProfileTab() {
               </div>
             </label>
 
+            {/* Toggle 3: Support notifications */}
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <div className="relative mt-0.5 flex-shrink-0">
+                <input type="checkbox" checked={waSupportEnabled} onChange={(e) => setWaSupportEnabled(e.target.checked)} className="sr-only" />
+                <div className={`w-10 h-6 rounded-full transition-colors ${waSupportEnabled ? "bg-green-500" : "bg-muted-foreground/30"} relative`}>
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${waSupportEnabled ? "right-1" : "left-1"}`} />
+                </div>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground">إشعارات الدعم الفني <span className="text-xs font-normal text-muted-foreground">(من المنصة)</span></p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">تلقّي إشعار على الواتساب فور رد فريق تكيّة على تذاكر الدعم والطلبات الخاصة بك.</p>
+              </div>
+            </label>
+
             {/* Unified phone number */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">رقم الواتساب (بصيغة دولية)</label>
+              <label className="text-xs font-semibold text-foreground">رقم الواتساب</label>
               <input
                 type="tel"
-                placeholder="مثال: 966501234567"
+                placeholder="05xxxxxxxx"
                 value={waUnifiedPhone}
-                onChange={(e) => setWaUnifiedPhone(e.target.value)}
+                onChange={(e) => setWaUnifiedPhone(toLatinDigits(e.target.value))}
                 dir="ltr"
                 className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
-              <p className="text-[11px] text-muted-foreground">أدخل رقم الواتساب كاملاً مع رمز الدولة (مثال: 966501234567). يُطبَّق على إشعارات التقييمات.</p>
+              <p className="text-[11px] text-muted-foreground">أدخل رقمك كما هو (مثال: 0501234567) — سيُحوَّل تلقائياً إلى الصيغة الدولية عند الحفظ.</p>
             </div>
 
             {/* Save button */}

@@ -603,6 +603,7 @@ export const ownerNotificationSettingsTable = pgTable("owner_notification_settin
   ownerId: text("owner_id").notNull().unique(),
   waEnabled: boolean("wa_enabled").notNull().default(false),
   waPhone: text("wa_phone"),
+  waSupportEnabled: boolean("wa_support_enabled").notNull().default(false),
   waInstanceId: text("wa_instance_id"),
   waToken: text("wa_token"),
   bookingConfirmationEnabled: boolean("booking_confirmation_enabled").notNull().default(false),

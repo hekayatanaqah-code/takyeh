@@ -4699,7 +4699,7 @@ router.get("/notification-settings", async (req, res) => {
   const ownerId = (req.user as any)?.id;
   if (!ownerId) return res.status(401).json({ error: "unauthorized" });
   const [row] = await db.select().from(ownerNotificationSettingsTable).where(eq(ownerNotificationSettingsTable.ownerId, ownerId));
-  return res.json(row ?? { ownerId, waEnabled: false, waPhone: null });
+  return res.json(row ?? { ownerId, waEnabled: false, waPhone: null, waSupportEnabled: false });
 });
 
 /* ── GET /owner/transaction-history ───────────────────────────
@@ -4797,15 +4797,17 @@ router.get("/transaction-history", async (req, res) => {
 router.patch("/notification-settings", async (req, res) => {
   const ownerId = (req.user as any)?.id;
   if (!ownerId) return res.status(401).json({ error: "unauthorized" });
-  const { waEnabled, waPhone } = z.object({
+  const { waEnabled, waPhone, waSupportEnabled } = z.object({
     waEnabled: z.boolean().optional(),
     waPhone: z.string().max(20).nullable().optional(),
+    waSupportEnabled: z.boolean().optional(),
   }).parse(req.body);
   const patch: Record<string, unknown> = { updatedAt: new Date() };
   if (waEnabled !== undefined) patch.waEnabled = waEnabled;
   if (waPhone !== undefined) patch.waPhone = waPhone;
+  if (waSupportEnabled !== undefined) patch.waSupportEnabled = waSupportEnabled;
   await db.insert(ownerNotificationSettingsTable)
-    .values({ ownerId, waEnabled: waEnabled ?? false, waPhone: waPhone ?? null })
+    .values({ ownerId, waEnabled: waEnabled ?? false, waPhone: waPhone ?? null, waSupportEnabled: waSupportEnabled ?? false })
     .onConflictDoUpdate({ target: ownerNotificationSettingsTable.ownerId, set: patch });
   return res.json({ ok: true });
 });
