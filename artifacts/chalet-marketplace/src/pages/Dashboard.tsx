@@ -10893,6 +10893,7 @@ function RevenueTab() {
   const [depositAmount, setDepositAmount] = useState("");
   const [revSubTab, setRevSubTab] = useState<"monthly" | "receivables">("monthly");
   const showAllFuture = revSubTab === "receivables";
+  const [pendingFilterMonth, setPendingFilterMonth] = useState<string>("all");
 
   const { data: financial, isLoading: finLoading, refetch: refetchFinancial } = useQuery<{
     totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
@@ -10983,6 +10984,27 @@ function RevenueTab() {
       .sort((a, bk) => (a.bookingDate ?? "").localeCompare(bk.bookingDate ?? ""));
   }, [allBookings, unit]);
 
+  /* Month options for pending receivables filter — dual Hijri/Gregorian */
+  const pendingMonthOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const opts: { val: string; label: string }[] = [];
+    for (const bk of allReceivables) {
+      const ym = bk.bookingDate?.slice(0, 7) ?? "";
+      if (!ym || seen.has(ym)) continue;
+      seen.add(ym);
+      const d = new Date(ym + "-15T12:00:00");
+      const hijriPart = d.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
+      const gregPart = d.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions);
+      opts.push({ val: ym, label: `${hijriPart} هـ - ${gregPart} م` });
+    }
+    return opts.sort((a, b) => b.val.localeCompare(a.val));
+  }, [allReceivables]);
+
+  const filteredReceivables = useMemo(() =>
+    pendingFilterMonth === "all"
+      ? allReceivables
+      : allReceivables.filter(bk => bk.bookingDate?.startsWith(pendingFilterMonth)),
+  [allReceivables, pendingFilterMonth]);
 
   const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings", "cancelled"],
@@ -11485,7 +11507,7 @@ function RevenueTab() {
               onClick={() => setRevSubTab("receivables")}
               className={`px-3 py-1.5 font-semibold transition-colors flex items-center gap-1 ${revSubTab === "receivables" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
             >
-              عرض كل المستحقات
+              متبقي مستحقات الضيوف
               {allReceivables.length > 0 && (
                 <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${revSubTab === "receivables" ? "bg-white/30 text-white" : "bg-amber-500 text-white"}`}>{allReceivables.length}</span>
               )}
@@ -11538,19 +11560,29 @@ function RevenueTab() {
       {/* ══════════════ ALL RECEIVABLES VIEW ══════════════ */}
       {showAllFuture && (
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
-            <Clock className="w-4 h-4 text-amber-500" />
-            <h3 className="font-bold text-sm text-foreground">كل المستحقات غير المحصّلة</h3>
-            <span className="text-[11px] text-muted-foreground ms-1">— جميع الشهور</span>
-            {allReceivables.length > 0 && (
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-border flex-wrap">
+            <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+            <h3 className="font-bold text-sm text-foreground">المبالغ المتبقية على الضيوف</h3>
+            <select
+              value={pendingFilterMonth}
+              onChange={e => setPendingFilterMonth(e.target.value)}
+              className="h-7 text-xs border border-border rounded-lg bg-background text-foreground px-2 focus:outline-none focus:ring-1 focus:ring-primary ms-1"
+              dir="rtl"
+            >
+              <option value="all">جميع الشهور</option>
+              {pendingMonthOptions.map(o => (
+                <option key={o.val} value={o.val}>{o.label}</option>
+              ))}
+            </select>
+            {filteredReceivables.length > 0 && (
               <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 rounded-full ms-auto font-semibold">
-                {allReceivables.length} ضيف
+                {filteredReceivables.length} ضيف
               </span>
             )}
           </div>
           {bkLoading ? (
             <div className="p-4 space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
-          ) : allReceivables.length === 0 ? (
+          ) : filteredReceivables.length === 0 ? (
             <div className="text-center text-muted-foreground text-sm py-12">✅ لا توجد مستحقات معلقة</div>
           ) : (
             <div className="overflow-x-auto">
@@ -11564,7 +11596,7 @@ function RevenueTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {allReceivables.map(bk => {
+                  {filteredReceivables.map(bk => {
                     const _bkDual = bk.bookingDate ? formatDualDate(bk.bookingDate) : null;
                     return (
                       <tr key={bk.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
@@ -11590,7 +11622,7 @@ function RevenueTab() {
                   <tr className="bg-muted/30 border-t-2 border-border">
                     <td colSpan={3} className="py-2.5 px-4 text-xs font-bold text-muted-foreground">الإجمالي</td>
                     <td className="py-2.5 px-4 text-left">
-                      <span className="font-extrabold text-amber-700 dark:text-amber-400 tabular-nums">{fmtN(allReceivables.reduce((s, bk) => s + bk.remaining, 0))}</span>
+                      <span className="font-extrabold text-amber-700 dark:text-amber-400 tabular-nums">{fmtN(filteredReceivables.reduce((s, bk) => s + bk.remaining, 0))}</span>
                       <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
                     </td>
                   </tr>
