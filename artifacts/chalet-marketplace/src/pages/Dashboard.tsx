@@ -6647,34 +6647,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               <SelectContent dir="rtl" align="end">
                 <SelectItem value="all"><span className="text-sm">كل الحجوزات</span></SelectItem>
                 {availableMonthKeys.map(key => {
-                  const [ys, ms] = key.split("-").map(Number);
-                  const gName = (gy: number, gm: number) =>
-                    new Date(gy, gm, 15).toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
-                  let primary = "", secondary = "";
-                  if (bookingCalView === "hijri") {
-                    primary = `${HIJRI_MONTHS_AR[ms - 1]} ${toArN(ys)} هـ`;
-                    const { start, end } = getHijriMonthGregorianRange(ys, ms);
-                    if (start && end) {
-                      const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
-                      const [sY, sM, eY, eM] = [s.getFullYear(), s.getMonth(), e.getFullYear(), e.getMonth()];
-                      if (sY === eY && sM === eM) secondary = `${gName(sY, sM)} ${toArN(sY)}`;
-                      else if (sY === eY) secondary = `${gName(sY, sM)} / ${gName(eY, eM)} ${toArN(sY)}`;
-                      else secondary = `${gName(sY, sM)} ${toArN(sY)} / ${gName(eY, eM)} ${toArN(eY)}`;
-                    }
-                  } else {
-                    primary = `${GREGORIAN_MONTHS_AR[ms - 1]} ${toArN(ys)}`;
-                    const h1 = toHijriComponents(new Date(ys, ms - 1, 1));
-                    const h2 = toHijriComponents(new Date(ys, ms, 0));
-                    if (h1.year === h2.year && h1.month === h2.month) secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
-                    else if (h1.year === h2.year) secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
-                    else secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
-                  }
+                  const [, ms] = key.split("-").map(Number);
+                  const label = bookingCalView === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
                   return (
                     <SelectItem key={key} value={key}>
-                      <div className="flex flex-col items-end gap-0.5 py-0.5">
-                        <span className="font-semibold text-sm leading-tight">{primary}</span>
-                        {secondary && <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>}
-                      </div>
+                      <span className="text-sm">{label}</span>
                     </SelectItem>
                   );
                 })}
