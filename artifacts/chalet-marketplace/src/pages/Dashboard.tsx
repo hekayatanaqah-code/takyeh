@@ -11629,107 +11629,106 @@ function RevenueTab() {
               )}
             </button>
           </div>
-          {/* Calendar toggle — hidden in all-future mode */}
+          {/* Filters row: calType → year → month → refresh — all in one nowrap line */}
           {!showAllFuture && (
-            <div className="flex rounded-lg border border-border overflow-hidden text-xs">
-              {(["gregorian", "hijri"] as const).map(mode => (
-                <button key={mode}
-                  onClick={() => {
-                    const newYear = mode === "hijri" ? String(toHijriComponents(new Date()).year) : String(new Date().getFullYear());
-                    setCalType(mode); setRevYear(newYear);
-                    if (mode === "gregorian") { const d = new Date(); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`); }
-                    else { const fmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura",{month:"long",year:"numeric"}); setSelectedHijriMonth(fmt.format(new Date())); }
-                    localStorage.setItem("revCalType", mode);
-                    setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50);
-                  }}
-                  className={`px-3 py-1.5 font-medium transition-colors ${calType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
-                >
-                  {mode === "gregorian" ? "ميلادي" : "هجري"}
-                </button>
-              ))}
-            </div>
-          )}
-          {/* Year dropdown — hidden in all-future mode */}
-          {!showAllFuture && (
-            <Select value={revYear} onValueChange={yr => { setRevYear(yr); setSelectedMonth(""); setSelectedHijriMonth(""); }}>
-              <SelectTrigger className="h-9 text-sm rounded-lg border-border w-28" dir="rtl">
-                <SelectValue placeholder="السنة" />
-              </SelectTrigger>
-              <SelectContent dir="rtl" align="end">
-                {(calType === "gregorian" ? revGregYearOptions : revHijriYearOptions.map(String)).map(yr => (
-                  <SelectItem key={yr} value={yr}>
-                    {calType === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
-                  </SelectItem>
+            <div className="flex items-center gap-2 flex-nowrap">
+              {/* Calendar toggle */}
+              <div className="flex rounded-lg border border-border overflow-hidden text-xs shrink-0">
+                {(["gregorian", "hijri"] as const).map(mode => (
+                  <button key={mode}
+                    onClick={() => {
+                      const newYear = mode === "hijri" ? String(toHijriComponents(new Date()).year) : String(new Date().getFullYear());
+                      setCalType(mode); setRevYear(newYear);
+                      if (mode === "gregorian") { const d = new Date(); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`); }
+                      else { const fmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura",{month:"long",year:"numeric"}); setSelectedHijriMonth(fmt.format(new Date())); }
+                      localStorage.setItem("revCalType", mode);
+                      setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50);
+                    }}
+                    className={`px-3 py-1.5 font-medium transition-colors ${calType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                  >
+                    {mode === "gregorian" ? "ميلادي" : "هجري"}
+                  </button>
                 ))}
-              </SelectContent>
-            </Select>
-          )}
-          {/* Month dropdown — dynamic, data-driven, hidden in all-future mode */}
-          {!showAllFuture && revMonthsForYear.length > 0 && (calType === "gregorian" ? (
-            <Select value={selectedMonth || (revMonthsForYear[0] ?? "")} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[130px] max-w-[200px]" dir="rtl">
-                {(() => {
-                  const ym = selectedMonth || revMonthsForYear[0] || "";
-                  if (!ym) return <span className="text-sm text-muted-foreground">اختر الشهر</span>;
-                  const [y,m] = ym.split("-").map(Number);
-                  return <span className="text-sm font-medium">{new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"})}</span>;
-                })()}
-              </SelectTrigger>
-              <SelectContent dir="rtl" align="end">
-                {revMonthsForYear.map(ym => {
-                  const [y,m] = ym.split("-").map(Number);
-                  const gregPrimary = new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"});
-                  const h1 = toHijriComponents(new Date(y,m-1,1));
-                  const h2 = toHijriComponents(new Date(y,m,0));
-                  const hijriSec = (h1.year===h2.year&&h1.month===h2.month)
-                    ? `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} هـ`
-                    : h1.year===h2.year
-                      ? `${HIJRI_MONTHS_AR[h1.month-1]} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h1.year)} هـ`
-                      : `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h2.year)} هـ`;
-                  return (
-                    <SelectItem key={ym} value={ym}>
-                      <div className="flex flex-col items-end gap-0.5 py-0.5">
-                        <span className="font-semibold text-sm leading-tight">{gregPrimary}</span>
-                        {hijriSec && <span className="text-xs text-muted-foreground leading-tight">{hijriSec}</span>}
-                      </div>
+              </div>
+              {/* Year dropdown */}
+              <Select value={revYear} onValueChange={yr => { setRevYear(yr); setSelectedMonth(""); setSelectedHijriMonth(""); }}>
+                <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[6.5rem] shrink-0" dir="rtl">
+                  <SelectValue placeholder="السنة" />
+                </SelectTrigger>
+                <SelectContent dir="rtl" align="end">
+                  {(calType === "gregorian" ? revGregYearOptions : revHijriYearOptions.map(String)).map(yr => (
+                    <SelectItem key={yr} value={yr}>
+                      {calType === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
                     </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          ) : (
-            <Select value={selectedHijriMonth || (revMonthsForYear[0] ?? "")} onValueChange={setSelectedHijriMonth}>
-              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[130px] max-w-[200px]" dir="rtl">
-                {selectedHijriMonth || revMonthsForYear[0]
-                  ? <span className="text-sm font-medium">{selectedHijriMonth || revMonthsForYear[0]}</span>
-                  : <span className="text-sm text-muted-foreground">اختر الشهر</span>}
-              </SelectTrigger>
-              <SelectContent dir="rtl" align="end">
-                {revMonthsForYear.map(key => {
-                  const gregYm = hijriToGregorianMap[key];
-                  let gregSec = "";
-                  if (gregYm) { const [gy,gm] = gregYm.split("-").map(Number); gregSec = new Date(gy,gm-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"}); }
-                  return (
-                    <SelectItem key={key} value={key}>
-                      <div className="flex flex-col items-end gap-0.5 py-0.5">
-                        <span className="font-semibold text-sm leading-tight">{key}</span>
-                        {gregSec && <span className="text-xs text-muted-foreground leading-tight">{gregSec}</span>}
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          ))}
-          {/* Manual refresh */}
-          {!showAllFuture && (
-            <button
-              onClick={() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }}
-              title="تحديث البيانات"
-              className="h-9 w-9 flex items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
+                  ))}
+                </SelectContent>
+              </Select>
+              {/* Month dropdown — data-driven */}
+              {revMonthsForYear.length > 0 && (calType === "gregorian" ? (
+                <Select value={selectedMonth || (revMonthsForYear[0] ?? "")} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
+                    {(() => {
+                      const ym = selectedMonth || revMonthsForYear[0] || "";
+                      if (!ym) return <span className="text-sm text-muted-foreground">الشهر</span>;
+                      const [y,m] = ym.split("-").map(Number);
+                      return <span className="text-sm font-medium">{new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"})}</span>;
+                    })()}
+                  </SelectTrigger>
+                  <SelectContent dir="rtl" align="end">
+                    {revMonthsForYear.map(ym => {
+                      const [y,m] = ym.split("-").map(Number);
+                      const gregPrimary = new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"});
+                      const h1 = toHijriComponents(new Date(y,m-1,1));
+                      const h2 = toHijriComponents(new Date(y,m,0));
+                      const hijriSec = (h1.year===h2.year&&h1.month===h2.month)
+                        ? `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} هـ`
+                        : h1.year===h2.year
+                          ? `${HIJRI_MONTHS_AR[h1.month-1]} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h1.year)} هـ`
+                          : `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h2.year)} هـ`;
+                      return (
+                        <SelectItem key={ym} value={ym}>
+                          <div className="flex flex-col items-end gap-0.5 py-0.5">
+                            <span className="font-semibold text-sm leading-tight">{gregPrimary}</span>
+                            {hijriSec && <span className="text-xs text-muted-foreground leading-tight">{hijriSec}</span>}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Select value={selectedHijriMonth || (revMonthsForYear[0] ?? "")} onValueChange={setSelectedHijriMonth}>
+                  <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
+                    {selectedHijriMonth || revMonthsForYear[0]
+                      ? <span className="text-sm font-medium truncate">{selectedHijriMonth || revMonthsForYear[0]}</span>
+                      : <span className="text-sm text-muted-foreground">الشهر</span>}
+                  </SelectTrigger>
+                  <SelectContent dir="rtl" align="end">
+                    {revMonthsForYear.map(key => {
+                      const gregYm = hijriToGregorianMap[key];
+                      let gregSec = "";
+                      if (gregYm) { const [gy,gm] = gregYm.split("-").map(Number); gregSec = new Date(gy,gm-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"}); }
+                      return (
+                        <SelectItem key={key} value={key}>
+                          <div className="flex flex-col items-end gap-0.5 py-0.5">
+                            <span className="font-semibold text-sm leading-tight">{key}</span>
+                            {gregSec && <span className="text-xs text-muted-foreground leading-tight">{gregSec}</span>}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              ))}
+              {/* Refresh */}
+              <button
+                onClick={() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }}
+                title="تحديث البيانات"
+                className="h-9 w-9 flex items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors shrink-0"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
       </div>
