@@ -11720,14 +11720,6 @@ function RevenueTab() {
                   </SelectContent>
                 </Select>
               ))}
-              {/* Refresh */}
-              <button
-                onClick={() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }}
-                title="تحديث البيانات"
-                className="h-9 w-9 flex items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors shrink-0"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
             </div>
           )}
         </div>
