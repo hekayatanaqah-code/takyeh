@@ -4138,6 +4138,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const _todayH = toHijriComponents(new Date());
   const [calHijriYear, setCalHijriYear] = useState(_todayH.year);
   const [calHijriMonth, setCalHijriMonth] = useState(_todayH.month);
+  const [calPickerOpen, setCalPickerOpen] = useState(false);
+  const [calPickerYear, setCalPickerYear] = useState(0);
   const _todayGreg = new Date();
   const [calGregYear, setCalGregYear] = useState(_todayGreg.getFullYear());
   const [calGregMonth, setCalGregMonth] = useState(_todayGreg.getMonth() + 1);
@@ -4179,6 +4181,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   const [bookingPage, setBookingPage] = useState(0);
   const [bookingCalView, setBookingCalView] = useState<"hijri" | "gregorian">("hijri");
   const [bookingMonthFilter, setBookingMonthFilter] = useState<string>("all");
+  const [bookingYearFilter, setBookingYearFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [calDepositSaving, setCalDepositSaving] = useState<number | null>(null);
   const [bookingDepositTarget, setBookingDepositTarget] = useState<{ bookingId: number; maxAmount: number; totalCash: number; submissionId?: number | null; label?: string } | null>(null);
@@ -4735,16 +4738,42 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     }).sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
   }, [bookings, searchQuery, ownerChalets]);
 
-  const availableMonthKeys = useMemo(() => {
-    const seen = new Set<string>();
-    filteredBookings.forEach(b => seen.add(getBookingMonthKey(b.bookingDate, bookingCalView)));
-    return Array.from(seen).sort();
+  const bookingYearOptions = useMemo(() => {
+    const years = new Set<string>();
+    filteredBookings.forEach(b => {
+      const d = new Date(b.bookingDate + "T00:00:00");
+      years.add(bookingCalView === "hijri" ? String(toHijriComponents(d).year) : String(d.getFullYear()));
+    });
+    return Array.from(years).sort().reverse();
   }, [filteredBookings, bookingCalView]);
 
+  const availableMonthKeys = useMemo(() => {
+    const seen = new Set<string>();
+    filteredBookings
+      .filter(b => {
+        if (!bookingYearFilter) return true;
+        const d = new Date(b.bookingDate + "T00:00:00");
+        const yr = bookingCalView === "hijri" ? String(toHijriComponents(d).year) : String(d.getFullYear());
+        return yr === bookingYearFilter;
+      })
+      .forEach(b => seen.add(getBookingMonthKey(b.bookingDate, bookingCalView)));
+    return Array.from(seen).sort();
+  }, [filteredBookings, bookingCalView, bookingYearFilter]);
+
   const monthFilteredBookings = useMemo(() => {
-    if (bookingMonthFilter === "all") return filteredBookings;
-    return filteredBookings.filter(b => getBookingMonthKey(b.bookingDate, bookingCalView) === bookingMonthFilter);
-  }, [filteredBookings, bookingMonthFilter, bookingCalView]);
+    let result = filteredBookings;
+    if (bookingYearFilter) {
+      result = result.filter(b => {
+        const d = new Date(b.bookingDate + "T00:00:00");
+        const yr = bookingCalView === "hijri" ? String(toHijriComponents(d).year) : String(d.getFullYear());
+        return yr === bookingYearFilter;
+      });
+    }
+    if (bookingMonthFilter !== "all") {
+      result = result.filter(b => getBookingMonthKey(b.bookingDate, bookingCalView) === bookingMonthFilter);
+    }
+    return result;
+  }, [filteredBookings, bookingMonthFilter, bookingCalView, bookingYearFilter]);
 
   const totalBookingPages = Math.max(1, Math.ceil(monthFilteredBookings.length / BOOKINGS_PER_PAGE));
   const pagedBookings = useMemo(() => {
@@ -4753,8 +4782,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
   }, [monthFilteredBookings, bookingPage]);
 
   useEffect(() => { setBookingPage(0); }, [searchQuery, filterFrom, filterTo]);
-  useEffect(() => { setBookingPage(0); setBookingMonthFilter("all"); }, [bookingCalView]);
+  useEffect(() => { setBookingPage(0); setBookingMonthFilter("all"); setBookingYearFilter(""); }, [bookingCalView]);
   useEffect(() => { setBookingPage(0); }, [bookingMonthFilter]);
+  useEffect(() => { setBookingPage(0); setBookingMonthFilter("all"); }, [bookingYearFilter]);
 
   const getManualWhatsAppTemplates = (booking: OwnerBooking) => messageSettings.waEnabled ? [
     { id: "confirmation", title: "تأكيد الحجز", body: messageSettings.bookingConfirmationTemplate },
@@ -6012,7 +6042,61 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               <button onClick={prevMonth} className="w-8 h-8 rounded-full hover:bg-secondary flex items-center justify-center">
                 <ChevronRight className="w-4 h-4" />
               </button>
-              <span className="text-sm font-semibold">{monthLabel}</span>
+              {/* Clickable title → Month/Year quick picker */}
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    const yr = dashCalType === "hijri" ? calHijriYear : calGregYear;
+                    setCalPickerYear(yr);
+                    setCalPickerOpen(o => !o);
+                  }}
+                  className="flex items-center gap-1 text-sm font-semibold px-3 py-1 rounded-lg hover:bg-muted/60 transition-colors"
+                >
+                  {monthLabel}
+                  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+                {calPickerOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setCalPickerOpen(false)} />
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-card border border-border rounded-xl shadow-lg p-3 w-64" dir="rtl">
+                      {/* Year selector row */}
+                      <div className="flex items-center justify-between mb-3 px-1">
+                        <button onClick={() => setCalPickerYear(y => y + 1)} className="w-7 h-7 rounded-full hover:bg-muted flex items-center justify-center">
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="text-sm font-bold">
+                          {dashCalType === "hijri" ? `${toArN(calPickerYear)} هـ` : `${toArN(calPickerYear)} م`}
+                        </span>
+                        <button onClick={() => setCalPickerYear(y => y - 1)} className="w-7 h-7 rounded-full hover:bg-muted flex items-center justify-center">
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      {/* Month grid */}
+                      <div className="grid grid-cols-3 gap-1">
+                        {(dashCalType === "hijri" ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR).map((name, i) => {
+                          const monthNum = i + 1;
+                          const isActive = dashCalType === "hijri"
+                            ? calPickerYear === calHijriYear && monthNum === calHijriMonth
+                            : calPickerYear === calGregYear && monthNum === calGregMonth;
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => {
+                                if (dashCalType === "hijri") { setCalHijriYear(calPickerYear); setCalHijriMonth(monthNum); }
+                                else { setCalGregYear(calPickerYear); setCalGregMonth(monthNum); }
+                                setCalPickerOpen(false);
+                              }}
+                              className={`rounded-lg py-1.5 px-1 text-[11px] font-medium leading-tight transition-colors text-center ${isActive ? "bg-primary text-primary-foreground" : "hover:bg-muted text-foreground"}`}
+                            >
+                              {name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
               <button onClick={nextMonth} className="w-8 h-8 rounded-full hover:bg-secondary flex items-center justify-center">
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -6506,17 +6590,17 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         </div>
         <div className="mb-4 space-y-2">
           <h3 className="font-bold text-foreground">قائمة الحجوزات
-            {(searchQuery || bookingMonthFilter !== "all") && monthFilteredBookings.length > 0 && (
+            {(searchQuery || bookingYearFilter || bookingMonthFilter !== "all") && monthFilteredBookings.length > 0 && (
               <span className="text-xs font-normal text-muted-foreground mr-2">({toAr(monthFilteredBookings.length)} نتيجة)</span>
             )}
           </h3>
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Calendar mode toggle */}
+            {/* Calendar type toggle */}
             <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
               {(["hijri", "gregorian"] as const).map((mode) => (
                 <button
                   key={mode}
-                  onClick={() => { setBookingCalView(mode); setBookingMonthFilter("all"); }}
+                  onClick={() => { setBookingCalView(mode); setBookingMonthFilter("all"); setBookingYearFilter(""); }}
                   className={`text-xs px-3 py-1.5 h-9 font-medium transition-colors ${
                     bookingCalView === mode
                       ? "bg-primary text-primary-foreground"
@@ -6527,87 +6611,87 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 </button>
               ))}
             </div>
-            {/* Month dropdown with overlap */}
-            {availableMonthKeys.length > 0 && (
-              <Select
-                value={bookingMonthFilter}
-                onValueChange={(v) => { setBookingMonthFilter(v); setBookingPage(0); }}
-              >
-                <SelectTrigger className="h-9 text-xs font-semibold rounded-xl border-border min-w-[130px] max-w-[200px] shrink-0" dir="rtl">
-                  {bookingMonthFilter !== "all" ? (() => {
-                    const [ys, ms] = bookingMonthFilter.split("-").map(Number);
-                    return bookingCalView === "hijri"
-                      ? <span>{HIJRI_MONTHS_AR[ms - 1]} {toArN(ys)} هـ</span>
-                      : <span>{GREGORIAN_MONTHS_AR[ms - 1]} {toArN(ys)}</span>;
-                  })() : <span className="text-muted-foreground">كل الشهور</span>}
-                </SelectTrigger>
-                <SelectContent dir="rtl" align="end">
-                  <SelectItem value="all"><span className="text-sm">كل الشهور</span></SelectItem>
-                  {availableMonthKeys.map(key => {
-                    const [ys, ms] = key.split("-").map(Number);
-                    const gName = (gy: number, gm: number) =>
-                      new Date(gy, gm, 15).toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
-                    let primary = "", secondary = "";
-                    if (bookingCalView === "hijri") {
-                      primary = `${HIJRI_MONTHS_AR[ms - 1]} ${toArN(ys)} هـ`;
-                      const { start, end } = getHijriMonthGregorianRange(ys, ms);
-                      if (start && end) {
-                        const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
-                        const [sY, sM, eY, eM] = [s.getFullYear(), s.getMonth(), e.getFullYear(), e.getMonth()];
-                        if (sY === eY && sM === eM) secondary = `${gName(sY, sM)} ${toArN(sY)}`;
-                        else if (sY === eY) secondary = `${gName(sY, sM)} / ${gName(eY, eM)} ${toArN(sY)}`;
-                        else secondary = `${gName(sY, sM)} ${toArN(sY)} / ${gName(eY, eM)} ${toArN(eY)}`;
-                      }
-                    } else {
-                      primary = `${GREGORIAN_MONTHS_AR[ms - 1]} ${toArN(ys)}`;
-                      const h1 = toHijriComponents(new Date(ys, ms - 1, 1));
-                      const h2 = toHijriComponents(new Date(ys, ms, 0));
-                      if (h1.year === h2.year && h1.month === h2.month) {
-                        secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
-                      } else if (h1.year === h2.year) {
-                        secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
-                      } else {
-                        secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
-                      }
+            {/* Year dropdown */}
+            <Select
+              value={bookingYearFilter || "__all__"}
+              onValueChange={yr => { setBookingYearFilter(yr === "__all__" ? "" : yr); setBookingMonthFilter("all"); setBookingPage(0); }}
+            >
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7rem] shrink-0" dir="rtl">
+                {bookingYearFilter
+                  ? <span className="text-sm font-medium">{bookingCalView === "hijri" ? `${toArN(Number(bookingYearFilter))} هـ` : `${toArN(Number(bookingYearFilter))} م`}</span>
+                  : <span className="text-sm text-muted-foreground">كل السنوات</span>}
+              </SelectTrigger>
+              <SelectContent dir="rtl" align="end">
+                <SelectItem value="__all__"><span className="text-sm">كل السنوات</span></SelectItem>
+                {bookingYearOptions.map(yr => (
+                  <SelectItem key={yr} value={yr}>
+                    {bookingCalView === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {/* Month dropdown — cascades from year, disabled when كل السنوات */}
+            <Select
+              value={!bookingYearFilter ? "__all__" : bookingMonthFilter}
+              onValueChange={(v) => { if (bookingYearFilter) { setBookingMonthFilter(v); setBookingPage(0); } }}
+              disabled={!bookingYearFilter}
+            >
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[130px] shrink-0" dir="rtl">
+                {bookingMonthFilter !== "all" && bookingYearFilter ? (() => {
+                  const [ys, ms] = bookingMonthFilter.split("-").map(Number);
+                  return bookingCalView === "hijri"
+                    ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]} {toArN(ys)} هـ</span>
+                    : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]} {toArN(ys)}</span>;
+                })() : <span className="text-muted-foreground">{bookingYearFilter ? "كل الحجوزات" : "كل الحجوزات"}</span>}
+              </SelectTrigger>
+              <SelectContent dir="rtl" align="end">
+                <SelectItem value="all"><span className="text-sm">كل الحجوزات</span></SelectItem>
+                {availableMonthKeys.map(key => {
+                  const [ys, ms] = key.split("-").map(Number);
+                  const gName = (gy: number, gm: number) =>
+                    new Date(gy, gm, 15).toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
+                  let primary = "", secondary = "";
+                  if (bookingCalView === "hijri") {
+                    primary = `${HIJRI_MONTHS_AR[ms - 1]} ${toArN(ys)} هـ`;
+                    const { start, end } = getHijriMonthGregorianRange(ys, ms);
+                    if (start && end) {
+                      const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
+                      const [sY, sM, eY, eM] = [s.getFullYear(), s.getMonth(), e.getFullYear(), e.getMonth()];
+                      if (sY === eY && sM === eM) secondary = `${gName(sY, sM)} ${toArN(sY)}`;
+                      else if (sY === eY) secondary = `${gName(sY, sM)} / ${gName(eY, eM)} ${toArN(sY)}`;
+                      else secondary = `${gName(sY, sM)} ${toArN(sY)} / ${gName(eY, eM)} ${toArN(eY)}`;
                     }
-                    return (
-                      <SelectItem key={key} value={key}>
-                        <div className="flex flex-col items-end gap-0.5 py-0.5">
-                          <span className="font-semibold text-sm leading-tight">{primary}</span>
-                          {secondary && <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>}
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            )}
-            <div className="h-9 rounded-xl border border-border bg-background px-3 flex items-center text-sm min-w-[130px] shrink-0 overflow-hidden">
-              <DualCalendarPicker value={filterFrom} onChange={setFilterFrom} placeholder="من تاريخ" compact />
-            </div>
-            <div className="h-9 rounded-xl border border-border bg-background px-3 flex items-center text-sm min-w-[130px] shrink-0 overflow-hidden">
-              <DualCalendarPicker value={filterTo} onChange={setFilterTo} placeholder="إلى تاريخ" compact />
-            </div>
-            {(filterFrom || filterTo) && (
-              <button
-                onClick={() => { setFilterFrom(""); setFilterTo(""); }}
-                className="h-9 text-xs text-muted-foreground hover:text-foreground border border-border rounded-xl px-3 transition-colors shrink-0"
-              >
-                مسح
-              </button>
-            )}
+                  } else {
+                    primary = `${GREGORIAN_MONTHS_AR[ms - 1]} ${toArN(ys)}`;
+                    const h1 = toHijriComponents(new Date(ys, ms - 1, 1));
+                    const h2 = toHijriComponents(new Date(ys, ms, 0));
+                    if (h1.year === h2.year && h1.month === h2.month) secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
+                    else if (h1.year === h2.year) secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
+                    else secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
+                  }
+                  return (
+                    <SelectItem key={key} value={key}>
+                      <div className="flex flex-col items-end gap-0.5 py-0.5">
+                        <span className="font-semibold text-sm leading-tight">{primary}</span>
+                        {secondary && <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         {bookingsLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
           </div>
-        ) : filteredBookings.length === 0 ? (
+        ) : monthFilteredBookings.length === 0 ? (
           <div className="bg-card border border-dashed border-border rounded-2xl p-10 text-center">
             <BookOpen className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
-            <h3 className="text-base font-semibold mb-2">{(filterFrom || filterTo) ? "لا توجد حجوزات في هذا النطاق" : "لا توجد حجوزات بعد"}</h3>
-            <p className="text-sm text-muted-foreground mb-4">{(filterFrom || filterTo) ? "جرّب تغيير نطاق التاريخ" : "سجّل حجوزاتك من واتساب وانستقرام لمتابعة تقويمك"}</p>
-            {!filterFrom && !filterTo && (
+            <h3 className="text-base font-semibold mb-2">{(bookingYearFilter || bookingMonthFilter !== "all") ? "لا توجد حجوزات في هذه الفترة" : "لا توجد حجوزات بعد"}</h3>
+            <p className="text-sm text-muted-foreground mb-4">{(bookingYearFilter || bookingMonthFilter !== "all") ? "جرّب تغيير الفترة الزمنية" : "سجّل حجوزاتك من واتساب وانستقرام لمتابعة تقويمك"}</p>
+            {!bookingYearFilter && bookingMonthFilter === "all" && (
               <Button size="sm" disabled={isReadOnly} onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } setAddOpen(true); }}>
                 <Plus className="w-4 h-4 me-2" />
                 إضافة أول حجز
