@@ -6020,13 +6020,13 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               onClick={() => { setDashCalType("hijri"); localStorage.setItem("dashCalDefaultType", "hijri"); }}
               className={`px-3 py-1.5 font-bold transition-colors ${dashCalType === "hijri" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
               title="تقويم هجري"
-            >هـ</button>
+            >هجري</button>
             <button
               type="button"
               onClick={() => { setDashCalType("gregorian"); localStorage.setItem("dashCalDefaultType", "gregorian"); }}
               className={`px-3 py-1.5 font-bold transition-colors ${dashCalType === "gregorian" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
               title="تقويم ميلادي"
-            >م</button>
+            >ميلادي</button>
           </div>
         </div>
 
@@ -6594,7 +6594,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               <span className="text-xs font-normal text-muted-foreground mr-2">({toAr(monthFilteredBookings.length)} نتيجة)</span>
             )}
           </h3>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
             {/* Calendar type toggle */}
             <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
               {(["hijri", "gregorian"] as const).map((mode) => (
@@ -6636,7 +6636,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               onValueChange={(v) => { if (bookingYearFilter) { setBookingMonthFilter(v); setBookingPage(0); } }}
               disabled={!bookingYearFilter}
             >
-              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[130px] shrink-0" dir="rtl">
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[8rem] shrink-0" dir="rtl">
                 {bookingMonthFilter !== "all" && bookingYearFilter ? (() => {
                   const [ys, ms] = bookingMonthFilter.split("-").map(Number);
                   return bookingCalView === "hijri"
