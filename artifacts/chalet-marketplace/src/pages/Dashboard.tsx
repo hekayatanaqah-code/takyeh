@@ -16789,6 +16789,7 @@ function DepositsTab() {
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMonth, setFilterMonth] = useState("");
+  const [filterYear, setFilterYear] = useState("");
   const [filterChalet, setFilterChalet] = useState("all");
   const [calendarMode, setCalendarMode] = useState<"hijri" | "gregorian">("hijri");
   const [currentPage, setCurrentPage] = useState(1);
@@ -16893,19 +16894,37 @@ function DepositsTab() {
     }
   };
 
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    deposits.forEach((d) => {
+      if (!d.bookingDate) return;
+      if (calendarMode === "gregorian") {
+        years.add(d.bookingDate.slice(0, 4));
+      } else {
+        const h = toHijriComponents(new Date(d.bookingDate + "T00:00:00"));
+        years.add(String(h.year));
+      }
+    });
+    return Array.from(years).sort().reverse();
+  }, [deposits, calendarMode]);
+
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
     deposits.forEach((d) => {
       if (!d.bookingDate) return;
       if (calendarMode === "gregorian") {
-        months.add(d.bookingDate.slice(0, 7));
+        const ym = d.bookingDate.slice(0, 7);
+        if (filterYear && !ym.startsWith(filterYear)) return;
+        months.add(ym);
       } else {
         const h = toHijriComponents(new Date(d.bookingDate + "T00:00:00"));
-        months.add(`${h.year}-${String(h.month).padStart(2, "0")}`);
+        const ym = `${h.year}-${String(h.month).padStart(2, "0")}`;
+        if (filterYear && !ym.startsWith(filterYear)) return;
+        months.add(ym);
       }
     });
     return Array.from(months).sort().reverse();
-  }, [deposits, calendarMode]);
+  }, [deposits, calendarMode, filterYear]);
 
   const availableChalets = useMemo(() => {
     const map = new Map<string, string>();
@@ -16974,6 +16993,16 @@ function DepositsTab() {
           return `${h.year}-${String(h.month).padStart(2, "0")}` === filterMonth;
         });
       }
+    } else if (filterYear) {
+      if (calendarMode === "gregorian") {
+        result = result.filter((d) => d.bookingDate?.startsWith(filterYear));
+      } else {
+        result = result.filter((d) => {
+          if (!d.bookingDate) return false;
+          const h = toHijriComponents(new Date(d.bookingDate + "T00:00:00"));
+          return String(h.year) === filterYear;
+        });
+      }
     }
     if (filterChalet !== "all") result = result.filter((d) => String(d.submissionId) === filterChalet);
     if (searchQuery.trim()) {
@@ -16993,7 +17022,7 @@ function DepositsTab() {
       });
     }
     return result;
-  }, [deposits, filterStatus, filterMonth, filterChalet, searchQuery, calendarMode]);
+  }, [deposits, filterStatus, filterMonth, filterYear, filterChalet, searchQuery, calendarMode]);
 
   const PAGE_SIZE = 10;
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -17104,14 +17133,14 @@ function DepositsTab() {
               : `لا توجد نتائج لـ «${searchQuery}»`}
           </p>
         )}
-        {/* Calendar toggle + Month dropdown + Chalet */}
-        <div className="flex gap-2 flex-wrap items-center">
+        {/* Unified time filter bar: [هجري|ميلادي] → [Year] → [Month] */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
           {/* Calendar mode toggle */}
-          <div className="flex rounded-lg overflow-hidden border border-border">
+          <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
             {(["hijri", "gregorian"] as const).map((mode) => (
               <button
                 key={mode}
-                onClick={() => { setCalendarMode(mode); setFilterMonth(""); setCurrentPage(1); }}
+                onClick={() => { setCalendarMode(mode); setFilterMonth(""); setFilterYear(""); setCurrentPage(1); }}
                 className={`text-xs px-3 py-1.5 font-medium transition-colors ${
                   calendarMode === mode
                     ? "bg-primary text-primary-foreground"
@@ -17123,46 +17152,60 @@ function DepositsTab() {
             ))}
           </div>
 
-          {/* Month dropdown */}
-          {availableMonths.length > 0 && (
-            <Select
-              value={filterMonth || "__all__"}
-              onValueChange={(v) => { setFilterMonth(v === "__all__" ? "" : v); setCurrentPage(1); }}
-            >
-              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[150px] max-w-[220px]" dir="rtl">
-                {filterMonth ? (
-                  <span className="text-sm font-medium">{monthParts(filterMonth).primary}</span>
-                ) : (
-                  <span className="text-sm text-muted-foreground">كل الشهور</span>
-                )}
-              </SelectTrigger>
-              <SelectContent dir="rtl" align="end">
-                <SelectItem value="__all__">
-                  <span className="text-sm">كل الشهور</span>
+          {/* Year dropdown */}
+          <Select
+            value={filterYear || "__all__"}
+            onValueChange={(yr) => { setFilterYear(yr === "__all__" ? "" : yr); setFilterMonth(""); setCurrentPage(1); }}
+          >
+            <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7rem] shrink-0" dir="rtl">
+              {filterYear
+                ? <span className="text-sm font-medium">{calendarMode === "hijri" ? `${toArN(Number(filterYear))} هـ` : `${toArN(Number(filterYear))} م`}</span>
+                : <span className="text-sm text-muted-foreground">كل السنوات</span>}
+            </SelectTrigger>
+            <SelectContent dir="rtl" align="end">
+              <SelectItem value="__all__"><span className="text-sm">كل السنوات</span></SelectItem>
+              {availableYears.map(yr => (
+                <SelectItem key={yr} value={yr}>
+                  {calendarMode === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
                 </SelectItem>
-                {availableMonths.map((ym) => {
-                  const { primary, secondary } = monthParts(ym);
-                  return (
-                    <SelectItem key={ym} value={ym}>
-                      <div className="flex flex-col items-end gap-0.5 py-0.5">
-                        <span className="font-semibold text-sm leading-tight">{primary}</span>
-                        {secondary && (
-                          <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          )}
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Month dropdown — cascades from year, locked when كل السنوات */}
+          <Select
+            value={!filterYear ? "__all__" : (filterMonth || "__all__")}
+            onValueChange={(v) => { if (filterYear) { setFilterMonth(v === "__all__" ? "" : v); setCurrentPage(1); } }}
+            disabled={!filterYear}
+          >
+            <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[8rem] shrink-0" dir="rtl">
+              {filterMonth && filterYear ? (() => {
+                const [, ms] = filterMonth.split("-").map(Number);
+                return calendarMode === "hijri"
+                  ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]}</span>
+                  : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
+              })() : <span className="text-muted-foreground">كل التأمينات</span>}
+            </SelectTrigger>
+            <SelectContent dir="rtl" align="end">
+              <SelectItem value="__all__"><span className="text-sm">كل التأمينات</span></SelectItem>
+              {availableMonths.map((ym) => {
+                const [, ms] = ym.split("-").map(Number);
+                const label = calendarMode === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
+                return (
+                  <SelectItem key={ym} value={ym}>
+                    <span className="text-sm">{label}</span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
 
           {/* Chalet dropdown */}
           {availableChalets.length > 1 && (
             <select
               value={filterChalet}
               onChange={(e) => { setFilterChalet(e.target.value); setCurrentPage(1); }}
-              className="text-sm rounded-lg border border-border bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 h-9"
+              className="text-sm rounded-lg border border-border bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 h-9 shrink-0"
               dir="rtl"
             >
               <option value="all">🏡 كل الشاليهات</option>
@@ -17173,10 +17216,10 @@ function DepositsTab() {
           )}
 
           {/* Clear filters */}
-          {(searchQuery || filterMonth || filterChalet !== "all" || filterStatus !== "all") && (
+          {(searchQuery || filterMonth || filterYear || filterChalet !== "all" || filterStatus !== "all") && (
             <button
-              onClick={() => { setSearchQuery(""); setFilterMonth(""); setFilterChalet("all"); setFilterStatus("all"); setCurrentPage(1); }}
-              className="text-sm px-3 py-1.5 rounded-lg font-medium border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 transition-colors h-9"
+              onClick={() => { setSearchQuery(""); setFilterMonth(""); setFilterYear(""); setFilterChalet("all"); setFilterStatus("all"); setCurrentPage(1); }}
+              className="text-sm px-3 py-1.5 rounded-lg font-medium border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 transition-colors h-9 shrink-0"
             >✕ مسح الفلاتر</button>
           )}
         </div>
