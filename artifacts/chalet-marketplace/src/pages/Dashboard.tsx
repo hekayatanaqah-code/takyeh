@@ -16069,6 +16069,9 @@ function ReviewsTab() {
   const [replyingId, setReplyingId] = useState<number | null>(null);
   const [reportConfirmId, setReportConfirmId] = useState<number | null>(null);
   const [reportReasonDraft, setReportReasonDraft] = useState("");
+  const [reviewCalType, setReviewCalType] = useState<"gregorian" | "hijri">("gregorian");
+  const [reviewYear, setReviewYear] = useState<string>(String(new Date().getFullYear()));
+  const [reviewMonth, setReviewMonth] = useState<string>("");
 
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
@@ -16216,6 +16219,86 @@ function ReviewsTab() {
   }
 
   const selectedChalet = chalets.find((c) => c.id === selectedChaletId) ?? null;
+
+  /* ── Reviews: cascading filter data ── */
+  const chaletReviewsAll = useMemo(() =>
+    selectedChalet ? ownerReviews.filter(r => r.chaletId === selectedChalet.id) : [],
+  [ownerReviews, selectedChalet]);
+
+  const reviewYearOptions = useMemo(() => {
+    const years = new Set<string>();
+    chaletReviewsAll.forEach(r => {
+      const d = new Date(r.createdAt);
+      years.add(reviewCalType === "gregorian" ? String(d.getFullYear()) : String(toHijriComponents(d).year));
+    });
+    years.add(reviewCalType === "gregorian" ? String(new Date().getFullYear()) : String(toHijriComponents(new Date()).year));
+    return Array.from(years).sort().reverse();
+  }, [chaletReviewsAll, reviewCalType]);
+
+  const reviewMonthOptions = useMemo(() => {
+    if (!reviewYear) return [] as string[];
+    const months = new Set<string>();
+    chaletReviewsAll.forEach(r => {
+      const d = new Date(r.createdAt);
+      if (reviewCalType === "gregorian") {
+        if (String(d.getFullYear()) === reviewYear) months.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+      } else {
+        const h = toHijriComponents(d);
+        if (String(h.year) === reviewYear) months.add(`${h.year}-${String(h.month).padStart(2,"0")}`);
+      }
+    });
+    const curYear = reviewCalType === "gregorian" ? String(new Date().getFullYear()) : String(toHijriComponents(new Date()).year);
+    if (reviewYear === curYear) {
+      const d = new Date();
+      if (reviewCalType === "gregorian") months.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+      else { const h = toHijriComponents(d); months.add(`${h.year}-${String(h.month).padStart(2,"0")}`); }
+    }
+    return Array.from(months).sort().reverse();
+  }, [chaletReviewsAll, reviewCalType, reviewYear]);
+
+  const filteredChaletReviews = useMemo(() => {
+    if (!reviewYear) return chaletReviewsAll;
+    return chaletReviewsAll.filter(r => {
+      const d = new Date(r.createdAt);
+      if (reviewCalType === "gregorian") {
+        if (String(d.getFullYear()) !== reviewYear) return false;
+        if (!reviewMonth) return true;
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}` === reviewMonth;
+      } else {
+        const h = toHijriComponents(d);
+        if (String(h.year) !== reviewYear) return false;
+        if (!reviewMonth) return true;
+        return `${h.year}-${String(h.month).padStart(2,"0")}` === reviewMonth;
+      }
+    });
+  }, [chaletReviewsAll, reviewCalType, reviewYear, reviewMonth]);
+
+  const reviewMonthParts = (ym: string): { primary: string; secondary: string } => {
+    const [y, m] = ym.split("-").map(Number);
+    const gregMonthName = (gy: number, gm: number) =>
+      new Date(gy, gm, 15).toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
+    if (reviewCalType === "hijri") {
+      const primary = `${HIJRI_MONTHS_AR[m - 1]} ${toArN(y)} هـ`;
+      const { start, end } = getHijriMonthGregorianRange(y, m);
+      let secondary = "";
+      if (start && end) {
+        const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
+        const sY = s.getFullYear(), sM = s.getMonth(), eY = e.getFullYear(), eM = e.getMonth();
+        if (sY === eY && sM === eM) secondary = `${gregMonthName(sY, sM)} ${toArN(sY)}`;
+        else if (sY === eY) secondary = `${gregMonthName(sY, sM)} / ${gregMonthName(eY, eM)} ${toArN(sY)}`;
+        else secondary = `${gregMonthName(sY, sM)} ${toArN(sY)} / ${gregMonthName(eY, eM)} ${toArN(eY)}`;
+      }
+      return { primary, secondary };
+    }
+    const primary = `${gregMonthName(y, m - 1)} ${toArN(y)}`;
+    const h1 = toHijriComponents(new Date(y, m - 1, 1)), h2 = toHijriComponents(new Date(y, m, 0));
+    let secondary = "";
+    if (h1.year === h2.year && h1.month === h2.month) secondary = `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} هـ`;
+    else if (h1.year === h2.year) secondary = `${HIJRI_MONTHS_AR[h1.month-1]} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h1.year)} هـ`;
+    else secondary = `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h2.year)} هـ`;
+    return { primary, secondary };
+  };
+
   const currentLink = selectedChaletId ? generatedLinks[selectedChaletId] : null;
   const stats = selectedChaletId ? inviteStats(selectedChaletId) : null;
 
@@ -16382,21 +16465,84 @@ function ReviewsTab() {
           )}
 
           {/* ── Submitted Reviews for selected chalet ── */}
-          {selectedChalet && (() => {
-            const chaletReviews = ownerReviews.filter((r) => r.chaletId === selectedChalet.id);
-            if (reviewsLoading) return (
+          {selectedChalet && (
+            reviewsLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
-            );
-            if (chaletReviews.length === 0) return (
+            ) : chaletReviewsAll.length === 0 ? (
               <div className="bg-card border border-border rounded-2xl p-6 text-center text-muted-foreground text-sm">
                 <Star className="w-8 h-8 mx-auto mb-2 opacity-30" />
                 لا توجد تقييمات مستلمة لهذا الشاليه بعد
               </div>
-            );
-            return (
+            ) : (
               <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
-                <p className="font-bold text-foreground">التقييمات الواردة ({toAr(chaletReviews.length)})</p>
-                {chaletReviews.map((rev) => (
+                {/* Filter bar */}
+                <div className="flex items-center gap-2 flex-wrap justify-between">
+                  <p className="font-bold text-foreground shrink-0">
+                    التقييمات الواردة ({toAr(filteredChaletReviews.length)})
+                  </p>
+                  <div className="flex items-center gap-2 flex-nowrap">
+                    {/* Calendar toggle */}
+                    <div className="flex rounded-lg border border-border overflow-hidden text-xs shrink-0">
+                      {(["gregorian", "hijri"] as const).map(mode => (
+                        <button key={mode}
+                          onClick={() => {
+                            const yr = mode === "hijri" ? String(toHijriComponents(new Date()).year) : String(new Date().getFullYear());
+                            setReviewCalType(mode); setReviewYear(yr); setReviewMonth("");
+                          }}
+                          className={`px-3 py-1.5 font-medium transition-colors ${reviewCalType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                        >
+                          {mode === "gregorian" ? "ميلادي" : "هجري"}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Year dropdown — includes "كل السنوات" */}
+                    <Select value={reviewYear || "__all__"} onValueChange={yr => { setReviewYear(yr === "__all__" ? "" : yr); setReviewMonth(""); }}>
+                      <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7rem] shrink-0" dir="rtl">
+                        {reviewYear
+                          ? <span className="text-sm font-medium">{reviewCalType === "hijri" ? `${toArN(Number(reviewYear))} هـ` : `${toArN(Number(reviewYear))} م`}</span>
+                          : <span className="text-sm text-muted-foreground">كل السنوات</span>}
+                      </SelectTrigger>
+                      <SelectContent dir="rtl" align="end">
+                        <SelectItem value="__all__"><span className="text-sm">كل السنوات</span></SelectItem>
+                        {reviewYearOptions.map(yr => (
+                          <SelectItem key={yr} value={yr}>
+                            {reviewCalType === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {/* Month dropdown — locked to "كل الشهور" when no year selected */}
+                    <Select
+                      value={!reviewYear ? "__all__" : (reviewMonth || "__all__")}
+                      onValueChange={v => { if (reviewYear) setReviewMonth(v === "__all__" ? "" : v); }}
+                      disabled={!reviewYear}
+                    >
+                      <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
+                        {reviewMonth && reviewYear
+                          ? <span className="text-sm font-medium">{reviewMonthParts(reviewMonth).primary}</span>
+                          : <span className="text-sm text-muted-foreground">كل الشهور</span>}
+                      </SelectTrigger>
+                      <SelectContent dir="rtl" align="end">
+                        <SelectItem value="__all__"><span className="text-sm">كل الشهور</span></SelectItem>
+                        {reviewMonthOptions.map(ym => {
+                          const { primary, secondary } = reviewMonthParts(ym);
+                          return (
+                            <SelectItem key={ym} value={ym}>
+                              <div className="flex flex-col items-end gap-0.5 py-0.5">
+                                <span className="font-semibold text-sm leading-tight">{primary}</span>
+                                {secondary && <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>}
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {/* Reviews list */}
+                {filteredChaletReviews.length === 0 ? (
+                  <div className="text-center text-muted-foreground text-sm py-6">لا توجد تقييمات في هذه الفترة</div>
+                ) : filteredChaletReviews.map((rev) => (
                   <div key={rev.id} className={`rounded-xl border p-4 space-y-3 ${rev.isHidden ? "border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-800" : "border-border bg-muted/30"}`}>
                     {/* Header */}
                     <div className="flex items-center gap-2 flex-wrap">
@@ -16531,8 +16677,8 @@ function ReviewsTab() {
                   </div>
                 ))}
               </div>
-            );
-          })()}
+            )
+          )}
 
           {/* Tip card when nothing selected */}
           {!selectedChalet && (
