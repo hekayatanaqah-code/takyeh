@@ -10895,6 +10895,11 @@ function RevenueTab() {
   const showAllFuture = revSubTab === "receivables";
   const [pendingFilterMonth, setPendingFilterMonth] = useState<string>("");
   const [pendingCalType, setPendingCalType] = useState<"hijri" | "gregorian">("gregorian");
+  const [revYear, setRevYear] = useState<string>(() => {
+    const mode = (localStorage.getItem("revCalType") as "gregorian" | "hijri") ?? "gregorian";
+    return mode === "hijri" ? String(toHijriComponents(new Date()).year) : String(new Date().getFullYear());
+  });
+  const [pendingYear, setPendingYear] = useState<string>(() => String(new Date().getFullYear()));
 
   const { data: financial, isLoading: finLoading, refetch: refetchFinancial } = useQuery<{
     totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
@@ -10985,9 +10990,58 @@ function RevenueTab() {
       .sort((a, bk) => (a.bookingDate ?? "").localeCompare(bk.bookingDate ?? ""));
   }, [allBookings, unit]);
 
-  /* Available months for pending receivables filter — keyed by active calendar type */
+  /* ── Revenue tab: cascading year/month options ── */
+  const revGregYearOptions = useMemo(() => {
+    const years = new Set<string>();
+    years.add(String(new Date().getFullYear()));
+    allBookings.forEach(bk => { if (bk.bookingDate) years.add(bk.bookingDate.slice(0, 4)); });
+    return Array.from(years).sort().reverse();
+  }, [allBookings]);
+
+  const revHijriYearOptions = useMemo(() => {
+    const years = new Set<number>();
+    years.add(toHijriComponents(new Date()).year);
+    allBookings.forEach(bk => {
+      if (bk.bookingDate) years.add(toHijriComponents(new Date(bk.bookingDate + "T00:00:00")).year);
+    });
+    return Array.from(years).sort().reverse();
+  }, [allBookings]);
+
+  const revMonthsForYear = useMemo(() => {
+    if (calType === "gregorian") {
+      const months = new Set<string>();
+      const curYear = String(new Date().getFullYear());
+      if (revYear === curYear) months.add(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`);
+      allBookings.forEach(bk => {
+        if (bk.bookingDate?.startsWith(revYear + "-")) months.add(bk.bookingDate.slice(0, 7));
+      });
+      return Array.from(months).sort().reverse();
+    } else {
+      const fmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
+      const months = new Map<string, Date>();
+      const now = new Date();
+      if (revYear === String(toHijriComponents(now).year)) months.set(fmt.format(now), now);
+      allBookings.forEach(bk => {
+        if (!bk.bookingDate) return;
+        const d = new Date(bk.bookingDate + "T00:00:00");
+        if (String(toHijriComponents(d).year) === revYear) {
+          const key = fmt.format(d);
+          if (!months.has(key)) months.set(key, d);
+        }
+      });
+      return Array.from(months.entries()).sort(([,a],[,b]) => b.getTime()-a.getTime()).map(([k]) => k);
+    }
+  }, [allBookings, calType, revYear]);
+
+  /* ── Receivables tab: cascading year/month options ── */
   const pendingAvailableMonths = useMemo(() => {
     const months = new Set<string>();
+    if (pendingCalType === "gregorian") {
+      months.add(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`);
+    } else {
+      const h = toHijriComponents(new Date());
+      months.add(`${h.year}-${String(h.month).padStart(2,"0")}`);
+    }
     allReceivables.forEach(bk => {
       if (!bk.bookingDate) return;
       if (pendingCalType === "gregorian") {
@@ -11035,17 +11089,38 @@ function RevenueTab() {
     return { primary, secondary };
   };
 
+  const pendingYearOptions = useMemo(() => {
+    const years = new Set<string>();
+    pendingAvailableMonths.forEach(ym => years.add(ym.slice(0, 4)));
+    return Array.from(years).sort().reverse();
+  }, [pendingAvailableMonths]);
+
+  const pendingMonthsForYear = useMemo(() =>
+    pendingYear ? pendingAvailableMonths.filter(ym => ym.startsWith(pendingYear + "-")) : pendingAvailableMonths,
+  [pendingAvailableMonths, pendingYear]);
+
   const filteredReceivables = useMemo(() => {
-    if (!pendingFilterMonth) return allReceivables;
+    let result = allReceivables;
     if (pendingCalType === "gregorian") {
-      return allReceivables.filter(bk => bk.bookingDate?.startsWith(pendingFilterMonth));
+      if (pendingFilterMonth) result = result.filter(bk => bk.bookingDate?.startsWith(pendingFilterMonth));
+      else if (pendingYear) result = result.filter(bk => bk.bookingDate?.startsWith(pendingYear + "-"));
+    } else {
+      if (pendingFilterMonth) {
+        result = result.filter(bk => {
+          if (!bk.bookingDate) return false;
+          const h = toHijriComponents(new Date(bk.bookingDate + "T00:00:00"));
+          return `${h.year}-${String(h.month).padStart(2,"0")}` === pendingFilterMonth;
+        });
+      } else if (pendingYear) {
+        result = result.filter(bk => {
+          if (!bk.bookingDate) return false;
+          const h = toHijriComponents(new Date(bk.bookingDate + "T00:00:00"));
+          return String(h.year) === pendingYear;
+        });
+      }
     }
-    return allReceivables.filter(bk => {
-      if (!bk.bookingDate) return false;
-      const h = toHijriComponents(new Date(bk.bookingDate + "T00:00:00"));
-      return `${h.year}-${String(h.month).padStart(2, "0")}` === pendingFilterMonth;
-    });
-  }, [allReceivables, pendingFilterMonth, pendingCalType]);
+    return result;
+  }, [allReceivables, pendingFilterMonth, pendingYear, pendingCalType]);
 
   const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings", "cancelled"],
@@ -11558,9 +11633,15 @@ function RevenueTab() {
           {!showAllFuture && (
             <div className="flex rounded-lg border border-border overflow-hidden text-xs">
               {(["gregorian", "hijri"] as const).map(mode => (
-                <button
-                  key={mode}
-                  onClick={() => { setCalType(mode); localStorage.setItem("revCalType", mode); setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50); }}
+                <button key={mode}
+                  onClick={() => {
+                    const newYear = mode === "hijri" ? String(toHijriComponents(new Date()).year) : String(new Date().getFullYear());
+                    setCalType(mode); setRevYear(newYear);
+                    if (mode === "gregorian") { const d = new Date(); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`); }
+                    else { const fmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura",{month:"long",year:"numeric"}); setSelectedHijriMonth(fmt.format(new Date())); }
+                    localStorage.setItem("revCalType", mode);
+                    setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50);
+                  }}
                   className={`px-3 py-1.5 font-medium transition-colors ${calType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                 >
                   {mode === "gregorian" ? "ميلادي" : "هجري"}
@@ -11568,20 +11649,36 @@ function RevenueTab() {
               ))}
             </div>
           )}
-          {/* Month selector — hidden in all-future mode */}
-          {!showAllFuture && (calType === "gregorian" ? (
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[150px] max-w-[220px]" dir="rtl">
-                {selectedMonth ? (
-                  <span className="text-sm font-medium">
-                    {(() => { const [y,m] = selectedMonth.split("-").map(Number); return new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",year:"numeric",calendar:"gregory"}); })()}
-                  </span>
-                ) : <span className="text-sm text-muted-foreground">اختر الشهر</span>}
+          {/* Year dropdown — hidden in all-future mode */}
+          {!showAllFuture && (
+            <Select value={revYear} onValueChange={yr => { setRevYear(yr); setSelectedMonth(""); setSelectedHijriMonth(""); }}>
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border w-28" dir="rtl">
+                <SelectValue placeholder="السنة" />
               </SelectTrigger>
               <SelectContent dir="rtl" align="end">
-                {monthOptions.map(o => {
-                  const [y,m] = o.val.split("-").map(Number);
-                  const gregPrimary = new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",year:"numeric",calendar:"gregory"});
+                {(calType === "gregorian" ? revGregYearOptions : revHijriYearOptions.map(String)).map(yr => (
+                  <SelectItem key={yr} value={yr}>
+                    {calType === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {/* Month dropdown — dynamic, data-driven, hidden in all-future mode */}
+          {!showAllFuture && revMonthsForYear.length > 0 && (calType === "gregorian" ? (
+            <Select value={selectedMonth || (revMonthsForYear[0] ?? "")} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[130px] max-w-[200px]" dir="rtl">
+                {(() => {
+                  const ym = selectedMonth || revMonthsForYear[0] || "";
+                  if (!ym) return <span className="text-sm text-muted-foreground">اختر الشهر</span>;
+                  const [y,m] = ym.split("-").map(Number);
+                  return <span className="text-sm font-medium">{new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"})}</span>;
+                })()}
+              </SelectTrigger>
+              <SelectContent dir="rtl" align="end">
+                {revMonthsForYear.map(ym => {
+                  const [y,m] = ym.split("-").map(Number);
+                  const gregPrimary = new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"});
                   const h1 = toHijriComponents(new Date(y,m-1,1));
                   const h2 = toHijriComponents(new Date(y,m,0));
                   const hijriSec = (h1.year===h2.year&&h1.month===h2.month)
@@ -11590,9 +11687,9 @@ function RevenueTab() {
                       ? `${HIJRI_MONTHS_AR[h1.month-1]} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h1.year)} هـ`
                       : `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h2.year)} هـ`;
                   return (
-                    <SelectItem key={o.val} value={o.val}>
+                    <SelectItem key={ym} value={ym}>
                       <div className="flex flex-col items-end gap-0.5 py-0.5">
-                        <span className="font-semibold text-sm leading-tight">{o.isFuture ? `🔮 ${gregPrimary}` : gregPrimary}</span>
+                        <span className="font-semibold text-sm leading-tight">{gregPrimary}</span>
                         {hijriSec && <span className="text-xs text-muted-foreground leading-tight">{hijriSec}</span>}
                       </div>
                     </SelectItem>
@@ -11601,24 +11698,21 @@ function RevenueTab() {
               </SelectContent>
             </Select>
           ) : (
-            <Select value={selectedHijriMonth} onValueChange={setSelectedHijriMonth}>
-              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[150px] max-w-[220px]" dir="rtl">
-                {selectedHijriMonth
-                  ? <span className="text-sm font-medium">{selectedHijriMonth}</span>
+            <Select value={selectedHijriMonth || (revMonthsForYear[0] ?? "")} onValueChange={setSelectedHijriMonth}>
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[130px] max-w-[200px]" dir="rtl">
+                {selectedHijriMonth || revMonthsForYear[0]
+                  ? <span className="text-sm font-medium">{selectedHijriMonth || revMonthsForYear[0]}</span>
                   : <span className="text-sm text-muted-foreground">اختر الشهر</span>}
               </SelectTrigger>
               <SelectContent dir="rtl" align="end">
-                {hijriMonthOptions.map(o => {
-                  const gregYm = hijriToGregorianMap[o.key];
+                {revMonthsForYear.map(key => {
+                  const gregYm = hijriToGregorianMap[key];
                   let gregSec = "";
-                  if (gregYm) {
-                    const [gy,gm] = gregYm.split("-").map(Number);
-                    gregSec = new Date(gy,gm-1,15).toLocaleDateString("ar-SA",{month:"long",year:"numeric",calendar:"gregory"});
-                  }
+                  if (gregYm) { const [gy,gm] = gregYm.split("-").map(Number); gregSec = new Date(gy,gm-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"}); }
                   return (
-                    <SelectItem key={o.key} value={o.key}>
+                    <SelectItem key={key} value={key}>
                       <div className="flex flex-col items-end gap-0.5 py-0.5">
-                        <span className="font-semibold text-sm leading-tight">{o.isFuture ? `🔮 ${o.key}` : o.key}</span>
+                        <span className="font-semibold text-sm leading-tight">{key}</span>
                         {gregSec && <span className="text-xs text-muted-foreground leading-tight">{gregSec}</span>}
                       </div>
                     </SelectItem>
@@ -11655,20 +11749,38 @@ function RevenueTab() {
               {(["gregorian", "hijri"] as const).map((mode) => (
                 <button
                   key={mode}
-                  onClick={() => { setPendingCalType(mode); setPendingFilterMonth(""); }}
+                  onClick={() => {
+                    const newYear = mode === "hijri" ? String(toHijriComponents(new Date()).year) : String(new Date().getFullYear());
+                    setPendingCalType(mode); setPendingYear(newYear); setPendingFilterMonth("");
+                  }}
                   className={`px-3 py-1.5 font-medium transition-colors ${pendingCalType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                 >
                   {mode === "gregorian" ? "ميلادي" : "هجري"}
                 </button>
               ))}
             </div>
-            {/* Month dropdown */}
-            {pendingAvailableMonths.length > 0 && (
+            {/* Year dropdown */}
+            {pendingYearOptions.length > 0 && (
+              <Select value={pendingYear} onValueChange={yr => { setPendingYear(yr); setPendingFilterMonth(""); }}>
+                <SelectTrigger className="h-9 text-sm rounded-lg border-border w-28" dir="rtl">
+                  <SelectValue placeholder="السنة" />
+                </SelectTrigger>
+                <SelectContent dir="rtl" align="end">
+                  {pendingYearOptions.map(yr => (
+                    <SelectItem key={yr} value={yr}>
+                      {pendingCalType === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {/* Month dropdown — data-driven, only months with activity */}
+            {pendingMonthsForYear.length > 0 && (
               <Select
                 value={pendingFilterMonth || "__all__"}
                 onValueChange={v => setPendingFilterMonth(v === "__all__" ? "" : v)}
               >
-                <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[150px] max-w-[220px]" dir="rtl">
+                <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[130px] max-w-[200px]" dir="rtl">
                   {pendingFilterMonth ? (
                     <span className="text-sm font-medium">{pendingMonthParts(pendingFilterMonth).primary}</span>
                   ) : (
@@ -11679,7 +11791,7 @@ function RevenueTab() {
                   <SelectItem value="__all__">
                     <span className="text-sm">كل الشهور</span>
                   </SelectItem>
-                  {pendingAvailableMonths.map(ym => {
+                  {pendingMonthsForYear.map(ym => {
                     const { primary, secondary } = pendingMonthParts(ym);
                     return (
                       <SelectItem key={ym} value={ym}>
