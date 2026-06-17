@@ -6638,10 +6638,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
             >
               <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[8rem] shrink-0" dir="rtl">
                 {bookingMonthFilter !== "all" && bookingYearFilter ? (() => {
-                  const [ys, ms] = bookingMonthFilter.split("-").map(Number);
+                  const [, ms] = bookingMonthFilter.split("-").map(Number);
                   return bookingCalView === "hijri"
-                    ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]} {toArN(ys)} هـ</span>
-                    : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]} {toArN(ys)}</span>;
+                    ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]}</span>
+                    : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
                 })() : <span className="text-muted-foreground">{bookingYearFilter ? "كل الحجوزات" : "كل الحجوزات"}</span>}
               </SelectTrigger>
               <SelectContent dir="rtl" align="end">
