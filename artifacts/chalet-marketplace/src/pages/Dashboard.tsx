@@ -16520,7 +16520,9 @@ function ReviewsTab() {
                       <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
                         {reviewMonth && reviewYear
                           ? <span className="text-sm font-medium">{reviewMonthParts(reviewMonth).primary}</span>
-                          : <span className="text-sm text-muted-foreground">كل الشهور</span>}
+                          : !reviewYear
+                            ? <span className="text-sm text-muted-foreground">كل التقييمات</span>
+                            : <span className="text-sm text-muted-foreground">كل الشهور</span>}
                       </SelectTrigger>
                       <SelectContent dir="rtl" align="end">
                         <SelectItem value="__all__"><span className="text-sm">كل الشهور</span></SelectItem>
