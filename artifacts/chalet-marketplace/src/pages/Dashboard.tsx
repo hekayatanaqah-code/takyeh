@@ -20886,6 +20886,7 @@ function ContractsArchiveTab() {
     (localStorage.getItem("dashCalDefaultType") as "hijri" | "gregorian") ?? "hijri"
   );
   const [contractMonth, setContractMonth] = useState<string>("all");
+  const [contractYear, setContractYear] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<"all" | "signed" | "pending" | "cancelled">("all");
   const [page, setPage] = useState(1);
   const [dropdownPos, setDropdownPos] = useState<{ id: number; right: number; top: number; up: boolean } | null>(null);
@@ -20929,19 +20930,37 @@ function ContractsArchiveTab() {
     return                       { key: "pending",   label: "قيد الانتظار", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-700/40" };
   }
 
-  /* ── Month options built from actual bookings ── */
+  /* ── Year options built from actual bookings ── */
+  const contractYearOptions = useMemo(() => {
+    const years = new Set<string>();
+    for (const b of bookings) {
+      if (!b.bookingDate) continue;
+      years.add(getBookingMonthKey(b.bookingDate, contractCalView).split("-")[0]);
+    }
+    return Array.from(years).sort().reverse();
+  }, [bookings, contractCalView]);
+
+  /* ── Month options filtered by selected year ── */
   const monthOptions = useMemo(() => {
     const keySet = new Set<string>();
     for (const b of bookings) {
-      if (b.bookingDate) keySet.add(getBookingMonthKey(b.bookingDate, contractCalView));
+      if (!b.bookingDate) continue;
+      const key = getBookingMonthKey(b.bookingDate, contractCalView);
+      if (contractYear && !key.startsWith(contractYear)) continue;
+      keySet.add(key);
     }
     return Array.from(keySet).sort();
-  }, [bookings, contractCalView]);
+  }, [bookings, contractCalView, contractYear]);
 
   const monthFiltered = useMemo(() => {
-    if (contractMonth === "all") return bookings;
-    return bookings.filter((b) => b.bookingDate && getBookingMonthKey(b.bookingDate, contractCalView) === contractMonth);
-  }, [bookings, contractMonth, contractCalView]);
+    if (contractMonth !== "all") {
+      return bookings.filter((b) => b.bookingDate && getBookingMonthKey(b.bookingDate, contractCalView) === contractMonth);
+    }
+    if (contractYear) {
+      return bookings.filter((b) => b.bookingDate && getBookingMonthKey(b.bookingDate, contractCalView).startsWith(contractYear));
+    }
+    return bookings;
+  }, [bookings, contractMonth, contractYear, contractCalView]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase().replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
@@ -21116,84 +21135,78 @@ function ContractsArchiveTab() {
 
       {/* ── Filter Bar ── */}
       <div className="space-y-2">
-        {/* Row 1: Cal toggle + Month dropdown + Search */}
-        <div className="flex flex-wrap items-center gap-2" dir="rtl">
+        {/* Row 1: Unified time filters [هجري|ميلادي] → [Year] → [Month] */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
           {/* Hijri / Gregorian toggle */}
-          <div className="flex rounded-xl border border-border overflow-hidden text-xs shrink-0">
+          <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
             {(["hijri", "gregorian"] as const).map(mode => (
               <button
                 key={mode}
                 type="button"
-                onClick={() => { setContractCalView(mode); setContractMonth("all"); }}
-                className={`px-3 py-2 font-semibold transition-colors ${contractCalView === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                onClick={() => { setContractCalView(mode); setContractMonth("all"); setContractYear(""); }}
+                className={`text-xs px-3 py-1.5 font-medium transition-colors ${contractCalView === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
               >{mode === "hijri" ? "هجري" : "ميلادي"}</button>
             ))}
           </div>
-          {/* Month Select */}
-          <Select value={contractMonth} onValueChange={v => setContractMonth(v)}>
-            <SelectTrigger className="h-9 text-xs font-semibold rounded-xl border-border min-w-[160px] max-w-[220px] shrink-0" dir="rtl">
-              {contractMonth === "all"
-                ? <span className="text-muted-foreground">كل الأشهر</span>
-                : contractCalView === "hijri"
-                  ? <span>{HIJRI_MONTHS_AR[+contractMonth.split("-")[1] - 1]} {toArN(+contractMonth.split("-")[0])} هـ</span>
-                  : <span>{GREGORIAN_MONTHS_AR[+contractMonth.split("-")[1] - 1]} {toArN(+contractMonth.split("-")[0])} م</span>
-              }
+          {/* Year dropdown */}
+          <Select value={contractYear || "__all__"} onValueChange={(yr) => { setContractYear(yr === "__all__" ? "" : yr); setContractMonth("all"); }}>
+            <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7rem] shrink-0" dir="rtl">
+              {contractYear
+                ? <span className="text-sm font-medium">{contractCalView === "hijri" ? `${toArN(Number(contractYear))} هـ` : `${toArN(Number(contractYear))} م`}</span>
+                : <span className="text-sm text-muted-foreground">كل السنوات</span>}
+            </SelectTrigger>
+            <SelectContent dir="rtl" align="end">
+              <SelectItem value="__all__"><span className="text-sm">كل السنوات</span></SelectItem>
+              {contractYearOptions.map(yr => (
+                <SelectItem key={yr} value={yr}>
+                  {contractCalView === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {/* Month dropdown — cascades from year */}
+          <Select
+            value={!contractYear ? "all" : contractMonth}
+            onValueChange={(v) => { if (contractYear) setContractMonth(v); }}
+            disabled={!contractYear}
+          >
+            <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[8rem] shrink-0" dir="rtl">
+              {contractMonth !== "all" && contractYear ? (() => {
+                const ms = Number(contractMonth.split("-")[1]);
+                return contractCalView === "hijri"
+                  ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]}</span>
+                  : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
+              })() : <span className="text-muted-foreground">كل العقود</span>}
             </SelectTrigger>
             <SelectContent dir="rtl" align="end" className="z-[100]">
-              <SelectItem value="all"><span className="text-sm">كل الأشهر</span></SelectItem>
+              <SelectItem value="all"><span className="text-sm">كل العقود</span></SelectItem>
               {monthOptions.map(key => {
-                const [ys, ms] = key.split("-").map(Number);
-                const gName = (gy: number, gm: number) =>
-                  new Date(gy, gm, 15).toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
-                let primary = "", secondary = "";
-                if (contractCalView === "hijri") {
-                  primary = `${HIJRI_MONTHS_AR[ms - 1]} ${toArN(ys)} هـ`;
-                  const { start, end } = getHijriMonthGregorianRange(ys, ms);
-                  if (start && end) {
-                    const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
-                    const [sY, sM, eY, eM] = [s.getFullYear(), s.getMonth(), e.getFullYear(), e.getMonth()];
-                    if (sY === eY && sM === eM) secondary = `${gName(sY, sM)} ${toArN(sY)} م`;
-                    else if (sY === eY) secondary = `${gName(sY, sM)} / ${gName(eY, eM)} ${toArN(sY)} م`;
-                    else secondary = `${gName(sY, sM)} ${toArN(sY)} م / ${gName(eY, eM)} ${toArN(eY)} م`;
-                  }
-                } else {
-                  primary = `${GREGORIAN_MONTHS_AR[ms - 1]} ${toArN(ys)} م`;
-                  const h1 = toHijriComponents(new Date(ys, ms - 1, 1));
-                  const h2 = toHijriComponents(new Date(ys, ms, 0));
-                  if (h1.year === h2.year && h1.month === h2.month)
-                    secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
-                  else if (h1.year === h2.year)
-                    secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
-                  else
-                    secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
-                }
+                const ms = Number(key.split("-")[1]);
+                const label = contractCalView === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
                 return (
                   <SelectItem key={key} value={key}>
-                    <div className="flex flex-col items-end gap-0.5 py-0.5">
-                      <span className="font-semibold text-sm leading-tight">{primary}</span>
-                      {secondary && <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>}
-                    </div>
+                    <span className="text-sm">{label}</span>
                   </SelectItem>
                 );
               })}
             </SelectContent>
           </Select>
-          {/* Search */}
-          <div className="relative flex-1 min-w-[180px]">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="ابحث بالاسم أو رقم الحجز أو الجوال…"
-              className="w-full rounded-xl border border-border bg-background pr-10 pl-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right"
-            />
-            {search && (
-              <button onClick={() => setSearch("")} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+        </div>
+        {/* Search bar */}
+        <div className="relative" dir="rtl">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="ابحث بالاسم أو رقم الحجز أو الجوال…"
+            className="w-full rounded-xl border border-border bg-background pr-10 pl-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         {/* Row 2: Status tabs */}
         <div className="flex gap-1.5 flex-wrap">
