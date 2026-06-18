@@ -21734,11 +21734,11 @@ function OwnerProfileTab() {
 
   useEffect(() => {
     setFetchError(null);
-    apiFetch("/owner/profile")
-      .then(async (r) => {
+    Promise.all([
+      apiFetch("/owner/profile").then(async (r) => {
         const d = await r.json().catch(() => null);
         console.log("[OwnerProfileTab] API response:", d);
-        if (!r.ok) { setFetchError(d?.error ?? "تعذّر تحميل بيانات الحساب"); return; }
+        if (!r.ok) { setFetchError(d?.error ?? "تعذّر تحميل بيانات الحساب"); return null; }
         if (d) {
           const n = d.fullName ?? "", ph = d.phone ?? "", em = d.email ?? "";
           console.log("[OwnerProfileTab] Setting fields — name:", n, "phone:", ph, "email:", em);
@@ -21746,13 +21746,24 @@ function OwnerProfileTab() {
           setPhone(ph);   setInitPhone(ph);
           setEmail(em);   setInitEmail(em);
           setWaSubscribe(!!d.whatsappNewsSubscribe);
+          return ph;
         }
-      })
-      .catch(() => setFetchError("تعذّر الاتصال بالخادم"))
-      .finally(() => setLoading(false));
-    apiFetch("/owner/notification-settings")
-      .then(async (r) => { if (r.ok) { const nd = await r.json(); setWaReviewEnabled(nd.waEnabled ?? false); setWaSupportEnabled(nd.waSupportEnabled ?? false); const raw = nd.waPhone ?? ""; setWaUnifiedPhone(raw.startsWith("966") ? "0" + raw.slice(3) : raw); } })
-      .catch(() => {});
+        return null;
+      }).catch(() => { setFetchError("تعذّر الاتصال بالخادم"); return null; }),
+      apiFetch("/owner/notification-settings")
+        .then(async (r) => r.ok ? r.json() : null)
+        .catch(() => null),
+    ]).then(([mainPhone, nd]) => {
+      if (nd) {
+        setWaReviewEnabled(nd.waEnabled ?? false);
+        setWaSupportEnabled(nd.waSupportEnabled ?? false);
+        const raw = nd.waPhone ?? "";
+        const formatted = raw.startsWith("966") ? "0" + raw.slice(3) : raw;
+        setWaUnifiedPhone(formatted || mainPhone || "");
+      } else if (mainPhone) {
+        setWaUnifiedPhone(mainPhone);
+      }
+    }).finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
