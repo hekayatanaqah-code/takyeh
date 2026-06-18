@@ -21266,10 +21266,12 @@ function ContractsArchiveTab() {
                         <span className="font-mono text-xs font-bold text-primary">#{toAr(b.id)}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-medium text-foreground">{b.clientName}</span>
-                        {returningPhonesSet.has((b as any).clientPhone ?? "") && (
-                          <span className="mr-1.5 text-[10px] bg-primary/10 text-primary rounded-full px-1.5 py-0.5">عميل سابق</span>
-                        )}
+                        <div className="flex items-center justify-between gap-2" dir="rtl">
+                          <span className="font-medium text-foreground">{b.clientName}</span>
+                          {returningPhonesSet.has((b as any).clientPhone ?? "") && (
+                            <span className="shrink-0 text-[10px] bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">عميل سابق</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 hidden sm:table-cell">
                         {b.clientPhone
