@@ -17134,14 +17134,6 @@ function DepositsTab() {
           </p>
         )}
         {/* Unified time filter bar: [هجري|ميلادي] → [Year] → [Month] */}
-        {(filterMonth || filterYear || filterChalet !== "all" || filterStatus !== "all") && (
-          <div className="flex justify-start">
-            <button
-              onClick={() => { setSearchQuery(""); setFilterMonth(""); setFilterYear(""); setFilterChalet("all"); setFilterStatus("all"); setCurrentPage(1); }}
-              className="text-xs text-muted-foreground hover:text-primary transition-colors underline-offset-2 hover:underline"
-            >إعادة تعيين</button>
-          </div>
-        )}
         <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
           {/* Calendar mode toggle */}
           <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
