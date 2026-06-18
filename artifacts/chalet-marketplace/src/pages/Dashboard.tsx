@@ -16572,7 +16572,7 @@ function ReviewsTab() {
                         ))}
                       </SelectContent>
                     </Select>
-                    {/* Month dropdown — locked to "كل الشهور" when no year selected */}
+                    {/* Month dropdown — locked to "كل التقييمات" when no year selected */}
                     <Select
                       value={!reviewYear ? "__all__" : (reviewMonth || "__all__")}
                       onValueChange={v => { if (reviewYear) setReviewMonth(v === "__all__" ? "" : v); }}
@@ -16580,21 +16580,22 @@ function ReviewsTab() {
                     >
                       <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
                         {reviewMonth && reviewYear
-                          ? <span className="text-sm font-medium">{reviewMonthParts(reviewMonth).primary}</span>
-                          : !reviewYear
-                            ? <span className="text-sm text-muted-foreground">كل التقييمات</span>
-                            : <span className="text-sm text-muted-foreground">كل الشهور</span>}
+                          ? <span className="text-sm font-medium">
+                              {(() => {
+                                const ms = Number(reviewMonth.split("-")[1]);
+                                return reviewCalType === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
+                              })()}
+                            </span>
+                          : <span className="text-sm text-muted-foreground">كل التقييمات</span>}
                       </SelectTrigger>
                       <SelectContent dir="rtl" align="end">
-                        <SelectItem value="__all__"><span className="text-sm">كل الشهور</span></SelectItem>
+                        <SelectItem value="__all__"><span className="text-sm">كل التقييمات</span></SelectItem>
                         {reviewMonthOptions.map(ym => {
-                          const { primary, secondary } = reviewMonthParts(ym);
+                          const ms = Number(ym.split("-")[1]);
+                          const label = reviewCalType === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
                           return (
                             <SelectItem key={ym} value={ym}>
-                              <div className="flex flex-col items-end gap-0.5 py-0.5">
-                                <span className="font-semibold text-sm leading-tight">{primary}</span>
-                                {secondary && <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>}
-                              </div>
+                              <span className="text-sm">{label}</span>
                             </SelectItem>
                           );
                         })}
