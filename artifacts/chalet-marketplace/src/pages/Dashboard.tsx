@@ -10671,6 +10671,9 @@ function getHijriYMClient(date: Date): { year: number; month: number } {
 function BankLedgerTab() {
   const { unit } = useAdminFinance();
   const [activeTab, setActiveTab] = useState<"all" | "revenue" | "insurance" | "cash_deposit">("all");
+  const [bankCalType, setBankCalType] = useState<"hijri" | "gregorian">("hijri");
+  const [bankYear, setBankYear] = useState<string>("");
+  const [bankMonth, setBankMonth] = useState<string>("");
   const fmtN = (n: number) => n.toLocaleString("ar-SA");
 
   const { data: allBookings = [], isLoading: bkLoading } = useQuery<OwnerBooking[]>({
@@ -10725,10 +10728,36 @@ function BankLedgerTab() {
     return entries.sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
   }, [allBookings, depositLogs, unit]);
 
+  const bankYearOptions = useMemo(() => {
+    const years = new Set<string>();
+    for (const e of ledgerEntries) {
+      if (!e.bookingDate) continue;
+      years.add(getBookingMonthKey(e.bookingDate, bankCalType).split("-")[0]);
+    }
+    return Array.from(years).sort().reverse();
+  }, [ledgerEntries, bankCalType]);
+
+  const bankMonthOptions = useMemo(() => {
+    const keys = new Set<string>();
+    for (const e of ledgerEntries) {
+      if (!e.bookingDate) continue;
+      const key = getBookingMonthKey(e.bookingDate, bankCalType);
+      if (bankYear && !key.startsWith(bankYear)) continue;
+      keys.add(key);
+    }
+    return Array.from(keys).sort();
+  }, [ledgerEntries, bankCalType, bankYear]);
+
   const filtered = useMemo(() => {
-    if (activeTab === "all") return ledgerEntries;
-    return ledgerEntries.filter(e => e.type === activeTab);
-  }, [ledgerEntries, activeTab]);
+    let result = ledgerEntries;
+    if (bankMonth) {
+      result = result.filter(e => e.bookingDate && getBookingMonthKey(e.bookingDate, bankCalType) === bankMonth);
+    } else if (bankYear) {
+      result = result.filter(e => e.bookingDate && getBookingMonthKey(e.bookingDate, bankCalType).startsWith(bankYear));
+    }
+    if (activeTab !== "all") result = result.filter(e => e.type === activeTab);
+    return result;
+  }, [ledgerEntries, activeTab, bankCalType, bankYear, bankMonth]);
 
   return (
     <div className="space-y-4">
@@ -10744,6 +10773,58 @@ function BankLedgerTab() {
               {ledgerEntries.length} معاملة
             </div>
           )}
+        </div>
+        {/* ── Unified time filter bar ── */}
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-border overflow-x-auto">
+          <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
+            {(["hijri", "gregorian"] as const).map(mode => (
+              <button key={mode} type="button"
+                onClick={() => { setBankCalType(mode); setBankYear(""); setBankMonth(""); }}
+                className={`text-xs px-3 py-1.5 font-medium transition-colors ${bankCalType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+              >{mode === "hijri" ? "هجري" : "ميلادي"}</button>
+            ))}
+          </div>
+          <Select value={bankYear || "__all__"} onValueChange={(yr) => { setBankYear(yr === "__all__" ? "" : yr); setBankMonth(""); }}>
+            <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7rem] shrink-0" dir="rtl">
+              {bankYear
+                ? <span className="text-sm font-medium">{bankCalType === "hijri" ? `${toArN(Number(bankYear))} هـ` : `${toArN(Number(bankYear))} م`}</span>
+                : <span className="text-sm text-muted-foreground">كل السنوات</span>}
+            </SelectTrigger>
+            <SelectContent dir="rtl" align="end">
+              <SelectItem value="__all__"><span className="text-sm">كل السنوات</span></SelectItem>
+              {bankYearOptions.map(yr => (
+                <SelectItem key={yr} value={yr}>
+                  {bankCalType === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={!bankYear ? "all" : (bankMonth || "all")}
+            onValueChange={(v) => { if (bankYear) setBankMonth(v === "all" ? "" : v); }}
+            disabled={!bankYear}
+          >
+            <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[8rem] shrink-0" dir="rtl">
+              {bankMonth && bankYear ? (() => {
+                const ms = Number(bankMonth.split("-")[1]);
+                return bankCalType === "hijri"
+                  ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]}</span>
+                  : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
+              })() : <span className="text-muted-foreground">كل المعاملات</span>}
+            </SelectTrigger>
+            <SelectContent dir="rtl" align="end">
+              <SelectItem value="all"><span className="text-sm">كل المعاملات</span></SelectItem>
+              {bankMonthOptions.map(key => {
+                const ms = Number(key.split("-")[1]);
+                const label = bankCalType === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
+                return (
+                  <SelectItem key={key} value={key}>
+                    <span className="text-sm">{label}</span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex border-b border-border text-xs overflow-x-auto">
           {([
