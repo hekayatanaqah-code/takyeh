@@ -6700,7 +6700,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 {availableMonthKeys.map(key => {
                   const [ys, ms] = key.split("-").map(Number);
                   const primary = bookingCalView === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
-                  const corr = getCalCorrespondenceHint(key, bookingCalView).replace(/^يوافق تقريباً: |^يوافق: /, "");
+                  const corr = getCalCorrespondenceHint(key, bookingCalView);
                   return (
                     <SelectItem key={key} value={key}>
                       <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
@@ -10888,7 +10888,7 @@ function BankLedgerTab() {
               {bankMonthOptions.map(key => {
                 const [ys, ms] = key.split("-").map(Number);
                 const primary = bankCalType === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
-                const corr = getCalCorrespondenceHint(key, bankCalType).replace(/^يوافق تقريباً: |^يوافق: /, "");
+                const corr = getCalCorrespondenceHint(key, bankCalType);
                 return (
                   <SelectItem key={key} value={key}>
                     <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
@@ -16765,7 +16765,7 @@ function ReviewsTab() {
                         {reviewMonthOptions.map(ym => {
                           const [ys, ms] = ym.split("-").map(Number);
                           const primary = reviewCalType === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
-                          const corr = getCalCorrespondenceHint(ym, reviewCalType).replace(/^يوافق تقريباً: |^يوافق: /, "");
+                          const corr = getCalCorrespondenceHint(ym, reviewCalType);
                           return (
                             <SelectItem key={ym} value={ym}>
                               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
@@ -17384,7 +17384,7 @@ function DepositsTab() {
               {availableMonths.map((ym) => {
                 const [ys, ms] = ym.split("-").map(Number);
                 const primary = calendarMode === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
-                const corr = getCalCorrespondenceHint(ym, calendarMode).replace(/^يوافق تقريباً: |^يوافق: /, "");
+                const corr = getCalCorrespondenceHint(ym, calendarMode);
                 return (
                   <SelectItem key={ym} value={ym}>
                     <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
@@ -21396,7 +21396,7 @@ function ContractsArchiveTab() {
               {monthOptions.map(key => {
                 const [ys, ms] = key.split("-").map(Number);
                 const primary = contractCalView === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
-                const corr = getCalCorrespondenceHint(key, contractCalView).replace(/^يوافق تقريباً: |^يوافق: /, "");
+                const corr = getCalCorrespondenceHint(key, contractCalView);
                 return (
                   <SelectItem key={key} value={key}>
                     <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
