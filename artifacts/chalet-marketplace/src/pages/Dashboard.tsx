@@ -6703,9 +6703,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const corr = getCalCorrespondenceHint(key, bookingCalView);
                   return (
                     <SelectItem key={key} value={key}>
-                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
-                        <span style={{fontWeight:"600",fontSize:"13px"}}>{primary}</span>
-                        {corr && <span style={{fontSize:"11px",color:"#888"}}>{corr}</span>}
+                      <div style={{width:"100%",direction:"rtl"}}>
+                        <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
+                        {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
                       </div>
                     </SelectItem>
                   );
@@ -10875,9 +10875,9 @@ function BankLedgerTab() {
                 const corr = getCalCorrespondenceHint(key, bankCalType);
                 return (
                   <SelectItem key={key} value={key}>
-                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
-                      <span style={{fontWeight:"600",fontSize:"13px"}}>{primary}</span>
-                      {corr && <span style={{fontSize:"11px",color:"#888"}}>{corr}</span>}
+                    <div style={{width:"100%",direction:"rtl"}}>
+                      <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
+                      {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
                     </div>
                   </SelectItem>
                 );
@@ -16736,9 +16736,9 @@ function ReviewsTab() {
                           const corr = getCalCorrespondenceHint(ym, reviewCalType);
                           return (
                             <SelectItem key={ym} value={ym}>
-                              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
-                                <span style={{fontWeight:"600",fontSize:"13px"}}>{primary}</span>
-                                {corr && <span style={{fontSize:"11px",color:"#888"}}>{corr}</span>}
+                              <div style={{width:"100%",direction:"rtl"}}>
+                                <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
+                                {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
                               </div>
                             </SelectItem>
                           );
@@ -17339,9 +17339,9 @@ function DepositsTab() {
                 const corr = getCalCorrespondenceHint(ym, calendarMode);
                 return (
                   <SelectItem key={ym} value={ym}>
-                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
-                      <span style={{fontWeight:"600",fontSize:"13px"}}>{primary}</span>
-                      {corr && <span style={{fontSize:"11px",color:"#888"}}>{corr}</span>}
+                    <div style={{width:"100%",direction:"rtl"}}>
+                      <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
+                      {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
                     </div>
                   </SelectItem>
                 );
@@ -21335,9 +21335,9 @@ function ContractsArchiveTab() {
                 const corr = getCalCorrespondenceHint(key, contractCalView);
                 return (
                   <SelectItem key={key} value={key}>
-                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
-                      <span style={{fontWeight:"600",fontSize:"13px"}}>{primary}</span>
-                      {corr && <span style={{fontSize:"11px",color:"#888"}}>{corr}</span>}
+                    <div style={{width:"100%",direction:"rtl"}}>
+                      <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
+                      {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
                     </div>
                   </SelectItem>
                 );
