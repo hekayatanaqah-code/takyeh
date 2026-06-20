@@ -10851,49 +10851,51 @@ function BankLedgerTab() {
               ))}
             </SelectContent>
           </Select>
-          <Select
-            value={!bankYear ? "all" : (bankMonth || "all")}
-            onValueChange={(v) => { if (bankYear) setBankMonth(v === "all" ? "" : v); }}
-            disabled={!bankYear}
-          >
-            <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[8rem] shrink-0" dir="rtl">
-              {bankMonth && bankYear ? (() => {
-                const ms = Number(bankMonth.split("-")[1]);
-                return bankCalType === "hijri"
-                  ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]}</span>
-                  : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
-              })() : <span className="text-muted-foreground">كل المعاملات</span>}
-            </SelectTrigger>
-            <SelectContent dir="rtl" align="end">
-              <SelectItem value="all"><span className="text-sm">كل المعاملات</span></SelectItem>
-              {bankMonthOptions.map(key => {
-                const ms = Number(key.split("-")[1]);
-                const label = bankCalType === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
-                return (
-                  <SelectItem key={key} value={key}>
-                    <span className="text-sm">{label}</span>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",flexShrink:0,gap:4}}>
+            <Select
+              value={!bankYear ? "all" : (bankMonth || "all")}
+              onValueChange={(v) => { if (bankYear) setBankMonth(v === "all" ? "" : v); }}
+              disabled={!bankYear}
+            >
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[8rem]" dir="rtl">
+                {bankMonth && bankYear ? (() => {
+                  const ms = Number(bankMonth.split("-")[1]);
+                  return bankCalType === "hijri"
+                    ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]}</span>
+                    : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
+                })() : <span className="text-muted-foreground">كل المعاملات</span>}
+              </SelectTrigger>
+              <SelectContent dir="rtl" align="end">
+                <SelectItem value="all"><span className="text-sm">كل المعاملات</span></SelectItem>
+                {bankMonthOptions.map(key => {
+                  const ms = Number(key.split("-")[1]);
+                  const label = bankCalType === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
+                  return (
+                    <SelectItem key={key} value={key}>
+                      <span className="text-sm">{label}</span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            {bankYear && (() => {
+              if (bankMonth) {
+                const h = getCalCorrespondenceHint(bankMonth, bankCalType);
+                return h ? <span style={calHintStyle}>📅 {h}</span> : null;
+              }
+              if (bankCalType === "hijri") {
+                const y = Number(bankYear);
+                return <span style={calHintStyle}>📅 يوافق تقريباً: {toArN(y - 579)} / {toArN(y - 578)} م</span>;
+              } else {
+                const y = Number(bankYear);
+                const h1 = toHijriComponents(new Date(y, 0, 1)).year;
+                const h2 = toHijriComponents(new Date(y, 11, 31)).year;
+                const hStr = h1 === h2 ? `${toArN(h1)} هـ` : `${toArN(h1)} / ${toArN(h2)} هـ`;
+                return <span style={calHintStyle}>📅 يوافق: {hStr}</span>;
+              }
+            })()}
+          </div>
         </div>
-        {bankYear && (() => {
-          if (bankMonth) {
-            const h = getCalCorrespondenceHint(bankMonth, bankCalType);
-            return h ? <div style={{padding:"4px 20px 8px",textAlign:"right"}}><span style={calHintStyle}>📅 {h}</span></div> : null;
-          }
-          if (bankCalType === "hijri") {
-            const y = Number(bankYear);
-            return <div style={{padding:"4px 20px 8px",textAlign:"right"}}><span style={calHintStyle}>📅 يوافق تقريباً: {toArN(y - 579)} / {toArN(y - 578)} م</span></div>;
-          } else {
-            const y = Number(bankYear);
-            const h1 = toHijriComponents(new Date(y, 0, 1)).year;
-            const h2 = toHijriComponents(new Date(y, 11, 31)).year;
-            const hStr = h1 === h2 ? `${toArN(h1)} هـ` : `${toArN(h1)} / ${toArN(h2)} هـ`;
-            return <div style={{padding:"4px 20px 8px",textAlign:"right"}}><span style={calHintStyle}>📅 يوافق: {hStr}</span></div>;
-          }
-        })()}
         <div className="flex border-b border-border text-xs overflow-x-auto">
           {([
             ["all",          "🗂️ كل الحوالات"],
