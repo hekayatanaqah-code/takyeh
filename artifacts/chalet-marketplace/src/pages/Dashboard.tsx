@@ -136,17 +136,17 @@ function getCalCorrespondenceHint(monthKey: string, calType: "hijri" | "gregoria
     if (!start || !end) return "";
     const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
     const [sY, sM, eY, eM] = [s.getFullYear(), s.getMonth(), e.getFullYear(), e.getMonth()];
-    if (sY === eY && sM === eM) return `يوافق تقريباً: ${gregName(sY, sM)} ${toArN(sY)} م`;
-    if (sY === eY) return `يوافق تقريباً: ${gregName(sY, sM)} / ${gregName(eY, eM)} ${toArN(sY)} م`;
-    return `يوافق تقريباً: ${gregName(sY, sM)} ${toArN(sY)} م / ${gregName(eY, eM)} ${toArN(eY)} م`;
+    if (sY === eY && sM === eM) return `يوافق: ${gregName(sY, sM)} ${toArN(sY)} م`;
+    if (sY === eY) return `يوافق: ${gregName(sY, sM)} / ${gregName(eY, eM)} ${toArN(sY)} م`;
+    return `يوافق: ${gregName(sY, sM)} ${toArN(sY)} م / ${gregName(eY, eM)} ${toArN(eY)} م`;
   } else {
     const h1 = toHijriComponents(new Date(ys, ms - 1, 1));
     const h2 = toHijriComponents(new Date(ys, ms, 0));
     if (h1.year === h2.year && h1.month === h2.month)
-      return `يوافق تقريباً: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
+      return `يوافق: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
     if (h1.year === h2.year)
-      return `يوافق تقريباً: ${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
-    return `يوافق تقريباً: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
+      return `يوافق: ${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
+    return `يوافق: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
   }
 }
 
