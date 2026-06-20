@@ -127,6 +127,29 @@ function getLocalDateStr(date = new Date()) {
 
 const GREGORIAN_MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"] as const;
 
+function getCalCorrespondenceHint(monthKey: string, calType: "hijri" | "gregorian"): string {
+  const [ys, ms] = monthKey.split("-").map(Number);
+  const gregName = (gy: number, gm: number) =>
+    new Date(gy, gm, 15).toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
+  if (calType === "hijri") {
+    const { start, end } = getHijriMonthGregorianRange(ys, ms);
+    if (!start || !end) return "";
+    const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
+    const [sY, sM, eY, eM] = [s.getFullYear(), s.getMonth(), e.getFullYear(), e.getMonth()];
+    if (sY === eY && sM === eM) return `يوافق تقريباً: ${gregName(sY, sM)} ${toArN(sY)} م`;
+    if (sY === eY) return `يوافق تقريباً: ${gregName(sY, sM)} / ${gregName(eY, eM)} ${toArN(sY)} م`;
+    return `يوافق تقريباً: ${gregName(sY, sM)} ${toArN(sY)} م / ${gregName(eY, eM)} ${toArN(eY)} م`;
+  } else {
+    const h1 = toHijriComponents(new Date(ys, ms - 1, 1));
+    const h2 = toHijriComponents(new Date(ys, ms, 0));
+    if (h1.year === h2.year && h1.month === h2.month)
+      return `يوافق تقريباً: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
+    if (h1.year === h2.year)
+      return `يوافق تقريباً: ${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
+    return `يوافق تقريباً: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
+  }
+}
+
 function getBookingMonthKey(dateStr: string, calView: "hijri" | "gregorian"): string {
   const d = new Date(dateStr + "T00:00:00");
   if (calView === "gregorian") return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -6658,6 +6681,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               </SelectContent>
             </Select>
           </div>
+          {bookingMonthFilter !== "all" && bookingYearFilter && (
+            <p className="text-[11px] text-muted-foreground" dir="rtl">
+              {getCalCorrespondenceHint(bookingMonthFilter, bookingCalView)}
+            </p>
+          )}
         </div>
         {bookingsLoading ? (
           <div className="space-y-3">
@@ -10826,6 +10854,11 @@ function BankLedgerTab() {
             </SelectContent>
           </Select>
         </div>
+        {bankMonth && bankYear && (
+          <div className="px-5 py-1.5">
+            <p className="text-[11px] text-muted-foreground" dir="rtl">{getCalCorrespondenceHint(bankMonth, bankCalType)}</p>
+          </div>
+        )}
         <div className="flex border-b border-border text-xs overflow-x-auto">
           {([
             ["all",          "🗂️ كل الحوالات"],
@@ -16684,6 +16717,11 @@ function ReviewsTab() {
                     </Select>
                   </div>
                 </div>
+                {reviewMonth && reviewYear && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5" dir="rtl">
+                    {getCalCorrespondenceHint(reviewMonth, reviewCalType)}
+                  </p>
+                )}
                 {/* Reviews list */}
                 {filteredChaletReviews.length === 0 ? (
                   <div className="text-center text-muted-foreground text-sm py-6">لا توجد تقييمات في هذه الفترة</div>
@@ -17298,6 +17336,11 @@ function DepositsTab() {
           )}
 
         </div>
+        {filterMonth && filterYear && (
+          <p className="text-[11px] text-muted-foreground mt-0.5" dir="rtl">
+            {getCalCorrespondenceHint(filterMonth, calendarMode)}
+          </p>
+        )}
       </div>
 
       {/* Status Filter */}
@@ -21274,6 +21317,11 @@ function ContractsArchiveTab() {
             </SelectContent>
           </Select>
         </div>
+        {contractMonth !== "all" && contractYear && (
+          <p className="text-[11px] text-muted-foreground" dir="rtl">
+            {getCalCorrespondenceHint(contractMonth, contractCalView)}
+          </p>
+        )}
         {/* Search bar */}
         <div className="relative" dir="rtl">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
