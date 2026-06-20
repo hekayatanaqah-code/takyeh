@@ -129,12 +129,29 @@ const GREGORIAN_MONTHS_AR = ["يناير","فبراير","مارس","أبريل"
 
 function getCalCorrespondenceHint(monthKey: string, calType: "hijri" | "gregorian"): string {
   const [ys, ms] = monthKey.split("-").map(Number);
+  if (!ys || !ms) return "";
   const gregName = (gy: number, gm: number) =>
     new Date(gy, gm, 15).toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
   if (calType === "hijri") {
+    let s: Date | null = null, e: Date | null = null;
     const { start, end } = getHijriMonthGregorianRange(ys, ms);
-    if (!start || !end) return "";
-    const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
+    if (start && end) {
+      s = new Date(start + "T00:00:00");
+      e = new Date(end + "T00:00:00");
+    } else {
+      const epochMs = Date.UTC(622, 6, 19);
+      const days = (ys - 1) * 354.36707 + (ms - 1) * 29.53059;
+      const estimate = new Date(epochMs + days * 86400000);
+      const cursor = new Date(estimate);
+      cursor.setDate(cursor.getDate() - 15);
+      for (let i = 0; i < 90; i++) {
+        const h = toHijriComponents(cursor);
+        if (h.year === ys && h.month === ms) { if (!s) s = new Date(cursor); e = new Date(cursor); }
+        else if (s) break;
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+    if (!s || !e) return "";
     const [sY, sM, eY, eM] = [s.getFullYear(), s.getMonth(), e.getFullYear(), e.getMonth()];
     if (sY === eY && sM === eM) return `يوافق: ${gregName(sY, sM)} ${toArN(sY)} م`;
     if (sY === eY) return `يوافق: ${gregName(sY, sM)} / ${gregName(eY, eM)} ${toArN(sY)} م`;
@@ -149,6 +166,17 @@ function getCalCorrespondenceHint(monthKey: string, calType: "hijri" | "gregoria
     return `يوافق: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
   }
 }
+
+const calHintStyle: React.CSSProperties = {
+  display: "inline-block",
+  color: "#888888",
+  fontSize: "11px",
+  background: "#f5f5f5",
+  borderRadius: "8px",
+  padding: "2px 10px",
+  direction: "rtl",
+  marginTop: "6px",
+};
 
 function getBookingMonthKey(dateStr: string, calView: "hijri" | "gregorian"): string {
   const d = new Date(dateStr + "T00:00:00");
@@ -6681,12 +6709,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               </SelectContent>
             </Select>
           </div>
-          {bookingMonthFilter !== "all" && bookingYearFilter && (
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-1.5 w-fit" dir="rtl">
-              <span className="text-[10px]">📅</span>
-              <span>{getCalCorrespondenceHint(bookingMonthFilter, bookingCalView)}</span>
-            </div>
-          )}
+          {bookingMonthFilter !== "all" && bookingYearFilter && (() => { const h = getCalCorrespondenceHint(bookingMonthFilter, bookingCalView); return h ? <span style={calHintStyle}>📅 {h}</span> : null; })()}
         </div>
         {bookingsLoading ? (
           <div className="space-y-3">
@@ -10855,14 +10878,7 @@ function BankLedgerTab() {
             </SelectContent>
           </Select>
         </div>
-        {bankMonth && bankYear && (
-          <div className="px-5 py-2">
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-1.5 w-fit" dir="rtl">
-              <span className="text-[10px]">📅</span>
-              <span>{getCalCorrespondenceHint(bankMonth, bankCalType)}</span>
-            </div>
-          </div>
-        )}
+        {bankMonth && bankYear && (() => { const h = getCalCorrespondenceHint(bankMonth, bankCalType); return h ? <div style={{padding: "4px 20px 8px", textAlign: "right"}}><span style={calHintStyle}>📅 {h}</span></div> : null; })()}
         <div className="flex border-b border-border text-xs overflow-x-auto">
           {([
             ["all",          "🗂️ كل الحوالات"],
@@ -16721,12 +16737,7 @@ function ReviewsTab() {
                     </Select>
                   </div>
                 </div>
-                {reviewMonth && reviewYear && (
-                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-1.5 w-fit mt-1" dir="rtl">
-                    <span className="text-[10px]">📅</span>
-                    <span>{getCalCorrespondenceHint(reviewMonth, reviewCalType)}</span>
-                  </div>
-                )}
+                {reviewMonth && reviewYear && (() => { const h = getCalCorrespondenceHint(reviewMonth, reviewCalType); return h ? <div style={{textAlign: "right", marginTop: "4px"}}><span style={calHintStyle}>📅 {h}</span></div> : null; })()}
                 {/* Reviews list */}
                 {filteredChaletReviews.length === 0 ? (
                   <div className="text-center text-muted-foreground text-sm py-6">لا توجد تقييمات في هذه الفترة</div>
@@ -17341,12 +17352,7 @@ function DepositsTab() {
           )}
 
         </div>
-        {filterMonth && filterYear && (
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-1.5 w-fit mt-1" dir="rtl">
-            <span className="text-[10px]">📅</span>
-            <span>{getCalCorrespondenceHint(filterMonth, calendarMode)}</span>
-          </div>
-        )}
+        {filterMonth && filterYear && (() => { const h = getCalCorrespondenceHint(filterMonth, calendarMode); return h ? <div style={{textAlign: "right", marginTop: "4px"}}><span style={calHintStyle}>📅 {h}</span></div> : null; })()}
       </div>
 
       {/* Status Filter */}
@@ -21323,12 +21329,7 @@ function ContractsArchiveTab() {
             </SelectContent>
           </Select>
         </div>
-        {contractMonth !== "all" && contractYear && (
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-1.5 w-fit" dir="rtl">
-            <span className="text-[10px]">📅</span>
-            <span>{getCalCorrespondenceHint(contractMonth, contractCalView)}</span>
-          </div>
-        )}
+        {contractMonth !== "all" && contractYear && (() => { const h = getCalCorrespondenceHint(contractMonth, contractCalView); return h ? <div style={{textAlign: "right", marginBottom: "4px"}}><span style={calHintStyle}>📅 {h}</span></div> : null; })()}
         {/* Search bar */}
         <div className="relative" dir="rtl">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
