@@ -10878,7 +10878,22 @@ function BankLedgerTab() {
             </SelectContent>
           </Select>
         </div>
-        {bankMonth && bankYear && (() => { const h = getCalCorrespondenceHint(bankMonth, bankCalType); return h ? <div style={{padding: "4px 20px 8px", textAlign: "right"}}><span style={calHintStyle}>📅 {h}</span></div> : null; })()}
+        {bankYear && (() => {
+          if (bankMonth) {
+            const h = getCalCorrespondenceHint(bankMonth, bankCalType);
+            return h ? <div style={{padding:"4px 20px 8px",textAlign:"right"}}><span style={calHintStyle}>📅 {h}</span></div> : null;
+          }
+          if (bankCalType === "hijri") {
+            const y = Number(bankYear);
+            return <div style={{padding:"4px 20px 8px",textAlign:"right"}}><span style={calHintStyle}>📅 يوافق تقريباً: {toArN(y - 579)} / {toArN(y - 578)} م</span></div>;
+          } else {
+            const y = Number(bankYear);
+            const h1 = toHijriComponents(new Date(y, 0, 1)).year;
+            const h2 = toHijriComponents(new Date(y, 11, 31)).year;
+            const hStr = h1 === h2 ? `${toArN(h1)} هـ` : `${toArN(h1)} / ${toArN(h2)} هـ`;
+            return <div style={{padding:"4px 20px 8px",textAlign:"right"}}><span style={calHintStyle}>📅 يوافق: {hStr}</span></div>;
+          }
+        })()}
         <div className="flex border-b border-border text-xs overflow-x-auto">
           {([
             ["all",          "🗂️ كل الحوالات"],
