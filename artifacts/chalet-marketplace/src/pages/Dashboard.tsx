@@ -6714,20 +6714,9 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
             </Select>
           </div>
           {bookingMonthFilter !== "all" && bookingYearFilter && (() => {
-            const [ys, ms] = bookingMonthFilter.split("-").map(Number);
-            const monthLabel = bookingCalView === "hijri"
-              ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ`
-              : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
             const hint = getCalCorrespondenceHint(bookingMonthFilter, bookingCalView);
             if (!hint) return null;
-            return (
-              <div style={{direction:"rtl",textAlign:"right",marginTop:"2px"}}>
-                <div style={{display:"inline-flex",flexDirection:"column",alignItems:"flex-end",gap:"3px"}}>
-                  <span style={{fontSize:"13px",fontWeight:"600",color:"#555"}}>{monthLabel}</span>
-                  <span style={{fontSize:"11px",color:"#888"}}>{hint}</span>
-                </div>
-              </div>
-            );
+            return <div style={{direction:"rtl",textAlign:"right",marginTop:"2px"}}><span style={{fontSize:"11px",color:"#888"}}>{hint}</span></div>;
           })()}
         </div>
         {bookingsLoading ? (
@@ -10902,20 +10891,9 @@ function BankLedgerTab() {
           </Select>
         </div>
         {bankMonth && bankYear && (() => {
-          const [ys, ms] = bankMonth.split("-").map(Number);
-          const monthLabel = bankCalType === "hijri"
-            ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ`
-            : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
           const hint = getCalCorrespondenceHint(bankMonth, bankCalType);
           if (!hint) return null;
-          return (
-            <div style={{padding:"4px 20px 10px",direction:"rtl",textAlign:"right"}}>
-              <div style={{display:"inline-flex",flexDirection:"column",alignItems:"flex-end",gap:"3px"}}>
-                <span style={{fontSize:"13px",fontWeight:"600",color:"#555"}}>{monthLabel}</span>
-                <span style={{fontSize:"11px",color:"#888"}}>{hint}</span>
-              </div>
-            </div>
-          );
+          return <div style={{padding:"2px 20px 8px",direction:"rtl",textAlign:"right"}}><span style={{fontSize:"11px",color:"#888"}}>{hint}</span></div>;
         })()}
         <div className="flex border-b border-border text-xs overflow-x-auto">
           {([
@@ -16780,20 +16758,9 @@ function ReviewsTab() {
                   </div>
                 </div>
                 {reviewMonth && reviewYear && (() => {
-                  const [ys, ms] = reviewMonth.split("-").map(Number);
-                  const monthLabel = reviewCalType === "hijri"
-                    ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ`
-                    : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
                   const hint = getCalCorrespondenceHint(reviewMonth, reviewCalType);
                   if (!hint) return null;
-                  return (
-                    <div style={{direction:"rtl",textAlign:"right",marginTop:"4px"}}>
-                      <div style={{display:"inline-flex",flexDirection:"column",alignItems:"flex-end",gap:"3px"}}>
-                        <span style={{fontSize:"13px",fontWeight:"600",color:"#555"}}>{monthLabel}</span>
-                        <span style={{fontSize:"11px",color:"#888"}}>{hint}</span>
-                      </div>
-                    </div>
-                  );
+                  return <div style={{direction:"rtl",textAlign:"right",marginTop:"4px"}}><span style={{fontSize:"11px",color:"#888"}}>{hint}</span></div>;
                 })()}
                 {/* Reviews list */}
                 {filteredChaletReviews.length === 0 ? (
@@ -17414,20 +17381,9 @@ function DepositsTab() {
 
         </div>
         {filterMonth && filterYear && (() => {
-          const [ys, ms] = filterMonth.split("-").map(Number);
-          const monthLabel = calendarMode === "hijri"
-            ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ`
-            : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
           const hint = getCalCorrespondenceHint(filterMonth, calendarMode);
           if (!hint) return null;
-          return (
-            <div style={{direction:"rtl",textAlign:"right",marginTop:"4px"}}>
-              <div style={{display:"inline-flex",flexDirection:"column",alignItems:"flex-end",gap:"3px"}}>
-                <span style={{fontSize:"13px",fontWeight:"600",color:"#555"}}>{monthLabel}</span>
-                <span style={{fontSize:"11px",color:"#888"}}>{hint}</span>
-              </div>
-            </div>
-          );
+          return <div style={{direction:"rtl",textAlign:"right",marginTop:"4px"}}><span style={{fontSize:"11px",color:"#888"}}>{hint}</span></div>;
         })()}
       </div>
 
@@ -21410,20 +21366,9 @@ function ContractsArchiveTab() {
           </Select>
         </div>
         {contractMonth !== "all" && contractYear && (() => {
-          const [ys, ms] = contractMonth.split("-").map(Number);
-          const monthLabel = contractCalView === "hijri"
-            ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ`
-            : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
           const hint = getCalCorrespondenceHint(contractMonth, contractCalView);
           if (!hint) return null;
-          return (
-            <div style={{direction:"rtl",textAlign:"right",marginBottom:"4px"}}>
-              <div style={{display:"inline-flex",flexDirection:"column",alignItems:"flex-end",gap:"3px"}}>
-                <span style={{fontSize:"13px",fontWeight:"600",color:"#555"}}>{monthLabel}</span>
-                <span style={{fontSize:"11px",color:"#888"}}>{hint}</span>
-              </div>
-            </div>
-          );
+          return <div style={{direction:"rtl",textAlign:"right",marginBottom:"4px"}}><span style={{fontSize:"11px",color:"#888"}}>{hint}</span></div>;
         })()}
         {/* Search bar */}
         <div className="relative" dir="rtl">
