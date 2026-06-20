@@ -6713,11 +6713,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               </SelectContent>
             </Select>
           </div>
-          {bookingMonthFilter !== "all" && bookingYearFilter && (() => {
-            const hint = getCalCorrespondenceHint(bookingMonthFilter, bookingCalView);
-            if (!hint) return null;
-            return <div style={{direction:"rtl",textAlign:"right",marginTop:"2px"}}><span style={{fontSize:"11px",color:"#888"}}>{hint}</span></div>;
-          })()}
         </div>
         {bookingsLoading ? (
           <div className="space-y-3">
@@ -10890,11 +10885,6 @@ function BankLedgerTab() {
             </SelectContent>
           </Select>
         </div>
-        {bankMonth && bankYear && (() => {
-          const hint = getCalCorrespondenceHint(bankMonth, bankCalType);
-          if (!hint) return null;
-          return <div style={{padding:"2px 20px 8px",direction:"rtl",textAlign:"right"}}><span style={{fontSize:"11px",color:"#888"}}>{hint}</span></div>;
-        })()}
         <div className="flex border-b border-border text-xs overflow-x-auto">
           {([
             ["all",          "🗂️ كل الحوالات"],
@@ -16757,11 +16747,6 @@ function ReviewsTab() {
                     </Select>
                   </div>
                 </div>
-                {reviewMonth && reviewYear && (() => {
-                  const hint = getCalCorrespondenceHint(reviewMonth, reviewCalType);
-                  if (!hint) return null;
-                  return <div style={{direction:"rtl",textAlign:"right",marginTop:"4px"}}><span style={{fontSize:"11px",color:"#888"}}>{hint}</span></div>;
-                })()}
                 {/* Reviews list */}
                 {filteredChaletReviews.length === 0 ? (
                   <div className="text-center text-muted-foreground text-sm py-6">لا توجد تقييمات في هذه الفترة</div>
@@ -17380,11 +17365,6 @@ function DepositsTab() {
           )}
 
         </div>
-        {filterMonth && filterYear && (() => {
-          const hint = getCalCorrespondenceHint(filterMonth, calendarMode);
-          if (!hint) return null;
-          return <div style={{direction:"rtl",textAlign:"right",marginTop:"4px"}}><span style={{fontSize:"11px",color:"#888"}}>{hint}</span></div>;
-        })()}
       </div>
 
       {/* Status Filter */}
@@ -21365,11 +21345,6 @@ function ContractsArchiveTab() {
             </SelectContent>
           </Select>
         </div>
-        {contractMonth !== "all" && contractYear && (() => {
-          const hint = getCalCorrespondenceHint(contractMonth, contractCalView);
-          if (!hint) return null;
-          return <div style={{direction:"rtl",textAlign:"right",marginBottom:"4px"}}><span style={{fontSize:"11px",color:"#888"}}>{hint}</span></div>;
-        })()}
         {/* Search bar */}
         <div className="relative" dir="rtl">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
