@@ -6682,9 +6682,10 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
             </Select>
           </div>
           {bookingMonthFilter !== "all" && bookingYearFilter && (
-            <p className="text-[11px] text-muted-foreground" dir="rtl">
-              {getCalCorrespondenceHint(bookingMonthFilter, bookingCalView)}
-            </p>
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-1.5 w-fit" dir="rtl">
+              <span className="text-[10px]">📅</span>
+              <span>{getCalCorrespondenceHint(bookingMonthFilter, bookingCalView)}</span>
+            </div>
           )}
         </div>
         {bookingsLoading ? (
@@ -10855,8 +10856,11 @@ function BankLedgerTab() {
           </Select>
         </div>
         {bankMonth && bankYear && (
-          <div className="px-5 py-1.5">
-            <p className="text-[11px] text-muted-foreground" dir="rtl">{getCalCorrespondenceHint(bankMonth, bankCalType)}</p>
+          <div className="px-5 py-2">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-1.5 w-fit" dir="rtl">
+              <span className="text-[10px]">📅</span>
+              <span>{getCalCorrespondenceHint(bankMonth, bankCalType)}</span>
+            </div>
           </div>
         )}
         <div className="flex border-b border-border text-xs overflow-x-auto">
@@ -16718,9 +16722,10 @@ function ReviewsTab() {
                   </div>
                 </div>
                 {reviewMonth && reviewYear && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5" dir="rtl">
-                    {getCalCorrespondenceHint(reviewMonth, reviewCalType)}
-                  </p>
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-1.5 w-fit mt-1" dir="rtl">
+                    <span className="text-[10px]">📅</span>
+                    <span>{getCalCorrespondenceHint(reviewMonth, reviewCalType)}</span>
+                  </div>
                 )}
                 {/* Reviews list */}
                 {filteredChaletReviews.length === 0 ? (
@@ -17337,9 +17342,10 @@ function DepositsTab() {
 
         </div>
         {filterMonth && filterYear && (
-          <p className="text-[11px] text-muted-foreground mt-0.5" dir="rtl">
-            {getCalCorrespondenceHint(filterMonth, calendarMode)}
-          </p>
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-1.5 w-fit mt-1" dir="rtl">
+            <span className="text-[10px]">📅</span>
+            <span>{getCalCorrespondenceHint(filterMonth, calendarMode)}</span>
+          </div>
         )}
       </div>
 
@@ -21318,9 +21324,10 @@ function ContractsArchiveTab() {
           </Select>
         </div>
         {contractMonth !== "all" && contractYear && (
-          <p className="text-[11px] text-muted-foreground" dir="rtl">
-            {getCalCorrespondenceHint(contractMonth, contractCalView)}
-          </p>
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-1.5 w-fit" dir="rtl">
+            <span className="text-[10px]">📅</span>
+            <span>{getCalCorrespondenceHint(contractMonth, contractCalView)}</span>
+          </div>
         )}
         {/* Search bar */}
         <div className="relative" dir="rtl">
