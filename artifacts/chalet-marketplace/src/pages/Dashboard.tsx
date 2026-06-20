@@ -6698,11 +6698,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               <SelectContent dir="rtl" align="end">
                 <SelectItem value="all"><span className="text-sm">كل الحجوزات</span></SelectItem>
                 {availableMonthKeys.map(key => {
-                  const [, ms] = key.split("-").map(Number);
-                  const label = bookingCalView === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
+                  const [ys, ms] = key.split("-").map(Number);
+                  const primary = bookingCalView === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
+                  const corr = getCalCorrespondenceHint(key, bookingCalView).replace(/^يوافق تقريباً: |^يوافق: /, "");
                   return (
                     <SelectItem key={key} value={key}>
-                      <span className="text-sm">{label}</span>
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
+                        <span style={{fontWeight:"600",fontSize:"13px"}}>{primary}</span>
+                        {corr && <span style={{fontSize:"11px",color:"#888"}}>{corr}</span>}
+                      </div>
                     </SelectItem>
                   );
                 })}
@@ -10868,11 +10872,15 @@ function BankLedgerTab() {
               <SelectContent dir="rtl" align="end">
                 <SelectItem value="all"><span className="text-sm">كل المعاملات</span></SelectItem>
                 {bankMonthOptions.map(key => {
-                  const ms = Number(key.split("-")[1]);
-                  const label = bankCalType === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
+                  const [ys, ms] = key.split("-").map(Number);
+                  const primary = bankCalType === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
+                  const corr = getCalCorrespondenceHint(key, bankCalType).replace(/^يوافق تقريباً: |^يوافق: /, "");
                   return (
                     <SelectItem key={key} value={key}>
-                      <span className="text-sm">{label}</span>
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
+                        <span style={{fontWeight:"600",fontSize:"13px"}}>{primary}</span>
+                        {corr && <span style={{fontSize:"11px",color:"#888"}}>{corr}</span>}
+                      </div>
                     </SelectItem>
                   );
                 })}
@@ -16742,11 +16750,15 @@ function ReviewsTab() {
                       <SelectContent dir="rtl" align="end">
                         <SelectItem value="__all__"><span className="text-sm">كل التقييمات</span></SelectItem>
                         {reviewMonthOptions.map(ym => {
-                          const ms = Number(ym.split("-")[1]);
-                          const label = reviewCalType === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
+                          const [ys, ms] = ym.split("-").map(Number);
+                          const primary = reviewCalType === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
+                          const corr = getCalCorrespondenceHint(ym, reviewCalType).replace(/^يوافق تقريباً: |^يوافق: /, "");
                           return (
                             <SelectItem key={ym} value={ym}>
-                              <span className="text-sm">{label}</span>
+                              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
+                                <span style={{fontWeight:"600",fontSize:"13px"}}>{primary}</span>
+                                {corr && <span style={{fontSize:"11px",color:"#888"}}>{corr}</span>}
+                              </div>
                             </SelectItem>
                           );
                         })}
@@ -17342,11 +17354,15 @@ function DepositsTab() {
             <SelectContent dir="rtl" align="end">
               <SelectItem value="__all__"><span className="text-sm">كل التأمينات</span></SelectItem>
               {availableMonths.map((ym) => {
-                const [, ms] = ym.split("-").map(Number);
-                const label = calendarMode === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
+                const [ys, ms] = ym.split("-").map(Number);
+                const primary = calendarMode === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
+                const corr = getCalCorrespondenceHint(ym, calendarMode).replace(/^يوافق تقريباً: |^يوافق: /, "");
                 return (
                   <SelectItem key={ym} value={ym}>
-                    <span className="text-sm">{label}</span>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
+                      <span style={{fontWeight:"600",fontSize:"13px"}}>{primary}</span>
+                      {corr && <span style={{fontSize:"11px",color:"#888"}}>{corr}</span>}
+                    </div>
                   </SelectItem>
                 );
               })}
@@ -21335,11 +21351,15 @@ function ContractsArchiveTab() {
             <SelectContent dir="rtl" align="end" className="z-[100]">
               <SelectItem value="all"><span className="text-sm">كل العقود</span></SelectItem>
               {monthOptions.map(key => {
-                const ms = Number(key.split("-")[1]);
-                const label = contractCalView === "hijri" ? HIJRI_MONTHS_AR[ms - 1] : GREGORIAN_MONTHS_AR[ms - 1];
+                const [ys, ms] = key.split("-").map(Number);
+                const primary = contractCalView === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
+                const corr = getCalCorrespondenceHint(key, contractCalView).replace(/^يوافق تقريباً: |^يوافق: /, "");
                 return (
                   <SelectItem key={key} value={key}>
-                    <span className="text-sm">{label}</span>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",direction:"rtl",gap:"1px"}}>
+                      <span style={{fontWeight:"600",fontSize:"13px"}}>{primary}</span>
+                      {corr && <span style={{fontSize:"11px",color:"#888"}}>{corr}</span>}
+                    </div>
                   </SelectItem>
                 );
               })}
