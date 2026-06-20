@@ -12933,6 +12933,7 @@ function ExpensesTab() {
   const _nowExp = new Date();
   const currentMonth = `${_nowExp.getFullYear()}-${String(_nowExp.getMonth() + 1).padStart(2, "0")}`;
   const [month, setMonth] = useState(currentMonth);
+  const [expCalType, setExpCalType] = useState<"hijri" | "gregorian">("gregorian");
   const [form, setForm] = useState({ categoryId: "", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", customCategory: "", submissionId: "" });
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -12980,12 +12981,17 @@ function ExpensesTab() {
     const now = new Date();
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const label = d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
-      opts.push({ val, label });
+      const ys = d.getFullYear();
+      const ms = d.getMonth() + 1;
+      const val = `${ys}-${String(ms).padStart(2, "0")}`;
+      const primary = expCalType === "hijri"
+        ? `${HIJRI_MONTHS_AR[ms - 1]} ${toArN(ys)} هـ`
+        : `${GREGORIAN_MONTHS_AR[ms - 1]} ${toArN(ys)} م`;
+      const corr = getCalCorrespondenceHint(val, expCalType);
+      opts.push({ val, primary, corr });
     }
     return opts;
-  }, []);
+  }, [expCalType]);
 
   const { data: mySubmissions = [] } = useQuery<any[]>({
     queryKey: ["my-submissions-for-report"],
@@ -13101,13 +13107,12 @@ function ExpensesTab() {
             <div className="flex-1 min-w-[120px]">
               <label className="text-xs text-muted-foreground font-medium mb-1 block">المبلغ (ر.س)</label>
               <Input
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={form.amount}
-                onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                className="h-11"
+                type="text"
+                inputMode="decimal"
+                placeholder="٠.٠٠"
+                value={toAr(form.amount)}
+                onChange={(e) => setForm((f) => ({ ...f, amount: fromAr(e.target.value) }))}
+                className="h-11 text-right"
                 required
               />
             </div>
@@ -13130,7 +13135,7 @@ function ExpensesTab() {
 
           {/* Row 2: Date + Property */}
           <div className="flex gap-3 flex-wrap">
-            <div className="flex-1 min-w-[140px]">
+            <div className="min-w-[140px] w-fit max-w-[220px]">
               <label className="text-xs text-muted-foreground font-medium mb-1 block">التاريخ</label>
               <div className="rounded-md border bg-background px-3 py-2 h-11 flex items-center">
                 <DualCalendarPicker
@@ -13300,13 +13305,25 @@ function ExpensesTab() {
             المصروفات
           </h2>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setExpCalType(t => t === "hijri" ? "gregorian" : "hijri")}
+              className="h-9 px-3 rounded-lg border border-border text-xs font-bold text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            >
+              {expCalType === "hijri" ? "هـ" : "م"}
+            </button>
             <Select value={month} onValueChange={setMonth}>
-              <SelectTrigger className="h-9 text-sm w-[150px]">
+              <SelectTrigger className="h-9 text-sm min-w-[180px]">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent dir="rtl" align="end">
                 {monthOptions.map((o) => (
-                  <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
+                  <SelectItem key={o.val} value={o.val}>
+                    <div style={{width:"100%",direction:"rtl"}}>
+                      <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{o.primary}</div>
+                      {o.corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{o.corr}</div>}
+                    </div>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
