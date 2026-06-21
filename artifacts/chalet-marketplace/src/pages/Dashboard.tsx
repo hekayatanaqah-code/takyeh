@@ -13306,7 +13306,7 @@ function ExpensesTab() {
           </h2>
           <div className="flex items-center gap-2">
             <Select value={month} onValueChange={setMonth}>
-              <SelectTrigger className="h-9 text-sm w-auto min-w-[220px] max-w-[280px]">
+              <SelectTrigger className="h-9 text-sm" style={{minWidth:"200px",width:"auto"}}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent dir="rtl" align="end">
