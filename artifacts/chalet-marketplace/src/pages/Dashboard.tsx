@@ -12994,9 +12994,21 @@ function ExpensesTab() {
   });
 
   const expYearOptions = useMemo(() => {
-    if (expCalType === "hijri") return ["1448", "1447", "1446"];
-    return ["2027", "2026", "2025"];
-  }, [expCalType]);
+    const years = new Set<string>();
+    // Always include current year in selected calendar
+    if (expCalType === "hijri") {
+      const h = toHijriComponents(new Date());
+      years.add(String(h.year));
+    } else {
+      years.add(String(new Date().getFullYear()));
+    }
+    // Add any year that actually has expense records
+    for (const e of expenses) {
+      if (!(e as any).dateStr) continue;
+      years.add(getBookingMonthKey((e as any).dateStr, expCalType).split("-")[0]);
+    }
+    return Array.from(years).sort().reverse();
+  }, [expenses, expCalType]);
 
   const expMonthOptions = useMemo(() => {
     const keys = new Set<string>();
