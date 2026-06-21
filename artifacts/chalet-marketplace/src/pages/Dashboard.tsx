@@ -12930,10 +12930,9 @@ function ExpensesTab() {
   const { unit } = useAdminFinance();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
-  const _nowExp = new Date();
-  const currentMonth = `${_nowExp.getFullYear()}-${String(_nowExp.getMonth() + 1).padStart(2, "0")}`;
-  const [month, setMonth] = useState(currentMonth);
   const [expCalType, setExpCalType] = useState<"hijri" | "gregorian">("gregorian");
+  const [expYear, setExpYear] = useState<string>("");
+  const [expMonth, setExpMonth] = useState<string>("");
   const [form, setForm] = useState({ categoryId: "", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", customCategory: "", submissionId: "" });
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -12976,22 +12975,25 @@ function ExpensesTab() {
     return map;
   }, [expenseCats]);
 
-  const monthOptions = useMemo(() => {
-    const opts = [];
-    const now = new Date();
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const ys = d.getFullYear();
-      const ms = d.getMonth() + 1;
-      const val = `${ys}-${String(ms).padStart(2, "0")}`;
-      const primary = expCalType === "hijri"
-        ? `${HIJRI_MONTHS_AR[ms - 1]} ${toArN(ys)} هـ`
-        : `${GREGORIAN_MONTHS_AR[ms - 1]} ${toArN(ys)} م`;
-      const corr = getCalCorrespondenceHint(val, expCalType);
-      opts.push({ val, primary, corr });
+  const expYearOptions = useMemo(() => {
+    const years = new Set<string>();
+    for (const e of expenses) {
+      if (!(e as any).dateStr) continue;
+      years.add(getBookingMonthKey((e as any).dateStr, expCalType).split("-")[0]);
     }
-    return opts;
-  }, [expCalType]);
+    return Array.from(years).sort().reverse();
+  }, [expenses, expCalType]);
+
+  const expMonthOptions = useMemo(() => {
+    const keys = new Set<string>();
+    for (const e of expenses) {
+      if (!(e as any).dateStr) continue;
+      const key = getBookingMonthKey((e as any).dateStr, expCalType);
+      if (expYear && !key.startsWith(expYear)) continue;
+      keys.add(key);
+    }
+    return Array.from(keys).sort().reverse();
+  }, [expenses, expCalType, expYear]);
 
   const { data: mySubmissions = [] } = useQuery<any[]>({
     queryKey: ["my-submissions-for-report"],
@@ -13003,9 +13005,9 @@ function ExpensesTab() {
   });
 
   const { data: expenses = [], isLoading } = useQuery<OwnerExpense[]>({
-    queryKey: ["owner", "expenses", month],
+    queryKey: ["owner", "expenses"],
     queryFn: async () => {
-      const r = await apiFetch(`/owner/expenses?month=${month}`);
+      const r = await apiFetch(`/owner/expenses`);
       if (!r.ok) return [];
       return r.json();
     },
@@ -13066,16 +13068,22 @@ function ExpensesTab() {
   // Derive providerId from unit context
   const unitProviderId = unit.type === "service" ? (unit as any).id : null;
 
-  // Filter expenses by unit
+  // Filter expenses by calendar period then by unit
   const filteredExpenses = useMemo(() => {
+    let result: OwnerExpense[] = expenses;
+    if (expMonth) {
+      result = result.filter(e => (e as any).dateStr && getBookingMonthKey((e as any).dateStr, expCalType) === expMonth);
+    } else if (expYear) {
+      result = result.filter(e => (e as any).dateStr && getBookingMonthKey((e as any).dateStr, expCalType).startsWith(expYear));
+    }
     if (unit.type === "chalet" && (unit as any).submissionId) {
-      return expenses.filter(e => (e as any).submissionId === (unit as any).submissionId);
+      result = result.filter(e => (e as any).submissionId === (unit as any).submissionId);
     }
     if (unit.type === "service") {
-      return expenses.filter(e => (e as any).providerId === unitProviderId);
+      result = result.filter(e => (e as any).providerId === unitProviderId);
     }
-    return expenses;
-  }, [expenses, unit, unitProviderId]);
+    return result;
+  }, [expenses, expCalType, expYear, expMonth, unit, unitProviderId]);
 
   const totalMonth = filteredExpenses.reduce((s, e) => s + Number(e.amount), 0);
 
@@ -13304,20 +13312,58 @@ function ExpensesTab() {
             <Wallet className="w-4 h-4 text-primary" />
             المصروفات
           </h2>
-          <div className="flex items-center gap-2">
-            <Select value={month} onValueChange={setMonth}>
-              <SelectTrigger className="h-9 text-sm" style={{minWidth:"200px",width:"auto"}}>
-                <SelectValue />
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
+              {(["gregorian", "hijri"] as const).map(mode => (
+                <button key={mode} type="button"
+                  onClick={() => { setExpCalType(mode); setExpYear(""); setExpMonth(""); }}
+                  className={`text-xs px-3 py-1.5 font-medium transition-colors ${expCalType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                >{mode === "hijri" ? "هجري" : "ميلادي"}</button>
+              ))}
+            </div>
+            <Select value={expYear || "__all__"} onValueChange={(yr) => { setExpYear(yr === "__all__" ? "" : yr); setExpMonth(""); }}>
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7rem] shrink-0" dir="rtl">
+                {expYear
+                  ? <span className="text-sm font-medium">{expCalType === "hijri" ? `${toArN(Number(expYear))} هـ` : `${toArN(Number(expYear))} م`}</span>
+                  : <span className="text-sm text-muted-foreground">كل السنوات</span>}
               </SelectTrigger>
               <SelectContent dir="rtl" align="end">
-                {monthOptions.map((o) => (
-                  <SelectItem key={o.val} value={o.val} textValue={o.primary}>
-                    <div style={{width:"100%",direction:"rtl"}}>
-                      <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{o.primary}</div>
-                      {o.corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{o.corr}</div>}
-                    </div>
+                <SelectItem value="__all__"><span className="text-sm">كل السنوات</span></SelectItem>
+                {expYearOptions.map(yr => (
+                  <SelectItem key={yr} value={yr}>
+                    {expCalType === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={!expYear ? "all" : (expMonth || "all")}
+              onValueChange={(v) => { if (expYear) setExpMonth(v === "all" ? "" : v); }}
+              disabled={!expYear}
+            >
+              <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[8rem] shrink-0" dir="rtl">
+                {expMonth && expYear ? (() => {
+                  const ms = Number(expMonth.split("-")[1]);
+                  return expCalType === "hijri"
+                    ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]}</span>
+                    : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
+                })() : <span className="text-muted-foreground">كل المصروفات</span>}
+              </SelectTrigger>
+              <SelectContent dir="rtl" align="end">
+                <SelectItem value="all"><span className="text-sm">كل المصروفات</span></SelectItem>
+                {expMonthOptions.map(key => {
+                  const [ys, ms] = key.split("-").map(Number);
+                  const primary = expCalType === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
+                  const corr = getCalCorrespondenceHint(key, expCalType);
+                  return (
+                    <SelectItem key={key} value={key} textValue={primary}>
+                      <div style={{width:"100%",direction:"rtl"}}>
+                        <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
+                        {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
