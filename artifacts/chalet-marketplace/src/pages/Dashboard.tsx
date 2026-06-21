@@ -13011,15 +13011,14 @@ function ExpensesTab() {
   }, [expenses, expCalType]);
 
   const expMonthOptions = useMemo(() => {
-    const keys = new Set<string>();
-    for (const e of expenses) {
-      if (!(e as any).dateStr) continue;
-      const key = getBookingMonthKey((e as any).dateStr, expCalType);
-      if (expYear && !key.startsWith(expYear)) continue;
-      keys.add(key);
+    if (!expYear) return [];
+    // Generate all 12 months of the selected year so the dropdown is never empty
+    const keys: string[] = [];
+    for (let m = 1; m <= 12; m++) {
+      keys.push(`${expYear}-${String(m).padStart(2, "0")}`);
     }
-    return Array.from(keys).sort().reverse();
-  }, [expenses, expCalType, expYear]);
+    return keys.reverse(); // newest month first
+  }, [expYear]);
 
   const addMutation = useMutation({
     mutationFn: async (data: any) => {
