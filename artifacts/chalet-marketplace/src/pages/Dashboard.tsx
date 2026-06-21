@@ -13365,10 +13365,10 @@ function ExpensesTab() {
                   const primary = expCalType === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
                   const corr = getCalCorrespondenceHint(key, expCalType);
                   return (
-                    <SelectItem key={key} value={key} textValue={primary}>
+                    <SelectItem key={key} value={key} textValue={primary} className="h-auto items-start py-2">
                       <div style={{width:"100%",direction:"rtl"}}>
                         <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
-                        {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
+                        {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"2px"}}>{corr}</div>}
                       </div>
                     </SelectItem>
                   );
