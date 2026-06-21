@@ -13012,15 +13012,21 @@ function ExpensesTab() {
 
   const expMonthOptions = useMemo(() => {
     if (!expYear) return [];
-    const keys = new Set<string>();
-    for (const e of expenses) {
-      if (!(e as any).dateStr) continue;
-      const key = getBookingMonthKey((e as any).dateStr, expCalType);
-      if (!key.startsWith(expYear)) continue;
-      keys.add(key);
+    const now = new Date();
+    let maxMonth = 12;
+    // For the current year, only show months up to now (no future months)
+    if (expCalType === "hijri") {
+      const curH = toHijriComponents(now);
+      if (expYear === String(curH.year)) maxMonth = curH.month;
+    } else {
+      if (expYear === String(now.getFullYear())) maxMonth = now.getMonth() + 1;
     }
-    return Array.from(keys).sort().reverse();
-  }, [expenses, expCalType, expYear]);
+    const keys: string[] = [];
+    for (let m = maxMonth; m >= 1; m--) {
+      keys.push(`${expYear}-${String(m).padStart(2, "0")}`);
+    }
+    return keys;
+  }, [expCalType, expYear]);
 
   const addMutation = useMutation({
     mutationFn: async (data: any) => {
