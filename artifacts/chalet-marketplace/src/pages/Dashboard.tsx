@@ -13012,13 +13012,15 @@ function ExpensesTab() {
 
   const expMonthOptions = useMemo(() => {
     if (!expYear) return [];
-    // Generate all 12 months of the selected year so the dropdown is never empty
-    const keys: string[] = [];
-    for (let m = 1; m <= 12; m++) {
-      keys.push(`${expYear}-${String(m).padStart(2, "0")}`);
+    const keys = new Set<string>();
+    for (const e of expenses) {
+      if (!(e as any).dateStr) continue;
+      const key = getBookingMonthKey((e as any).dateStr, expCalType);
+      if (!key.startsWith(expYear)) continue;
+      keys.add(key);
     }
-    return keys.reverse(); // newest month first
-  }, [expYear]);
+    return Array.from(keys).sort().reverse();
+  }, [expenses, expCalType, expYear]);
 
   const addMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -13356,7 +13358,7 @@ function ExpensesTab() {
                     : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
                 })() : <span className="text-muted-foreground">كل المصروفات</span>}
               </SelectTrigger>
-              <SelectContent dir="rtl" align="end">
+              <SelectContent dir="rtl" align="end" className="max-h-[260px] overflow-y-auto">
                 <SelectItem value="all"><span className="text-sm">كل المصروفات</span></SelectItem>
                 {expMonthOptions.map(key => {
                   const [ys, ms] = key.split("-").map(Number);
