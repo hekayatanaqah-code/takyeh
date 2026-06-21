@@ -12994,13 +12994,9 @@ function ExpensesTab() {
   });
 
   const expYearOptions = useMemo(() => {
-    const years = new Set<string>();
-    for (const e of expenses) {
-      if (!(e as any).dateStr) continue;
-      years.add(getBookingMonthKey((e as any).dateStr, expCalType).split("-")[0]);
-    }
-    return Array.from(years).sort().reverse();
-  }, [expenses, expCalType]);
+    if (expCalType === "hijri") return ["1448", "1447", "1446"];
+    return ["2027", "2026", "2025"];
+  }, [expCalType]);
 
   const expMonthOptions = useMemo(() => {
     const keys = new Set<string>();
