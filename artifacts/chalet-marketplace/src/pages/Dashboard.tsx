@@ -13305,15 +13305,8 @@ function ExpensesTab() {
             المصروفات
           </h2>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setExpCalType(t => t === "hijri" ? "gregorian" : "hijri")}
-              className="h-9 px-3 rounded-lg border border-border text-xs font-bold text-muted-foreground hover:text-foreground transition-colors shrink-0"
-            >
-              {expCalType === "hijri" ? "هـ" : "م"}
-            </button>
             <Select value={month} onValueChange={setMonth}>
-              <SelectTrigger className="h-9 text-sm min-w-[180px]">
+              <SelectTrigger className="h-9 text-sm w-auto min-w-[220px] max-w-[280px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent dir="rtl" align="end">
