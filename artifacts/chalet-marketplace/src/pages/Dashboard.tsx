@@ -159,11 +159,7 @@ function getCalCorrespondenceHint(monthKey: string, calType: "hijri" | "gregoria
   } else {
     const h1 = toHijriComponents(new Date(ys, ms - 1, 1));
     const h2 = toHijriComponents(new Date(ys, ms, 0));
-    if (h1.year === h2.year && h1.month === h2.month)
-      return `يوافق: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
-    if (h1.year === h2.year)
-      return `يوافق: ${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
-    return `يوافق: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
+    return `يوافق: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
   }
 }
 
@@ -13012,21 +13008,15 @@ function ExpensesTab() {
 
   const expMonthOptions = useMemo(() => {
     if (!expYear) return [];
-    const now = new Date();
-    let maxMonth = 12;
-    // For the current year, only show months up to now (no future months)
-    if (expCalType === "hijri") {
-      const curH = toHijriComponents(now);
-      if (expYear === String(curH.year)) maxMonth = curH.month;
-    } else {
-      if (expYear === String(now.getFullYear())) maxMonth = now.getMonth() + 1;
+    const keys = new Set<string>();
+    for (const e of expenses) {
+      if (!(e as any).dateStr) continue;
+      const key = getBookingMonthKey((e as any).dateStr, expCalType);
+      if (!key.startsWith(expYear + "-")) continue;
+      keys.add(key);
     }
-    const keys: string[] = [];
-    for (let m = maxMonth; m >= 1; m--) {
-      keys.push(`${expYear}-${String(m).padStart(2, "0")}`);
-    }
-    return keys;
-  }, [expCalType, expYear]);
+    return Array.from(keys).sort().reverse();
+  }, [expenses, expCalType, expYear]);
 
   const addMutation = useMutation({
     mutationFn: async (data: any) => {
