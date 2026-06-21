@@ -13077,8 +13077,10 @@ function ExpensesTab() {
       amount: amt,
       notes: form.notes || undefined,
       receiptUrl: receiptUrl || undefined,
-      submissionId: unit.type !== "service" && form.submissionId ? Number(form.submissionId) : undefined,
-      providerId: unitProviderId ?? (form.submissionId && unit.type === "all" ? undefined : undefined),
+      submissionId: unit.type === "chalet"
+        ? (unit as any).submissionId
+        : (unit.type !== "service" && form.submissionId ? Number(form.submissionId) : undefined),
+      providerId: unitProviderId ?? undefined,
     });
   }
 
@@ -13158,9 +13160,9 @@ function ExpensesTab() {
             </div>
           )}
 
-          {/* Row 2: Date + Property */}
+          {/* Row 2: Date + Property (property only shown in "all" / main budget mode) */}
           <div className="flex gap-3 flex-wrap">
-            <div className="min-w-[140px] w-fit max-w-[220px]">
+            <div className={unit.type === "all" && mySubmissions.length > 0 ? "min-w-[140px] w-fit max-w-[220px]" : "flex-1 min-w-[140px]"}>
               <label className="text-xs text-muted-foreground font-medium mb-1 block">التاريخ</label>
               <div className="rounded-md border bg-background px-3 py-2 h-11 flex items-center">
                 <DualCalendarPicker
@@ -13179,7 +13181,8 @@ function ExpensesTab() {
                 </div>
               </div>
             )}
-            {unit.type !== "service" && mySubmissions.length > 0 && (
+            {/* Property selector: visible ONLY in main-budget (all) mode */}
+            {unit.type === "all" && mySubmissions.length > 0 && (
               <div className="flex-1 min-w-[140px]">
                 <label className="text-xs text-muted-foreground font-medium mb-1 block">العقار (اختياري)</label>
                 <Select value={form.submissionId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, submissionId: v === "none" ? "" : v }))}>
