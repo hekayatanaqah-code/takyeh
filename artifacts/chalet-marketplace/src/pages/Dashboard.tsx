@@ -12991,14 +12991,6 @@ function ExpensesTab() {
 
   const expYearOptions = useMemo(() => {
     const years = new Set<string>();
-    // Always include current year in selected calendar
-    if (expCalType === "hijri") {
-      const h = toHijriComponents(new Date());
-      years.add(String(h.year));
-    } else {
-      years.add(String(new Date().getFullYear()));
-    }
-    // Add any year that actually has expense records
     for (const e of expenses) {
       if (!(e as any).dateStr) continue;
       years.add(getBookingMonthKey((e as any).dateStr, expCalType).split("-")[0]);
