@@ -13358,7 +13358,7 @@ function ExpensesTab() {
                     : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
                 })() : <span className="text-muted-foreground">كل المصروفات</span>}
               </SelectTrigger>
-              <SelectContent dir="rtl" align="end" className="max-h-[260px] overflow-y-auto">
+              <SelectContent dir="rtl" align="end" className="max-h-[260px]">
                 <SelectItem value="all"><span className="text-sm">كل المصروفات</span></SelectItem>
                 {expMonthOptions.map(key => {
                   const [ys, ms] = key.split("-").map(Number);
