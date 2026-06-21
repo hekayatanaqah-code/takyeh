@@ -12975,6 +12975,24 @@ function ExpensesTab() {
     return map;
   }, [expenseCats]);
 
+  const { data: expenses = [], isLoading } = useQuery<OwnerExpense[]>({
+    queryKey: ["owner", "expenses"],
+    queryFn: async () => {
+      const r = await apiFetch(`/owner/expenses`);
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const { data: mySubmissions = [] } = useQuery<any[]>({
+    queryKey: ["my-submissions-for-report"],
+    queryFn: async () => {
+      const r = await apiFetch("/submissions/mine");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
   const expYearOptions = useMemo(() => {
     const years = new Set<string>();
     for (const e of expenses) {
@@ -12994,24 +13012,6 @@ function ExpensesTab() {
     }
     return Array.from(keys).sort().reverse();
   }, [expenses, expCalType, expYear]);
-
-  const { data: mySubmissions = [] } = useQuery<any[]>({
-    queryKey: ["my-submissions-for-report"],
-    queryFn: async () => {
-      const r = await apiFetch("/submissions/mine");
-      if (!r.ok) return [];
-      return r.json();
-    },
-  });
-
-  const { data: expenses = [], isLoading } = useQuery<OwnerExpense[]>({
-    queryKey: ["owner", "expenses"],
-    queryFn: async () => {
-      const r = await apiFetch(`/owner/expenses`);
-      if (!r.ok) return [];
-      return r.json();
-    },
-  });
 
   const addMutation = useMutation({
     mutationFn: async (data: any) => {
