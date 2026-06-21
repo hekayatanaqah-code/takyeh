@@ -6702,7 +6702,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                   const primary = bookingCalView === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
                   const corr = getCalCorrespondenceHint(key, bookingCalView);
                   return (
-                    <SelectItem key={key} value={key}>
+                    <SelectItem key={key} value={key} textValue={primary}>
                       <div style={{width:"100%",direction:"rtl"}}>
                         <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
                         {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
@@ -10874,7 +10874,7 @@ function BankLedgerTab() {
                 const primary = bankCalType === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
                 const corr = getCalCorrespondenceHint(key, bankCalType);
                 return (
-                  <SelectItem key={key} value={key}>
+                  <SelectItem key={key} value={key} textValue={primary}>
                     <div style={{width:"100%",direction:"rtl"}}>
                       <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
                       {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
@@ -13311,7 +13311,7 @@ function ExpensesTab() {
               </SelectTrigger>
               <SelectContent dir="rtl" align="end">
                 {monthOptions.map((o) => (
-                  <SelectItem key={o.val} value={o.val}>
+                  <SelectItem key={o.val} value={o.val} textValue={o.primary}>
                     <div style={{width:"100%",direction:"rtl"}}>
                       <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{o.primary}</div>
                       {o.corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{o.corr}</div>}
@@ -16745,7 +16745,7 @@ function ReviewsTab() {
                           const primary = reviewCalType === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
                           const corr = getCalCorrespondenceHint(ym, reviewCalType);
                           return (
-                            <SelectItem key={ym} value={ym}>
+                            <SelectItem key={ym} value={ym} textValue={primary}>
                               <div style={{width:"100%",direction:"rtl"}}>
                                 <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
                                 {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
@@ -17348,7 +17348,7 @@ function DepositsTab() {
                 const primary = calendarMode === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
                 const corr = getCalCorrespondenceHint(ym, calendarMode);
                 return (
-                  <SelectItem key={ym} value={ym}>
+                  <SelectItem key={ym} value={ym} textValue={primary}>
                     <div style={{width:"100%",direction:"rtl"}}>
                       <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
                       {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
@@ -21344,7 +21344,7 @@ function ContractsArchiveTab() {
                 const primary = contractCalView === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
                 const corr = getCalCorrespondenceHint(key, contractCalView);
                 return (
-                  <SelectItem key={key} value={key}>
+                  <SelectItem key={key} value={key} textValue={primary}>
                     <div style={{width:"100%",direction:"rtl"}}>
                       <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
                       {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
