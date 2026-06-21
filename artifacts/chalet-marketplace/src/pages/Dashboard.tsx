@@ -12991,6 +12991,13 @@ function ExpensesTab() {
 
   const expYearOptions = useMemo(() => {
     const years = new Set<string>();
+    // Always include today's year as default
+    if (expCalType === "hijri") {
+      years.add(String(toHijriComponents(new Date()).year));
+    } else {
+      years.add(String(new Date().getFullYear()));
+    }
+    // Add any year that has actual expense records
     for (const e of expenses) {
       if (!(e as any).dateStr) continue;
       years.add(getBookingMonthKey((e as any).dateStr, expCalType).split("-")[0]);
@@ -13000,7 +13007,20 @@ function ExpensesTab() {
 
   const expMonthOptions = useMemo(() => {
     if (!expYear) return [];
+    const now = new Date();
     const keys = new Set<string>();
+    // Always include today's month if the selected year is the current year
+    let curYearStr: string, curMonthKey: string;
+    if (expCalType === "hijri") {
+      const h = toHijriComponents(now);
+      curYearStr = String(h.year);
+      curMonthKey = `${h.year}-${String(h.month).padStart(2, "0")}`;
+    } else {
+      curYearStr = String(now.getFullYear());
+      curMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    }
+    if (expYear === curYearStr) keys.add(curMonthKey);
+    // Add any month in the selected year that has actual expense records
     for (const e of expenses) {
       if (!(e as any).dateStr) continue;
       const key = getBookingMonthKey((e as any).dateStr, expCalType);
