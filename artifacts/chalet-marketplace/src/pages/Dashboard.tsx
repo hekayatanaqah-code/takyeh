@@ -13118,6 +13118,10 @@ function ExpensesTab() {
   }, [expenses, expCalType, expYear, expMonth, unit, unitProviderId]);
 
   const totalMonth = filteredExpenses.reduce((s, e) => s + Number(e.amount), 0);
+  const expShowProp = unit.type === "all";
+  const expTableCols = expShowProp
+    ? "max-content max-content max-content 1fr max-content max-content max-content"
+    : "max-content max-content 1fr max-content max-content max-content";
 
   return (
     <div className="space-y-5">
@@ -13203,10 +13207,28 @@ function ExpensesTab() {
                 className="h-11"
                 required
               />
+              {form.customCategory.trim() && (
+                <div
+                  className="flex items-center gap-2 mt-2 cursor-pointer select-none group w-fit"
+                  dir="rtl"
+                  onClick={() => setSaveAsCategory((v) => !v)}
+                >
+                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${saveAsCategory ? "bg-primary border-primary" : "border-muted-foreground/40 group-hover:border-primary/60"}`}>
+                    {saveAsCategory && (
+                      <svg viewBox="0 0 10 8" className="w-2.5 h-2.5 fill-none stroke-white stroke-[2]">
+                        <polyline points="1,4 4,7 9,1" />
+                      </svg>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+                    حفظ كفئة دائمة في القائمة للمرات القادمة
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Notes + Receipt + optional save-as-category — same row */}
+          {/* Notes (65%) + Receipt (35%) */}
           <div className="flex gap-3 items-end flex-wrap">
             <div className="flex-[2] min-w-[160px]">
               <label className="text-xs text-muted-foreground font-medium mb-1 block">ملاحظات (اختياري)</label>
@@ -13232,26 +13254,6 @@ function ExpensesTab() {
                 <a href={receiptUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline text-center mt-1">عرض الإيصال</a>
               )}
             </div>
-            {isOtherSelected && form.customCategory.trim() && (
-              <div className="flex flex-col shrink-0">
-                <label className="text-xs font-medium mb-1 block opacity-0 select-none">حفظ</label>
-                <div
-                  className="h-11 flex items-center gap-2 cursor-pointer select-none group px-1"
-                  onClick={() => setSaveAsCategory((v) => !v)}
-                >
-                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${saveAsCategory ? "bg-primary border-primary" : "border-muted-foreground/40 group-hover:border-primary/60"}`}>
-                    {saveAsCategory && (
-                      <svg viewBox="0 0 10 8" className="w-2.5 h-2.5 fill-none stroke-white stroke-[2]">
-                        <polyline points="1,4 4,7 9,1" />
-                      </svg>
-                    )}
-                  </div>
-                  <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors leading-snug max-w-[88px]">
-                    حفظ كفئة دائمة للمرات القادمة
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Submit — centered, capped at max-w-md */}
@@ -13457,54 +13459,56 @@ function ExpensesTab() {
             <p className="text-sm">لا توجد مصروفات في هذا الشهر</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {filteredExpenses.map((exp) => {
+          <div className="rounded-xl overflow-hidden border border-border/40">
+            {/* رأس الجدول */}
+            <div
+              className="grid items-center gap-x-3 px-3 py-2 bg-muted/60 border-b border-border/40 text-right"
+              dir="rtl"
+              style={{ gridTemplateColumns: expTableCols }}
+            >
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">التاريخ</span>
+              {expShowProp && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">العقار</span>}
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">الفئة</span>
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">الملاحظات</span>
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-left">المبلغ</span>
+              <span />
+              <span />
+            </div>
+            {/* صفوف البيانات */}
+            {filteredExpenses.map((exp, idx) => {
               const cat = catDisplayMap[exp.category] ?? { label: exp.category, emoji: "✨", colorClass: "bg-slate-100 text-slate-700" };
               const displayLabel = exp.customCategory ? exp.customCategory : cat.label;
               const displayDate = expCalType === "hijri"
                 ? formatDualDate(exp.dateStr).hijri.replace(/\s*هـ\s*$/, "") + " هـ"
                 : formatDualDate(exp.dateStr).gregorian;
               const propName = exp.submissionId
-                ? ((mySubmissions as any[]).find((s) => s.id === exp.submissionId) as any)?.nameAr ?? ""
-                : "";
+                ? ((mySubmissions as any[]).find((s) => s.id === exp.submissionId) as any)?.nameAr ?? "—"
+                : "—";
               return (
-                <div key={exp.id} className="flex items-center gap-2 p-3 bg-muted/40 rounded-xl text-right" dir="rtl">
-                  {/* التاريخ */}
-                  <div className="shrink-0">
-                    <p className="text-[11px] font-semibold text-foreground leading-tight whitespace-nowrap">{displayDate}</p>
+                <div
+                  key={exp.id}
+                  className={`grid items-center gap-x-3 px-3 py-2.5 text-right transition-colors hover:bg-muted/30 ${idx % 2 === 0 ? "" : "bg-muted/20"} ${idx < filteredExpenses.length - 1 ? "border-b border-border/20" : ""}`}
+                  dir="rtl"
+                  style={{ gridTemplateColumns: expTableCols }}
+                >
+                  <span className="text-[11px] font-semibold text-foreground whitespace-nowrap">{displayDate}</span>
+                  {expShowProp && <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">{propName}</span>}
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${cat.colorClass}`}>
+                    {cat.emoji} {displayLabel}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground truncate">{exp.notes || "—"}</span>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-foreground leading-tight">{toArN(Math.round(Number(exp.amount)).toLocaleString("en-US"))}</p>
+                    <p className="text-[9px] text-muted-foreground">ر.س</p>
                   </div>
-                  {/* العقار (إن وُجد) */}
-                  {propName ? (
-                    <div className="shrink-0 max-w-[72px]">
-                      <p className="text-[10px] text-muted-foreground truncate leading-tight">{propName}</p>
-                    </div>
-                  ) : null}
-                  {/* الفئة والبيان — يملأ المساحة الوسطى */}
-                  <div className="flex-1 min-w-0 flex items-center gap-2">
-                    <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold ${cat.colorClass}`}>
-                      {cat.emoji} {displayLabel}
-                    </span>
-                    {exp.notes && (
-                      <span className="text-[10px] text-muted-foreground truncate flex-1">{exp.notes}</span>
-                    )}
-                  </div>
-                  {/* المبلغ */}
-                  <div className="shrink-0 text-left">
-                    <p className="text-sm font-bold text-foreground">{toArN(Math.round(Number(exp.amount)).toLocaleString("en-US"))}</p>
-                    <p className="text-[10px] text-muted-foreground text-center">ر.س</p>
-                  </div>
-                  {/* الإيصال */}
                   {exp.receiptUrl ? (
-                    <a href={exp.receiptUrl} target="_blank" rel="noreferrer" className="shrink-0 text-primary hover:text-primary/70 transition-colors">
+                    <a href={exp.receiptUrl} target="_blank" rel="noreferrer" className="text-primary hover:text-primary/70 transition-colors flex justify-center">
                       <Receipt className="w-4 h-4" />
                     </a>
-                  ) : (
-                    <div className="w-4 shrink-0" />
-                  )}
-                  {/* حذف */}
+                  ) : <span className="w-4 block" />}
                   <button
                     onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } if (confirm("حذف هذا المصروف؟")) deleteMutation.mutate(exp.id); }}
-                    className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                    className="text-muted-foreground hover:text-destructive transition-colors flex justify-center"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
