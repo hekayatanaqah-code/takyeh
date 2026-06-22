@@ -12930,6 +12930,7 @@ function ExpensesTab() {
   const [expYear, setExpYear] = useState<string>("");
   const [expMonth, setExpMonth] = useState<string>("");
   const [form, setForm] = useState({ categoryId: "", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", customCategory: "", submissionId: "" });
+  const [saveAsCategory, setSaveAsCategory] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -13066,12 +13067,21 @@ function ExpensesTab() {
     setUploading(false);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (isReadOnly) { onBlockedEdit(); return; }
     const amt = parseFloat(form.amount);
     if (!amt || isNaN(amt)) return;
     if (isOtherSelected && !form.customCategory.trim()) return;
+    if (isOtherSelected && saveAsCategory && form.customCategory.trim()) {
+      try {
+        await apiFetch("/owner/expense-categories", {
+          method: "POST",
+          body: JSON.stringify({ name: form.customCategory.trim() }),
+        });
+        qc.invalidateQueries({ queryKey: ["catalog", "expense-categories"] });
+      } catch { /* حفظ الفئة اختياري */ }
+    }
     addMutation.mutate({
       category: selectedCat?.name ?? "أخرى",
       customCategory: isOtherSelected ? form.customCategory.trim() : undefined,
@@ -13084,6 +13094,7 @@ function ExpensesTab() {
         : (unit.type !== "service" && form.submissionId ? Number(form.submissionId) : undefined),
       providerId: unitProviderId ?? undefined,
     });
+    setSaveAsCategory(false);
   }
 
   // Derive providerId from unit context
@@ -13192,6 +13203,30 @@ function ExpensesTab() {
                 className="h-11"
                 required
               />
+              {form.customCategory.trim() && (
+                <label className="flex items-center gap-2 mt-2 cursor-pointer select-none group w-fit">
+                  <div
+                    onClick={() => setSaveAsCategory((v) => !v)}
+                    className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors shrink-0 ${
+                      saveAsCategory
+                        ? "bg-primary border-primary"
+                        : "border-muted-foreground/40 group-hover:border-primary/60"
+                    }`}
+                  >
+                    {saveAsCategory && (
+                      <svg viewBox="0 0 10 8" className="w-2.5 h-2.5 fill-none stroke-white stroke-[2]">
+                        <polyline points="1,4 4,7 9,1" />
+                      </svg>
+                    )}
+                  </div>
+                  <span
+                    onClick={() => setSaveAsCategory((v) => !v)}
+                    className="text-xs text-muted-foreground group-hover:text-foreground transition-colors"
+                  >
+                    حفظ كفئة دائمة في القائمة للمرات القادمة
+                  </span>
+                </label>
+              )}
             </div>
           )}
 
@@ -13430,20 +13465,47 @@ function ExpensesTab() {
             {filteredExpenses.map((exp) => {
               const cat = catDisplayMap[exp.category] ?? { label: exp.category, emoji: "✨", colorClass: "bg-slate-100 text-slate-700" };
               const displayLabel = exp.customCategory ? exp.customCategory : cat.label;
+              const displayDate = expCalType === "hijri"
+                ? formatDualDate(exp.dateStr).hijri.replace(/\s*هـ\s*$/, "") + " هـ"
+                : formatDualDate(exp.dateStr).gregorian;
+              const propName = exp.submissionId
+                ? ((mySubmissions as any[]).find((s) => s.id === exp.submissionId) as any)?.nameAr ?? ""
+                : "";
               return (
-                <div key={exp.id} className="flex items-center gap-3 p-3 bg-muted/40 rounded-xl">
-                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold shrink-0 ${cat.colorClass}`}>
-                    {cat.emoji} {displayLabel}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-foreground">{formatAmount(Number(exp.amount))}</p>
-                    <p className="text-xs text-muted-foreground truncate">{exp.dateStr}{exp.notes ? ` · ${exp.notes}` : ""}</p>
+                <div key={exp.id} className="flex items-center gap-2 p-3 bg-muted/40 rounded-xl text-right" dir="rtl">
+                  {/* التاريخ */}
+                  <div className="shrink-0 w-[82px]">
+                    <p className="text-[11px] font-semibold text-foreground leading-tight">{displayDate}</p>
                   </div>
-                  {exp.receiptUrl && (
-                    <a href={exp.receiptUrl} target="_blank" rel="noreferrer" className="text-xs text-primary shrink-0">
+                  {/* العقار (إن وُجد) */}
+                  {propName ? (
+                    <div className="shrink-0 max-w-[72px]">
+                      <p className="text-[10px] text-muted-foreground truncate leading-tight">{propName}</p>
+                    </div>
+                  ) : null}
+                  {/* الفئة والبيان */}
+                  <div className="flex-1 min-w-0">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold ${cat.colorClass}`}>
+                      {cat.emoji} {displayLabel}
+                    </span>
+                    {exp.notes && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{exp.notes}</p>
+                    )}
+                  </div>
+                  {/* المبلغ */}
+                  <div className="shrink-0 text-left">
+                    <p className="text-sm font-bold text-foreground">{toArN(Math.round(Number(exp.amount)).toLocaleString("en-US"))}</p>
+                    <p className="text-[10px] text-muted-foreground text-center">ر.س</p>
+                  </div>
+                  {/* الإيصال */}
+                  {exp.receiptUrl ? (
+                    <a href={exp.receiptUrl} target="_blank" rel="noreferrer" className="shrink-0 text-primary hover:text-primary/70 transition-colors">
                       <Receipt className="w-4 h-4" />
                     </a>
+                  ) : (
+                    <div className="w-4 shrink-0" />
                   )}
+                  {/* حذف */}
                   <button
                     onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } if (confirm("حذف هذا المصروف؟")) deleteMutation.mutate(exp.id); }}
                     className="text-muted-foreground hover:text-destructive transition-colors shrink-0"

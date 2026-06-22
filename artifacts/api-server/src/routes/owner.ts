@@ -26,6 +26,7 @@ import {
   ownerRefundsTable,
   bookingPaymentsTable,
   cashDepositLogsTable,
+  expenseCategoriesTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
@@ -2701,6 +2702,15 @@ router.delete("/expenses/:id", async (req, res) => {
   const id = Number(req.params.id);
   await db.delete(ownerExpensesTable).where(and(eq(ownerExpensesTable.id, id), eq(ownerExpensesTable.ownerId, ownerId)));
   return res.json({ ok: true });
+});
+
+router.post("/expense-categories", async (req, res) => {
+  const body = z.object({ name: z.string().min(1), emoji: z.string().default("✨"), color: z.string().default("slate") }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const existing = await db.select().from(expenseCategoriesTable).where(eq(expenseCategoriesTable.name, body.data.name));
+  if (existing.length > 0) return res.json(existing[0]);
+  const [row] = await db.insert(expenseCategoriesTable).values({ ...body.data, isOther: false, sortOrder: 100 }).returning();
+  return res.status(201).json(row);
 });
 
 /* ── Staff ─────────────────────────────────────────────────── */
