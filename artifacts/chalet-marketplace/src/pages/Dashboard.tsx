@@ -13160,9 +13160,9 @@ function ExpensesTab() {
             </div>
           )}
 
-          {/* Row 2: Date + Property (property only shown in "all" / main budget mode) */}
+          {/* Row 2: Date (half-width) + Property (only in main-budget mode) */}
           <div className="flex gap-3 flex-wrap">
-            <div className={unit.type === "all" && mySubmissions.length > 0 ? "min-w-[140px] w-fit max-w-[220px]" : "flex-1 min-w-[140px]"}>
+            <div className="w-1/2 min-w-[150px]">
               <label className="text-xs text-muted-foreground font-medium mb-1 block">التاريخ</label>
               <div className="rounded-md border bg-background px-3 py-2 h-11 flex items-center">
                 <DualCalendarPicker
@@ -13199,35 +13199,40 @@ function ExpensesTab() {
               </div>
             )}
           </div>
-          {/* Row 3: Notes */}
-          <div>
-            <label className="text-xs text-muted-foreground font-medium mb-1 block">ملاحظات (اختياري)</label>
-            <Input
-              placeholder="تفاصيل إضافية..."
-              value={form.notes}
-              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              className="h-11"
-            />
+          {/* Row 3: Notes (65%) + Receipt upload (35%) side by side */}
+          <div className="flex gap-3 items-end flex-wrap">
+            <div className="flex-[2] min-w-[160px]">
+              <label className="text-xs text-muted-foreground font-medium mb-1 block">ملاحظات (اختياري)</label>
+              <Input
+                placeholder="تفاصيل إضافية..."
+                value={form.notes}
+                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                className="h-11"
+              />
+            </div>
+            <div className="flex-1 min-w-[120px] flex flex-col">
+              <label className="text-xs text-muted-foreground font-medium mb-1 block opacity-0 select-none">رفع</label>
+              <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && handleReceiptUpload(e.target.files[0])} />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="h-11 flex items-center justify-center gap-2 px-3 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors w-full"
+              >
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                {receiptUrl ? "تم رفع الإيصال ✓" : "رفع إيصال"}
+              </button>
+              {receiptUrl && (
+                <a href={receiptUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline text-center mt-1">عرض الإيصال</a>
+              )}
+            </div>
           </div>
-          {/* Row 4: Receipt upload */}
-          <div className="flex items-center gap-3">
-            <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && handleReceiptUpload(e.target.files[0])} />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-            >
-              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-              {receiptUrl ? "تم رفع الإيصال ✓" : "رفع إيصال (اختياري)"}
-            </button>
-            {receiptUrl && (
-              <a href={receiptUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">عرض</a>
-            )}
+          {/* Submit button — centered, max width md */}
+          <div className="flex justify-center pt-1">
+            <Button type="submit" className="h-11 font-bold w-full max-w-md" disabled={addMutation.isPending || !form.amount}>
+              {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <Plus className="w-4 h-4 me-2" />}
+              تسجيل المصروف
+            </Button>
           </div>
-          <Button type="submit" className="w-full h-11 font-bold" disabled={addMutation.isPending || !form.amount}>
-            {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <Plus className="w-4 h-4 me-2" />}
-            تسجيل المصروف
-          </Button>
         </form>
       </div>
       )}
