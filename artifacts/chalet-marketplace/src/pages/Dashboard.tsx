@@ -12938,6 +12938,7 @@ function ExpensesTab() {
   const [wDate, setWDate] = useState(getLocalDateStr());
   const [wNote, setWNote] = useState("");
   const [wSaving, setWSaving] = useState(false);
+  const [dateInputMode, setDateInputMode] = useState<"hijri" | "gregorian">("hijri");
   const { toast } = useToast();
 
   /* ── dynamic categories ── */
@@ -13116,9 +13117,10 @@ function ExpensesTab() {
           {unit.type === "chalet" ? `تسجيل مصروف: ${(unit as any).name}` : `تسجيل مصروف: ${(unit as any).name}`}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-3">
-          {/* Row 1: Category + Amount */}
-          <div className="flex gap-3 flex-wrap">
-            <div className="flex-1 min-w-[140px]">
+          {/* Row 1: 3-column grid — Category + Amount + Date */}
+          <div className="grid grid-cols-3 gap-3">
+            {/* Category */}
+            <div>
               <label className="text-xs text-muted-foreground font-medium mb-1 block">الفئة</label>
               <Select value={form.categoryId} onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v, customCategory: "" }))}>
                 <SelectTrigger className="h-11">
@@ -13131,7 +13133,8 @@ function ExpensesTab() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex-1 min-w-[120px]">
+            {/* Amount */}
+            <div>
               <label className="text-xs text-muted-foreground font-medium mb-1 block">المبلغ (ر.س)</label>
               <Input
                 type="text"
@@ -13143,8 +13146,47 @@ function ExpensesTab() {
                 required
               />
             </div>
+            {/* Date with Hijri/Gregorian toggle */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-muted-foreground font-medium">التاريخ</label>
+                <div className="flex rounded-md border border-border overflow-hidden text-[11px] font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setDateInputMode("hijri")}
+                    className={dateInputMode === "hijri"
+                      ? "px-2 py-0.5 bg-primary text-primary-foreground transition-colors"
+                      : "px-2 py-0.5 bg-background text-muted-foreground hover:bg-accent transition-colors"}
+                  >هجري</button>
+                  <button
+                    type="button"
+                    onClick={() => setDateInputMode("gregorian")}
+                    className={dateInputMode === "gregorian"
+                      ? "px-2 py-0.5 bg-primary text-primary-foreground border-r border-border transition-colors"
+                      : "px-2 py-0.5 bg-background text-muted-foreground hover:bg-accent border-r border-border transition-colors"}
+                  >ميلادي</button>
+                </div>
+              </div>
+              {dateInputMode === "hijri" ? (
+                <div className="rounded-md border bg-background px-3 py-2 h-11 flex items-center">
+                  <DualCalendarPicker
+                    value={form.dateStr}
+                    onChange={(v) => setForm((f) => ({ ...f, dateStr: v }))}
+                    placeholder="اختر التاريخ"
+                  />
+                </div>
+              ) : (
+                <input
+                  type="date"
+                  value={form.dateStr}
+                  onChange={(e) => setForm((f) => ({ ...f, dateStr: e.target.value }))}
+                  className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground [direction:ltr] focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              )}
+            </div>
           </div>
-          {/* Custom category name — shown only when isOther category is selected */}
+
+          {/* Custom category — full width, only when "أخرى" selected */}
           {isOtherSelected && (
             <div>
               <label className="text-xs text-muted-foreground font-medium mb-1 block">
@@ -13160,46 +13202,7 @@ function ExpensesTab() {
             </div>
           )}
 
-          {/* Row 2: Date (half-width) + Property (only in main-budget mode) */}
-          <div className="flex gap-3 flex-wrap">
-            <div className="w-1/2 min-w-[150px]">
-              <label className="text-xs text-muted-foreground font-medium mb-1 block">التاريخ</label>
-              <div className="rounded-md border bg-background px-3 py-2 h-11 flex items-center">
-                <DualCalendarPicker
-                  value={form.dateStr}
-                  onChange={(v) => setForm((f) => ({ ...f, dateStr: v }))}
-                  placeholder="اختر التاريخ"
-                />
-              </div>
-            </div>
-            {unit.type === "service" && (
-              <div className="flex-1 min-w-[140px]">
-                <label className="text-xs text-muted-foreground font-medium mb-1 block">الوحدة</label>
-                <div className="h-11 flex items-center px-3 rounded-md border bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/30 text-sm font-semibold text-amber-700 dark:text-amber-300 gap-2">
-                  <Activity className="w-3.5 h-3.5 shrink-0" />
-                  {(unit as any).name}
-                </div>
-              </div>
-            )}
-            {/* Property selector: visible ONLY in main-budget (all) mode */}
-            {unit.type === "all" && mySubmissions.length > 0 && (
-              <div className="flex-1 min-w-[140px]">
-                <label className="text-xs text-muted-foreground font-medium mb-1 block">العقار (اختياري)</label>
-                <Select value={form.submissionId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, submissionId: v === "none" ? "" : v }))}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue placeholder="عام" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">عام (غير مرتبط)</SelectItem>
-                    {mySubmissions.map((s: any) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.nameAr ?? `شاليه #${s.id}`}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-          {/* Row 3: Notes (65%) + Receipt upload (35%) side by side */}
+          {/* Notes (65%) + Receipt upload (35%) — same row */}
           <div className="flex gap-3 items-end flex-wrap">
             <div className="flex-[2] min-w-[160px]">
               <label className="text-xs text-muted-foreground font-medium mb-1 block">ملاحظات (اختياري)</label>
@@ -13226,7 +13229,8 @@ function ExpensesTab() {
               )}
             </div>
           </div>
-          {/* Submit button — centered, max width md */}
+
+          {/* Submit — centered, capped at max-w-md */}
           <div className="flex justify-center pt-1">
             <Button type="submit" className="h-11 font-bold w-full max-w-md" disabled={addMutation.isPending || !form.amount}>
               {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <Plus className="w-4 h-4 me-2" />}
