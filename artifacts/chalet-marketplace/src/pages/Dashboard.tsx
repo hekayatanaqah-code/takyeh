@@ -12938,6 +12938,7 @@ function ExpensesTab() {
   const [wDate, setWDate] = useState(getLocalDateStr());
   const [wNote, setWNote] = useState("");
   const [wSaving, setWSaving] = useState(false);
+  const [wDateMode, setWDateMode] = useState<"hijri" | "gregorian">("hijri");
   const [dateInputMode, setDateInputMode] = useState<"hijri" | "gregorian">("hijri");
   const { toast } = useToast();
 
@@ -13291,36 +13292,63 @@ function ExpensesTab() {
             }}
             className="space-y-2.5 pt-1 border-t border-amber-200 dark:border-amber-800"
           >
+            {/* Row 1: Amount + Date (2-col grid) */}
             <div className="grid grid-cols-2 gap-2">
+              {/* Amount — Arabic-Indic digits */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">المبلغ (ر.س) *</label>
                 <Input
-                  type="number"
-                  min="1"
-                  value={wAmount}
-                  onChange={e => setWAmount(e.target.value)}
-                  placeholder="0"
-                  className="h-9 text-sm"
+                  type="text"
+                  inputMode="decimal"
+                  value={toAr(wAmount)}
+                  onChange={e => setWAmount(fromAr(e.target.value))}
+                  placeholder="٠"
+                  className="h-10 text-sm text-right"
                   required
                 />
               </div>
+              {/* Date — custom picker with Hijri/Gregorian toggle */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">التاريخ</label>
-                <Input
-                  type="date"
-                  value={wDate}
-                  onChange={e => setWDate(e.target.value)}
-                  className="h-9 text-sm"
-                />
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">التاريخ</label>
+                  <div className="flex rounded-md border border-amber-300 dark:border-amber-700 overflow-hidden text-[10px] font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setWDateMode("hijri")}
+                      className={wDateMode === "hijri"
+                        ? "px-1.5 py-0.5 bg-amber-600 text-white transition-colors"
+                        : "px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"}
+                    >هجري</button>
+                    <button
+                      type="button"
+                      onClick={() => setWDateMode("gregorian")}
+                      className={wDateMode === "gregorian"
+                        ? "px-1.5 py-0.5 bg-amber-600 text-white border-r border-amber-300 dark:border-amber-700 transition-colors"
+                        : "px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 border-r border-amber-300 dark:border-amber-700 transition-colors"}
+                    >ميلادي</button>
+                  </div>
+                </div>
+                <div className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/10 px-3 py-1.5 h-10 flex items-center">
+                  <DualCalendarPicker
+                    value={wDate}
+                    onChange={setWDate}
+                    placeholder="اختر التاريخ"
+                    mode={wDateMode}
+                  />
+                </div>
               </div>
             </div>
+            {/* Row 2: Notes full width */}
             <div className="space-y-1">
               <label className="text-xs font-semibold text-amber-800 dark:text-amber-300">ملاحظة (اختياري)</label>
-              <Input value={wNote} onChange={e => setWNote(e.target.value)} placeholder="مثال: سحب شخصي، راتب المالك..." className="h-9 text-sm" />
+              <Input value={wNote} onChange={e => setWNote(e.target.value)} placeholder="مثال: سحب شخصي، راتب المالك..." className="h-10 text-sm" />
             </div>
-            <Button type="submit" disabled={wSaving || !wAmount} size="sm" className="w-full bg-amber-600 hover:bg-amber-700 text-white">
-              {wSaving ? "جاري الحفظ..." : "💸 تسجيل المسحوبات"}
-            </Button>
+            {/* Submit — centered, capped width */}
+            <div className="flex justify-center">
+              <Button type="submit" disabled={wSaving || !wAmount} size="sm" className="w-full max-w-xs bg-amber-600 hover:bg-amber-700 text-white h-10 font-bold">
+                {wSaving ? "جاري الحفظ..." : "💸 تسجيل المسحوبات"}
+              </Button>
+            </div>
           </form>
         )}
       </div>
