@@ -12934,6 +12934,7 @@ function ExpensesTab() {
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; expId: number | null }>({ open: false, expId: null });
   const [showWithdrawal, setShowWithdrawal] = useState(false);
   const [wAmount, setWAmount] = useState("");
   const [wDate, setWDate] = useState(getLocalDateStr());
@@ -13525,7 +13526,7 @@ function ExpensesTab() {
                       </td>
                       <td className="text-center px-2 py-2.5">
                         <button
-                          onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } if (confirm("حذف هذا المصروف؟")) deleteMutation.mutate(exp.id); }}
+                          onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } setDeleteConfirm({ open: true, expId: exp.id }); }}
                           className="text-muted-foreground hover:text-destructive transition-colors inline-flex justify-center"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -13546,6 +13547,53 @@ function ExpensesTab() {
           </div>
         )}
       </div>
+
+      {/* ── مودال تأكيد الحذف ── */}
+      {deleteConfirm.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" dir="rtl">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setDeleteConfirm({ open: false, expId: null })}
+          />
+          {/* Card */}
+          <div className="relative z-10 w-full max-w-sm mx-4 bg-card border border-border rounded-2xl shadow-2xl p-6 flex flex-col gap-5">
+            {/* أيقونة التحذير */}
+            <div className="flex justify-center">
+              <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center">
+                <Trash2 className="w-7 h-7 text-destructive" />
+              </div>
+            </div>
+            {/* النص */}
+            <div className="text-center space-y-2">
+              <h3 className="text-base font-bold text-foreground">تأكيد الحذف</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                هل أنت متأكد من رغبتك في حذف هذا المصروف؟
+                <br />
+                <span className="text-destructive/80 font-medium text-xs">لا يمكن التراجع عن هذا الإجراء</span>
+              </p>
+            </div>
+            {/* الأزرار */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm({ open: false, expId: null })}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-muted/60 hover:bg-muted text-sm font-semibold text-foreground transition-colors"
+              >
+                تراجع
+              </button>
+              <button
+                onClick={() => {
+                  if (deleteConfirm.expId !== null) deleteMutation.mutate(deleteConfirm.expId);
+                  setDeleteConfirm({ open: false, expId: null });
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-destructive hover:bg-destructive/90 text-sm font-semibold text-white transition-colors shadow-sm"
+              >
+                نعم، حذف
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
