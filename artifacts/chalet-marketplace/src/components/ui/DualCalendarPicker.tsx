@@ -20,6 +20,7 @@ const gregFullFmt = new Intl.DateTimeFormat("ar-SA", {
 } as Intl.DateTimeFormatOptions);
 
 const DAYS_SHORT = ["أح", "إث", "ثل", "أر", "خم", "جم", "سب"];
+const GREG_MONTHS_AR = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 
 /* ── Helpers ── */
 function formatSelected(dateStr: string): { hijri: string; gregorian: string } {
@@ -40,6 +41,20 @@ function getGregRangeLabel(days: Array<{ date: Date; hijriDay: number }>): strin
   return firstLabel === lastLabel ? firstLabel : `${firstLabel} – ${lastLabel}`;
 }
 
+function daysInGregMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function gregFirstDOW(year: number, month: number): number {
+  return new Date(year, month, 1).getDay();
+}
+
+function gregDateStr(year: number, month: number, day: number): string {
+  const m = String(month + 1).padStart(2, "0");
+  const d = String(day).padStart(2, "0");
+  return `${year}-${m}-${d}`;
+}
+
 /* ── Props ── */
 interface DualCalendarPickerProps {
   value: string;
@@ -49,6 +64,7 @@ interface DualCalendarPickerProps {
   label?: string;
   className?: string;
   compact?: boolean;
+  mode?: "hijri" | "gregorian";
 }
 
 /* ── Main component ── */
@@ -60,10 +76,11 @@ export function DualCalendarPicker({
   label,
   className,
   compact = false,
+  mode = "hijri",
 }: DualCalendarPickerProps) {
   const [open, setOpen] = React.useState(false);
 
-  /* ── Picker navigation (Hijri month) ── */
+  /* ── Hijri navigation state ── */
   const _initH = React.useMemo(() => {
     if (value) { try { return toHijriComponents(new Date(value + "T12:00:00")); } catch { /* */ } }
     if (minDate) { try { return toHijriComponents(new Date(minDate + "T12:00:00")); } catch { /* */ } }
@@ -73,32 +90,62 @@ export function DualCalendarPicker({
   const [pickerHY, setPickerHY] = React.useState(_initH.year);
   const [pickerHM, setPickerHM] = React.useState(_initH.month);
 
-  /* Sync picker to selected value when it changes externally */
+  /* ── Gregorian navigation state ── */
+  const _initG = React.useMemo(() => {
+    const d = value ? new Date(value + "T12:00:00") : new Date();
+    return { year: d.getFullYear(), month: d.getMonth() };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [pickerGY, setPickerGY] = React.useState(_initG.year);
+  const [pickerGM, setPickerGM] = React.useState(_initG.month);
+
+  /* Sync picker navigation when value changes externally */
   React.useEffect(() => {
     if (value) {
       try {
         const h = toHijriComponents(new Date(value + "T12:00:00"));
-        setPickerHY(h.year);
-        setPickerHM(h.month);
+        setPickerHY(h.year); setPickerHM(h.month);
+        const g = new Date(value + "T12:00:00");
+        setPickerGY(g.getFullYear()); setPickerGM(g.getMonth());
       } catch { /* */ }
     }
   }, [value]);
 
-  /* ── Month grid ── */
-  const monthDays = React.useMemo(
+  /* ── Hijri month grid ── */
+  const hijriMonthDays = React.useMemo(
     () => getHijriMonthDays(pickerHY, pickerHM),
     [pickerHY, pickerHM],
   );
-  const firstDOW = monthDays[0]?.date.getDay() ?? 0;
+  const hijriFirstDOW = hijriMonthDays[0]?.date.getDay() ?? 0;
+
+  /* ── Gregorian month grid ── */
+  const gregDayCount = daysInGregMonth(pickerGY, pickerGM);
+  const gregFirst = gregFirstDOW(pickerGY, pickerGM);
 
   const minDateStr = minDate ?? "";
   const todayStr = toGregorianStr(new Date());
 
   /* ── Navigation ── */
-  const goPrev = () => { const p = prevHijriMonth(pickerHY, pickerHM); setPickerHY(p.year); setPickerHM(p.month); };
-  const goNext = () => { const n = nextHijriMonth(pickerHY, pickerHM); setPickerHY(n.year); setPickerHM(n.month); };
+  const goPrevHijri = () => { const p = prevHijriMonth(pickerHY, pickerHM); setPickerHY(p.year); setPickerHM(p.month); };
+  const goNextHijri = () => { const n = nextHijriMonth(pickerHY, pickerHM); setPickerHY(n.year); setPickerHM(n.month); };
+
+  const goPrevGreg = () => {
+    if (pickerGM === 0) { setPickerGY(y => y - 1); setPickerGM(11); }
+    else setPickerGM(m => m - 1);
+  };
+  const goNextGreg = () => {
+    if (pickerGM === 11) { setPickerGY(y => y + 1); setPickerGM(0); }
+    else setPickerGM(m => m + 1);
+  };
+
+  const goPrev = mode === "gregorian" ? goPrevGreg : goPrevHijri;
+  const goNext = mode === "gregorian" ? goNextGreg : goNextHijri;
 
   const { hijri, gregorian } = formatSelected(value);
+
+  /* ── Trigger label ── */
+  const primaryLabel  = mode === "gregorian" ? gregorian : hijri;
+  const secondaryLabel = mode === "gregorian" ? hijri     : gregorian;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -116,11 +163,11 @@ export function DualCalendarPicker({
           )}
           {value ? (
             compact ? (
-              <p className="text-sm font-semibold text-foreground truncate leading-none">{hijri}</p>
+              <p className="text-sm font-semibold text-foreground truncate leading-none">{primaryLabel}</p>
             ) : (
               <div>
-                <p className="text-sm font-bold text-foreground leading-tight">{hijri}</p>
-                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{gregorian}</p>
+                <p className="text-sm font-bold text-foreground leading-tight">{primaryLabel}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{secondaryLabel}</p>
               </div>
             )
           ) : (
@@ -137,7 +184,7 @@ export function DualCalendarPicker({
       >
         {/* ── Header ── */}
         <div className="flex items-center justify-between mb-3 gap-2">
-          {/* RTL: right arrow = next month */}
+          {/* RTL: right button = next month */}
           <button
             type="button"
             onClick={goNext}
@@ -146,12 +193,35 @@ export function DualCalendarPicker({
           >›</button>
 
           <div className="flex-1 text-center">
-            <p className="text-[1rem] font-bold text-foreground leading-tight">
-              {HIJRI_MONTHS_AR[pickerHM - 1]} {pickerHY} هـ
-            </p>
-            <p className="text-[0.68rem] font-normal text-muted-foreground leading-tight mt-0.5">
-              {getGregRangeLabel(monthDays)}
-            </p>
+            {mode === "hijri" ? (
+              <>
+                <p className="text-[1rem] font-bold text-foreground leading-tight">
+                  {HIJRI_MONTHS_AR[pickerHM - 1]} {pickerHY} هـ
+                </p>
+                <p className="text-[0.68rem] font-normal text-muted-foreground leading-tight mt-0.5">
+                  {getGregRangeLabel(hijriMonthDays)}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[1rem] font-bold text-foreground leading-tight">
+                  {GREG_MONTHS_AR[pickerGM]} {pickerGY} م
+                </p>
+                <p className="text-[0.68rem] font-normal text-muted-foreground leading-tight mt-0.5">
+                  {(() => {
+                    try {
+                      const d1 = new Date(pickerGY, pickerGM, 1);
+                      const h1 = toHijriComponents(d1);
+                      const d2 = new Date(pickerGY, pickerGM + 1, 0);
+                      const h2 = toHijriComponents(d2);
+                      if (h1.month === h2.month)
+                        return `${HIJRI_MONTHS_AR[h1.month - 1]} ${h1.year} هـ`;
+                      return `${HIJRI_MONTHS_AR[h1.month - 1]} – ${HIJRI_MONTHS_AR[h2.month - 1]} ${h2.year} هـ`;
+                    } catch { return ""; }
+                  })()}
+                </p>
+              </>
+            )}
           </div>
 
           <button
@@ -165,55 +235,76 @@ export function DualCalendarPicker({
         {/* ── Day-of-week headers ── */}
         <div className="grid grid-cols-7 mb-1">
           {DAYS_SHORT.map((d) => (
-            <div
-              key={d}
-              className="text-center text-[0.65rem] font-semibold text-muted-foreground select-none pb-1"
-            >{d}</div>
+            <div key={d} className="text-center text-[0.65rem] font-semibold text-muted-foreground select-none pb-1">{d}</div>
           ))}
         </div>
 
         {/* ── Day cells ── */}
-        <div className="grid grid-cols-7 gap-[2px]">
-          {/* Leading empty cells */}
-          {Array.from({ length: firstDOW }).map((_, i) => <div key={`pad-${i}`} />)}
-
-          {monthDays.map(({ date, hijriDay }) => {
-            const gregStr = toGregorianStr(date);
-            const isSelected = value === gregStr;
-            const isToday = todayStr === gregStr;
-            const isDisabled = !!minDateStr && gregStr < minDateStr;
-
-            return (
-              <button
-                key={gregStr}
-                type="button"
-                disabled={isDisabled}
-                onClick={() => { onChange(gregStr); flushSync(() => setOpen(false)); }}
-                className={cn(
-                  "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors",
-                  isDisabled && "opacity-30 pointer-events-none",
-                  isSelected
-                    ? "bg-primary text-primary-foreground"
-                    : isToday
-                    ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
-                    : "hover:bg-accent",
-                )}
-              >
-                {/* Hijri day — large, bold */}
-                <span className="text-[1.1rem] font-bold leading-none">
-                  {hijriDay.toLocaleString("ar-SA")}
-                </span>
-                {/* Gregorian day — small, muted */}
-                <span
-                  className="text-[0.62rem] font-normal leading-none"
-                  style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#a1a1aa" }}
+        {mode === "hijri" ? (
+          <div className="grid grid-cols-7 gap-[2px]">
+            {Array.from({ length: hijriFirstDOW }).map((_, i) => <div key={`pad-${i}`} />)}
+            {hijriMonthDays.map(({ date, hijriDay }) => {
+              const gregStr = toGregorianStr(date);
+              const isSelected = value === gregStr;
+              const isToday = todayStr === gregStr;
+              const isDisabled = !!minDateStr && gregStr < minDateStr;
+              return (
+                <button
+                  key={gregStr}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => { onChange(gregStr); flushSync(() => setOpen(false)); }}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors",
+                    isDisabled && "opacity-30 pointer-events-none",
+                    isSelected ? "bg-primary text-primary-foreground"
+                      : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
+                      : "hover:bg-accent",
+                  )}
                 >
-                  {date.getDate()}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                  <span className="text-[1.1rem] font-bold leading-none">{hijriDay.toLocaleString("ar-SA")}</span>
+                  <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#a1a1aa" }}>
+                    {date.getDate()}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="grid grid-cols-7 gap-[2px]">
+            {Array.from({ length: gregFirst }).map((_, i) => <div key={`pad-${i}`} />)}
+            {Array.from({ length: gregDayCount }, (_, i) => i + 1).map((day) => {
+              const gregStr = gregDateStr(pickerGY, pickerGM, day);
+              const isSelected = value === gregStr;
+              const isToday = todayStr === gregStr;
+              const isDisabled = !!minDateStr && gregStr < minDateStr;
+              let hijriDay = 0;
+              try { hijriDay = toHijriComponents(new Date(gregStr + "T12:00:00")).day; } catch { /* */ }
+              return (
+                <button
+                  key={gregStr}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => { onChange(gregStr); flushSync(() => setOpen(false)); }}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors",
+                    isDisabled && "opacity-30 pointer-events-none",
+                    isSelected ? "bg-primary text-primary-foreground"
+                      : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
+                      : "hover:bg-accent",
+                  )}
+                >
+                  {/* Gregorian day — large, bold */}
+                  <span className="text-[1.1rem] font-bold leading-none">{day.toLocaleString("ar-SA")}</span>
+                  {/* Hijri day — small, muted */}
+                  <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#a1a1aa" }}>
+                    {hijriDay > 0 ? hijriDay.toLocaleString("ar-SA") : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* ── Footer ── */}
         <div className="mt-3 pt-2.5 border-t border-border flex items-center justify-between">
@@ -222,8 +313,8 @@ export function DualCalendarPicker({
             onClick={() => {
               const today = new Date();
               const h = toHijriComponents(today);
-              setPickerHY(h.year);
-              setPickerHM(h.month);
+              setPickerHY(h.year); setPickerHM(h.month);
+              setPickerGY(today.getFullYear()); setPickerGM(today.getMonth());
               onChange(todayStr);
               flushSync(() => setOpen(false));
             }}

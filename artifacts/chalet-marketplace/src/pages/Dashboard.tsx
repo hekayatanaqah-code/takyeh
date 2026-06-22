@@ -13167,22 +13167,14 @@ function ExpensesTab() {
                   >ميلادي</button>
                 </div>
               </div>
-              {dateInputMode === "hijri" ? (
-                <div className="rounded-md border bg-background px-3 py-2 h-11 flex items-center">
-                  <DualCalendarPicker
-                    value={form.dateStr}
-                    onChange={(v) => setForm((f) => ({ ...f, dateStr: v }))}
-                    placeholder="اختر التاريخ"
-                  />
-                </div>
-              ) : (
-                <input
-                  type="date"
+              <div className="rounded-md border bg-background px-3 py-2 h-11 flex items-center">
+                <DualCalendarPicker
                   value={form.dateStr}
-                  onChange={(e) => setForm((f) => ({ ...f, dateStr: e.target.value }))}
-                  className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground [direction:ltr] focus:outline-none focus:ring-2 focus:ring-ring"
+                  onChange={(v) => setForm((f) => ({ ...f, dateStr: v }))}
+                  placeholder="اختر التاريخ"
+                  mode={dateInputMode}
                 />
-              )}
+              </div>
             </div>
           </div>
 
