@@ -13460,61 +13460,82 @@ function ExpensesTab() {
           </div>
         ) : (
           <div className="rounded-xl overflow-hidden border border-border/40">
-            {/* رأس الجدول */}
-            <div
-              className="grid items-center gap-x-3 px-3 py-2 bg-muted/60 border-b border-border/40 text-right"
-              dir="rtl"
-              style={{ gridTemplateColumns: expTableCols }}
-            >
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">التاريخ</span>
-              {expShowProp && <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">العقار</span>}
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">الفئة</span>
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">الملاحظات</span>
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-left">المبلغ</span>
-              <span />
-              <span />
-            </div>
-            {/* صفوف البيانات */}
-            {filteredExpenses.map((exp, idx) => {
-              const cat = catDisplayMap[exp.category] ?? { label: exp.category, emoji: "✨", colorClass: "bg-slate-100 text-slate-700" };
-              const displayLabel = exp.customCategory ? exp.customCategory : cat.label;
-              const displayDate = expCalType === "hijri"
-                ? formatDualDate(exp.dateStr).hijri.replace(/\s*هـ\s*$/, "") + " هـ"
-                : formatDualDate(exp.dateStr).gregorian;
-              const propName = exp.submissionId
-                ? ((mySubmissions as any[]).find((s) => s.id === exp.submissionId) as any)?.nameAr ?? "—"
-                : "—";
-              return (
-                <div
-                  key={exp.id}
-                  className={`grid items-center gap-x-3 px-3 py-2.5 text-right transition-colors hover:bg-muted/30 ${idx % 2 === 0 ? "" : "bg-muted/20"} ${idx < filteredExpenses.length - 1 ? "border-b border-border/20" : ""}`}
-                  dir="rtl"
-                  style={{ gridTemplateColumns: expTableCols }}
-                >
-                  <span className="text-[11px] font-semibold text-foreground whitespace-nowrap">{displayDate}</span>
-                  {expShowProp && <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">{propName}</span>}
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${cat.colorClass}`}>
-                    {cat.emoji} {displayLabel}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground truncate">{exp.notes || "—"}</span>
-                  <div className="text-left">
-                    <p className="text-sm font-bold text-foreground leading-tight">{toArN(Math.round(Number(exp.amount)).toLocaleString("en-US"))}</p>
-                    <p className="text-[9px] text-muted-foreground">ر.س</p>
-                  </div>
-                  {exp.receiptUrl ? (
-                    <a href={exp.receiptUrl} target="_blank" rel="noreferrer" className="text-primary hover:text-primary/70 transition-colors flex justify-center">
-                      <Receipt className="w-4 h-4" />
-                    </a>
-                  ) : <span className="w-4 block" />}
-                  <button
-                    onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } if (confirm("حذف هذا المصروف؟")) deleteMutation.mutate(exp.id); }}
-                    className="text-muted-foreground hover:text-destructive transition-colors flex justify-center"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              );
-            })}
+            <table className="w-full table-fixed border-collapse" dir="rtl">
+              <colgroup>
+                <col className="w-[15%]" />
+                {expShowProp && <col className="w-[15%]" />}
+                <col className={expShowProp ? "w-[15%]" : "w-[20%]"} />
+                <col className={expShowProp ? "w-[35%]" : "w-[45%]"} />
+                <col className="w-[10%]" />
+                <col className="w-[5%]" />
+                <col className="w-[5%]" />
+              </colgroup>
+              <thead>
+                <tr className="bg-muted/60 border-b border-border/40">
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">التاريخ</th>
+                  {expShowProp && <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">العقار</th>}
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الفئة</th>
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الملاحظات / البيان</th>
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">المبلغ</th>
+                  <th className="text-center text-[10px] font-semibold text-muted-foreground px-2 py-2">إيصال</th>
+                  <th className="w-[5%] px-2 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {filteredExpenses.map((exp, idx) => {
+                  const cat = catDisplayMap[exp.category] ?? { label: exp.category, emoji: "✨", colorClass: "bg-slate-100 text-slate-700" };
+                  const displayLabel = exp.customCategory ? exp.customCategory : cat.label;
+                  const displayDate = expCalType === "hijri"
+                    ? formatDualDate(exp.dateStr).hijri.replace(/\s*هـ\s*$/, "") + " هـ"
+                    : formatDualDate(exp.dateStr).gregorian;
+                  const propName = exp.submissionId
+                    ? ((mySubmissions as any[]).find((s) => s.id === exp.submissionId) as any)?.nameAr ?? "—"
+                    : "—";
+                  return (
+                    <tr
+                      key={exp.id}
+                      className={`transition-colors hover:bg-muted/30 ${idx % 2 === 0 ? "" : "bg-muted/20"} ${idx < filteredExpenses.length - 1 ? "border-b border-border/20" : ""}`}
+                    >
+                      <td className="text-right px-3 py-2.5">
+                        <span className="text-[11px] font-semibold text-foreground whitespace-nowrap">{displayDate}</span>
+                      </td>
+                      {expShowProp && (
+                        <td className="text-right px-3 py-2.5">
+                          <span className="text-[10px] text-muted-foreground">{propName}</span>
+                        </td>
+                      )}
+                      <td className="text-right px-3 py-2.5">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold whitespace-nowrap ${cat.colorClass}`}>
+                          {cat.emoji} {displayLabel}
+                        </span>
+                      </td>
+                      <td className="text-right px-3 py-2.5">
+                        <span className="text-[10px] text-muted-foreground line-clamp-2">{exp.notes || "—"}</span>
+                      </td>
+                      <td className="text-right px-3 py-2.5">
+                        <p className="text-sm font-bold text-foreground leading-tight">{toArN(Math.round(Number(exp.amount)).toLocaleString("en-US"))}</p>
+                        <p className="text-[9px] text-muted-foreground">ر.س</p>
+                      </td>
+                      <td className="text-center px-2 py-2.5">
+                        {exp.receiptUrl ? (
+                          <a href={exp.receiptUrl} target="_blank" rel="noreferrer" className="text-primary hover:text-primary/70 transition-colors inline-flex justify-center">
+                            <Receipt className="w-4 h-4" />
+                          </a>
+                        ) : <span className="text-muted-foreground/30 text-xs">—</span>}
+                      </td>
+                      <td className="text-center px-2 py-2.5">
+                        <button
+                          onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } if (confirm("حذف هذا المصروف؟")) deleteMutation.mutate(exp.id); }}
+                          className="text-muted-foreground hover:text-destructive transition-colors inline-flex justify-center"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 
