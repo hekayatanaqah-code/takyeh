@@ -13947,7 +13947,14 @@ function StaffTab() {
   const [addAssignType, setAddAssignType] = useState<"all" | "chalet" | "service">("all");
   const [addAssignId, setAddAssignId] = useState<string>("");
   const [editId, setEditId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", baseSalary: "" });
+  const [editForm, setEditForm] = useState<{
+    name: string; baseSalary: string;
+    assignedToType: "all" | "chalet" | "service"; assignedToId: string;
+    username: string; password: string;
+  }>({ name: "", baseSalary: "", assignedToType: "all", assignedToId: "", username: "", password: "" });
+  const [editPerms, setEditPerms] = useState<StaffPermissions>({});
+  /* Employee profile slide-over */
+  const [staffProfileTarget, setStaffProfileTarget] = useState<any | null>(null);
   /* Permission panel state */
   const [permEditId, setPermEditId] = useState<number | null>(null);
   const [permState, setPermState] = useState<StaffPermissions>({});
@@ -14344,7 +14351,7 @@ function StaffTab() {
                             <p
                               className="text-sm font-semibold text-foreground leading-tight cursor-pointer hover:text-primary transition-colors"
                               title="ملف الموظف — قريباً"
-                              onClick={() => !isMock && toast({ title: "🚧 قريباً", description: "ملف الموظف الشامل — الوثائق، الإقامة، التأمين، تذاكر السفر" })}
+                              onClick={() => { if (!isMock) setStaffProfileTarget(member); }}
                             >{member.name}</p>
                             {!isMock && member.username && <p className="text-[10px] text-muted-foreground">@{member.username}</p>}
                             {isMock && <p className="text-[10px] text-amber-600 font-medium">بيانات تجريبية</p>}
@@ -14382,7 +14389,18 @@ function StaffTab() {
                               صرف
                             </Button>
                             <button
-                              onClick={() => { setEditId(member.id); setEditForm({ name: member.name, baseSalary: member.baseSalary }); }}
+                              onClick={() => {
+                                setEditId(member.id);
+                                setEditForm({
+                                  name: member.name,
+                                  baseSalary: member.baseSalary,
+                                  assignedToType: (member as any).assignedToType ?? "all",
+                                  assignedToId: String((member as any).assignedToId ?? ""),
+                                  username: member.username ?? "",
+                                  password: "",
+                                });
+                                setEditPerms({ ...(member.permissions ?? {}) });
+                              }}
                               className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
@@ -14655,7 +14673,19 @@ function StaffTab() {
               <div className="space-y-4 pt-2">
                 {/* Month picker */}
                 <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-1 block">الشهر</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-muted-foreground font-medium">الشهر</label>
+                    <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
+                      <button
+                        onClick={() => setStaffCalMode("gregorian")}
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition-all ${staffCalMode === "gregorian" ? "bg-background shadow text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                      >م</button>
+                      <button
+                        onClick={() => setStaffCalMode("hijri")}
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition-all ${staffCalMode === "hijri" ? "bg-background shadow text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                      >هـ</button>
+                    </div>
+                  </div>
                   <Select value={payForm.month} onValueChange={(v) => setPayForm((f) => ({ ...f, month: v }))}>
                     <SelectTrigger className="h-10">
                       <SelectValue />
@@ -14738,42 +14768,116 @@ function StaffTab() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Edit Staff Dialog ── */}
+      {/* ── Edit Staff Dialog (all fields) ── */}
       <Dialog open={editId !== null} onOpenChange={(o) => !o && setEditId(null)}>
-        <DialogContent className="max-w-sm" dir="rtl">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-right flex items-center gap-2">
               <Edit2 className="w-4 h-4 text-primary" />
               تعديل بيانات الموظف
             </DialogTitle>
-            <DialogDescription className="text-right text-xs">تعديل الاسم والراتب الأساسي فقط — الصلاحيات وبيانات الدخول تُعدّل من الجدول.</DialogDescription>
+            <DialogDescription className="text-right text-xs">جميع حقول الموظف قابلة للتعديل من هنا.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 pt-2">
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1 block">الاسم الكامل</label>
-              <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="h-10" placeholder="الاسم الكامل" />
+          <div className="space-y-4 pt-1">
+            {/* Name + Salary */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground font-medium mb-1 block">الاسم الكامل *</label>
+                <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="h-10" placeholder="الاسم الكامل" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground font-medium mb-1 block">الراتب الأساسي (ر.س)</label>
+                <Input type="text" inputMode="numeric" value={toAr(editForm.baseSalary)} onChange={(e) => setEditForm((f) => ({ ...f, baseSalary: fromAr(e.target.value) }))} className="h-10" />
+              </div>
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground font-medium mb-1 block">الراتب الأساسي (ر.س)</label>
-              <Input
-                type="text"
-                inputMode="numeric"
-                value={toAr(editForm.baseSalary)}
-                onChange={(e) => setEditForm((f) => ({ ...f, baseSalary: fromAr(e.target.value) }))}
-                className="h-10"
-              />
+
+            {/* Unit Assignment */}
+            {(staffChalets.length > 0 || staffProviders.length > 0) && (
+              <div className="border border-border/60 rounded-xl p-3 bg-muted/20">
+                <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> الوحدة المكلّفة</p>
+                <div className="flex gap-2 flex-wrap">
+                  <Select value={editForm.assignedToType} onValueChange={(v) => setEditForm((f) => ({ ...f, assignedToType: v as any, assignedToId: "" }))}>
+                    <SelectTrigger className="h-9 flex-1 min-w-[120px] text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الوحدات</SelectItem>
+                      {staffChalets.length > 0 && <SelectItem value="chalet">وحدة محددة</SelectItem>}
+                      {staffProviders.length > 0 && <SelectItem value="service">خدمة محددة</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                  {editForm.assignedToType === "chalet" && (
+                    <Select value={editForm.assignedToId} onValueChange={(v) => setEditForm((f) => ({ ...f, assignedToId: v }))}>
+                      <SelectTrigger className="h-9 flex-1 min-w-[140px] text-sm"><SelectValue placeholder="اختر الوحدة" /></SelectTrigger>
+                      <SelectContent>{staffChalets.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nameAr ?? `وحدة #${c.id}`}</SelectItem>)}</SelectContent>
+                    </Select>
+                  )}
+                  {editForm.assignedToType === "service" && (
+                    <Select value={editForm.assignedToId} onValueChange={(v) => setEditForm((f) => ({ ...f, assignedToId: v }))}>
+                      <SelectTrigger className="h-9 flex-1 min-w-[140px] text-sm"><SelectValue placeholder="اختر الخدمة" /></SelectTrigger>
+                      <SelectContent>{staffProviders.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.businessName}</SelectItem>)}</SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Login Credentials */}
+            <div className="border border-border/60 rounded-xl p-3 bg-muted/20">
+              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> بيانات الدخول</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">اسم المستخدم</label>
+                  <Input value={editForm.username} onChange={(e) => setEditForm((f) => ({ ...f, username: e.target.value }))} className="h-9 text-sm" dir="ltr" placeholder="username" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">كلمة مرور جديدة</label>
+                  <Input type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} className="h-9 text-sm" dir="ltr" placeholder="اتركها فارغة للإبقاء" />
+                </div>
+              </div>
             </div>
+
+            {/* Permissions */}
+            <div className="border border-border/60 rounded-xl p-3 bg-muted/20">
+              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5"><Settings className="w-3.5 h-3.5" /> الصلاحيات</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {ALL_PERM_KEYS.map((key) => {
+                  const info = PERM_LABELS[key];
+                  return (
+                    <label key={key} className="flex items-center gap-2.5 cursor-pointer">
+                      <Switch checked={!!editPerms[key]} onCheckedChange={(v) => setEditPerms((p) => ({ ...p, [key]: v }))} className="shrink-0" />
+                      <span className="text-xs font-medium text-foreground">{info.icon} {info.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="flex gap-2 pt-1">
               <Button
                 className="flex-1 h-10 font-bold"
                 disabled={editStaff.isPending || !editForm.name.trim()}
                 onClick={() => {
                   if (!editId || !editForm.name.trim()) return;
-                  editStaff.mutate({ id: editId, data: { name: editForm.name.trim(), baseSalary: parseFloat(editForm.baseSalary) || 0 } });
+                  const hasAnyEditPerm = Object.values(editPerms).some(Boolean);
+                  if (hasAnyEditPerm && !editForm.username.trim()) {
+                    toast({ title: "اسم المستخدم مطلوب", description: "يجب إدخال اسم مستخدم عند تفعيل أي صلاحية", variant: "destructive" });
+                    return;
+                  }
+                  editStaff.mutate({
+                    id: editId,
+                    data: {
+                      name: editForm.name.trim(),
+                      baseSalary: parseFloat(editForm.baseSalary) || 0,
+                      assignedToType: editForm.assignedToType,
+                      assignedToId: editForm.assignedToType !== "all" && editForm.assignedToId ? Number(editForm.assignedToId) : null,
+                      username: editForm.username.trim() || undefined,
+                      password: editForm.password.trim() || undefined,
+                      permissions: editPerms,
+                    },
+                  });
                 }}
               >
                 {editStaff.isPending ? <Loader2 className="w-4 h-4 animate-spin me-1" /> : null}
-                حفظ التعديلات
+                حفظ جميع التعديلات
               </Button>
               <Button variant="outline" className="h-10 px-4" onClick={() => setEditId(null)}>إلغاء</Button>
             </div>
@@ -14809,6 +14913,62 @@ function StaffTab() {
                 حذف نهائياً
               </Button>
               <Button variant="outline" className="h-10 px-5" onClick={() => setDeleteConfirmTarget(null)}>إلغاء</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Employee Profile Slide-over Panel ── */}
+      {staffProfileTarget && (
+        <div className="fixed inset-0 z-50 flex justify-end" dir="rtl">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setStaffProfileTarget(null)} />
+          <div className="relative bg-card w-full max-w-sm h-full shadow-2xl flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <User className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-foreground">{staffProfileTarget.name}</p>
+                  {staffProfileTarget.username && <p className="text-[11px] text-muted-foreground">@{staffProfileTarget.username}</p>}
+                </div>
+              </div>
+              <button onClick={() => setStaffProfileTarget(null)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Summary strip */}
+            <div className="px-5 py-3 bg-muted/20 border-b border-border/60 flex items-center gap-4">
+              <div className="text-center">
+                <p className="text-[10px] text-muted-foreground">الراتب الأساسي</p>
+                <p className="text-xs font-bold text-foreground">{formatAmount(Number(staffProfileTarget.baseSalary))} ر.س</p>
+              </div>
+              <div className="h-6 w-px bg-border/60" />
+              <div className="text-center">
+                <p className="text-[10px] text-muted-foreground">الحالة</p>
+                <p className="text-xs font-bold" style={{ color: staffProfileTarget.isActive ? "#16a34a" : "#dc2626" }}>{staffProfileTarget.isActive ? "نشط" : "معطّل"}</p>
+              </div>
+            </div>
+            {/* Documents section */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">الوثائق الرسمية</p>
+              {[
+                { icon: "🪪", title: "الإقامة", sub: "رقم الإقامة، تاريخ الانتهاء" },
+                { icon: "🏥", title: "التأمين الصحي", sub: "رقم الوثيقة، شركة التأمين" },
+                { icon: "✈️", title: "تذاكر السفر", sub: "سجل الإجازات والتذاكر" },
+                { icon: "📄", title: "العقد الوظيفي", sub: "تاريخ التوظيف، بنود العقد" },
+              ].map((doc) => (
+                <div key={doc.title} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-border bg-muted/10 hover:bg-muted/30 transition-colors cursor-default">
+                  <span className="text-xl">{doc.icon}</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-foreground">{doc.title}</p>
+                    <p className="text-[11px] text-muted-foreground">{doc.sub}</p>
+                  </div>
+                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-full px-2 py-0.5">قريباً</span>
+                </div>
+              ))}
+              <p className="text-[11px] text-muted-foreground text-center pt-2 pb-1">سيتم تفعيل إدارة الوثائق في تحديث قادم</p>
             </div>
           </div>
         </div>
