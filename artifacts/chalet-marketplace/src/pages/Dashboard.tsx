@@ -13962,6 +13962,21 @@ function StaffTab() {
   /* Bulk print selection */
   const [selectedLogIds, setSelectedLogIds] = useState<Set<number>>(new Set());
   const [masterMonth, setMasterMonth] = useState(currentMonth);
+  /* Username uniqueness check */
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
+  useEffect(() => {
+    const val = addForm.username.trim();
+    if (val.length < 3) { setUsernameStatus("idle"); return; }
+    setUsernameStatus("checking");
+    const timer = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/owner/staff/check-username?username=${encodeURIComponent(val)}`);
+        const d = await r.json();
+        setUsernameStatus(d.available ? "available" : "taken");
+      } catch { setUsernameStatus("idle"); }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [addForm.username]);
 
   /* ── month select options ── */
   const monthOptions = useMemo(() => {
@@ -14129,6 +14144,7 @@ function StaffTab() {
           onSubmit={(e) => {
             e.preventDefault();
             if (isReadOnly) { onBlockedEdit(); return; }
+            if (usernameStatus === "taken") return;
             const s = parseFloat(addForm.baseSalary);
             if (!addForm.name || isNaN(s)) return;
             addStaff.mutate({
@@ -14160,13 +14176,13 @@ function StaffTab() {
                   <SelectTrigger className="h-10 flex-1 min-w-[130px] text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">جميع الوحدات</SelectItem>
-                    {staffChalets.length > 0 && <SelectItem value="chalet">شاليه محدّد</SelectItem>}
+                    {staffChalets.length > 0 && <SelectItem value="chalet">وحدة محددة</SelectItem>}
                     {staffProviders.length > 0 && <SelectItem value="service">خدمة محدّدة</SelectItem>}
                   </SelectContent>
                 </Select>
                 {addAssignType === "chalet" && staffChalets.length > 0 && (
                   <Select value={addAssignId} onValueChange={setAddAssignId}>
-                    <SelectTrigger className="h-10 flex-1 min-w-[150px] text-sm"><SelectValue placeholder="اختر الشاليه" /></SelectTrigger>
+                    <SelectTrigger className="h-10 flex-1 min-w-[150px] text-sm"><SelectValue placeholder="اختر الوحدة" /></SelectTrigger>
                     <SelectContent>
                       {staffChalets.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nameAr ?? `شاليه #${c.id}`}</SelectItem>)}
                     </SelectContent>
@@ -14190,13 +14206,18 @@ function StaffTab() {
               <Lock className="w-3.5 h-3.5" /> بيانات دخول الموظف (اختياري)
             </p>
             <div className="flex gap-3 flex-wrap">
-              <Input
-                placeholder="اسم المستخدم (لتسجيل الدخول)"
-                value={addForm.username}
-                onChange={(e) => setAddForm((f) => ({ ...f, username: e.target.value }))}
-                className="flex-1 min-w-[150px] h-10 text-sm"
-                dir="ltr"
-              />
+              <div className="flex-1 min-w-[150px] flex flex-col gap-0.5">
+                <Input
+                  placeholder="اسم المستخدم (لتسجيل الدخول)"
+                  value={addForm.username}
+                  onChange={(e) => { setAddForm((f) => ({ ...f, username: e.target.value })); setUsernameStatus("idle"); }}
+                  className={`h-10 text-sm w-full ${usernameStatus === "taken" ? "border-destructive focus-visible:ring-destructive" : usernameStatus === "available" ? "border-green-500 focus-visible:ring-green-500" : ""}`}
+                  dir="ltr"
+                />
+                {usernameStatus === "checking" && <p className="text-[10px] text-muted-foreground px-1">جارٍ التحقق…</p>}
+                {usernameStatus === "available" && <p className="text-[10px] text-green-600 px-1">✓ اسم المستخدم متاح</p>}
+                {usernameStatus === "taken" && <p className="text-[10px] text-destructive px-1">✗ اسم المستخدم مستخدم مسبقاً</p>}
+              </div>
               <Input
                 type="password"
                 placeholder="كلمة المرور (٦ أحرف أو أكثر)"
@@ -14468,7 +14489,9 @@ function StaffTab() {
                               setSelectedLogIds(next);
                             }}
                           />
-                        ) : <span />}
+                        ) : (
+                          <input type="checkbox" className="w-3.5 h-3.5 rounded accent-primary opacity-30" disabled />
+                        )}
                       </td>
                       <td className="text-right px-3 py-2.5 font-semibold text-foreground">
                         {(log as any).staffName ?? "—"}

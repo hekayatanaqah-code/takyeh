@@ -2715,6 +2715,17 @@ router.post("/expense-categories", async (req, res) => {
 
 /* ── Staff ─────────────────────────────────────────────────── */
 
+router.get("/staff/check-username", async (req, res) => {
+  const username = String(req.query.username ?? "").trim().toLowerCase();
+  if (username.length < 3) return res.json({ available: false, reason: "short" });
+  const [existing] = await db
+    .select({ id: ownerStaffTable.id })
+    .from(ownerStaffTable)
+    .where(sql`lower(${ownerStaffTable.username}) = ${username}`)
+    .limit(1);
+  return res.json({ available: !existing });
+});
+
 router.get("/staff", async (req, res) => {
   const allOwnerIds = await getOwnerIds(req);
   const rows = await db
