@@ -13956,12 +13956,16 @@ function StaffTab() {
   const [credForm, setCredForm] = useState({ username: "", password: "" });
   /* Pay dialog */
   const [payTarget, setPayTarget] = useState<StaffMember | null>(null);
-  const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", notes: "" });
+  const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", notes: "", generalNotes: "" });
   /* Voucher (shown in dialog after successful payment) */
   const [paidVoucher, setPaidVoucher] = useState<VoucherData | null>(null);
   /* Bulk print selection */
   const [selectedLogIds, setSelectedLogIds] = useState<Set<number>>(new Set());
   const [masterMonth, setMasterMonth] = useState(currentMonth);
+  /* Staff table dialogs */
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{ id: number; name: string } | null>(null);
+  /* Salary calendar mode */
+  const [staffCalMode, setStaffCalMode] = useState<"gregorian" | "hijri">("gregorian");
   /* Username uniqueness check */
   const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
   useEffect(() => {
@@ -13978,16 +13982,34 @@ function StaffTab() {
     return () => clearTimeout(timer);
   }, [addForm.username]);
 
-  /* ── month select options ── */
+  /* ── month select options (respects staffCalMode) ── */
   const monthOptions = useMemo(() => {
     const opts = [];
     const now = new Date();
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      opts.push({ val: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" }) });
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      let label: string;
+      if (staffCalMode === "hijri") {
+        const h = toHijriComponents(d);
+        label = `${HIJRI_MONTHS_AR[h.month - 1]} ${h.year} هـ`;
+      } else {
+        label = d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+      }
+      opts.push({ val: ym, label });
     }
     return opts;
-  }, []);
+  }, [staffCalMode]);
+
+  /* ── salary month label (respects staffCalMode) ── */
+  const salaryMonthLabel = useCallback((ym: string) => {
+    const d = new Date(ym + "-15");
+    if (staffCalMode === "hijri") {
+      const h = toHijriComponents(d);
+      return `${HIJRI_MONTHS_AR[h.month - 1]} ${h.year} هـ`;
+    }
+    return d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+  }, [staffCalMode]);
 
   /* ── queries ── */
   const { data: staff = [], isLoading } = useQuery<StaffMember[]>({
@@ -14095,7 +14117,7 @@ function StaffTab() {
           qrDataUrl,
         });
       }
-      setPayForm({ month: currentMonth, bonus: "0", deduction: "0", notes: "" });
+      setPayForm({ month: currentMonth, bonus: "0", deduction: "0", notes: "", generalNotes: "" });
     },
   });
 
@@ -14147,6 +14169,11 @@ function StaffTab() {
             if (usernameStatus === "taken") return;
             const s = parseFloat(addForm.baseSalary);
             if (!addForm.name || isNaN(s)) return;
+            const hasAnyPerm = Object.values(addPerms).some(Boolean);
+            if (hasAnyPerm && (!addForm.username.trim() || !addForm.password.trim())) {
+              toast({ title: "بيانات الدخول مطلوبة", description: "يجب إدخال اسم المستخدم وكلمة المرور عند تفعيل أي صلاحية للموظف", variant: "destructive" });
+              return;
+            }
             addStaff.mutate({
               name: addForm.name,
               baseSalary: s,
@@ -14202,8 +14229,11 @@ function StaffTab() {
 
           {/* Login Credentials */}
           <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
-            <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5" /> بيانات دخول الموظف (اختياري)
+            <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5 flex-wrap">
+              <Lock className="w-3.5 h-3.5" /> بيانات دخول الموظف
+              {Object.values(addPerms).some(Boolean)
+                ? <span className="bg-destructive/10 text-destructive text-[10px] px-1.5 py-0.5 rounded-full font-bold">إلزامي *</span>
+                : <span className="text-muted-foreground font-normal">(اختياري)</span>}
             </p>
             <div className="flex gap-3 flex-wrap">
               <div className="flex-1 min-w-[150px] flex flex-col gap-0.5">
@@ -14311,7 +14341,11 @@ function StaffTab() {
                             <User className="w-4 h-4 text-primary" />
                           </div>
                           <div>
-                            <p className="text-sm font-semibold text-foreground leading-tight">{member.name}</p>
+                            <p
+                              className="text-sm font-semibold text-foreground leading-tight cursor-pointer hover:text-primary transition-colors"
+                              title="ملف الموظف — قريباً"
+                              onClick={() => !isMock && toast({ title: "🚧 قريباً", description: "ملف الموظف الشامل — الوثائق، الإقامة، التأمين، تذاكر السفر" })}
+                            >{member.name}</p>
                             {!isMock && member.username && <p className="text-[10px] text-muted-foreground">@{member.username}</p>}
                             {isMock && <p className="text-[10px] text-amber-600 font-medium">بيانات تجريبية</p>}
                           </div>
@@ -14342,7 +14376,7 @@ function StaffTab() {
                             <Button
                               size="sm"
                               className="h-7 px-3 text-[11px] font-bold"
-                              onClick={() => { setPayTarget(member as any); setPayForm({ month: nextDue, bonus: "0", deduction: "0", notes: "" }); }}
+                              onClick={() => { setPayTarget(member as any); setPayForm({ month: nextDue, bonus: "0", deduction: "0", notes: "", generalNotes: "" }); }}
                             >
                               <DollarSign className="w-3 h-3 me-1" />
                               صرف
@@ -14354,7 +14388,7 @@ function StaffTab() {
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } if (confirm(`حذف ${member.name}؟`)) deleteStaff.mutate(member.id); }}
+                              onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } setDeleteConfirmTarget({ id: member.id, name: member.name }); }}
                               className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -14376,10 +14410,23 @@ function StaffTab() {
       {/* ── Payment History Table ── */}
       <div className="bg-card border border-border rounded-2xl p-5">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-            <Receipt className="w-4 h-4 text-primary" />
-            سجل صرف الرواتب
-          </h2>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-primary" />
+              سجل صرف الرواتب
+            </h2>
+            {/* Calendar mode toggle */}
+            <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5 text-xs">
+              <button
+                onClick={() => setStaffCalMode("gregorian")}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${staffCalMode === "gregorian" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >م</button>
+              <button
+                onClick={() => setStaffCalMode("hijri")}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${staffCalMode === "hijri" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >هـ</button>
+            </div>
+          </div>
           {history.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
               {/* Master payroll month picker */}
@@ -14497,7 +14544,7 @@ function StaffTab() {
                         {(log as any).staffName ?? "—"}
                         {isMock && <span className="block text-[10px] text-amber-600 font-normal">تجريبي</span>}
                       </td>
-                      <td className="text-right px-3 py-2.5 text-muted-foreground">{monthLabel(log.month)}</td>
+                      <td className="text-right px-3 py-2.5 text-muted-foreground">{salaryMonthLabel(log.month)}</td>
                       <td className="text-right px-3 py-2.5">{formatAmount(base)}</td>
                       <td className="text-right px-3 py-2.5 text-green-600">{bonus > 0 ? `+${formatAmount(bonus)}` : "—"}</td>
                       <td className="text-right px-3 py-2.5 text-red-600">{deduction > 0 ? `-${formatAmount(deduction)}` : "—"}</td>
@@ -14570,7 +14617,7 @@ function StaffTab() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">الشهر</span>
-                    <span className="font-semibold">{monthLabel(paidVoucher.month)}</span>
+                    <span className="font-semibold">{salaryMonthLabel(paidVoucher.month)}</span>
                   </div>
                   <div className="flex justify-between border-t border-green-200 dark:border-green-800 pt-2 font-bold">
                     <span>صافي الراتب</span>
@@ -14636,10 +14683,14 @@ function StaffTab() {
                     <Input type="text" inputMode="numeric" value={toAr(payForm.deduction)} onChange={(e) => setPayForm((f) => ({ ...f, deduction: fromAr(e.target.value) }))} className="h-10" />
                   </div>
                 </div>
-                {/* Reason */}
+                {/* Reason + General Notes */}
                 <div>
                   <label className="text-xs text-muted-foreground font-medium mb-1 block">سبب المكافأة / الخصم (اختياري)</label>
                   <Input placeholder="مثال: مكافأة أداء، غياب..." value={payForm.notes} onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))} className="h-10" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">ملاحظات عامة (اختياري)</label>
+                  <Input placeholder="مثال: دوام نصف شهر، تسوية مالية..." value={payForm.generalNotes} onChange={(e) => setPayForm((f) => ({ ...f, generalNotes: e.target.value }))} className="h-10" />
                 </div>
                 {/* Net preview */}
                 {payTarget && (
@@ -14674,7 +14725,7 @@ function StaffTab() {
                       month: payForm.month,
                       bonus: parseFloat(payForm.bonus) || 0,
                       deduction: parseFloat(payForm.deduction) || 0,
-                      notes: payForm.notes || undefined,
+                      notes: [payForm.notes, payForm.generalNotes].filter(Boolean).join(" — ") || undefined,
                     });
                   }}
                 >
@@ -14686,6 +14737,82 @@ function StaffTab() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ── Edit Staff Dialog ── */}
+      <Dialog open={editId !== null} onOpenChange={(o) => !o && setEditId(null)}>
+        <DialogContent className="max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-right flex items-center gap-2">
+              <Edit2 className="w-4 h-4 text-primary" />
+              تعديل بيانات الموظف
+            </DialogTitle>
+            <DialogDescription className="text-right text-xs">تعديل الاسم والراتب الأساسي فقط — الصلاحيات وبيانات الدخول تُعدّل من الجدول.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div>
+              <label className="text-xs text-muted-foreground font-medium mb-1 block">الاسم الكامل</label>
+              <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="h-10" placeholder="الاسم الكامل" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground font-medium mb-1 block">الراتب الأساسي (ر.س)</label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={toAr(editForm.baseSalary)}
+                onChange={(e) => setEditForm((f) => ({ ...f, baseSalary: fromAr(e.target.value) }))}
+                className="h-10"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button
+                className="flex-1 h-10 font-bold"
+                disabled={editStaff.isPending || !editForm.name.trim()}
+                onClick={() => {
+                  if (!editId || !editForm.name.trim()) return;
+                  editStaff.mutate({ id: editId, data: { name: editForm.name.trim(), baseSalary: parseFloat(editForm.baseSalary) || 0 } });
+                }}
+              >
+                {editStaff.isPending ? <Loader2 className="w-4 h-4 animate-spin me-1" /> : null}
+                حفظ التعديلات
+              </Button>
+              <Button variant="outline" className="h-10 px-4" onClick={() => setEditId(null)}>إلغاء</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Confirm Modal ── */}
+      {deleteConfirmTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDeleteConfirmTarget(null)} />
+          <div className="relative bg-card border border-border rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl space-y-4" dir="rtl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-destructive" />
+              </div>
+              <div>
+                <h3 className="font-bold text-foreground">حذف الموظف</h3>
+                <p className="text-sm text-muted-foreground">هل أنت متأكد من حذف <span className="font-semibold text-foreground">{deleteConfirmTarget.name}</span>؟</p>
+              </div>
+            </div>
+            <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2">
+              سيتم حذف الموظف نهائياً من النظام. تبقى سجلات الرواتب السابقة محفوظة.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="destructive"
+                className="flex-1 h-10 font-bold"
+                disabled={deleteStaff.isPending}
+                onClick={() => { deleteStaff.mutate(deleteConfirmTarget.id); setDeleteConfirmTarget(null); }}
+              >
+                <Trash2 className="w-4 h-4 me-1.5" />
+                حذف نهائياً
+              </Button>
+              <Button variant="outline" className="h-10 px-5" onClick={() => setDeleteConfirmTarget(null)}>إلغاء</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
