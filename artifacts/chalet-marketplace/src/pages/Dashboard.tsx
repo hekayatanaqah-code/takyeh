@@ -13955,6 +13955,8 @@ function StaffTab() {
   const [editPerms, setEditPerms] = useState<StaffPermissions>({});
   /* Employee profile slide-over */
   const [staffProfileTarget, setStaffProfileTarget] = useState<any | null>(null);
+  const [staffProfileTab, setStaffProfileTab] = useState<"profile" | "finance">("profile");
+  const [staffProfileEditing, setStaffProfileEditing] = useState(false);
   /* Permission panel state */
   const [permEditId, setPermEditId] = useState<number | null>(null);
   const [permState, setPermState] = useState<StaffPermissions>({});
@@ -14077,7 +14079,7 @@ function StaffTab() {
       const r = await apiFetch(`/owner/staff/${id}`, { method: "PATCH", body: JSON.stringify(data) });
       if (!r.ok) throw new Error();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["owner", "staff"] }); setEditId(null); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["owner", "staff"] }); setEditId(null); setStaffProfileEditing(false); },
   });
 
   const deleteStaff = useMutation({
@@ -14311,19 +14313,17 @@ function StaffTab() {
           <div className="rounded-xl overflow-hidden border border-border/40">
             <table className="w-full table-fixed border-collapse" dir="rtl">
               <colgroup>
-                <col className="w-[22%]" />
-                <col className="w-[15%]" />
-                <col className="w-[20%]" />
                 <col className="w-[28%]" />
-                <col className="w-[15%]" />
+                <col className="w-[18%]" />
+                <col className="w-[24%]" />
+                <col className="w-[30%]" />
               </colgroup>
               <thead>
                 <tr className="bg-muted/60 border-b border-border/40">
                   <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الاسم</th>
                   <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الراتب الأساسي</th>
-                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الوحدة</th>
-                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الصلاحيات</th>
-                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الإجراءات</th>
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الوحدة المكلّفة</th>
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الإجراءات السريعة</th>
                 </tr>
               </thead>
               <tbody>
@@ -14335,7 +14335,6 @@ function StaffTab() {
                       : (member as any).assignedToType === "service"
                       ? (staffProviders.find((p) => p.id === (member as any).assignedToId)?.businessName ?? "خدمة")
                       : "جميع الوحدات");
-                  const permKeys = ALL_PERM_KEYS.filter((k) => member.permissions?.[k]);
                   const nextDue = nextDueMonth((staffStats[member.id] ?? { lastPaidMonth: null }).lastPaidMonth);
                   return (
                     <tr
@@ -14365,19 +14364,6 @@ function StaffTab() {
                         <span className="text-xs text-muted-foreground">{unitLabel}</span>
                       </td>
                       <td className="text-right px-3 py-3">
-                        {permKeys.length === 0 ? (
-                          <span className="text-[10px] text-muted-foreground italic">لا توجد صلاحيات</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {permKeys.map((k) => (
-                              <span key={k} className="inline-flex items-center gap-0.5 text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">
-                                {PERM_LABELS[k].icon} {PERM_LABELS[k].label}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="text-right px-3 py-3">
                         {!isMock ? (
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <Button
@@ -14386,10 +14372,16 @@ function StaffTab() {
                               onClick={() => { setPayTarget(member as any); setPayForm({ month: nextDue, bonus: "0", deduction: "0", notes: "", generalNotes: "" }); }}
                             >
                               <DollarSign className="w-3 h-3 me-1" />
-                              صرف
+                              صرف الراتب
                             </Button>
-                            <button
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-3 text-[11px] font-bold"
                               onClick={() => {
+                                setStaffProfileTarget(member);
+                                setStaffProfileTab("profile");
+                                setStaffProfileEditing(true);
                                 setEditId(member.id);
                                 setEditForm({
                                   name: member.name,
@@ -14401,16 +14393,10 @@ function StaffTab() {
                                 });
                                 setEditPerms({ ...(member.permissions ?? {}) });
                               }}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                             >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } setDeleteConfirmTarget({ id: member.id, name: member.name }); }}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                              <Shield className="w-3 h-3 me-1" />
+                              الصلاحيات
+                            </Button>
                           </div>
                         ) : (
                           <span className="text-[10px] text-muted-foreground">—</span>
@@ -14768,122 +14754,7 @@ function StaffTab() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Edit Staff Dialog (all fields) ── */}
-      <Dialog open={editId !== null} onOpenChange={(o) => !o && setEditId(null)}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="text-right flex items-center gap-2">
-              <Edit2 className="w-4 h-4 text-primary" />
-              تعديل بيانات الموظف
-            </DialogTitle>
-            <DialogDescription className="text-right text-xs">جميع حقول الموظف قابلة للتعديل من هنا.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-1">
-            {/* Name + Salary */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground font-medium mb-1 block">الاسم الكامل *</label>
-                <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="h-10" placeholder="الاسم الكامل" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground font-medium mb-1 block">الراتب الأساسي (ر.س)</label>
-                <Input type="text" inputMode="numeric" value={toAr(editForm.baseSalary)} onChange={(e) => setEditForm((f) => ({ ...f, baseSalary: fromAr(e.target.value) }))} className="h-10" />
-              </div>
-            </div>
-
-            {/* Unit Assignment */}
-            {(staffChalets.length > 0 || staffProviders.length > 0) && (
-              <div className="border border-border/60 rounded-xl p-3 bg-muted/20">
-                <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> الوحدة المكلّفة</p>
-                <div className="flex gap-2 flex-wrap">
-                  <Select value={editForm.assignedToType} onValueChange={(v) => setEditForm((f) => ({ ...f, assignedToType: v as any, assignedToId: "" }))}>
-                    <SelectTrigger className="h-9 flex-1 min-w-[120px] text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">جميع الوحدات</SelectItem>
-                      {staffChalets.length > 0 && <SelectItem value="chalet">وحدة محددة</SelectItem>}
-                      {staffProviders.length > 0 && <SelectItem value="service">خدمة محددة</SelectItem>}
-                    </SelectContent>
-                  </Select>
-                  {editForm.assignedToType === "chalet" && (
-                    <Select value={editForm.assignedToId} onValueChange={(v) => setEditForm((f) => ({ ...f, assignedToId: v }))}>
-                      <SelectTrigger className="h-9 flex-1 min-w-[140px] text-sm"><SelectValue placeholder="اختر الوحدة" /></SelectTrigger>
-                      <SelectContent>{staffChalets.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nameAr ?? `وحدة #${c.id}`}</SelectItem>)}</SelectContent>
-                    </Select>
-                  )}
-                  {editForm.assignedToType === "service" && (
-                    <Select value={editForm.assignedToId} onValueChange={(v) => setEditForm((f) => ({ ...f, assignedToId: v }))}>
-                      <SelectTrigger className="h-9 flex-1 min-w-[140px] text-sm"><SelectValue placeholder="اختر الخدمة" /></SelectTrigger>
-                      <SelectContent>{staffProviders.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.businessName}</SelectItem>)}</SelectContent>
-                    </Select>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Login Credentials */}
-            <div className="border border-border/60 rounded-xl p-3 bg-muted/20">
-              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> بيانات الدخول</p>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-1 block">اسم المستخدم</label>
-                  <Input value={editForm.username} onChange={(e) => setEditForm((f) => ({ ...f, username: e.target.value }))} className="h-9 text-sm" dir="ltr" placeholder="username" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-1 block">كلمة مرور جديدة</label>
-                  <Input type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} className="h-9 text-sm" dir="ltr" placeholder="اتركها فارغة للإبقاء" />
-                </div>
-              </div>
-            </div>
-
-            {/* Permissions */}
-            <div className="border border-border/60 rounded-xl p-3 bg-muted/20">
-              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5"><Settings className="w-3.5 h-3.5" /> الصلاحيات</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {ALL_PERM_KEYS.map((key) => {
-                  const info = PERM_LABELS[key];
-                  return (
-                    <label key={key} className="flex items-center gap-2.5 cursor-pointer">
-                      <Switch checked={!!editPerms[key]} onCheckedChange={(v) => setEditPerms((p) => ({ ...p, [key]: v }))} className="shrink-0" />
-                      <span className="text-xs font-medium text-foreground">{info.icon} {info.label}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-1">
-              <Button
-                className="flex-1 h-10 font-bold"
-                disabled={editStaff.isPending || !editForm.name.trim()}
-                onClick={() => {
-                  if (!editId || !editForm.name.trim()) return;
-                  const hasAnyEditPerm = Object.values(editPerms).some(Boolean);
-                  if (hasAnyEditPerm && !editForm.username.trim()) {
-                    toast({ title: "اسم المستخدم مطلوب", description: "يجب إدخال اسم مستخدم عند تفعيل أي صلاحية", variant: "destructive" });
-                    return;
-                  }
-                  editStaff.mutate({
-                    id: editId,
-                    data: {
-                      name: editForm.name.trim(),
-                      baseSalary: parseFloat(editForm.baseSalary) || 0,
-                      assignedToType: editForm.assignedToType,
-                      assignedToId: editForm.assignedToType !== "all" && editForm.assignedToId ? Number(editForm.assignedToId) : null,
-                      username: editForm.username.trim() || undefined,
-                      password: editForm.password.trim() || undefined,
-                      permissions: editPerms,
-                    },
-                  });
-                }}
-              >
-                {editStaff.isPending ? <Loader2 className="w-4 h-4 animate-spin me-1" /> : null}
-                حفظ جميع التعديلات
-              </Button>
-              <Button variant="outline" className="h-10 px-4" onClick={() => setEditId(null)}>إلغاء</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Edit Dialog removed — editing is now inline inside the slide-over panel */}
 
       {/* ── Delete Confirm Modal ── */}
       {deleteConfirmTarget && (
@@ -14918,61 +14789,360 @@ function StaffTab() {
         </div>
       )}
 
-      {/* ── Employee Profile Slide-over Panel ── */}
-      {staffProfileTarget && (
-        <div className="fixed inset-0 z-50 flex justify-end" dir="rtl">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setStaffProfileTarget(null)} />
-          <div className="relative bg-card w-full max-w-sm h-full shadow-2xl flex flex-col overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <User className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-foreground">{staffProfileTarget.name}</p>
-                  {staffProfileTarget.username && <p className="text-[11px] text-muted-foreground">@{staffProfileTarget.username}</p>}
-                </div>
-              </div>
-              <button onClick={() => setStaffProfileTarget(null)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            {/* Summary strip */}
-            <div className="px-5 py-3 bg-muted/20 border-b border-border/60 flex items-center gap-4">
-              <div className="text-center">
-                <p className="text-[10px] text-muted-foreground">الراتب الأساسي</p>
-                <p className="text-xs font-bold text-foreground">{formatAmount(Number(staffProfileTarget.baseSalary))} ر.س</p>
-              </div>
-              <div className="h-6 w-px bg-border/60" />
-              <div className="text-center">
-                <p className="text-[10px] text-muted-foreground">الحالة</p>
-                <p className="text-xs font-bold" style={{ color: staffProfileTarget.isActive ? "#16a34a" : "#dc2626" }}>{staffProfileTarget.isActive ? "نشط" : "معطّل"}</p>
-              </div>
-            </div>
-            {/* Documents section */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">الوثائق الرسمية</p>
-              {[
-                { icon: "🪪", title: "الإقامة", sub: "رقم الإقامة، تاريخ الانتهاء" },
-                { icon: "🏥", title: "التأمين الصحي", sub: "رقم الوثيقة، شركة التأمين" },
-                { icon: "✈️", title: "تذاكر السفر", sub: "سجل الإجازات والتذاكر" },
-                { icon: "📄", title: "العقد الوظيفي", sub: "تاريخ التوظيف، بنود العقد" },
-              ].map((doc) => (
-                <div key={doc.title} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-border bg-muted/10 hover:bg-muted/30 transition-colors cursor-default">
-                  <span className="text-xl">{doc.icon}</span>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-foreground">{doc.title}</p>
-                    <p className="text-[11px] text-muted-foreground">{doc.sub}</p>
+      {/* ── Employee Profile Slide-over Panel (2 tabs) ── */}
+      {staffProfileTarget && (() => {
+        const emp = staffProfileTarget;
+        const empHistory = history.filter((l: SalaryLog) => l.staffId === emp.id);
+        const empPerms = ALL_PERM_KEYS.filter((k) => emp.permissions?.[k]);
+        const closePanel = () => { setStaffProfileTarget(null); setStaffProfileEditing(false); setEditId(null); };
+        const startEdit = () => {
+          setStaffProfileEditing(true);
+          setEditId(emp.id);
+          setEditForm({
+            name: emp.name, baseSalary: emp.baseSalary,
+            assignedToType: emp.assignedToType ?? "all",
+            assignedToId: String(emp.assignedToId ?? ""),
+            username: emp.username ?? "", password: "",
+          });
+          setEditPerms({ ...(emp.permissions ?? {}) });
+        };
+        const saveEdit = () => {
+          if (!editForm.name.trim()) return;
+          const hasAnyPerm = Object.values(editPerms).some(Boolean);
+          if (hasAnyPerm && !editForm.username.trim()) {
+            toast({ title: "اسم المستخدم مطلوب", description: "يجب إدخال اسم مستخدم عند تفعيل أي صلاحية", variant: "destructive" });
+            return;
+          }
+          editStaff.mutate({
+            id: emp.id,
+            data: {
+              name: editForm.name.trim(),
+              baseSalary: parseFloat(editForm.baseSalary) || 0,
+              assignedToType: editForm.assignedToType,
+              assignedToId: editForm.assignedToType !== "all" && editForm.assignedToId ? Number(editForm.assignedToId) : null,
+              username: editForm.username.trim() || undefined,
+              password: editForm.password.trim() || undefined,
+              permissions: editPerms,
+            },
+          });
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex justify-end" dir="rtl">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closePanel} />
+            <div className="relative bg-card w-full max-w-md h-full shadow-2xl flex flex-col overflow-hidden border-r border-border/60">
+
+              {/* ── Panel Header ── */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <User className="w-5 h-5 text-primary" />
                   </div>
-                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-full px-2 py-0.5">قريباً</span>
+                  <div>
+                    <p className="text-sm font-bold text-foreground">{emp.name}</p>
+                    {emp.username
+                      ? <p className="text-[11px] text-muted-foreground">@{emp.username}</p>
+                      : <p className="text-[11px] text-amber-600">بدون حساب دخول</p>
+                    }
+                  </div>
                 </div>
-              ))}
-              <p className="text-[11px] text-muted-foreground text-center pt-2 pb-1">سيتم تفعيل إدارة الوثائق في تحديث قادم</p>
+                <button onClick={closePanel} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* ── Quick Stats ── */}
+              <div className="px-5 py-3 bg-muted/10 border-b border-border/40 flex items-center gap-5 shrink-0 text-right">
+                <div>
+                  <p className="text-[10px] text-muted-foreground">الراتب الأساسي</p>
+                  <p className="text-xs font-bold text-foreground">{formatAmount(Number(emp.baseSalary))} ر.س</p>
+                </div>
+                <div className="h-6 w-px bg-border/60" />
+                <div>
+                  <p className="text-[10px] text-muted-foreground">الحالة</p>
+                  <p className="text-xs font-bold" style={{ color: emp.isActive !== false ? "#16a34a" : "#dc2626" }}>
+                    {emp.isActive !== false ? "نشط" : "معطّل"}
+                  </p>
+                </div>
+                <div className="h-6 w-px bg-border/60" />
+                <div>
+                  <p className="text-[10px] text-muted-foreground">الصلاحيات</p>
+                  <p className="text-xs font-bold text-foreground">{empPerms.length === 0 ? "لا توجد" : `${empPerms.length} صلاحية`}</p>
+                </div>
+              </div>
+
+              {/* ── Tabs ── */}
+              <div className="flex border-b border-border shrink-0">
+                {(["profile", "finance"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => { setStaffProfileTab(tab); if (tab === "profile") {} }}
+                    className={`flex-1 py-2.5 text-xs font-semibold transition-all border-b-2 ${
+                      staffProfileTab === tab
+                        ? "border-primary text-primary bg-primary/5"
+                        : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                    }`}
+                  >
+                    {tab === "profile" ? "📋 الملف الشخصي" : "💰 السجل المالي"}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── Tab Content ── */}
+              <div className="flex-1 overflow-y-auto">
+
+                {/* ─ Tab 1: الملف الشخصي ─ */}
+                {staffProfileTab === "profile" && (
+                  <div className="px-5 py-4 space-y-4 text-right">
+
+                    {/* Action buttons */}
+                    {!staffProfileEditing && (
+                      <div className="flex gap-2">
+                        <Button
+                          className="flex-1 h-9 text-xs font-bold"
+                          onClick={startEdit}
+                        >
+                          <Edit2 className="w-3.5 h-3.5 me-1.5" />
+                          تعديل البيانات
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          className="h-9 px-4 text-xs font-bold"
+                          onClick={() => { closePanel(); setDeleteConfirmTarget({ id: emp.id, name: emp.name }); }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 me-1" />
+                          حذف
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* ── View mode ── */}
+                    {!staffProfileEditing && (
+                      <div className="space-y-3">
+                        <div className="bg-muted/20 rounded-xl p-4 space-y-3 border border-border/40">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">البيانات الأساسية</p>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <p className="text-[10px] text-muted-foreground mb-0.5">الاسم الكامل</p>
+                              <p className="text-sm font-semibold text-foreground">{emp.name}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground mb-0.5">الراتب الأساسي</p>
+                              <p className="text-sm font-semibold text-foreground">{formatAmount(Number(emp.baseSalary))} ر.س</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground mb-0.5">اسم المستخدم</p>
+                              <p className="text-sm font-mono text-foreground">{emp.username ?? "—"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground mb-0.5">الوحدة المكلّفة</p>
+                              <p className="text-sm text-foreground">
+                                {emp.assignedToName ?? (emp.assignedToType === "all" ? "جميع الوحدات" : emp.assignedToType === "chalet" ? "شاليه" : "خدمة")}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Permissions display */}
+                        <div className="bg-muted/20 rounded-xl p-4 border border-border/40">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-3">الصلاحيات الممنوحة</p>
+                          {empPerms.length === 0 ? (
+                            <p className="text-xs text-muted-foreground italic">لا توجد صلاحيات مفعّلة</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {empPerms.map((k) => (
+                                <span key={k} className="inline-flex items-center gap-1 text-[11px] bg-primary/10 text-primary rounded-full px-2.5 py-1 font-medium">
+                                  {PERM_LABELS[k].icon} {PERM_LABELS[k].label}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Official documents — placeholder */}
+                        <div className="bg-muted/20 rounded-xl p-4 border border-border/40">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-3">الوثائق الرسمية</p>
+                          <div className="space-y-2">
+                            {[
+                              { icon: "🪪", title: "الإقامة / الهوية الوطنية", sub: "رقم الهوية، تاريخ الانتهاء" },
+                              { icon: "🏥", title: "التأمين الصحي", sub: "رقم الوثيقة، شركة التأمين" },
+                              { icon: "✈️", title: "تذاكر السفر والإجازات", sub: "سجل الإجازات والتذاكر" },
+                              { icon: "📄", title: "العقد الوظيفي", sub: "تاريخ التوظيف، بنود العقد" },
+                            ].map((doc) => (
+                              <div key={doc.title} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-dashed border-border/60 bg-card/50">
+                                <span className="text-base">{doc.icon}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-semibold text-foreground">{doc.title}</p>
+                                  <p className="text-[10px] text-muted-foreground">{doc.sub}</p>
+                                </div>
+                                <span className="text-[9px] font-bold text-muted-foreground/60 shrink-0">قيد التطوير</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Edit mode (inline) ── */}
+                    {staffProfileEditing && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-primary flex items-center gap-1.5"><Edit2 className="w-3.5 h-3.5" /> وضع التعديل</p>
+                          <button onClick={() => { setStaffProfileEditing(false); setEditId(null); }} className="text-[11px] text-muted-foreground hover:text-foreground underline">إلغاء</button>
+                        </div>
+
+                        {/* Name + Salary */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[10px] text-muted-foreground font-medium mb-1 block">الاسم الكامل *</label>
+                            <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="h-9 text-sm" />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-muted-foreground font-medium mb-1 block">الراتب الأساسي (ر.س)</label>
+                            <Input type="text" inputMode="numeric" value={toAr(editForm.baseSalary)} onChange={(e) => setEditForm((f) => ({ ...f, baseSalary: fromAr(e.target.value) }))} className="h-9 text-sm" />
+                          </div>
+                        </div>
+
+                        {/* Unit */}
+                        {(staffChalets.length > 0 || staffProviders.length > 0) && (
+                          <div className="rounded-xl border border-border/60 p-3 bg-muted/10">
+                            <p className="text-[10px] font-semibold text-muted-foreground mb-2 flex items-center gap-1"><Briefcase className="w-3 h-3" /> الوحدة المكلّفة</p>
+                            <div className="flex gap-2 flex-wrap">
+                              <Select value={editForm.assignedToType} onValueChange={(v) => setEditForm((f) => ({ ...f, assignedToType: v as any, assignedToId: "" }))}>
+                                <SelectTrigger className="h-8 flex-1 min-w-[110px] text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">جميع الوحدات</SelectItem>
+                                  {staffChalets.length > 0 && <SelectItem value="chalet">وحدة محددة</SelectItem>}
+                                  {staffProviders.length > 0 && <SelectItem value="service">خدمة محددة</SelectItem>}
+                                </SelectContent>
+                              </Select>
+                              {editForm.assignedToType === "chalet" && (
+                                <Select value={editForm.assignedToId} onValueChange={(v) => setEditForm((f) => ({ ...f, assignedToId: v }))}>
+                                  <SelectTrigger className="h-8 flex-1 min-w-[130px] text-xs"><SelectValue placeholder="اختر الوحدة" /></SelectTrigger>
+                                  <SelectContent>{staffChalets.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nameAr ?? `وحدة #${c.id}`}</SelectItem>)}</SelectContent>
+                                </Select>
+                              )}
+                              {editForm.assignedToType === "service" && (
+                                <Select value={editForm.assignedToId} onValueChange={(v) => setEditForm((f) => ({ ...f, assignedToId: v }))}>
+                                  <SelectTrigger className="h-8 flex-1 min-w-[130px] text-xs"><SelectValue placeholder="اختر الخدمة" /></SelectTrigger>
+                                  <SelectContent>{staffProviders.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.businessName}</SelectItem>)}</SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Credentials */}
+                        <div className="rounded-xl border border-border/60 p-3 bg-muted/10">
+                          <p className="text-[10px] font-semibold text-muted-foreground mb-2 flex items-center gap-1"><Lock className="w-3 h-3" /> بيانات الدخول</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-muted-foreground mb-1 block">اسم المستخدم</label>
+                              <Input value={editForm.username} onChange={(e) => setEditForm((f) => ({ ...f, username: e.target.value }))} className="h-8 text-xs" dir="ltr" placeholder="username" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-muted-foreground mb-1 block">كلمة مرور جديدة</label>
+                              <Input type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} className="h-8 text-xs" dir="ltr" placeholder="فارغة = بدون تغيير" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Permissions */}
+                        <div className="rounded-xl border border-border/60 p-3 bg-muted/10">
+                          <p className="text-[10px] font-semibold text-muted-foreground mb-2 flex items-center gap-1"><Shield className="w-3 h-3" /> الصلاحيات</p>
+                          <div className="space-y-2">
+                            {ALL_PERM_KEYS.map((key) => {
+                              const info = PERM_LABELS[key];
+                              return (
+                                <label key={key} className="flex items-center gap-2.5 cursor-pointer py-0.5">
+                                  <Switch checked={!!editPerms[key]} onCheckedChange={(v) => setEditPerms((p) => ({ ...p, [key]: v }))} className="shrink-0" />
+                                  <span className="text-xs text-foreground">{info.icon} {info.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <Button
+                          className="w-full h-10 font-bold"
+                          disabled={editStaff.isPending || !editForm.name.trim()}
+                          onClick={saveEdit}
+                        >
+                          {editStaff.isPending ? <Loader2 className="w-4 h-4 animate-spin me-1.5" /> : <Check className="w-4 h-4 me-1.5" />}
+                          حفظ التعديلات
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ─ Tab 2: السجل المالي ─ */}
+                {staffProfileTab === "finance" && (
+                  <div className="px-5 py-4 text-right">
+                    <p className="text-xs font-bold text-foreground mb-3 flex items-center gap-1.5">
+                      <Receipt className="w-3.5 h-3.5 text-primary" />
+                      كشف حساب — {emp.name}
+                    </p>
+                    {empHistory.length === 0 ? (
+                      <div className="text-center py-10">
+                        <Receipt className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">لا توجد معاملات مالية مسجّلة</p>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl overflow-hidden border border-border/40">
+                        <table className="w-full text-xs border-collapse" dir="rtl">
+                          <thead>
+                            <tr className="bg-muted/60 border-b border-border/40">
+                              <th className="text-right px-3 py-2 font-semibold text-muted-foreground">الشهر</th>
+                              <th className="text-right px-3 py-2 font-semibold text-muted-foreground">الأساسي</th>
+                              <th className="text-right px-3 py-2 font-semibold text-muted-foreground">مكافأة</th>
+                              <th className="text-right px-3 py-2 font-semibold text-muted-foreground">خصم</th>
+                              <th className="text-right px-3 py-2 font-semibold text-muted-foreground">الصافي</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {empHistory.map((log: SalaryLog, i: number) => {
+                              const base = Number((log as any).baseSalary ?? emp.baseSalary ?? 0);
+                              const bonus = Number(log.bonus);
+                              const deduction = Number(log.deduction);
+                              const net = base + bonus - deduction;
+                              const paidDate = log.paidAt ? new Date(log.paidAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "—";
+                              return (
+                                <tr key={log.id} className={`border-b border-border/20 last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
+                                  <td className="px-3 py-2.5">
+                                    <p className="font-semibold text-foreground">{monthLabel(log.month)}</p>
+                                    <p className="text-[10px] text-muted-foreground">{paidDate}</p>
+                                  </td>
+                                  <td className="px-3 py-2.5 text-foreground">{formatAmount(base)}</td>
+                                  <td className="px-3 py-2.5 text-green-600">{bonus > 0 ? `+${formatAmount(bonus)}` : "—"}</td>
+                                  <td className="px-3 py-2.5 text-destructive">{deduction > 0 ? `-${formatAmount(deduction)}` : "—"}</td>
+                                  <td className="px-3 py-2.5 font-bold text-foreground">{formatAmount(net)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot>
+                            <tr className="bg-muted/40 border-t border-border">
+                              <td colSpan={4} className="px-3 py-2 text-xs font-bold text-muted-foreground">إجمالي المصروف</td>
+                              <td className="px-3 py-2 font-bold text-primary text-xs">
+                                {formatAmount(empHistory.reduce((acc: number, l: SalaryLog) => {
+                                  const b = Number((l as any).baseSalary ?? emp.baseSalary ?? 0);
+                                  return acc + b + Number(l.bonus) - Number(l.deduction);
+                                }, 0))}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
