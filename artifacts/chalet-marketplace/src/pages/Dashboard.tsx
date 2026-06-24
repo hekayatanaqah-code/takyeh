@@ -14103,6 +14103,20 @@ function StaffTab() {
     ? Number(payTarget.baseSalary) + (parseFloat(payForm.bonus) || 0) - (parseFloat(payForm.deduction) || 0)
     : 0;
 
+  /* ── mock data shown when no real records yet ── */
+  const MOCK_STAFF_ITEM = {
+    id: -1, name: "محمد أحمد", baseSalary: "4000", username: null,
+    permissions: { manageBookings: true } as StaffPermissions,
+    assignedToType: "chalet" as const, assignedToId: null, assignedToName: "شاليه الياسمين",
+  };
+  const MOCK_HISTORY_ITEM = {
+    id: -1, staffId: -1, staffName: "محمد أحمد", month: "2026-05",
+    baseSalary: "4000", bonus: "500", deduction: "0",
+    notes: "راتب شهر مايو", paidAt: "2026-06-01T10:00:00.000Z",
+  };
+  const displayStaff  = isLoading   ? [] : staff.length   > 0 ? staff   : [MOCK_STAFF_ITEM];
+  const displayHistory = histLoading ? [] : history.length > 0 ? history : [MOCK_HISTORY_ITEM];
+
   return (
     <div className="space-y-5">
       {/* ── Add Staff Form ── */}
@@ -14234,254 +14248,106 @@ function StaffTab() {
         </h2>
 
         {isLoading ? (
-          <div className="space-y-3">{[1,2,3].map((i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}</div>
-        ) : staff.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground">
-            <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">لا يوجد موظفون مسجلون بعد</p>
-          </div>
+          <div className="space-y-3">{[1,2,3].map((i) => <Skeleton key={i} className="h-10 rounded-xl" />)}</div>
         ) : (
-          <div className="space-y-3">
-            {staff.map((member) => {
-              const stats = staffStats[member.id] ?? { totalEarned: 0, lastPaidMonth: null };
-              const nextDue = nextDueMonth(stats.lastPaidMonth);
-              const nextDueLabel = monthLabel(nextDue);
-              const isDueThisMonth = nextDue === currentMonth;
-
-              return (
-                <div key={member.id} className="border border-border rounded-2xl overflow-hidden">
-                  <div className="flex items-start gap-4 p-4">
-                    {/* Avatar */}
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                      <User className="w-6 h-6 text-primary" />
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      {editId === member.id ? (
-                        <div className="flex gap-2 flex-wrap">
-                          <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-[120px] h-8 text-sm" placeholder="الاسم" />
-                          <Input type="text" inputMode="numeric" value={toAr(editForm.baseSalary)} onChange={(e) => setEditForm((f) => ({ ...f, baseSalary: fromAr(e.target.value) }))} className="w-32 h-8 text-sm" placeholder="الراتب" />
-                          <Button size="sm" disabled={isReadOnly} onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } editStaff.mutate({ id: member.id, data: { name: editForm.name, baseSalary: parseFloat(editForm.baseSalary) } }); }}>حفظ</Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditId(null)}>إلغاء</Button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-bold text-foreground">{member.name}</p>
-                            {!member.username && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
-                                <Lock className="w-2.5 h-2.5" />
-                                لا يمكنه الدخول — أضف بيانات تسجيل الدخول
-                              </span>
-                            )}
-                            {member.username && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-green-50 text-green-700 border border-green-100 rounded-full px-2 py-0.5">
-                                <LogIn className="w-2.5 h-2.5" />
-                                @{member.username}
-                              </span>
-                            )}
+          <div className="rounded-xl overflow-hidden border border-border/40">
+            <table className="w-full table-fixed border-collapse" dir="rtl">
+              <colgroup>
+                <col className="w-[22%]" />
+                <col className="w-[15%]" />
+                <col className="w-[20%]" />
+                <col className="w-[28%]" />
+                <col className="w-[15%]" />
+              </colgroup>
+              <thead>
+                <tr className="bg-muted/60 border-b border-border/40">
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الاسم</th>
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الراتب الأساسي</th>
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الوحدة</th>
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الصلاحيات</th>
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayStaff.map((member, idx) => {
+                  const isMock = (member.id as number) < 0;
+                  const unitLabel = (member as any).assignedToName
+                    ?? ((member as any).assignedToType === "chalet"
+                      ? (staffChalets.find((c) => c.id === (member as any).assignedToId)?.nameAr ?? "شاليه")
+                      : (member as any).assignedToType === "service"
+                      ? (staffProviders.find((p) => p.id === (member as any).assignedToId)?.businessName ?? "خدمة")
+                      : "جميع الوحدات");
+                  const permKeys = ALL_PERM_KEYS.filter((k) => member.permissions?.[k]);
+                  const nextDue = nextDueMonth((staffStats[member.id] ?? { lastPaidMonth: null }).lastPaidMonth);
+                  return (
+                    <tr
+                      key={member.id}
+                      className={`transition-colors hover:bg-muted/30 ${idx % 2 === 0 ? "" : "bg-muted/20"} border-b border-border/20 last:border-0 ${isMock ? "opacity-60" : ""}`}
+                    >
+                      <td className="text-right px-3 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                            <User className="w-4 h-4 text-primary" />
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">الراتب الأساسي: <span className="font-semibold text-foreground">{formatAmount(Number(member.baseSalary))}</span></p>
-                          {(member as any).assignedToType && (member as any).assignedToType !== "all" && (
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5 mt-0.5 ${(member as any).assignedToType === "chalet" ? "bg-primary/10 text-primary border border-primary/20" : "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800/30"}`}>
-                              {(member as any).assignedToType === "chalet" ? <Home className="w-2.5 h-2.5" /> : <Activity className="w-2.5 h-2.5" />}
-                              {(member as any).assignedToType === "chalet"
-                                ? (staffChalets.find((c: any) => c.id === (member as any).assignedToId)?.nameAr ?? `شاليه #${(member as any).assignedToId}`)
-                                : (staffProviders.find((p: any) => p.id === (member as any).assignedToId)?.businessName ?? `خدمة #${(member as any).assignedToId}`)
-                              }
-                            </span>
-                          )}
-                        </>
-                      )}
-
-                      {/* Stats row */}
-                      {editId !== member.id && (
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          <div className="bg-green-50 dark:bg-green-950/30 rounded-xl px-3 py-2">
-                            <p className="text-[10px] text-muted-foreground mb-0.5">إجمالي المصروف</p>
-                            <p className="text-sm font-bold text-green-700 dark:text-green-400">{formatAmount(stats.totalEarned)}</p>
-                          </div>
-                          <div className={`rounded-xl px-3 py-2 ${isDueThisMonth ? "bg-amber-50 dark:bg-amber-950/30" : "bg-muted/50"}`}>
-                            <p className="text-[10px] text-muted-foreground mb-0.5">موعد الراتب القادم</p>
-                            <p className={`text-sm font-bold ${isDueThisMonth ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
-                              {nextDueLabel} {isDueThisMonth ? "⚠️" : ""}
-                            </p>
+                          <div>
+                            <p className="text-sm font-semibold text-foreground leading-tight">{member.name}</p>
+                            {!isMock && member.username && <p className="text-[10px] text-muted-foreground">@{member.username}</p>}
+                            {isMock && <p className="text-[10px] text-amber-600 font-medium">بيانات تجريبية</p>}
                           </div>
                         </div>
-                      )}
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      <div className="flex items-center gap-1">
-                        {editId !== member.id && (
-                          <button onClick={() => { setEditId(member.id); setEditForm({ name: member.name, baseSalary: member.baseSalary }); }} className="p-2 text-muted-foreground hover:text-foreground transition-colors">
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                        <button onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } if (confirm(`حذف ${member.name}؟`)) deleteStaff.mutate(member.id); }} className="p-2 text-muted-foreground hover:text-destructive transition-colors">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <Button
-                        size="sm"
-                        className="h-9 px-4 font-bold text-xs"
-                        onClick={() => {
-                          setPayTarget(member);
-                          setPayForm({ month: nextDue, bonus: "0", deduction: "0", notes: "" });
-                        }}
-                      >
-                        <DollarSign className="w-3.5 h-3.5 me-1" />
-                        صرف راتب
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* ── Permission Summary Row ── */}
-                  <div className="border-t border-border/50 px-4 pb-3 pt-2.5 bg-muted/10">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
-                        <Settings className="w-3 h-3" /> الصلاحيات
-                      </p>
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => {
-                            if (permEditId === member.id) { setPermEditId(null); }
-                            else {
-                              setPermEditId(member.id);
-                              setPermState(member.permissions ?? {});
-                              setCredEditId(null);
-                            }
-                          }}
-                          className="text-[11px] text-primary hover:underline flex items-center gap-0.5"
-                        >
-                          <Edit2 className="w-2.5 h-2.5" />
-                          {permEditId === member.id ? "إغلاق" : "تعديل"}
-                        </button>
-                        <span className="text-muted-foreground/40">|</span>
-                        <button
-                          onClick={() => {
-                            if (credEditId === member.id) { setCredEditId(null); }
-                            else {
-                              setCredEditId(member.id);
-                              setCredForm({ username: member.username ?? "", password: "" });
-                              setPermEditId(null);
-                            }
-                          }}
-                          className="text-[11px] text-blue-600 hover:underline flex items-center gap-0.5"
-                        >
-                          <Lock className="w-2.5 h-2.5" />
-                          {credEditId === member.id ? "إغلاق" : "بيانات الدخول"}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Permission badges */}
-                    {permEditId !== member.id && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {ALL_PERM_KEYS.filter((k) => member.permissions?.[k]).length === 0 ? (
-                          <span className="text-[11px] text-muted-foreground italic">لا توجد صلاحيات ممنوحة</span>
+                      </td>
+                      <td className="text-right px-3 py-3">
+                        <p className="text-sm font-bold text-foreground">{formatAmount(Number(member.baseSalary))}</p>
+                      </td>
+                      <td className="text-right px-3 py-3">
+                        <span className="text-xs text-muted-foreground">{unitLabel}</span>
+                      </td>
+                      <td className="text-right px-3 py-3">
+                        {permKeys.length === 0 ? (
+                          <span className="text-[10px] text-muted-foreground italic">لا توجد صلاحيات</span>
                         ) : (
-                          ALL_PERM_KEYS.filter((k) => member.permissions?.[k]).map((k) => (
-                            <span key={k} className="inline-flex items-center gap-0.5 text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">
-                              {PERM_LABELS[k].icon} {PERM_LABELS[k].label}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    )}
-
-                    {/* Expandable Permission Editor */}
-                    {permEditId === member.id && (
-                      <div className="mt-2 space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {ALL_PERM_KEYS.map((key) => {
-                            const info = PERM_LABELS[key];
-                            return (
-                              <label key={key} className="flex items-start gap-2.5 cursor-pointer">
-                                <Switch
-                                  checked={!!permState[key]}
-                                  onCheckedChange={(v) => setPermState((p) => ({ ...p, [key]: v }))}
-                                  className="mt-0.5 shrink-0"
-                                />
-                                <span className="text-xs">
-                                  <span className="font-semibold text-foreground">{info.icon} {info.label}</span>
-                                  <span className="block text-muted-foreground mt-0.5 text-[10px]">{info.description}</span>
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                        <div className="flex gap-2 pt-1">
-                          <Button
-                            size="sm"
-                            className="h-8 text-xs px-4"
-                            disabled={updatePermissions.isPending || isReadOnly}
-                            onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } updatePermissions.mutate({ id: member.id, permissions: permState }); }}
-                          >
-                            حفظ الصلاحيات
-                          </Button>
-                          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setPermEditId(null)}>إلغاء</Button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Expandable Credentials Editor */}
-                    {credEditId === member.id && (
-                      <div className="mt-2 space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <div>
-                            <p className="text-[10px] text-muted-foreground mb-1">اسم المستخدم</p>
-                            <Input
-                              value={credForm.username}
-                              onChange={(e) => setCredForm((f) => ({ ...f, username: e.target.value }))}
-                              placeholder="username"
-                              dir="ltr"
-                              className="h-8 text-sm"
-                            />
+                          <div className="flex flex-wrap gap-1">
+                            {permKeys.map((k) => (
+                              <span key={k} className="inline-flex items-center gap-0.5 text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">
+                                {PERM_LABELS[k].icon} {PERM_LABELS[k].label}
+                              </span>
+                            ))}
                           </div>
-                          <div>
-                            <p className="text-[10px] text-muted-foreground mb-1">كلمة مرور جديدة (اتركها فارغة للإبقاء)</p>
-                            <Input
-                              type="password"
-                              value={credForm.password}
-                              onChange={(e) => setCredForm((f) => ({ ...f, password: e.target.value }))}
-                              placeholder="••••••"
-                              dir="ltr"
-                              className="h-8 text-sm"
-                            />
-                          </div>
-                        </div>
-                        {member.username && (
-                          <p className="text-[10px] text-muted-foreground">
-                            رابط الدخول الحالي: <span className="font-mono text-primary">/staff-login</span>
-                            {" "}← اسم المستخدم: <span className="font-mono">{member.username}</span>
-                          </p>
                         )}
-                        <div className="flex gap-2 pt-1">
-                          <Button
-                            size="sm"
-                            className="h-8 text-xs px-4"
-                            disabled={updateCredentials.isPending || isReadOnly}
-                            onClick={() => {
-                              if (isReadOnly) { onBlockedEdit(); return; }
-                              const data: Record<string, string> = {};
-                              if (credForm.username) data.username = credForm.username;
-                              if (credForm.password) data.password = credForm.password;
-                              updateCredentials.mutate({ id: member.id, data });
-                            }}
-                          >
-                            حفظ بيانات الدخول
-                          </Button>
-                          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setCredEditId(null)}>إلغاء</Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                      </td>
+                      <td className="text-right px-3 py-3">
+                        {!isMock ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Button
+                              size="sm"
+                              className="h-7 px-3 text-[11px] font-bold"
+                              onClick={() => { setPayTarget(member as any); setPayForm({ month: nextDue, bonus: "0", deduction: "0", notes: "" }); }}
+                            >
+                              <DollarSign className="w-3 h-3 me-1" />
+                              صرف
+                            </Button>
+                            <button
+                              onClick={() => { setEditId(member.id); setEditForm({ name: member.name, baseSalary: member.baseSalary }); }}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } if (confirm(`حذف ${member.name}؟`)) deleteStaff.mutate(member.id); }}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-muted transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -14537,39 +14403,46 @@ function StaffTab() {
         </div>
         {histLoading ? (
           <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-10 rounded-xl" />)}</div>
-        ) : history.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <Receipt className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">لم يتم صرف أي راتب بعد</p>
-          </div>
         ) : (
-          <div className="overflow-x-auto -mx-5 px-5">
-            <table className="w-full text-sm min-w-[600px]">
+          <div className="rounded-xl overflow-hidden border border-border/40">
+            <table className="w-full table-fixed border-collapse text-sm" dir="rtl">
+              <colgroup>
+                <col className="w-[4%]" />
+                <col className="w-[16%]" />
+                <col className="w-[13%]" />
+                <col className="w-[12%]" />
+                <col className="w-[9%]" />
+                <col className="w-[9%]" />
+                <col className="w-[12%]" />
+                <col className="w-[17%]" />
+                <col className="w-[8%]" />
+              </colgroup>
               <thead>
-                <tr className="border-b border-border text-muted-foreground text-xs">
-                  <th className="pb-3 w-8">
+                <tr className="bg-muted/60 border-b border-border/40 text-muted-foreground text-[10px]">
+                  <th className="px-2 py-2">
                     <input
                       type="checkbox"
                       className="w-3.5 h-3.5 rounded accent-primary"
-                      checked={selectedLogIds.size === history.length && history.length > 0}
+                      checked={selectedLogIds.size === displayHistory.length && displayHistory.length > 0 && !histLoading}
                       onChange={(e) => {
-                        if (e.target.checked) setSelectedLogIds(new Set((history as any[]).map((l) => l.id)));
+                        if (e.target.checked) setSelectedLogIds(new Set((displayHistory as any[]).filter(l => (l.id as number) > 0).map((l) => l.id)));
                         else setSelectedLogIds(new Set());
                       }}
                     />
                   </th>
-                  <th className="text-right pb-3 font-semibold">الموظف</th>
-                  <th className="text-right pb-3 font-semibold">الشهر</th>
-                  <th className="text-right pb-3 font-semibold">الأساسي</th>
-                  <th className="text-right pb-3 font-semibold">مكافأة</th>
-                  <th className="text-right pb-3 font-semibold">خصم</th>
-                  <th className="text-right pb-3 font-semibold">الصافي</th>
-                  <th className="text-right pb-3 font-semibold">تاريخ الصرف</th>
-                  <th className="pb-3"></th>
+                  <th className="text-right font-semibold px-3 py-2">الموظف</th>
+                  <th className="text-right font-semibold px-3 py-2">الشهر</th>
+                  <th className="text-right font-semibold px-3 py-2">الأساسي</th>
+                  <th className="text-right font-semibold px-3 py-2">مكافأة</th>
+                  <th className="text-right font-semibold px-3 py-2">خصم</th>
+                  <th className="text-right font-semibold px-3 py-2">الصافي</th>
+                  <th className="text-right font-semibold px-3 py-2">تاريخ الصرف</th>
+                  <th className="px-2 py-2" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
-                {history.map((log) => {
+              <tbody>
+                {displayHistory.map((log, idx) => {
+                  const isMock = (log.id as number) < 0;
                   const base = Number((log as any).baseSalary ?? 0);
                   const bonus = Number(log.bonus);
                   const deduction = Number(log.deduction);
@@ -14578,53 +14451,63 @@ function StaffTab() {
                   const voucherNo = `SAL-${log.month.replace("-","")}-${log.staffId}`;
                   const isSelected = selectedLogIds.has(log.id);
                   return (
-                    <tr key={log.id} className={`hover:bg-muted/30 transition-colors ${isSelected ? "bg-primary/5" : ""}`}>
-                      <td className="py-3">
-                        <input
-                          type="checkbox"
-                          className="w-3.5 h-3.5 rounded accent-primary"
-                          checked={isSelected}
-                          onChange={(e) => {
-                            const next = new Set(selectedLogIds);
-                            if (e.target.checked) next.add(log.id);
-                            else next.delete(log.id);
-                            setSelectedLogIds(next);
-                          }}
-                        />
+                    <tr
+                      key={log.id}
+                      className={`hover:bg-muted/30 transition-colors border-b border-border/20 last:border-0 ${isSelected ? "bg-primary/5" : idx % 2 !== 0 ? "bg-muted/20" : ""} ${isMock ? "opacity-60" : ""}`}
+                    >
+                      <td className="px-2 py-2.5 text-center">
+                        {!isMock ? (
+                          <input
+                            type="checkbox"
+                            className="w-3.5 h-3.5 rounded accent-primary"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              const next = new Set(selectedLogIds);
+                              if (e.target.checked) next.add(log.id);
+                              else next.delete(log.id);
+                              setSelectedLogIds(next);
+                            }}
+                          />
+                        ) : <span />}
                       </td>
-                      <td className="py-3 font-semibold text-foreground">{(log as any).staffName ?? "—"}</td>
-                      <td className="py-3 text-muted-foreground">{monthLabel(log.month)}</td>
-                      <td className="py-3">{formatAmount(base)}</td>
-                      <td className="py-3 text-green-600">{bonus > 0 ? `+${formatAmount(bonus)}` : "—"}</td>
-                      <td className="py-3 text-red-600">{deduction > 0 ? `-${formatAmount(deduction)}` : "—"}</td>
-                      <td className="py-3 font-bold text-foreground">{formatAmount(net)}</td>
-                      <td className="py-3 text-muted-foreground text-xs">
+                      <td className="text-right px-3 py-2.5 font-semibold text-foreground">
+                        {(log as any).staffName ?? "—"}
+                        {isMock && <span className="block text-[10px] text-amber-600 font-normal">تجريبي</span>}
+                      </td>
+                      <td className="text-right px-3 py-2.5 text-muted-foreground">{monthLabel(log.month)}</td>
+                      <td className="text-right px-3 py-2.5">{formatAmount(base)}</td>
+                      <td className="text-right px-3 py-2.5 text-green-600">{bonus > 0 ? `+${formatAmount(bonus)}` : "—"}</td>
+                      <td className="text-right px-3 py-2.5 text-red-600">{deduction > 0 ? `-${formatAmount(deduction)}` : "—"}</td>
+                      <td className="text-right px-3 py-2.5 font-bold text-foreground">{formatAmount(net)}</td>
+                      <td className="text-right px-3 py-2.5 text-muted-foreground text-xs">
                         {log.paidAt ? new Date(paidAtStr).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                       </td>
-                      <td className="py-3">
-                        <button
-                          onClick={async () => {
-                            const qrDataUrl = await buildVoucherQR(log.id, voucherNo);
-                            printSalaryVoucher({
-                              voucherNo,
-                              logId:      log.id,
-                              staffName:  (log as any).staffName ?? "موظف",
-                              ownerName:  [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل",
-                              month:      log.month,
-                              paidAt:     paidAtStr,
-                              baseSalary: base,
-                              bonus,
-                              deduction,
-                              net,
-                              notes:      log.notes ?? undefined,
-                              qrDataUrl,
-                            });
-                          }}
-                          className="flex items-center gap-1 text-xs text-primary hover:underline whitespace-nowrap"
-                        >
-                          <Receipt className="w-3 h-3" />
-                          طباعة
-                        </button>
+                      <td className="px-2 py-2.5 text-center">
+                        {!isMock ? (
+                          <button
+                            onClick={async () => {
+                              const qrDataUrl = await buildVoucherQR(log.id, voucherNo);
+                              printSalaryVoucher({
+                                voucherNo,
+                                logId:      log.id,
+                                staffName:  (log as any).staffName ?? "موظف",
+                                ownerName:  [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل",
+                                month:      log.month,
+                                paidAt:     paidAtStr,
+                                baseSalary: base,
+                                bonus,
+                                deduction,
+                                net,
+                                notes:      log.notes ?? undefined,
+                                qrDataUrl,
+                              });
+                            }}
+                            className="flex items-center gap-1 text-xs text-primary hover:underline whitespace-nowrap"
+                          >
+                            <Receipt className="w-3 h-3" />
+                            طباعة
+                          </button>
+                        ) : <span />}
                       </td>
                     </tr>
                   );
