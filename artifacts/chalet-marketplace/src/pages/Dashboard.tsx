@@ -14540,17 +14540,6 @@ function StaffTab() {
               <Receipt className="w-4 h-4 text-primary" />
               سجل صرف الرواتب
             </h2>
-            {/* Calendar mode toggle */}
-            <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5 text-xs">
-              <button
-                onClick={() => setStaffCalMode("gregorian")}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${staffCalMode === "gregorian" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >م</button>
-              <button
-                onClick={() => setStaffCalMode("hijri")}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${staffCalMode === "hijri" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >هـ</button>
-            </div>
           </div>
           {history.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
