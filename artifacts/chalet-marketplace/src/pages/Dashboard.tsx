@@ -14790,11 +14790,35 @@ function StaffTab() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground font-medium mb-1 block">مكافأة / بدل (+)</label>
-                    <Input type="text" inputMode="numeric" value={toAr(payForm.bonus)} onChange={(e) => setPayForm((f) => ({ ...f, bonus: fromAr(e.target.value) }))} className="h-10" />
+                    <div className="relative">
+                      <Input
+                        type="text" inputMode="numeric"
+                        placeholder="٠"
+                        value={payForm.bonus === "0" ? "" : toAr(payForm.bonus)}
+                        onChange={(e) => {
+                          const raw = fromAr(e.target.value).replace(/^0+(\d)/, "$1");
+                          setPayForm((f) => ({ ...f, bonus: raw || "0" }));
+                        }}
+                        className="h-10 pe-10"
+                      />
+                      <span className="absolute end-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground select-none pointer-events-none">ر.س</span>
+                    </div>
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground font-medium mb-1 block">خصومات (-)</label>
-                    <Input type="text" inputMode="numeric" value={toAr(payForm.deduction)} onChange={(e) => setPayForm((f) => ({ ...f, deduction: fromAr(e.target.value) }))} className="h-10" />
+                    <div className="relative">
+                      <Input
+                        type="text" inputMode="numeric"
+                        placeholder="٠"
+                        value={payForm.deduction === "0" ? "" : toAr(payForm.deduction)}
+                        onChange={(e) => {
+                          const raw = fromAr(e.target.value).replace(/^0+(\d)/, "$1");
+                          setPayForm((f) => ({ ...f, deduction: raw || "0" }));
+                        }}
+                        className="h-10 pe-10"
+                      />
+                      <span className="absolute end-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground select-none pointer-events-none">ر.س</span>
+                    </div>
                   </div>
                 </div>
                 {/* Conditional reason fields — appear only when relevant amount > 0 */}
