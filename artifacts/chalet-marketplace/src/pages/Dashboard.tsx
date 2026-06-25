@@ -13939,10 +13939,11 @@ function StaffTab() {
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { toast } = useToast();
   const _nowStaff = new Date();
   const currentMonth = `${_nowStaff.getFullYear()}-${String(_nowStaff.getMonth() + 1).padStart(2, "0")}`;
   /* ── state ── */
-  const [addForm, setAddForm] = useState({ name: "", baseSalary: "", username: "", password: "" });
+  const [addForm, setAddForm] = useState({ name: "", baseSalary: "", username: "", password: "", nationalId: "", phoneNum: "", birthDate: "", hireDate: "" });
   const [addPerms, setAddPerms] = useState<StaffPermissions>({});
   const [addAssignType, setAddAssignType] = useState<"all" | "chalet" | "service">("all");
   const [addAssignId, setAddAssignId] = useState<string>("");
@@ -13951,7 +13952,9 @@ function StaffTab() {
     name: string; baseSalary: string;
     assignedToType: "all" | "chalet" | "service"; assignedToId: string;
     username: string; password: string;
-  }>({ name: "", baseSalary: "", assignedToType: "all", assignedToId: "", username: "", password: "" });
+    nationalId: string; phoneNum: string; birthDate: string; hireDate: string;
+    isActive: boolean;
+  }>({ name: "", baseSalary: "", assignedToType: "all", assignedToId: "", username: "", password: "", nationalId: "", phoneNum: "", birthDate: "", hireDate: "", isActive: true });
   const [editPerms, setEditPerms] = useState<StaffPermissions>({});
   /* Employee profile slide-over */
   const [staffProfileTarget, setStaffProfileTarget] = useState<any | null>(null);
@@ -13973,8 +13976,18 @@ function StaffTab() {
   const [masterMonth, setMasterMonth] = useState(currentMonth);
   /* Staff table dialogs */
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{ id: number; name: string } | null>(null);
-  /* Salary calendar mode */
+  /* Salary calendar mode — seeded from owner's bookings preference */
+  const { data: _staffOwnerProfile } = useQuery<{ bookingsCalPref?: string }>({
+    queryKey: ["owner", "profile-btype"],
+    queryFn: async () => { const r = await apiFetch("/owner/profile"); return r.ok ? r.json() : {}; },
+    staleTime: 5 * 60 * 1000,
+  });
   const [staffCalMode, setStaffCalMode] = useState<"gregorian" | "hijri">("gregorian");
+  useEffect(() => {
+    if (_staffOwnerProfile?.bookingsCalPref) {
+      setStaffCalMode(_staffOwnerProfile.bookingsCalPref as "gregorian" | "hijri");
+    }
+  }, [_staffOwnerProfile?.bookingsCalPref]);
   /* Username uniqueness check */
   const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
   useEffect(() => {
@@ -14051,7 +14064,7 @@ function StaffTab() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "staff"] });
-      setAddForm({ name: "", baseSalary: "", username: "", password: "" });
+      setAddForm({ name: "", baseSalary: "", username: "", password: "", nationalId: "", phoneNum: "", birthDate: "", hireDate: "" });
       setAddPerms({});
       setAddAssignType("all");
       setAddAssignId("");
@@ -14077,9 +14090,15 @@ function StaffTab() {
   const editStaff = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
       const r = await apiFetch(`/owner/staff/${id}`, { method: "PATCH", body: JSON.stringify(data) });
-      if (!r.ok) throw new Error();
+      if (!r.ok) throw new Error("فشل حفظ بيانات الموظف");
+      return r.json();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["owner", "staff"] }); setEditId(null); setStaffProfileEditing(false); },
+    onSuccess: (updatedEmp) => {
+      qc.invalidateQueries({ queryKey: ["owner", "staff"] });
+      setEditId(null);
+      setStaffProfileEditing(false);
+      if (updatedEmp) setStaffProfileTarget(updatedEmp);
+    },
   });
 
   const deleteStaff = useMutation({
@@ -14191,6 +14210,10 @@ function StaffTab() {
               permissions: addPerms,
               assignedToType: addAssignType,
               assignedToId: addAssignType !== "all" && addAssignId ? Number(addAssignId) : undefined,
+              nationalId: addForm.nationalId || undefined,
+              phoneNum: addForm.phoneNum || undefined,
+              birthDate: addForm.birthDate || undefined,
+              hireDate: addForm.hireDate || undefined,
             });
           }}
           className="space-y-4"
@@ -14199,6 +14222,25 @@ function StaffTab() {
           <div className="flex gap-3 flex-wrap">
             <Input placeholder="الاسم الكامل" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-[140px] h-11" required />
             <Input type="text" inputMode="numeric" placeholder="الراتب الأساسي (ر.س)" value={toAr(addForm.baseSalary)} onChange={(e) => setAddForm((f) => ({ ...f, baseSalary: fromAr(e.target.value) }))} className="flex-1 min-w-[160px] h-11" required />
+          </div>
+
+          {/* Personal Info */}
+          <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
+            <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5" /> البيانات الشخصية <span className="font-normal">(اختياري)</span>
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Input placeholder="رقم الهوية / الإقامة" value={addForm.nationalId} onChange={(e) => setAddForm((f) => ({ ...f, nationalId: e.target.value }))} className="h-10 text-sm" inputMode="numeric" />
+              <Input placeholder="رقم الجوال (05xxxxxxxx)" value={addForm.phoneNum} onChange={(e) => setAddForm((f) => ({ ...f, phoneNum: e.target.value }))} className="h-10 text-sm" inputMode="tel" dir="ltr" />
+              <div>
+                <label className="text-[10px] text-muted-foreground mb-1 block">تاريخ الميلاد</label>
+                <Input type="date" value={addForm.birthDate} onChange={(e) => setAddForm((f) => ({ ...f, birthDate: e.target.value }))} className="h-10 text-sm" dir="ltr" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground mb-1 block">تاريخ التعيين</label>
+                <Input type="date" value={addForm.hireDate} onChange={(e) => setAddForm((f) => ({ ...f, hireDate: e.target.value }))} className="h-10 text-sm" dir="ltr" />
+              </div>
+            </div>
           </div>
 
           {/* Unit Assignment */}
@@ -14371,14 +14413,14 @@ function StaffTab() {
                               className="h-7 px-3 text-[11px] font-bold"
                               onClick={() => { setPayTarget(member as any); setPayForm({ month: nextDue, bonus: "0", deduction: "0", notes: "", generalNotes: "" }); }}
                             >
-                              <DollarSign className="w-3 h-3 me-1" />
+                              <Banknote className="w-3 h-3 me-1" />
                               صرف الراتب
                             </Button>
                             <div className="flex items-center gap-1 flex-wrap">
                               {ALL_PERM_KEYS.filter((k) => !!(member.permissions?.[k])).length === 0
-                                ? <span className="text-[10px] text-muted-foreground/60 italic">لا صلاحيات</span>
+                                ? <span className="text-[10px] text-muted-foreground/50 italic">لا صلاحيات</span>
                                 : ALL_PERM_KEYS.filter((k) => !!(member.permissions?.[k])).map((k) => (
-                                    <span key={k} title={PERM_LABELS[k].label} className="text-sm cursor-default" aria-label={PERM_LABELS[k].label}>{PERM_LABELS[k].icon}</span>
+                                    <span key={k} className="inline-flex items-center text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-semibold whitespace-nowrap">{PERM_LABELS[k].icon} {PERM_LABELS[k].label}</span>
                                   ))
                               }
                             </div>
@@ -14786,25 +14828,33 @@ function StaffTab() {
             const empPerms = ALL_PERM_KEYS.filter((k) => emp.permissions?.[k]);
             const closeModal = () => { setStaffProfileTarget(null); setStaffProfileEditing(false); setEditId(null); };
             const startEdit = () => {
+              const target = staffProfileTarget;
+              if (!target?.id) return;
               setStaffProfileEditing(true);
-              setEditId(emp.id);
+              setEditId(target.id);
               setEditForm({
-                name: emp.name, baseSalary: emp.baseSalary,
-                assignedToType: emp.assignedToType ?? "all",
-                assignedToId: String(emp.assignedToId ?? ""),
-                username: emp.username ?? "", password: "",
+                name: target.name, baseSalary: target.baseSalary,
+                assignedToType: target.assignedToType ?? "all",
+                assignedToId: String(target.assignedToId ?? ""),
+                username: target.username ?? "", password: "",
+                nationalId: target.nationalId ?? "",
+                phoneNum: target.phoneNum ?? "",
+                birthDate: target.birthDate ?? "",
+                hireDate: target.hireDate ?? "",
+                isActive: target.isActive !== false,
               });
-              setEditPerms({ ...(emp.permissions ?? {}) });
+              setEditPerms({ ...(target.permissions ?? {}) });
             };
             const saveEdit = () => {
-              if (!editForm.name.trim()) return;
+              const target = staffProfileTarget;
+              if (!target?.id || !editForm.name.trim()) return;
               const hasAnyPerm = Object.values(editPerms).some(Boolean);
               if (hasAnyPerm && !editForm.username.trim()) {
                 toast({ title: "اسم المستخدم مطلوب", description: "يجب إدخال اسم مستخدم عند تفعيل أي صلاحية", variant: "destructive" });
                 return;
               }
               editStaff.mutate({
-                id: emp.id,
+                id: target.id,
                 data: {
                   name: editForm.name.trim(),
                   baseSalary: parseFloat(editForm.baseSalary) || 0,
@@ -14813,6 +14863,11 @@ function StaffTab() {
                   username: editForm.username.trim() || undefined,
                   password: editForm.password.trim() || undefined,
                   permissions: editPerms,
+                  isActive: editForm.isActive,
+                  nationalId: editForm.nationalId.trim() || undefined,
+                  phoneNum: editForm.phoneNum.trim() || undefined,
+                  birthDate: editForm.birthDate.trim() || undefined,
+                  hireDate: editForm.hireDate.trim() || undefined,
                 },
               });
             };
@@ -14837,7 +14892,7 @@ function StaffTab() {
                   <div className="hidden sm:flex items-center gap-4 text-right">
                     <div>
                       <p className="text-[10px] text-muted-foreground">الراتب</p>
-                      <p className="text-xs font-bold text-foreground">{formatAmount(Number(emp.baseSalary))} ر.س</p>
+                      <p className="text-xs font-bold text-foreground">{formatAmount(Number(emp.baseSalary))}</p>
                     </div>
                     <div className="h-6 w-px bg-border/60" />
                     <div>
@@ -14909,7 +14964,21 @@ function StaffTab() {
                               </div>
                               <div>
                                 <p className="text-[10px] text-muted-foreground mb-0.5">الراتب الأساسي</p>
-                                <p className="text-sm font-semibold text-foreground">{formatAmount(Number(emp.baseSalary))} ر.س</p>
+                                <p className="text-sm font-semibold text-foreground">{formatAmount(Number(emp.baseSalary))}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground mb-0.5">الحالة الوظيفية</p>
+                                <span className={`inline-flex text-xs font-bold px-2 py-0.5 rounded-full ${emp.isActive !== false ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                  {emp.isActive !== false ? "نشط" : "غير نشط"}
+                                </span>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground mb-0.5">رقم الهوية / الإقامة</p>
+                                <p className="text-sm text-foreground">{emp.nationalId || "—"}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-muted-foreground mb-0.5">رقم الجوال</p>
+                                <p className="text-sm text-foreground" dir="ltr">{emp.phoneNum || "—"}</p>
                               </div>
                               <div>
                                 <p className="text-[10px] text-muted-foreground mb-0.5">اسم المستخدم</p>
@@ -14922,12 +14991,12 @@ function StaffTab() {
                                 </p>
                               </div>
                               <div>
-                                <p className="text-[10px] text-muted-foreground mb-0.5">رقم الهوية / الإقامة</p>
-                                <p className="text-sm text-muted-foreground italic">—</p>
+                                <p className="text-[10px] text-muted-foreground mb-0.5">تاريخ الميلاد</p>
+                                <p className="text-sm text-foreground">{emp.birthDate || "—"}</p>
                               </div>
                               <div>
-                                <p className="text-[10px] text-muted-foreground mb-0.5">تاريخ الميلاد</p>
-                                <p className="text-sm text-muted-foreground italic">—</p>
+                                <p className="text-[10px] text-muted-foreground mb-0.5">تاريخ التعيين</p>
+                                <p className="text-sm text-foreground">{emp.hireDate || "—"}</p>
                               </div>
                             </div>
                           </div>
@@ -14948,37 +15017,13 @@ function StaffTab() {
                             )}
                           </div>
 
-                          {/* Official documents */}
-                          <div className="bg-muted/20 rounded-xl p-4 border border-border/40">
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-3">الوثائق الرسمية</p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {[
-                                { icon: "🪪", title: "الإقامة / الهوية", sub: "رقم الهوية، تاريخ الانتهاء" },
-                                { icon: "🏥", title: "التأمين الصحي", sub: "رقم الوثيقة، شركة التأمين" },
-                                { icon: "✈️", title: "تذاكر السفر", sub: "سجل الإجازات والتذاكر" },
-                                { icon: "📄", title: "العقد الوظيفي", sub: "تاريخ التوظيف، بنود العقد" },
-                              ].map((doc) => (
-                                <div key={doc.title} className="flex items-start gap-2.5 px-3 py-2.5 rounded-lg border border-dashed border-border/60 bg-card/50">
-                                  <span className="text-lg mt-0.5">{doc.icon}</span>
-                                  <div className="min-w-0">
-                                    <p className="text-xs font-semibold text-foreground">{doc.title}</p>
-                                    <p className="text-[10px] text-muted-foreground">{doc.sub}</p>
-                                    <p className="text-[9px] text-muted-foreground/50 mt-0.5">قيد التطوير</p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
                         </div>
                       )}
 
                       {/* ── Edit mode (inline) ── */}
                       {staffProfileEditing && (
                         <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-bold text-primary flex items-center gap-1.5"><Edit2 className="w-4 h-4" /> وضع التعديل</p>
-                            <button onClick={() => { setStaffProfileEditing(false); setEditId(null); }} className="text-xs text-muted-foreground hover:text-foreground underline">إلغاء</button>
-                          </div>
+                          <p className="text-sm font-bold text-primary flex items-center gap-1.5"><Edit2 className="w-4 h-4" /> وضع التعديل</p>
 
                           {/* Name + Salary */}
                           <div className="grid grid-cols-2 gap-3">
@@ -15036,6 +15081,43 @@ function StaffTab() {
                             </div>
                           </div>
 
+                          {/* Personal Info */}
+                          <div className="rounded-xl border border-border/60 p-3 bg-muted/10">
+                            <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5"><User className="w-3.5 h-3.5" /> البيانات الشخصية</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-xs text-muted-foreground mb-1 block">رقم الهوية / الإقامة</label>
+                                <Input value={editForm.nationalId} onChange={(e) => setEditForm((f) => ({ ...f, nationalId: e.target.value }))} className="h-9 text-sm" placeholder="10 أرقام" inputMode="numeric" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-muted-foreground mb-1 block">رقم الجوال</label>
+                                <Input value={editForm.phoneNum} onChange={(e) => setEditForm((f) => ({ ...f, phoneNum: e.target.value }))} className="h-9 text-sm" placeholder="05xxxxxxxx" inputMode="tel" dir="ltr" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-muted-foreground mb-1 block">تاريخ الميلاد</label>
+                                <Input type="date" value={editForm.birthDate} onChange={(e) => setEditForm((f) => ({ ...f, birthDate: e.target.value }))} className="h-9 text-sm" dir="ltr" />
+                              </div>
+                              <div>
+                                <label className="text-xs text-muted-foreground mb-1 block">تاريخ التعيين</label>
+                                <Input type="date" value={editForm.hireDate} onChange={(e) => setEditForm((f) => ({ ...f, hireDate: e.target.value }))} className="h-9 text-sm" dir="ltr" />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Active Status */}
+                          <div className="rounded-xl border border-border/60 p-3 bg-muted/10 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <UserCheck className="w-3.5 h-3.5 text-muted-foreground" />
+                              <span className="text-xs font-semibold text-muted-foreground">حالة الموظف</span>
+                            </div>
+                            <label className="flex items-center gap-2.5 cursor-pointer">
+                              <Switch checked={editForm.isActive} onCheckedChange={(v) => setEditForm((f) => ({ ...f, isActive: v }))} />
+                              <span className={`text-sm font-semibold ${editForm.isActive ? "text-green-600" : "text-muted-foreground"}`}>
+                                {editForm.isActive ? "نشط" : "غير نشط"}
+                              </span>
+                            </label>
+                          </div>
+
                           {/* Permissions */}
                           <div className="rounded-xl border border-border/60 p-3 bg-muted/10">
                             <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" /> الصلاحيات</p>
@@ -15052,14 +15134,24 @@ function StaffTab() {
                             </div>
                           </div>
 
-                          <Button
-                            className="w-full h-11 font-bold text-sm"
-                            disabled={editStaff.isPending || !editForm.name.trim()}
-                            onClick={saveEdit}
-                          >
-                            {editStaff.isPending ? <Loader2 className="w-4 h-4 animate-spin me-1.5" /> : <Check className="w-4 h-4 me-1.5" />}
-                            حفظ جميع التعديلات
-                          </Button>
+                          <div className="flex gap-2 pt-1">
+                            <Button
+                              className="flex-1 h-11 font-bold text-sm"
+                              disabled={editStaff.isPending || !editForm.name.trim()}
+                              onClick={saveEdit}
+                            >
+                              {editStaff.isPending ? <Loader2 className="w-4 h-4 animate-spin me-1.5" /> : <Check className="w-4 h-4 me-1.5" />}
+                              حفظ جميع التعديلات
+                            </Button>
+                            <Button
+                              variant="outline"
+                              className="h-11 px-5 font-semibold text-sm"
+                              onClick={() => { setStaffProfileEditing(false); setEditId(null); }}
+                              disabled={editStaff.isPending}
+                            >
+                              إلغاء
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>

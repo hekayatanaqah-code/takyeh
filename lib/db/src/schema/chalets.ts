@@ -447,6 +447,10 @@ export const ownerStaffTable = pgTable("owner_staff", {
   isActive: boolean("is_active").notNull().default(true),
   assignedToType: text("assigned_to_type").notNull().default("all"),
   assignedToId: integer("assigned_to_id"),
+  nationalId: text("national_id"),
+  phoneNum: text("phone_num"),
+  birthDate: text("birth_date"),
+  hireDate: text("hire_date"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type OwnerStaff = typeof ownerStaffTable.$inferSelect;

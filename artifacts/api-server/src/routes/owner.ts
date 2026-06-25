@@ -2751,6 +2751,10 @@ router.post("/staff", async (req, res) => {
     permissions: z.record(z.boolean()).optional(),
     assignedToType: z.enum(["all", "chalet", "service"]).optional(),
     assignedToId: z.number().int().positive().optional(),
+    nationalId: z.string().optional(),
+    phoneNum: z.string().optional(),
+    birthDate: z.string().optional(),
+    hireDate: z.string().optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
@@ -2761,6 +2765,10 @@ router.post("/staff", async (req, res) => {
     permissions: body.data.permissions ?? {},
     assignedToType: body.data.assignedToType ?? "all",
     assignedToId: body.data.assignedToId ?? null,
+    nationalId: body.data.nationalId || null,
+    phoneNum: body.data.phoneNum || null,
+    birthDate: body.data.birthDate || null,
+    hireDate: body.data.hireDate || null,
   };
 
   if (body.data.username) {
@@ -2790,6 +2798,10 @@ router.patch("/staff/:id", async (req, res) => {
     permissions: z.record(z.boolean()).optional(),
     assignedToType: z.enum(["all", "chalet", "service"]).optional(),
     assignedToId: z.number().int().positive().nullable().optional(),
+    nationalId: z.string().optional(),
+    phoneNum: z.string().optional(),
+    birthDate: z.string().optional(),
+    hireDate: z.string().optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
@@ -2802,6 +2814,10 @@ router.patch("/staff/:id", async (req, res) => {
   if (body.data.permissions !== undefined) staffPatch.permissions = body.data.permissions;
   if (body.data.assignedToType !== undefined) staffPatch.assignedToType = body.data.assignedToType;
   if (body.data.assignedToId !== undefined) staffPatch.assignedToId = body.data.assignedToId;
+  if (body.data.nationalId !== undefined) staffPatch.nationalId = body.data.nationalId || null;
+  if (body.data.phoneNum !== undefined) staffPatch.phoneNum = body.data.phoneNum || null;
+  if (body.data.birthDate !== undefined) staffPatch.birthDate = body.data.birthDate || null;
+  if (body.data.hireDate !== undefined) staffPatch.hireDate = body.data.hireDate || null;
 
   const [row] = await db
     .update(ownerStaffTable)
