@@ -13990,6 +13990,16 @@ function StaffTab() {
       setStaffCalMode(_staffOwnerProfile.salaryCalPref as "gregorian" | "hijri");
     }
   }, [_staffOwnerProfile?.salaryCalPref]);
+
+  /* Live sync: account-settings salary cal pref change fires this event instantly */
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const v = (e as CustomEvent<string>).detail as "gregorian" | "hijri";
+      if (v === "gregorian" || v === "hijri") setStaffCalMode(v);
+    };
+    window.addEventListener("salaryCalPrefChanged", handler);
+    return () => window.removeEventListener("salaryCalPrefChanged", handler);
+  }, []);
   /* Username uniqueness check */
   const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
   useEffect(() => {
@@ -22966,6 +22976,7 @@ function OwnerProfileTab() {
                     onClick={() => {
                       setSalaryCalPrefLocal(v);
                       localStorage.setItem("staffCalDefault", v);
+                      window.dispatchEvent(new CustomEvent("salaryCalPrefChanged", { detail: v }));
                       apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ salaryCalPref: v }) });
                     }}
                     className={`px-4 py-2 font-semibold transition-colors ${salaryCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
