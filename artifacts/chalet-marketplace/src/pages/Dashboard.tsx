@@ -14689,21 +14689,9 @@ function StaffTab() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-2">
-                {/* Month picker */}
+                {/* Month picker — calendar type driven automatically from account settings */}
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-muted-foreground font-medium">الشهر</label>
-                    <div className="flex items-center gap-0.5 bg-muted rounded-lg p-0.5">
-                      <button
-                        onClick={() => setStaffCalMode("gregorian")}
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition-all ${staffCalMode === "gregorian" ? "bg-background shadow text-primary" : "text-muted-foreground hover:text-foreground"}`}
-                      >م</button>
-                      <button
-                        onClick={() => setStaffCalMode("hijri")}
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition-all ${staffCalMode === "hijri" ? "bg-background shadow text-primary" : "text-muted-foreground hover:text-foreground"}`}
-                      >هـ</button>
-                    </div>
-                  </div>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">الشهر</label>
                   <Select value={payForm.month} onValueChange={(v) => setPayForm((f) => ({ ...f, month: v }))}>
                     <SelectTrigger className="h-10">
                       <SelectValue />
@@ -14744,21 +14732,21 @@ function StaffTab() {
                 {payTarget && (
                   <div className="bg-muted/50 rounded-xl p-4 space-y-1.5 text-sm">
                     <div className="flex justify-between text-muted-foreground">
-                      <span>الأساسي</span><span>{formatAmount(Number(payTarget.baseSalary))}</span>
+                      <span>الأساسي</span><span>{fmtSAR(Number(payTarget.baseSalary))}</span>
                     </div>
                     {(parseFloat(payForm.bonus)||0) > 0 && (
                       <div className="flex justify-between text-green-600">
-                        <span>مكافأة</span><span>+ {formatAmount(parseFloat(payForm.bonus)||0)}</span>
+                        <span>مكافأة</span><span>+ {fmtSAR(parseFloat(payForm.bonus)||0)}</span>
                       </div>
                     )}
                     {(parseFloat(payForm.deduction)||0) > 0 && (
                       <div className="flex justify-between text-red-600">
-                        <span>خصم</span><span>- {formatAmount(parseFloat(payForm.deduction)||0)}</span>
+                        <span>خصم</span><span>- {fmtSAR(parseFloat(payForm.deduction)||0)}</span>
                       </div>
                     )}
                     <div className="flex justify-between font-bold text-foreground border-t border-border pt-2">
                       <span>صافي الراتب</span>
-                      <span className={payNet >= 0 ? "text-green-600" : "text-destructive"}>{formatAmount(payNet)}</span>
+                      <span className={payNet >= 0 ? "text-green-600" : "text-destructive"}>{fmtSAR(payNet)}</span>
                     </div>
                   </div>
                 )}
