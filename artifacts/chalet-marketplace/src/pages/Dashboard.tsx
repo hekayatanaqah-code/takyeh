@@ -13976,18 +13976,20 @@ function StaffTab() {
   const [masterMonth, setMasterMonth] = useState(currentMonth);
   /* Staff table dialogs */
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{ id: number; name: string } | null>(null);
-  /* Salary calendar mode — seeded from owner's bookings preference */
-  const { data: _staffOwnerProfile } = useQuery<{ bookingsCalPref?: string }>({
+  /* Salary calendar mode — seeded from owner's dedicated salary calendar preference */
+  const { data: _staffOwnerProfile } = useQuery<{ salaryCalPref?: string }>({
     queryKey: ["owner", "profile-btype"],
     queryFn: async () => { const r = await apiFetch("/owner/profile"); return r.ok ? r.json() : {}; },
     staleTime: 5 * 60 * 1000,
   });
-  const [staffCalMode, setStaffCalMode] = useState<"gregorian" | "hijri">("gregorian");
+  const [staffCalMode, setStaffCalMode] = useState<"gregorian" | "hijri">(
+    (localStorage.getItem("staffCalDefault") as "gregorian" | "hijri") ?? "gregorian"
+  );
   useEffect(() => {
-    if (_staffOwnerProfile?.bookingsCalPref) {
-      setStaffCalMode(_staffOwnerProfile.bookingsCalPref as "gregorian" | "hijri");
+    if (_staffOwnerProfile?.salaryCalPref) {
+      setStaffCalMode(_staffOwnerProfile.salaryCalPref as "gregorian" | "hijri");
     }
-  }, [_staffOwnerProfile?.bookingsCalPref]);
+  }, [_staffOwnerProfile?.salaryCalPref]);
   /* Username uniqueness check */
   const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken">("idle");
   useEffect(() => {
@@ -14032,6 +14034,9 @@ function StaffTab() {
     }
     return d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
   }, [staffCalMode]);
+
+  /* Explicit SAR formatter — guarantees ر.س without relying on ICU locale data */
+  const fmtSAR = (n: number) => `${Number(n).toLocaleString("ar-SA", { maximumFractionDigits: 0 })} ر.س`;
 
   /* ── queries ── */
   const { data: staff = [], isLoading } = useQuery<StaffMember[]>({
@@ -14576,10 +14581,10 @@ function StaffTab() {
                         {isMock && <span className="block text-[10px] text-amber-600 font-normal">تجريبي</span>}
                       </td>
                       <td className="text-right px-3 py-2.5 text-muted-foreground">{salaryMonthLabel(log.month)}</td>
-                      <td className="text-right px-3 py-2.5">{formatAmount(base)}</td>
-                      <td className="text-right px-3 py-2.5 text-green-600">{bonus > 0 ? `+${formatAmount(bonus)}` : "—"}</td>
-                      <td className="text-right px-3 py-2.5 text-red-600">{deduction > 0 ? `-${formatAmount(deduction)}` : "—"}</td>
-                      <td className="text-right px-3 py-2.5 font-bold text-foreground">{formatAmount(net)}</td>
+                      <td className="text-right px-3 py-2.5">{fmtSAR(base)}</td>
+                      <td className="text-right px-3 py-2.5 text-green-600">{bonus > 0 ? `+${fmtSAR(bonus)}` : "—"}</td>
+                      <td className="text-right px-3 py-2.5 text-red-600">{deduction > 0 ? `-${fmtSAR(deduction)}` : "—"}</td>
+                      <td className="text-right px-3 py-2.5 font-bold text-foreground">{fmtSAR(net)}</td>
                       <td className="text-right px-3 py-2.5 text-muted-foreground text-xs">
                         {log.paidAt ? new Date(paidAtStr).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                       </td>
@@ -15192,10 +15197,10 @@ function StaffTab() {
                                 return (
                                   <tr key={log.id} className={`border-b border-border/20 last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
                                     <td className="px-4 py-3 font-semibold text-foreground">{salaryMonthLabel(log.month)}</td>
-                                    <td className="px-4 py-3 text-foreground">{formatAmount(base)}</td>
-                                    <td className="px-4 py-3 text-green-600">{bonus > 0 ? `+${formatAmount(bonus)}` : "—"}</td>
-                                    <td className="px-4 py-3 text-destructive">{deduction > 0 ? `-${formatAmount(deduction)}` : "—"}</td>
-                                    <td className="px-4 py-3 font-bold text-foreground">{formatAmount(net)}</td>
+                                    <td className="px-4 py-3 text-foreground">{fmtSAR(base)}</td>
+                                    <td className="px-4 py-3 text-green-600">{bonus > 0 ? `+${fmtSAR(bonus)}` : "—"}</td>
+                                    <td className="px-4 py-3 text-destructive">{deduction > 0 ? `-${fmtSAR(deduction)}` : "—"}</td>
+                                    <td className="px-4 py-3 font-bold text-foreground">{fmtSAR(net)}</td>
                                     <td className="px-4 py-3 text-muted-foreground">{paidDate}</td>
                                   </tr>
                                 );
@@ -15205,10 +15210,10 @@ function StaffTab() {
                               <tr className="bg-muted/40 border-t border-border">
                                 <td colSpan={4} className="px-4 py-2.5 text-xs font-bold text-muted-foreground">إجمالي ما صُرف</td>
                                 <td colSpan={2} className="px-4 py-2.5 font-bold text-primary text-sm">
-                                  {formatAmount(empHistory.reduce((acc: number, l: SalaryLog) => {
+                                  {fmtSAR(empHistory.reduce((acc: number, l: SalaryLog) => {
                                     const b = Number((l as any).baseSalary ?? emp.baseSalary ?? 0);
                                     return acc + b + Number(l.bonus) - Number(l.deduction);
-                                  }, 0))} ر.س
+                                  }, 0))}
                                 </td>
                               </tr>
                             </tfoot>
@@ -20289,7 +20294,7 @@ export default function Dashboard() {
   });
 
   /* ── Owner profile: fetch business_type + calendar prefs ── */
-  const { data: ownerProfile } = useQuery<{ businessType?: string; bookingsCalPref?: string; reportsCalPref?: string }>({
+  const { data: ownerProfile } = useQuery<{ businessType?: string; bookingsCalPref?: string; reportsCalPref?: string; salaryCalPref?: string }>({
     queryKey: ["owner", "profile-btype"],
     queryFn: async () => {
       const r = await apiFetch("/owner/profile");
@@ -20318,6 +20323,9 @@ export default function Dashboard() {
     if (ownerProfile.reportsCalPref) {
       const rPref = ownerProfile.reportsCalPref as "gregorian" | "hijri";
       localStorage.setItem("revCalType", rPref);
+    }
+    if (ownerProfile.salaryCalPref) {
+      localStorage.setItem("staffCalDefault", ownerProfile.salaryCalPref);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerProfile]);
@@ -22559,6 +22567,9 @@ function OwnerProfileTab() {
   const [reportsCalPrefLocal, setReportsCalPrefLocal] = useState<"gregorian" | "hijri">(
     (localStorage.getItem("revCalType") as "gregorian" | "hijri") ?? "gregorian"
   );
+  const [salaryCalPrefLocal, setSalaryCalPrefLocal] = useState<"gregorian" | "hijri">(
+    (localStorage.getItem("staffCalDefault") as "gregorian" | "hijri") ?? "gregorian"
+  );
 
   /* ── page-level state ── */
   const [loading,    setLoading]    = useState(true);
@@ -22955,6 +22966,25 @@ function OwnerProfileTab() {
                 ))}
               </div>
               <p className="text-[11px] text-muted-foreground">يحدد نوع التقويم في تبويب «التقارير المالية» عند بدء الجلسة.</p>
+            </div>
+            {/* Salary calendar preference */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">نظام الرواتب المعتمد</label>
+              <div className="flex rounded-lg border border-border overflow-hidden text-sm w-fit">
+                {(["gregorian", "hijri"] as const).map(v => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => {
+                      setSalaryCalPrefLocal(v);
+                      localStorage.setItem("staffCalDefault", v);
+                      apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ salaryCalPref: v }) });
+                    }}
+                    className={`px-4 py-2 font-semibold transition-colors ${salaryCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                  >{v === "hijri" ? "هجري" : "ميلادي"}</button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">يحدد نوع التقويم في قسم الموظفين وجداول الرواتب عند بدء الجلسة.</p>
             </div>
           </div>
         )}

@@ -567,7 +567,7 @@ router.get("/profile", async (req, res) => {
         phone = ((csResult as any).rows as Array<{ whatsapp_number: string }>)[0]?.whatsapp_number ?? "";
       }
       console.log(`[GET /owner/profile] owner_applications path: email=${email} phone=${phone}`);
-      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email, whatsappNewsSubscribe: oaRow.whatsapp_news_subscribe ?? false, businessType: oaRow.business_type ?? "both", bookingsCalPref: oaRow.bookings_cal_pref ?? "hijri", reportsCalPref: oaRow.reports_cal_pref ?? "gregorian" });
+      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email, whatsappNewsSubscribe: oaRow.whatsapp_news_subscribe ?? false, businessType: oaRow.business_type ?? "both", bookingsCalPref: oaRow.bookings_cal_pref ?? "hijri", reportsCalPref: oaRow.reports_cal_pref ?? "gregorian", salaryCalPref: oaRow.salary_cal_pref ?? "gregorian" });
     }
 
     /* ── Path 2: Replit OIDC owner — look up via chalet_submissions ── */
@@ -723,15 +723,19 @@ router.patch("/profile/calendar-prefs", requireAuth, async (req, res) => {
   try {
     const currentEmail = await resolveOwnerEmail(req);
     if (!currentEmail) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
-    const { bookingsCalPref, reportsCalPref } = req.body as { bookingsCalPref?: string; reportsCalPref?: string };
+    const { bookingsCalPref, reportsCalPref, salaryCalPref } = req.body as { bookingsCalPref?: string; reportsCalPref?: string; salaryCalPref?: string };
     const valid = ["hijri", "gregorian"];
     if (bookingsCalPref && !valid.includes(bookingsCalPref)) return res.status(400).json({ error: "قيمة غير صالحة" });
     if (reportsCalPref  && !valid.includes(reportsCalPref))  return res.status(400).json({ error: "قيمة غير صالحة" });
+    if (salaryCalPref   && !valid.includes(salaryCalPref))   return res.status(400).json({ error: "قيمة غير صالحة" });
     if (bookingsCalPref !== undefined) {
       await db.execute(sql`UPDATE owner_applications SET bookings_cal_pref = ${bookingsCalPref} WHERE email = ${currentEmail}`);
     }
     if (reportsCalPref !== undefined) {
       await db.execute(sql`UPDATE owner_applications SET reports_cal_pref = ${reportsCalPref} WHERE email = ${currentEmail}`);
+    }
+    if (salaryCalPref !== undefined) {
+      await db.execute(sql`UPDATE owner_applications SET salary_cal_pref = ${salaryCalPref} WHERE email = ${currentEmail}`);
     }
     return res.json({ ok: true });
   } catch (err) {
