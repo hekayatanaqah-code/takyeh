@@ -14676,7 +14676,7 @@ function StaffTab() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-right">
-                  <DollarSign className="w-5 h-5 text-primary" />
+                  <Banknote className="w-5 h-5 text-primary" />
                   صرف راتب – {payTarget?.name}
                 </DialogTitle>
                 <DialogDescription className="text-right text-xs">
@@ -15191,7 +15191,7 @@ function StaffTab() {
                                 const paidDate = log.paidAt ? new Date(log.paidAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "—";
                                 return (
                                   <tr key={log.id} className={`border-b border-border/20 last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
-                                    <td className="px-4 py-3 font-semibold text-foreground">{monthLabel(log.month)}</td>
+                                    <td className="px-4 py-3 font-semibold text-foreground">{salaryMonthLabel(log.month)}</td>
                                     <td className="px-4 py-3 text-foreground">{formatAmount(base)}</td>
                                     <td className="px-4 py-3 text-green-600">{bonus > 0 ? `+${formatAmount(bonus)}` : "—"}</td>
                                     <td className="px-4 py-3 text-destructive">{deduction > 0 ? `-${formatAmount(deduction)}` : "—"}</td>
