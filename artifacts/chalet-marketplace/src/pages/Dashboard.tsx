@@ -13968,7 +13968,7 @@ function StaffTab() {
   const [credForm, setCredForm] = useState({ username: "", password: "" });
   /* Pay dialog */
   const [payTarget, setPayTarget] = useState<StaffMember | null>(null);
-  const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", notes: "", generalNotes: "" });
+  const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "" });
   /* Voucher (shown in dialog after successful payment) */
   const [paidVoucher, setPaidVoucher] = useState<VoucherData | null>(null);
   /* Bulk print selection */
@@ -14051,6 +14051,54 @@ function StaffTab() {
 
   /* Explicit SAR formatter — guarantees ر.س without relying on ICU locale data */
   const fmtSAR = (n: number) => `${Number(n).toLocaleString("ar-SA", { maximumFractionDigits: 0 })} ر.س`;
+
+  /* ── Pay dialog: year/month computed values ── */
+  const payDateParsed = useMemo(() => {
+    const d = new Date(payForm.month + "-15");
+    if (staffCalMode === "hijri") {
+      const h = toHijriComponents(d);
+      return { year: h.year, monthIdx: h.month - 1 };
+    }
+    return { year: d.getFullYear(), monthIdx: d.getMonth() };
+  }, [payForm.month, staffCalMode]);
+
+  const payYearOptions = useMemo(() => {
+    if (staffCalMode === "hijri") {
+      const cy = toHijriComponents(new Date()).year;
+      return [cy - 1, cy, cy + 1];
+    }
+    const cy = new Date().getFullYear();
+    return [cy - 1, cy, cy + 1];
+  }, [staffCalMode]);
+
+  const payMonthLabels = useMemo(() => {
+    if (staffCalMode === "hijri") return HIJRI_MONTHS_AR;
+    return Array.from({ length: 12 }, (_, i) =>
+      new Date(payDateParsed.year, i, 1).toLocaleDateString("ar-SA", { month: "long" })
+    );
+  }, [staffCalMode, payDateParsed.year]);
+
+  const applyPayDate = (year: number, monthIdx: number) => {
+    let ym: string;
+    if (staffCalMode === "hijri") {
+      const approxGreg = Math.round((year - 622) * 365.25 / 354.367);
+      let found = false;
+      outer: for (let y = approxGreg - 1; y <= approxGreg + 2; y++) {
+        for (let m = 1; m <= 12; m++) {
+          const h = toHijriComponents(new Date(y, m - 1, 15));
+          if (h.year === year && h.month === monthIdx + 1) {
+            ym = `${y}-${String(m).padStart(2, "0")}`;
+            found = true;
+            break outer;
+          }
+        }
+      }
+      if (!found) ym = `${approxGreg}-01`;
+    } else {
+      ym = `${year}-${String(monthIdx + 1).padStart(2, "0")}`;
+    }
+    setPayForm(f => ({ ...f, month: ym! }));
+  };
 
   /* ── queries ── */
   const { data: staff = [], isLoading } = useQuery<StaffMember[]>({
@@ -14164,7 +14212,7 @@ function StaffTab() {
           qrDataUrl,
         });
       }
-      setPayForm({ month: currentMonth, bonus: "0", deduction: "0", notes: "", generalNotes: "" });
+      setPayForm({ month: currentMonth, bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "" });
     },
   });
 
@@ -14703,17 +14751,33 @@ function StaffTab() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-2">
-                {/* Month picker — calendar type driven automatically from account settings */}
+                {/* Date picker: Year + Month inline — driven by salary cal pref from account settings */}
                 <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-1 block">الشهر</label>
-                  <Select value={payForm.month} onValueChange={(v) => setPayForm((f) => ({ ...f, month: v }))}>
-                    <SelectTrigger className="h-10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {monthOptions.map((o) => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">الفترة</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select value={String(payDateParsed.year)} onValueChange={(v) => applyPayDate(Number(v), payDateParsed.monthIdx)}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {payYearOptions.map(y => (
+                          <SelectItem key={y} value={String(y)}>
+                            {staffCalMode === "hijri" ? `${toArN(y)} هـ` : `${toArN(y)} م`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={String(payDateParsed.monthIdx)} onValueChange={(v) => applyPayDate(payDateParsed.year, Number(v))}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {payMonthLabels.map((label, i) => (
+                          <SelectItem key={i} value={String(i)}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 {/* Base salary (read-only) */}
                 {payTarget && (
@@ -14733,11 +14797,19 @@ function StaffTab() {
                     <Input type="text" inputMode="numeric" value={toAr(payForm.deduction)} onChange={(e) => setPayForm((f) => ({ ...f, deduction: fromAr(e.target.value) }))} className="h-10" />
                   </div>
                 </div>
-                {/* Reason + General Notes */}
-                <div>
-                  <label className="text-xs text-muted-foreground font-medium mb-1 block">سبب المكافأة / الخصم (اختياري)</label>
-                  <Input placeholder="مثال: مكافأة أداء، غياب..." value={payForm.notes} onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))} className="h-10" />
-                </div>
+                {/* Conditional reason fields — appear only when relevant amount > 0 */}
+                {(parseFloat(payForm.bonus) || 0) > 0 && (
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium mb-1 block">سبب المكافأة / البدل (اختياري)</label>
+                    <Input placeholder="مثال: مكافأة أداء، حضور متميز..." value={payForm.bonusNotes} onChange={(e) => setPayForm((f) => ({ ...f, bonusNotes: e.target.value }))} className="h-10" />
+                  </div>
+                )}
+                {(parseFloat(payForm.deduction) || 0) > 0 && (
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium mb-1 block">سبب الخصم (اختياري)</label>
+                    <Input placeholder="مثال: غياب، تأخر، سلفة..." value={payForm.deductionNotes} onChange={(e) => setPayForm((f) => ({ ...f, deductionNotes: e.target.value }))} className="h-10" />
+                  </div>
+                )}
                 <div>
                   <label className="text-xs text-muted-foreground font-medium mb-1 block">ملاحظات عامة (اختياري)</label>
                   <Input placeholder="مثال: دوام نصف شهر، تسوية مالية..." value={payForm.generalNotes} onChange={(e) => setPayForm((f) => ({ ...f, generalNotes: e.target.value }))} className="h-10" />
@@ -14775,7 +14847,7 @@ function StaffTab() {
                       month: payForm.month,
                       bonus: parseFloat(payForm.bonus) || 0,
                       deduction: parseFloat(payForm.deduction) || 0,
-                      notes: [payForm.notes, payForm.generalNotes].filter(Boolean).join(" — ") || undefined,
+                      notes: [payForm.bonusNotes, payForm.deductionNotes, payForm.generalNotes].filter(Boolean).join(" — ") || undefined,
                     });
                   }}
                 >
