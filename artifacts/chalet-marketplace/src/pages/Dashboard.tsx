@@ -13986,8 +13986,12 @@ function StaffTab() {
     (localStorage.getItem("staffCalDefault") as "gregorian" | "hijri") ?? "gregorian"
   );
   useEffect(() => {
-    if (_staffOwnerProfile?.salaryCalPref) {
-      setStaffCalMode(_staffOwnerProfile.salaryCalPref as "gregorian" | "hijri");
+    /* Only seed from DB if localStorage key is absent (first-time user).
+       Prevents stale cache (5-min window) from overriding a live user selection. */
+    if (_staffOwnerProfile?.salaryCalPref && !localStorage.getItem("staffCalDefault")) {
+      const v = _staffOwnerProfile.salaryCalPref as "gregorian" | "hijri";
+      localStorage.setItem("staffCalDefault", v);
+      setStaffCalMode(v);
     }
   }, [_staffOwnerProfile?.salaryCalPref]);
 
@@ -20322,7 +20326,9 @@ export default function Dashboard() {
       const rPref = ownerProfile.reportsCalPref as "gregorian" | "hijri";
       localStorage.setItem("revCalType", rPref);
     }
-    if (ownerProfile.salaryCalPref) {
+    /* salaryCalPref: only seed localStorage if key not yet set (first-time user).
+       Account settings onClick is the sole authority for live changes. */
+    if (ownerProfile.salaryCalPref && !localStorage.getItem("staffCalDefault")) {
       localStorage.setItem("staffCalDefault", ownerProfile.salaryCalPref);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
