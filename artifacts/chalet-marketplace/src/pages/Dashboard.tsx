@@ -13944,6 +13944,7 @@ function StaffTab() {
   const currentMonth = `${_nowStaff.getFullYear()}-${String(_nowStaff.getMonth() + 1).padStart(2, "0")}`;
   /* ── state ── */
   const [addForm, setAddForm] = useState({ name: "", baseSalary: "", username: "", password: "", nationalId: "", phoneNum: "", birthDate: "", hireDate: "" });
+  const [showAddStaff, setShowAddStaff] = useState(false);
   const [addPerms, setAddPerms] = useState<StaffPermissions>({});
   const [addAssignType, setAddAssignType] = useState<"all" | "chalet" | "service">("all");
   const [addAssignId, setAddAssignId] = useState<string>("");
@@ -14135,6 +14136,7 @@ function StaffTab() {
       setAddPerms({});
       setAddAssignType("all");
       setAddAssignId("");
+      setShowAddStaff(false);
     },
   });
 
@@ -14251,163 +14253,188 @@ function StaffTab() {
 
   return (
     <div className="space-y-5">
-      {/* ── Add Staff Form ── */}
-      <div className="bg-card border border-border rounded-2xl p-5">
-        <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
-          <UserCheck className="w-4 h-4 text-primary" />
+      {/* ── Add Staff Button ── */}
+      <div className="flex justify-start">
+        <Button onClick={() => setShowAddStaff(true)} className="h-10 px-5 font-bold">
+          <Plus className="w-4 h-4 me-1.5" />
           إضافة موظف جديد
-        </h2>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (isReadOnly) { onBlockedEdit(); return; }
-            if (usernameStatus === "taken") return;
-            const s = parseFloat(addForm.baseSalary);
-            if (!addForm.name || isNaN(s)) return;
-            const hasAnyPerm = Object.values(addPerms).some(Boolean);
-            if (hasAnyPerm && (!addForm.username.trim() || !addForm.password.trim())) {
-              toast({ title: "بيانات الدخول مطلوبة", description: "يجب إدخال اسم المستخدم وكلمة المرور عند تفعيل أي صلاحية للموظف", variant: "destructive" });
-              return;
-            }
-            addStaff.mutate({
-              name: addForm.name,
-              baseSalary: s,
-              username: addForm.username || undefined,
-              password: addForm.password || undefined,
-              permissions: addPerms,
-              assignedToType: addAssignType,
-              assignedToId: addAssignType !== "all" && addAssignId ? Number(addAssignId) : undefined,
-              nationalId: addForm.nationalId || undefined,
-              phoneNum: addForm.phoneNum || undefined,
-              birthDate: addForm.birthDate || undefined,
-              hireDate: addForm.hireDate || undefined,
-            });
-          }}
-          className="space-y-4"
-        >
-          {/* Basic Info */}
-          <div className="flex gap-3 flex-wrap">
-            <Input placeholder="الاسم الكامل" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-[140px] h-11" required />
-            <Input type="text" inputMode="numeric" placeholder="الراتب الأساسي (ر.س)" value={toAr(addForm.baseSalary)} onChange={(e) => setAddForm((f) => ({ ...f, baseSalary: fromAr(e.target.value) }))} className="flex-1 min-w-[160px] h-11" required />
-          </div>
+        </Button>
+      </div>
 
-          {/* Personal Info */}
-          <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
-            <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5" /> البيانات الشخصية <span className="font-normal">(اختياري)</span>
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <Input placeholder="رقم الهوية / الإقامة" value={addForm.nationalId} onChange={(e) => setAddForm((f) => ({ ...f, nationalId: e.target.value }))} className="h-10 text-sm" inputMode="numeric" />
-              <Input placeholder="رقم الجوال (05xxxxxxxx)" value={addForm.phoneNum} onChange={(e) => setAddForm((f) => ({ ...f, phoneNum: e.target.value }))} className="h-10 text-sm" inputMode="tel" dir="ltr" />
-              <div>
-                <label className="text-[10px] text-muted-foreground mb-1 block">تاريخ الميلاد</label>
-                <Input type="date" value={addForm.birthDate} onChange={(e) => setAddForm((f) => ({ ...f, birthDate: e.target.value }))} className="h-10 text-sm" dir="ltr" />
-              </div>
-              <div>
-                <label className="text-[10px] text-muted-foreground mb-1 block">تاريخ التعيين</label>
-                <Input type="date" value={addForm.hireDate} onChange={(e) => setAddForm((f) => ({ ...f, hireDate: e.target.value }))} className="h-10 text-sm" dir="ltr" />
-              </div>
+      {/* ── Add Staff Modal ── */}
+      <Dialog open={showAddStaff} onOpenChange={(open) => {
+        if (!open) {
+          setShowAddStaff(false);
+          setAddForm({ name: "", baseSalary: "", username: "", password: "", nationalId: "", phoneNum: "", birthDate: "", hireDate: "" });
+          setAddPerms({});
+          setAddAssignType("all");
+          setAddAssignId("");
+          setUsernameStatus("idle");
+        }
+      }}>
+        <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <UserCheck className="w-4 h-4 text-primary" />
+              إضافة موظف جديد
+            </DialogTitle>
+            <DialogDescription>أدخل بيانات الموظف ثم اضغط حفظ</DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (isReadOnly) { onBlockedEdit(); return; }
+              if (usernameStatus === "taken") return;
+              const s = parseFloat(addForm.baseSalary);
+              if (!addForm.name || isNaN(s)) return;
+              const hasAnyPerm = Object.values(addPerms).some(Boolean);
+              if (hasAnyPerm && (!addForm.username.trim() || !addForm.password.trim())) {
+                toast({ title: "بيانات الدخول مطلوبة", description: "يجب إدخال اسم المستخدم وكلمة المرور عند تفعيل أي صلاحية للموظف", variant: "destructive" });
+                return;
+              }
+              addStaff.mutate({
+                name: addForm.name,
+                baseSalary: s,
+                username: addForm.username || undefined,
+                password: addForm.password || undefined,
+                permissions: addPerms,
+                assignedToType: addAssignType,
+                assignedToId: addAssignType !== "all" && addAssignId ? Number(addAssignId) : undefined,
+                nationalId: addForm.nationalId || undefined,
+                phoneNum: addForm.phoneNum || undefined,
+                birthDate: addForm.birthDate || undefined,
+                hireDate: addForm.hireDate || undefined,
+              });
+            }}
+            className="space-y-4"
+          >
+            {/* Basic Info */}
+            <div className="flex gap-3 flex-wrap">
+              <Input placeholder="الاسم الكامل" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-[140px] h-11" required />
+              <Input type="text" inputMode="numeric" placeholder="الراتب الأساسي (ر.س)" value={toAr(addForm.baseSalary)} onChange={(e) => setAddForm((f) => ({ ...f, baseSalary: fromAr(e.target.value) }))} className="flex-1 min-w-[160px] h-11" required />
             </div>
-          </div>
 
-          {/* Unit Assignment */}
-          {(staffChalets.length > 0 || staffProviders.length > 0) && (
+            {/* Personal Info */}
             <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
               <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
-                <Briefcase className="w-3.5 h-3.5" /> الوحدة المكلّفة
+                <User className="w-3.5 h-3.5" /> البيانات الشخصية <span className="font-normal">(اختياري)</span>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Input placeholder="رقم الهوية / الإقامة" value={addForm.nationalId} onChange={(e) => setAddForm((f) => ({ ...f, nationalId: e.target.value }))} className="h-10 text-sm" inputMode="numeric" />
+                <Input placeholder="رقم الجوال (05xxxxxxxx)" value={addForm.phoneNum} onChange={(e) => setAddForm((f) => ({ ...f, phoneNum: e.target.value }))} className="h-10 text-sm" inputMode="tel" dir="ltr" />
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-1 block">تاريخ الميلاد</label>
+                  <Input type="date" value={addForm.birthDate} onChange={(e) => setAddForm((f) => ({ ...f, birthDate: e.target.value }))} className="h-10 text-sm" dir="ltr" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-1 block">تاريخ التعيين</label>
+                  <Input type="date" value={addForm.hireDate} onChange={(e) => setAddForm((f) => ({ ...f, hireDate: e.target.value }))} className="h-10 text-sm" dir="ltr" />
+                </div>
+              </div>
+            </div>
+
+            {/* Unit Assignment */}
+            {(staffChalets.length > 0 || staffProviders.length > 0) && (
+              <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
+                <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5" /> الوحدة المكلّفة
+                </p>
+                <div className="flex gap-3 flex-wrap">
+                  <Select value={addAssignType} onValueChange={(v) => { setAddAssignType(v as any); setAddAssignId(""); }}>
+                    <SelectTrigger className="h-10 flex-1 min-w-[130px] text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الوحدات</SelectItem>
+                      {staffChalets.length > 0 && <SelectItem value="chalet">وحدة محددة</SelectItem>}
+                      {staffProviders.length > 0 && <SelectItem value="service">خدمة محدّدة</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                  {addAssignType === "chalet" && staffChalets.length > 0 && (
+                    <Select value={addAssignId} onValueChange={setAddAssignId}>
+                      <SelectTrigger className="h-10 flex-1 min-w-[150px] text-sm"><SelectValue placeholder="اختر الوحدة" /></SelectTrigger>
+                      <SelectContent>
+                        {staffChalets.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nameAr ?? `شاليه #${c.id}`}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {addAssignType === "service" && staffProviders.length > 0 && (
+                    <Select value={addAssignId} onValueChange={setAddAssignId}>
+                      <SelectTrigger className="h-10 flex-1 min-w-[150px] text-sm"><SelectValue placeholder="اختر الخدمة" /></SelectTrigger>
+                      <SelectContent>
+                        {staffProviders.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.businessName}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Login Credentials */}
+            <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
+              <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5 flex-wrap">
+                <Lock className="w-3.5 h-3.5" /> بيانات دخول الموظف
+                {Object.values(addPerms).some(Boolean)
+                  ? <span className="bg-destructive/10 text-destructive text-[10px] px-1.5 py-0.5 rounded-full font-bold">إلزامي *</span>
+                  : <span className="text-muted-foreground font-normal">(اختياري)</span>}
               </p>
               <div className="flex gap-3 flex-wrap">
-                <Select value={addAssignType} onValueChange={(v) => { setAddAssignType(v as any); setAddAssignId(""); }}>
-                  <SelectTrigger className="h-10 flex-1 min-w-[130px] text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">جميع الوحدات</SelectItem>
-                    {staffChalets.length > 0 && <SelectItem value="chalet">وحدة محددة</SelectItem>}
-                    {staffProviders.length > 0 && <SelectItem value="service">خدمة محدّدة</SelectItem>}
-                  </SelectContent>
-                </Select>
-                {addAssignType === "chalet" && staffChalets.length > 0 && (
-                  <Select value={addAssignId} onValueChange={setAddAssignId}>
-                    <SelectTrigger className="h-10 flex-1 min-w-[150px] text-sm"><SelectValue placeholder="اختر الوحدة" /></SelectTrigger>
-                    <SelectContent>
-                      {staffChalets.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nameAr ?? `شاليه #${c.id}`}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )}
-                {addAssignType === "service" && staffProviders.length > 0 && (
-                  <Select value={addAssignId} onValueChange={setAddAssignId}>
-                    <SelectTrigger className="h-10 flex-1 min-w-[150px] text-sm"><SelectValue placeholder="اختر الخدمة" /></SelectTrigger>
-                    <SelectContent>
-                      {staffProviders.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.businessName}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Login Credentials */}
-          <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
-            <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5 flex-wrap">
-              <Lock className="w-3.5 h-3.5" /> بيانات دخول الموظف
-              {Object.values(addPerms).some(Boolean)
-                ? <span className="bg-destructive/10 text-destructive text-[10px] px-1.5 py-0.5 rounded-full font-bold">إلزامي *</span>
-                : <span className="text-muted-foreground font-normal">(اختياري)</span>}
-            </p>
-            <div className="flex gap-3 flex-wrap">
-              <div className="flex-1 min-w-[150px] flex flex-col gap-0.5">
+                <div className="flex-1 min-w-[150px] flex flex-col gap-0.5">
+                  <Input
+                    placeholder="اسم المستخدم (لتسجيل الدخول)"
+                    value={addForm.username}
+                    onChange={(e) => { setAddForm((f) => ({ ...f, username: e.target.value })); setUsernameStatus("idle"); }}
+                    className={`h-10 text-sm w-full ${usernameStatus === "taken" ? "border-destructive focus-visible:ring-destructive" : usernameStatus === "available" ? "border-green-500 focus-visible:ring-green-500" : ""}`}
+                    dir="ltr"
+                  />
+                  {usernameStatus === "checking" && <p className="text-[10px] text-muted-foreground px-1">جارٍ التحقق…</p>}
+                  {usernameStatus === "available" && <p className="text-[10px] text-green-600 px-1">✓ اسم المستخدم متاح</p>}
+                  {usernameStatus === "taken" && <p className="text-[10px] text-destructive px-1">✗ اسم المستخدم مستخدم مسبقاً</p>}
+                </div>
                 <Input
-                  placeholder="اسم المستخدم (لتسجيل الدخول)"
-                  value={addForm.username}
-                  onChange={(e) => { setAddForm((f) => ({ ...f, username: e.target.value })); setUsernameStatus("idle"); }}
-                  className={`h-10 text-sm w-full ${usernameStatus === "taken" ? "border-destructive focus-visible:ring-destructive" : usernameStatus === "available" ? "border-green-500 focus-visible:ring-green-500" : ""}`}
+                  type="password"
+                  placeholder="كلمة المرور (٦ أحرف أو أكثر)"
+                  value={addForm.password}
+                  onChange={(e) => setAddForm((f) => ({ ...f, password: e.target.value }))}
+                  className="flex-1 min-w-[150px] h-10 text-sm"
                   dir="ltr"
                 />
-                {usernameStatus === "checking" && <p className="text-[10px] text-muted-foreground px-1">جارٍ التحقق…</p>}
-                {usernameStatus === "available" && <p className="text-[10px] text-green-600 px-1">✓ اسم المستخدم متاح</p>}
-                {usernameStatus === "taken" && <p className="text-[10px] text-destructive px-1">✗ اسم المستخدم مستخدم مسبقاً</p>}
               </div>
-              <Input
-                type="password"
-                placeholder="كلمة المرور (٦ أحرف أو أكثر)"
-                value={addForm.password}
-                onChange={(e) => setAddForm((f) => ({ ...f, password: e.target.value }))}
-                className="flex-1 min-w-[150px] h-10 text-sm"
-                dir="ltr"
-              />
             </div>
-          </div>
 
-          {/* Permissions */}
-          <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
-            <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
-              <Settings className="w-3.5 h-3.5" /> صلاحيات الموظف
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {ALL_PERM_KEYS.map((key) => {
-                const info = PERM_LABELS[key];
-                return (
-                  <label key={key} className="flex items-start gap-3 cursor-pointer group">
-                    <Switch
-                      checked={!!addPerms[key]}
-                      onCheckedChange={(v) => setAddPerms((p) => ({ ...p, [key]: v }))}
-                      className="mt-0.5 shrink-0"
-                    />
-                    <span className="text-xs">
-                      <span className="font-semibold text-foreground">{info.icon} {info.label}</span>
-                      <span className="block text-muted-foreground mt-0.5">{info.description}</span>
-                    </span>
-                  </label>
-                );
-              })}
+            {/* Permissions */}
+            <div className="border border-border/60 rounded-xl p-4 bg-muted/20">
+              <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
+                <Settings className="w-3.5 h-3.5" /> صلاحيات الموظف
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {ALL_PERM_KEYS.map((key) => {
+                  const info = PERM_LABELS[key];
+                  return (
+                    <label key={key} className="flex items-start gap-3 cursor-pointer group">
+                      <Switch
+                        checked={!!addPerms[key]}
+                        onCheckedChange={(v) => setAddPerms((p) => ({ ...p, [key]: v }))}
+                        className="mt-0.5 shrink-0"
+                      />
+                      <span className="text-xs">
+                        <span className="font-semibold text-foreground">{info.icon} {info.label}</span>
+                        <span className="block text-muted-foreground mt-0.5">{info.description}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          <Button type="submit" className="h-11 px-5 font-bold w-full sm:w-auto" disabled={addStaff.isPending}>
-            <Plus className="w-4 h-4 me-1.5" />
-            إضافة الموظف
-          </Button>
-        </form>
-      </div>
+            <DialogFooter className="gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={() => setShowAddStaff(false)} className="h-10">إلغاء</Button>
+              <Button type="submit" className="h-10 px-5 font-bold" disabled={addStaff.isPending}>
+                {addStaff.isPending ? <Loader2 className="w-4 h-4 animate-spin me-1.5" /> : <Plus className="w-4 h-4 me-1.5" />}
+                حفظ الموظف
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Staff Cards ── */}
       <div className="bg-card border border-border rounded-2xl p-5">
