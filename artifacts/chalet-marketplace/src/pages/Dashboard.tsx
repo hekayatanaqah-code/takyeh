@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback, createContext, useCo
 import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import QRCode from "qrcode";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
@@ -35,13 +36,12 @@ import {
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
-  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays, PieChart, Save, ScrollText, Check,
+  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays, PieChart, Save, ScrollText, Check, Printer,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid,
 } from "recharts";
-import QRCode from "qrcode";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -13598,7 +13598,7 @@ function ExpensesTab() {
   );
 }
 
-/* ── Salary Voucher Printer ──────────────────────── */
+/* ── Salary Voucher HTML Builders ──────────────────────── */
 interface VoucherData {
   voucherNo: string;
   logId?: number;
@@ -13611,55 +13611,48 @@ interface VoucherData {
   deduction: number;
   net: number;
   notes?: string;
-  qrDataUrl?: string;
 }
 
-async function buildVoucherQR(logId: number | undefined, voucherNo: string): Promise<string> {
-  try {
-    const verifyUrl = logId
-      ? `${window.location.origin}/dashboard?tab=staff&verify=${logId}`
-      : `${window.location.origin}/dashboard?voucher=${encodeURIComponent(voucherNo)}`;
-    return await QRCode.toDataURL(verifyUrl, {
-      margin: 1,
-      width: 180,
-      color: { dark: "#1a1a1a", light: "#ffffff" },
-    });
-  } catch { return ""; }
+function fmtMonthForPrint(ym: string, calMode: "hijri" | "gregorian"): string {
+  const d = new Date(ym + "-15");
+  if (calMode === "hijri") {
+    const h = toHijriComponents(d);
+    return `${HIJRI_MONTHS_AR[h.month - 1]} ${h.year} هـ`;
+  }
+  return d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
 }
 
-function printSalaryVoucher(v: VoucherData) {
-  const win = window.open("", "_blank", "width=794,height=1123");
-  if (!win) return;
-  const monthStr = monthLabel(v.month);
-  const dateStr = new Date(v.paidAt).toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
-  win.document.write(`<!DOCTYPE html>
+function fmtDateForPrint(iso: string, calMode: "hijri" | "gregorian"): string {
+  const d = new Date(iso);
+  if (calMode === "hijri") {
+    const h = toHijriComponents(d);
+    return `${h.day} ${HIJRI_MONTHS_AR[h.month - 1]} ${h.year} هـ`;
+  }
+  return d.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"): string {
+  const monthStr = fmtMonthForPrint(v.month, calMode);
+  const dateStr  = fmtDateForPrint(v.paidAt, calMode);
+  return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>مسيّر رواتب – ${v.staffName}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background:#fff; color:#111; direction:rtl; }
   .page { max-width: 794px; margin: 0 auto; padding: 40px 48px; min-height: 1123px; position: relative; }
-  /* header */
-  .header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; border-bottom: 3px solid #b8860b; padding-bottom: 18px; margin-bottom: 24px; }
-  .brand { display: flex; flex-direction: column; gap: 2px; }
-  .brand-name { font-size: 26px; font-weight: 800; color: #b8860b; letter-spacing: -0.5px; }
-  .brand-sub  { font-size: 12px; color: #666; }
+  .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #b8860b; padding-bottom: 18px; margin-bottom: 24px; }
+  .brand-name { font-size: 26px; font-weight: 800; color: #b8860b; }
+  .brand-sub  { font-size: 12px; color: #666; margin-top: 3px; }
   .voucher-badge { background: #b8860b; color: #fff; border-radius: 10px; padding: 8px 18px; text-align: center; }
   .voucher-badge-title { font-size: 15px; font-weight: 700; }
   .voucher-badge-no   { font-size: 11px; opacity: .85; margin-top: 2px; }
-  /* QR */
-  .qr-section { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
-  .qr-section img { width: 80px; height: 80px; border: 1px solid #e0d8c0; border-radius: 6px; padding: 2px; }
-  .qr-caption { font-size: 9px; color: #999; text-align: center; }
-  /* meta grid */
   .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
   .meta-item { background: #faf9f6; border: 1px solid #e8e2d0; border-radius: 8px; padding: 10px 14px; }
   .meta-label { font-size: 11px; color: #888; margin-bottom: 3px; }
   .meta-value { font-size: 14px; font-weight: 600; color: #111; }
-  /* salary table */
   .salary-table { width: 100%; border-collapse: collapse; margin-bottom: 28px; font-size: 14px; }
   .salary-table th { background: #b8860b; color: #fff; padding: 10px 14px; text-align: right; font-weight: 600; }
   .salary-table td { padding: 10px 14px; border-bottom: 1px solid #ede9dd; }
@@ -13667,32 +13660,22 @@ function printSalaryVoucher(v: VoucherData) {
   .salary-table .total-row td { font-weight: 700; font-size: 16px; border-top: 2px solid #b8860b; background: #fffbf0; }
   .pos { color: #16a34a; }
   .neg { color: #dc2626; }
-  .amount { font-variant-numeric: tabular-nums; }
-  /* notes */
   .notes-box { background: #faf9f6; border: 1px solid #e8e2d0; border-radius: 8px; padding: 12px 14px; margin-bottom: 28px; font-size: 13px; color: #444; }
   .notes-box strong { color: #111; display: block; margin-bottom: 4px; }
-  /* signatures */
   .sig-section { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 32px; }
   .sig-box { display: flex; flex-direction: column; gap: 8px; }
   .sig-label { font-size: 13px; font-weight: 600; color: #555; }
   .sig-name  { font-size: 15px; font-weight: 700; color: #111; }
   .sig-line  { border-bottom: 1.5px solid #999; margin-top: 40px; }
-  .sig-caption { font-size: 11px; color: #999; margin-top: 4px; }
-  /* footer */
-  .footer { position: absolute; bottom: 32px; left: 48px; right: 48px; text-align: center; font-size: 11px; color: #aaa; border-top: 1px solid #eee; padding-top: 10px; }
-  /* print */
-  @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page { padding: 20px 30px; }
-    .no-print { display: none !important; }
-  }
+  .sig-caption { font-size: 11px; color: #999; }
+  .footer { position: absolute; bottom: 32px; right: 0; left: 0; text-align: center; font-size: 11px; color: #aaa; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style>
 </head>
 <body>
 <div class="page">
-  <!-- Header -->
   <div class="header">
-    <div class="brand">
+    <div>
       <div class="brand-name">حكاية أناقة</div>
       <div class="brand-sub">منصة إدارة الشاليهات – القصيم</div>
     </div>
@@ -13700,54 +13683,29 @@ function printSalaryVoucher(v: VoucherData) {
       <div class="voucher-badge-title">مسيّر رواتب</div>
       <div class="voucher-badge-no"># ${v.voucherNo}</div>
     </div>
-    ${v.qrDataUrl ? `<div class="qr-section">
-      <img src="${v.qrDataUrl}" alt="QR للتحقق"/>
-      <div class="qr-caption">امسح للتحقق</div>
-    </div>` : '<div></div>'}
   </div>
-
-  <!-- Meta -->
   <div class="meta">
-    <div class="meta-item">
-      <div class="meta-label">اسم الموظف</div>
-      <div class="meta-value">${v.staffName}</div>
-    </div>
-    <div class="meta-item">
-      <div class="meta-label">اسم صاحب العمل</div>
-      <div class="meta-value">${v.ownerName}</div>
-    </div>
-    <div class="meta-item">
-      <div class="meta-label">فترة الراتب</div>
-      <div class="meta-value">${monthStr}</div>
-    </div>
-    <div class="meta-item">
-      <div class="meta-label">تاريخ الصرف</div>
-      <div class="meta-value">${dateStr}</div>
-    </div>
+    <div class="meta-item"><div class="meta-label">اسم الموظف</div><div class="meta-value">${v.staffName}</div></div>
+    <div class="meta-item"><div class="meta-label">صاحب العمل</div><div class="meta-value">${v.ownerName}</div></div>
+    <div class="meta-item"><div class="meta-label">فترة الراتب</div><div class="meta-value">${monthStr}</div></div>
+    <div class="meta-item"><div class="meta-label">تاريخ الصرف</div><div class="meta-value">${dateStr}</div></div>
   </div>
-
-  <!-- Salary Breakdown -->
   <table class="salary-table">
-    <thead>
-      <tr><th>البيان</th><th>المبلغ (ر.س)</th></tr>
-    </thead>
+    <thead><tr><th>البند</th><th>المبلغ (ر.س)</th></tr></thead>
     <tbody>
-      <tr><td>الراتب الأساسي</td><td class="amount">${v.baseSalary.toLocaleString("ar-SA")}</td></tr>
-      ${v.bonus > 0 ? `<tr><td class="pos">مكافأة / بدل</td><td class="pos amount">+ ${v.bonus.toLocaleString("ar-SA")}</td></tr>` : ""}
-      ${v.deduction > 0 ? `<tr><td class="neg">خصومات</td><td class="neg amount">- ${v.deduction.toLocaleString("ar-SA")}</td></tr>` : ""}
-      <tr class="total-row"><td>صافي الراتب المستحق</td><td class="amount">${v.net.toLocaleString("ar-SA")} ر.س</td></tr>
+      <tr><td>الراتب الأساسي</td><td>${v.baseSalary.toLocaleString("ar-SA")}</td></tr>
+      ${v.bonus > 0 ? `<tr><td>مكافأة / بدل</td><td class="pos">+${v.bonus.toLocaleString("ar-SA")}</td></tr>` : ""}
+      ${v.deduction > 0 ? `<tr><td>خصم</td><td class="neg">-${v.deduction.toLocaleString("ar-SA")}</td></tr>` : ""}
     </tbody>
+    <tfoot><tr class="total-row"><td>الصافي المستحق</td><td>${v.net.toLocaleString("ar-SA")} ر.س</td></tr></tfoot>
   </table>
-
-  ${v.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${v.notes}</div>` : ""}
-
-  <!-- Signatures -->
+  ${v.notes ? `<div class="notes-box"><strong>ملاحظات:</strong> ${v.notes}</div>` : ""}
   <div class="sig-section">
     <div class="sig-box">
       <div class="sig-label">توقيع صاحب العمل</div>
       <div class="sig-name">${v.ownerName}</div>
       <div class="sig-line"></div>
-      <div class="sig-caption">التوقيع والختم</div>
+      <div class="sig-caption">مفوَّض بالصرف</div>
     </div>
     <div class="sig-box">
       <div class="sig-label">توقيع الموظف / إقرار الاستلام</div>
@@ -13756,15 +13714,13 @@ function printSalaryVoucher(v: VoucherData) {
       <div class="sig-caption">التوقيع بما يفيد الاستلام</div>
     </div>
   </div>
-
   <div class="footer">
     تم إصدار هذا المسيّر إلكترونياً عبر منصة حكاية أناقة · ${new Date().getFullYear()}
   </div>
 </div>
-<script>window.onload = function(){ window.print(); };<\/script>
-</body></html>`);
-  win.document.close();
+</body></html>`;
 }
+
 
 /* ── Staff & Salaries Tab ────────────────────────── */
 interface StaffMember { id: number; name: string; username: string | null; baseSalary: string; isActive: boolean; permissions: StaffPermissions; createdAt: string; }
@@ -13793,12 +13749,9 @@ function monthLabel(ym: string) {
   return new Date(ym + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
 }
 
-/* ── Bulk Voucher Printer ─────────────────────── */
-async function printBulkVouchers(logs: any[], ownerName: string) {
-  if (logs.length === 0) return;
-  const win = window.open("", "_blank", "width=900,height=1200");
-  if (!win) return;
-
+/* ── Bulk Voucher HTML Builder ─────────────────────── */
+function buildBulkVouchersHtml(logs: any[], ownerName: string, calMode: "hijri" | "gregorian"): string {
+  if (logs.length === 0) return "";
   const pages: string[] = [];
   for (const log of logs) {
     const base = Number(log.baseSalary ?? 0);
@@ -13807,17 +13760,13 @@ async function printBulkVouchers(logs: any[], ownerName: string) {
     const net = base + bonus - deduction;
     const paidAtStr = log.paidAt ? String(log.paidAt) : new Date().toISOString();
     const voucherNo = `SAL-${log.month.replace("-","")}-${log.staffId}`;
-    const dateStr = new Date(paidAtStr).toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
-    const monthStr = monthLabel(log.month);
-    const qrDataUrl = await buildVoucherQR(log.id, voucherNo);
-    const qrHtml = qrDataUrl ? `<div class="qr-section"><img src="${qrDataUrl}" alt="QR"/><div class="qr-cap">امسح للتحقق</div></div>` : "";
-
+    const dateStr  = fmtDateForPrint(paidAtStr, calMode);
+    const monthStr = fmtMonthForPrint(log.month, calMode);
     pages.push(`
 <div class="page" style="page-break-after:always;">
   <div class="header">
     <div class="brand"><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
     <div class="badge"><div class="badge-title">مسيّر رواتب</div><div class="badge-no"># ${voucherNo}</div></div>
-    ${qrHtml}
   </div>
   <div class="meta">
     <div class="meta-item"><div class="meta-label">اسم الموظف</div><div class="meta-val">${log.staffName ?? "—"}</div></div>
@@ -13832,27 +13781,23 @@ async function printBulkVouchers(logs: any[], ownerName: string) {
       ${bonus > 0 ? `<tr><td>مكافأة</td><td class="green">+${bonus.toLocaleString("ar-SA")}</td></tr>` : ""}
       ${deduction > 0 ? `<tr><td>خصم</td><td class="red">-${deduction.toLocaleString("ar-SA")}</td></tr>` : ""}
     </tbody>
-    <tfoot><tr><td>الصافي</td><td class="net">${net.toLocaleString("ar-SA")}</td></tr></tfoot>
+    <tfoot><tr><td>الصافي</td><td class="net">${net.toLocaleString("ar-SA")} ر.س</td></tr></tfoot>
   </table>
   ${log.notes ? `<div class="notes">ملاحظات: ${log.notes}</div>` : ""}
   <div class="sigs"><div class="sig"><div class="sig-line"></div><p>توقيع صاحب العمل</p></div><div class="sig"><div class="sig-line"></div><p>توقيع الموظف</p></div></div>
 </div>`);
   }
-
-  win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
 body { font-family:'Segoe UI',Tahoma,Arial,sans-serif; direction:rtl; color:#111; }
 .page { max-width:794px; margin:0 auto; padding:40px 48px; min-height:1123px; position:relative; }
-.header { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:16px; border-bottom:3px solid #b8860b; padding-bottom:16px; margin-bottom:20px; }
+.header { display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid #b8860b; padding-bottom:16px; margin-bottom:20px; }
 .brand-name { font-size:24px; font-weight:800; color:#b8860b; }
 .brand-sub { font-size:11px; color:#888; }
 .badge { background:#b8860b; color:#fff; border-radius:10px; padding:8px 18px; text-align:center; }
 .badge-title { font-size:14px; font-weight:700; }
 .badge-no { font-size:10px; opacity:.8; }
-.qr-section { display:flex; flex-direction:column; align-items:flex-start; gap:3px; }
-.qr-section img { width:72px; height:72px; border:1px solid #ddd; border-radius:4px; }
-.qr-cap { font-size:8px; color:#aaa; }
 .meta { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px; }
 .meta-item { background:#faf9f6; border:1px solid #e8e2d0; border-radius:8px; padding:10px 12px; }
 .meta-label { font-size:10px; color:#999; margin-bottom:2px; }
@@ -13861,28 +13806,24 @@ body { font-family:'Segoe UI',Tahoma,Arial,sans-serif; direction:rtl; color:#111
 .sal-table th,.sal-table td { padding:10px 14px; border:1px solid #e8e2d0; text-align:right; }
 .sal-table thead { background:#b8860b; color:#fff; }
 .sal-table tfoot { background:#fff9ed; font-weight:700; }
-.green { color:#15803d; } .red { color:#dc2626; } .net { font-size:16px; color:#b8860b; }
+.green { color:#15803d; } .red { color:#dc2626; } .net { font-size:15px; color:#b8860b; }
 .notes { background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:12px; margin-bottom:20px; }
 .sigs { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:30px; }
 .sig { text-align:center; } .sig-line { height:1px; background:#ccc; margin-bottom:8px; } .sig p { font-size:11px; color:#888; }
-</style></head><body>${pages.join("")}</body></html>`);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 600);
+@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+</style></head><body>${pages.join("")}</body></html>`;
 }
 
-async function printMasterPayroll(filterMonth: string, logs: any[], ownerName: string) {
+
+function buildMasterPayrollHtml(filterMonth: string, logs: any[], ownerName: string, calMode: "hijri" | "gregorian"): string {
   const filtered = filterMonth ? logs.filter((l) => l.month === filterMonth) : logs;
-  if (filtered.length === 0) return;
-  const win = window.open("", "_blank", "width=860,height=700");
-  if (!win) return;
+  if (filtered.length === 0) return "";
   const total = filtered.reduce((s: number, l: any) => {
     const base = Number(l.baseSalary ?? 0);
     return s + base + Number(l.bonus) - Number(l.deduction);
   }, 0);
-  const monthStr = filterMonth ? monthLabel(filterMonth) : "كل الشهور";
-  const dateNow = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
-
+  const monthStr = filterMonth ? fmtMonthForPrint(filterMonth, calMode) : "كل الشهور";
+  const dateNow  = fmtDateForPrint(new Date().toISOString(), calMode);
   const rows = filtered.map((l: any, i: number) => {
     const base = Number(l.baseSalary ?? 0);
     const bonus = Number(l.bonus);
@@ -13897,8 +13838,7 @@ async function printMasterPayroll(filterMonth: string, logs: any[], ownerName: s
       <td style="font-weight:700;color:#b8860b">${net.toLocaleString("ar-SA")}</td>
     </tr>`;
   }).join("");
-
-  win.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
 body { font-family:'Segoe UI',Tahoma,Arial,sans-serif; direction:rtl; color:#111; padding:40px 48px; }
@@ -13911,6 +13851,7 @@ thead { background:#b8860b; color:#fff; }
 tfoot { background:#fff9ed; font-weight:700; }
 .sig-row { display:grid; grid-template-columns:1fr 1fr; gap:60px; margin-top:40px; }
 .sig { text-align:center; } .sig-line { height:1px; background:#ccc; margin-bottom:8px; } .sig p { font-size:11px; color:#888; }
+@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
 </style></head><body>
 <h1>حكاية أناقة — مسيّر رواتب جماعي</h1>
 <div class="sub">منصة إدارة الشاليهات – القصيم</div>
@@ -13928,11 +13869,9 @@ tfoot { background:#fff9ed; font-weight:700; }
   <div class="sig"><div class="sig-line"></div><p>توقيع صاحب العمل</p></div>
   <div class="sig"><div class="sig-line"></div><p>المدير المالي / المراجع</p></div>
 </div>
-</body></html>`);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 400);
+</body></html>`;
 }
+
 
 /* ──────────────────────────────────────────────── */
 function StaffTab() {
@@ -13972,6 +13911,7 @@ function StaffTab() {
   const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "" });
   /* Voucher (shown in dialog after successful payment) */
   const [paidVoucher, setPaidVoucher] = useState<VoucherData | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   /* Bulk print selection */
   const [selectedLogIds, setSelectedLogIds] = useState<Set<number>>(new Set());
   const [masterMonth, setMasterMonth] = useState(currentMonth);
@@ -14184,12 +14124,12 @@ function StaffTab() {
       if (!r.ok) throw new Error("فشل صرف الراتب");
       return r.json() as Promise<{ salaryLog: any; expense: any }>;
     },
-    onSuccess: async (result, variables) => {
+    onSuccess: (result, variables) => {
       qc.invalidateQueries({ queryKey: ["owner", "salary-logs-history"] });
       qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
       qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
       qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
-      /* Build voucher data (with QR) from the result + payTarget context */
+      /* Build voucher data from the result + payTarget context */
       if (payTarget) {
         const base  = Number(payTarget.baseSalary);
         const bonus = variables.bonus ?? 0;
@@ -14198,7 +14138,6 @@ function StaffTab() {
         const paidAt = result.salaryLog?.paidAt ?? new Date().toISOString();
         const logId  = result.salaryLog?.id as number | undefined;
         const voucherNo = `SAL-${new Date().getFullYear()}${String(new Date().getMonth()+1).padStart(2,"0")}-${payTarget.id}`;
-        const qrDataUrl = await buildVoucherQR(logId, voucherNo);
         setPaidVoucher({
           voucherNo,
           logId,
@@ -14211,7 +14150,6 @@ function StaffTab() {
           deduction,
           net,
           notes:      variables.notes,
-          qrDataUrl,
         });
       }
       setPayForm({ month: currentMonth, bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "" });
@@ -14560,7 +14498,8 @@ function StaffTab() {
                 className="h-8 text-xs gap-1.5"
                 onClick={() => {
                   const ownerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل";
-                  printMasterPayroll(masterMonth, history as any[], ownerName);
+                  const html = buildMasterPayrollHtml(masterMonth, history as any[], ownerName, staffCalMode);
+                  if (html) setPreviewHtml(html);
                 }}
               >
                 <Receipt className="w-3.5 h-3.5" />
@@ -14570,10 +14509,11 @@ function StaffTab() {
                 <Button
                   size="sm"
                   className="h-8 text-xs gap-1.5"
-                  onClick={async () => {
+                  onClick={() => {
                     const ownerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل";
                     const selected = (history as any[]).filter((l) => selectedLogIds.has(l.id));
-                    await printBulkVouchers(selected, ownerName);
+                    const html = buildBulkVouchersHtml(selected, ownerName, staffCalMode);
+                    if (html) setPreviewHtml(html);
                   }}
                 >
                   <Receipt className="w-3.5 h-3.5" />
@@ -14669,9 +14609,8 @@ function StaffTab() {
                       <td className="px-2 py-2.5 text-center">
                         {!isMock ? (
                           <button
-                            onClick={async () => {
-                              const qrDataUrl = await buildVoucherQR(log.id, voucherNo);
-                              printSalaryVoucher({
+                            onClick={() => {
+                              const html = buildSalaryVoucherHtml({
                                 voucherNo,
                                 logId:      log.id,
                                 staffName:  (log as any).staffName ?? "موظف",
@@ -14683,8 +14622,8 @@ function StaffTab() {
                                 deduction,
                                 net,
                                 notes:      log.notes ?? undefined,
-                                qrDataUrl,
-                              });
+                              }, staffCalMode);
+                              setPreviewHtml(html);
                             }}
                             className="flex items-center gap-1 text-xs text-primary hover:underline whitespace-nowrap"
                           >
@@ -14740,7 +14679,7 @@ function StaffTab() {
                 </div>
                 <Button
                   className="w-full h-11 font-bold"
-                  onClick={() => printSalaryVoucher(paidVoucher)}
+                  onClick={() => { const html = buildSalaryVoucherHtml(paidVoucher, staffCalMode); setPreviewHtml(html); }}
                 >
                   <Receipt className="w-4 h-4 me-2" />
                   طباعة مسيّر الراتب (PDF)
@@ -14897,6 +14836,48 @@ function StaffTab() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Print Preview Dialog ── */}
+      <Dialog open={!!previewHtml} onOpenChange={(open) => { if (!open) setPreviewHtml(null); }}>
+        <DialogContent className="max-w-4xl w-full max-h-[95vh] flex flex-col p-0 gap-0" dir="rtl">
+          <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
+            <h2 className="text-sm font-bold flex-1 flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-primary" />
+              معاينة المسيّر
+            </h2>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => {
+                const iframe = document.getElementById("salary-preview-iframe") as HTMLIFrameElement;
+                iframe?.contentWindow?.print();
+              }}
+            >
+              <Printer className="w-3.5 h-3.5" />
+              طباعة
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => {
+                const iframe = document.getElementById("salary-preview-iframe") as HTMLIFrameElement;
+                iframe?.contentWindow?.print();
+              }}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              حفظ كـ PDF
+            </Button>
+          </div>
+          <iframe
+            id="salary-preview-iframe"
+            srcDoc={previewHtml ?? ""}
+            className="flex-1 w-full border-0 rounded-b-lg"
+            style={{ minHeight: "600px" }}
+            title="معاينة المسيّر"
+          />
         </DialogContent>
       </Dialog>
 
