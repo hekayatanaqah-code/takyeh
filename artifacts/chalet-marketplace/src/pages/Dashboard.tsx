@@ -14755,7 +14755,7 @@ function StaffTab() {
                   <label className="text-xs text-muted-foreground font-medium mb-1 block">الفترة</label>
                   <div className="grid grid-cols-2 gap-2">
                     <select
-                      value={String(payDateParsed.year)}
+                      value={payYearState !== null ? String(payYearState) : ""}
                       onChange={(e) => {
                         const y = Number(e.target.value);
                         setPayYearState(y);
@@ -14764,6 +14764,7 @@ function StaffTab() {
                       className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring text-right"
                       dir="rtl"
                     >
+                      <option value="" disabled>اختر السنة</option>
                       {payYearOptions.map(y => (
                         <option key={y} value={String(y)}>
                           {staffCalMode === "hijri" ? `${toArN(y)} هـ` : `${toArN(y)} م`}
@@ -14772,8 +14773,12 @@ function StaffTab() {
                     </select>
                     <select
                       value={payForm.month ? String(payDateParsed.monthIdx) : ""}
-                      onChange={(e) => applyPayDate(payDateParsed.year, Number(e.target.value))}
-                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring text-right"
+                      onChange={(e) => {
+                        if (payYearState === null) return;
+                        applyPayDate(payYearState, Number(e.target.value));
+                      }}
+                      disabled={payYearState === null}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring text-right disabled:opacity-50 disabled:cursor-not-allowed"
                       dir="rtl"
                     >
                       <option value="" disabled>اختر الشهر</option>
