@@ -14724,7 +14724,7 @@ function StaffTab() {
                   onClick={() => { const html = buildSalaryVoucherHtml(paidVoucher, staffCalMode); setPreviewHtml(html); }}
                 >
                   <Receipt className="w-4 h-4 me-2" />
-                  طباعة مسيّر الراتب (PDF)
+                  معاينة إشعار صرف الراتب
                 </Button>
                 <Button
                   variant="outline"
@@ -14928,7 +14928,7 @@ function StaffTab() {
           <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
             <h2 className="text-sm font-bold flex-1 flex items-center gap-2">
               <Receipt className="w-4 h-4 text-primary" />
-              معاينة المسيّر
+              معاينة إشعار صرف الراتب
             </h2>
             <Button
               size="sm"
@@ -14959,7 +14959,7 @@ function StaffTab() {
             srcDoc={previewHtml ?? ""}
             className="flex-1 w-full border-0 rounded-b-lg"
             style={{ minHeight: "600px" }}
-            title="معاينة المسيّر"
+            title="معاينة إشعار صرف الراتب"
           />
         </DialogContent>
       </Dialog>
