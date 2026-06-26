@@ -13874,7 +13874,8 @@ thead { background:#b8860b; color:#fff; }
 tfoot { background:#fff9ed; font-weight:700; }
 .sig-row { display:grid; grid-template-columns:1fr 1fr; gap:60px; margin-top:40px; }
 .sig { text-align:center; } .sig-line { height:1px; background:#ccc; margin-bottom:8px; } .sig p { font-size:11px; color:#888; }
-@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+@page { size: auto; margin: 0mm; }
+@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:10mm 12mm; } }
 </style></head><body>
 <h1>منصة تكية الإلكترونية — كشف صرف الرواتب الجماعي</h1>
 <div class="meta-row">
@@ -13936,6 +13937,7 @@ function StaffTab() {
   /* Voucher (shown in dialog after successful payment) */
   const [paidVoucher, setPaidVoucher] = useState<VoucherData | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewTitle, setPreviewTitle] = useState("معاينة إشعار صرف الراتب");
   /* Bulk print selection */
   const [selectedLogIds, setSelectedLogIds] = useState<Set<number>>(new Set());
   const [masterMonth, setMasterMonth] = useState(currentMonth);
@@ -14913,7 +14915,7 @@ function StaffTab() {
           <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
             <h2 className="text-sm font-bold flex-1 flex items-center gap-2">
               <Receipt className="w-4 h-4 text-primary" />
-              معاينة إشعار صرف الراتب
+              {previewTitle}
             </h2>
             <Button
               size="sm"
@@ -15006,13 +15008,17 @@ function StaffTab() {
                 let filterMonth: string;
                 if (staffCalMode === "hijri") {
                   const range = getHijriMonthGregorianRange(bulkReportYear, bulkReportMonth);
-                  filterMonth = range.start ? range.start.slice(0, 7) : "";
+                  if (range.start) {
+                    const d = new Date(range.start + "T00:00:00");
+                    d.setDate(d.getDate() + 14);
+                    filterMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+                  } else { filterMonth = ""; }
                 } else {
                   filterMonth = `${bulkReportYear}-${String(bulkReportMonth).padStart(2, "0")}`;
                 }
                 const ownerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل";
                 const html = buildMasterPayrollHtml(filterMonth, history as any[], ownerName, staffCalMode);
-                if (html) { setPreviewHtml(html); setBulkReportOpen(false); }
+                if (html) { setPreviewTitle("معاينة كشف الرواتب الجماعي"); setPreviewHtml(html); setBulkReportOpen(false); }
               }}
             >
               <Receipt className="w-4 h-4" />
