@@ -14038,10 +14038,10 @@ function StaffTab() {
   const payYearOptions = useMemo(() => {
     if (staffCalMode === "hijri") {
       const cy = toHijriComponents(new Date()).year;
-      return [cy - 1, cy, cy + 1];
+      return [cy - 1, cy, cy + 1, cy + 2];
     }
     const cy = new Date().getFullYear();
-    return [cy - 1, cy, cy + 1];
+    return [cy - 1, cy, cy + 1, cy + 2];
   }, [staffCalMode]);
 
   const payMonthLabels = useMemo(() => {
