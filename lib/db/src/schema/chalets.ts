@@ -470,6 +470,8 @@ export const salaryLogsTable = pgTable("salary_logs", {
   bonus: numeric("bonus", { precision: 10, scale: 2 }).notNull().default("0"),
   deduction: numeric("deduction", { precision: 10, scale: 2 }).notNull().default("0"),
   notes: text("notes"),
+  bonusNotes: text("bonus_notes"),
+  deductionNotes: text("deduction_notes"),
   paidAt: timestamp("paid_at", { withTimezone: true }),
   expenseId: integer("expense_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

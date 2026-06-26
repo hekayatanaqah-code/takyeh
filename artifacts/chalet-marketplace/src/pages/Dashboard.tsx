@@ -14636,16 +14636,18 @@ function StaffTab() {
                             onClick={() => {
                               const html = buildSalaryVoucherHtml({
                                 voucherNo,
-                                logId:      log.id,
-                                staffName:  (log as any).staffName ?? "موظف",
-                                ownerName:  [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل",
-                                month:      log.month,
-                                paidAt:     paidAtStr,
-                                baseSalary: base,
+                                logId:          log.id,
+                                staffName:      (log as any).staffName ?? "موظف",
+                                ownerName:      [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل",
+                                month:          log.month,
+                                paidAt:         paidAtStr,
+                                baseSalary:     base,
                                 bonus,
                                 deduction,
                                 net,
-                                notes:      log.notes ?? undefined,
+                                notes:          log.notes ?? undefined,
+                                bonusNotes:     (log as any).bonusNotes ?? undefined,
+                                deductionNotes: (log as any).deductionNotes ?? undefined,
                               }, staffCalMode);
                               setPreviewHtml(html);
                             }}
@@ -14750,26 +14752,16 @@ function StaffTab() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Popover open={payMonthOpen} onOpenChange={setPayMonthOpen}>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" className="h-10 w-full justify-between text-sm font-normal border-input bg-transparent shadow-sm">
-                          <span>{payMonthLabels[payDateParsed.monthIdx]}</span>
-                          <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ms-2" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent side="bottom" align="start" avoidCollisions={false} className="w-40 p-1.5 max-h-72 overflow-y-auto">
-                        {payMonthLabels.map((label, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => { applyPayDate(payDateParsed.year, i); setPayMonthOpen(false); }}
-                            className={`w-full text-right px-3 py-1.5 text-sm rounded transition-colors ${payDateParsed.monthIdx === i ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </PopoverContent>
-                    </Popover>
+                    <select
+                      value={String(payDateParsed.monthIdx)}
+                      onChange={(e) => applyPayDate(payDateParsed.year, Number(e.target.value))}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring text-right"
+                      dir="rtl"
+                    >
+                      {payMonthLabels.map((label, i) => (
+                        <option key={i} value={String(i)}>{label}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 {/* Base salary (read-only) */}
@@ -14891,7 +14883,9 @@ function StaffTab() {
                       month: payForm.month,
                       bonus: parseFloat(payForm.bonus) || 0,
                       deduction: parseFloat(payForm.deduction) || 0,
-                      notes: [payForm.bonusNotes, payForm.deductionNotes, payForm.generalNotes].filter(Boolean).join(" — ") || undefined,
+                      notes: payForm.generalNotes || undefined,
+                      bonusNotes: payForm.bonusNotes || undefined,
+                      deductionNotes: payForm.deductionNotes || undefined,
                     });
                   }}
                 >

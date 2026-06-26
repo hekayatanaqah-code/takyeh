@@ -2936,6 +2936,8 @@ router.get("/salary-logs/history", async (req, res) => {
       bonus: salaryLogsTable.bonus,
       deduction: salaryLogsTable.deduction,
       notes: salaryLogsTable.notes,
+      bonusNotes: salaryLogsTable.bonusNotes,
+      deductionNotes: salaryLogsTable.deductionNotes,
       paidAt: salaryLogsTable.paidAt,
       expenseId: salaryLogsTable.expenseId,
     })
@@ -2955,6 +2957,8 @@ router.post("/salary-logs/pay", async (req, res) => {
     bonus: z.number().nonnegative().default(0),
     deduction: z.number().nonnegative().default(0),
     notes: z.string().optional(),
+    bonusNotes: z.string().optional(),
+    deductionNotes: z.string().optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
@@ -2997,6 +3001,8 @@ router.post("/salary-logs/pay", async (req, res) => {
         bonus: String(body.data.bonus),
         deduction: String(body.data.deduction),
         notes: body.data.notes ?? null,
+        bonusNotes: body.data.bonusNotes ?? null,
+        deductionNotes: body.data.deductionNotes ?? null,
         paidAt,
         expenseId: expense.id,
       })
@@ -3012,6 +3018,8 @@ router.post("/salary-logs/pay", async (req, res) => {
         bonus: String(body.data.bonus),
         deduction: String(body.data.deduction),
         notes: body.data.notes ?? null,
+        bonusNotes: body.data.bonusNotes ?? null,
+        deductionNotes: body.data.deductionNotes ?? null,
         paidAt,
         expenseId: expense.id,
       })
