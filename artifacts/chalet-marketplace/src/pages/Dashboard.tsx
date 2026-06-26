@@ -13648,7 +13648,7 @@ function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"):
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background:#fff; color:#111; direction:rtl; }
-  .page { max-width: 794px; margin: 0 auto; padding: 40px 48px; min-height: 1123px; position: relative; }
+  .page { max-width: 794px; margin: 0 auto; padding: 40px 48px; min-height: 1123px; position: relative; page-break-inside: avoid; }
   .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #b8860b; padding-bottom: 18px; margin-bottom: 24px; }
   .brand-name { font-size: 26px; font-weight: 800; color: #b8860b; }
   .brand-sub  { font-size: 12px; color: #666; margin-top: 3px; }
@@ -13680,7 +13680,13 @@ function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"):
   .sig-line  { border-bottom: 1.5px solid #999; margin-top: 40px; }
   .sig-caption { font-size: 11px; color: #999; }
   .footer { position: absolute; bottom: 32px; right: 0; left: 0; text-align: center; font-size: 11px; color: #aaa; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @page { margin: 0; size: A4; }
+  @media print {
+    html, body { height: auto; overflow: visible; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { min-height: auto; padding: 20mm 15mm; margin: 0; max-width: 100%; page-break-inside: avoid; break-inside: avoid; }
+    .footer { position: static; margin-top: 24px; padding-top: 8px; border-top: 1px solid #eee; }
+  }
 </style>
 </head>
 <body>
@@ -14740,18 +14746,18 @@ function StaffTab() {
                 <div>
                   <label className="text-xs text-muted-foreground font-medium mb-1 block">الفترة</label>
                   <div className="grid grid-cols-2 gap-2">
-                    <Select value={String(payDateParsed.year)} onValueChange={(v) => applyPayDate(Number(v), payDateParsed.monthIdx)}>
-                      <SelectTrigger className="h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {payYearOptions.map(y => (
-                          <SelectItem key={y} value={String(y)}>
-                            {staffCalMode === "hijri" ? `${toArN(y)} هـ` : `${toArN(y)} م`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <select
+                      value={String(payDateParsed.year)}
+                      onChange={(e) => applyPayDate(Number(e.target.value), payDateParsed.monthIdx)}
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring text-right"
+                      dir="rtl"
+                    >
+                      {payYearOptions.map(y => (
+                        <option key={y} value={String(y)}>
+                          {staffCalMode === "hijri" ? `${toArN(y)} هـ` : `${toArN(y)} م`}
+                        </option>
+                      ))}
+                    </select>
                     <select
                       value={String(payDateParsed.monthIdx)}
                       onChange={(e) => applyPayDate(payDateParsed.year, Number(e.target.value))}
