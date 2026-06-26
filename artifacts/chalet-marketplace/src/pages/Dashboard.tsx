@@ -15006,8 +15006,7 @@ function StaffTab() {
                 let filterMonth: string;
                 if (staffCalMode === "hijri") {
                   const range = getHijriMonthGregorianRange(bulkReportYear, bulkReportMonth);
-                  const d = range.start;
-                  filterMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+                  filterMonth = range.start ? range.start.slice(0, 7) : "";
                 } else {
                   filterMonth = `${bulkReportYear}-${String(bulkReportMonth).padStart(2, "0")}`;
                 }
