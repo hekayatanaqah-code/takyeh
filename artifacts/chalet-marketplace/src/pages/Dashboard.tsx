@@ -13611,6 +13611,9 @@ interface VoucherData {
   deduction: number;
   net: number;
   notes?: string;
+  bonusNotes?: string;
+  deductionNotes?: string;
+  generalNotes?: string;
   paymentMethod?: "cash" | "bank";
   iban?: string;
 }
@@ -13664,6 +13667,7 @@ function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"):
   .neg { color: #dc2626; }
   .notes-box { background: #faf9f6; border: 1px solid #e8e2d0; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; color: #444; }
   .notes-box strong { color: #111; display: block; margin-bottom: 4px; }
+  .row-note { font-size: 11px; color: #666; font-weight: 400; margin-top: 2px; }
   .payment-box { display: flex; align-items: center; gap: 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 10px 14px; margin-bottom: 20px; font-size: 13px; }
   .payment-label { color: #0369a1; font-weight: 600; }
   .payment-value { color: #111; font-weight: 700; }
@@ -13700,12 +13704,12 @@ function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"):
     <thead><tr><th>البند</th><th>المبلغ (ر.س)</th></tr></thead>
     <tbody>
       <tr><td>الراتب الأساسي</td><td>${v.baseSalary.toLocaleString("ar-SA")}</td></tr>
-      ${v.bonus > 0 ? `<tr><td>مكافأة / بدل</td><td class="pos">+${v.bonus.toLocaleString("ar-SA")}</td></tr>` : ""}
-      ${v.deduction > 0 ? `<tr><td>خصم</td><td class="neg">-${v.deduction.toLocaleString("ar-SA")}</td></tr>` : ""}
+      ${v.bonus > 0 ? `<tr><td>مكافأة / بدل${v.bonusNotes ? `<div class="row-note">${v.bonusNotes}</div>` : ""}</td><td class="pos">+${v.bonus.toLocaleString("ar-SA")}</td></tr>` : ""}
+      ${v.deduction > 0 ? `<tr><td>خصم${v.deductionNotes ? `<div class="row-note">${v.deductionNotes}</div>` : ""}</td><td class="neg">-${v.deduction.toLocaleString("ar-SA")}</td></tr>` : ""}
     </tbody>
     <tfoot><tr class="total-row"><td>الصافي المستحق</td><td>${v.net.toLocaleString("ar-SA")} ر.س</td></tr></tfoot>
   </table>
-  ${v.notes ? `<div class="notes-box"><strong>ملاحظات:</strong> ${v.notes}</div>` : ""}
+  ${v.generalNotes ? `<div class="notes-box"><strong>ملاحظات:</strong> ${v.generalNotes}</div>` : (v.notes && !v.bonusNotes && !v.deductionNotes ? `<div class="notes-box"><strong>ملاحظات:</strong> ${v.notes}</div>` : "")}
   ${v.paymentMethod ? `<div class="payment-box">
     <div>
       <div class="payment-label">طريقة السداد</div>
@@ -14163,6 +14167,9 @@ function StaffTab() {
           deduction,
           net,
           notes:         variables.notes,
+          bonusNotes:    payForm.bonusNotes || undefined,
+          deductionNotes: payForm.deductionNotes || undefined,
+          generalNotes:  payForm.generalNotes || undefined,
           paymentMethod: payForm.paymentMethod,
           iban:          payForm.paymentMethod === "bank" ? payForm.iban : undefined,
         });
@@ -14663,20 +14670,22 @@ function StaffTab() {
           if (!open) { setPayTarget(null); setPaidVoucher(null); }
         }}
       >
-        <DialogContent className="max-w-sm" dir="rtl">
+        <DialogContent className="sm:max-w-sm max-h-[92vh] flex flex-col gap-0 p-0 overflow-hidden" dir="rtl">
           {/* ── Success / Voucher state ── */}
           {paidVoucher ? (
             <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-right text-green-600">
-                  <CheckCircle className="w-5 h-5" />
-                  تم صرف الراتب بنجاح
-                </DialogTitle>
-                <DialogDescription className="text-right text-xs">
-                  تمت إضافة الراتب تلقائياً في المصروفات تحت بند الرواتب.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 pt-2">
+              <div className="shrink-0 px-6 pt-6 pb-2">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-right text-green-600">
+                    <CheckCircle className="w-5 h-5" />
+                    تم صرف الراتب بنجاح
+                  </DialogTitle>
+                  <DialogDescription className="text-right text-xs">
+                    تمت إضافة الراتب تلقائياً في المصروفات تحت بند الرواتب.
+                  </DialogDescription>
+                </DialogHeader>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4 pt-2">
                 {/* Mini summary */}
                 <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-xl p-4 space-y-2 text-sm">
                   <div className="flex justify-between">
@@ -14711,16 +14720,18 @@ function StaffTab() {
           ) : (
             /* ── Pay Form state ── */
             <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-right">
-                  <Banknote className="w-5 h-5 text-primary" />
-                  صرف راتب – {payTarget?.name}
-                </DialogTitle>
-                <DialogDescription className="text-right text-xs">
-                  سيتم تسجيل الراتب تلقائياً ضمن المصروفات تحت بند الرواتب.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 pt-2">
+              <div className="shrink-0 px-6 pt-6 pb-2">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-right">
+                    <Banknote className="w-5 h-5 text-primary" />
+                    صرف راتب – {payTarget?.name}
+                  </DialogTitle>
+                  <DialogDescription className="text-right text-xs">
+                    سيتم تسجيل الراتب تلقائياً ضمن المصروفات تحت بند الرواتب.
+                  </DialogDescription>
+                </DialogHeader>
+              </div>
+              <div className="flex-1 overflow-y-auto px-6 pt-2 pb-2 space-y-4">
                 {/* Date picker: Year + Month inline — driven by salary cal pref from account settings */}
                 <div>
                   <label className="text-xs text-muted-foreground font-medium mb-1 block">الفترة</label>
@@ -14741,7 +14752,7 @@ function StaffTab() {
                       <SelectTrigger className="h-10">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent position="popper" className="max-h-64 overflow-y-auto">
+                      <SelectContent position="popper" align="start" sideOffset={4}>
                         {payMonthLabels.map((label, i) => (
                           <SelectItem key={i} value={String(i)}>{label}</SelectItem>
                         ))}
@@ -14855,6 +14866,8 @@ function StaffTab() {
                     </div>
                   </div>
                 )}
+              </div>
+              <div className="shrink-0 px-6 pb-6 pt-4 border-t">
                 <Button
                   className="w-full h-11 font-bold"
                   disabled={paySalary.isPending || isReadOnly}
