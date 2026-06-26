@@ -13932,7 +13932,8 @@ function StaffTab() {
   const [credForm, setCredForm] = useState({ username: "", password: "" });
   /* Pay dialog */
   const [payTarget, setPayTarget] = useState<StaffMember | null>(null);
-  const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "", paymentMethod: "cash" as "cash" | "bank", iban: "" });
+  const [payForm, setPayForm] = useState({ month: "", bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "", paymentMethod: "cash" as "cash" | "bank", iban: "" });
+  const [payYearState, setPayYearState] = useState<number | null>(null);
   const [payMonthOpen, setPayMonthOpen] = useState(false);
   /* Voucher (shown in dialog after successful payment) */
   const [paidVoucher, setPaidVoucher] = useState<VoucherData | null>(null);
@@ -14020,13 +14021,19 @@ function StaffTab() {
 
   /* ── Pay dialog: year/month computed values ── */
   const payDateParsed = useMemo(() => {
+    if (!payForm.month) {
+      const fallback = payYearState ?? (staffCalMode === "hijri"
+        ? toHijriComponents(new Date()).year
+        : new Date().getFullYear());
+      return { year: fallback, monthIdx: -1 };
+    }
     const d = new Date(payForm.month + "-15");
     if (staffCalMode === "hijri") {
       const h = toHijriComponents(d);
       return { year: h.year, monthIdx: h.month - 1 };
     }
     return { year: d.getFullYear(), monthIdx: d.getMonth() };
-  }, [payForm.month, staffCalMode]);
+  }, [payForm.month, payYearState, staffCalMode]);
 
   const payYearOptions = useMemo(() => {
     if (staffCalMode === "hijri") {
@@ -14182,7 +14189,8 @@ function StaffTab() {
           iban:          payForm.paymentMethod === "bank" ? payForm.iban : undefined,
         });
       }
-      setPayForm({ month: currentMonth, bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "", paymentMethod: "cash", iban: "" });
+      setPayForm({ month: "", bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "", paymentMethod: "cash", iban: "" });
+      setPayYearState(null);
     },
   });
 
@@ -14473,7 +14481,7 @@ function StaffTab() {
                             <Button
                               size="sm"
                               className="h-7 px-3 text-[11px] font-bold"
-                              onClick={() => { setPayTarget(member as any); setPayForm({ month: nextDue, bonus: "0", deduction: "0", notes: "", generalNotes: "" }); }}
+                              onClick={() => { setPayTarget(member as any); setPayYearState(null); setPayForm({ month: "", bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "", paymentMethod: "cash", iban: "" }); }}
                             >
                               <Banknote className="w-3 h-3 me-1" />
                               صرف الراتب
@@ -14748,7 +14756,11 @@ function StaffTab() {
                   <div className="grid grid-cols-2 gap-2">
                     <select
                       value={String(payDateParsed.year)}
-                      onChange={(e) => applyPayDate(Number(e.target.value), payDateParsed.monthIdx)}
+                      onChange={(e) => {
+                        const y = Number(e.target.value);
+                        setPayYearState(y);
+                        setPayForm(f => ({ ...f, month: "" }));
+                      }}
                       className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring text-right"
                       dir="rtl"
                     >
@@ -14759,11 +14771,12 @@ function StaffTab() {
                       ))}
                     </select>
                     <select
-                      value={String(payDateParsed.monthIdx)}
+                      value={payForm.month ? String(payDateParsed.monthIdx) : ""}
                       onChange={(e) => applyPayDate(payDateParsed.year, Number(e.target.value))}
                       className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring text-right"
                       dir="rtl"
                     >
+                      <option value="" disabled>اختر الشهر</option>
                       {payMonthLabels.map((label, i) => (
                         <option key={i} value={String(i)}>{label}</option>
                       ))}
@@ -14880,7 +14893,7 @@ function StaffTab() {
               <div className="shrink-0 px-6 pb-6 pt-4 border-t">
                 <Button
                   className="w-full h-11 font-bold"
-                  disabled={paySalary.isPending || isReadOnly}
+                  disabled={paySalary.isPending || isReadOnly || !payForm.month}
                   onClick={() => {
                     if (isReadOnly) { onBlockedEdit(); return; }
                     if (!payTarget) return;
