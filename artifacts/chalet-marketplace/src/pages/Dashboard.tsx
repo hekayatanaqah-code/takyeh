@@ -13623,7 +13623,7 @@ function fmtMonthForPrint(ym: string, calMode: "hijri" | "gregorian"): string {
   const d = new Date(ym + "-15");
   if (calMode === "hijri") {
     const h = toHijriComponents(d);
-    return `${HIJRI_MONTHS_AR[h.month - 1]} ${h.year} هـ`;
+    return `${HIJRI_MONTHS_AR[h.month - 1]} ${toArN(h.year)} هـ`;
   }
   return d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
 }
@@ -13632,7 +13632,7 @@ function fmtDateForPrint(iso: string, calMode: "hijri" | "gregorian"): string {
   const d = new Date(iso);
   if (calMode === "hijri") {
     const h = toHijriComponents(d);
-    return `${h.day} ${HIJRI_MONTHS_AR[h.month - 1]} ${h.year} هـ`;
+    return `${toArN(h.day)} ${HIJRI_MONTHS_AR[h.month - 1]} ${toArN(h.year)} هـ`;
   }
   return d.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
 }
@@ -13693,11 +13693,10 @@ function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"):
 <div class="page">
   <div class="header">
     <div>
-      <div class="brand-name">حكاية أناقة</div>
-      <div class="brand-sub">منصة إدارة الشاليهات – القصيم</div>
+      <div class="brand-name">منصة تكية الإلكترونية</div>
     </div>
     <div class="voucher-badge">
-      <div class="voucher-badge-title">مسيّر رواتب</div>
+      <div class="voucher-badge-title">إشعار راتب</div>
       <div class="voucher-badge-no"># ${v.voucherNo}</div>
     </div>
   </div>
