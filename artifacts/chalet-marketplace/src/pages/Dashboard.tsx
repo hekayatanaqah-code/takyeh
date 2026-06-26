@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { HijriDatePicker } from "@/components/HijriDatePicker";
 import { formatDualDate, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents, getHijriMonthGregorianRange } from "@/lib/hijri";
@@ -13926,6 +13927,7 @@ function StaffTab() {
   /* Pay dialog */
   const [payTarget, setPayTarget] = useState<StaffMember | null>(null);
   const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "", paymentMethod: "cash" as "cash" | "bank", iban: "" });
+  const [payMonthOpen, setPayMonthOpen] = useState(false);
   /* Voucher (shown in dialog after successful payment) */
   const [paidVoucher, setPaidVoucher] = useState<VoucherData | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -14748,16 +14750,26 @@ function StaffTab() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Select value={String(payDateParsed.monthIdx)} onValueChange={(v) => applyPayDate(payDateParsed.year, Number(v))}>
-                      <SelectTrigger className="h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent position="popper" align="start" sideOffset={4}>
+                    <Popover open={payMonthOpen} onOpenChange={setPayMonthOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="h-10 w-full justify-between text-sm font-normal border-input bg-transparent shadow-sm">
+                          <span>{payMonthLabels[payDateParsed.monthIdx]}</span>
+                          <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ms-2" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent side="bottom" align="start" avoidCollisions={false} className="w-40 p-1.5 max-h-72 overflow-y-auto">
                         {payMonthLabels.map((label, i) => (
-                          <SelectItem key={i} value={String(i)}>{label}</SelectItem>
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => { applyPayDate(payDateParsed.year, i); setPayMonthOpen(false); }}
+                            className={`w-full text-right px-3 py-1.5 text-sm rounded transition-colors ${payDateParsed.monthIdx === i ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                          >
+                            {label}
+                          </button>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
                 {/* Base salary (read-only) */}
