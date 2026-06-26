@@ -13739,7 +13739,7 @@ function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"):
     </div>
   </div>
   <div class="footer">
-    تم إصدار هذا المسيّر إلكترونياً عبر منصة حكاية أناقة · ${new Date().getFullYear()}
+    تم إصدار هذا المسيّر إلكترونياً عبر منصة تكية · ${toHijriComponents(new Date()).year} هـ - ${new Date().getFullYear()} م
   </div>
 </div>
 </body></html>`;
