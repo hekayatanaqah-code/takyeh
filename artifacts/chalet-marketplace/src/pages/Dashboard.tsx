@@ -13611,6 +13611,8 @@ interface VoucherData {
   deduction: number;
   net: number;
   notes?: string;
+  paymentMethod?: "cash" | "bank";
+  iban?: string;
 }
 
 function fmtMonthForPrint(ym: string, calMode: "hijri" | "gregorian"): string {
@@ -13660,8 +13662,12 @@ function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"):
   .salary-table .total-row td { font-weight: 700; font-size: 16px; border-top: 2px solid #b8860b; background: #fffbf0; }
   .pos { color: #16a34a; }
   .neg { color: #dc2626; }
-  .notes-box { background: #faf9f6; border: 1px solid #e8e2d0; border-radius: 8px; padding: 12px 14px; margin-bottom: 28px; font-size: 13px; color: #444; }
+  .notes-box { background: #faf9f6; border: 1px solid #e8e2d0; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; color: #444; }
   .notes-box strong { color: #111; display: block; margin-bottom: 4px; }
+  .payment-box { display: flex; align-items: center; gap: 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 10px 14px; margin-bottom: 20px; font-size: 13px; }
+  .payment-label { color: #0369a1; font-weight: 600; }
+  .payment-value { color: #111; font-weight: 700; }
+  .payment-iban { color: #555; font-size: 12px; margin-top: 2px; direction: ltr; text-align: right; }
   .sig-section { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 32px; }
   .sig-box { display: flex; flex-direction: column; gap: 8px; }
   .sig-label { font-size: 13px; font-weight: 600; color: #555; }
@@ -13700,6 +13706,13 @@ function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"):
     <tfoot><tr class="total-row"><td>الصافي المستحق</td><td>${v.net.toLocaleString("ar-SA")} ر.س</td></tr></tfoot>
   </table>
   ${v.notes ? `<div class="notes-box"><strong>ملاحظات:</strong> ${v.notes}</div>` : ""}
+  ${v.paymentMethod ? `<div class="payment-box">
+    <div>
+      <div class="payment-label">طريقة السداد</div>
+      <div class="payment-value">${v.paymentMethod === "bank" ? "تحويل بنكي" : "كاش (نقداً)"}</div>
+      ${v.paymentMethod === "bank" && v.iban ? `<div class="payment-iban">IBAN: ${v.iban}</div>` : ""}
+    </div>
+  </div>` : ""}
   <div class="sig-section">
     <div class="sig-box">
       <div class="sig-label">توقيع صاحب العمل</div>
@@ -13908,7 +13921,7 @@ function StaffTab() {
   const [credForm, setCredForm] = useState({ username: "", password: "" });
   /* Pay dialog */
   const [payTarget, setPayTarget] = useState<StaffMember | null>(null);
-  const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "" });
+  const [payForm, setPayForm] = useState({ month: currentMonth, bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "", paymentMethod: "cash" as "cash" | "bank", iban: "" });
   /* Voucher (shown in dialog after successful payment) */
   const [paidVoucher, setPaidVoucher] = useState<VoucherData | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -14022,7 +14035,7 @@ function StaffTab() {
   const applyPayDate = (year: number, monthIdx: number) => {
     let ym: string;
     if (staffCalMode === "hijri") {
-      const approxGreg = Math.round((year - 622) * 365.25 / 354.367);
+      const approxGreg = Math.round(year * 0.9702 + 621.57);
       let found = false;
       outer: for (let y = approxGreg - 1; y <= approxGreg + 2; y++) {
         for (let m = 1; m <= 12; m++) {
@@ -14141,18 +14154,20 @@ function StaffTab() {
         setPaidVoucher({
           voucherNo,
           logId,
-          staffName:  payTarget.name,
-          ownerName:  [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل",
-          month:      variables.month,
+          staffName:     payTarget.name,
+          ownerName:     [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل",
+          month:         variables.month,
           paidAt,
-          baseSalary: base,
+          baseSalary:    base,
           bonus,
           deduction,
           net,
-          notes:      variables.notes,
+          notes:         variables.notes,
+          paymentMethod: payForm.paymentMethod,
+          iban:          payForm.paymentMethod === "bank" ? payForm.iban : undefined,
         });
       }
-      setPayForm({ month: currentMonth, bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "" });
+      setPayForm({ month: currentMonth, bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "", paymentMethod: "cash", iban: "" });
     },
   });
 
@@ -14726,7 +14741,7 @@ function StaffTab() {
                       <SelectTrigger className="h-10">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper" className="max-h-64 overflow-y-auto">
                         {payMonthLabels.map((label, i) => (
                           <SelectItem key={i} value={String(i)}>{label}</SelectItem>
                         ))}
@@ -14793,6 +14808,31 @@ function StaffTab() {
                   <label className="text-xs text-muted-foreground font-medium mb-1 block">ملاحظات عامة (اختياري)</label>
                   <Input placeholder="مثال: دوام نصف شهر، تسوية مالية..." value={payForm.generalNotes} onChange={(e) => setPayForm((f) => ({ ...f, generalNotes: e.target.value }))} className="h-10" />
                 </div>
+                {/* Payment method */}
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium mb-1 block">طريقة الصرف</label>
+                  <Select value={payForm.paymentMethod} onValueChange={(v) => setPayForm((f) => ({ ...f, paymentMethod: v as "cash" | "bank", iban: v === "cash" ? "" : f.iban }))}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">كاش (نقداً)</SelectItem>
+                      <SelectItem value="bank">تحويل بنكي</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {payForm.paymentMethod === "bank" && (
+                  <div>
+                    <label className="text-xs text-muted-foreground font-medium mb-1 block">رقم حساب الموظف / الآيبان IBAN</label>
+                    <Input
+                      placeholder="SA00 0000 0000 0000 0000 0000"
+                      value={payForm.iban}
+                      onChange={(e) => setPayForm((f) => ({ ...f, iban: e.target.value }))}
+                      className="h-10 tracking-wide"
+                      dir="ltr"
+                    />
+                  </div>
+                )}
                 {/* Net preview */}
                 {payTarget && (
                   <div className="bg-muted/50 rounded-xl p-4 space-y-1.5 text-sm">
