@@ -13853,7 +13853,7 @@ function buildMasterPayrollHtml(filterMonth: string, logs: any[], ownerName: str
     const deduction = Number(l.deduction);
     const net = base + bonus - deduction;
     return `<tr>
-      <td>${i + 1}</td>
+      <td>${toArN(i + 1)}</td>
       <td>${l.staffName ?? "—"}</td>
       <td>${base.toLocaleString("ar-SA")}</td>
       <td style="color:#15803d">${bonus > 0 ? `+${bonus.toLocaleString("ar-SA")}` : "—"}</td>
@@ -13876,8 +13876,7 @@ tfoot { background:#fff9ed; font-weight:700; }
 .sig { text-align:center; } .sig-line { height:1px; background:#ccc; margin-bottom:8px; } .sig p { font-size:11px; color:#888; }
 @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
 </style></head><body>
-<h1>حكاية أناقة — مسيّر رواتب جماعي</h1>
-<div class="sub">منصة إدارة الشاليهات – القصيم</div>
+<h1>منصة تكية الإلكترونية — كشف صرف الرواتب الجماعي</h1>
 <div class="meta-row">
   <span>الشهر: <strong>${monthStr}</strong></span>
   <span>صاحب العمل: <strong>${ownerName}</strong></span>
@@ -14540,7 +14539,7 @@ function StaffTab() {
                 }}
               >
                 <Receipt className="w-3.5 h-3.5" />
-                مسيّر جماعي
+                طباعة كشف الشهر الجماعي
               </Button>
               {selectedLogIds.size > 0 && (
                 <Button
