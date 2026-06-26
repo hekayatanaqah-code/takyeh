@@ -13939,6 +13939,10 @@ function StaffTab() {
   /* Bulk print selection */
   const [selectedLogIds, setSelectedLogIds] = useState<Set<number>>(new Set());
   const [masterMonth, setMasterMonth] = useState(currentMonth);
+  /* Bulk payroll report modal */
+  const [bulkReportOpen, setBulkReportOpen] = useState(false);
+  const [bulkReportYear, setBulkReportYear] = useState<number | null>(null);
+  const [bulkReportMonth, setBulkReportMonth] = useState<number | null>(null);
   /* Staff table dialogs */
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{ id: number; name: string } | null>(null);
   /* Salary calendar mode — seeded from owner's dedicated salary calendar preference */
@@ -14515,49 +14519,32 @@ function StaffTab() {
               سجل صرف الرواتب
             </h2>
           </div>
-          {history.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Master payroll month picker */}
-              <Select value={masterMonth} onValueChange={setMasterMonth}>
-                <SelectTrigger className="h-8 text-xs w-[130px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {monthOptions.map((o) => (
-                    <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              onClick={() => { setBulkReportYear(null); setBulkReportMonth(null); setBulkReportOpen(true); }}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              إصدار كشف جماعي
+            </Button>
+            {selectedLogIds.size > 0 && (
               <Button
                 size="sm"
                 variant="outline"
                 className="h-8 text-xs gap-1.5"
                 onClick={() => {
                   const ownerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل";
-                  const html = buildMasterPayrollHtml(masterMonth, history as any[], ownerName, staffCalMode);
+                  const selected = (history as any[]).filter((l) => selectedLogIds.has(l.id));
+                  const html = buildBulkVouchersHtml(selected, ownerName, staffCalMode);
                   if (html) setPreviewHtml(html);
                 }}
               >
                 <Receipt className="w-3.5 h-3.5" />
-                طباعة كشف الشهر الجماعي
+                طباعة المسيرات ({selectedLogIds.size})
               </Button>
-              {selectedLogIds.size > 0 && (
-                <Button
-                  size="sm"
-                  className="h-8 text-xs gap-1.5"
-                  onClick={() => {
-                    const ownerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل";
-                    const selected = (history as any[]).filter((l) => selectedLogIds.has(l.id));
-                    const html = buildBulkVouchersHtml(selected, ownerName, staffCalMode);
-                    if (html) setPreviewHtml(html);
-                  }}
-                >
-                  <Receipt className="w-3.5 h-3.5" />
-                  طباعة المسيرات ({selectedLogIds.size})
-                </Button>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
         {histLoading ? (
           <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-10 rounded-xl" />)}</div>
@@ -14959,6 +14946,80 @@ function StaffTab() {
             style={{ minHeight: "600px" }}
             title="معاينة إشعار صرف الراتب"
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Bulk Payroll Report Modal ── */}
+      <Dialog open={bulkReportOpen} onOpenChange={setBulkReportOpen}>
+        <DialogContent className="max-w-sm w-full" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <FileText className="w-4 h-4 text-primary" />
+              إصدار كشف الرواتب الجماعي
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Year */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">السنة</label>
+              <Select
+                value={bulkReportYear !== null ? String(bulkReportYear) : ""}
+                onValueChange={(v) => { setBulkReportYear(Number(v)); setBulkReportMonth(null); }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="اختر السنة" />
+                </SelectTrigger>
+                <SelectContent>
+                  {payYearOptions.map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {toArN(y)} {staffCalMode === "hijri" ? "هـ" : "م"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {/* Month */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">الشهر</label>
+              <Select
+                value={bulkReportMonth !== null ? String(bulkReportMonth) : ""}
+                onValueChange={(v) => setBulkReportMonth(Number(v))}
+                disabled={bulkReportYear === null}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="اختر الشهر" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(staffCalMode === "hijri" ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR).map((name, idx) => (
+                    <SelectItem key={idx + 1} value={String(idx + 1)}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="pt-2">
+            <Button
+              className="w-full h-11 font-bold gap-2"
+              disabled={bulkReportYear === null || bulkReportMonth === null}
+              onClick={() => {
+                if (!bulkReportYear || !bulkReportMonth) return;
+                let filterMonth: string;
+                if (staffCalMode === "hijri") {
+                  const range = getHijriMonthGregorianRange(bulkReportYear, bulkReportMonth);
+                  const d = range.start;
+                  filterMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+                } else {
+                  filterMonth = `${bulkReportYear}-${String(bulkReportMonth).padStart(2, "0")}`;
+                }
+                const ownerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل";
+                const html = buildMasterPayrollHtml(filterMonth, history as any[], ownerName, staffCalMode);
+                if (html) { setPreviewHtml(html); setBulkReportOpen(false); }
+              }}
+            >
+              <Receipt className="w-4 h-4" />
+              معاينة وطباعة الكشف
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
