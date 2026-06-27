@@ -13838,8 +13838,18 @@ body { font-family:'Segoe UI',Tahoma,Arial,sans-serif; direction:rtl; color:#111
 }
 
 
-function buildMasterPayrollHtml(filterMonth: string, logs: any[], ownerName: string, calMode: "hijri" | "gregorian"): string {
-  const filtered = filterMonth ? logs.filter((l) => l.month === filterMonth) : logs;
+function buildMasterPayrollHtml(filterMonth: string, logs: any[], ownerName: string, calMode: "hijri" | "gregorian", hijriFilter?: { year: number; month: number }): string {
+  let filtered: any[];
+  if (hijriFilter) {
+    filtered = logs.filter(l => {
+      const d = new Date((l.month ?? "") + "-15");
+      if (isNaN(d.getTime())) return false;
+      const h = toHijriComponents(d);
+      return h.year === hijriFilter.year && h.month === hijriFilter.month;
+    });
+  } else {
+    filtered = filterMonth ? logs.filter((l) => l.month === filterMonth) : logs;
+  }
   if (filtered.length === 0) {
     const monthStr = filterMonth ? fmtMonthForPrint(filterMonth, calMode) : "";
     return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
@@ -13954,6 +13964,7 @@ function StaffTab() {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewTitle, setPreviewTitle] = useState("معاينة إشعار صرف الراتب");
   const [previewEmpty, setPreviewEmpty] = useState(false);
+  const [bulkReportError, setBulkReportError] = useState<string | null>(null);
   /* Bulk print selection */
   const [selectedLogIds, setSelectedLogIds] = useState<Set<number>>(new Set());
   const [masterMonth, setMasterMonth] = useState(currentMonth);
@@ -14960,6 +14971,15 @@ function StaffTab() {
                 </Button>
               </>
             )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1 text-xs text-muted-foreground"
+              onClick={() => setPreviewHtml(null)}
+            >
+              <X className="w-3.5 h-3.5" />
+              إغلاق
+            </Button>
           </div>
           <iframe
             id="salary-preview-iframe"
@@ -14986,7 +15006,7 @@ function StaffTab() {
               <label className="text-sm font-medium text-foreground">السنة</label>
               <Select
                 value={bulkReportYear !== null ? String(bulkReportYear) : ""}
-                onValueChange={(v) => { setBulkReportYear(Number(v)); setBulkReportMonth(null); }}
+                onValueChange={(v) => { setBulkReportYear(Number(v)); setBulkReportMonth(null); setBulkReportError(null); }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="اختر السنة" />
@@ -15005,7 +15025,7 @@ function StaffTab() {
               <label className="text-sm font-medium text-foreground">الشهر</label>
               <Select
                 value={bulkReportMonth !== null ? String(bulkReportMonth) : ""}
-                onValueChange={(v) => setBulkReportMonth(Number(v))}
+                onValueChange={(v) => { setBulkReportMonth(Number(v)); setBulkReportError(null); }}
                 disabled={bulkReportYear === null}
               >
                 <SelectTrigger className="w-full">
@@ -15019,35 +15039,50 @@ function StaffTab() {
               </Select>
             </div>
           </div>
+          {bulkReportError && (
+            <p className="text-sm text-destructive font-medium text-center pt-1">{bulkReportError}</p>
+          )}
           <div className="pt-2">
             <Button
               className="w-full h-11 font-bold gap-2"
               disabled={bulkReportYear === null || bulkReportMonth === null}
               onClick={() => {
                 if (!bulkReportYear || !bulkReportMonth) return;
-                let filterMonth: string;
+                setBulkReportError(null);
+                const ownerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل";
+                let filterMonth = "";
+                let hijriFilter: { year: number; month: number } | undefined;
                 if (staffCalMode === "hijri") {
+                  hijriFilter = { year: bulkReportYear, month: bulkReportMonth };
                   const approxGreg = Math.round(bulkReportYear * 0.9702 + 621.57);
-                  let found = false;
                   outer: for (let y = approxGreg - 1; y <= approxGreg + 2; y++) {
                     for (let m = 1; m <= 12; m++) {
                       const h = toHijriComponents(new Date(y, m - 1, 15));
                       if (h.year === bulkReportYear && h.month === bulkReportMonth) {
                         filterMonth = `${y}-${String(m).padStart(2, "0")}`;
-                        found = true;
                         break outer;
                       }
                     }
                   }
-                  if (!found) filterMonth = `${approxGreg}-01`;
                 } else {
                   filterMonth = `${bulkReportYear}-${String(bulkReportMonth).padStart(2, "0")}`;
                 }
-                const ownerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل";
-                const isEmpty = !(history as any[]).some(l => l.month === filterMonth);
-                const html = buildMasterPayrollHtml(filterMonth, history as any[], ownerName, staffCalMode);
+                const hasRecords = (history as any[]).some(l => {
+                  if (hijriFilter) {
+                    const d = new Date((l.month ?? "") + "-15");
+                    if (isNaN(d.getTime())) return false;
+                    const h = toHijriComponents(d);
+                    return h.year === hijriFilter.year && h.month === hijriFilter.month;
+                  }
+                  return l.month === filterMonth;
+                });
+                if (!hasRecords) {
+                  setBulkReportError("لا توجد رواتب مسجلة للفترة المحددة");
+                  return;
+                }
+                const html = buildMasterPayrollHtml(filterMonth, history as any[], ownerName, staffCalMode, hijriFilter);
                 setPreviewTitle("معاينة كشف الرواتب الجماعي");
-                setPreviewEmpty(isEmpty);
+                setPreviewEmpty(false);
                 setPreviewHtml(html);
                 setBulkReportOpen(false);
               }}
