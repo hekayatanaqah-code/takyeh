@@ -14944,7 +14944,7 @@ function StaffTab() {
               size="sm"
               variant="outline"
               className="h-8 gap-1.5 text-xs shrink-0"
-              onClick={() => setPreviewHtml(null)}
+              onClick={() => { setPreviewHtml(null); setBulkReportOpen(true); }}
             >
               <ArrowRight className="w-3.5 h-3.5" />
               رجوع
@@ -14980,6 +14980,14 @@ function StaffTab() {
                 </Button>
               </>
             )}
+            <button
+              type="button"
+              className="ms-1 rounded-sm p-1 opacity-60 hover:opacity-100 transition-opacity focus:outline-none focus:ring-2 focus:ring-ring"
+              aria-label="إغلاق"
+              onClick={() => { setPreviewHtml(null); setBulkReportOpen(false); }}
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
           <iframe
             id="salary-preview-iframe"
