@@ -14656,7 +14656,17 @@ function StaffTab() {
                       <td className="text-right px-3 py-2.5 text-red-600">{deduction > 0 ? `-${fmtSAR(deduction)}` : "—"}</td>
                       <td className="text-right px-3 py-2.5 font-bold text-foreground">{fmtSAR(net)}</td>
                       <td className="text-right px-3 py-2.5 text-muted-foreground text-xs">
-                        {log.paidAt ? new Date(paidAtStr).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                        {log.paidAt ? (() => {
+                          const d = new Date(paidAtStr);
+                          const h = toHijriComponents(d);
+                          const greg = d.toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" });
+                          return (
+                            <span>
+                              <span className="block font-medium text-foreground">{toArN(h.day)} {HIJRI_MONTHS_AR[h.month - 1]} {toArN(h.year)} هـ</span>
+                              <span className="block text-[10px] text-muted-foreground">{greg} م</span>
+                            </span>
+                          );
+                        })() : "—"}
                       </td>
                       <td className="px-2 py-2.5 text-center">
                         {!isMock ? (
@@ -15509,7 +15519,12 @@ function StaffTab() {
                                 const bonus = Number(log.bonus);
                                 const deduction = Number(log.deduction);
                                 const net = base + bonus - deduction;
-                                const paidDate = log.paidAt ? new Date(log.paidAt).toLocaleDateString("ar-SA", { day: "numeric", month: "short", year: "numeric" }) : "—";
+                                const paidDate = log.paidAt ? (() => {
+                                  const d = new Date(log.paidAt!);
+                                  const h = toHijriComponents(d);
+                                  const greg = d.toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" });
+                                  return `${toArN(h.day)} ${HIJRI_MONTHS_AR[h.month - 1]} ${toArN(h.year)} هـ — ${greg} م`;
+                                })() : "—";
                                 return (
                                   <tr key={log.id} className={`border-b border-border/20 last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
                                     <td className="px-4 py-3 font-semibold text-foreground">{salaryMonthLabel(log.month)}</td>
