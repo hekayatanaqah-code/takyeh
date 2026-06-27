@@ -37,7 +37,7 @@ import {
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
-  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays, PieChart, Save, ScrollText, Check, Printer,
+  X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays, PieChart, Save, ScrollText, Check, Printer, ArrowRight,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -14938,10 +14938,19 @@ function StaffTab() {
 
       {/* ── Print Preview Dialog ── */}
       <Dialog open={!!previewHtml} onOpenChange={(open) => { if (!open) setPreviewHtml(null); }}>
-        <DialogContent className="max-w-4xl w-full max-h-[95vh] flex flex-col p-0 gap-0" dir="rtl">
-          <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
-            <h2 className="text-sm font-bold flex-1 flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-primary" />
+        <DialogContent hideClose className="max-w-4xl w-full max-h-[95vh] flex flex-col p-0 gap-0" dir="rtl">
+          <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/40 shrink-0 rounded-t-lg">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 text-xs shrink-0"
+              onClick={() => setPreviewHtml(null)}
+            >
+              <ArrowRight className="w-3.5 h-3.5" />
+              رجوع
+            </Button>
+            <h2 className="text-sm font-semibold flex-1 flex items-center gap-2 text-foreground">
+              <Receipt className="w-4 h-4 text-primary shrink-0" />
               {previewTitle}
             </h2>
             {!previewEmpty && (
@@ -14971,15 +14980,6 @@ function StaffTab() {
                 </Button>
               </>
             )}
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 gap-1 text-xs text-muted-foreground"
-              onClick={() => setPreviewHtml(null)}
-            >
-              <X className="w-3.5 h-3.5" />
-              إغلاق
-            </Button>
           </div>
           <iframe
             id="salary-preview-iframe"
