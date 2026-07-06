@@ -17097,13 +17097,16 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
             </div>
           </div>
           {unread.length > 0 && (
-            <button
+            <Button
+              size="sm"
+              variant="default"
+              className="h-8 gap-1.5 text-xs px-3"
               onClick={() => markAllRead.mutate()}
               disabled={markAllRead.isPending}
-              className="text-xs text-primary hover:underline underline-offset-2 font-medium"
             >
+              {markAllRead.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
               تحديد الكل كمقروء
-            </button>
+            </Button>
           )}
         </div>
         {isLoading ? (
@@ -17116,11 +17119,23 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
         ) : (
           <div className="divide-y divide-border">
             {notifications.map((n) => {
-              // Extract optional wa.me link from message: format "text | wa.me/..."
-              const waMatch = n.message.match(/\|\s*(wa\.me\/\S+)/);
-              const displayMsg = waMatch ? n.message.slice(0, n.message.lastIndexOf("|")).trim() : n.message;
+              // Strip bracket codes like [98:booking] from message
+              const rawMsg = n.message.replace(/\[\d+:[^\]]+\]/g, "").trim();
+              // Extract optional wa.me link
+              const waMatch = rawMsg.match(/\|\s*(wa\.me\/\S+)/);
+              const displayMsg = waMatch ? rawMsg.slice(0, rawMsg.lastIndexOf("|")).trim() : rawMsg;
               const waHref = waMatch ? `https://${waMatch[1]}` : null;
               const typeIcon = n.type === "new_booking" ? "📅" : n.type === "new_review" ? "⭐" : n.type === "report_dismissed" ? "🚩" : "🔔";
+              // Format date: dual Hijri + Gregorian with Arabic-Indic digits
+              const notifDate = new Date(n.createdAt);
+              const hDate = toHijriComponents(notifDate);
+              const isToday = new Date().toDateString() === notifDate.toDateString();
+              const isYesterday = new Date(Date.now() - 86400000).toDateString() === notifDate.toDateString();
+              const hijriStr = `${toArN(hDate.day)} ${HIJRI_MONTHS_AR[hDate.month - 1]} ${toArN(hDate.year)} هـ`;
+              const gregStr = notifDate.toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" });
+              const timeStr = notifDate.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", hour12: true });
+              const dateLabel = isToday ? `اليوم، ${hijriStr}` : isYesterday ? `أمس، ${hijriStr}` : hijriStr;
+              const fullDateStr = `${dateLabel} (${gregStr} م) | ${timeStr}`;
               return (
                 <div key={n.id} className={`flex items-start gap-3 px-5 py-4 text-sm transition-colors ${n.isRead ? "opacity-60" : n.type === "new_booking" ? "bg-green-50/60 dark:bg-green-900/10" : "bg-amber-50/60 dark:bg-amber-900/10"}`}>
                   <div className="text-base shrink-0 mt-0.5">{typeIcon}</div>
@@ -17137,9 +17152,7 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
                         إرسال على واتساب
                       </a>
                     )}
-                    <p className="text-xs text-muted-foreground mt-1.5">
-                      {new Date(n.createdAt).toLocaleDateString("ar-SA")} · {new Date(n.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-1.5">{fullDateStr}</p>
                   </div>
                   {!n.isRead && <span className="w-2 h-2 rounded-full bg-green-500 shrink-0 mt-1.5" />}
                 </div>
