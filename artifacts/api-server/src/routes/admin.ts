@@ -1,4 +1,7 @@
 import { Router } from "express";
+import multer from "multer";
+import sharp from "sharp";
+import { ObjectStorageService } from "../lib/objectStorage";
 import { db } from "@workspace/db";
 import {
   chaletSubmissionsTable,
@@ -41,6 +44,9 @@ declare global {
 }
 
 const router = Router();
+
+const adminReplyUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const adminReplyStorageSvc = new ObjectStorageService();
 
 function todayStr() {
   const d = new Date();
@@ -1161,7 +1167,7 @@ router.get("/support-requests", async (req, res) => {
       ownerId
         ? sql`SELECT s.id, s.owner_id,
                 COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
-                s.subject, s.message, s.status, s.attachment_url, s.admin_reply, s.admin_reply_at, s.is_read_by_owner, s.created_at
+                s.subject, s.message, s.status, s.attachment_url, s.admin_reply, s.admin_reply_at, s.admin_attachment_url, s.is_read_by_owner, s.created_at
               FROM owner_support_requests s
               LEFT JOIN LATERAL (
                 SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
@@ -1171,7 +1177,7 @@ router.get("/support-requests", async (req, res) => {
               ORDER BY s.created_at DESC LIMIT 300`
         : sql`SELECT s.id, s.owner_id,
                 COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
-                s.subject, s.message, s.status, s.attachment_url, s.admin_reply, s.admin_reply_at, s.is_read_by_owner, s.created_at
+                s.subject, s.message, s.status, s.attachment_url, s.admin_reply, s.admin_reply_at, s.admin_attachment_url, s.is_read_by_owner, s.created_at
               FROM owner_support_requests s
               LEFT JOIN LATERAL (
                 SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
@@ -1196,20 +1202,46 @@ router.patch("/support-requests/:id/status", async (req, res) => {
   return res.json({ ok: true });
 });
 
-router.post("/support-requests/:id/reply", async (req, res) => {
+router.post("/support-requests/:id/reply", adminReplyUpload.single("file"), async (req, res) => {
   const id = Number(req.params.id);
-  const body = z.object({ reply: z.string().min(1).max(2000) }).safeParse(req.body);
-  if (!body.success || !Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const reply = (req.body?.reply ?? "").trim();
+  if (!reply) return res.status(400).json({ error: "نص الرد مطلوب" });
+  if (reply.length > 2000) return res.status(400).json({ error: "الرد طويل جداً" });
+
+  /* Upload attachment if provided */
+  let adminAttachmentUrl: string | null = null;
+  const file = (req as any).file as Express.Multer.File | undefined;
+  if (file) {
+    try {
+      const isImage = file.mimetype.startsWith("image/");
+      const isPdf   = file.mimetype === "application/pdf" || file.originalname?.endsWith(".pdf");
+      let buffer: Buffer; let contentType: string; let ext: string;
+      if (isPdf) {
+        buffer = file.buffer; contentType = "application/pdf"; ext = "pdf";
+      } else if (isImage) {
+        buffer = await sharp(file.buffer).resize({ width: 2048, withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
+        contentType = "image/webp"; ext = "webp";
+      } else {
+        return res.status(400).json({ error: "يُسمح فقط بصور PNG/JPG أو ملفات PDF" });
+      }
+      adminAttachmentUrl = await adminReplyStorageSvc.uploadBuffer(buffer, contentType, ext);
+    } catch (uploadErr) {
+      console.error("[POST /admin/support-requests/:id/reply] attachment upload failed:", uploadErr);
+    }
+  }
+
   try {
     await db.execute(
       sql`UPDATE owner_support_requests
-          SET admin_reply = ${body.data.reply},
+          SET admin_reply = ${reply},
               admin_reply_at = NOW(),
               status = 'in_progress',
               is_read_by_owner = false
+              ${adminAttachmentUrl ? sql`, admin_attachment_url = ${adminAttachmentUrl}` : sql``}
           WHERE id = ${id}`
     );
-    return res.json({ ok: true });
+    return res.json({ ok: true, admin_attachment_url: adminAttachmentUrl });
   } catch (err) {
     console.error("[POST /admin/support-requests/:id/reply]", err);
     return res.status(500).json({ error: "حدث خطأ" });

@@ -51,7 +51,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, FileText, Check, Video, Mail, MessageSquare, Send, Inbox, Smartphone, Download } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, FileText, Check, Video, Mail, MessageSquare, Send, Inbox, Smartphone, Download, Paperclip } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -6812,6 +6812,7 @@ interface OwnerSupportRequest {
   attachment_url: string | null;
   admin_reply: string | null;
   admin_reply_at: string | null;
+  admin_attachment_url: string | null;
   is_read_by_owner: boolean;
   created_at: string;
 }
@@ -6828,6 +6829,8 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
   const [replyingId, setReplyingId] = useState<number | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replySending, setReplySending] = useState(false);
+  const [replyFile, setReplyFile] = useState<File | null>(null);
+  const replyFileInputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
   const queryKey = ownerIdFilter
@@ -6865,14 +6868,18 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
     if (!replyText.trim()) return;
     setReplySending(true);
     try {
-      const r = await apiFetch(`/admin/support-requests/${id}/reply`, {
+      const fd = new FormData();
+      fd.append("reply", replyText.trim());
+      if (replyFile) fd.append("file", replyFile);
+      const r = await fetch(`${BASE}/api/admin/support-requests/${id}/reply`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reply: replyText.trim() }),
+        body: fd,
+        credentials: "include",
       });
       if (r.ok) {
         setReplyingId(null);
         setReplyText("");
+        setReplyFile(null);
         qc.invalidateQueries({ queryKey: ["admin", "support-requests"] });
         qc.invalidateQueries({ queryKey: ["admin", "support-requests", ownerIdFilter ?? ""] });
       }
@@ -6982,11 +6989,33 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
 
                     {/* Existing reply */}
                     {req.admin_reply && (
-                      <div>
+                      <div className="space-y-2">
                         <p className="text-xs text-green-500 mb-1.5 font-medium flex items-center gap-1.5">
                           <Send className="w-3 h-3" /> ردّ الإدارة — {req.admin_reply_at ? fmtDate(req.admin_reply_at) : ""}:
                         </p>
                         <div className="bg-green-900/20 border border-green-700/30 rounded-lg p-3 text-green-200 text-sm leading-relaxed whitespace-pre-wrap">{req.admin_reply}</div>
+                        {req.admin_attachment_url && (
+                          req.admin_attachment_url.toLowerCase().includes(".pdf") ? (
+                            <a
+                              href={req.admin_attachment_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-amber-900/30 border border-amber-700/40 text-amber-300 hover:bg-amber-900/50 transition-colors"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              عرض ملف PDF المرفق
+                              <ExternalLink className="w-3 h-3 opacity-60" />
+                            </a>
+                          ) : (
+                            <a href={req.admin_attachment_url} target="_blank" rel="noopener noreferrer" className="block w-fit">
+                              <img
+                                src={req.admin_attachment_url}
+                                alt="مرفق الإدارة"
+                                className="max-h-48 max-w-xs rounded-lg border border-green-700/40 object-cover hover:border-green-500/50 hover:opacity-90 transition-all"
+                              />
+                            </a>
+                          )
+                        )}
                       </div>
                     )}
 
@@ -7002,9 +7031,40 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
                           dir="rtl"
                           className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-amber-500 placeholder:text-slate-500"
                         />
+                        {/* File attachment row */}
+                        <div className="flex items-center gap-2">
+                          <input
+                            ref={replyFileInputRef}
+                            type="file"
+                            accept="image/*,.pdf"
+                            className="hidden"
+                            onChange={(e) => setReplyFile(e.target.files?.[0] ?? null)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => replyFileInputRef.current?.click()}
+                            className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 flex items-center gap-1.5"
+                          >
+                            <Paperclip className="w-3 h-3" />
+                            إرفاق ملف
+                          </button>
+                          {replyFile && (
+                            <div className="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 max-w-[180px]">
+                              {replyFile.type === "application/pdf"
+                                ? <FileText className="w-3 h-3 text-amber-400 shrink-0" />
+                                : <ImageIcon className="w-3 h-3 text-blue-400 shrink-0" />}
+                              <span className="truncate">{replyFile.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => setReplyFile(null)}
+                                className="text-slate-500 hover:text-red-400 shrink-0 ml-0.5"
+                              ><X className="w-3 h-3" /></button>
+                            </div>
+                          )}
+                        </div>
                         <div className="flex gap-2 justify-end">
                           <button
-                            onClick={() => { setReplyingId(null); setReplyText(""); }}
+                            onClick={() => { setReplyingId(null); setReplyText(""); setReplyFile(null); }}
                             className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600"
                           >إلغاء</button>
                           <button
