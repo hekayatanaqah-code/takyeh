@@ -17045,8 +17045,14 @@ interface OwnerNotifRow {
   message: string; isRead: boolean; createdAt: string;
 }
 
+type NotifFilter = "all" | "new_booking" | "booking_reminder";
+const NOTIF_PAGE_SIZE = 8;
+
 function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
   const qc = useQueryClient();
+  const [activeFilter, setActiveFilter] = useState<NotifFilter>("all");
+  const [showAll, setShowAll] = useState(false);
+
   const { data: rawNotifications = [], isLoading } = useQuery<OwnerNotifRow[]>({
     queryKey: ["owner", "notifications"],
     queryFn: async () => {
@@ -17067,7 +17073,7 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
     },
   });
 
-  const notifications = deduplicate
+  const allNotifs = deduplicate
     ? (() => {
         const seen = new Set<string>();
         return rawNotifications.filter(n => {
@@ -17079,12 +17085,68 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
       })()
     : rawNotifications;
 
-  const unread = notifications.filter((n) => !n.isRead);
+  const filtered = activeFilter === "all"
+    ? allNotifs
+    : allNotifs.filter(n => n.type === activeFilter);
+
+  const visible = showAll ? filtered : filtered.slice(0, NOTIF_PAGE_SIZE);
+  const hasMore = !showAll && filtered.length > NOTIF_PAGE_SIZE;
+  const unread = allNotifs.filter(n => !n.isRead);
+
+  const TABS: { key: NotifFilter; label: string; icon: string }[] = [
+    { key: "all",              label: "الكل",           icon: "🔔" },
+    { key: "new_booking",      label: "حجوزات جديدة",   icon: "📅" },
+    { key: "booking_reminder", label: "تذكيرات",         icon: "⏰" },
+  ];
+
+  function renderNotif(n: OwnerNotifRow) {
+    const rawMsg = n.message.replace(/\[[\w:]+\]/g, "").trim();
+    const waMatch = rawMsg.match(/\|\s*(wa\.me\/\S+)/);
+    const displayMsg = waMatch ? rawMsg.slice(0, rawMsg.lastIndexOf("|")).trim() : rawMsg;
+    const waHref = waMatch ? `https://${waMatch[1]}` : null;
+    const typeIcon = n.type === "new_booking" ? "📅" : n.type === "new_review" ? "⭐" : n.type === "report_dismissed" ? "🚩" : n.type === "booking_reminder" ? "⏰" : "🔔";
+    const notifDate = new Date(n.createdAt);
+    const hDate = toHijriComponents(notifDate);
+    const isToday = new Date().toDateString() === notifDate.toDateString();
+    const isYesterday = new Date(Date.now() - 86400000).toDateString() === notifDate.toDateString();
+    const hijriStr = `${toArN(hDate.day)} ${HIJRI_MONTHS_AR[hDate.month - 1]} ${toArN(hDate.year)} هـ`;
+    const gregStr = notifDate.toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" });
+    const timeStr = notifDate.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", hour12: true });
+    const dateLabel = isToday ? `اليوم، ${hijriStr}` : isYesterday ? `أمس، ${hijriStr}` : hijriStr;
+    const fullDateStr = `${dateLabel} (${gregStr} م) | ${timeStr}`;
+
+    const rowBg = n.isRead
+      ? "bg-card"
+      : n.type === "new_booking"
+        ? "bg-green-50 dark:bg-green-900/15 border-r-2 border-green-400"
+        : n.type === "booking_reminder"
+          ? "bg-amber-50 dark:bg-amber-900/15 border-r-2 border-amber-400"
+          : "bg-primary/5 border-r-2 border-primary/40";
+
+    return (
+      <div key={n.id} className={`flex items-start gap-3 px-5 py-3.5 text-sm transition-colors ${rowBg}`}>
+        <div className="text-base shrink-0 mt-0.5">{typeIcon}</div>
+        <div className="flex-1 min-w-0">
+          <p className={`leading-relaxed ${n.isRead ? "text-muted-foreground" : "text-foreground font-medium"}`}>{displayMsg}</p>
+          {waHref && (
+            <a href={waHref} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg transition-colors">
+              <Phone className="w-3 h-3" />
+              إرسال على واتساب
+            </a>
+          )}
+          <p className="text-[11px] text-muted-foreground/80 mt-1">{fullDateStr}</p>
+        </div>
+        {!n.isRead && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />}
+      </div>
+    );
+  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
       <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-muted/30">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
               <Bell className="w-4 h-4 text-amber-600 dark:text-amber-400" />
@@ -17092,73 +17154,71 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
             <div>
               <h2 className="font-bold text-base text-foreground">الإشعارات</h2>
               {unread.length > 0 && (
-                <p className="text-xs text-muted-foreground">{unread.length} إشعار غير مقروء</p>
+                <p className="text-xs text-muted-foreground">{toArN(unread.length)} غير مقروء</p>
               )}
             </div>
           </div>
           {unread.length > 0 && (
-            <Button
-              size="sm"
-              variant="default"
-              className="h-8 gap-1.5 text-xs px-3"
-              onClick={() => markAllRead.mutate()}
-              disabled={markAllRead.isPending}
-            >
+            <Button size="sm" variant="default" className="h-8 gap-1.5 text-xs px-3"
+              onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}>
               {markAllRead.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
               تحديد الكل كمقروء
             </Button>
           )}
         </div>
+
+        {/* Filter tabs */}
+        <div className="flex items-center gap-1 px-4 py-2.5 border-b border-border bg-muted/10">
+          {TABS.map(tab => {
+            const count = tab.key === "all" ? allNotifs.length : allNotifs.filter(n => n.type === tab.key).length;
+            const isActive = activeFilter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => { setActiveFilter(tab.key); setShowAll(false); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <span>{tab.icon}</span>
+                {tab.label}
+                {count > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                    {toArN(count)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Body */}
         {isLoading ? (
           <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 animate-spin text-muted-foreground" /></div>
-        ) : notifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-14 text-muted-foreground gap-3">
-            <Bell className="w-10 h-10 opacity-20" />
-            <p className="text-sm">لا توجد إشعارات حتى الآن</p>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
+            <Bell className="w-9 h-9 opacity-20" />
+            <p className="text-sm">لا توجد إشعارات في هذا التصنيف</p>
           </div>
         ) : (
-          <div className="divide-y divide-border">
-            {notifications.map((n) => {
-              // Strip bracket codes like [booking:98] or [98:booking] from message
-              const rawMsg = n.message.replace(/\[[\w:]+\]/g, "").trim();
-              // Extract optional wa.me link
-              const waMatch = rawMsg.match(/\|\s*(wa\.me\/\S+)/);
-              const displayMsg = waMatch ? rawMsg.slice(0, rawMsg.lastIndexOf("|")).trim() : rawMsg;
-              const waHref = waMatch ? `https://${waMatch[1]}` : null;
-              const typeIcon = n.type === "new_booking" ? "📅" : n.type === "new_review" ? "⭐" : n.type === "report_dismissed" ? "🚩" : "🔔";
-              // Format date: dual Hijri + Gregorian with Arabic-Indic digits
-              const notifDate = new Date(n.createdAt);
-              const hDate = toHijriComponents(notifDate);
-              const isToday = new Date().toDateString() === notifDate.toDateString();
-              const isYesterday = new Date(Date.now() - 86400000).toDateString() === notifDate.toDateString();
-              const hijriStr = `${toArN(hDate.day)} ${HIJRI_MONTHS_AR[hDate.month - 1]} ${toArN(hDate.year)} هـ`;
-              const gregStr = notifDate.toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" });
-              const timeStr = notifDate.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", hour12: true });
-              const dateLabel = isToday ? `اليوم، ${hijriStr}` : isYesterday ? `أمس، ${hijriStr}` : hijriStr;
-              const fullDateStr = `${dateLabel} (${gregStr} م) | ${timeStr}`;
-              return (
-                <div key={n.id} className={`flex items-start gap-3 px-5 py-4 text-sm transition-colors ${n.isRead ? "opacity-60" : n.type === "new_booking" ? "bg-green-50/60 dark:bg-green-900/10" : "bg-amber-50/60 dark:bg-amber-900/10"}`}>
-                  <div className="text-base shrink-0 mt-0.5">{typeIcon}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-foreground leading-relaxed">{displayMsg}</p>
-                    {waHref && (
-                      <a
-                        href={waHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg transition-colors"
-                      >
-                        <Phone className="w-3 h-3" />
-                        إرسال على واتساب
-                      </a>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-1.5">{fullDateStr}</p>
-                  </div>
-                  {!n.isRead && <span className="w-2 h-2 rounded-full bg-green-500 shrink-0 mt-1.5" />}
-                </div>
-              );
-            })}
-          </div>
+          <>
+            <div className="max-h-[480px] overflow-y-auto divide-y divide-border/60 overscroll-contain">
+              {visible.map(renderNotif)}
+            </div>
+            {hasMore && (
+              <div className="border-t border-border px-5 py-3 bg-muted/20 flex justify-center">
+                <button
+                  onClick={() => setShowAll(true)}
+                  className="flex items-center gap-2 text-sm text-primary hover:text-primary/80 font-medium transition-colors"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                  عرض الإشعارات السابقة ({toArN(filtered.length - NOTIF_PAGE_SIZE)} إشعار)
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </motion.div>
