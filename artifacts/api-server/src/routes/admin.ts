@@ -1161,7 +1161,7 @@ router.get("/support-requests", async (req, res) => {
       ownerId
         ? sql`SELECT s.id, s.owner_id,
                 COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
-                s.subject, s.message, s.status, s.admin_reply, s.admin_reply_at, s.is_read_by_owner, s.created_at
+                s.subject, s.message, s.status, s.attachment_url, s.admin_reply, s.admin_reply_at, s.is_read_by_owner, s.created_at
               FROM owner_support_requests s
               LEFT JOIN LATERAL (
                 SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
@@ -1171,7 +1171,7 @@ router.get("/support-requests", async (req, res) => {
               ORDER BY s.created_at DESC LIMIT 300`
         : sql`SELECT s.id, s.owner_id,
                 COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
-                s.subject, s.message, s.status, s.admin_reply, s.admin_reply_at, s.is_read_by_owner, s.created_at
+                s.subject, s.message, s.status, s.attachment_url, s.admin_reply, s.admin_reply_at, s.is_read_by_owner, s.created_at
               FROM owner_support_requests s
               LEFT JOIN LATERAL (
                 SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1

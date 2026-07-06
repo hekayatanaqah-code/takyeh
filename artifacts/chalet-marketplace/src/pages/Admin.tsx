@@ -51,7 +51,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, Check, Video, Mail, MessageSquare, Send, Inbox, Smartphone, Download } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, FileText, Check, Video, Mail, MessageSquare, Send, Inbox, Smartphone, Download } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -6809,6 +6809,7 @@ interface OwnerSupportRequest {
   subject: string;
   message: string;
   status: string;
+  attachment_url: string | null;
   admin_reply: string | null;
   admin_reply_at: string | null;
   is_read_by_owner: boolean;
@@ -6953,6 +6954,30 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
                     <div>
                       <p className="text-xs text-slate-500 mb-1.5 font-medium">رسالة المالك:</p>
                       <div className="bg-slate-800/80 rounded-lg p-3 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{req.message}</div>
+                      {req.attachment_url && (
+                        <div className="mt-2">
+                          {req.attachment_url.toLowerCase().includes(".pdf") ? (
+                            <a
+                              href={req.attachment_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 text-xs font-medium text-amber-300 hover:text-amber-200 border border-slate-600 hover:border-amber-500/50 rounded-lg px-3 py-2 bg-slate-800 transition-colors"
+                            >
+                              <FileText className="w-4 h-4 text-red-400 shrink-0" />
+                              عرض المرفق PDF
+                              <ExternalLink className="w-3 h-3 opacity-60" />
+                            </a>
+                          ) : (
+                            <a href={req.attachment_url} target="_blank" rel="noopener noreferrer" className="block w-fit">
+                              <img
+                                src={req.attachment_url}
+                                alt="مرفق المالك"
+                                className="max-h-48 max-w-xs rounded-lg border border-slate-600 object-cover hover:border-amber-500/50 hover:opacity-90 transition-all"
+                              />
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Existing reply */}
