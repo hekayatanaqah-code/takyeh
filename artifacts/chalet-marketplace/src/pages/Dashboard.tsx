@@ -22981,7 +22981,17 @@ function OwnerSupportTab() {
                   {hasUnread && <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0 animate-pulse" />}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-foreground truncate">{msg.subject}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{new Date(msg.created_at).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{(() => {
+                      const d = new Date(msg.created_at);
+                      const hc = toHijriComponents(d);
+                      const isToday = new Date().toDateString() === d.toDateString();
+                      const isYesterday = new Date(Date.now() - 86400000).toDateString() === d.toDateString();
+                      const hijriStr = `${toArN(hc.day)} ${HIJRI_MONTHS_AR[hc.month - 1]} ${toArN(hc.year)} هـ`;
+                      const gregStr = d.toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" });
+                      const timeStr = d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", hour12: true });
+                      const label = isToday ? `اليوم، ${hijriStr}` : isYesterday ? `أمس، ${hijriStr}` : hijriStr;
+                      return `${label} (${gregStr} م) | ${timeStr}`;
+                    })()}</p>
                   </div>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0 ${statusInfo.color}`}>{statusInfo.label}</span>
                   {msg.admin_reply && <span className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700/40 px-2 py-0.5 rounded-full shrink-0">رد متاح</span>}
@@ -23013,7 +23023,7 @@ function OwnerSupportTab() {
                     {msg.admin_reply && (
                       <div>
                         <p className="text-xs text-blue-600 dark:text-blue-400 mb-1.5 font-medium flex items-center gap-1.5">
-                          <Send className="w-3 h-3" /> رد فريق تكية {msg.admin_reply_at ? `— ${new Date(msg.admin_reply_at).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })}` : ""}:
+                          <Send className="w-3 h-3" /> رد فريق تكية {msg.admin_reply_at ? ("— " + (() => { const d = new Date(msg.admin_reply_at!); const hc = toHijriComponents(d); const hijriStr = toArN(hc.day) + " " + HIJRI_MONTHS_AR[hc.month - 1] + " " + toArN(hc.year) + " هـ"; const gregStr = d.toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" }); const timeStr = d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", hour12: true }); return hijriStr + " (" + gregStr + " م) | " + timeStr; })()) : ""}:
                         </p>
                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600/30 rounded-lg p-3 text-sm text-blue-900 dark:text-blue-200 leading-relaxed whitespace-pre-wrap">{msg.admin_reply}</div>
                       </div>
