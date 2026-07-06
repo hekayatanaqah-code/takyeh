@@ -22704,12 +22704,23 @@ function OwnerSupportTab() {
     return fetch(`${BASE}/api${path}`, { credentials: "include", headers: { "Content-Type": "application/json", ...(opts?.headers ?? {}) }, ...opts });
   }
 
+  const { data: siteSettings = {} } = useQuery<Record<string, string>>({
+    queryKey: ["siteSettings"],
+    queryFn: async () => {
+      const r = await fetch(`${import.meta.env.BASE_URL}api/page-content`);
+      if (!r.ok) return {};
+      const rows: { key: string; value: string }[] = await r.json();
+      return Object.fromEntries(rows.map((x) => [x.key, x.value]));
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   const SUBJECTS = [
     "طلب تعديل تقني",
     "مشكلة في لوحة التحكم",
     "اقتراح ميزة جديدة",
-    "طلب تحديث بيانات العقار",
-    "استفسار عن الاشتراك",
+    "تحديث بيانات الشاليه/العقار",
+    "الفواتير والاشتراكات",
     "أخرى",
   ];
 
@@ -22916,7 +22927,22 @@ function OwnerSupportTab() {
       {/* Info note */}
       <div className="bg-muted/50 border border-border rounded-xl px-4 py-3 text-xs text-muted-foreground leading-relaxed">
         <p className="font-semibold text-foreground mb-1">ملاحظة</p>
-        <p>يتم مراجعة الطلبات خلال ٢٤–٤٨ ساعة. للاستفسارات العاجلة تواصل معنا مباشرةً عبر الواتساب من صفحة "اتصل بنا".</p>
+        <p>
+          يتم مراجعة الطلبات خلال ٢٤–٤٨ ساعة. للاستفسارات العاجلة تواصل معنا مباشرةً عبر{" "}
+          {siteSettings.platform_whatsapp ? (
+            <a
+              href={`https://wa.me/${siteSettings.platform_whatsapp}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-green-600 dark:text-green-400 underline underline-offset-2 hover:text-green-700 transition-colors"
+            >
+              الواتساب
+            </a>
+          ) : (
+            <span>الواتساب</span>
+          )}
+          .
+        </p>
       </div>
     </div>
   );
