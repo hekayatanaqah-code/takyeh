@@ -22784,21 +22784,16 @@ function OwnerSupportTab() {
     if (!subject) { setError("اختر الموضوع"); return; }
     if (!message.trim() || message.trim().length < 10) { setError("الرجاء كتابة وصف مفصّل (١٠ أحرف على الأقل)"); return; }
     setSubmitting(true);
+    if (attachFile) setUploading(true);
     try {
-      let attachment_url: string | null = null;
-      if (attachFile) {
-        setUploading(true);
-        const fd = new FormData();
-        fd.append("file", attachFile);
-        const up = await fetch(`${BASE}/api/storage/uploads/process`, { method: "POST", body: fd, credentials: "include" });
-        setUploading(false);
-        if (!up.ok) { setError("فشل رفع المرفق، حاول مرة أخرى"); setSubmitting(false); return; }
-        const upData = await up.json();
-        attachment_url = upData.url ?? null;
-      }
-      const r = await apiFetch("/owner/support-request", {
+      const fd = new FormData();
+      fd.append("subject", subject);
+      fd.append("message", message.trim());
+      if (attachFile) fd.append("file", attachFile);
+      const r = await fetch(`${BASE}/api/owner/support-request`, {
         method: "POST",
-        body: JSON.stringify({ subject, message: message.trim(), attachment_url }),
+        body: fd,
+        credentials: "include",
       });
       const d = await r.json().catch(() => null);
       if (!r.ok) { setError(d?.error ?? "حدث خطأ، يرجى المحاولة مرة أخرى"); return; }

@@ -1,4 +1,7 @@
 import { Router } from "express";
+import multer from "multer";
+import sharp from "sharp";
+import { ObjectStorageService } from "../lib/objectStorage";
 import { db } from "@workspace/db";
 import {
   ownerBookingsTable,
@@ -36,6 +39,9 @@ import type { Request, Response, NextFunction } from "express";
 import { sendOtpEmail } from "../lib/email";
 
 const router = Router();
+
+const supportUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const supportStorageSvc = new ObjectStorageService();
 
 /* ── Platform-admin guard ───────────────────────────────────────
    Only the designated platform admin Replit account(s) may view
@@ -745,7 +751,7 @@ router.patch("/profile/calendar-prefs", requireAuth, async (req, res) => {
 });
 
 /* ── POST /owner/support-request — submit a support/feature request ── */
-router.post("/support-request", requireAuth, async (req, res) => {
+router.post("/support-request", requireAuth, supportUpload.single("file"), async (req, res) => {
   try {
     const { subject, message } = req.body as { subject?: string; message?: string };
     if (!subject?.trim()) return res.status(400).json({ error: "الموضوع مطلوب" });
@@ -754,19 +760,13 @@ router.post("/support-request", requireAuth, async (req, res) => {
     /* Resolve owner identity — use user ID as primary key */
     const ownerId = String(req.user?.id ?? (await resolveOwnerEmail(req)) ?? "unknown");
 
-    /* Resolve name:
-     *  1. Try owner_applications via email (works when owner_id IS an email)
-     *  2. Try chalet_submissions.owner_id → whatsapp_number → owner_applications.phone
-     *     (works when owner_id is a Replit numeric user ID or "owner_N" key)
-     */
+    /* Resolve name */
     let ownerName: string | null = null;
     try {
-      // Strategy 1 — owner_id is email-shaped
       if (ownerId.includes("@")) {
         const r = await db.execute(sql`SELECT full_name FROM owner_applications WHERE LOWER(email) = LOWER(${ownerId}) LIMIT 1`);
         ownerName = ((r as any).rows as Array<{ full_name: string }>)[0]?.full_name ?? null;
       }
-      // Strategy 2 — owner_id is Replit user ID or "owner_N" → join via chalet_submissions
       if (!ownerName) {
         const r = await db.execute(
           sql`SELECT oa.full_name FROM chalet_submissions cs
@@ -776,14 +776,44 @@ router.post("/support-request", requireAuth, async (req, res) => {
         );
         ownerName = ((r as any).rows as Array<{ full_name: string }>)[0]?.full_name ?? null;
       }
-    } catch { /* ignore — name will be null, resolved at display time */ }
+    } catch { /* ignore */ }
 
-    const { attachment_url } = req.body as { subject?: string; message?: string; attachment_url?: string };
+    /* Upload attachment if provided */
+    let attachmentUrl: string | null = null;
+    const file = (req as any).file as Express.Multer.File | undefined;
+    if (file) {
+      try {
+        const isImage = file.mimetype.startsWith("image/");
+        const isPdf   = file.mimetype === "application/pdf" || file.originalname?.endsWith(".pdf");
+        let buffer: Buffer;
+        let contentType: string;
+        let ext: string;
+        if (isPdf) {
+          buffer = file.buffer;
+          contentType = "application/pdf";
+          ext = "pdf";
+        } else if (isImage) {
+          buffer = await sharp(file.buffer)
+            .resize({ width: 2048, withoutEnlargement: true })
+            .webp({ quality: 82 })
+            .toBuffer();
+          contentType = "image/webp";
+          ext = "webp";
+        } else {
+          return res.status(400).json({ error: "يُسمح فقط بصور PNG/JPG أو ملفات PDF" });
+        }
+        attachmentUrl = await supportStorageSvc.uploadBuffer(buffer, contentType, ext);
+      } catch (uploadErr) {
+        console.error("[POST /owner/support-request] attachment upload failed:", uploadErr);
+        /* Non-fatal — submit without attachment rather than failing */
+      }
+    }
+
     await db.execute(
       sql`INSERT INTO owner_support_requests (owner_id, owner_name, subject, message, status, attachment_url, created_at)
-          VALUES (${String(ownerId)}, ${ownerName}, ${subject.trim()}, ${message.trim()}, 'new', ${attachment_url?.trim() || null}, now())`
+          VALUES (${String(ownerId)}, ${ownerName}, ${subject.trim()}, ${message.trim()}, 'new', ${attachmentUrl}, now())`
     );
-    return res.json({ ok: true });
+    return res.json({ ok: true, attachment_url: attachmentUrl });
   } catch (err) {
     console.error("[POST /owner/support-request]", err);
     return res.status(500).json({ error: "حدث خطأ أثناء إرسال الطلب" });
