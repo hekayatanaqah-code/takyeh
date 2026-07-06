@@ -38,6 +38,7 @@ import {
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
   X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays, PieChart, Save, ScrollText, Check, Printer, ArrowRight,
+  Paperclip, Upload,
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -22684,6 +22685,7 @@ interface OwnerSupportMsg {
   subject: string;
   message: string;
   status: string;
+  attachment_url: string | null;
   admin_reply: string | null;
   admin_reply_at: string | null;
   is_read_by_owner: boolean;
@@ -22724,13 +22726,40 @@ function OwnerSupportTab() {
     "أخرى",
   ];
 
-  const [subject,     setSubject]     = useState("");
-  const [message,     setMessage]     = useState("");
-  const [submitting,  setSubmitting]  = useState(false);
-  const [submitted,   setSubmitted]   = useState(false);
-  const [error,       setError]       = useState("");
-  const [expandedId,  setExpandedId]  = useState<number | null>(null);
-  const [showForm,    setShowForm]    = useState(false);
+  const [subject,      setSubject]      = useState("");
+  const [message,      setMessage]      = useState("");
+  const [submitting,   setSubmitting]   = useState(false);
+  const [submitted,    setSubmitted]    = useState(false);
+  const [error,        setError]        = useState("");
+  const [expandedId,   setExpandedId]   = useState<number | null>(null);
+  const [showForm,     setShowForm]     = useState(false);
+  const [attachFile,   setAttachFile]   = useState<File | null>(null);
+  const [attachPreview,setAttachPreview] = useState<string | null>(null);
+  const [uploading,    setUploading]    = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ["image/png", "image/jpeg", "image/jpg", "application/pdf"];
+    if (!allowed.includes(file.type)) { setError("يُسمح فقط بـ PNG, JPG, PDF"); return; }
+    if (file.size > 5 * 1024 * 1024) { setError("حجم الملف يتجاوز الحد الأقصى (5MB)"); return; }
+    setAttachFile(file);
+    setError("");
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setAttachPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setAttachPreview("pdf");
+    }
+  }
+
+  function clearAttachment() {
+    setAttachFile(null);
+    setAttachPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   /* Fetch message history */
   const { data: history = [], isLoading: histLoading } = useQuery<OwnerSupportMsg[]>({
@@ -22756,18 +22785,30 @@ function OwnerSupportTab() {
     if (!message.trim() || message.trim().length < 10) { setError("الرجاء كتابة وصف مفصّل (١٠ أحرف على الأقل)"); return; }
     setSubmitting(true);
     try {
+      let attachment_url: string | null = null;
+      if (attachFile) {
+        setUploading(true);
+        const fd = new FormData();
+        fd.append("file", attachFile);
+        const up = await fetch(`${BASE}/api/storage/uploads/process`, { method: "POST", body: fd, credentials: "include" });
+        setUploading(false);
+        if (!up.ok) { setError("فشل رفع المرفق، حاول مرة أخرى"); setSubmitting(false); return; }
+        const upData = await up.json();
+        attachment_url = upData.url ?? null;
+      }
       const r = await apiFetch("/owner/support-request", {
         method: "POST",
-        body: JSON.stringify({ subject, message: message.trim() }),
+        body: JSON.stringify({ subject, message: message.trim(), attachment_url }),
       });
       const d = await r.json().catch(() => null);
       if (!r.ok) { setError(d?.error ?? "حدث خطأ، يرجى المحاولة مرة أخرى"); return; }
       setSubmitted(true);
       setShowForm(false);
+      clearAttachment();
       qc.invalidateQueries({ queryKey: ["owner", "support-requests"] });
       toast({ title: "تم الإرسال ✓", description: "سيتواصل معك فريق الدعم في أقرب وقت" });
     } catch { setError("تعذّر الاتصال بالخادم"); }
-    finally { setSubmitting(false); }
+    finally { setSubmitting(false); setUploading(false); }
   }
 
   const unreadReplies = history.filter((m) => m.admin_reply && !m.is_read_by_owner).length;
@@ -22840,12 +22881,61 @@ function OwnerSupportTab() {
             />
             <p className="text-xs text-muted-foreground text-left">{message.length} حرف</p>
           </div>
+
+          {/* File attachment */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Paperclip className="w-4 h-4 text-primary/70" />
+              إرفاق صورة أو ملف المشكلة
+              <span className="text-xs font-normal text-muted-foreground">(اختياري — PNG, JPG, PDF · حتى 5MB)</span>
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            {!attachFile ? (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border hover:border-primary/50 rounded-xl py-5 text-muted-foreground hover:text-primary transition-colors bg-muted/30 hover:bg-primary/5"
+              >
+                <Upload className="w-5 h-5" />
+                <span className="text-xs font-medium">اضغط لاختيار ملف أو صورة</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 bg-muted/40 border border-border rounded-xl px-4 py-3">
+                {attachPreview === "pdf" ? (
+                  <div className="w-12 h-12 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                    <FileText className="w-6 h-6 text-red-600 dark:text-red-400" />
+                  </div>
+                ) : (
+                  <img src={attachPreview!} alt="معاينة" className="w-12 h-12 rounded-lg object-cover shrink-0 border border-border" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{attachFile.name}</p>
+                  <p className="text-xs text-muted-foreground">{(attachFile.size / 1024).toFixed(0)} KB</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearAttachment}
+                  className="shrink-0 w-7 h-7 rounded-full bg-destructive/10 hover:bg-destructive/20 flex items-center justify-center text-destructive transition-colors"
+                  title="حذف المرفق"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+
           {error && <p className="text-sm text-destructive font-medium">{error}</p>}
           <div className="flex gap-2">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => setShowForm(false)}>إلغاء</Button>
-            <Button type="submit" className="flex-1 gap-2" disabled={submitting}>
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              إرسال الطلب
+            <Button type="button" variant="outline" className="flex-1" onClick={() => { setShowForm(false); clearAttachment(); }}>إلغاء</Button>
+            <Button type="submit" className="flex-1 gap-2" disabled={submitting || uploading}>
+              {uploading ? <><Loader2 className="w-4 h-4 animate-spin" />جاري رفع الملف...</> : submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {!uploading && "إرسال الطلب"}
             </Button>
           </div>
         </form>
@@ -22903,6 +22993,21 @@ function OwnerSupportTab() {
                     <div>
                       <p className="text-xs text-muted-foreground mb-1.5 font-medium">رسالتك:</p>
                       <div className="bg-background border border-border rounded-lg p-3 text-sm text-foreground leading-relaxed whitespace-pre-wrap">{msg.message}</div>
+                      {msg.attachment_url && (
+                        <div className="mt-2">
+                          {msg.attachment_url.endsWith(".pdf") ? (
+                            <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 text-xs font-medium text-primary hover:underline border border-border rounded-lg px-3 py-2 bg-muted/30">
+                              <FileText className="w-4 h-4 text-red-500" />
+                              عرض المرفق PDF
+                            </a>
+                          ) : (
+                            <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer">
+                              <img src={msg.attachment_url} alt="مرفق" className="max-h-40 rounded-lg border border-border object-cover hover:opacity-90 transition-opacity" />
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
                     {/* Admin reply */}
                     {msg.admin_reply && (

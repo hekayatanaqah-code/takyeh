@@ -778,9 +778,10 @@ router.post("/support-request", requireAuth, async (req, res) => {
       }
     } catch { /* ignore — name will be null, resolved at display time */ }
 
+    const { attachment_url } = req.body as { subject?: string; message?: string; attachment_url?: string };
     await db.execute(
-      sql`INSERT INTO owner_support_requests (owner_id, owner_name, subject, message, status, created_at)
-          VALUES (${String(ownerId)}, ${ownerName}, ${subject.trim()}, ${message.trim()}, 'new', now())`
+      sql`INSERT INTO owner_support_requests (owner_id, owner_name, subject, message, status, attachment_url, created_at)
+          VALUES (${String(ownerId)}, ${ownerName}, ${subject.trim()}, ${message.trim()}, 'new', ${attachment_url?.trim() || null}, now())`
     );
     return res.json({ ok: true });
   } catch (err) {
@@ -795,7 +796,7 @@ router.get("/support-requests", requireAuth, async (req, res) => {
     const email = await resolveOwnerEmail(req);
     const ownerId = req.user?.id ?? email ?? "unknown";
     const result = await db.execute(
-      sql`SELECT id, owner_id, subject, message, status, admin_reply, admin_reply_at, is_read_by_owner, created_at
+      sql`SELECT id, owner_id, subject, message, status, attachment_url, admin_reply, admin_reply_at, is_read_by_owner, created_at
           FROM owner_support_requests
           WHERE owner_id = ${String(ownerId)}
           ORDER BY created_at DESC`
