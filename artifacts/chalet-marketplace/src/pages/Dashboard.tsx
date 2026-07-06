@@ -17119,8 +17119,8 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
         ) : (
           <div className="divide-y divide-border">
             {notifications.map((n) => {
-              // Strip bracket codes like [98:booking] from message
-              const rawMsg = n.message.replace(/\[\d+:[^\]]+\]/g, "").trim();
+              // Strip bracket codes like [booking:98] or [98:booking] from message
+              const rawMsg = n.message.replace(/\[[\w:]+\]/g, "").trim();
               // Extract optional wa.me link
               const waMatch = rawMsg.match(/\|\s*(wa\.me\/\S+)/);
               const displayMsg = waMatch ? rawMsg.slice(0, rawMsg.lastIndexOf("|")).trim() : rawMsg;
