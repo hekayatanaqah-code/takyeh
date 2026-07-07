@@ -12716,22 +12716,10 @@ function TransactionHistoryTab() {
   const { unit } = useAdminFinance();
   const qcHist = useQueryClient();
   const { toast } = useToast();
-  const _now = new Date();
-  const currentMonth = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
-  const [month, setMonth] = useState(currentMonth);
+  const [histCalType, setHistCalType] = useState<"hijri" | "gregorian">("hijri");
+  const [histYear, setHistYear] = useState<string>("");
+  const [histMonth, setHistMonth] = useState<string>("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-
-  const fmtDualDate = (dateStr: string) => {
-    const { hijri, gregorian } = formatDualDate(dateStr);
-    return `${hijri.replace(/\s*هـ\s*$/, "")} (${gregorian})`;
-  };
-
-  const monthOptions: { value: string; label: string }[] = [];
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(_now.getFullYear(), _now.getMonth() - i, 1);
-    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    monthOptions.push({ value: val, label: d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" }) });
-  }
 
   const submissionId = unit.type === "chalet" ? unit.submissionId : undefined;
 
@@ -12755,14 +12743,14 @@ function TransactionHistoryTab() {
 
   const [receiptLightboxTx, setReceiptLightboxTx] = useState<string | null>(null);
 
-  const { data: items = [], isLoading } = useQuery<{
-    id: string; date: string; type: "income" | "expense" | "withdrawal";
+  const { data: allItems = [], isLoading } = useQuery<{
+    id: string; date: string; type: "income" | "expense" | "withdrawal" | "refund";
     label: string; amount: number; method: string; status: string; cashDeposited: boolean | null;
-    paymentReceiptUrl?: string | null;
+    paymentReceiptUrl?: string | null; bookingId?: number | null;
   }[]>({
-    queryKey: ["owner", "transaction-history", month, submissionId ?? "all"],
+    queryKey: ["owner", "transaction-history", submissionId ?? "all"],
     queryFn: async () => {
-      const params = new URLSearchParams({ month });
+      const params = new URLSearchParams();
       if (submissionId) params.set("submissionId", String(submissionId));
       const r = await fetch(`/api/owner/transaction-history?${params}`, { credentials: "include" });
       if (!r.ok) return [];
@@ -12770,11 +12758,41 @@ function TransactionHistoryTab() {
     },
   });
 
+  /* Build year/month option lists from fetched data (client-side dual calendar) */
+  const histYearOptions = useMemo(() => {
+    const years = new Set<string>();
+    for (const e of allItems) {
+      if (!e.date) continue;
+      years.add(getBookingMonthKey(e.date, histCalType).split("-")[0]);
+    }
+    return Array.from(years).sort().reverse();
+  }, [allItems, histCalType]);
+
+  const histMonthOptions = useMemo(() => {
+    const keys = new Set<string>();
+    for (const e of allItems) {
+      if (!e.date) continue;
+      const key = getBookingMonthKey(e.date, histCalType);
+      if (histYear && !key.startsWith(histYear)) continue;
+      keys.add(key);
+    }
+    return Array.from(keys).sort().reverse();
+  }, [allItems, histCalType, histYear]);
+
+  const items = useMemo(() => allItems.filter(e => {
+    if (!e.date) return true;
+    const key = getBookingMonthKey(e.date, histCalType);
+    if (histMonth) return key === histMonth;
+    if (histYear) return key.startsWith(histYear);
+    return true;
+  }), [allItems, histCalType, histYear, histMonth]);
+
   const typeLabel = (t: string, method: string) => {
     if (t === "income") {
       const m = method === "transfer" ? "حوالة" : method === "pos" ? "شبكة" : "كاش";
       return { text: `إيراد — ${m}`, cls: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" };
     }
+    if (t === "refund") return { text: "مسترجع", cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" };
     if (t === "withdrawal") return { text: "مسحوبات شخصية", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" };
     return { text: "مصروف", cls: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" };
   };
@@ -12782,34 +12800,98 @@ function TransactionHistoryTab() {
   const statusLabel = (s: string) => {
     if (s === "collected") return { text: "مُحصَّل", cls: "text-green-600 dark:text-green-400" };
     if (s === "deposit_only") return { text: "عربون فقط", cls: "text-amber-600 dark:text-amber-400" };
-    if (s === "cancelled") return { text: "ملغي", cls: "text-red-500 dark:text-red-400" };
+    if (s === "cancelled") return { text: "ملغي", cls: "text-slate-400 dark:text-slate-500" };
+    if (s === "refunded") return { text: "مُسترجَع", cls: "text-orange-600 dark:text-orange-400" };
     return { text: "مدفوع", cls: "text-slate-500" };
   };
 
   const totalIn = items.filter(i => i.type === "income" && i.status !== "cancelled").reduce((s, i) => s + i.amount, 0);
-  const totalOut = items.filter(i => i.type !== "income").reduce((s, i) => s + i.amount, 0);
+  const totalRefunds = items.filter(i => i.type === "refund").reduce((s, i) => s + i.amount, 0);
+  const totalOut = items.filter(i => i.type === "expense" || i.type === "withdrawal").reduce((s, i) => s + i.amount, 0);
 
   return (
     <div className="space-y-4">
-      {/* Month selector */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <ListChecks className="w-4 h-4 text-slate-600 shrink-0" />
-        <h3 className="font-bold text-foreground">سجل المعاملات المالية</h3>
-        <select
-          value={month}
-          onChange={e => setMonth(e.target.value)}
-          className="mr-auto text-sm border border-border rounded-lg px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-          dir="rtl"
-        >
-          {monthOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+      {/* Header card with dual calendar filter */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
+          <ListChecks className="w-4 h-4 text-slate-600 shrink-0" />
+          <div>
+            <h3 className="font-bold text-base text-foreground">سجل المعاملات المالية</h3>
+            <p className="text-[11px] text-muted-foreground">سجل مفصّل لجميع الإيرادات والمصروفات</p>
+          </div>
+          {!isLoading && (
+            <div className="ms-auto text-xs font-semibold text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg">
+              {items.length} معاملة
+            </div>
+          )}
+        </div>
+        {/* Calendar toggle + year + month selectors */}
+        <div className="flex items-center gap-2 px-5 py-3 overflow-x-auto">
+          <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
+            {(["hijri", "gregorian"] as const).map(mode => (
+              <button key={mode} type="button"
+                onClick={() => { setHistCalType(mode); setHistYear(""); setHistMonth(""); }}
+                className={`text-xs px-3 py-1.5 font-medium transition-colors ${histCalType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+              >{mode === "hijri" ? "هجري" : "ميلادي"}</button>
+            ))}
+          </div>
+          <Select value={histYear || "__all__"} onValueChange={yr => { setHistYear(yr === "__all__" ? "" : yr); setHistMonth(""); }}>
+            <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7rem] shrink-0" dir="rtl">
+              {histYear
+                ? <span className="text-sm font-medium">{histCalType === "hijri" ? `${toArN(Number(histYear))} هـ` : `${toArN(Number(histYear))} م`}</span>
+                : <span className="text-sm text-muted-foreground">كل السنوات</span>}
+            </SelectTrigger>
+            <SelectContent dir="rtl" align="end">
+              <SelectItem value="__all__"><span className="text-sm">كل السنوات</span></SelectItem>
+              {histYearOptions.map(yr => (
+                <SelectItem key={yr} value={yr}>
+                  {histCalType === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={!histYear ? "all" : (histMonth || "all")}
+            onValueChange={v => { if (histYear) setHistMonth(v === "all" ? "" : v); }}
+            disabled={!histYear}
+          >
+            <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[8rem] shrink-0" dir="rtl">
+              {histMonth && histYear ? (() => {
+                const ms = Number(histMonth.split("-")[1]);
+                return histCalType === "hijri"
+                  ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]}</span>
+                  : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
+              })() : <span className="text-sm text-muted-foreground">كل المعاملات</span>}
+            </SelectTrigger>
+            <SelectContent dir="rtl" align="end">
+              <SelectItem value="all"><span className="text-sm">كل المعاملات</span></SelectItem>
+              {histMonthOptions.map(key => {
+                const [ys, ms] = key.split("-").map(Number);
+                const primary = histCalType === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
+                const corr = getCalCorrespondenceHint(key, histCalType);
+                return (
+                  <SelectItem key={key} value={key} textValue={primary}>
+                    <div style={{width:"100%",direction:"rtl"}}>
+                      <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
+                      {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {/* Summary row */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Summary cards — 3 cards: إيرادات / مسترجع / مصروفات */}
+      <div className="grid grid-cols-3 gap-3">
         <div className="rounded-xl border border-green-200 bg-green-50 dark:bg-green-900/10 p-3.5">
           <div className="text-xs text-green-700 dark:text-green-400 font-semibold">إجمالي الإيرادات</div>
           <div className="text-xl font-extrabold text-green-700 dark:text-green-300 tabular-nums mt-0.5">{totalIn.toLocaleString("ar-SA")} <span className="text-xs font-normal">ر.س</span></div>
+        </div>
+        <div className="rounded-xl border border-orange-200 bg-orange-50 dark:bg-orange-900/10 p-3.5">
+          <div className="text-xs text-orange-700 dark:text-orange-400 font-semibold">إجمالي المسترجع</div>
+          <div className="text-xl font-extrabold text-orange-700 dark:text-orange-300 tabular-nums mt-0.5">{totalRefunds.toLocaleString("ar-SA")} <span className="text-xs font-normal">ر.س</span></div>
         </div>
         <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/10 p-3.5">
           <div className="text-xs text-red-700 dark:text-red-400 font-semibold">إجمالي المصروفات</div>
@@ -12821,7 +12903,9 @@ function TransactionHistoryTab() {
       {isLoading ? (
         <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}</div>
       ) : items.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">لا توجد معاملات في هذا الشهر</div>
+        <div className="text-center py-12 text-muted-foreground text-sm">
+          <div className="text-3xl mb-2">📭</div>لا توجد معاملات في هذه الفترة
+        </div>
       ) : (
         <div className="rounded-2xl border border-border overflow-hidden">
           <div className="overflow-x-auto">
@@ -12851,7 +12935,6 @@ function TransactionHistoryTab() {
                         ? { icon: "💳", label: "شبكة", cls: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" }
                         : { icon: "💵", label: "كاش", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" }
                     : null;
-                  /* ③ Arabicise any English label fragments from the API */
                   const arabicLabel = item.label
                     .replace(/\bWithdrawal\b/gi, "سحب نقدي")
                     .replace(/\bwithdraw\b/gi, "سحب نقدي")
@@ -12863,11 +12946,12 @@ function TransactionHistoryTab() {
                     .replace(/\bDeposit\b/gi, "عربون")
                     .replace(/\bCleaning\b/gi, "تنظيف")
                     .replace(/\bMaintenance\b/gi, "صيانة");
+                  const { hijri: _dHijri, gregorian: _dGreg } = formatDualDate(item.date);
                   return (
-                    /* ② dim entire row when cancelled */
                     <tr key={item.id} className={`hover:bg-muted/30 transition-colors ${needsDeposit ? "bg-amber-50/40 dark:bg-amber-950/10" : ""} ${isCancelled ? "opacity-50" : ""}`}>
                       <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap leading-tight">
-                        {fmtDualDate(item.date)}
+                        <span className="block">{_dHijri.replace(/\s*هـ\s*$/, "")}</span>
+                        <span className="block opacity-60">({_dGreg})</span>
                       </td>
                       <td className="px-4 py-3 space-y-1">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tl.cls}`}>{tl.text}</span>
@@ -12886,16 +12970,27 @@ function TransactionHistoryTab() {
                           <span className="text-muted-foreground text-xs">—</span>
                         )}
                       </td>
-                      {/* ④ allow label to wrap — no truncate, min width so it breathes */}
-                      <td className="px-4 py-3 text-foreground font-medium min-w-[130px] break-words whitespace-normal">{arabicLabel}</td>
-                      <td className="px-4 py-3 text-left font-bold tabular-nums whitespace-nowrap">
-                        {/* ① sign gets its own color; number stays dark/foreground */}
-                        <span className="inline-flex items-baseline gap-1.5">
-                          <span className={`text-base leading-none font-extrabold ${isIncome && !isCancelled ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
-                            {isIncome && !isCancelled ? "+" : "−"}
+                      <td className="px-4 py-3 min-w-[130px] break-words whitespace-normal">
+                        <div className="text-foreground font-medium text-sm">{arabicLabel}</div>
+                        {item.bookingId ? (
+                          <span className="inline-flex items-center mt-0.5 text-[11px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-md">
+                            #{item.bookingId}
                           </span>
-                          <span className="text-foreground">{item.amount.toLocaleString("ar-SA")}</span>
-                        </span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-left font-bold tabular-nums whitespace-nowrap">
+                        {isCancelled ? (
+                          <span className="text-muted-foreground/60 line-through text-sm">
+                            {item.amount > 0 ? item.amount.toLocaleString("ar-SA") : "—"}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-baseline gap-1.5">
+                            <span className={`text-base leading-none font-extrabold ${isIncome ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+                              {isIncome ? "+" : "−"}
+                            </span>
+                            <span className="text-foreground">{item.amount.toLocaleString("ar-SA")}</span>
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-col items-end gap-1.5">
@@ -21374,7 +21469,7 @@ export default function Dashboard() {
             { id: "notifications", label: "الإشعارات",             icon: <Bell className="w-4 h-4" />,         color: "text-amber-600" },
             { id: "reports",       label: "التقارير المالية",      icon: <BarChart2 className="w-4 h-4" />,    color: "text-indigo-600" },
             { id: "support",       label: "مركز الدعم",            icon: <MessageSquare className="w-4 h-4" />, color: "text-primary" },
-            { id: "history",       label: "سجل المعاملات",         icon: <ListChecks className="w-4 h-4" />,    color: "text-slate-600" },
+            { id: "history",       label: "سجل المعاملات المالية", icon: <ListChecks className="w-4 h-4" />,    color: "text-slate-600" },
           ] as const;
           return (
             <motion.div key="admin-finance-mode" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">

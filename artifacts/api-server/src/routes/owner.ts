@@ -4791,23 +4791,15 @@ router.get("/notification-settings", async (req, res) => {
 });
 
 /* ── GET /owner/transaction-history ───────────────────────────
-   Combined log: bookings income + expenses + withdrawals */
+   Combined log: bookings income + refunds + expenses + withdrawals
+   Client-side filtering by month; API returns all data for owner. */
 router.get("/transaction-history", async (req, res) => {
   const ownerId = req.user!.id;
-  const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : null;
   const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
 
   const bConds: Parameters<typeof and>[0][] = [eq(ownerBookingsTable.ownerId, ownerId)];
   const eConds: Parameters<typeof and>[0][] = [eq(ownerExpensesTable.ownerId, ownerId)];
   const pConds: Parameters<typeof and>[0][] = [eq(bookingPaymentsTable.ownerId, ownerId)];
-  if (month) {
-    bConds.push(gte(ownerBookingsTable.bookingDate, `${month}-01`));
-    bConds.push(lte(ownerBookingsTable.bookingDate, `${month}-31`));
-    eConds.push(gte(ownerExpensesTable.dateStr, `${month}-01`));
-    eConds.push(lte(ownerExpensesTable.dateStr, `${month}-31`));
-    pConds.push(gte(bookingPaymentsTable.paymentDate, `${month}-01`));
-    pConds.push(lte(bookingPaymentsTable.paymentDate, `${month}-31`));
-  }
   if (submissionId) {
     bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
     eConds.push(eq(ownerExpensesTable.submissionId, submissionId));
@@ -4835,21 +4827,57 @@ router.get("/transaction-history", async (req, res) => {
   const bookingIdsWithInstallments = new Set(instPayments.map(p => p.bookingId));
 
   const items = [
-    ...bookings.map(b => {
+    /* Booking entries — distinguish refund vs cancelled vs normal income */
+    ...bookings.flatMap(b => {
       const dep = Number(b.depositPaid ?? 0);
+      const refundAmt = Number((b as any).cancelRefundAmount ?? 0);
       const hasInst = bookingIdsWithInstallments.has(b.id);
       const bal = (!hasInst && b.balanceCollected) ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
-      return {
+
+      if (b.cancelledAt) {
+        if (dep > 0 && refundAmt > 0) {
+          /* Money was received AND refunded → "refund" row with negative sign */
+          return [{
+            id: `b-${b.id}`,
+            date: String(b.cancelledAt).slice(0, 10),
+            type: "refund" as const,
+            label: `استرداد — ${b.clientName}`,
+            amount: refundAmt,
+            method: (b.paymentMethod ?? "transfer") as string,
+            status: "refunded" as string,
+            cashDeposited: null as boolean | null,
+            paymentReceiptUrl: null as string | null,
+            bookingId: b.id as number | null,
+          }];
+        }
+        /* Cancelled — no money was ever paid (dep==0) or owner kept as fee → greyed row */
+        return [{
+          id: `b-${b.id}`,
+          date: b.bookingDate,
+          type: "income" as const,
+          label: `إيداع — ${b.clientName}`,
+          amount: dep,
+          method: (b.paymentMethod ?? "transfer") as string,
+          status: "cancelled" as string,
+          cashDeposited: null as boolean | null,
+          paymentReceiptUrl: null as string | null,
+          bookingId: b.id as number | null,
+        }];
+      }
+
+      /* Normal income */
+      return [{
         id: `b-${b.id}`,
         date: b.bookingDate,
         type: "income" as const,
         label: `إيداع — ${b.clientName}`,
         amount: dep + bal,
         method: (b.paymentMethod ?? "transfer") as string,
-        status: b.cancelledAt ? "cancelled" : (hasInst ? "deposit_only" : (b.balanceCollected ? "collected" : "deposit_only")),
+        status: hasInst ? "deposit_only" : (b.balanceCollected ? "collected" : "deposit_only"),
         cashDeposited: true as boolean | null,
         paymentReceiptUrl: b.paymentReceiptUrl ?? null,
-      };
+        bookingId: b.id as number | null,
+      }];
     }),
     ...instPayments
       .filter(p => !submissionId || p.submissionId === submissionId)
@@ -4863,6 +4891,7 @@ router.get("/transaction-history", async (req, res) => {
         status: "collected" as string,
         cashDeposited: p.cashDeposited as boolean | null,
         paymentReceiptUrl: p.receiptUrl ?? null,
+        bookingId: p.bookingId as number | null,
       })),
     ...expenses.map(e => ({
       id: `e-${e.id}`,
@@ -4874,6 +4903,7 @@ router.get("/transaction-history", async (req, res) => {
       status: "paid" as const,
       cashDeposited: null as boolean | null,
       paymentReceiptUrl: null as string | null,
+      bookingId: null as number | null,
     })),
   ].sort((a, b) => b.date.localeCompare(a.date));
 
