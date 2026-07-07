@@ -161,7 +161,11 @@ function getCalCorrespondenceHint(monthKey: string, calType: "hijri" | "gregoria
   } else {
     const h1 = toHijriComponents(new Date(ys, ms - 1, 1));
     const h2 = toHijriComponents(new Date(ys, ms, 0));
-    return `يوافق: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
+    if (h1.year === h2.year && h1.month === h2.month)
+      return `يوافق: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
+    if (h1.year === h2.year)
+      return `يوافق: ${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
+    return `يوافق: ${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
   }
 }
 
