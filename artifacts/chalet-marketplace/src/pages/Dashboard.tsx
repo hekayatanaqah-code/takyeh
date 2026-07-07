@@ -12873,8 +12873,11 @@ function TransactionHistoryTab() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-foreground font-medium max-w-[140px] truncate">{item.label}</td>
-                      <td className={`px-4 py-3 text-left font-bold tabular-nums whitespace-nowrap ${isIncome && item.status !== "cancelled" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                        {isIncome && item.status !== "cancelled" ? "+" : "−"}{item.amount.toLocaleString("ar-SA")}
+                      <td className="px-4 py-3 text-left font-bold tabular-nums whitespace-nowrap">
+                        <span className={`inline-flex items-baseline gap-1.5 ${isIncome && item.status !== "cancelled" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                          <span className="text-base leading-none">{isIncome && item.status !== "cancelled" ? "+" : "−"}</span>
+                          <span>{item.amount.toLocaleString("ar-SA")}</span>
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex flex-col items-end gap-1.5">
