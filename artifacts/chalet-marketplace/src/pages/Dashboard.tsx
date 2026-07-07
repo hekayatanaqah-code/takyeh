@@ -12750,7 +12750,7 @@ function TransactionHistoryTab() {
   const { data: allItems = [], isLoading } = useQuery<{
     id: string; date: string; type: "income" | "expense" | "withdrawal" | "refund";
     label: string; amount: number; method: string; status: string; cashDeposited: boolean | null;
-    paymentReceiptUrl?: string | null; bookingId?: number | null;
+    paymentReceiptUrl?: string | null; bookingId?: number | null; remainingBalance?: number | null;
   }[]>({
     queryKey: ["owner", "transaction-history", submissionId ?? "all"],
     queryFn: async () => {
@@ -12802,8 +12802,8 @@ function TransactionHistoryTab() {
   };
 
   const statusLabel = (s: string) => {
-    if (s === "collected") return { text: "مُحصَّل", cls: "text-green-600 dark:text-green-400" };
-    if (s === "deposit_only") return { text: "عربون فقط", cls: "text-amber-600 dark:text-amber-400" };
+    if (s === "collected") return { text: "مدفوع بالكامل", cls: "text-blue-600 dark:text-blue-400" };
+    if (s === "deposit_only") return { text: "عربون", cls: "text-amber-600 dark:text-amber-400" };
     if (s === "cancelled") return { text: "ملغي", cls: "text-slate-400 dark:text-slate-500" };
     if (s === "refunded") return { text: "مُسترجَع", cls: "text-orange-600 dark:text-orange-400" };
     return { text: "مدفوع", cls: "text-slate-500" };
@@ -13007,7 +13007,14 @@ function TransactionHistoryTab() {
                               {isUpdating ? "..." : "✓ تم الإيداع"}
                             </button>
                           ) : (
-                            <span className={`text-xs font-semibold ${sl.cls}`}>{sl.text}</span>
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className={`text-xs font-semibold ${sl.cls}`}>{sl.text}</span>
+                              {item.remainingBalance && item.remainingBalance > 0 ? (
+                                <span className="text-[10px] text-muted-foreground leading-tight">
+                                  المتبقي: {item.remainingBalance.toLocaleString("ar-SA")} ر.س
+                                </span>
+                              ) : null}
+                            </div>
                           )}
                           {item.paymentReceiptUrl && (
                             <button

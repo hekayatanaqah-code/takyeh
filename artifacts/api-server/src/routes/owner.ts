@@ -4865,7 +4865,12 @@ router.get("/transaction-history", async (req, res) => {
         }];
       }
 
-      /* Normal income */
+      /* Normal income — determine full-payment status by comparing amount vs totalPrice */
+      const total = Number(b.totalPrice ?? 0);
+      const fullAmountCollected = b.balanceCollected || (total > 0 && dep >= total);
+      const remaining = (total > 0 && !fullAmountCollected && !hasInst)
+        ? Math.max(0, total - dep)
+        : 0;
       return [{
         id: `b-${b.id}`,
         date: b.bookingDate,
@@ -4873,10 +4878,11 @@ router.get("/transaction-history", async (req, res) => {
         label: `إيداع — ${b.clientName}`,
         amount: dep + bal,
         method: (b.paymentMethod ?? "transfer") as string,
-        status: hasInst ? "deposit_only" : (b.balanceCollected ? "collected" : "deposit_only"),
+        status: hasInst ? "deposit_only" : (fullAmountCollected ? "collected" : "deposit_only"),
         cashDeposited: true as boolean | null,
         paymentReceiptUrl: b.paymentReceiptUrl ?? null,
         bookingId: b.id as number | null,
+        remainingBalance: remaining > 0 ? remaining : null as number | null,
       }];
     }),
     ...instPayments
