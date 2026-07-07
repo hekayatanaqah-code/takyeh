@@ -811,9 +811,11 @@ router.post("/support-request", requireAuth, supportUpload.array("files", 10), a
       }
     }
 
+    /* drizzle spreads JS arrays as ($1,$2) record — pass as Postgres literal instead */
+    const pgAttachArr = `{${attachmentUrls.join(",")}}`;
     await db.execute(
       sql`INSERT INTO owner_support_requests (owner_id, owner_name, subject, message, status, attachment_urls, created_at)
-          VALUES (${String(ownerId)}, ${ownerName}, ${subject.trim()}, ${message.trim()}, 'new', ${attachmentUrls}, now())`
+          VALUES (${String(ownerId)}, ${ownerName}, ${subject.trim()}, ${message.trim()}, 'new', ${pgAttachArr}::text[], now())`
     );
     return res.json({ ok: true, attachment_urls: attachmentUrls });
   } catch (err) {

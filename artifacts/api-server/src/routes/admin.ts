@@ -1249,7 +1249,7 @@ router.post("/support-requests/:id/reply", adminReplyUpload.array("files", 10), 
               admin_reply_at = NOW(),
               status = 'in_progress',
               is_read_by_owner = false
-              ${adminAttachmentUrls.length > 0 ? sql`, admin_attachment_urls = ${adminAttachmentUrls}` : sql``}
+              ${adminAttachmentUrls.length > 0 ? sql`, admin_attachment_urls = ${`{${adminAttachmentUrls.join(",")}}`}::text[]` : sql``}
           WHERE id = ${id}`
     );
     return res.json({ ok: true, admin_attachment_urls: adminAttachmentUrls });
