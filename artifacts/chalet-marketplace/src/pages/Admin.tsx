@@ -6809,10 +6809,12 @@ interface OwnerSupportRequest {
   subject: string;
   message: string;
   status: string;
-  attachment_url: string | null;
+  attachment_url?: string | null;
+  attachment_urls?: string[];
   admin_reply: string | null;
   admin_reply_at: string | null;
-  admin_attachment_url: string | null;
+  admin_attachment_url?: string | null;
+  admin_attachment_urls?: string[];
   is_read_by_owner: boolean;
   created_at: string;
 }
@@ -6829,7 +6831,7 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
   const [replyingId, setReplyingId] = useState<number | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replySending, setReplySending] = useState(false);
-  const [replyFile, setReplyFile] = useState<File | null>(null);
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
@@ -6870,7 +6872,7 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
     try {
       const fd = new FormData();
       fd.append("reply", replyText.trim());
-      if (replyFile) fd.append("file", replyFile);
+      for (const f of replyFiles) fd.append("files", f);
       const r = await fetch(`${BASE}/api/admin/support-requests/${id}/reply`, {
         method: "POST",
         body: fd,
@@ -6879,7 +6881,7 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
       if (r.ok) {
         setReplyingId(null);
         setReplyText("");
-        setReplyFile(null);
+        setReplyFiles([]);
         qc.invalidateQueries({ queryKey: ["admin", "support-requests"] });
         qc.invalidateQueries({ queryKey: ["admin", "support-requests", ownerIdFilter ?? ""] });
       }
@@ -6961,30 +6963,25 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
                     <div>
                       <p className="text-xs text-slate-500 mb-1.5 font-medium">رسالة المالك:</p>
                       <div className="bg-slate-800/80 rounded-lg p-3 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{req.message}</div>
-                      {req.attachment_url && (
-                        <div className="mt-2">
-                          {req.attachment_url.toLowerCase().includes(".pdf") ? (
-                            <a
-                              href={req.attachment_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 text-xs font-medium text-amber-300 hover:text-amber-200 border border-slate-600 hover:border-amber-500/50 rounded-lg px-3 py-2 bg-slate-800 transition-colors"
-                            >
-                              <FileText className="w-4 h-4 text-red-400 shrink-0" />
-                              عرض المرفق PDF
-                              <ExternalLink className="w-3 h-3 opacity-60" />
-                            </a>
-                          ) : (
-                            <a href={req.attachment_url} target="_blank" rel="noopener noreferrer" className="block w-fit">
-                              <img
-                                src={req.attachment_url}
-                                alt="مرفق المالك"
-                                className="max-h-48 max-w-xs rounded-lg border border-slate-600 object-cover hover:border-amber-500/50 hover:opacity-90 transition-all"
-                              />
-                            </a>
-                          )}
-                        </div>
-                      )}
+                      {(() => {
+                        const urls = req.attachment_urls?.length ? req.attachment_urls : req.attachment_url ? [req.attachment_url] : [];
+                        return urls.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {urls.map((url, i) => url.toLowerCase().includes(".pdf") ? (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 text-xs font-medium text-amber-300 hover:text-amber-200 border border-slate-600 hover:border-amber-500/50 rounded-lg px-3 py-2 bg-slate-800 transition-colors">
+                                <FileText className="w-4 h-4 text-red-400 shrink-0" />
+                                مرفق PDF {urls.length > 1 ? `(${i + 1})` : ""}
+                                <ExternalLink className="w-3 h-3 opacity-60" />
+                              </a>
+                            ) : (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-fit">
+                                <img src={url} alt="مرفق المالك" className="max-h-48 max-w-xs rounded-lg border border-slate-600 object-cover hover:border-amber-500/50 hover:opacity-90 transition-all" />
+                              </a>
+                            ))}
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
 
                     {/* Existing reply */}
@@ -6994,28 +6991,25 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
                           <Send className="w-3 h-3" /> ردّ الإدارة — {req.admin_reply_at ? fmtDate(req.admin_reply_at) : ""}:
                         </p>
                         <div className="bg-green-900/20 border border-green-700/30 rounded-lg p-3 text-green-200 text-sm leading-relaxed whitespace-pre-wrap">{req.admin_reply}</div>
-                        {req.admin_attachment_url && (
-                          req.admin_attachment_url.toLowerCase().includes(".pdf") ? (
-                            <a
-                              href={req.admin_attachment_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-amber-900/30 border border-amber-700/40 text-amber-300 hover:bg-amber-900/50 transition-colors"
-                            >
-                              <FileText className="w-3.5 h-3.5" />
-                              عرض ملف PDF المرفق
-                              <ExternalLink className="w-3 h-3 opacity-60" />
-                            </a>
-                          ) : (
-                            <a href={req.admin_attachment_url} target="_blank" rel="noopener noreferrer" className="block w-fit">
-                              <img
-                                src={req.admin_attachment_url}
-                                alt="مرفق الإدارة"
-                                className="max-h-48 max-w-xs rounded-lg border border-green-700/40 object-cover hover:border-green-500/50 hover:opacity-90 transition-all"
-                              />
-                            </a>
-                          )
-                        )}
+                        {(() => {
+                          const adminUrls = req.admin_attachment_urls?.length ? req.admin_attachment_urls : req.admin_attachment_url ? [req.admin_attachment_url] : [];
+                          return adminUrls.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {adminUrls.map((url, i) => url.toLowerCase().includes(".pdf") ? (
+                                <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-amber-900/30 border border-amber-700/40 text-amber-300 hover:bg-amber-900/50 transition-colors">
+                                  <FileText className="w-3.5 h-3.5" />
+                                  مرفق PDF {adminUrls.length > 1 ? `(${i + 1})` : ""}
+                                  <ExternalLink className="w-3 h-3 opacity-60" />
+                                </a>
+                              ) : (
+                                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-fit">
+                                  <img src={url} alt="مرفق الإدارة" className="max-h-48 max-w-xs rounded-lg border border-green-700/40 object-cover hover:border-green-500/50 hover:opacity-90 transition-all" />
+                                </a>
+                              ))}
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                     )}
 
@@ -7037,8 +7031,13 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
                             ref={replyFileInputRef}
                             type="file"
                             accept="image/*,.pdf"
+                            multiple
                             className="hidden"
-                            onChange={(e) => setReplyFile(e.target.files?.[0] ?? null)}
+                            onChange={(e) => {
+                              const newFs = Array.from(e.target.files ?? []);
+                              setReplyFiles(prev => [...prev, ...newFs].slice(0, 10));
+                              e.target.value = "";
+                            }}
                           />
                           <button
                             type="button"
@@ -7046,25 +7045,25 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
                             className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 flex items-center gap-1.5"
                           >
                             <Paperclip className="w-3 h-3" />
-                            إرفاق ملف
+                            إرفاق ملفات
                           </button>
-                          {replyFile && (
-                            <div className="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 max-w-[180px]">
-                              {replyFile.type === "application/pdf"
+                          {replyFiles.map((f, i) => (
+                            <div key={i} className="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 max-w-[160px]">
+                              {f.type === "application/pdf"
                                 ? <FileText className="w-3 h-3 text-amber-400 shrink-0" />
                                 : <ImageIcon className="w-3 h-3 text-blue-400 shrink-0" />}
-                              <span className="truncate">{replyFile.name}</span>
+                              <span className="truncate">{f.name}</span>
                               <button
                                 type="button"
-                                onClick={() => setReplyFile(null)}
+                                onClick={() => setReplyFiles(prev => prev.filter((_, j) => j !== i))}
                                 className="text-slate-500 hover:text-red-400 shrink-0 ml-0.5"
                               ><X className="w-3 h-3" /></button>
                             </div>
-                          )}
+                          ))}
                         </div>
                         <div className="flex gap-2 justify-end">
                           <button
-                            onClick={() => { setReplyingId(null); setReplyText(""); setReplyFile(null); }}
+                            onClick={() => { setReplyingId(null); setReplyText(""); setReplyFiles([]); }}
                             className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600"
                           >إلغاء</button>
                           <button

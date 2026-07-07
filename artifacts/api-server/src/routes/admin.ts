@@ -1167,7 +1167,11 @@ router.get("/support-requests", async (req, res) => {
       ownerId
         ? sql`SELECT s.id, s.owner_id,
                 COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
-                s.subject, s.message, s.status, s.attachment_url, s.admin_reply, s.admin_reply_at, s.admin_attachment_url, s.is_read_by_owner, s.created_at
+                s.subject, s.message, s.status,
+                CASE WHEN array_length(s.attachment_urls, 1) > 0 THEN s.attachment_urls WHEN s.attachment_url IS NOT NULL THEN ARRAY[s.attachment_url] ELSE '{}'::text[] END AS attachment_urls,
+                s.admin_reply, s.admin_reply_at,
+                CASE WHEN array_length(s.admin_attachment_urls, 1) > 0 THEN s.admin_attachment_urls WHEN s.admin_attachment_url IS NOT NULL THEN ARRAY[s.admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
+                s.is_read_by_owner, s.created_at
               FROM owner_support_requests s
               LEFT JOIN LATERAL (
                 SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
@@ -1177,7 +1181,11 @@ router.get("/support-requests", async (req, res) => {
               ORDER BY s.created_at DESC LIMIT 300`
         : sql`SELECT s.id, s.owner_id,
                 COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
-                s.subject, s.message, s.status, s.attachment_url, s.admin_reply, s.admin_reply_at, s.admin_attachment_url, s.is_read_by_owner, s.created_at
+                s.subject, s.message, s.status,
+                CASE WHEN array_length(s.attachment_urls, 1) > 0 THEN s.attachment_urls WHEN s.attachment_url IS NOT NULL THEN ARRAY[s.attachment_url] ELSE '{}'::text[] END AS attachment_urls,
+                s.admin_reply, s.admin_reply_at,
+                CASE WHEN array_length(s.admin_attachment_urls, 1) > 0 THEN s.admin_attachment_urls WHEN s.admin_attachment_url IS NOT NULL THEN ARRAY[s.admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
+                s.is_read_by_owner, s.created_at
               FROM owner_support_requests s
               LEFT JOIN LATERAL (
                 SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
@@ -1202,32 +1210,35 @@ router.patch("/support-requests/:id/status", async (req, res) => {
   return res.json({ ok: true });
 });
 
-router.post("/support-requests/:id/reply", adminReplyUpload.single("file"), async (req, res) => {
+router.post("/support-requests/:id/reply", adminReplyUpload.array("files", 10), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
   const reply = (req.body?.reply ?? "").trim();
   if (!reply) return res.status(400).json({ error: "نص الرد مطلوب" });
   if (reply.length > 2000) return res.status(400).json({ error: "الرد طويل جداً" });
 
-  /* Upload attachment if provided */
-  let adminAttachmentUrl: string | null = null;
-  const file = (req as any).file as Express.Multer.File | undefined;
-  if (file) {
-    try {
-      const isImage = file.mimetype.startsWith("image/");
-      const isPdf   = file.mimetype === "application/pdf" || file.originalname?.endsWith(".pdf");
-      let buffer: Buffer; let contentType: string; let ext: string;
-      if (isPdf) {
-        buffer = file.buffer; contentType = "application/pdf"; ext = "pdf";
-      } else if (isImage) {
-        buffer = await sharp(file.buffer).resize({ width: 2048, withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
-        contentType = "image/webp"; ext = "webp";
-      } else {
-        return res.status(400).json({ error: "يُسمح فقط بصور PNG/JPG أو ملفات PDF" });
+  /* Upload attachments if provided */
+  const adminAttachmentUrls: string[] = [];
+  const files = (req as any).files as Express.Multer.File[] | undefined;
+  if (files && files.length > 0) {
+    for (const file of files) {
+      try {
+        const isImage = file.mimetype.startsWith("image/");
+        const isPdf   = file.mimetype === "application/pdf" || file.originalname?.endsWith(".pdf");
+        let buffer: Buffer; let contentType: string; let ext: string;
+        if (isPdf) {
+          buffer = file.buffer; contentType = "application/pdf"; ext = "pdf";
+        } else if (isImage) {
+          buffer = await sharp(file.buffer).resize({ width: 2048, withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
+          contentType = "image/webp"; ext = "webp";
+        } else {
+          continue;
+        }
+        const url = await adminReplyStorageSvc.uploadBuffer(buffer, contentType, ext);
+        adminAttachmentUrls.push(url);
+      } catch (uploadErr) {
+        console.error("[POST /admin/support-requests/:id/reply] attachment upload failed:", uploadErr);
       }
-      adminAttachmentUrl = await adminReplyStorageSvc.uploadBuffer(buffer, contentType, ext);
-    } catch (uploadErr) {
-      console.error("[POST /admin/support-requests/:id/reply] attachment upload failed:", uploadErr);
     }
   }
 
@@ -1238,10 +1249,10 @@ router.post("/support-requests/:id/reply", adminReplyUpload.single("file"), asyn
               admin_reply_at = NOW(),
               status = 'in_progress',
               is_read_by_owner = false
-              ${adminAttachmentUrl ? sql`, admin_attachment_url = ${adminAttachmentUrl}` : sql``}
+              ${adminAttachmentUrls.length > 0 ? sql`, admin_attachment_urls = ${adminAttachmentUrls}` : sql``}
           WHERE id = ${id}`
     );
-    return res.json({ ok: true, admin_attachment_url: adminAttachmentUrl });
+    return res.json({ ok: true, admin_attachment_urls: adminAttachmentUrls });
   } catch (err) {
     console.error("[POST /admin/support-requests/:id/reply]", err);
     return res.status(500).json({ error: "حدث خطأ" });

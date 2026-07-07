@@ -22685,10 +22685,12 @@ interface OwnerSupportMsg {
   subject: string;
   message: string;
   status: string;
-  attachment_url: string | null;
+  attachment_url?: string | null;
+  attachment_urls?: string[];
   admin_reply: string | null;
   admin_reply_at: string | null;
-  admin_attachment_url: string | null;
+  admin_attachment_url?: string | null;
+  admin_attachment_urls?: string[];
   is_read_by_owner: boolean;
   created_at: string;
 }
@@ -22734,31 +22736,36 @@ function OwnerSupportTab() {
   const [error,        setError]        = useState("");
   const [expandedId,   setExpandedId]   = useState<number | null>(null);
   const [showForm,     setShowForm]     = useState(false);
-  const [attachFile,   setAttachFile]   = useState<File | null>(null);
-  const [attachPreview,setAttachPreview] = useState<string | null>(null);
+  const [attachFiles,   setAttachFiles]   = useState<File[]>([]);
+  const [attachPreviews,setAttachPreviews] = useState<(string | "pdf")[]>([]);
   const [uploading,    setUploading]    = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const newFiles = Array.from(e.target.files ?? []);
+    if (!newFiles.length) return;
     const allowed = ["image/png", "image/jpeg", "image/jpg", "application/pdf"];
-    if (!allowed.includes(file.type)) { setError("يُسمح فقط بـ PNG, JPG, PDF"); return; }
-    if (file.size > 5 * 1024 * 1024) { setError("حجم الملف يتجاوز الحد الأقصى (5MB)"); return; }
-    setAttachFile(file);
-    setError("");
-    if (file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = (ev) => setAttachPreview(ev.target?.result as string);
-      reader.readAsDataURL(file);
-    } else {
-      setAttachPreview("pdf");
+    for (const f of newFiles) {
+      if (!allowed.includes(f.type)) { setError("يُسمح فقط بـ PNG, JPG, PDF"); return; }
+      if (f.size > 5 * 1024 * 1024) { setError("حجم الملف يتجاوز الحد الأقصى (5MB)"); return; }
     }
+    setAttachFiles(prev => [...prev, ...newFiles].slice(0, 10));
+    setError("");
+    for (const f of newFiles) {
+      if (f.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (ev) => setAttachPreviews(prev => [...prev, ev.target?.result as string]);
+        reader.readAsDataURL(f);
+      } else {
+        setAttachPreviews(prev => [...prev, "pdf"]);
+      }
+    }
+    e.target.value = "";
   }
 
   function clearAttachment() {
-    setAttachFile(null);
-    setAttachPreview(null);
+    setAttachFiles([]);
+    setAttachPreviews([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -22785,12 +22792,12 @@ function OwnerSupportTab() {
     if (!subject) { setError("اختر الموضوع"); return; }
     if (!message.trim() || message.trim().length < 10) { setError("الرجاء كتابة وصف مفصّل (١٠ أحرف على الأقل)"); return; }
     setSubmitting(true);
-    if (attachFile) setUploading(true);
+    if (attachFiles.length > 0) setUploading(true);
     try {
       const fd = new FormData();
       fd.append("subject", subject);
       fd.append("message", message.trim());
-      if (attachFile) fd.append("file", attachFile);
+      for (const f of attachFiles) fd.append("files", f);
       const r = await fetch(`${BASE}/api/owner/support-request`, {
         method: "POST",
         body: fd,
@@ -22889,39 +22896,42 @@ function OwnerSupportTab() {
               ref={fileInputRef}
               type="file"
               accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf"
+              multiple
               className="hidden"
               onChange={handleFileChange}
             />
-            {!attachFile ? (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border hover:border-primary/50 rounded-xl py-5 text-muted-foreground hover:text-primary transition-colors bg-muted/30 hover:bg-primary/5"
-              >
-                <Upload className="w-5 h-5" />
-                <span className="text-xs font-medium">اضغط لاختيار ملف أو صورة</span>
-              </button>
-            ) : (
-              <div className="flex items-center gap-3 bg-muted/40 border border-border rounded-xl px-4 py-3">
-                {attachPreview === "pdf" ? (
-                  <div className="w-12 h-12 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
-                    <FileText className="w-6 h-6 text-red-600 dark:text-red-400" />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border hover:border-primary/50 rounded-xl py-5 text-muted-foreground hover:text-primary transition-colors bg-muted/30 hover:bg-primary/5"
+            >
+              <Upload className="w-5 h-5" />
+              <span className="text-xs font-medium">اضغط لإضافة ملفات أو صور (يمكن اختيار أكثر من واحد)</span>
+            </button>
+            {attachFiles.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {attachFiles.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-muted/40 border border-border rounded-xl px-3 py-2 max-w-[200px]">
+                    {attachPreviews[i] === "pdf" ? (
+                      <FileText className="w-5 h-5 text-red-500 shrink-0" />
+                    ) : attachPreviews[i] ? (
+                      <img src={attachPreviews[i]} alt="معاينة" className="w-8 h-8 rounded object-cover shrink-0 border border-border" />
+                    ) : (
+                      <Loader2 className="w-5 h-5 animate-spin shrink-0" />
+                    )}
+                    <p className="text-xs font-medium text-foreground truncate flex-1">{f.name}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachFiles(prev => prev.filter((_, j) => j !== i));
+                        setAttachPreviews(prev => prev.filter((_, j) => j !== i));
+                      }}
+                      className="shrink-0 w-5 h-5 rounded-full bg-destructive/10 hover:bg-destructive/20 flex items-center justify-center text-destructive transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
                   </div>
-                ) : (
-                  <img src={attachPreview!} alt="معاينة" className="w-12 h-12 rounded-lg object-cover shrink-0 border border-border" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{attachFile.name}</p>
-                  <p className="text-xs text-muted-foreground">{(attachFile.size / 1024).toFixed(0)} KB</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={clearAttachment}
-                  className="shrink-0 w-7 h-7 rounded-full bg-destructive/10 hover:bg-destructive/20 flex items-center justify-center text-destructive transition-colors"
-                  title="حذف المرفق"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                ))}
               </div>
             )}
           </div>
@@ -22999,21 +23009,24 @@ function OwnerSupportTab() {
                     <div>
                       <p className="text-xs text-muted-foreground mb-1.5 font-medium">رسالتك:</p>
                       <div className="bg-background border border-border rounded-lg p-3 text-sm text-foreground leading-relaxed whitespace-pre-wrap">{msg.message}</div>
-                      {msg.attachment_url && (
-                        <div className="mt-2">
-                          {msg.attachment_url.endsWith(".pdf") ? (
-                            <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 text-xs font-medium text-primary hover:underline border border-border rounded-lg px-3 py-2 bg-muted/30">
-                              <FileText className="w-4 h-4 text-red-500" />
-                              عرض المرفق PDF
-                            </a>
-                          ) : (
-                            <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer">
-                              <img src={msg.attachment_url} alt="مرفق" className="max-h-40 rounded-lg border border-border object-cover hover:opacity-90 transition-opacity" />
-                            </a>
-                          )}
-                        </div>
-                      )}
+                      {(() => {
+                        const urls = msg.attachment_urls?.length ? msg.attachment_urls : msg.attachment_url ? [msg.attachment_url] : [];
+                        return urls.length > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {urls.map((url, i) => url.endsWith(".pdf") ? (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 text-xs font-medium text-primary hover:underline border border-border rounded-lg px-3 py-2 bg-muted/30">
+                                <FileText className="w-4 h-4 text-red-500" />
+                                مرفق PDF {urls.length > 1 ? `(${i + 1})` : ""}
+                              </a>
+                            ) : (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                <img src={url} alt="مرفق" className="max-h-40 rounded-lg border border-border object-cover hover:opacity-90 transition-opacity" />
+                              </a>
+                            ))}
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                     {/* Admin reply */}
                     {msg.admin_reply && (
@@ -23022,28 +23035,25 @@ function OwnerSupportTab() {
                           <Send className="w-3 h-3" /> رد فريق تكية {msg.admin_reply_at ? ("— " + (() => { const d = new Date(msg.admin_reply_at!); const hc = toHijriComponents(d); const hijriStr = toArN(hc.day) + " " + HIJRI_MONTHS_AR[hc.month - 1] + " " + toArN(hc.year) + " هـ"; const gregStr = d.toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" }); const timeStr = d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", hour12: true }); return hijriStr + " (" + gregStr + " م) | " + timeStr; })()) : ""}:
                         </p>
                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600/30 rounded-lg p-3 text-sm text-blue-900 dark:text-blue-200 leading-relaxed whitespace-pre-wrap">{msg.admin_reply}</div>
-                        {msg.admin_attachment_url && (
-                          msg.admin_attachment_url.toLowerCase().includes(".pdf") ? (
-                            <a
-                              href={msg.admin_attachment_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors font-medium"
-                            >
-                              <FileText className="w-3.5 h-3.5" />
-                              عرض المرفق
-                              <ExternalLink className="w-3 h-3 opacity-60" />
-                            </a>
-                          ) : (
-                            <a href={msg.admin_attachment_url} target="_blank" rel="noopener noreferrer" className="block w-fit">
-                              <img
-                                src={msg.admin_attachment_url}
-                                alt="مرفق فريق تكية"
-                                className="max-h-40 max-w-xs rounded-lg border border-blue-200 dark:border-blue-600/40 object-cover hover:opacity-90 transition-opacity"
-                              />
-                            </a>
-                          )
-                        )}
+                        {(() => {
+                          const adminUrls = msg.admin_attachment_urls?.length ? msg.admin_attachment_urls : msg.admin_attachment_url ? [msg.admin_attachment_url] : [];
+                          return adminUrls.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {adminUrls.map((url, i) => url.toLowerCase().includes(".pdf") ? (
+                                <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors font-medium">
+                                  <FileText className="w-3.5 h-3.5" />
+                                  مرفق {adminUrls.length > 1 ? `(${i + 1})` : ""}
+                                  <ExternalLink className="w-3 h-3 opacity-60" />
+                                </a>
+                              ) : (
+                                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-fit">
+                                  <img src={url} alt="مرفق فريق تكية" className="max-h-40 max-w-xs rounded-lg border border-blue-200 dark:border-blue-600/40 object-cover hover:opacity-90 transition-opacity" />
+                                </a>
+                              ))}
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                     )}
                     {!msg.admin_reply && (

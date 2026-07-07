@@ -751,7 +751,7 @@ router.patch("/profile/calendar-prefs", requireAuth, async (req, res) => {
 });
 
 /* ── POST /owner/support-request — submit a support/feature request ── */
-router.post("/support-request", requireAuth, supportUpload.single("file"), async (req, res) => {
+router.post("/support-request", requireAuth, supportUpload.array("files", 10), async (req, res) => {
   try {
     const { subject, message } = req.body as { subject?: string; message?: string };
     if (!subject?.trim()) return res.status(400).json({ error: "الموضوع مطلوب" });
@@ -778,42 +778,44 @@ router.post("/support-request", requireAuth, supportUpload.single("file"), async
       }
     } catch { /* ignore */ }
 
-    /* Upload attachment if provided */
-    let attachmentUrl: string | null = null;
-    const file = (req as any).file as Express.Multer.File | undefined;
-    if (file) {
-      try {
-        const isImage = file.mimetype.startsWith("image/");
-        const isPdf   = file.mimetype === "application/pdf" || file.originalname?.endsWith(".pdf");
-        let buffer: Buffer;
-        let contentType: string;
-        let ext: string;
-        if (isPdf) {
-          buffer = file.buffer;
-          contentType = "application/pdf";
-          ext = "pdf";
-        } else if (isImage) {
-          buffer = await sharp(file.buffer)
-            .resize({ width: 2048, withoutEnlargement: true })
-            .webp({ quality: 82 })
-            .toBuffer();
-          contentType = "image/webp";
-          ext = "webp";
-        } else {
-          return res.status(400).json({ error: "يُسمح فقط بصور PNG/JPG أو ملفات PDF" });
+    /* Upload attachments if provided */
+    const attachmentUrls: string[] = [];
+    const files = (req as any).files as Express.Multer.File[] | undefined;
+    if (files && files.length > 0) {
+      for (const file of files) {
+        try {
+          const isImage = file.mimetype.startsWith("image/");
+          const isPdf   = file.mimetype === "application/pdf" || file.originalname?.endsWith(".pdf");
+          let buffer: Buffer;
+          let contentType: string;
+          let ext: string;
+          if (isPdf) {
+            buffer = file.buffer;
+            contentType = "application/pdf";
+            ext = "pdf";
+          } else if (isImage) {
+            buffer = await sharp(file.buffer)
+              .resize({ width: 2048, withoutEnlargement: true })
+              .webp({ quality: 82 })
+              .toBuffer();
+            contentType = "image/webp";
+            ext = "webp";
+          } else {
+            continue;
+          }
+          const url = await supportStorageSvc.uploadBuffer(buffer, contentType, ext);
+          attachmentUrls.push(url);
+        } catch (uploadErr) {
+          console.error("[POST /owner/support-request] attachment upload failed:", uploadErr);
         }
-        attachmentUrl = await supportStorageSvc.uploadBuffer(buffer, contentType, ext);
-      } catch (uploadErr) {
-        console.error("[POST /owner/support-request] attachment upload failed:", uploadErr);
-        /* Non-fatal — submit without attachment rather than failing */
       }
     }
 
     await db.execute(
-      sql`INSERT INTO owner_support_requests (owner_id, owner_name, subject, message, status, attachment_url, created_at)
-          VALUES (${String(ownerId)}, ${ownerName}, ${subject.trim()}, ${message.trim()}, 'new', ${attachmentUrl}, now())`
+      sql`INSERT INTO owner_support_requests (owner_id, owner_name, subject, message, status, attachment_urls, created_at)
+          VALUES (${String(ownerId)}, ${ownerName}, ${subject.trim()}, ${message.trim()}, 'new', ${attachmentUrls}, now())`
     );
-    return res.json({ ok: true, attachment_url: attachmentUrl });
+    return res.json({ ok: true, attachment_urls: attachmentUrls });
   } catch (err) {
     console.error("[POST /owner/support-request]", err);
     return res.status(500).json({ error: "حدث خطأ أثناء إرسال الطلب" });
@@ -826,7 +828,11 @@ router.get("/support-requests", requireAuth, async (req, res) => {
     const email = await resolveOwnerEmail(req);
     const ownerId = req.user?.id ?? email ?? "unknown";
     const result = await db.execute(
-      sql`SELECT id, owner_id, subject, message, status, attachment_url, admin_reply, admin_reply_at, is_read_by_owner, created_at
+      sql`SELECT id, owner_id, subject, message, status,
+              CASE WHEN array_length(attachment_urls, 1) > 0 THEN attachment_urls WHEN attachment_url IS NOT NULL THEN ARRAY[attachment_url] ELSE '{}'::text[] END AS attachment_urls,
+              admin_reply, admin_reply_at,
+              CASE WHEN array_length(admin_attachment_urls, 1) > 0 THEN admin_attachment_urls WHEN admin_attachment_url IS NOT NULL THEN ARRAY[admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
+              is_read_by_owner, created_at
           FROM owner_support_requests
           WHERE owner_id = ${String(ownerId)}
           ORDER BY created_at DESC`
