@@ -16555,125 +16555,103 @@ function ReportsTab() {
       {/* Subscription card moved to profile header area — not shown in Reports */}
 
       {/* ── Filters ── */}
-      <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
-        <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-          <BarChart2 className="w-4 h-4 text-primary" />
-          فلاتر التقرير
-        </h2>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 space-y-1">
-            <label className="text-xs text-muted-foreground font-medium">العقار</label>
-            <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
-              <SelectTrigger className="h-10">
-                <SelectValue placeholder={
-                  mySubmissions.length === 1
-                    ? (mySubmissions[0]?.nameAr || mySubmissions[0]?.name)
-                    : "جميع العقارات"
-                } />
-              </SelectTrigger>
+      <div className="bg-card border border-border rounded-2xl px-4 py-3">
+        <div className="flex items-center gap-2 flex-wrap">
+
+          {/* ١. العقار — أقصى اليمين */}
+          <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
+            <SelectTrigger className="h-9 min-w-[130px] flex-1 text-sm">
+              <SelectValue placeholder={mySubmissions.length === 1 ? (mySubmissions[0]?.nameAr || mySubmissions[0]?.name) : "جميع العقارات"} />
+            </SelectTrigger>
+            <SelectContent>
+              {mySubmissions.length !== 1 && <SelectItem value="all">جميع العقارات</SelectItem>}
+              {mySubmissions.map((s: any) => (
+                <SelectItem key={s.id} value={String(s.id)}>{s.nameAr || s.name || `عقار #${s.id}`}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* ٢. نوع التقويم — أزرار التبديل */}
+          <div className="flex h-9 items-center gap-0 bg-muted/60 border border-border rounded-lg p-0.5 shrink-0">
+            {(["gregorian", "hijri"] as const).map((c) => (
+              <button key={c} type="button"
+                onClick={() => {
+                  if (viewMode === "monthly") setIsHijri(c === "hijri");
+                  else setIsYearlyHijri(c === "hijri");
+                }}
+                className={`h-full px-3 rounded-md text-xs font-bold transition-colors ${
+                  (viewMode === "monthly" ? isHijri : isYearlyHijri) === (c === "hijri")
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {c === "hijri" ? "هجري" : "ميلادي"}
+              </button>
+            ))}
+          </div>
+
+          {/* ٣. السنة */}
+          {viewMode === "monthly" ? (
+            <Select
+              value={isHijri ? selectedHijriMonthVal.split("-")[0] : selectedMonth.split("-")[0]}
+              onValueChange={(y) => {
+                if (isHijri) {
+                  const m = selectedHijriMonthVal.split("-")[1] ?? "01";
+                  setSelectedHijriMonthVal(`${y}-${m}`);
+                } else {
+                  const m = selectedMonth.split("-")[1] ?? "01";
+                  setSelectedMonth(`${y}-${m}`);
+                }
+              }}
+            >
+              <SelectTrigger className="h-9 w-[90px] shrink-0 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {mySubmissions.length !== 1 && (
-                  <SelectItem value="all">جميع العقارات</SelectItem>
-                )}
-                {mySubmissions.map((s: any) => (
-                  <SelectItem key={s.id} value={String(s.id)}>{s.nameAr || s.name || `عقار #${s.id}`}</SelectItem>
+                {(isHijri ? hijriYearOptions : yearOptions).map(o => (
+                  <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          {viewMode === "monthly" ? (
-            <div className="flex-1 space-y-2">
-              <label className="text-xs text-muted-foreground font-medium">الفترة</label>
-              {/* Calendar type toggle */}
-              <div className="flex gap-1 bg-muted/60 rounded-lg p-0.5 w-fit">
-                {(["gregorian", "hijri"] as const).map((c) => (
-                  <button key={c} type="button"
-                    onClick={() => setIsHijri(c === "hijri")}
-                    className={`px-3 py-1 rounded-md text-xs font-bold transition-colors ${
-                      (c === "hijri") === isHijri
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {c === "hijri" ? "هجري" : "ميلادي"}
-                  </button>
-                ))}
-              </div>
-              {/* Separate year + month selects */}
-              <div className="flex gap-2">
-                <Select
-                  value={isHijri ? selectedHijriMonthVal.split("-")[0] : selectedMonth.split("-")[0]}
-                  onValueChange={(y) => {
-                    if (isHijri) {
-                      const m = selectedHijriMonthVal.split("-")[1] ?? "01";
-                      setSelectedHijriMonthVal(`${y}-${m}`);
-                    } else {
-                      const m = selectedMonth.split("-")[1] ?? "01";
-                      setSelectedMonth(`${y}-${m}`);
-                    }
-                  }}
-                >
-                  <SelectTrigger className="h-9 w-24"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(isHijri ? hijriYearOptions : yearOptions).map(o => (
-                      <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={String(Number(isHijri ? selectedHijriMonthVal.split("-")[1] : selectedMonth.split("-")[1]))}
-                  onValueChange={(m) => {
-                    const padded = m.padStart(2, "0");
-                    if (isHijri) {
-                      const y = selectedHijriMonthVal.split("-")[0];
-                      setSelectedHijriMonthVal(`${y}-${padded}`);
-                    } else {
-                      const y = selectedMonth.split("-")[0];
-                      setSelectedMonth(`${y}-${padded}`);
-                    }
-                  }}
-                >
-                  <SelectTrigger className="h-9 flex-1"><SelectValue /></SelectTrigger>
-                  <SelectContent dir="rtl">
-                    {Array.from({ length: 12 }, (_, i) => ({
-                      val: String(i + 1),
-                      label: isHijri ? HIJRI_MONTHS_AR[i] : GREGORIAN_MONTHS_AR[i],
-                    })).map(o => (
-                      <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
           ) : (
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-xs text-muted-foreground font-medium">السنة</label>
-                <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <span className="text-xs text-muted-foreground">هجري</span>
-                  <Switch checked={isYearlyHijri} onCheckedChange={setIsYearlyHijri} />
-                </label>
-              </div>
-              {isYearlyHijri ? (
-                <Select value={selectedHijriYear} onValueChange={setSelectedHijriYear}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {hijriYearOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Select value={selectedYear} onValueChange={setSelectedYear}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {yearOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
+            <Select value={isYearlyHijri ? selectedHijriYear : selectedYear} onValueChange={isYearlyHijri ? setSelectedHijriYear : setSelectedYear}>
+              <SelectTrigger className="h-9 w-[90px] shrink-0 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(isYearlyHijri ? hijriYearOptions : yearOptions).map(o => (
+                  <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {/* ٤. الشهر — أقصى اليسار (فقط في العرض الشهري) */}
+          {viewMode === "monthly" && (
+            <Select
+              value={String(Number(isHijri ? selectedHijriMonthVal.split("-")[1] : selectedMonth.split("-")[1]))}
+              onValueChange={(m) => {
+                const padded = m.padStart(2, "0");
+                if (isHijri) {
+                  const y = selectedHijriMonthVal.split("-")[0];
+                  setSelectedHijriMonthVal(`${y}-${padded}`);
+                } else {
+                  const y = selectedMonth.split("-")[0];
+                  setSelectedMonth(`${y}-${padded}`);
+                }
+              }}
+            >
+              <SelectTrigger className="h-9 min-w-[90px] flex-1 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent dir="rtl">
+                {Array.from({ length: 12 }, (_, i) => ({
+                  val: String(i + 1),
+                  label: isHijri ? HIJRI_MONTHS_AR[i] : GREGORIAN_MONTHS_AR[i],
+                })).map(o => (
+                  <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
+
         {selectedSubmissionId !== "all" && (
-          <p className="text-xs text-primary font-medium flex items-center gap-1">
+          <p className="text-xs text-primary font-medium flex items-center gap-1 mt-2">
             <Building2 className="w-3.5 h-3.5" />
             يعرض بيانات: {selectedPropertyName}
           </p>
