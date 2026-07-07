@@ -12841,7 +12841,8 @@ function TransactionHistoryTab() {
                   const tl = typeLabel(item.type, item.method);
                   const sl = statusLabel(item.status);
                   const isIncome = item.type === "income";
-                  const needsDeposit = isIncome && item.method === "cash" && item.cashDeposited === false && item.status !== "cancelled";
+                  const isCancelled = item.status === "cancelled";
+                  const needsDeposit = isIncome && item.method === "cash" && item.cashDeposited === false && !isCancelled;
                   const isUpdating = updatingId === item.id;
                   const methodBadge = isIncome
                     ? item.method === "transfer"
@@ -12850,8 +12851,21 @@ function TransactionHistoryTab() {
                         ? { icon: "💳", label: "شبكة", cls: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" }
                         : { icon: "💵", label: "كاش", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" }
                     : null;
+                  /* ③ Arabicise any English label fragments from the API */
+                  const arabicLabel = item.label
+                    .replace(/\bWithdrawal\b/gi, "سحب نقدي")
+                    .replace(/\bwithdraw\b/gi, "سحب نقدي")
+                    .replace(/\bExpense\b/gi, "مصروف")
+                    .replace(/\bIncome\b/gi, "إيراد")
+                    .replace(/\bBooking\b/gi, "حجز")
+                    .replace(/\bRefund\b/gi, "استرداد")
+                    .replace(/\bCancellation\b/gi, "إلغاء")
+                    .replace(/\bDeposit\b/gi, "عربون")
+                    .replace(/\bCleaning\b/gi, "تنظيف")
+                    .replace(/\bMaintenance\b/gi, "صيانة");
                   return (
-                    <tr key={item.id} className={`hover:bg-muted/30 transition-colors ${needsDeposit ? "bg-amber-50/40 dark:bg-amber-950/10" : ""}`}>
+                    /* ② dim entire row when cancelled */
+                    <tr key={item.id} className={`hover:bg-muted/30 transition-colors ${needsDeposit ? "bg-amber-50/40 dark:bg-amber-950/10" : ""} ${isCancelled ? "opacity-50" : ""}`}>
                       <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap leading-tight">
                         {fmtDualDate(item.date)}
                       </td>
@@ -12872,11 +12886,15 @@ function TransactionHistoryTab() {
                           <span className="text-muted-foreground text-xs">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-foreground font-medium max-w-[140px] truncate">{item.label}</td>
+                      {/* ④ allow label to wrap — no truncate, min width so it breathes */}
+                      <td className="px-4 py-3 text-foreground font-medium min-w-[130px] break-words whitespace-normal">{arabicLabel}</td>
                       <td className="px-4 py-3 text-left font-bold tabular-nums whitespace-nowrap">
-                        <span className={`inline-flex items-baseline gap-1.5 ${isIncome && item.status !== "cancelled" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                          <span className="text-base leading-none">{isIncome && item.status !== "cancelled" ? "+" : "−"}</span>
-                          <span>{item.amount.toLocaleString("ar-SA")}</span>
+                        {/* ① sign gets its own color; number stays dark/foreground */}
+                        <span className="inline-flex items-baseline gap-1.5">
+                          <span className={`text-base leading-none font-extrabold ${isIncome && !isCancelled ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+                            {isIncome && !isCancelled ? "+" : "−"}
+                          </span>
+                          <span className="text-foreground">{item.amount.toLocaleString("ar-SA")}</span>
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
