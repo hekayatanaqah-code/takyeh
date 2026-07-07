@@ -4834,26 +4834,57 @@ router.get("/transaction-history", async (req, res) => {
       const hasInst = bookingIdsWithInstallments.has(b.id);
       const bal = (!hasInst && b.balanceCollected) ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
 
+      /* Helper: safely convert Drizzle Date object or string to YYYY-MM-DD */
+      const toDateStr = (v: unknown): string => {
+        if (!v) return b.bookingDate ?? "";
+        if (v instanceof Date) return v.toISOString().slice(0, 10);
+        const s = String(v);
+        /* Already ISO YYYY-MM-DD or YYYY-MM-DDTHH… */
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+        /* Fallback: parse and format */
+        const d = new Date(s);
+        return isNaN(d.getTime()) ? (b.bookingDate ?? "") : d.toISOString().slice(0, 10);
+      };
+
       if (b.cancelledAt) {
+        const cancelDate = toDateStr(b.cancelledAt);
         if (dep > 0 && refundAmt > 0) {
-          /* Money was received AND refunded → "refund" row with negative sign */
-          return [{
-            id: `b-${b.id}`,
-            date: String(b.cancelledAt).slice(0, 10),
-            type: "refund" as const,
-            label: `استرداد — ${b.clientName}`,
-            amount: refundAmt,
-            method: (b.paymentMethod ?? "transfer") as string,
-            status: "refunded" as string,
-            cashDeposited: null as boolean | null,
-            paymentReceiptUrl: null as string | null,
-            bookingId: b.id as number | null,
-          }];
+          /* Money was received AND partially/fully refunded →
+             Keep original deposit row (+dep) AND add a refund row (-refundAmt).
+             The difference (dep - refundAmt) = cancellation fee that stays with owner. */
+          return [
+            {
+              id: `b-${b.id}-dep`,
+              date: b.bookingDate ?? "",
+              type: "income" as const,
+              label: `إيداع — ${b.clientName}`,
+              amount: dep,
+              method: (b.paymentMethod ?? "transfer") as string,
+              status: "collected" as string,
+              cashDeposited: true as boolean | null,
+              paymentReceiptUrl: b.paymentReceiptUrl ?? null,
+              bookingId: b.id as number | null,
+              remainingBalance: null as number | null,
+            },
+            {
+              id: `b-${b.id}-ref`,
+              date: cancelDate,
+              type: "refund" as const,
+              label: `استرداد — ${b.clientName}`,
+              amount: refundAmt,
+              method: (b.paymentMethod ?? "transfer") as string,
+              status: "refunded" as string,
+              cashDeposited: null as boolean | null,
+              paymentReceiptUrl: null as string | null,
+              bookingId: b.id as number | null,
+              remainingBalance: null as number | null,
+            },
+          ];
         }
-        /* Cancelled — no money was ever paid (dep==0) or owner kept as fee → greyed row */
+        /* Cancelled — no money ever paid (dep==0), or 100% kept as fee (refundAmt==0) */
         return [{
           id: `b-${b.id}`,
-          date: b.bookingDate,
+          date: b.bookingDate ?? "",
           type: "income" as const,
           label: `إيداع — ${b.clientName}`,
           amount: dep,
@@ -4862,6 +4893,7 @@ router.get("/transaction-history", async (req, res) => {
           cashDeposited: null as boolean | null,
           paymentReceiptUrl: null as string | null,
           bookingId: b.id as number | null,
+          remainingBalance: null as number | null,
         }];
       }
 
