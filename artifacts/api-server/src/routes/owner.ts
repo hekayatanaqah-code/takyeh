@@ -72,6 +72,25 @@ function getHijriYM(dateStr: string): { year: number; month: number } {
 
 const HIJRI_MONTH_NAMES = ["محرم","صفر","ربيع الأول","ربيع الآخر","جمادى الأولى","جمادى الآخرة","رجب","شعبان","رمضان","شوال","ذو القعدة","ذو الحجة"];
 
+/** Compute the actual number of days in a Hijri month (Umm al-Qura) by scanning Gregorian days. */
+function computeHijriDaysInMonth(hy: number, hm: number): number {
+  const epochMs = Date.UTC(622, 6, 19);
+  const approxDays = (hy - 1) * 354.36707 + (hm - 1) * 29.53059;
+  const approx = new Date(epochMs + approxDays * 86400000);
+  const cursor = new Date(approx);
+  cursor.setDate(cursor.getDate() - 6);
+  let count = 0;
+  let started = false;
+  for (let i = 0; i < 65; i++) {
+    const ds = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+    const h = getHijriYM(ds);
+    if (h.year === hy && h.month === hm) { started = true; count++; }
+    else if (started) break;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count || 30;
+}
+
 /** Extract the Hijri day-of-month from a "YYYY-MM-DD" string using Umm al-Qura. */
 function getHijriDay(dateStr: string): number {
   try {
@@ -2400,7 +2419,7 @@ router.get("/reports", async (req, res) => {
 
   let daysInMonth: number;
   if (isHijriMode) {
-    daysInMonth = 30;
+    daysInMonth = computeHijriDaysInMonth(hijriYear!, hijriMonth!);
   } else {
     const [year, mon] = month.split("-").map(Number);
     daysInMonth = new Date(year, mon, 0).getDate();
@@ -2425,7 +2444,7 @@ router.get("/reports", async (req, res) => {
 
   /* ── Daily revenue breakdown ─────────────────────────────── */
   const dailyRevenue = isHijriMode
-    ? Array.from({ length: 30 }, (_, i) => {
+    ? Array.from({ length: daysInMonth }, (_, i) => {
         const day = i + 1;
         const revenue = activeMonthBookings
           .filter(b =>

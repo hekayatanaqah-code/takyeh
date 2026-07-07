@@ -16728,7 +16728,7 @@ function ReportsTab() {
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="name" tick={(props: any) => {
                         const { x, y, payload } = props;
-                        return <text x={x} y={y + 14} textAnchor="middle" fontSize={11} fill="hsl(var(--muted-foreground))" fontFamily="inherit">{payload.value}</text>;
+                        return <text x={x} y={y + 14} textAnchor="middle" fontSize={11} fill="hsl(var(--muted-foreground))" fontFamily="inherit" direction="rtl" unicodeBidi="embed">{payload.value}</text>;
                       }} />
                       <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                       <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: 12 }} formatter={(v: number) => [formatAmount(v)]} />
@@ -16833,10 +16833,12 @@ function ReportsTab() {
                 <span>إجمالي الخدمات</span>
               </div>
               <div style={{ fontSize: 30, fontWeight: 900, color: "#b45309", lineHeight: 1, marginTop: 4 }}>
-                {repBreakdown.totSvc.toLocaleString("ar-SA")}
+                {(repBreakdown.totSvc || 0).toLocaleString("ar-SA")}
               </div>
               <div style={{ fontSize: 12, color: "#d97706", marginTop: "auto" }}>ريال سعودي</div>
-              <div style={{ fontSize: 11, color: "#6b7280" }}>رسوم الإضافات والخدمات</div>
+              <div style={{ fontSize: 11, color: "#6b7280" }}>
+                {repBreakdown.totSvc > 0 ? "رسوم الإضافات والخدمات" : "لا توجد خدمات مدفوعة"}
+              </div>
             </div>
             <div style={{ background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", border: "2px solid #4ade80", borderRadius: 16, padding: 20, minHeight: 150, display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#15803d" }}>
@@ -16921,7 +16923,7 @@ function ReportsTab() {
               <div className="grid grid-cols-3 gap-3">
                 {[
                   { label: "المبالغ المحصّلة فعلياً", value: formatAmount(financial.totalRevenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", note: "إجمالي ما دخل الحساب" },
-                  { label: "إجمالي المصروفات", value: formatAmount(Math.max(0, financial.totalExpenses)), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "مصروفات + رواتب" },
+                  { label: "إجمالي المصروفات", value: (Number(financial.totalExpenses) ?? 0) <= 0 ? "٠ ر.س" : formatAmount(Number(financial.totalExpenses)), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "مصروفات + رواتب" },
                   { label: "صافي الربح", value: formatAmount(financial.netProfit), icon: <DollarSign className="w-5 h-5" />, color: financial.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "الإيرادات - المصروفات" },
                 ].map((stat) => (
                   <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
@@ -17004,7 +17006,7 @@ function ReportsTab() {
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="name" tick={(props: any) => {
                         const { x, y, payload } = props;
-                        return <text x={x} y={y + 14} textAnchor="middle" fontSize={11} fill="hsl(var(--muted-foreground))" fontFamily="inherit">{payload.value}</text>;
+                        return <text x={x} y={y + 14} textAnchor="middle" fontSize={11} fill="hsl(var(--muted-foreground))" fontFamily="inherit" direction="rtl" unicodeBidi="embed">{payload.value}</text>;
                       }} />
                       <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                       <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: 12 }} formatter={(value: number) => [formatAmount(value)]} />
