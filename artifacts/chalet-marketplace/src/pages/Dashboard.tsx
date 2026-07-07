@@ -16221,6 +16221,12 @@ function ReportsTab() {
     ? (report?.hijriMonthLabel ?? hijriMonthOptions.find(o => o.val === selectedHijriMonthVal)?.label ?? selectedHijriMonthVal)
     : (monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth);
 
+  /* Recalculate occupancy from raw fields to guarantee consistency with displayed text */
+  const displayOccupancy = useMemo(() => {
+    if (!report || !report.daysInMonth) return report?.occupancyRate ?? 0;
+    return Math.min(100, Math.round((report.totalDays / report.daysInMonth) * 100));
+  }, [report]);
+
   const yearOptions = useMemo(() => {
     const cur = new Date().getFullYear();
     return [cur, cur - 1, cur - 2].map((y) => ({ val: String(y), label: String(y) }));
@@ -16257,7 +16263,7 @@ function ReportsTab() {
       bodyText =
         `📊 تقرير شهر ${monthLabel}\n` +
         `🏠 العقار: ${selectedPropertyName}\n` +
-        `📅 الحجوزات: ${report.totalBookings} · الإشغال: ${report.occupancyRate}%\n` +
+        `📅 الحجوزات: ${report.totalBookings} · الإشغال: ${report.daysInMonth > 0 ? Math.min(100, Math.round((report.totalDays / report.daysInMonth) * 100)) : report.occupancyRate}%\n` +
         (financial ? `💰 صافي الربح: ${formatAmount(financial.netProfit)}\n` : "") +
         `✨ منصة حكاية أناقة – شاليهات القصيم`;
       fileName = `Monthly_Report_${selectedMonth}.pdf`;
@@ -16576,33 +16582,68 @@ function ReportsTab() {
             </Select>
           </div>
           {viewMode === "monthly" ? (
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-xs text-muted-foreground font-medium">الشهر</label>
-                <label htmlFor="hijri-toggle" className="flex items-center gap-1.5 cursor-pointer select-none">
-                  <span className="text-xs text-muted-foreground">التقويم الهجري</span>
-                  <Switch
-                    id="hijri-toggle"
-                    checked={isHijri}
-                    onCheckedChange={setIsHijri}
-                  />
-                </label>
+            <div className="flex-1 space-y-2">
+              <label className="text-xs text-muted-foreground font-medium">الفترة</label>
+              {/* Calendar type toggle */}
+              <div className="flex gap-1 bg-muted/60 rounded-lg p-0.5 w-fit">
+                {(["gregorian", "hijri"] as const).map((c) => (
+                  <button key={c} type="button"
+                    onClick={() => setIsHijri(c === "hijri")}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-colors ${
+                      (c === "hijri") === isHijri
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {c === "hijri" ? "هجري" : "ميلادي"}
+                  </button>
+                ))}
               </div>
-              {isHijri ? (
-                <Select value={selectedHijriMonthVal} onValueChange={setSelectedHijriMonthVal}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              {/* Separate year + month selects */}
+              <div className="flex gap-2">
+                <Select
+                  value={isHijri ? selectedHijriMonthVal.split("-")[0] : selectedMonth.split("-")[0]}
+                  onValueChange={(y) => {
+                    if (isHijri) {
+                      const m = selectedHijriMonthVal.split("-")[1] ?? "01";
+                      setSelectedHijriMonthVal(`${y}-${m}`);
+                    } else {
+                      const m = selectedMonth.split("-")[1] ?? "01";
+                      setSelectedMonth(`${y}-${m}`);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-9 w-24"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {hijriMonthOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
+                    {(isHijri ? hijriYearOptions : yearOptions).map(o => (
+                      <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-              ) : (
-                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {monthOptions.map((o) => (<SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>))}
+                <Select
+                  value={String(Number(isHijri ? selectedHijriMonthVal.split("-")[1] : selectedMonth.split("-")[1]))}
+                  onValueChange={(m) => {
+                    const padded = m.padStart(2, "0");
+                    if (isHijri) {
+                      const y = selectedHijriMonthVal.split("-")[0];
+                      setSelectedHijriMonthVal(`${y}-${padded}`);
+                    } else {
+                      const y = selectedMonth.split("-")[0];
+                      setSelectedMonth(`${y}-${padded}`);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-9 flex-1"><SelectValue /></SelectTrigger>
+                  <SelectContent dir="rtl">
+                    {Array.from({ length: 12 }, (_, i) => ({
+                      val: String(i + 1),
+                      label: isHijri ? HIJRI_MONTHS_AR[i] : GREGORIAN_MONTHS_AR[i],
+                    })).map(o => (
+                      <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-              )}
+              </div>
             </div>
           ) : (
             <div className="flex-1 space-y-1">
@@ -16683,9 +16724,12 @@ function ReportsTab() {
                       name: getMonthShortLabel(m),
                       الإيرادات: m.revenue,
                       المصروفات: m.expenses,
-                    }))} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                    }))} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                      <XAxis dataKey="name" tick={(props: any) => {
+                        const { x, y, payload } = props;
+                        return <text x={x} y={y + 14} textAnchor="middle" fontSize={11} fill="hsl(var(--muted-foreground))" fontFamily="inherit">{payload.value}</text>;
+                      }} />
                       <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                       <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: 12 }} formatter={(v: number) => [formatAmount(v)]} />
                       <Legend wrapperStyle={{ fontSize: 12, direction: "rtl" }} />
@@ -16876,8 +16920,8 @@ function ReportsTab() {
             <>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "إجمالي الإيرادات", value: formatAmount(financial.totalRevenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", note: "عربون + مبالغ محصّلة" },
-                  { label: "إجمالي المصروفات", value: formatAmount(financial.totalExpenses), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "مصروفات + رواتب" },
+                  { label: "المبالغ المحصّلة فعلياً", value: formatAmount(financial.totalRevenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", note: "إجمالي ما دخل الحساب" },
+                  { label: "إجمالي المصروفات", value: formatAmount(Math.max(0, financial.totalExpenses)), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "مصروفات + رواتب" },
                   { label: "صافي الربح", value: formatAmount(financial.netProfit), icon: <DollarSign className="w-5 h-5" />, color: financial.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "الإيرادات - المصروفات" },
                 ].map((stat) => (
                   <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
@@ -16956,9 +17000,12 @@ function ReportsTab() {
                       name: new Date(t.month + "-15").toLocaleDateString("ar-SA", { month: "short" }),
                       الإيرادات: t.revenue,
                       المصروفات: t.expenses,
-                    }))} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                    }))} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                      <XAxis dataKey="name" tick={(props: any) => {
+                        const { x, y, payload } = props;
+                        return <text x={x} y={y + 14} textAnchor="middle" fontSize={11} fill="hsl(var(--muted-foreground))" fontFamily="inherit">{payload.value}</text>;
+                      }} />
                       <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                       <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: 12 }} formatter={(value: number) => [formatAmount(value)]} />
                       <Legend wrapperStyle={{ fontSize: 12, direction: "rtl" }} />
@@ -16983,7 +17030,7 @@ function ReportsTab() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
                   { label: "إجمالي الحجوزات", value: report.totalBookings, icon: <BookOpen className="w-5 h-5" />, color: "bg-primary/10 text-primary" },
-                  { label: "نسبة الإشغال", value: `${report.occupancyRate}%`, icon: <TrendingUp className="w-5 h-5" />, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+                  { label: "نسبة الإشغال", value: `${displayOccupancy}%`, icon: <TrendingUp className="w-5 h-5" />, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
                   { label: "عبر المنصة", value: report.platformBookings, icon: <Globe className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
                   { label: "من خارج المنصة", value: report.externalBookings, icon: <Phone className="w-5 h-5" />, color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
                 ].map((stat) => (
@@ -17016,10 +17063,10 @@ function ReportsTab() {
               <div className="bg-card border border-border rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-bold text-foreground text-sm">نسبة الإشغال — {activeMonthLabel}</h3>
-                  <span className="text-2xl font-bold text-primary">{report.occupancyRate}%</span>
+                  <span className="text-2xl font-bold text-primary">{displayOccupancy}%</span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-3">
-                  <div className="bg-primary h-3 rounded-full transition-all duration-500" style={{ width: `${report.occupancyRate}%` }} />
+                  <div className="bg-primary h-3 rounded-full transition-all duration-500" style={{ width: `${displayOccupancy}%` }} />
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">{report.totalDays} يوم محجوز من أصل {report.daysInMonth} يوم</p>
               </div>
