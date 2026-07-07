@@ -15965,6 +15965,11 @@ function ReportsTab() {
   const _nowRep = new Date();
   const currentMonth = `${_nowRep.getFullYear()}-${String(_nowRep.getMonth() + 1).padStart(2, "0")}`;
   const currentYear = String(_nowRep.getFullYear());
+  const nowGregorianMonthNum = _nowRep.getMonth() + 1;
+  const nowGregorianYearNum  = _nowRep.getFullYear();
+  const _nowHijri = getHijriYMClient(_nowRep);
+  const nowHijriYearNum  = _nowHijri.year;
+  const nowHijriMonthNum = _nowHijri.month;
 
   const [viewMode, setViewMode] = useState<"monthly" | "yearly">("monthly");
   const [reportType, setReportType] = useState<"chalets" | "services" | "unified">("chalets");
@@ -16596,11 +16601,16 @@ function ReportsTab() {
               value={isHijri ? selectedHijriMonthVal.split("-")[0] : selectedMonth.split("-")[0]}
               onValueChange={(y) => {
                 if (isHijri) {
-                  const m = selectedHijriMonthVal.split("-")[1] ?? "01";
-                  setSelectedHijriMonthVal(`${y}-${m}`);
+                  const yNum = Number(y);
+                  const curM = Number(selectedHijriMonthVal.split("-")[1] ?? "1");
+                  /* إذا اخترنا السنة الحالية وكان الشهر المختار مستقبلياً → نصحح للشهر الحالي */
+                  const safeM = yNum === nowHijriYearNum && curM > nowHijriMonthNum ? nowHijriMonthNum : curM;
+                  setSelectedHijriMonthVal(`${y}-${String(safeM).padStart(2, "0")}`);
                 } else {
-                  const m = selectedMonth.split("-")[1] ?? "01";
-                  setSelectedMonth(`${y}-${m}`);
+                  const yNum = Number(y);
+                  const curM = Number(selectedMonth.split("-")[1] ?? "1");
+                  const safeM = yNum === nowGregorianYearNum && curM > nowGregorianMonthNum ? nowGregorianMonthNum : curM;
+                  setSelectedMonth(`${y}-${String(safeM).padStart(2, "0")}`);
                 }
               }}
             >
@@ -16623,31 +16633,53 @@ function ReportsTab() {
           )}
 
           {/* ٤. الشهر — أقصى اليسار (فقط في العرض الشهري) */}
-          {viewMode === "monthly" && (
-            <Select
-              value={String(Number(isHijri ? selectedHijriMonthVal.split("-")[1] : selectedMonth.split("-")[1]))}
-              onValueChange={(m) => {
-                const padded = m.padStart(2, "0");
-                if (isHijri) {
-                  const y = selectedHijriMonthVal.split("-")[0];
-                  setSelectedHijriMonthVal(`${y}-${padded}`);
-                } else {
-                  const y = selectedMonth.split("-")[0];
-                  setSelectedMonth(`${y}-${padded}`);
-                }
-              }}
-            >
-              <SelectTrigger className="h-9 min-w-[90px] flex-1 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent dir="rtl">
-                {Array.from({ length: 12 }, (_, i) => ({
-                  val: String(i + 1),
-                  label: isHijri ? HIJRI_MONTHS_AR[i] : GREGORIAN_MONTHS_AR[i],
-                })).map(o => (
-                  <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          {viewMode === "monthly" && (() => {
+            const selYearNum = isHijri
+              ? Number(selectedHijriMonthVal.split("-")[0])
+              : Number(selectedMonth.split("-")[0]);
+            const isCurrentYear = isHijri
+              ? selYearNum === nowHijriYearNum
+              : selYearNum === nowGregorianYearNum;
+            const maxMonth = isCurrentYear
+              ? (isHijri ? nowHijriMonthNum : nowGregorianMonthNum)
+              : 12;
+            return (
+              <Select
+                value={String(Number(isHijri ? selectedHijriMonthVal.split("-")[1] : selectedMonth.split("-")[1]))}
+                onValueChange={(m) => {
+                  const mNum = Number(m);
+                  if (isCurrentYear && mNum > maxMonth) return;
+                  const padded = m.padStart(2, "0");
+                  if (isHijri) {
+                    const y = selectedHijriMonthVal.split("-")[0];
+                    setSelectedHijriMonthVal(`${y}-${padded}`);
+                  } else {
+                    const y = selectedMonth.split("-")[0];
+                    setSelectedMonth(`${y}-${padded}`);
+                  }
+                }}
+              >
+                <SelectTrigger className="h-9 min-w-[90px] flex-1 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent dir="rtl">
+                  {Array.from({ length: 12 }, (_, i) => {
+                    const mNum = i + 1;
+                    const isFuture = isCurrentYear && mNum > maxMonth;
+                    return {
+                      val: String(mNum),
+                      label: isHijri ? HIJRI_MONTHS_AR[i] : GREGORIAN_MONTHS_AR[i],
+                      disabled: isFuture,
+                    };
+                  }).map(o => (
+                    <SelectItem key={o.val} value={o.val} disabled={o.disabled}
+                      className={o.disabled ? "opacity-30 cursor-not-allowed" : ""}
+                    >
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            );
+          })()}
         </div>
 
         {selectedSubmissionId !== "all" && (
