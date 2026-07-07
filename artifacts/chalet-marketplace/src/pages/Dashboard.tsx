@@ -180,8 +180,20 @@ const calHintStyle: React.CSSProperties = {
   marginTop: "6px",
 };
 
-function getBookingMonthKey(dateStr: string, calView: "hijri" | "gregorian"): string {
-  const d = new Date(dateStr + "T00:00:00");
+function getBookingMonthKey(dateStr: string | null | undefined, calView: "hijri" | "gregorian"): string {
+  if (!dateStr) {
+    const today = new Date();
+    if (calView === "gregorian") return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    const h = toHijriComponents(today);
+    return `${h.year}-${String(h.month).padStart(2, "0")}`;
+  }
+  const d = new Date(dateStr.includes("T") ? dateStr : dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) {
+    const today = new Date();
+    if (calView === "gregorian") return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    const h = toHijriComponents(today);
+    return `${h.year}-${String(h.month).padStart(2, "0")}`;
+  }
   if (calView === "gregorian") return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   const h = toHijriComponents(d);
   return `${h.year}-${String(h.month).padStart(2, "0")}`;

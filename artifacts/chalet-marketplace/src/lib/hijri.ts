@@ -19,6 +19,13 @@ function _arToInt(s: string): number {
 
 /** Extract Hijri year / month / day from a Gregorian Date (Umm al-Qura). */
 export function toHijriComponents(date: Date): { year: number; month: number; day: number } {
+  if (!date || isNaN(date.getTime())) {
+    const today = new Date();
+    const fallbackParts = _hijriComponentsFmt.formatToParts(today);
+    const getFallback = (type: string) =>
+      _arToInt(fallbackParts.find((p) => p.type === type)?.value ?? "0");
+    return { year: getFallback("year"), month: getFallback("month"), day: getFallback("day") };
+  }
   const parts = _hijriComponentsFmt.formatToParts(date);
   const get = (type: string) =>
     _arToInt(parts.find((p) => p.type === type)?.value ?? "0");
