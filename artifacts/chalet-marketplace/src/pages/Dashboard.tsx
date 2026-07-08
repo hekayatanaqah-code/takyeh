@@ -12,6 +12,7 @@ import { useStaffAuth } from "@/lib/useStaffAuth";
 import { TAB_PERMISSION, ALL_PERM_KEYS, PERM_LABELS } from "@/lib/staffPermissions";
 import type { PermKey, StaffPermissions } from "@/lib/staffPermissions";
 import { Switch } from "@/components/ui/switch";
+import { RiyalIcon } from "@/components/icons/RiyalIcon";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -15764,7 +15765,7 @@ function buildMonthlyReportHtml(
     ? Object.entries(financial.categoryTotals).sort(([, a], [, b]) => b - a).map(([key, amt]) => {
         const cat = catMap[key] ?? { label: key, emoji: "✨" };
         const pct = financial.totalExpenses > 0 ? Math.round((amt / financial.totalExpenses) * 100) : 0;
-        return `<tr><td>${cat.emoji} ${cat.label}</td><td>${formatAmount(amt)}</td><td>${pct}%</td></tr>`;
+        return `<tr><td>${cat.emoji} ${cat.label}</td><td>${formatAmount(amt)}</td><td>٪${pct}</td></tr>`;
       }).join("") : "";
   const scriptTag = forPrint ? `<script>window.onload=function(){window.print();};<\/script>` : "";
   const qrHtml = qrDataUrl
@@ -16713,7 +16714,7 @@ function ReportsTab() {
                 {[
                   { label: "إجمالي الإيرادات", value: formatAmount(activeYearly.totals.revenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
                   { label: "إجمالي المصروفات", value: formatAmount(activeYearly.totals.expenses), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
-                  { label: "صافي الربح السنوي", value: formatAmount(activeYearly.totals.netProfit), icon: <DollarSign className="w-5 h-5" />, color: activeYearly.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700" },
+                  { label: "صافي الربح السنوي", value: formatAmount(activeYearly.totals.netProfit), icon: <RiyalIcon className="w-4 h-4" />, color: activeYearly.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700" },
                 ].map((s) => (
                   <div key={s.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>{s.icon}</div>
@@ -16934,7 +16935,7 @@ function ReportsTab() {
                 {[
                   { label: "المبالغ المحصّلة فعلياً", value: formatAmount(financial.totalRevenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", note: "إجمالي ما دخل الحساب" },
                   { label: "إجمالي المصروفات", value: (Number(financial.totalExpenses) ?? 0) <= 0 ? "٠ ر.س" : formatAmount(Number(financial.totalExpenses)), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "مصروفات + رواتب" },
-                  { label: "صافي الربح", value: formatAmount(financial.netProfit), icon: <DollarSign className="w-5 h-5" />, color: financial.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "الإيرادات - المصروفات" },
+                  { label: "صافي الربح", value: formatAmount(financial.netProfit), icon: <RiyalIcon className="w-4 h-4" />, color: financial.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "الإيرادات - المصروفات" },
                 ].map((stat) => (
                   <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stat.color}`}>{stat.icon}</div>
@@ -16990,7 +16991,7 @@ function ReportsTab() {
                         <div key={key}>
                           <div className="flex items-center justify-between text-sm mb-1">
                             <span className="flex items-center gap-1.5 text-muted-foreground"><span>{cat.emoji}</span>{cat.label}</span>
-                            <span className="font-semibold">{formatAmount(amount)} <span className="text-xs text-muted-foreground">({pct}%)</span></span>
+                            <span className="font-semibold">{formatAmount(amount)} <span className="text-xs text-muted-foreground">(٪{pct})</span></span>
                           </div>
                           <div className="w-full bg-muted rounded-full h-1.5">
                             <div className="h-1.5 rounded-full bg-destructive/70 transition-all" style={{ width: `${pct}%` }} />
