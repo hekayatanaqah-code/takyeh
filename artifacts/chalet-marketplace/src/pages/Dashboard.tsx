@@ -16183,7 +16183,9 @@ function ReportsTab() {
     },
   });
 
-  // ── Months (past) that actually have booking/expense data, per property + calendar type ───
+  // ── Months (past) that actually have ACTIVE (non-cancelled) booking/expense data, per property + calendar type ───
+  // ملاحظة: أي حجز ملغى (cancelledAt) أو مصروف بقيمة صفرية لا يُعتبر سجلاً مالياً فعلياً،
+  // ولا يجوز أن يُبقي الشهر متاحاً للاختيار في القائمة المنسدلة.
   const monthsWithDataSet = useMemo(() => {
     const gregorian = new Set<string>();
     const hijri = new Set<string>();
@@ -16191,11 +16193,13 @@ function ReportsTab() {
       selectedSubmissionId === "all" || String(submissionId) === selectedSubmissionId;
     for (const b of repAllBookings) {
       if (!b.bookingDate || !propMatch(b.submissionId)) continue;
+      if (b.cancelledAt) continue; // حجز ملغى → لا يُحتسب كبيانات فعلية
       gregorian.add(getBookingMonthKey(b.bookingDate, "gregorian"));
       hijri.add(getBookingMonthKey(b.bookingDate, "hijri"));
     }
     for (const e of repAllExpenses) {
       if (!e.dateStr || !propMatch(e.submissionId)) continue;
+      if (!(Number(e.amount) > 0)) continue; // مصروف مُصفّر/ملغى → لا يُحتسب كبيانات فعلية
       gregorian.add(getBookingMonthKey(e.dateStr, "gregorian"));
       hijri.add(getBookingMonthKey(e.dateStr, "hijri"));
     }
