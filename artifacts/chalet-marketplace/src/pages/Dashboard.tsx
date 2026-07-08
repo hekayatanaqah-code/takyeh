@@ -12691,6 +12691,12 @@ function formatAmount(n: number) {
   return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n);
 }
 
+/* Accounting-style formatting: negative values shown as (١٬٢٣٤ ر.س.) instead of a barely-visible "-" sign. */
+function formatAmountSigned(n: number) {
+  const formatted = formatAmount(Math.abs(n));
+  return n < 0 ? `(${formatted})` : formatted;
+}
+
 /* ── Expenses Tab ────────────────────────────────── */
 interface OwnerExpense {
   id: number;
@@ -15784,7 +15790,7 @@ ${qrHtml}</div>
 ${financial ? `<div class="section"><div class="section-title">الملخص المالي (أرباح وخسائر)</div><div class="kpi-grid">
 <div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">عربون + محصّل + تلفيات</div></div>
 <div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات</div><div class="kpi-value">${formatAmount(financial.totalExpenses)}</div><div class="kpi-note">مصروفات + رواتب</div></div>
-<div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value">${formatAmount(financial.netProfit)}</div><div class="kpi-note">الإيرادات - المصروفات</div></div>
+<div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value" style="${financial.netProfit >= 0 ? "" : "color:#dc2626"}">${formatAmountSigned(financial.netProfit)}</div><div class="kpi-note">الإيرادات - المصروفات</div></div>
 </div>${insuranceDeducted > 0 ? `<div style="margin-top:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#b91c1c;">✂️ إيرادات تلفيات (محوّلة من التأمين)</span><span style="font-size:16px;font-weight:700;color:#b91c1c;">${formatAmount(insuranceDeducted)}</span></div>` : ""}${insuranceHeld > 0 ? `<div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#c2410c;">🔒 تأمينات محتجزة (غير محسوبة في الأرباح)</span><span style="font-size:16px;font-weight:700;color:#c2410c;">${formatAmount(insuranceHeld)}</span></div>` : ""}</div>${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}` : ""}
 ${report ? `<div class="section"><div class="section-title">إحصائيات الحجوزات</div><div class="kpi-grid">
 <div class="kpi-card"><div class="kpi-label">إجمالي الحجوزات</div><div class="kpi-value">${report.totalBookings}</div></div>
@@ -15806,7 +15812,7 @@ function buildYearlyReportHtml(
   const rows = yearly.monthly.map(m => {
     const label = new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
     const cls = m.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626";
-    return `<tr><td>${label}</td><td>${formatAmount(m.revenue)}</td><td>${formatAmount(m.expenses)}</td><td style="${cls}">${formatAmount(m.netProfit)}</td></tr>`;
+    return `<tr><td>${label}</td><td>${formatAmount(m.revenue)}</td><td>${formatAmount(m.expenses)}</td><td style="${cls}">${formatAmountSigned(m.netProfit)}</td></tr>`;
   }).join("");
   const scriptTag = forPrint ? `<script>window.onload=function(){window.print();};<\/script>` : "";
   const qrHtml = qrDataUrl
@@ -15823,11 +15829,11 @@ ${qrHtml}</div>
 <div class="kpi-grid" style="margin-bottom:24px">
 <div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.revenue)}</div></div>
 <div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.expenses)}</div></div>
-<div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح السنوي</div><div class="kpi-value" style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmount(yearly.totals.netProfit)}</div></div>
+<div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح السنوي</div><div class="kpi-value" style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</div></div>
 </div>
 <table><thead><tr><th>الشهر</th><th>الإيرادات (ر.س)</th><th>المصروفات (ر.س)</th><th>صافي الربح (ر.س)</th></tr></thead>
 <tbody>${rows}</tbody>
-<tfoot><tr><td>الإجمالي السنوي</td><td>${formatAmount(yearly.totals.revenue)}</td><td>${formatAmount(yearly.totals.expenses)}</td><td style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmount(yearly.totals.netProfit)}</td></tr></tfoot>
+<tfoot><tr><td>الإجمالي السنوي</td><td>${formatAmount(yearly.totals.revenue)}</td><td>${formatAmount(yearly.totals.expenses)}</td><td style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</td></tr></tfoot>
 </table>
 <div class="footer">تم إصدار هذا التقرير عبر منصة حكاية أناقة · ${new Date().getFullYear()}</div>
 </div>${scriptTag}</body></html>`;
@@ -16167,6 +16173,35 @@ function ReportsTab() {
     enabled: viewMode === "monthly",
   });
 
+  // ── Fetch all owner expenses so we can tell which months actually have data ───
+  const { data: repAllExpenses = [] } = useQuery<OwnerExpense[]>({
+    queryKey: ["owner", "expenses"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/expenses");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  // ── Months (past) that actually have booking/expense data, per property + calendar type ───
+  const monthsWithDataSet = useMemo(() => {
+    const gregorian = new Set<string>();
+    const hijri = new Set<string>();
+    const propMatch = (submissionId: number | string | null | undefined) =>
+      selectedSubmissionId === "all" || String(submissionId) === selectedSubmissionId;
+    for (const b of repAllBookings) {
+      if (!b.bookingDate || !propMatch(b.submissionId)) continue;
+      gregorian.add(getBookingMonthKey(b.bookingDate, "gregorian"));
+      hijri.add(getBookingMonthKey(b.bookingDate, "hijri"));
+    }
+    for (const e of repAllExpenses) {
+      if (!e.dateStr || !propMatch(e.submissionId)) continue;
+      gregorian.add(getBookingMonthKey(e.dateStr, "gregorian"));
+      hijri.add(getBookingMonthKey(e.dateStr, "hijri"));
+    }
+    return { gregorian, hijri };
+  }, [repAllBookings, repAllExpenses, selectedSubmissionId]);
+
   // ── Compute monthly booking breakdown for the selected month/property ───
   const repBreakdown = useMemo(() => {
     const getAddonSum = (b: OwnerBooking): number => {
@@ -16270,7 +16305,7 @@ function ReportsTab() {
         `📊 تقرير شهر ${monthLabel}\n` +
         `🏠 العقار: ${selectedPropertyName}\n` +
         `📅 الحجوزات: ${report.totalBookings} · الإشغال: ${report.daysInMonth > 0 ? Math.min(100, Math.round((report.totalDays / report.daysInMonth) * 100)) : report.occupancyRate}%\n` +
-        (financial ? `💰 صافي الربح: ${formatAmount(financial.netProfit)}\n` : "") +
+        (financial ? `💰 صافي الربح: ${formatAmountSigned(financial.netProfit)}\n` : "") +
         `✨ منصة حكاية أناقة – شاليهات القصيم`;
       fileName = `Monthly_Report_${selectedMonth}.pdf`;
     } else if (viewMode === "yearly" && yearly) {
@@ -16280,7 +16315,7 @@ function ReportsTab() {
         `🏠 العقار: ${selectedPropertyName}\n` +
         `💚 الإيرادات: ${formatAmount(yearly.totals.revenue)}\n` +
         `🔴 المصروفات: ${formatAmount(yearly.totals.expenses)}\n` +
-        `⭐ صافي الربح: ${formatAmount(yearly.totals.netProfit)}\n` +
+        `⭐ صافي الربح: ${formatAmountSigned(yearly.totals.netProfit)}\n` +
         `✨ منصة حكاية أناقة – شاليهات القصيم`;
       fileName = `Annual_Report_${selectedYear}.pdf`;
     } else return;
@@ -16359,12 +16394,12 @@ function ReportsTab() {
     if (viewMode === "monthly" && report) {
       subject = `تقرير شهري – ${activeMonthLabel}`;
       body = `${selectedPropertyName}\n\nالحجوزات: ${report.totalBookings}\nالإشغال: ${report.occupancyRate}%` +
-        (financial ? `\nصافي الربح: ${formatAmount(financial.netProfit)}` : "") +
+        (financial ? `\nصافي الربح: ${formatAmountSigned(financial.netProfit)}` : "") +
         (url ? `\n\nرابط التقرير PDF:\n${url}` : "") +
         `\n\nحكاية أناقة – شاليهات القصيم`;
     } else if (viewMode === "yearly" && yearly) {
       subject = `التقرير السنوي – ${selectedYear}`;
-      body = `${selectedPropertyName}\n\nإيرادات: ${formatAmount(yearly.totals.revenue)}\nمصروفات: ${formatAmount(yearly.totals.expenses)}\nصافي: ${formatAmount(yearly.totals.netProfit)}` +
+      body = `${selectedPropertyName}\n\nإيرادات: ${formatAmount(yearly.totals.revenue)}\nمصروفات: ${formatAmount(yearly.totals.expenses)}\nصافي: ${formatAmountSigned(yearly.totals.netProfit)}` +
         (url ? `\n\nرابط التقرير PDF:\n${url}` : "") +
         `\n\nحكاية أناقة – شاليهات القصيم`;
     }
@@ -16604,13 +16639,30 @@ function ReportsTab() {
                 if (isHijri) {
                   const yNum = Number(y);
                   const curM = Number(selectedHijriMonthVal.split("-")[1] ?? "1");
+                  const isNewCurrentYear = yNum === nowHijriYearNum;
+                  const maxM = isNewCurrentYear ? nowHijriMonthNum : 12;
                   /* إذا اخترنا السنة الحالية وكان الشهر المختار مستقبلياً → نصحح للشهر الحالي */
-                  const safeM = yNum === nowHijriYearNum && curM > nowHijriMonthNum ? nowHijriMonthNum : curM;
+                  let safeM = isNewCurrentYear && curM > maxM ? maxM : curM;
+                  const isCurrentMonthOfYear = isNewCurrentYear && safeM === maxM;
+                  /* إذا كان الشهر الناتج لا يملك بيانات فعلية → نقفز لآخر شهر فيه بيانات ضمن نفس السنة */
+                  if (!isCurrentMonthOfYear && !monthsWithDataSet.hijri.has(`${yNum}-${String(safeM).padStart(2, "0")}`)) {
+                    for (let m = maxM; m >= 1; m--) {
+                      if (monthsWithDataSet.hijri.has(`${yNum}-${String(m).padStart(2, "0")}`)) { safeM = m; break; }
+                    }
+                  }
                   setSelectedHijriMonthVal(`${y}-${String(safeM).padStart(2, "0")}`);
                 } else {
                   const yNum = Number(y);
                   const curM = Number(selectedMonth.split("-")[1] ?? "1");
-                  const safeM = yNum === nowGregorianYearNum && curM > nowGregorianMonthNum ? nowGregorianMonthNum : curM;
+                  const isNewCurrentYear = yNum === nowGregorianYearNum;
+                  const maxM = isNewCurrentYear ? nowGregorianMonthNum : 12;
+                  let safeM = isNewCurrentYear && curM > maxM ? maxM : curM;
+                  const isCurrentMonthOfYear = isNewCurrentYear && safeM === maxM;
+                  if (!isCurrentMonthOfYear && !monthsWithDataSet.gregorian.has(`${yNum}-${String(safeM).padStart(2, "0")}`)) {
+                    for (let m = maxM; m >= 1; m--) {
+                      if (monthsWithDataSet.gregorian.has(`${yNum}-${String(m).padStart(2, "0")}`)) { safeM = m; break; }
+                    }
+                  }
                   setSelectedMonth(`${y}-${String(safeM).padStart(2, "0")}`);
                 }
               }}
@@ -16665,10 +16717,15 @@ function ReportsTab() {
                   {Array.from({ length: 12 }, (_, i) => {
                     const mNum = i + 1;
                     const isFuture = isCurrentYear && mNum > maxMonth;
+                    const isCurrentMonthOption = isCurrentYear && mNum === maxMonth;
+                    const monthKey = `${selYearNum}-${String(mNum).padStart(2, "0")}`;
+                    const hasData = (isHijri ? monthsWithDataSet.hijri : monthsWithDataSet.gregorian).has(monthKey);
+                    /* الأشهر الماضية بدون حجوزات أو مصروفات فعلية تُعطّل مثل الأشهر المستقبلية */
+                    const isEmptyPast = !isFuture && !isCurrentMonthOption && !hasData;
                     return {
                       val: String(mNum),
                       label: isHijri ? HIJRI_MONTHS_AR[i] : GREGORIAN_MONTHS_AR[i],
-                      disabled: isFuture,
+                      disabled: isFuture || isEmptyPast,
                     };
                   }).map(o => (
                     <SelectItem key={o.val} value={o.val} disabled={o.disabled}
@@ -16712,13 +16769,13 @@ function ReportsTab() {
             <>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "إجمالي الإيرادات", value: formatAmount(activeYearly.totals.revenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-                  { label: "إجمالي المصروفات", value: formatAmount(activeYearly.totals.expenses), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
-                  { label: "صافي الربح السنوي", value: formatAmount(activeYearly.totals.netProfit), icon: <RiyalIcon className="w-4 h-4" />, color: activeYearly.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700" },
+                  { label: "إجمالي الإيرادات", value: formatAmount(activeYearly.totals.revenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", valueColor: "text-foreground" },
+                  { label: "إجمالي المصروفات", value: formatAmount(activeYearly.totals.expenses), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", valueColor: "text-foreground" },
+                  { label: "صافي الربح السنوي", value: formatAmountSigned(activeYearly.totals.netProfit), icon: <RiyalIcon className="w-4 h-4" />, color: activeYearly.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700", valueColor: activeYearly.totals.netProfit >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400" },
                 ].map((s) => (
                   <div key={s.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>{s.icon}</div>
-                    <p className="text-xl font-bold text-foreground leading-none">{s.value}</p>
+                    <p className={`text-xl font-bold leading-none ${s.valueColor}`}>{s.value}</p>
                     <p className="text-xs text-muted-foreground">{s.label}</p>
                   </div>
                 ))}
@@ -16769,7 +16826,7 @@ function ReportsTab() {
                           <td className="py-2 text-muted-foreground">{getMonthLabel(m)}</td>
                           <td className="py-2 font-medium text-green-600">{formatAmount(m.revenue)}</td>
                           <td className="py-2 font-medium text-red-600">{formatAmount(m.expenses)}</td>
-                          <td className={`py-2 font-bold ${m.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmount(m.netProfit)}</td>
+                          <td className={`py-2 font-bold ${m.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmountSigned(m.netProfit)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -16778,7 +16835,7 @@ function ReportsTab() {
                         <td className="py-2 font-bold">الإجمالي</td>
                         <td className="py-2 font-bold text-green-600">{formatAmount(activeYearly.totals.revenue)}</td>
                         <td className="py-2 font-bold text-red-600">{formatAmount(activeYearly.totals.expenses)}</td>
-                        <td className={`py-2 font-bold ${activeYearly.totals.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmount(activeYearly.totals.netProfit)}</td>
+                        <td className={`py-2 font-bold ${activeYearly.totals.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmountSigned(activeYearly.totals.netProfit)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -16933,13 +16990,13 @@ function ReportsTab() {
             <>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "المبالغ المحصّلة فعلياً", value: formatAmount(financial.totalRevenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", note: "إجمالي ما دخل الحساب" },
-                  { label: "إجمالي المصروفات", value: (Number(financial.totalExpenses) ?? 0) <= 0 ? "٠ ر.س" : formatAmount(Number(financial.totalExpenses)), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "مصروفات + رواتب" },
-                  { label: "صافي الربح", value: formatAmount(financial.netProfit), icon: <RiyalIcon className="w-4 h-4" />, color: financial.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "الإيرادات - المصروفات" },
+                  { label: "المبالغ المحصّلة فعلياً", value: formatAmount(financial.totalRevenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", note: "إجمالي ما دخل الحساب", valueColor: "text-foreground" },
+                  { label: "إجمالي المصروفات", value: (Number(financial.totalExpenses) ?? 0) <= 0 ? "٠ ر.س" : formatAmount(Number(financial.totalExpenses)), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "مصروفات + رواتب", valueColor: "text-foreground" },
+                  { label: "صافي الربح", value: formatAmountSigned(financial.netProfit), icon: <RiyalIcon className="w-4 h-4" />, color: financial.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "الإيرادات - المصروفات", valueColor: financial.netProfit >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400" },
                 ].map((stat) => (
                   <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stat.color}`}>{stat.icon}</div>
-                    <p className="text-xl font-bold text-foreground leading-none">{stat.value}</p>
+                    <p className={`text-xl font-bold leading-none ${stat.valueColor}`}>{stat.value}</p>
                     <p className="text-xs text-muted-foreground leading-tight">{stat.label}</p>
                     <p className="text-[10px] text-muted-foreground/60">{stat.note}</p>
                   </div>
