@@ -10593,7 +10593,7 @@ function _AnalyticsTab_REMOVED() {
             {/* Card 3 — Net Total */}
             <div className="bg-gradient-to-br from-green-500/5 to-emerald-500/10 border-2 border-green-400/30 rounded-2xl p-5 space-y-2">
               <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-xs font-bold uppercase tracking-wide">
-                <DollarSign className="w-4 h-4" />
+                <RiyalIcon className="w-4 h-4" />
                 صافي الدخل الكلي
               </div>
               <div className="text-3xl font-extrabold text-green-700 dark:text-green-400 tabular-nums">
@@ -11705,7 +11705,7 @@ function RevenueTab() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-card border border-border rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-              <DollarSign className="w-3.5 h-3.5 text-green-500" />
+              <RiyalIcon className="w-3.5 h-3.5 text-green-500" />
               إيرادات الخدمة المحصّلة
             </div>
             {svcLoading ? <Skeleton className="h-7 w-24" /> : (
@@ -12100,7 +12100,7 @@ function RevenueTab() {
 
         <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20 border-2 border-green-300 dark:border-green-700 rounded-2xl p-5 space-y-2">
           <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-xs font-bold uppercase tracking-wide">
-            <DollarSign className="w-4 h-4" />
+            <RiyalIcon className="w-4 h-4" />
             المبالغ المحصّلة
           </div>
           {loading ? <Skeleton className="h-10 w-32" /> : (
@@ -16853,7 +16853,7 @@ function ReportsTab() {
             </div>
             <div style={{ background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", border: "2px solid #4ade80", borderRadius: 16, padding: 20, minHeight: 150, display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#15803d" }}>
-                <DollarSign className="w-4 h-4" />
+                <RiyalIcon className="w-4 h-4" />
                 <span>صافي الدخل</span>
               </div>
               <div style={{ fontSize: 30, fontWeight: 900, color: "#15803d", lineHeight: 1, marginTop: 4 }}>
@@ -16991,7 +16991,7 @@ function ReportsTab() {
                         <div key={key}>
                           <div className="flex items-center justify-between text-sm mb-1">
                             <span className="flex items-center gap-1.5 text-muted-foreground"><span>{cat.emoji}</span>{cat.label}</span>
-                            <span className="font-semibold">{formatAmount(amount)} <span className="text-xs text-muted-foreground">(٪{pct})</span></span>
+                            <span className="font-semibold">{formatAmount(amount)} <span className="text-xs text-muted-foreground" dir="rtl">({pct.toLocaleString("ar-SA")}٪)</span></span>
                           </div>
                           <div className="w-full bg-muted rounded-full h-1.5">
                             <div className="h-1.5 rounded-full bg-destructive/70 transition-all" style={{ width: `${pct}%` }} />
@@ -17043,7 +17043,7 @@ function ReportsTab() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
                   { label: "إجمالي الحجوزات", value: report.totalBookings, icon: <BookOpen className="w-5 h-5" />, color: "bg-primary/10 text-primary" },
-                  { label: "نسبة الإشغال", value: `${displayOccupancy}%`, icon: <TrendingUp className="w-5 h-5" />, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+                  { label: "نسبة الإشغال", value: `${displayOccupancy.toLocaleString("ar-SA")}٪`, icon: <TrendingUp className="w-5 h-5" />, color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
                   { label: "عبر المنصة", value: report.platformBookings, icon: <Globe className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
                   { label: "من خارج المنصة", value: report.externalBookings, icon: <Phone className="w-5 h-5" />, color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
                 ].map((stat) => (
@@ -17076,7 +17076,7 @@ function ReportsTab() {
               <div className="bg-card border border-border rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-bold text-foreground text-sm">نسبة الإشغال — {activeMonthLabel}</h3>
-                  <span className="text-2xl font-bold text-primary">{displayOccupancy}%</span>
+                  <span className="text-2xl font-bold text-primary" dir="rtl">{displayOccupancy.toLocaleString("ar-SA")}٪</span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-3">
                   <div className="bg-primary h-3 rounded-full transition-all duration-500" style={{ width: `${displayOccupancy}%` }} />
@@ -17100,7 +17100,7 @@ function ReportsTab() {
                             {icon} {label}
                             {isTop && count > 0 && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold">الأعلى</span>}
                           </span>
-                          <span className="font-semibold">{count} ({pct}%)</span>
+                          <span className="font-semibold" dir="rtl">{count} ({pct.toLocaleString("ar-SA")}٪)</span>
                         </div>
                         <div className="w-full bg-muted rounded-full h-2">
                           <div className={`h-2 rounded-full transition-all duration-500 ${isTop && count > 0 ? "bg-primary" : "bg-muted-foreground/40"}`} style={{ width: `${pct}%` }} />
