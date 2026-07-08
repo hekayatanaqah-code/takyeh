@@ -8,3 +8,4 @@
 - [Arabic percent sign ordering](arabic-percent-sign-ordering.md) — ٪ must come AFTER the number (`{n}٪`, not `٪{n}`), or parens/bidi mirroring visually break in RTL text.
 - [Negative currency accounting format](negative-currency-accounting-format.md) — `Intl` accounting sign is unreliable for `ar-SA`; build `(amount)` + red text manually, applied everywhere the value renders.
 - [Data-driven month/year select disabling](data-driven-month-disable.md) — disable past periods with zero data (not just future ones), except the current period; auto-jump selection off disabled options.
+- [Salary expenses NULL submissionId](salary-null-submissionid.md) — owner-level salary expenses have submission_id=NULL; API and frontend must always include them regardless of property filter; use OR(submissionId=X, submissionId IS NULL).

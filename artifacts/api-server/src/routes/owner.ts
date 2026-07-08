@@ -3229,7 +3229,7 @@ router.get("/financial-summary", async (req, res) => {
       gte(ownerExpensesTable.dateStr, gStart),
       lte(ownerExpensesTable.dateStr, gEnd),
     ];
-    if (submissionId) eConds.push(eq(ownerExpensesTable.submissionId, submissionId));
+    if (submissionId) eConds.push(or(eq(ownerExpensesTable.submissionId, submissionId), isNull(ownerExpensesTable.submissionId)));
     const allExpRows = await db.select().from(ownerExpensesTable).where(and(...eConds));
     const monthExpenses = allExpRows.filter(e => {
       const hym = getHijriYM(e.dateStr);
@@ -3311,7 +3311,7 @@ router.get("/financial-summary", async (req, res) => {
     gte(ownerExpensesTable.dateStr, `${selectedMonth}-01`),
     lte(ownerExpensesTable.dateStr, `${selectedMonth}-31`),
   ];
-  if (submissionId) expenseConditions.push(eq(ownerExpensesTable.submissionId, submissionId));
+  if (submissionId) expenseConditions.push(or(eq(ownerExpensesTable.submissionId, submissionId), isNull(ownerExpensesTable.submissionId)));
 
   const monthExpenses = await db
     .select()

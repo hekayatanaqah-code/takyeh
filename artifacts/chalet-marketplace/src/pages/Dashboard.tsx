@@ -16198,7 +16198,9 @@ function ReportsTab() {
       hijri.add(getBookingMonthKey(b.bookingDate, "hijri"));
     }
     for (const e of repAllExpenses) {
-      if (!e.dateStr || !propMatch(e.submissionId)) continue;
+      if (!e.dateStr) continue;
+      // مصروفات الرواتب (submission_id = null) تنتمي للمالك وليس لشاليه بعينه → تُحتسب دائماً
+      if (e.submissionId != null && !propMatch(e.submissionId)) continue;
       if (!(Number(e.amount) > 0)) continue; // مصروف مُصفّر/ملغى → لا يُحتسب كبيانات فعلية
       gregorian.add(getBookingMonthKey(e.dateStr, "gregorian"));
       hijri.add(getBookingMonthKey(e.dateStr, "hijri"));
