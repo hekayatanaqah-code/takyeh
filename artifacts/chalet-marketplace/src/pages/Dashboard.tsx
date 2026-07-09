@@ -15733,11 +15733,12 @@ async function printMonthlyReport(
   propertyName: string,
   report: MonthReport | null | undefined,
   financial: { totalRevenue: number; totalInsuranceHeld?: number; totalInsuranceDeducted?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
+  breakdown: ReportBreakdown = null,
 ) {
-  const win = window.open("", "_blank", "width=794,height=1123");
+  const win = window.open("", "_blank", "width=900,height=1200");
   if (!win) return;
   const qr = await generateReportQrDataUrl("monthly", month);
-  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr));
+  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr, breakdown));
   win.document.close();
 }
 
@@ -15755,7 +15756,29 @@ async function printYearlyReport(
 }
 
 /* ── Shared Report HTML builders (for print + PDF export) ── */
-const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:36px 40px;background:#fff;overflow:hidden;}.header{border-bottom:3px solid #b8860b;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#b8860b;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.section{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#b8860b;border-right:3px solid #b8860b;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}.kpi-note{font-size:10px;color:#aaa;margin-top:2px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;word-wrap:break-word;}th{background:#b8860b;color:#fff;padding:8px 10px;text-align:right;}td{padding:8px 10px;border-bottom:1px solid #ede9dd;word-break:break-word;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #b8860b;}.footer{margin-top:40px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
+type ReportBreakdown = {
+  rows: Array<{ id: number; name: string; date: string; base: number; svc: number; total: number }>;
+  totBase: number; totSvc: number; totTotal: number;
+} | null;
+
+const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:36px 40px;background:#fff;}.header{border-bottom:3px solid #8C6246;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#8C6246;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.section{margin-bottom:24px;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#8C6246;border-right:3px solid #8C6246;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}.kpi-note{font-size:10px;color:#aaa;margin-top:2px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;word-wrap:break-word;}th{background:#8C6246;color:#fff;padding:7px 10px;text-align:right;}td{padding:6px 10px;border-bottom:1px solid #ede9dd;word-break:break-word;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #8C6246;}.slot-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}.slot-chip{background:#faf9f6;border:1px solid #e8e2d0;border-radius:6px;padding:5px 12px;font-size:12px;color:#555;}.footer{margin-top:32px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
+
+function buildRevBarSvg(dailyRevenue: { day: number; revenue: number }[]): string {
+  if (!dailyRevenue || dailyRevenue.length === 0) return "";
+  const W = 670, H = 90;
+  const maxRev = Math.max(...dailyRevenue.map(d => d.revenue), 1);
+  const n = dailyRevenue.length;
+  const gap = 2;
+  const barW = Math.max(3, Math.floor((W - gap * (n + 1)) / n));
+  const bars = dailyRevenue.map((d, i) => {
+    const barH = Math.max(2, Math.round((d.revenue / maxRev) * (H - 20)));
+    const x = gap + i * (barW + gap);
+    const y = H - barH - 16;
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="#8C6246" rx="2" opacity="${d.revenue > 0 ? 1 : 0.25}"/><text x="${x + barW / 2}" y="${H - 1}" text-anchor="middle" font-size="8" fill="#888">${d.day}</text>`;
+  }).join("");
+  const svgW = gap + n * (barW + gap);
+  return `<svg width="${svgW}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="direction:ltr;display:block;">${bars}</svg>`;
+}
 
 function buildMonthlyReportHtml(
   month: string,
@@ -15764,6 +15787,7 @@ function buildMonthlyReportHtml(
   financial: { totalRevenue: number; totalInsuranceHeld?: number; totalInsuranceDeducted?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
   forPrint = false,
   qrDataUrl: string | null = null,
+  breakdown: ReportBreakdown = null,
 ): string {
   const monthStr = new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
   const printDate = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
@@ -15771,7 +15795,7 @@ function buildMonthlyReportHtml(
     ? Object.entries(financial.categoryTotals).sort(([, a], [, b]) => b - a).map(([key, amt]) => {
         const cat = catMap[key] ?? { label: key, emoji: "✨" };
         const pct = financial.totalExpenses > 0 ? Math.round((amt / financial.totalExpenses) * 100) : 0;
-        return `<tr><td>${cat.emoji} ${cat.label}</td><td>${formatAmount(amt)}</td><td>٪${pct}</td></tr>`;
+        return `<tr><td>${cat.emoji} ${cat.label}</td><td>${formatAmount(amt)}</td><td>${pct}٪</td></tr>`;
       }).join("") : "";
   const scriptTag = forPrint ? `<script>window.onload=function(){window.print();};<\/script>` : "";
   const qrHtml = qrDataUrl
@@ -15779,24 +15803,57 @@ function buildMonthlyReportHtml(
     : `<div class="qr-block" style="width:80px;"></div>`;
   const insuranceHeld = financial?.totalInsuranceHeld ?? 0;
   const insuranceDeducted = financial?.totalInsuranceDeducted ?? 0;
+  const printMediaCss = `@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
+
+  const bookingRows = breakdown && breakdown.rows.length > 0
+    ? breakdown.rows.map((r, i) => {
+        const dateLabel = new Date(r.date + "T12:00:00").toLocaleDateString("ar-SA", { day: "numeric", month: "short" });
+        return `<tr><td style="text-align:center">${i + 1}</td><td>${r.name || "—"}</td><td>${dateLabel}</td><td>${r.base > 0 ? formatAmount(r.base) : "—"}</td><td>${r.svc > 0 ? formatAmount(r.svc) : "—"}</td><td>${formatAmount(r.total)}</td></tr>`;
+      }).join("") : "";
+
+  const dailyChartSvg = report?.dailyRevenue && report.dailyRevenue.length > 0
+    ? buildRevBarSvg(report.dailyRevenue) : "";
+
+  const slots = report?.slotStats;
+  const slotHtml = slots ? [
+    slots.morning > 0 ? `<div class="slot-chip">🌅 صباحي: ${slots.morning}</div>` : "",
+    slots.evening > 0 ? `<div class="slot-chip">🌙 مسائي: ${slots.evening}</div>` : "",
+    slots.full_day > 0 ? `<div class="slot-chip">☀️ يومي: ${slots.full_day}</div>` : "",
+    slots.unspecified > 0 ? `<div class="slot-chip">📋 غير محدد: ${slots.unspecified}</div>` : "",
+  ].filter(Boolean).join("") : "";
+
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <title>التقرير_الشهري_${monthStr}.pdf</title>
-<style>${REPORT_CSS}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
+<style>${REPORT_CSS}${printMediaCss}</style></head>
 <body><div class="page">
+
 <div class="header">
 <div class="header-brand"><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
 <div class="header-center"><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
 ${qrHtml}</div>
+
 ${financial ? `<div class="section"><div class="section-title">الملخص المالي (أرباح وخسائر)</div><div class="kpi-grid">
 <div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">عربون + محصّل + تلفيات</div></div>
 <div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات</div><div class="kpi-value">${formatAmount(financial.totalExpenses)}</div><div class="kpi-note">مصروفات + رواتب</div></div>
 <div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value" style="${financial.netProfit >= 0 ? "" : "color:#dc2626"}">${formatAmountSigned(financial.netProfit)}</div><div class="kpi-note">الإيرادات - المصروفات</div></div>
-</div>${insuranceDeducted > 0 ? `<div style="margin-top:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#b91c1c;">✂️ إيرادات تلفيات (محوّلة من التأمين)</span><span style="font-size:16px;font-weight:700;color:#b91c1c;">${formatAmount(insuranceDeducted)}</span></div>` : ""}${insuranceHeld > 0 ? `<div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#c2410c;">🔒 تأمينات محتجزة (غير محسوبة في الأرباح)</span><span style="font-size:16px;font-weight:700;color:#c2410c;">${formatAmount(insuranceHeld)}</span></div>` : ""}</div>${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}` : ""}
+</div>${insuranceDeducted > 0 ? `<div style="margin-top:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#b91c1c;">✂️ إيرادات تلفيات (محوّلة من التأمين)</span><span style="font-size:16px;font-weight:700;color:#b91c1c;">${formatAmount(insuranceDeducted)}</span></div>` : ""}${insuranceHeld > 0 ? `<div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#c2410c;">🔒 تأمينات محتجزة (غير محسوبة في الأرباح)</span><span style="font-size:16px;font-weight:700;color:#c2410c;">${formatAmount(insuranceHeld)}</span></div>` : ""}</div>` : ""}
+
 ${report ? `<div class="section"><div class="section-title">إحصائيات الحجوزات</div><div class="kpi-grid">
 <div class="kpi-card"><div class="kpi-label">إجمالي الحجوزات</div><div class="kpi-value">${report.totalBookings}</div></div>
-<div class="kpi-card"><div class="kpi-label">نسبة الإشغال</div><div class="kpi-value">${report.occupancyRate}%</div></div>
+<div class="kpi-card"><div class="kpi-label">نسبة الإشغال</div><div class="kpi-value">${report.occupancyRate}٪</div></div>
 <div class="kpi-card"><div class="kpi-label">أيام مشغولة</div><div class="kpi-value">${report.totalDays} / ${report.daysInMonth}</div></div>
-</div></div>` : ""}
+</div>${slotHtml ? `<div class="slot-row">${slotHtml}</div>` : ""}</div>` : ""}
+
+${bookingRows ? `<div class="section-auto"><div class="section-title">تفصيل الحجوزات (${breakdown!.rows.length} حجز)</div>
+<table><thead><tr><th style="width:32px">#</th><th>العميل</th><th>التاريخ</th><th>الإيجار</th><th>الخدمات</th><th>الإجمالي</th></tr></thead>
+<tbody>${bookingRows}</tbody>
+<tfoot><tr><td colspan="3">الإجمالي</td><td>${breakdown!.totBase > 0 ? formatAmount(breakdown!.totBase) : "—"}</td><td>${breakdown!.totSvc > 0 ? formatAmount(breakdown!.totSvc) : "—"}</td><td>${formatAmount(breakdown!.totTotal)}</td></tr></tfoot>
+</table></div>` : ""}
+
+${dailyChartSvg ? `<div class="section"><div class="section-title">الإيرادات اليومية</div>${dailyChartSvg}</div>` : ""}
+
+${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}
+
 <div class="footer">تم إصدار هذا التقرير عبر منصة حكاية أناقة · ${new Date().getFullYear()}</div>
 </div>${scriptTag}</body></html>`;
 }
@@ -15903,32 +15960,43 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
       logging: false,
     });
 
-    // Build an A4 PDF (210mm × 297mm) with 15mm margins.
-    // jsPDF unit 'mm': page width 210, content area 180mm (210 - 2×15).
+    // A4 multi-page: 210mm × 297mm, 15mm margins on each side/top/bottom.
+    // canvas is rendered at scale:2, so canvas.width = CONTENT_PX × 2.
+    // Mapping: contentWidthMm / canvas.width  →  mm per canvas-pixel.
     const A4_W_MM = 210;
+    const A4_H_MM = 297;
     const MARGIN_MM = 15;
     const contentWidthMm = A4_W_MM - MARGIN_MM * 2; // 180mm
-    const contentHeightMm = (canvas.height / canvas.width) * contentWidthMm;
-    const pageHeightMm = contentHeightMm + MARGIN_MM * 2;
+    const contentHeightPerPageMm = A4_H_MM - MARGIN_MM * 2; // 267mm
+    const mmPerCanvasPx = contentWidthMm / canvas.width; // e.g. 180/1500 = 0.12
+    const pageHeightCanvasPx = Math.round(contentHeightPerPageMm / mmPerCanvasPx); // ≈2225px
 
-    const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: [A4_W_MM, Math.max(pageHeightMm, 297)], // at least A4 height
-    });
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-    // Draw white background first (ensures no transparency artifacts)
-    pdf.setFillColor(255, 255, 255);
-    pdf.rect(0, 0, A4_W_MM, Math.max(pageHeightMm, 297), "F");
+    let srcY = 0;
+    let pageIndex = 0;
+    while (srcY < canvas.height) {
+      if (pageIndex > 0) pdf.addPage();
 
-    pdf.addImage(
-      canvas.toDataURL("image/jpeg", 0.95),
-      "JPEG",
-      MARGIN_MM,  // x — 15mm from left
-      MARGIN_MM,  // y — 15mm from top
-      contentWidthMm,
-      contentHeightMm,
-    );
+      // White background for this page
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(0, 0, A4_W_MM, A4_H_MM, "F");
+
+      const sliceH = Math.min(pageHeightCanvasPx, canvas.height - srcY);
+      const sliceCanvas = document.createElement("canvas");
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = sliceH;
+      const ctx = sliceCanvas.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+      ctx.drawImage(canvas, 0, srcY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+
+      const sliceHeightMm = sliceH * mmPerCanvasPx;
+      pdf.addImage(sliceCanvas.toDataURL("image/jpeg", 0.93), "JPEG", MARGIN_MM, MARGIN_MM, contentWidthMm, sliceHeightMm);
+
+      srcY += sliceH;
+      pageIndex++;
+    }
 
     return { blob: pdf.output("blob"), fileName };
   } finally {
@@ -15946,6 +16014,7 @@ async function generateAndUploadReportPdf(
     report?: MonthReport | null;
     financial?: { totalRevenue: number; totalInsuranceHeld?: number; totalInsuranceDeducted?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null;
     yearly?: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } } | null;
+    breakdown?: ReportBreakdown;
   }
 ): Promise<string | null> {
   let html: string;
@@ -15954,7 +16023,7 @@ async function generateAndUploadReportPdf(
   if (type === "monthly") {
     fileName = `Monthly_Report_${params.month ?? "report"}.pdf`;
     const qr = await generateReportQrDataUrl("monthly", params.month!);
-    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial, false, qr);
+    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial, false, qr, params.breakdown ?? null);
   } else {
     fileName = `Annual_Report_${params.year ?? new Date().getFullYear()}.pdf`;
     const qr = await generateReportQrDataUrl("yearly", params.year!);
@@ -16343,7 +16412,7 @@ function ReportsTab() {
         : await generateReportQrDataUrl("yearly", selectedYear);
 
       if (viewMode === "monthly") {
-        htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr);
+        htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown);
       } else {
         htmlContent = buildYearlyReportHtml(selectedYear, selectedPropertyName, yearly!, false, qr);
       }
@@ -16388,7 +16457,7 @@ function ReportsTab() {
       setPdfLoading(true);
       try {
         if (viewMode === "monthly") {
-          url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial });
+          url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial, breakdown: repBreakdown });
         } else if (viewMode === "yearly" && yearly) {
           url = await generateAndUploadReportPdf("yearly", { year: selectedYear, propertyName: selectedPropertyName, yearly });
         }
@@ -16418,7 +16487,7 @@ function ReportsTab() {
       let url = pdfUrl;
       if (!url) {
         if (viewMode === "monthly") {
-          url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial });
+          url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial, breakdown: repBreakdown });
         } else if (viewMode === "yearly" && yearly) {
           url = await generateAndUploadReportPdf("yearly", { year: selectedYear, propertyName: selectedPropertyName, yearly });
         }
@@ -17175,7 +17244,7 @@ function ReportsTab() {
               </div>
 
               <div className="flex flex-wrap gap-2 justify-end">
-                <Button variant="outline" size="sm" onClick={() => printMonthlyReport(selectedMonth, selectedPropertyName, report, financial)} className="gap-2">
+                <Button variant="outline" size="sm" onClick={() => printMonthlyReport(selectedMonth, selectedPropertyName, report, financial, repBreakdown)} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleShareWhatsApp} disabled={pdfLoading} className="gap-2">
