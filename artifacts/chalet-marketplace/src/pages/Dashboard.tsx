@@ -16428,9 +16428,8 @@ function ReportsTab() {
       fileName = `Annual_Report_${selectedYear}.pdf`;
     } else return;
 
-    // ── Fast path: desktop + cached URL (no need to regenerate) ───────────
-    const canShareFiles = typeof navigator.share === "function" && typeof navigator.canShare === "function";
-    if (!canShareFiles && pdfUrl) {
+    // ── Fast path: cached URL — open WhatsApp directly without regenerating PDF ──
+    if (pdfUrl) {
       const text = bodyText + `\n📎 التقرير (PDF): ${pdfUrl}`;
       const waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
       window.open(waLink, "_blank");
@@ -16454,20 +16453,7 @@ function ReportsTab() {
       const { blob } = await htmlToPdfBlob(htmlContent, fileName);
       const pdfFile = new File([blob], fileName, { type: "application/pdf" });
 
-      // ── Try Web Share API (mobile) — sends ACTUAL FILE to WhatsApp ─────
-      // On mobile the OS share sheet appears; user picks WhatsApp → PDF attached.
-      if (canShareFiles && navigator.canShare({ files: [pdfFile] })) {
-        try {
-          await navigator.share({ files: [pdfFile], title: titleText, text: bodyText });
-          return; // File shared successfully via native share sheet
-        } catch (shareErr: unknown) {
-          if ((shareErr as Error)?.name === "AbortError") return; // User cancelled
-          // Other error — fall through to wa.me fallback
-        }
-      }
-
-      // ── Desktop fallback: upload PDF → wa.me link ──────────────────────
-      // wa.me only supports text; we include a download link as the best alternative.
+      // ── Upload PDF → open WhatsApp directly (no system share sheet) ────
       let url: string | null = pdfUrl;
       if (!url) {
         url = await uploadFile(pdfFile);
