@@ -15734,11 +15734,12 @@ async function printMonthlyReport(
   report: MonthReport | null | undefined,
   financial: { totalRevenue: number; totalInsuranceHeld?: number; totalInsuranceDeducted?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
   breakdown: ReportBreakdown = null,
+  monthTitle: string | null = null,
 ) {
   const win = window.open("", "_blank", "width=900,height=1200");
   if (!win) return;
   const qr = await generateReportQrDataUrl("monthly", month);
-  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr, breakdown));
+  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr, breakdown, monthTitle));
   win.document.close();
 }
 
@@ -15788,8 +15789,9 @@ function buildMonthlyReportHtml(
   forPrint = false,
   qrDataUrl: string | null = null,
   breakdown: ReportBreakdown = null,
+  monthTitle: string | null = null,
 ): string {
-  const monthStr = new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+  const monthStr = monthTitle ?? new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
   const printDate = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
   const catRows = financial && Object.keys(financial.categoryTotals).length > 0
     ? Object.entries(financial.categoryTotals).sort(([, a], [, b]) => b - a).map(([key, amt]) => {
@@ -16015,6 +16017,7 @@ async function generateAndUploadReportPdf(
     financial?: { totalRevenue: number; totalInsuranceHeld?: number; totalInsuranceDeducted?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null;
     yearly?: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } } | null;
     breakdown?: ReportBreakdown;
+    monthTitle?: string | null;
   }
 ): Promise<string | null> {
   let html: string;
@@ -16023,7 +16026,7 @@ async function generateAndUploadReportPdf(
   if (type === "monthly") {
     fileName = `Monthly_Report_${params.month ?? "report"}.pdf`;
     const qr = await generateReportQrDataUrl("monthly", params.month!);
-    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial, false, qr, params.breakdown ?? null);
+    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial, false, qr, params.breakdown ?? null, params.monthTitle ?? null);
   } else {
     fileName = `Annual_Report_${params.year ?? new Date().getFullYear()}.pdf`;
     const qr = await generateReportQrDataUrl("yearly", params.year!);
@@ -16412,7 +16415,7 @@ function ReportsTab() {
         : await generateReportQrDataUrl("yearly", selectedYear);
 
       if (viewMode === "monthly") {
-        htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown);
+        htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel);
       } else {
         htmlContent = buildYearlyReportHtml(selectedYear, selectedPropertyName, yearly!, false, qr);
       }
@@ -16457,7 +16460,7 @@ function ReportsTab() {
       setPdfLoading(true);
       try {
         if (viewMode === "monthly") {
-          url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial, breakdown: repBreakdown });
+          url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial, breakdown: repBreakdown, monthTitle: activeMonthLabel });
         } else if (viewMode === "yearly" && yearly) {
           url = await generateAndUploadReportPdf("yearly", { year: selectedYear, propertyName: selectedPropertyName, yearly });
         }
@@ -16487,7 +16490,7 @@ function ReportsTab() {
       let url = pdfUrl;
       if (!url) {
         if (viewMode === "monthly") {
-          url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial, breakdown: repBreakdown });
+          url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial, breakdown: repBreakdown, monthTitle: activeMonthLabel });
         } else if (viewMode === "yearly" && yearly) {
           url = await generateAndUploadReportPdf("yearly", { year: selectedYear, propertyName: selectedPropertyName, yearly });
         }
@@ -17244,7 +17247,7 @@ function ReportsTab() {
               </div>
 
               <div className="flex flex-wrap gap-2 justify-end">
-                <Button variant="outline" size="sm" onClick={() => printMonthlyReport(selectedMonth, selectedPropertyName, report, financial, repBreakdown)} className="gap-2">
+                <Button variant="outline" size="sm" onClick={() => printMonthlyReport(selectedMonth, selectedPropertyName, report, financial, repBreakdown, activeMonthLabel)} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleShareWhatsApp} disabled={pdfLoading} className="gap-2">
