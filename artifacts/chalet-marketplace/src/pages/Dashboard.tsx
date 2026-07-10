@@ -15775,7 +15775,7 @@ function buildRevBarSvg(dailyRevenue: { day: number; revenue: number }[]): strin
     const barH = Math.max(2, Math.round((d.revenue / maxRev) * (H - 20)));
     const x = gap + i * (barW + gap);
     const y = H - barH - 16;
-    return `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="#8C6246" rx="2" opacity="${d.revenue > 0 ? 1 : 0.25}"/><text x="${x + barW / 2}" y="${H - 1}" text-anchor="middle" font-size="8" fill="#888">${d.day}</text>`;
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="#8C6246" rx="2" opacity="${d.revenue > 0 ? 1 : 0.25}"/><text x="${x + barW / 2}" y="${H - 1}" text-anchor="middle" font-size="8" fill="#888">${toAr(d.day)}</text>`;
   }).join("");
   const svgW = gap + n * (barW + gap);
   return `<svg width="${svgW}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="direction:ltr;display:block;">${bars}</svg>`;
@@ -15791,13 +15791,13 @@ function buildMonthlyReportHtml(
   breakdown: ReportBreakdown = null,
   monthTitle: string | null = null,
 ): string {
-  const monthStr = monthTitle ?? new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
-  const printDate = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
+  const monthStr = monthTitle ?? toAr(new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" }));
+  const printDate = toAr(new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" }));
   const catRows = financial && Object.keys(financial.categoryTotals).length > 0
     ? Object.entries(financial.categoryTotals).sort(([, a], [, b]) => b - a).map(([key, amt]) => {
         const cat = catMap[key] ?? { label: key, emoji: "✨" };
         const pct = financial.totalExpenses > 0 ? Math.round((amt / financial.totalExpenses) * 100) : 0;
-        return `<tr><td>${cat.emoji} ${cat.label}</td><td>${formatAmount(amt)}</td><td>${pct}٪</td></tr>`;
+        return `<tr><td>${cat.emoji} ${cat.label}</td><td>${formatAmount(amt)}</td><td>${toAr(pct)}٪</td></tr>`;
       }).join("") : "";
   const scriptTag = forPrint ? `<script>window.onload=function(){window.print();};<\/script>` : "";
   const qrHtml = qrDataUrl
@@ -15814,10 +15814,10 @@ function buildMonthlyReportHtml(
   const slotTotal = slots ? ((slots.morning + slots.evening + slots.full_day + slots.unspecified) || 1) : 1;
   const slotPct = (n: number) => Math.round((n / slotTotal) * 100);
   const slotHtml = slots ? [
-    slots.morning > 0 ? `<div class="slot-chip">صباحي: ${slots.morning} حجز <span dir="ltr">(${slotPct(slots.morning)}٪)</span></div>` : "",
-    slots.evening > 0 ? `<div class="slot-chip">مسائي: ${slots.evening} حجز <span dir="ltr">(${slotPct(slots.evening)}٪)</span></div>` : "",
-    slots.full_day > 0 ? `<div class="slot-chip">يوم كامل: ${slots.full_day} حجز <span dir="ltr">(${slotPct(slots.full_day)}٪)</span></div>` : "",
-    slots.unspecified > 0 ? `<div class="slot-chip">غير محدد: ${slots.unspecified} حجز <span dir="ltr">(${slotPct(slots.unspecified)}٪)</span></div>` : "",
+    slots.morning > 0 ? `<div class="slot-chip">صباحي: ${toAr(slots.morning)} حجز (${toAr(slotPct(slots.morning))}٪)</div>` : "",
+    slots.evening > 0 ? `<div class="slot-chip">مسائي: ${toAr(slots.evening)} حجز (${toAr(slotPct(slots.evening))}٪)</div>` : "",
+    slots.full_day > 0 ? `<div class="slot-chip">يوم كامل: ${toAr(slots.full_day)} حجز (${toAr(slotPct(slots.full_day))}٪)</div>` : "",
+    slots.unspecified > 0 ? `<div class="slot-chip">غير محدد: ${toAr(slots.unspecified)} حجز (${toAr(slotPct(slots.unspecified))}٪)</div>` : "",
   ].filter(Boolean).join("") : "";
 
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
@@ -15826,7 +15826,7 @@ function buildMonthlyReportHtml(
 <body><div class="page">
 
 <div class="header">
-<div class="header-brand"><svg width="110" height="42" viewBox="0 0 110 42" xmlns="http://www.w3.org/2000/svg"><rect width="110" height="42" rx="9" fill="#8C6246"/><text x="55" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="19" font-weight="900" fill="white" text-anchor="middle">تكية</text></svg></div>
+<div class="header-brand"><svg width="148" height="52" viewBox="0 0 148 52" xmlns="http://www.w3.org/2000/svg"><polygon points="10,27 26,11 42,27" fill="none" stroke="#8C6246" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><rect x="14" y="26" width="24" height="18" rx="2" fill="#8C6246" opacity="0.1" stroke="#8C6246" stroke-width="2"/><rect x="21" y="31" width="10" height="13" rx="1.5" fill="#8C6246" opacity="0.45"/><line x1="52" y1="10" x2="52" y2="43" stroke="#d9c9b8" stroke-width="1"/><text x="60" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="21" font-weight="900" fill="#8C6246">تكية</text><text x="60" y="42" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="9.5" fill="#a07852">منصة الشاليهات</text></svg></div>
 <div class="header-center"><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
 ${qrHtml}</div>
 
@@ -15837,26 +15837,21 @@ ${financial ? `<div class="section"><div class="section-title">الأداء وا
 <div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value" style="font-size:16px;${financial.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(financial.netProfit)}</div><div class="kpi-note">الإيرادات − المصروفات</div></div>
 </div>${insuranceDeducted > 0 ? `<div style="margin-top:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#b91c1c;">✂️ إيرادات تلفيات (محوّلة من التأمين)</span><span style="font-size:16px;font-weight:700;color:#b91c1c;">${formatAmount(insuranceDeducted)}</span></div>` : ""}${insuranceHeld > 0 ? `<div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#c2410c;">🔒 تأمينات محتجزة (غير محسوبة في الأرباح)</span><span style="font-size:16px;font-weight:700;color:#c2410c;">${formatAmount(insuranceHeld)}</span></div>` : ""}</div>` : ""}
 
-${report ? `<div class="section"><div class="section-title">إحصائيات الحجوزات</div><div class="kpi-grid">
-<div class="kpi-card"><div class="kpi-label">إجمالي الحجوزات</div><div class="kpi-value">${report.totalBookings}</div></div>
-<div class="kpi-card"><div class="kpi-label">نسبة الإشغال</div><div class="kpi-value">${report.occupancyRate}٪</div></div>
-<div class="kpi-card"><div class="kpi-label">أيام مشغولة</div><div class="kpi-value">${report.totalDays} / ${report.daysInMonth}</div></div>
-</div>${slotHtml ? `<div class="slot-row">${slotHtml}</div>` : ""}</div>` : ""}
-
-${dailyChartSvg ? `<div class="section"><div class="section-title">الإيرادات اليومية</div>${dailyChartSvg}</div>` : ""}
-
-${report ? `<div class="section"><div class="section-title">قنوات الحجز والإشغال</div>
-<div class="kpi-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
-<div class="kpi-card"><div class="kpi-label">🌐 عبر المنصة</div><div class="kpi-value">${report.platformBookings}</div><div class="kpi-note">حجز إلكتروني</div></div>
-<div class="kpi-card"><div class="kpi-label">📞 من خارج المنصة</div><div class="kpi-value">${report.externalBookings}</div><div class="kpi-note">واتساب / مباشر</div></div>
+${report ? `<div class="section"><div class="section-title">إحصائيات الحجوزات والقنوات</div>
+<div class="kpi-grid" style="margin-bottom:14px">
+<div class="kpi-card"><div class="kpi-label">📋 إجمالي الحجوزات</div><div class="kpi-value">${toAr(report.totalBookings)}</div><div class="kpi-note">خلال الشهر</div></div>
+<div class="kpi-card"><div class="kpi-label">🌐 عبر المنصة</div><div class="kpi-value">${toAr(report.platformBookings)}</div><div class="kpi-note">حجز إلكتروني</div></div>
+<div class="kpi-card"><div class="kpi-label">📞 خارج المنصة</div><div class="kpi-value">${toAr(report.externalBookings)}</div><div class="kpi-note">واتساب / مباشر</div></div>
 </div>
-<div style="margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;font-weight:700">نسبة الإشغال</span><span style="font-size:18px;font-weight:800;color:#8C6246">${report.occupancyRate}٪</span></div><div style="width:100%;background:#f3ede4;border-radius:6px;height:12px"><div style="width:${report.occupancyRate}%;background:#8C6246;height:12px;border-radius:6px;min-width:${report.occupancyRate > 0 ? 4 : 0}px"></div></div><div style="font-size:11px;color:#888;margin-top:4px">${report.totalDays} يوم محجوز من أصل ${report.daysInMonth} يوم</div></div>
+<div style="margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;font-weight:700">نسبة الإشغال</span><span style="font-size:18px;font-weight:800;color:#8C6246">${toAr(report.occupancyRate)}٪</span></div><div style="width:100%;background:#f3ede4;border-radius:6px;height:12px"><div style="width:${report.occupancyRate}%;background:#8C6246;height:12px;border-radius:6px;min-width:${report.occupancyRate > 0 ? 4 : 0}px"></div></div><div style="font-size:11px;color:#888;margin-top:4px">${toAr(report.totalDays)} يوم محجوز من أصل ${toAr(report.daysInMonth)} يوم</div></div>
 ${slotHtml ? `<div class="slot-row" style="margin-top:14px">${slotHtml}</div>` : ""}
 </div>` : ""}
 
+${dailyChartSvg ? `<div class="section"><div class="section-title">الإيرادات اليومية</div>${dailyChartSvg}</div>` : ""}
+
 ${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}
 
-<div class="footer">تم إصدار هذا التقرير عبر منصة تكية · ${new Date().getFullYear()}</div>
+<div class="footer">تم إصدار هذا التقرير عبر منصة تكية · ${toAr(new Date().getFullYear())}</div>
 </div>${scriptTag}</body></html>`;
 }
 
@@ -15882,7 +15877,7 @@ function buildYearlyReportHtml(
 <style>${REPORT_CSS}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
 <body><div class="page">
 <div class="header">
-<div class="header-brand"><svg width="110" height="42" viewBox="0 0 110 42" xmlns="http://www.w3.org/2000/svg"><rect width="110" height="42" rx="9" fill="#8C6246"/><text x="55" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="19" font-weight="900" fill="white" text-anchor="middle">تكية</text></svg></div>
+<div class="header-brand"><svg width="148" height="52" viewBox="0 0 148 52" xmlns="http://www.w3.org/2000/svg"><polygon points="10,27 26,11 42,27" fill="none" stroke="#8C6246" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><rect x="14" y="26" width="24" height="18" rx="2" fill="#8C6246" opacity="0.1" stroke="#8C6246" stroke-width="2"/><rect x="21" y="31" width="10" height="13" rx="1.5" fill="#8C6246" opacity="0.45"/><line x1="52" y1="10" x2="52" y2="43" stroke="#d9c9b8" stroke-width="1"/><text x="60" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="21" font-weight="900" fill="#8C6246">تكية</text><text x="60" y="42" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="9.5" fill="#a07852">منصة الشاليهات</text></svg></div>
 <div class="header-center"><div class="report-title">التقرير السنوي – ${year}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
 ${qrHtml}</div>
 <div class="kpi-grid" style="margin-bottom:24px">
@@ -15894,7 +15889,7 @@ ${qrHtml}</div>
 <tbody>${rows}</tbody>
 <tfoot><tr><td>الإجمالي السنوي</td><td>${formatAmount(yearly.totals.revenue)}</td><td>${formatAmount(yearly.totals.expenses)}</td><td style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</td></tr></tfoot>
 </table>
-<div class="footer">تم إصدار هذا التقرير عبر منصة تكية · ${new Date().getFullYear()}</div>
+<div class="footer">تم إصدار هذا التقرير عبر منصة تكية · ${toAr(new Date().getFullYear())}</div>
 </div>${scriptTag}</body></html>`;
 }
 
