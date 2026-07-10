@@ -15941,25 +15941,23 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
   // At 96dpi, 1mm ≈ 3.7795px → content canvas width = 750px → 198.4mm → fits in 180mm after margins.
   const CONTENT_PX = 750; // must match .page width in REPORT_CSS
 
-  // Wrapper: position in viewport so html2canvas can capture it.
-  // visibility:hidden and opacity:0 cause html2canvas to skip rendering,
-  // so we position the element above the viewport fold via negative top margin
-  // and use clip:rect(0,0,0,0) combined with overflow:hidden on html.
-  // Simplest reliable approach: fixed top:0 left:0, above content (z-index:99999),
-  // pointer-events:none. The element is briefly visible during ~500ms generation
-  // but the loading state in the UI makes this imperceptible.
+  // Off-screen wrapper: placed at left:-10000px so it is never visible to the user.
+  // DO NOT use visibility:hidden or opacity:0 — html2canvas skips those elements.
+  // position:fixed + large negative left keeps it out of the viewport while keeping
+  // browser-computed styles intact so html2canvas can render it correctly.
   const wrapper = document.createElement("div");
   wrapper.dir = "rtl";
   wrapper.style.cssText = [
     "position:fixed",
     "top:0",
-    "left:0",
+    // Place far off-screen so it is never visible to the user.
+    // html2canvas targets the element directly and does not need it in the viewport.
+    // DO NOT use visibility:hidden or opacity:0 — html2canvas skips those.
+    "left:-10000px",
     `width:${CONTENT_PX}px`,
     "background:#fff",
     "direction:rtl",
     "pointer-events:none",
-    "z-index:99999",
-    // Clip so only the area behind the page header is used (no flash effect)
     "overflow:hidden",
   ].join(";");
 
