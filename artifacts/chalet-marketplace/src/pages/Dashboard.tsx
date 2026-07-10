@@ -15784,7 +15784,7 @@ type ReportBreakdown = {
   totBase: number; totSvc: number; totTotal: number;
 } | null;
 
-const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:36px 40px;background:#fff;}.header{border-bottom:3px solid #8C6246;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#8C6246;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.section{margin-bottom:24px;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#8C6246;border-right:3px solid #8C6246;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}.kpi-note{font-size:10px;color:#aaa;margin-top:2px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;word-wrap:break-word;}th{background:#8C6246;color:#fff;padding:7px 10px;text-align:right;}td{padding:6px 10px;border-bottom:1px solid #ede9dd;word-break:break-word;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #8C6246;}.slot-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}.slot-chip{background:#faf9f6;border:1px solid #e8e2d0;border-radius:6px;padding:5px 12px;font-size:12px;color:#555;}.footer{margin-top:32px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
+const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:36px 40px;background:#fff;}.header{border-bottom:3px solid #8C6246;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#8C6246;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.section{margin-bottom:24px;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#8C6246;border-right:3px solid #8C6246;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:11px;color:#888;margin-bottom:4px;}.kpi-value{font-size:20px;font-weight:700;color:#111;}.kpi-note{font-size:10.5px;color:#555;font-weight:500;margin-top:3px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;word-wrap:break-word;}th{background:#8C6246;color:#fff;padding:7px 10px;text-align:right;}td{padding:6px 10px;border-bottom:1px solid #ede9dd;word-break:break-word;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #8C6246;}.slot-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}.slot-chip{background:#faf9f6;border:1px solid #e8e2d0;border-radius:6px;padding:5px 12px;font-size:12px;color:#555;}.footer{margin-top:32px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
 
 function buildRevBarSvg(dailyRevenue: { day: number; revenue: number }[]): string {
   if (!dailyRevenue || dailyRevenue.length === 0) return "";
@@ -15815,7 +15815,13 @@ function buildMonthlyReportHtml(
   logoDataUrl: string | null = null,
 ): string {
   const monthStr = monthTitle ?? toAr(new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" }));
-  const printDate = toAr(new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" }));
+  const _now = new Date();
+  const _hc = toHijriComponents(_now);
+  const _hijriPrint = `${toAr(_hc.day)} ${HIJRI_MONTHS_AR[_hc.month - 1]} ${toAr(_hc.year)} هـ`;
+  const _gregPrint = toAr(_now.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" })) + " م";
+  const printDate = `${_hijriPrint} | ${_gregPrint}`;
+  const hijriYear = toAr(_hc.year);
+  const gregYear = toAr(_now.getFullYear());
   const catRows = financial && Object.keys(financial.categoryTotals).length > 0
     ? Object.entries(financial.categoryTotals).sort(([, a], [, b]) => b - a).map(([key, amt]) => {
         const cat = catMap[key] ?? { label: key, emoji: "✨" };
@@ -15828,7 +15834,7 @@ function buildMonthlyReportHtml(
     : `<div class="qr-block" style="width:80px;"></div>`;
   const insuranceHeld = financial?.totalInsuranceHeld ?? 0;
   const insuranceDeducted = financial?.totalInsuranceDeducted ?? 0;
-  const printMediaCss = `@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
+  const printMediaCss = `@page{margin:0!important;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
   const dailyChartSvg = report?.dailyRevenue && report.dailyRevenue.length > 0
     ? buildRevBarSvg(report.dailyRevenue) : "";
@@ -15850,7 +15856,7 @@ function buildMonthlyReportHtml(
 
 <div class="header">
 <div class="header-brand">${logoDataUrl ? `<img src="${logoDataUrl}" style="height:68px;width:auto;object-fit:contain;display:block;" alt="تكية" />` : `<span style="font-size:26px;font-weight:900;color:#8C6246;font-family:Segoe UI,Tahoma,Arial,sans-serif;">تكية</span>`}</div>
-<div class="header-center"><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
+<div class="header-center"><div class="report-title">التقرير الشهري – ${monthStr}</div><div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
 
 ${financial ? `<div class="section"><div class="section-title">الأداء والملخص المالي</div><div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
@@ -15875,7 +15881,7 @@ ${slotHtml ? `<div class="slot-row" style="margin-top:14px">${slotHtml}</div>` :
 
 ${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}
 
-<div class="footer">تم إصدار هذا التقرير عبر منصة تكية · ${toAr(new Date().getFullYear())}</div>
+<div class="footer" style="font-size:12px;font-weight:500;color:#666;">تم إصدار هذا التقرير عبر منصة تكية · ${hijriYear} هـ / ${gregYear} م</div>
 </div>${scriptTag}</body></html>`;
 }
 
@@ -15886,7 +15892,13 @@ function buildYearlyReportHtml(
   forPrint = false,
   qrDataUrl: string | null = null,
 ): string {
-  const printDate = new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
+  const _nowY = new Date();
+  const _hcY = toHijriComponents(_nowY);
+  const _hijriPrintY = `${toAr(_hcY.day)} ${HIJRI_MONTHS_AR[_hcY.month - 1]} ${toAr(_hcY.year)} هـ`;
+  const _gregPrintY = toAr(_nowY.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" })) + " م";
+  const printDate = `${_hijriPrintY} | ${_gregPrintY}`;
+  const hijriYearY = toAr(_hcY.year);
+  const gregYearY = toAr(_nowY.getFullYear());
   const rows = yearly.monthly.map(m => {
     const label = new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
     const cls = m.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626";
@@ -15898,11 +15910,11 @@ function buildYearlyReportHtml(
     : `<div class="qr-block" style="width:80px;"></div>`;
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <title>التقرير_السنوي_${year}.pdf</title>
-<style>${REPORT_CSS}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
+<style>${REPORT_CSS}@page{margin:0!important;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}}</style></head>
 <body><div class="page">
 <div class="header">
 <div class="header-brand"><svg width="148" height="52" viewBox="0 0 148 52" xmlns="http://www.w3.org/2000/svg"><polygon points="10,27 26,11 42,27" fill="none" stroke="#8C6246" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><rect x="14" y="26" width="24" height="18" rx="2" fill="#8C6246" opacity="0.1" stroke="#8C6246" stroke-width="2"/><rect x="21" y="31" width="10" height="13" rx="1.5" fill="#8C6246" opacity="0.45"/><line x1="52" y1="10" x2="52" y2="43" stroke="#d9c9b8" stroke-width="1"/><text x="60" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="21" font-weight="900" fill="#8C6246">تكية</text><text x="60" y="42" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="9.5" fill="#a07852">منصة الشاليهات</text></svg></div>
-<div class="header-center"><div class="report-title">التقرير السنوي – ${year}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
+<div class="header-center"><div class="report-title">التقرير السنوي – ${year}</div><div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
 <div class="kpi-grid" style="margin-bottom:24px">
 <div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.revenue)}</div></div>
@@ -15913,7 +15925,7 @@ ${qrHtml}</div>
 <tbody>${rows}</tbody>
 <tfoot><tr><td>الإجمالي السنوي</td><td>${formatAmount(yearly.totals.revenue)}</td><td>${formatAmount(yearly.totals.expenses)}</td><td style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</td></tr></tfoot>
 </table>
-<div class="footer">تم إصدار هذا التقرير عبر منصة تكية · ${toAr(new Date().getFullYear())}</div>
+<div class="footer" style="font-size:12px;font-weight:500;color:#666;">تم إصدار هذا التقرير عبر منصة تكية · ${hijriYearY} هـ / ${gregYearY} م</div>
 </div>${scriptTag}</body></html>`;
 }
 
