@@ -32,7 +32,7 @@ import {
   expenseCategoriesTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
-import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull, or } from "drizzle-orm";
 import { randomBytes, createHash, randomInt } from "crypto";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";

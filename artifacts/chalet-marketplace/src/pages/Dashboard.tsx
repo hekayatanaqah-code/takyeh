@@ -15807,12 +15807,6 @@ function buildMonthlyReportHtml(
   const insuranceDeducted = financial?.totalInsuranceDeducted ?? 0;
   const printMediaCss = `@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
-  const bookingRows = breakdown && breakdown.rows.length > 0
-    ? breakdown.rows.map((r, i) => {
-        const dateLabel = new Date(r.date + "T12:00:00").toLocaleDateString("ar-SA", { day: "numeric", month: "short" });
-        return `<tr><td style="text-align:center">${i + 1}</td><td>${r.name || "—"}</td><td>${dateLabel}</td><td>${r.base > 0 ? formatAmount(r.base) : "—"}</td><td>${r.svc > 0 ? formatAmount(r.svc) : "—"}</td><td>${formatAmount(r.total)}</td></tr>`;
-      }).join("") : "";
-
   const dailyChartSvg = report?.dailyRevenue && report.dailyRevenue.length > 0
     ? buildRevBarSvg(report.dailyRevenue) : "";
 
@@ -15830,7 +15824,7 @@ function buildMonthlyReportHtml(
 <body><div class="page">
 
 <div class="header">
-<div class="header-brand"><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
+<div class="header-brand"><div class="brand-name">منصة تكية</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
 <div class="header-center"><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
 ${qrHtml}</div>
 
@@ -15846,17 +15840,11 @@ ${report ? `<div class="section"><div class="section-title">إحصائيات ا�
 <div class="kpi-card"><div class="kpi-label">أيام مشغولة</div><div class="kpi-value">${report.totalDays} / ${report.daysInMonth}</div></div>
 </div>${slotHtml ? `<div class="slot-row">${slotHtml}</div>` : ""}</div>` : ""}
 
-${bookingRows ? `<div class="section-auto"><div class="section-title">تفصيل الحجوزات (${breakdown!.rows.length} حجز)</div>
-<table><thead><tr><th style="width:32px">#</th><th>العميل</th><th>التاريخ</th><th>الإيجار</th><th>الخدمات</th><th>الإجمالي</th></tr></thead>
-<tbody>${bookingRows}</tbody>
-<tfoot><tr><td colspan="3">الإجمالي</td><td>${breakdown!.totBase > 0 ? formatAmount(breakdown!.totBase) : "—"}</td><td>${breakdown!.totSvc > 0 ? formatAmount(breakdown!.totSvc) : "—"}</td><td>${formatAmount(breakdown!.totTotal)}</td></tr></tfoot>
-</table></div>` : ""}
-
 ${dailyChartSvg ? `<div class="section"><div class="section-title">الإيرادات اليومية</div>${dailyChartSvg}</div>` : ""}
 
 ${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}
 
-<div class="footer">تم إصدار هذا التقرير عبر منصة حكاية أناقة · ${new Date().getFullYear()}</div>
+<div class="footer">تم إصدار هذا التقرير عبر منصة تكية · ${new Date().getFullYear()}</div>
 </div>${scriptTag}</body></html>`;
 }
 
@@ -15882,7 +15870,7 @@ function buildYearlyReportHtml(
 <style>${REPORT_CSS}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
 <body><div class="page">
 <div class="header">
-<div class="header-brand"><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
+<div class="header-brand"><div class="brand-name">منصة تكية</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
 <div class="header-center"><div class="report-title">التقرير السنوي – ${year}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
 ${qrHtml}</div>
 <div class="kpi-grid" style="margin-bottom:24px">
@@ -15894,7 +15882,7 @@ ${qrHtml}</div>
 <tbody>${rows}</tbody>
 <tfoot><tr><td>الإجمالي السنوي</td><td>${formatAmount(yearly.totals.revenue)}</td><td>${formatAmount(yearly.totals.expenses)}</td><td style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</td></tr></tfoot>
 </table>
-<div class="footer">تم إصدار هذا التقرير عبر منصة حكاية أناقة · ${new Date().getFullYear()}</div>
+<div class="footer">تم إصدار هذا التقرير عبر منصة تكية · ${new Date().getFullYear()}</div>
 </div>${scriptTag}</body></html>`;
 }
 
