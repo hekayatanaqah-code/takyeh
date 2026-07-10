@@ -16408,24 +16408,28 @@ function ReportsTab() {
 
     if (viewMode === "monthly" && report) {
       const monthLabel = activeMonthLabel;
+      const safeLabel = monthLabel.replace(/\s+[هم]\s*$/, "").replace(/\s+/g, "_");
       titleText = `تقرير ${monthLabel} – ${selectedPropertyName}`;
+      const occupancy = report.daysInMonth > 0
+        ? Math.min(100, Math.round((report.totalDays / report.daysInMonth) * 100))
+        : report.occupancyRate;
       bodyText =
         `📊 تقرير شهر ${monthLabel}\n` +
-        `🏠 العقار: ${selectedPropertyName}\n` +
-        `📅 الحجوزات: ${report.totalBookings} · الإشغال: ${report.daysInMonth > 0 ? Math.min(100, Math.round((report.totalDays / report.daysInMonth) * 100)) : report.occupancyRate}%\n` +
-        (financial ? `💰 صافي الربح: ${formatAmountSigned(financial.netProfit)}\n` : "") +
-        `✨ منصة حكاية أناقة – شاليهات القصيم`;
-      fileName = `Monthly_Report_${selectedMonth}.pdf`;
+        `🏡 العقار: ${selectedPropertyName}\n` +
+        `📅 الحجوزات: ${toAr(report.totalBookings)} • الإشغال: ${toAr(occupancy)}٪\n` +
+        (financial ? `💰 صافي الربح: ${toAr(formatAmountSigned(financial.netProfit))}\n` : "") +
+        `✨ منصة تكية لإدارة الشاليهات`;
+      fileName = `تقرير_شهر_${safeLabel}.pdf`;
     } else if (viewMode === "yearly" && yearly) {
       titleText = `التقرير السنوي ${selectedYear} – ${selectedPropertyName}`;
       bodyText =
-        `📊 التقرير السنوي ${selectedYear}\n` +
-        `🏠 العقار: ${selectedPropertyName}\n` +
-        `💚 الإيرادات: ${formatAmount(yearly.totals.revenue)}\n` +
-        `🔴 المصروفات: ${formatAmount(yearly.totals.expenses)}\n` +
-        `⭐ صافي الربح: ${formatAmountSigned(yearly.totals.netProfit)}\n` +
-        `✨ منصة حكاية أناقة – شاليهات القصيم`;
-      fileName = `Annual_Report_${selectedYear}.pdf`;
+        `📊 التقرير السنوي ${toAr(selectedYear)}\n` +
+        `🏡 العقار: ${selectedPropertyName}\n` +
+        `💚 الإيرادات: ${toAr(formatAmount(yearly.totals.revenue))}\n` +
+        `🔴 المصروفات: ${toAr(formatAmount(yearly.totals.expenses))}\n` +
+        `⭐ صافي الربح: ${toAr(formatAmountSigned(yearly.totals.netProfit))}\n` +
+        `✨ منصة تكية لإدارة الشاليهات`;
+      fileName = `تقرير_سنوي_${toAr(selectedYear)}.pdf`;
     } else return;
 
     // ── Fast path: cached URL — open WhatsApp directly without regenerating PDF ──
@@ -16453,7 +16457,18 @@ function ReportsTab() {
       const { blob } = await htmlToPdfBlob(htmlContent, fileName);
       const pdfFile = new File([blob], fileName, { type: "application/pdf" });
 
-      // ── Upload PDF → open WhatsApp directly (no system share sheet) ────
+      // ── Primary: share actual PDF file (mobile — goes to WhatsApp if installed) ─
+      if (typeof navigator.share === "function" && typeof navigator.canShare === "function" && navigator.canShare({ files: [pdfFile] })) {
+        try {
+          await navigator.share({ files: [pdfFile], title: titleText, text: bodyText });
+          return;
+        } catch (shareErr: unknown) {
+          if ((shareErr as Error)?.name === "AbortError") return;
+          // Other error — fall through to wa.me link
+        }
+      }
+
+      // ── Fallback: upload PDF → wa.me direct link (desktop / unsupported) ─
       let url: string | null = pdfUrl;
       if (!url) {
         url = await uploadFile(pdfFile);
