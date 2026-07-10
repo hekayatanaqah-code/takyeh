@@ -15941,19 +15941,16 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
   // At 96dpi, 1mm ≈ 3.7795px → content canvas width = 750px → 198.4mm → fits in 180mm after margins.
   const CONTENT_PX = 750; // must match .page width in REPORT_CSS
 
-  // Off-screen wrapper: placed at left:-10000px so it is never visible to the user.
+  // Off-screen wrapper: placed above the viewport (top:-99999px; left:0) so it is
+  // completely invisible without causing any horizontal overflow or layout shift.
+  // RTL pages with left:-10000px can create horizontal overflow; top:-99999px avoids this.
   // DO NOT use visibility:hidden or opacity:0 — html2canvas skips those elements.
-  // position:fixed + large negative left keeps it out of the viewport while keeping
-  // browser-computed styles intact so html2canvas can render it correctly.
   const wrapper = document.createElement("div");
   wrapper.dir = "rtl";
   wrapper.style.cssText = [
     "position:fixed",
-    "top:0",
-    // Place far off-screen so it is never visible to the user.
-    // html2canvas targets the element directly and does not need it in the viewport.
-    // DO NOT use visibility:hidden or opacity:0 — html2canvas skips those.
-    "left:-10000px",
+    "top:-99999px",
+    "left:0",
     `width:${CONTENT_PX}px`,
     "background:#fff",
     "direction:rtl",
@@ -15969,6 +15966,9 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
   contentEl.innerHTML = bodyContent;
   wrapper.appendChild(contentEl);
 
+  // Lock body scroll to prevent any visual disruption during the render delay.
+  const prevBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
   document.body.appendChild(wrapper);
 
   try {
@@ -16031,6 +16031,7 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
 
     return { blob: pdf.output("blob"), fileName };
   } finally {
+    document.body.style.overflow = prevBodyOverflow;
     try { document.body.removeChild(wrapper); } catch { /* ignore */ }
   }
 }
@@ -16406,9 +16407,20 @@ function ReportsTab() {
     let fileName = "";
     let htmlContent = "";
 
+    // ASCII-safe month name maps — Arabic filenames get corrupted on WhatsApp/iOS/Windows.
+    const HIJRI_TRANSLIT: Record<number, string> = {
+      1:"Muharram",2:"Safar",3:"Rabi_Awwal",4:"Rabi_Thani",
+      5:"Jumada_Ula",6:"Jumada_Akhirah",7:"Rajab",8:"Shaban",
+      9:"Ramadan",10:"Shawwal",11:"Dhul_Qadah",12:"Dhul_Hijjah",
+    };
+    const MONTH_EN: Record<number, string> = {
+      1:"January",2:"February",3:"March",4:"April",5:"May",6:"June",
+      7:"July",8:"August",9:"September",10:"October",11:"November",12:"December",
+    };
+
     if (viewMode === "monthly" && report) {
-      const monthLabel = activeMonthLabel;
-      const safeLabel = monthLabel.replace(/\s+[هم]\s*$/, "").replace(/\s+/g, "_");
+      // toAr() on the entire label ensures ALL digits (year + any Western fallback) become Arabic-Indic
+      const monthLabel = toAr(activeMonthLabel);
       titleText = `تقرير ${monthLabel} – ${selectedPropertyName}`;
       const occupancy = report.daysInMonth > 0
         ? Math.min(100, Math.round((report.totalDays / report.daysInMonth) * 100))
@@ -16419,9 +16431,16 @@ function ReportsTab() {
         `📅 الحجوزات: ${toAr(report.totalBookings)} • الإشغال: ${toAr(occupancy)}٪\n` +
         (financial ? `💰 صافي الربح: ${toAr(formatAmountSigned(financial.netProfit))}\n` : "") +
         `✨ منصة تكية لإدارة الشاليهات`;
-      fileName = `تقرير_شهر_${safeLabel}.pdf`;
+      // Build ASCII-safe filename to avoid encoding corruption when sharing
+      if (isHijri && selectedHijriMonthVal) {
+        const [hy, hm] = selectedHijriMonthVal.split("-").map(Number);
+        fileName = `Takyah_${HIJRI_TRANSLIT[hm] ?? "Month"}_${hy}.pdf`;
+      } else {
+        const [gy, gm] = selectedMonth.split("-").map(Number);
+        fileName = `Takyah_${MONTH_EN[gm] ?? "Month"}_${gy}.pdf`;
+      }
     } else if (viewMode === "yearly" && yearly) {
-      titleText = `التقرير السنوي ${selectedYear} – ${selectedPropertyName}`;
+      titleText = `التقرير السنوي ${toAr(selectedYear)} – ${selectedPropertyName}`;
       bodyText =
         `📊 التقرير السنوي ${toAr(selectedYear)}\n` +
         `🏡 العقار: ${selectedPropertyName}\n` +
@@ -16429,7 +16448,7 @@ function ReportsTab() {
         `🔴 المصروفات: ${toAr(formatAmount(yearly.totals.expenses))}\n` +
         `⭐ صافي الربح: ${toAr(formatAmountSigned(yearly.totals.netProfit))}\n` +
         `✨ منصة تكية لإدارة الشاليهات`;
-      fileName = `تقرير_سنوي_${toAr(selectedYear)}.pdf`;
+      fileName = `Takyah_Annual_${selectedYear}.pdf`;
     } else return;
 
     // ── Fast path: cached URL — open WhatsApp directly without regenerating PDF ──
