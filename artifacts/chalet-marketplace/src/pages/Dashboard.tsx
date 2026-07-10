@@ -12688,7 +12688,7 @@ async function uploadFile(file: File): Promise<string | null> {
 }
 
 function formatAmount(n: number) {
-  return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n);
+  return `${Math.round(n).toLocaleString("ar-SA")} ر.س`;
 }
 
 /* Accounting-style formatting: negative values shown as (١٬٢٣٤ ر.س.) instead of a barely-visible "-" sign. */
@@ -15811,11 +15811,13 @@ function buildMonthlyReportHtml(
     ? buildRevBarSvg(report.dailyRevenue) : "";
 
   const slots = report?.slotStats;
+  const slotTotal = slots ? ((slots.morning + slots.evening + slots.full_day + slots.unspecified) || 1) : 1;
+  const slotPct = (n: number) => Math.round((n / slotTotal) * 100);
   const slotHtml = slots ? [
-    slots.morning > 0 ? `<div class="slot-chip">🌅 صباحي: ${slots.morning}</div>` : "",
-    slots.evening > 0 ? `<div class="slot-chip">🌙 مسائي: ${slots.evening}</div>` : "",
-    slots.full_day > 0 ? `<div class="slot-chip">☀️ يومي: ${slots.full_day}</div>` : "",
-    slots.unspecified > 0 ? `<div class="slot-chip">📋 غير محدد: ${slots.unspecified}</div>` : "",
+    slots.morning > 0 ? `<div class="slot-chip">🌅 صباحي: ${slots.morning} · ${slotPct(slots.morning)}٪</div>` : "",
+    slots.evening > 0 ? `<div class="slot-chip">🌙 مسائي: ${slots.evening} · ${slotPct(slots.evening)}٪</div>` : "",
+    slots.full_day > 0 ? `<div class="slot-chip">☀️ يومي: ${slots.full_day} · ${slotPct(slots.full_day)}٪</div>` : "",
+    slots.unspecified > 0 ? `<div class="slot-chip">📋 غير محدد: ${slots.unspecified} · ${slotPct(slots.unspecified)}٪</div>` : "",
   ].filter(Boolean).join("") : "";
 
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
@@ -15841,6 +15843,21 @@ ${report ? `<div class="section"><div class="section-title">إحصائيات ا�
 </div>${slotHtml ? `<div class="slot-row">${slotHtml}</div>` : ""}</div>` : ""}
 
 ${dailyChartSvg ? `<div class="section"><div class="section-title">الإيرادات اليومية</div>${dailyChartSvg}</div>` : ""}
+
+${financial ? `<div class="section"><div class="section-title">كروت الأداء المالي</div><div class="kpi-grid">
+<div class="kpi-card kpi-green"><div class="kpi-label">المبالغ المحصّلة فعلياً</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">عربون + محصّل + تلفيات</div></div>
+<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات</div><div class="kpi-value">${formatAmount(financial.totalExpenses)}</div><div class="kpi-note">مصروفات + رواتب</div></div>
+<div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value" style="${financial.netProfit < 0 ? "color:#dc2626" : ""}">${formatAmountSigned(financial.netProfit)}</div><div class="kpi-note">الإيرادات − المصروفات</div></div>
+</div></div>` : ""}
+
+${report ? `<div class="section"><div class="section-title">قنوات الحجز والإشغال</div>
+<div class="kpi-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
+<div class="kpi-card"><div class="kpi-label">🌐 عبر المنصة</div><div class="kpi-value">${report.platformBookings}</div><div class="kpi-note">حجز إلكتروني</div></div>
+<div class="kpi-card"><div class="kpi-label">📞 من خارج المنصة</div><div class="kpi-value">${report.externalBookings}</div><div class="kpi-note">واتساب / مباشر</div></div>
+</div>
+<div style="margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;font-weight:700">نسبة الإشغال</span><span style="font-size:18px;font-weight:800;color:#8C6246">${report.occupancyRate}٪</span></div><div style="width:100%;background:#f3ede4;border-radius:6px;height:12px"><div style="width:${report.occupancyRate}%;background:#8C6246;height:12px;border-radius:6px;min-width:${report.occupancyRate > 0 ? 4 : 0}px"></div></div><div style="font-size:11px;color:#888;margin-top:4px">${report.totalDays} يوم محجوز من أصل ${report.daysInMonth} يوم</div></div>
+${slotHtml ? `<div class="slot-row" style="margin-top:14px">${slotHtml}</div>` : ""}
+</div>` : ""}
 
 ${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}
 
@@ -17223,7 +17240,7 @@ function ReportsTab() {
                             {icon} {label}
                             {isTop && count > 0 && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold">الأعلى</span>}
                           </span>
-                          <span className="font-semibold" dir="rtl">{count} ({pct.toLocaleString("ar-SA")}٪)</span>
+                          <span className="font-semibold">{count} · {pct.toLocaleString("ar-SA")}٪</span>
                         </div>
                         <div className="w-full bg-muted rounded-full h-2">
                           <div className={`h-2 rounded-full transition-all duration-500 ${isTop && count > 0 ? "bg-primary" : "bg-muted-foreground/40"}`} style={{ width: `${pct}%` }} />
