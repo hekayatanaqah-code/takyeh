@@ -16361,7 +16361,7 @@ function ReportsTab() {
       const key = `${year}-${String(month).padStart(2, "0")}`;
       if (!seen.has(key)) {
         seen.add(key);
-        opts.push({ val: key, year, month, label: `${HIJRI_MONTH_NAMES_AR[month - 1] ?? month} ${year} هـ` });
+        opts.push({ val: key, year, month, label: `${HIJRI_MONTH_NAMES_AR[month - 1] ?? month} ${toAr(year)} هـ` });
       }
     }
     // Newest first

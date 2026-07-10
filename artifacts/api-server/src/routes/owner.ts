@@ -71,6 +71,7 @@ function getHijriYM(dateStr: string): { year: number; month: number } {
 }
 
 const HIJRI_MONTH_NAMES = ["محرم","صفر","ربيع الأول","ربيع الآخر","جمادى الأولى","جمادى الآخرة","رجب","شعبان","رمضان","شوال","ذو القعدة","ذو الحجة"];
+const toArN = (n: number | string) => String(n).replace(/[0-9]/g, d => "٠١٢٣٤٥٦٧٨٩"[+d]);
 
 /** Compute the actual number of days in a Hijri month (Umm al-Qura) by scanning Gregorian days. */
 function computeHijriDaysInMonth(hy: number, hm: number): number {
@@ -2471,7 +2472,7 @@ router.get("/reports", async (req, res) => {
   return res.json({
     month: responseMonth,
     ...(isHijriMode ? {
-      hijriMonthLabel: `${HIJRI_MONTH_NAMES[hijriMonth! - 1] ?? hijriMonth} ${hijriYear} هـ`,
+      hijriMonthLabel: `${HIJRI_MONTH_NAMES[hijriMonth! - 1] ?? hijriMonth} ${toArN(hijriYear!)} هـ`,
     } : {}),
     totalBookings,
     platformBookings: platformBookings.length,
@@ -3256,7 +3257,7 @@ router.get("/financial-summary", async (req, res) => {
 
     return res.json({
       month: `${approxGYear}-${String(hMonth).padStart(2, "0")}`,
-      hijriMonthLabel: `${HIJRI_MONTH_NAMES[hMonth - 1] ?? hMonth} ${hYear} هـ`,
+      hijriMonthLabel: `${HIJRI_MONTH_NAMES[hMonth - 1] ?? hMonth} ${toArN(hYear)} هـ`,
       totalRevenue, totalDeposits, totalPendingBalance, totalInsuranceHeld,
       totalInsuranceDeducted: Math.round(totalInsuranceDeducted),
       totalExpenses: totalExpensesAll, netProfit, categoryTotals, insuranceRevenueTotals,
