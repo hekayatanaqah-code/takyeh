@@ -15814,10 +15814,10 @@ function buildMonthlyReportHtml(
   const slotTotal = slots ? ((slots.morning + slots.evening + slots.full_day + slots.unspecified) || 1) : 1;
   const slotPct = (n: number) => Math.round((n / slotTotal) * 100);
   const slotHtml = slots ? [
-    slots.morning > 0 ? `<div class="slot-chip">🌅 صباحي: ${slots.morning} · ${slotPct(slots.morning)}٪</div>` : "",
-    slots.evening > 0 ? `<div class="slot-chip">🌙 مسائي: ${slots.evening} · ${slotPct(slots.evening)}٪</div>` : "",
-    slots.full_day > 0 ? `<div class="slot-chip">☀️ يومي: ${slots.full_day} · ${slotPct(slots.full_day)}٪</div>` : "",
-    slots.unspecified > 0 ? `<div class="slot-chip">📋 غير محدد: ${slots.unspecified} · ${slotPct(slots.unspecified)}٪</div>` : "",
+    slots.morning > 0 ? `<div class="slot-chip">صباحي: ${slots.morning} حجز <span dir="ltr">(${slotPct(slots.morning)}٪)</span></div>` : "",
+    slots.evening > 0 ? `<div class="slot-chip">مسائي: ${slots.evening} حجز <span dir="ltr">(${slotPct(slots.evening)}٪)</span></div>` : "",
+    slots.full_day > 0 ? `<div class="slot-chip">يوم كامل: ${slots.full_day} حجز <span dir="ltr">(${slotPct(slots.full_day)}٪)</span></div>` : "",
+    slots.unspecified > 0 ? `<div class="slot-chip">غير محدد: ${slots.unspecified} حجز <span dir="ltr">(${slotPct(slots.unspecified)}٪)</span></div>` : "",
   ].filter(Boolean).join("") : "";
 
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
@@ -15826,14 +15826,15 @@ function buildMonthlyReportHtml(
 <body><div class="page">
 
 <div class="header">
-<div class="header-brand"><div class="brand-name">منصة تكية</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
+<div class="header-brand"><svg width="110" height="42" viewBox="0 0 110 42" xmlns="http://www.w3.org/2000/svg"><rect width="110" height="42" rx="9" fill="#8C6246"/><text x="55" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="19" font-weight="900" fill="white" text-anchor="middle">تكية</text></svg></div>
 <div class="header-center"><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
 ${qrHtml}</div>
 
-${financial ? `<div class="section"><div class="section-title">الملخص المالي (أرباح وخسائر)</div><div class="kpi-grid">
-<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">عربون + محصّل + تلفيات</div></div>
-<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات</div><div class="kpi-value">${formatAmount(financial.totalExpenses)}</div><div class="kpi-note">مصروفات + رواتب</div></div>
-<div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value" style="${financial.netProfit >= 0 ? "" : "color:#dc2626"}">${formatAmountSigned(financial.netProfit)}</div><div class="kpi-note">الإيرادات - المصروفات</div></div>
+${financial ? `<div class="section"><div class="section-title">الأداء والملخص المالي</div><div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value" style="font-size:16px">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">عربون + محصّل + تلفيات</div></div>
+<div class="kpi-card" style="border-color:#86efac"><div class="kpi-label">المبالغ المحصّلة فعلياً</div><div class="kpi-value" style="font-size:16px;color:#15803d">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">ما دخل الحساب فعلاً</div></div>
+<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات</div><div class="kpi-value" style="font-size:16px">${formatAmount(financial.totalExpenses)}</div><div class="kpi-note">مصروفات + رواتب</div></div>
+<div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value" style="font-size:16px;${financial.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(financial.netProfit)}</div><div class="kpi-note">الإيرادات − المصروفات</div></div>
 </div>${insuranceDeducted > 0 ? `<div style="margin-top:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#b91c1c;">✂️ إيرادات تلفيات (محوّلة من التأمين)</span><span style="font-size:16px;font-weight:700;color:#b91c1c;">${formatAmount(insuranceDeducted)}</span></div>` : ""}${insuranceHeld > 0 ? `<div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#c2410c;">🔒 تأمينات محتجزة (غير محسوبة في الأرباح)</span><span style="font-size:16px;font-weight:700;color:#c2410c;">${formatAmount(insuranceHeld)}</span></div>` : ""}</div>` : ""}
 
 ${report ? `<div class="section"><div class="section-title">إحصائيات الحجوزات</div><div class="kpi-grid">
@@ -15843,12 +15844,6 @@ ${report ? `<div class="section"><div class="section-title">إحصائيات ا�
 </div>${slotHtml ? `<div class="slot-row">${slotHtml}</div>` : ""}</div>` : ""}
 
 ${dailyChartSvg ? `<div class="section"><div class="section-title">الإيرادات اليومية</div>${dailyChartSvg}</div>` : ""}
-
-${financial ? `<div class="section"><div class="section-title">كروت الأداء المالي</div><div class="kpi-grid">
-<div class="kpi-card kpi-green"><div class="kpi-label">المبالغ المحصّلة فعلياً</div><div class="kpi-value">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">عربون + محصّل + تلفيات</div></div>
-<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات</div><div class="kpi-value">${formatAmount(financial.totalExpenses)}</div><div class="kpi-note">مصروفات + رواتب</div></div>
-<div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value" style="${financial.netProfit < 0 ? "color:#dc2626" : ""}">${formatAmountSigned(financial.netProfit)}</div><div class="kpi-note">الإيرادات − المصروفات</div></div>
-</div></div>` : ""}
 
 ${report ? `<div class="section"><div class="section-title">قنوات الحجز والإشغال</div>
 <div class="kpi-grid" style="grid-template-columns:1fr 1fr;margin-bottom:14px">
@@ -15887,7 +15882,7 @@ function buildYearlyReportHtml(
 <style>${REPORT_CSS}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head>
 <body><div class="page">
 <div class="header">
-<div class="header-brand"><div class="brand-name">منصة تكية</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
+<div class="header-brand"><svg width="110" height="42" viewBox="0 0 110 42" xmlns="http://www.w3.org/2000/svg"><rect width="110" height="42" rx="9" fill="#8C6246"/><text x="55" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="19" font-weight="900" fill="white" text-anchor="middle">تكية</text></svg></div>
 <div class="header-center"><div class="report-title">التقرير السنوي – ${year}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
 ${qrHtml}</div>
 <div class="kpi-grid" style="margin-bottom:24px">
