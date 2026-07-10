@@ -15814,7 +15814,7 @@ function buildMonthlyReportHtml(
   monthTitle: string | null = null,
   logoDataUrl: string | null = null,
 ): string {
-  const monthStr = monthTitle ?? toAr(new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" }));
+  const monthStr = toAr(monthTitle ?? new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" }));
   const _now = new Date();
   const _hc = toHijriComponents(_now);
   const _hijriPrint = `${toAr(_hc.day)} ${HIJRI_MONTHS_AR[_hc.month - 1]} ${toAr(_hc.year)} هـ`;
