@@ -42,6 +42,7 @@ import {
   Paperclip, Upload,
 } from "lucide-react";
 import { Link } from "wouter";
+import takyahLogoSrc from "@assets/image_1783707669452.png";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid,
 } from "recharts";
@@ -15711,6 +15712,26 @@ function StaffTab() {
   );
 }
 
+/* ── Logo data-URL helper (cached) ── */
+let _cachedLogoDataUrl: string | null | undefined = undefined;
+async function getLogoDataUrl(): Promise<string | null> {
+  if (_cachedLogoDataUrl !== undefined) return _cachedLogoDataUrl;
+  try {
+    const resp = await fetch(takyahLogoSrc);
+    const blob = await resp.blob();
+    _cachedLogoDataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    return _cachedLogoDataUrl;
+  } catch {
+    _cachedLogoDataUrl = null;
+    return null;
+  }
+}
+
 /* ── QR Code helper for report verification links ── */
 async function generateReportQrDataUrl(type: "monthly" | "yearly", period: string): Promise<string | null> {
   try {
@@ -15739,7 +15760,8 @@ async function printMonthlyReport(
   const win = window.open("", "_blank", "width=900,height=1200");
   if (!win) return;
   const qr = await generateReportQrDataUrl("monthly", month);
-  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr, breakdown, monthTitle));
+  const logo = await getLogoDataUrl();
+  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr, breakdown, monthTitle, logo));
   win.document.close();
 }
 
@@ -15790,6 +15812,7 @@ function buildMonthlyReportHtml(
   qrDataUrl: string | null = null,
   breakdown: ReportBreakdown = null,
   monthTitle: string | null = null,
+  logoDataUrl: string | null = null,
 ): string {
   const monthStr = monthTitle ?? toAr(new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" }));
   const printDate = toAr(new Date().toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" }));
@@ -15826,7 +15849,7 @@ function buildMonthlyReportHtml(
 <body><div class="page">
 
 <div class="header">
-<div class="header-brand"><svg width="148" height="52" viewBox="0 0 148 52" xmlns="http://www.w3.org/2000/svg"><polygon points="10,27 26,11 42,27" fill="none" stroke="#8C6246" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><rect x="14" y="26" width="24" height="18" rx="2" fill="#8C6246" opacity="0.1" stroke="#8C6246" stroke-width="2"/><rect x="21" y="31" width="10" height="13" rx="1.5" fill="#8C6246" opacity="0.45"/><line x1="52" y1="10" x2="52" y2="43" stroke="#d9c9b8" stroke-width="1"/><text x="60" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="21" font-weight="900" fill="#8C6246">تكية</text><text x="60" y="42" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="9.5" fill="#a07852">منصة الشاليهات</text></svg></div>
+<div class="header-brand">${logoDataUrl ? `<img src="${logoDataUrl}" style="height:68px;width:auto;object-fit:contain;display:block;" alt="تكية" />` : `<span style="font-size:26px;font-weight:900;color:#8C6246;font-family:Segoe UI,Tahoma,Arial,sans-serif;">تكية</span>`}</div>
 <div class="header-center"><div class="report-title">التقرير الشهري – ${monthStr}</div><div class="report-sub">${propertyName} · ${printDate}</div></div>
 ${qrHtml}</div>
 
@@ -15837,17 +15860,18 @@ ${financial ? `<div class="section"><div class="section-title">الأداء وا
 <div class="kpi-card ${financial.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح</div><div class="kpi-value" style="font-size:16px;${financial.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(financial.netProfit)}</div><div class="kpi-note">الإيرادات − المصروفات</div></div>
 </div>${insuranceDeducted > 0 ? `<div style="margin-top:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#b91c1c;">✂️ إيرادات تلفيات (محوّلة من التأمين)</span><span style="font-size:16px;font-weight:700;color:#b91c1c;">${formatAmount(insuranceDeducted)}</span></div>` : ""}${insuranceHeld > 0 ? `<div style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:12px;font-weight:700;color:#c2410c;">🔒 تأمينات محتجزة (غير محسوبة في الأرباح)</span><span style="font-size:16px;font-weight:700;color:#c2410c;">${formatAmount(insuranceHeld)}</span></div>` : ""}</div>` : ""}
 
-${report ? `<div class="section"><div class="section-title">إحصائيات الحجوزات والقنوات</div>
-<div class="kpi-grid" style="margin-bottom:14px">
-<div class="kpi-card"><div class="kpi-label">📋 إجمالي الحجوزات</div><div class="kpi-value">${toAr(report.totalBookings)}</div><div class="kpi-note">خلال الشهر</div></div>
+${report ? `<div class="section"><div class="section-title">قنوات الحجز والإشغال</div>
+<div class="kpi-grid" style="grid-template-columns:1fr 1fr">
 <div class="kpi-card"><div class="kpi-label">🌐 عبر المنصة</div><div class="kpi-value">${toAr(report.platformBookings)}</div><div class="kpi-note">حجز إلكتروني</div></div>
-<div class="kpi-card"><div class="kpi-label">📞 خارج المنصة</div><div class="kpi-value">${toAr(report.externalBookings)}</div><div class="kpi-note">واتساب / مباشر</div></div>
-</div>
-<div style="margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;font-weight:700">نسبة الإشغال</span><span style="font-size:18px;font-weight:800;color:#8C6246">${toAr(report.occupancyRate)}٪</span></div><div style="width:100%;background:#f3ede4;border-radius:6px;height:12px"><div style="width:${report.occupancyRate}%;background:#8C6246;height:12px;border-radius:6px;min-width:${report.occupancyRate > 0 ? 4 : 0}px"></div></div><div style="font-size:11px;color:#888;margin-top:4px">${toAr(report.totalDays)} يوم محجوز من أصل ${toAr(report.daysInMonth)} يوم</div></div>
-${slotHtml ? `<div class="slot-row" style="margin-top:14px">${slotHtml}</div>` : ""}
-</div>` : ""}
+<div class="kpi-card"><div class="kpi-label">📞 من خارج المنصة</div><div class="kpi-value">${toAr(report.externalBookings)}</div><div class="kpi-note">واتساب / مباشر</div></div>
+</div></div>` : ""}
 
 ${dailyChartSvg ? `<div class="section"><div class="section-title">الإيرادات اليومية</div>${dailyChartSvg}</div>` : ""}
+
+${report ? `<div class="section"><div class="section-title">نسبة الإشغال وتوزيع الفترات</div>
+<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13px;font-weight:700">نسبة الإشغال</span><span style="font-size:20px;font-weight:800;color:#8C6246;direction:rtl;">${toAr(report.occupancyRate)}٪</span></div><div style="width:100%;background:#f3ede4;border-radius:6px;height:12px"><div style="width:${report.occupancyRate}%;background:#8C6246;height:12px;border-radius:6px;min-width:${report.occupancyRate > 0 ? 4 : 0}px"></div></div><div style="font-size:11px;color:#888;margin-top:4px">${toAr(report.totalDays)} يوم محجوز من أصل ${toAr(report.daysInMonth)} يوم</div></div>
+${slotHtml ? `<div class="slot-row" style="margin-top:14px">${slotHtml}</div>` : ""}
+</div>` : ""}
 
 ${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}
 
@@ -16021,7 +16045,8 @@ async function generateAndUploadReportPdf(
   if (type === "monthly") {
     fileName = `Monthly_Report_${params.month ?? "report"}.pdf`;
     const qr = await generateReportQrDataUrl("monthly", params.month!);
-    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial, false, qr, params.breakdown ?? null, params.monthTitle ?? null);
+    const logo = await getLogoDataUrl();
+    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial, false, qr, params.breakdown ?? null, params.monthTitle ?? null, logo);
   } else {
     fileName = `Annual_Report_${params.year ?? new Date().getFullYear()}.pdf`;
     const qr = await generateReportQrDataUrl("yearly", params.year!);
@@ -16410,7 +16435,8 @@ function ReportsTab() {
         : await generateReportQrDataUrl("yearly", selectedYear);
 
       if (viewMode === "monthly") {
-        htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel);
+        const logo = await getLogoDataUrl();
+        htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel, logo);
       } else {
         htmlContent = buildYearlyReportHtml(selectedYear, selectedPropertyName, yearly!, false, qr);
       }
