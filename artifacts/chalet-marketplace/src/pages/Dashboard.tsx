@@ -16386,14 +16386,12 @@ function ReportsTab() {
   const handleShareWhatsApp = useCallback(async () => {
     const phone = sharePhone.replace(/\D/g, "");
 
-    // ── Build report metadata ──────────────────────────────────────────────
+    // ── Build message text (Arabic + Arabic-Indic digits) ──────────────────
     let titleText = "";
     let bodyText = "";
-    let fileName = "";
     let htmlContent = "";
 
     if (viewMode === "monthly" && report) {
-      // toAr() on the entire label ensures ALL digits become Arabic-Indic
       const monthLabel = toAr(activeMonthLabel);
       titleText = `تقرير ${monthLabel} – ${selectedPropertyName}`;
       const occupancy = report.daysInMonth > 0
@@ -16405,16 +16403,6 @@ function ReportsTab() {
         `📅 الحجوزات: ${toAr(report.totalBookings)} • الإشغال: ${toAr(occupancy)}٪\n` +
         (financial ? `💰 صافي الربح: ${toAr(formatAmountSigned(financial.netProfit))}\n` : "") +
         `✨ منصة تكية لإدارة الشاليهات`;
-      // Arabic filename — new File([blob], arabicName, { type:'application/pdf' }) encodes correctly
-      if (isHijri && selectedHijriMonthVal) {
-        const [hy, hm] = selectedHijriMonthVal.split("-").map(Number);
-        const monthAr = HIJRI_MONTHS_AR[hm - 1] ?? "شهر";
-        fileName = `تقرير_شهر_${monthAr}_${toAr(hy)}.pdf`;
-      } else {
-        const [gy, gm] = selectedMonth.split("-").map(Number);
-        const monthAr = new Date(gy, gm - 1, 15).toLocaleDateString("ar-SA", { month: "long" });
-        fileName = `تقرير_شهر_${monthAr}_${toAr(gy)}.pdf`;
-      }
     } else if (viewMode === "yearly" && yearly) {
       titleText = `التقرير السنوي ${toAr(selectedYear)} – ${selectedPropertyName}`;
       bodyText =
@@ -16424,20 +16412,14 @@ function ReportsTab() {
         `🔴 المصروفات: ${toAr(formatAmount(yearly.totals.expenses))}\n` +
         `⭐ صافي الربح: ${toAr(formatAmountSigned(yearly.totals.netProfit))}\n` +
         `✨ منصة تكية لإدارة الشاليهات`;
-      fileName = `تقرير_سنوي_${toAr(selectedYear)}.pdf`;
     } else return;
 
-    // ── Fast path: cached URL — open WhatsApp directly without regenerating PDF ──
-    if (pdfUrl) {
-      const text = bodyText + `\n📎 التقرير (PDF): ${pdfUrl}`;
-      const waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
-      window.open(waLink, "_blank");
-      return;
-    }
+    // ASCII filename — Arabic chars in file names appear as garbage on some
+    // WhatsApp/OS versions; Latin is universally safe on all platforms.
+    const PDF_NAME = "Takyah_Report.pdf";
 
     setPdfLoading(true);
     try {
-      // ── Generate PDF blob ──────────────────────────────────────────────
       const qr = viewMode === "monthly"
         ? await generateReportQrDataUrl("monthly", selectedMonth)
         : await generateReportQrDataUrl("yearly", selectedYear);
@@ -16449,36 +16431,32 @@ function ReportsTab() {
         htmlContent = buildYearlyReportHtml(selectedYear, selectedPropertyName, yearly!, false, qr);
       }
 
-      const { blob } = await htmlToPdfBlob(htmlContent, fileName);
-      const pdfFile = new File([blob], fileName, { type: "application/pdf" });
+      const { blob } = await htmlToPdfBlob(htmlContent, PDF_NAME);
+      const pdfFile = new File([blob], PDF_NAME, { type: "application/pdf" });
 
-      // ── Primary: share actual PDF file (mobile — goes to WhatsApp if installed) ─
+      // ── Primary: Web Share API sends the actual PDF file ──────────────────
       if (typeof navigator.share === "function" && typeof navigator.canShare === "function" && navigator.canShare({ files: [pdfFile] })) {
         try {
           await navigator.share({ files: [pdfFile], title: titleText, text: bodyText });
           return;
         } catch (shareErr: unknown) {
           if ((shareErr as Error)?.name === "AbortError") return;
-          // Other error — fall through to wa.me link
+          // Fall through to wa.me text-only fallback
         }
       }
 
-      // ── Fallback: upload PDF → wa.me direct link (desktop / unsupported) ─
-      let url: string | null = pdfUrl;
-      if (!url) {
-        url = await uploadFile(pdfFile);
-        if (url) setPdfUrl(url);
-      }
-      const text = bodyText + (url ? `\n📎 التقرير (PDF): ${url}` : "");
-      const waLink = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : `https://wa.me/?text=${encodeURIComponent(text)}`;
+      // ── Fallback: wa.me text-only link (no server upload) ─────────────────
+      const waLink = phone
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(bodyText)}`
+        : `https://wa.me/?text=${encodeURIComponent(bodyText)}`;
       window.open(waLink, "_blank");
-    } catch (e) {
-      console.error("Share failed:", e);
+    } catch (err) {
+      console.error("WhatsApp share failed:", err);
       alert("تعذّر مشاركة التقرير، يرجى المحاولة مرة أخرى.");
     } finally {
       setPdfLoading(false);
     }
-  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, sharePhone, pdfUrl, monthOptions]);
+  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, sharePhone, activeMonthLabel, repBreakdown]);
 
   const handleShareEmail = useCallback(async () => {
     if (!shareEmail) { alert("يرجى إدخال البريد الإلكتروني في إعدادات المشاركة"); return; }
@@ -16951,11 +16929,11 @@ function ReportsTab() {
                 <Button variant="outline" size="sm" onClick={() => printYearlyReport(isYearlyHijri ? activeYearLabel : selectedYear, selectedPropertyName, activeYearly as any)} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير السنوي
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleShareWhatsApp} disabled={pdfLoading} className="gap-2">
+                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); e.preventDefault(); void handleShareWhatsApp(); }} disabled={pdfLoading} className="gap-2">
                   {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                   {pdfLoading ? "جاري إنشاء PDF…" : "مشاركة PDF واتساب"}
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleShareEmail} disabled={pdfLoading} className="gap-2">
+                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); e.preventDefault(); void handleShareEmail(); }} disabled={pdfLoading} className="gap-2">
                   {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                   بريد
                 </Button>
@@ -17277,11 +17255,11 @@ function ReportsTab() {
                 <Button variant="outline" size="sm" onClick={() => printMonthlyReport(selectedMonth, selectedPropertyName, report, financial, repBreakdown, activeMonthLabel)} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleShareWhatsApp} disabled={pdfLoading} className="gap-2">
+                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); e.preventDefault(); void handleShareWhatsApp(); }} disabled={pdfLoading} className="gap-2">
                   {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                   {pdfLoading ? "جاري إنشاء PDF…" : "مشاركة PDF واتساب"}
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleShareEmail} disabled={pdfLoading} className="gap-2">
+                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); e.preventDefault(); void handleShareEmail(); }} disabled={pdfLoading} className="gap-2">
                   {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                   بريد
                 </Button>
