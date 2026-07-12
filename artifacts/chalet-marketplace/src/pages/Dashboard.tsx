@@ -16414,9 +16414,23 @@ function ReportsTab() {
         `✨ منصة تكية لإدارة الشاليهات`;
     } else return;
 
-    // ASCII filename — Arabic chars in file names appear as garbage on some
-    // WhatsApp/OS versions; Latin is universally safe on all platforms.
-    const PDF_NAME = "Takyah_Report.pdf";
+    // Arabic filename — new File([blob], arabicName, { type:'application/pdf' })
+    // passes the name as a UTF-16 JS string; Web Share API on modern iOS/Android
+    // handles Unicode filenames correctly without any extra encoding.
+    let fileName: string;
+    if (viewMode === "monthly") {
+      if (isHijri && selectedHijriMonthVal) {
+        const [hy, hm] = selectedHijriMonthVal.split("-").map(Number);
+        const monthAr = HIJRI_MONTHS_AR[hm - 1] ?? "شهر";
+        fileName = `تقرير_شهر_${monthAr}_${toAr(hy)}.pdf`;
+      } else {
+        const [gy, gm] = selectedMonth.split("-").map(Number);
+        const monthAr = new Date(gy, gm - 1, 15).toLocaleDateString("ar-SA", { month: "long" });
+        fileName = `تقرير_شهر_${monthAr}_${toAr(gy)}.pdf`;
+      }
+    } else {
+      fileName = `تقرير_سنوي_${toAr(selectedYear)}.pdf`;
+    }
 
     setPdfLoading(true);
     try {
@@ -16431,8 +16445,8 @@ function ReportsTab() {
         htmlContent = buildYearlyReportHtml(selectedYear, selectedPropertyName, yearly!, false, qr);
       }
 
-      const { blob } = await htmlToPdfBlob(htmlContent, PDF_NAME);
-      const pdfFile = new File([blob], PDF_NAME, { type: "application/pdf" });
+      const { blob } = await htmlToPdfBlob(htmlContent, fileName);
+      const pdfFile = new File([blob], fileName, { type: "application/pdf" });
 
       // ── Primary: Web Share API sends the actual PDF file ──────────────────
       if (typeof navigator.share === "function" && typeof navigator.canShare === "function" && navigator.canShare({ files: [pdfFile] })) {
@@ -16456,7 +16470,7 @@ function ReportsTab() {
     } finally {
       setPdfLoading(false);
     }
-  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, sharePhone, activeMonthLabel, repBreakdown]);
+  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal]);
 
   const handleShareEmail = useCallback(async () => {
     if (!shareEmail) { alert("يرجى إدخال البريد الإلكتروني في إعدادات المشاركة"); return; }
