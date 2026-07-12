@@ -15931,54 +15931,40 @@ ${qrHtml}</div>
 
 /* ── HTML → PDF blob (html2canvas + jsPDF) ── */
 async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Blob; fileName: string }> {
-  // Use DOMParser to properly extract styles and body content from the full HTML doc
-  const parser = new DOMParser();
-  const parsedDoc = parser.parseFromString(html, "text/html");
-  const styles = Array.from(parsedDoc.querySelectorAll("style")).map((s) => s.textContent ?? "").join("\n");
-  const bodyContent = parsedDoc.body.innerHTML;
-
-  // A4 page: 210mm × 297mm. Content width = 180mm (with 15mm side margins).
-  // At 96dpi, 1mm ≈ 3.7795px → content canvas width = 750px → 198.4mm → fits in 180mm after margins.
   const CONTENT_PX = 750; // must match .page width in REPORT_CSS
 
-  // Off-screen wrapper: placed above the viewport (top:-99999px; left:0) so it is
-  // completely invisible without causing any horizontal overflow or layout shift.
-  // RTL pages with left:-10000px can create horizontal overflow; top:-99999px avoids this.
-  // DO NOT use visibility:hidden or opacity:0 — html2canvas skips those elements.
-  const wrapper = document.createElement("div");
-  wrapper.dir = "rtl";
-  wrapper.style.cssText = [
+  // Render inside a hidden iframe — completely isolated from the main document.
+  // An iframe creates its own rendering context: no layout shifts, no scroll jumps,
+  // no viewport/paint disruption on the live dashboard screen.
+  // top:-9999px (fixed) puts it above the viewport; the main page is never repainted.
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText = [
     "position:fixed",
-    "top:-99999px",
+    "top:-9999px",
     "left:0",
     `width:${CONTENT_PX}px`,
-    "background:#fff",
-    "direction:rtl",
+    "height:5000px",
+    "border:none",
     "pointer-events:none",
-    "overflow:hidden",
   ].join(";");
-
-  const styleEl = document.createElement("style");
-  styleEl.textContent = styles;
-  wrapper.appendChild(styleEl);
-
-  const contentEl = document.createElement("div");
-  contentEl.innerHTML = bodyContent;
-  wrapper.appendChild(contentEl);
-
-  // Lock body scroll to prevent any visual disruption during the render delay.
-  const prevBodyOverflow = document.body.style.overflow;
-  document.body.style.overflow = "hidden";
-  document.body.appendChild(wrapper);
+  document.body.appendChild(iframe);
 
   try {
-    // Wait for CSS to apply and fonts to render
-    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    const iDoc = iframe.contentDocument!;
+    iDoc.open();
+    iDoc.write(html);
+    iDoc.close();
 
-    const pageEl = wrapper.querySelector<HTMLElement>(".page") ?? wrapper;
+    // Wait for iframe load + fonts/CSS to render
+    await new Promise<void>(resolve => {
+      if (iDoc.readyState === "complete") resolve();
+      else iframe.onload = () => resolve();
+    });
+    await new Promise<void>(resolve => setTimeout(resolve, 450));
 
-    // Fix: pass scrollX=0/scrollY=0 so position:fixed elements aren't shifted by page scroll.
-    // windowWidth matches the fixed width so responsive breakpoints don't misfire.
+    const pageEl = iDoc.querySelector<HTMLElement>(".page") ?? iDoc.body;
+
     const canvas = await html2canvas(pageEl, {
       scale: 2,
       useCORS: true,
@@ -16031,8 +16017,7 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
 
     return { blob: pdf.output("blob"), fileName };
   } finally {
-    document.body.style.overflow = prevBodyOverflow;
-    try { document.body.removeChild(wrapper); } catch { /* ignore */ }
+    if (document.body.contains(iframe)) document.body.removeChild(iframe);
   }
 }
 
@@ -16407,19 +16392,8 @@ function ReportsTab() {
     let fileName = "";
     let htmlContent = "";
 
-    // ASCII-safe month name maps — Arabic filenames get corrupted on WhatsApp/iOS/Windows.
-    const HIJRI_TRANSLIT: Record<number, string> = {
-      1:"Muharram",2:"Safar",3:"Rabi_Awwal",4:"Rabi_Thani",
-      5:"Jumada_Ula",6:"Jumada_Akhirah",7:"Rajab",8:"Shaban",
-      9:"Ramadan",10:"Shawwal",11:"Dhul_Qadah",12:"Dhul_Hijjah",
-    };
-    const MONTH_EN: Record<number, string> = {
-      1:"January",2:"February",3:"March",4:"April",5:"May",6:"June",
-      7:"July",8:"August",9:"September",10:"October",11:"November",12:"December",
-    };
-
     if (viewMode === "monthly" && report) {
-      // toAr() on the entire label ensures ALL digits (year + any Western fallback) become Arabic-Indic
+      // toAr() on the entire label ensures ALL digits become Arabic-Indic
       const monthLabel = toAr(activeMonthLabel);
       titleText = `تقرير ${monthLabel} – ${selectedPropertyName}`;
       const occupancy = report.daysInMonth > 0
@@ -16431,13 +16405,15 @@ function ReportsTab() {
         `📅 الحجوزات: ${toAr(report.totalBookings)} • الإشغال: ${toAr(occupancy)}٪\n` +
         (financial ? `💰 صافي الربح: ${toAr(formatAmountSigned(financial.netProfit))}\n` : "") +
         `✨ منصة تكية لإدارة الشاليهات`;
-      // Build ASCII-safe filename to avoid encoding corruption when sharing
+      // Arabic filename — new File([blob], arabicName, { type:'application/pdf' }) encodes correctly
       if (isHijri && selectedHijriMonthVal) {
         const [hy, hm] = selectedHijriMonthVal.split("-").map(Number);
-        fileName = `Takyah_${HIJRI_TRANSLIT[hm] ?? "Month"}_${hy}.pdf`;
+        const monthAr = HIJRI_MONTHS_AR[hm - 1] ?? "شهر";
+        fileName = `تقرير_شهر_${monthAr}_${toAr(hy)}.pdf`;
       } else {
         const [gy, gm] = selectedMonth.split("-").map(Number);
-        fileName = `Takyah_${MONTH_EN[gm] ?? "Month"}_${gy}.pdf`;
+        const monthAr = new Date(gy, gm - 1, 15).toLocaleDateString("ar-SA", { month: "long" });
+        fileName = `تقرير_شهر_${monthAr}_${toAr(gy)}.pdf`;
       }
     } else if (viewMode === "yearly" && yearly) {
       titleText = `التقرير السنوي ${toAr(selectedYear)} – ${selectedPropertyName}`;
@@ -16448,7 +16424,7 @@ function ReportsTab() {
         `🔴 المصروفات: ${toAr(formatAmount(yearly.totals.expenses))}\n` +
         `⭐ صافي الربح: ${toAr(formatAmountSigned(yearly.totals.netProfit))}\n` +
         `✨ منصة تكية لإدارة الشاليهات`;
-      fileName = `Takyah_Annual_${selectedYear}.pdf`;
+      fileName = `تقرير_سنوي_${toAr(selectedYear)}.pdf`;
     } else return;
 
     // ── Fast path: cached URL — open WhatsApp directly without regenerating PDF ──
