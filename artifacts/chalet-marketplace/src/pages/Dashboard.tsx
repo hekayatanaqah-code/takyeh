@@ -16383,7 +16383,9 @@ function ReportsTab() {
     ? "كل العقارات"
     : mySubmissions.find((s: any) => String(s.id) === selectedSubmissionId)?.nameAr ?? `شاليه #${selectedSubmissionId}`;
 
-  const handleShareWhatsApp = useCallback(async () => {
+  const handleShareWhatsApp = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     const phone = sharePhone.replace(/\D/g, "");
 
     // ── Build message text (Arabic + Arabic-Indic digits) ──────────────────
@@ -16446,7 +16448,7 @@ function ReportsTab() {
       }
 
       const { blob } = await htmlToPdfBlob(htmlContent, fileName);
-      const pdfFile = new File([blob], fileName, { type: "application/pdf" });
+      const pdfFile = new File([blob], fileName, { type: "application/pdf", lastModified: Date.now() });
 
       // ── Primary: Web Share API sends the actual PDF file ──────────────────
       if (typeof navigator.share === "function" && typeof navigator.canShare === "function" && navigator.canShare({ files: [pdfFile] })) {
@@ -16472,7 +16474,9 @@ function ReportsTab() {
     }
   }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal]);
 
-  const handleShareEmail = useCallback(async () => {
+  const handleShareEmail = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (!shareEmail) { alert("يرجى إدخال البريد الإلكتروني في إعدادات المشاركة"); return; }
     let url = pdfUrl;
     if (!url) {
@@ -16943,11 +16947,11 @@ function ReportsTab() {
                 <Button variant="outline" size="sm" onClick={() => printYearlyReport(isYearlyHijri ? activeYearLabel : selectedYear, selectedPropertyName, activeYearly as any)} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير السنوي
                 </Button>
-                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); e.preventDefault(); void handleShareWhatsApp(); }} disabled={pdfLoading} className="gap-2">
+                <Button variant="outline" size="sm" onClick={handleShareWhatsApp} disabled={pdfLoading} className="gap-2">
                   {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                   {pdfLoading ? "جاري إنشاء PDF…" : "مشاركة PDF واتساب"}
                 </Button>
-                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); e.preventDefault(); void handleShareEmail(); }} disabled={pdfLoading} className="gap-2">
+                <Button variant="outline" size="sm" onClick={handleShareEmail} disabled={pdfLoading} className="gap-2">
                   {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                   بريد
                 </Button>
@@ -17269,11 +17273,11 @@ function ReportsTab() {
                 <Button variant="outline" size="sm" onClick={() => printMonthlyReport(selectedMonth, selectedPropertyName, report, financial, repBreakdown, activeMonthLabel)} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير
                 </Button>
-                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); e.preventDefault(); void handleShareWhatsApp(); }} disabled={pdfLoading} className="gap-2">
+                <Button variant="outline" size="sm" onClick={handleShareWhatsApp} disabled={pdfLoading} className="gap-2">
                   {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
                   {pdfLoading ? "جاري إنشاء PDF…" : "مشاركة PDF واتساب"}
                 </Button>
-                <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); e.preventDefault(); void handleShareEmail(); }} disabled={pdfLoading} className="gap-2">
+                <Button variant="outline" size="sm" onClick={handleShareEmail} disabled={pdfLoading} className="gap-2">
                   {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                   بريد
                 </Button>
