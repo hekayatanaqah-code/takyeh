@@ -16015,7 +16015,11 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
       pageIndex++;
     }
 
-    return { blob: pdf.output("blob"), fileName };
+    // إخراج الـ PDF كـ ArrayBuffer نقي ثم بناء Blob بترميز صريح
+    // يمنع أي تلاعب في الترميز أثناء نقل الملف عبر Web Share API
+    const pdfArrayBuffer = pdf.output("arraybuffer");
+    const cleanBlob = new Blob([pdfArrayBuffer], { type: "application/pdf" });
+    return { blob: cleanBlob, fileName };
   } finally {
     if (document.body.contains(iframe)) document.body.removeChild(iframe);
   }
