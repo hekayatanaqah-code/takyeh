@@ -16417,23 +16417,26 @@ function ReportsTab() {
         `✨ منصة تكية لإدارة الشاليهات`;
     } else return;
 
-    // Arabic filename — new File([blob], arabicName, { type:'application/pdf' })
-    // passes the name as a UTF-16 JS string; Web Share API on modern iOS/Android
-    // handles Unicode filenames correctly without any extra encoding.
-    let fileName: string;
+    // Build Arabic filename — normalise to NFC so WhatsApp/OS sees canonical
+    // Unicode codepoints rather than decomposed sequences, which fixes garbling
+    // on some Android/iOS WhatsApp versions.
+    let rawFileName: string;
     if (viewMode === "monthly") {
       if (isHijri && selectedHijriMonthVal) {
         const [hy, hm] = selectedHijriMonthVal.split("-").map(Number);
         const monthAr = HIJRI_MONTHS_AR[hm - 1] ?? "شهر";
-        fileName = `تقرير_شهر_${monthAr}_${toAr(hy)}.pdf`;
+        rawFileName = `تقرير_شهر_${monthAr}_${toAr(hy)}.pdf`;
       } else {
         const [gy, gm] = selectedMonth.split("-").map(Number);
         const monthAr = new Date(gy, gm - 1, 15).toLocaleDateString("ar-SA", { month: "long" });
-        fileName = `تقرير_شهر_${monthAr}_${toAr(gy)}.pdf`;
+        rawFileName = `تقرير_شهر_${monthAr}_${toAr(gy)}.pdf`;
       }
     } else {
-      fileName = `تقرير_سنوي_${toAr(selectedYear)}.pdf`;
+      rawFileName = `تقرير_سنوي_${toAr(selectedYear)}.pdf`;
     }
+    // Round-trip through encodeURIComponent/decode then normalise NFC
+    // to guarantee the string WhatsApp/OS receives is always well-formed Unicode
+    const fileName = decodeURIComponent(encodeURIComponent(rawFileName)).normalize("NFC");
 
     setWaLoading(true);
     try {
@@ -16451,22 +16454,36 @@ function ReportsTab() {
       const { blob } = await htmlToPdfBlob(htmlContent, fileName);
       const pdfFile = new File([blob], fileName, { type: "application/pdf", lastModified: Date.now() });
 
-      // ── Primary: Web Share API sends the actual PDF file ──────────────────
+      // ── Primary: Web Share API (actual PDF file attachment) ───────────────
       if (typeof navigator.share === "function" && typeof navigator.canShare === "function" && navigator.canShare({ files: [pdfFile] })) {
         try {
           await navigator.share({ files: [pdfFile], title: titleText, text: bodyText });
           return;
         } catch (shareErr: unknown) {
           if ((shareErr as Error)?.name === "AbortError") return;
-          // Fall through to wa.me text-only fallback
+          // Fall through to URL.createObjectURL download fallback
         }
       }
 
-      // ── Fallback: wa.me text-only link (no server upload) ─────────────────
-      const waLink = phone
-        ? `https://wa.me/${phone}?text=${encodeURIComponent(bodyText)}`
-        : `https://wa.me/?text=${encodeURIComponent(bodyText)}`;
-      window.open(waLink, "_blank");
+      // ── Fallback A: download the PDF locally so the user can share it ──────
+      // URL.createObjectURL gives the browser's native download with the exact
+      // Arabic filename — the user can then forward from their downloads folder.
+      try {
+        const objUrl = URL.createObjectURL(pdfFile);
+        const anchor = document.createElement("a");
+        anchor.href = objUrl;
+        anchor.download = fileName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        setTimeout(() => URL.revokeObjectURL(objUrl), 10_000);
+      } catch {
+        // ── Fallback B: wa.me text-only link ────────────────────────────────
+        const waLink = phone
+          ? `https://wa.me/${phone}?text=${encodeURIComponent(bodyText)}`
+          : `https://wa.me/?text=${encodeURIComponent(bodyText)}`;
+        window.open(waLink, "_blank");
+      }
     } catch (err) {
       console.error("WhatsApp share failed:", err);
       alert("تعذّر مشاركة التقرير، يرجى المحاولة مرة أخرى.");
