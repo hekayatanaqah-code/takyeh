@@ -15989,9 +15989,6 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
     const pageHeightCanvasPx = Math.round(contentHeightPerPageMm / mmPerCanvasPx); // ≈2225px
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    // تضمين الاسم العربي في metadata الـ PDF (حقل /Title بترميز UTF-16BE)
-    // واتساب وبعض أنظمة أندرويد تقرأ الاسم من داخل الملف لا من اسم الملف في النظام
-    pdf.setProperties({ title: fileName });
 
     let srcY = 0;
     let pageIndex = 0;
@@ -16452,36 +16449,17 @@ function ReportsTab() {
       const { blob } = await htmlToPdfBlob(htmlContent, arabicFileName);
       const pdfFile = new File([blob], arabicFileName, { type: "application/pdf", lastModified: Date.now() });
 
-      // ── Primary: Web Share API (actual PDF file attachment) ───────────────
+      // ── Web Share API: إرسال ملف PDF حقيقي مباشرة ───────────────────────
       if (typeof navigator.share === "function" && typeof navigator.canShare === "function" && navigator.canShare({ files: [pdfFile] })) {
-        try {
-          await navigator.share({ files: [pdfFile], title: arabicFileName, text: bodyText });
-          return;
-        } catch (shareErr: unknown) {
-          if ((shareErr as Error)?.name === "AbortError") return;
-          // Fall through to URL.createObjectURL download fallback
-        }
+        await navigator.share({ files: [pdfFile], title: arabicFileName, text: bodyText });
+        return;
       }
 
-      // ── Fallback A: download the PDF locally so the user can share it ──────
-      // URL.createObjectURL gives the browser's native download with the exact
-      // Arabic filename — the user can then forward from their downloads folder.
-      try {
-        const objUrl = URL.createObjectURL(pdfFile);
-        const anchor = document.createElement("a");
-        anchor.href = objUrl;
-        anchor.download = fileName;
-        document.body.appendChild(anchor);
-        anchor.click();
-        document.body.removeChild(anchor);
-        setTimeout(() => URL.revokeObjectURL(objUrl), 10_000);
-      } catch {
-        // ── Fallback B: wa.me text-only link ────────────────────────────────
-        const waLink = phone
-          ? `https://wa.me/${phone}?text=${encodeURIComponent(bodyText)}`
-          : `https://wa.me/?text=${encodeURIComponent(bodyText)}`;
-        window.open(waLink, "_blank");
-      }
+      // ── إذا لم تدعم البيئة مشاركة الملفات: رابط واتساب نصي ──────────────
+      const waLink = phone
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(bodyText)}`
+        : `https://wa.me/?text=${encodeURIComponent(bodyText)}`;
+      window.open(waLink, "_blank");
     } catch (err) {
       console.error("WhatsApp share failed:", err);
       alert("تعذّر مشاركة التقرير، يرجى المحاولة مرة أخرى.");
