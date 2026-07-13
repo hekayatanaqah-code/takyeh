@@ -15989,6 +15989,9 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
     const pageHeightCanvasPx = Math.round(contentHeightPerPageMm / mmPerCanvasPx); // ≈2225px
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    // تضمين الاسم العربي في metadata الـ PDF (حقل /Title بترميز UTF-16BE)
+    // واتساب وبعض أنظمة أندرويد تقرأ الاسم من داخل الملف لا من اسم الملف في النظام
+    pdf.setProperties({ title: fileName });
 
     let srcY = 0;
     let pageIndex = 0;
