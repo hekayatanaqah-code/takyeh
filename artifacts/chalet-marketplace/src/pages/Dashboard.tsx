@@ -16417,26 +16417,21 @@ function ReportsTab() {
         `✨ منصة تكية لإدارة الشاليهات`;
     } else return;
 
-    // Build Arabic filename — normalise to NFC so WhatsApp/OS sees canonical
-    // Unicode codepoints rather than decomposed sequences, which fixes garbling
-    // on some Android/iOS WhatsApp versions.
-    let rawFileName: string;
+    // اسم الملف عربي صريح — NFC يضمن تسلسل Unicode موحّد لا يُكسر في واتساب
+    let arabicFileName: string;
     if (viewMode === "monthly") {
       if (isHijri && selectedHijriMonthVal) {
         const [hy, hm] = selectedHijriMonthVal.split("-").map(Number);
         const monthAr = HIJRI_MONTHS_AR[hm - 1] ?? "شهر";
-        rawFileName = `تقرير_شهر_${monthAr}_${toAr(hy)}.pdf`;
+        arabicFileName = `تقرير_شهر_${monthAr}_${toAr(hy)}.pdf`.normalize("NFC");
       } else {
         const [gy, gm] = selectedMonth.split("-").map(Number);
         const monthAr = new Date(gy, gm - 1, 15).toLocaleDateString("ar-SA", { month: "long" });
-        rawFileName = `تقرير_شهر_${monthAr}_${toAr(gy)}.pdf`;
+        arabicFileName = `تقرير_شهر_${monthAr}_${toAr(gy)}.pdf`.normalize("NFC");
       }
     } else {
-      rawFileName = `تقرير_سنوي_${toAr(selectedYear)}.pdf`;
+      arabicFileName = `تقرير_سنوي_${toAr(selectedYear)}.pdf`.normalize("NFC");
     }
-    // Round-trip through encodeURIComponent/decode then normalise NFC
-    // to guarantee the string WhatsApp/OS receives is always well-formed Unicode
-    const fileName = decodeURIComponent(encodeURIComponent(rawFileName)).normalize("NFC");
 
     setWaLoading(true);
     try {
@@ -16451,13 +16446,13 @@ function ReportsTab() {
         htmlContent = buildYearlyReportHtml(selectedYear, selectedPropertyName, yearly!, false, qr);
       }
 
-      const { blob } = await htmlToPdfBlob(htmlContent, fileName);
-      const pdfFile = new File([blob], fileName, { type: "application/pdf", lastModified: Date.now() });
+      const { blob } = await htmlToPdfBlob(htmlContent, arabicFileName);
+      const pdfFile = new File([blob], arabicFileName, { type: "application/pdf", lastModified: Date.now() });
 
       // ── Primary: Web Share API (actual PDF file attachment) ───────────────
       if (typeof navigator.share === "function" && typeof navigator.canShare === "function" && navigator.canShare({ files: [pdfFile] })) {
         try {
-          await navigator.share({ files: [pdfFile], title: titleText, text: bodyText });
+          await navigator.share({ files: [pdfFile], title: arabicFileName, text: bodyText });
           return;
         } catch (shareErr: unknown) {
           if ((shareErr as Error)?.name === "AbortError") return;
