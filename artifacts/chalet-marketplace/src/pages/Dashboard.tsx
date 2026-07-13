@@ -16084,7 +16084,8 @@ function ReportsTab() {
   const [shareEmail, setShareEmail] = useState(() => localStorage.getItem("reportShareEmail") ?? "");
   const [showShare, setShowShare] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
-  const [pdfLoading, setPdfLoading] = useState(false);
+  const [waLoading, setWaLoading] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [archiveSaving, setArchiveSaving] = useState(false);
   const [archiveSavedId, setArchiveSavedId] = useState<number | null>(null);
@@ -16434,7 +16435,7 @@ function ReportsTab() {
       fileName = `تقرير_سنوي_${toAr(selectedYear)}.pdf`;
     }
 
-    setPdfLoading(true);
+    setWaLoading(true);
     try {
       const qr = viewMode === "monthly"
         ? await generateReportQrDataUrl("monthly", selectedMonth)
@@ -16470,7 +16471,7 @@ function ReportsTab() {
       console.error("WhatsApp share failed:", err);
       alert("تعذّر مشاركة التقرير، يرجى المحاولة مرة أخرى.");
     } finally {
-      setPdfLoading(false);
+      setWaLoading(false);
     }
   }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal]);
 
@@ -16480,7 +16481,7 @@ function ReportsTab() {
     if (!shareEmail) { alert("يرجى إدخال البريد الإلكتروني في إعدادات المشاركة"); return; }
     let url = pdfUrl;
     if (!url) {
-      setPdfLoading(true);
+      setEmailLoading(true);
       try {
         if (viewMode === "monthly") {
           url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial, breakdown: repBreakdown, monthTitle: activeMonthLabel });
@@ -16488,7 +16489,7 @@ function ReportsTab() {
           url = await generateAndUploadReportPdf("yearly", { year: selectedYear, propertyName: selectedPropertyName, yearly });
         }
         if (url) setPdfUrl(url);
-      } catch (e) { console.error(e); } finally { setPdfLoading(false); }
+      } catch (e) { console.error(e); } finally { setEmailLoading(false); }
     }
     let subject = "";
     let body = "";
@@ -16947,15 +16948,34 @@ function ReportsTab() {
                 <Button variant="outline" size="sm" onClick={() => printYearlyReport(isYearlyHijri ? activeYearLabel : selectedYear, selectedPropertyName, activeYearly as any)} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير السنوي
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleShareWhatsApp} disabled={pdfLoading} className="gap-2">
-                  {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                  {pdfLoading ? "جاري إنشاء PDF…" : "مشاركة PDF واتساب"}
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleShareEmail} disabled={pdfLoading} className="gap-2">
-                  {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                  بريد
-                </Button>
+                <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShareWhatsApp}
+                    disabled={waLoading || emailLoading}
+                    className="gap-2 border-green-600 text-green-700 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-950"
+                  >
+                    {waLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                    {waLoading ? "جاري إنشاء PDF…" : "واتساب PDF"}
+                  </Button>
+                </div>
+                <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShareEmail}
+                    disabled={emailLoading || waLoading}
+                    className="gap-2 border-blue-600 text-blue-700 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950"
+                  >
+                    {emailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                    {emailLoading ? "جاري الإرسال…" : "بريد إلكتروني"}
+                  </Button>
+                </div>
                 <Button
+                  type="button"
                   variant={archiveSavedId ? "default" : "outline"}
                   size="sm"
                   onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } handleSaveToArchive(); }}
@@ -17273,15 +17293,34 @@ function ReportsTab() {
                 <Button variant="outline" size="sm" onClick={() => printMonthlyReport(selectedMonth, selectedPropertyName, report, financial, repBreakdown, activeMonthLabel)} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleShareWhatsApp} disabled={pdfLoading} className="gap-2">
-                  {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                  {pdfLoading ? "جاري إنشاء PDF…" : "مشاركة PDF واتساب"}
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleShareEmail} disabled={pdfLoading} className="gap-2">
-                  {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                  بريد
-                </Button>
+                <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShareWhatsApp}
+                    disabled={waLoading || emailLoading}
+                    className="gap-2 border-green-600 text-green-700 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-950"
+                  >
+                    {waLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                    {waLoading ? "جاري إنشاء PDF…" : "واتساب PDF"}
+                  </Button>
+                </div>
+                <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShareEmail}
+                    disabled={emailLoading || waLoading}
+                    className="gap-2 border-blue-600 text-blue-700 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950"
+                  >
+                    {emailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                    {emailLoading ? "جاري الإرسال…" : "بريد إلكتروني"}
+                  </Button>
+                </div>
                 <Button
+                  type="button"
                   variant={archiveSavedId ? "default" : "outline"}
                   size="sm"
                   onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } handleSaveToArchive(); }}
