@@ -16421,20 +16421,19 @@ function ReportsTab() {
         `✨ منصة تكية لإدارة الشاليهات`;
     } else return;
 
-    // اسم الملف عربي صريح — NFC يضمن تسلسل Unicode موحّد لا يُكسر في واتساب
-    let arabicFileName: string;
+    // اسم الملف: أرقام قياسية فقط لضمان تمريرها سليمة عبر واتساب
+    // شهري هجري  → 1447-10.pdf  |  شهري ميلادي → 2026-07.pdf  |  سنوي → 2026.pdf
+    let shareFileName: string;
     if (viewMode === "monthly") {
       if (isHijri && selectedHijriMonthVal) {
         const [hy, hm] = selectedHijriMonthVal.split("-").map(Number);
-        const monthAr = HIJRI_MONTHS_AR[hm - 1] ?? "شهر";
-        arabicFileName = `تقرير_شهر_${monthAr}_${toAr(hy)}.pdf`.normalize("NFC");
+        shareFileName = `${hy}-${String(hm).padStart(2, "0")}.pdf`;
       } else {
         const [gy, gm] = selectedMonth.split("-").map(Number);
-        const monthAr = new Date(gy, gm - 1, 15).toLocaleDateString("ar-SA", { month: "long" });
-        arabicFileName = `تقرير_شهر_${monthAr}_${toAr(gy)}.pdf`.normalize("NFC");
+        shareFileName = `${gy}-${String(gm).padStart(2, "0")}.pdf`;
       }
     } else {
-      arabicFileName = `تقرير_سنوي_${toAr(selectedYear)}.pdf`.normalize("NFC");
+      shareFileName = `${selectedYear}.pdf`;
     }
 
     setWaLoading(true);
@@ -16450,12 +16449,12 @@ function ReportsTab() {
         htmlContent = buildYearlyReportHtml(selectedYear, selectedPropertyName, yearly!, false, qr);
       }
 
-      const { blob } = await htmlToPdfBlob(htmlContent, arabicFileName);
-      const pdfFile = new File([blob], arabicFileName, { type: "application/pdf", lastModified: Date.now() });
+      const { blob } = await htmlToPdfBlob(htmlContent, shareFileName);
+      const pdfFile = new File([blob], shareFileName, { type: "application/pdf", lastModified: Date.now() });
 
       // ── Web Share API: إرسال ملف PDF حقيقي مباشرة ───────────────────────
       if (typeof navigator.share === "function" && typeof navigator.canShare === "function" && navigator.canShare({ files: [pdfFile] })) {
-        await navigator.share({ files: [pdfFile], title: arabicFileName, text: bodyText });
+        await navigator.share({ files: [pdfFile], title: shareFileName, text: bodyText });
         return;
       }
 
