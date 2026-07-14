@@ -16408,17 +16408,19 @@ function ReportsTab() {
 `📊 *تقرير شهر ${monthLabel}*
 🏡 *المنشأة:* ${selectedPropertyName}
 📅 *الحجوزات:* ${toAr(report.totalBookings)} • *الإشغال:* ${toAr(occupancy)}٪
-💰 *صافي الربح:* ${financial ? `${toAr(formatAmountSigned(financial.netProfit))} ر.س` : "—"}
+💰 *صافي الربح:* ${financial ? toAr(formatAmountSigned(financial.netProfit)) : "—"}
 ✨ *منصة تكية لإدارة الحجوزات*`;
+      console.log("[WA-SHARE] bodyText:", bodyText);
     } else if (viewMode === "yearly" && yearly) {
       titleText = `التقرير السنوي ${toAr(selectedYear)} – ${selectedPropertyName}`;
       bodyText =
 `📊 *التقرير السنوي ${toAr(selectedYear)}*
 🏡 *المنشأة:* ${selectedPropertyName}
-💰 *الإيرادات:* ${toAr(formatAmount(yearly.totals.revenue))} ر.س
-🔴 *المصروفات:* ${toAr(formatAmount(yearly.totals.expenses))} ر.س
-⭐ *صافي الربح:* ${toAr(formatAmountSigned(yearly.totals.netProfit))} ر.س
+💰 *الإيرادات:* ${toAr(formatAmount(yearly.totals.revenue))}
+🔴 *المصروفات:* ${toAr(formatAmount(yearly.totals.expenses))}
+⭐ *صافي الربح:* ${toAr(formatAmountSigned(yearly.totals.netProfit))}
 ✨ *منصة تكية لإدارة الحجوزات*`;
+      console.log("[WA-SHARE] bodyText:", bodyText);
     } else return;
 
     // اسم الملف: أرقام قياسية فقط لضمان تمريرها سليمة عبر واتساب
