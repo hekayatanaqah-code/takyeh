@@ -16407,7 +16407,7 @@ function ReportsTab() {
       bodyText =
 `📊 *تقرير شهر ${monthLabel}*
 🏡 *المنشأة:* ${selectedPropertyName}
-📅 *الحجوزات:* ${toAr(report.totalBookings)} • *الإشغال:* ${toAr(occupancy)}٪
+🗓️ *الحجوزات:* ${toAr(report.totalBookings)} • *الإشغال:* ${toAr(occupancy)}٪
 💰 *صافي الربح:* ${financial ? toAr(formatAmountSigned(financial.netProfit)) : "—"}
 ✨ *منصة تكية لإدارة الحجوزات*`;
       console.log("[WA-SHARE] bodyText:", bodyText);
