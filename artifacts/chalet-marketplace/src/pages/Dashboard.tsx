@@ -16406,19 +16406,19 @@ function ReportsTab() {
         : report.occupancyRate;
       bodyText =
         `📊 تقرير شهر ${monthLabel}\n` +
-        `🏡 العقار: ${selectedPropertyName}\n` +
+        `🏡 المنشأة: ${selectedPropertyName}\n` +
         `📅 الحجوزات: ${toAr(report.totalBookings)} • الإشغال: ${toAr(occupancy)}٪\n` +
-        (financial ? `💰 صافي الربح: ${toAr(formatAmountSigned(financial.netProfit))}\n` : "") +
-        `✨ منصة تكية لإدارة الشاليهات`;
+        (financial ? `💰 صافي الربح: ${toAr(formatAmountSigned(financial.netProfit))} ر.س\n` : "") +
+        `✨ منصة تكية لإدارة الحجوزات`;
     } else if (viewMode === "yearly" && yearly) {
       titleText = `التقرير السنوي ${toAr(selectedYear)} – ${selectedPropertyName}`;
       bodyText =
         `📊 التقرير السنوي ${toAr(selectedYear)}\n` +
-        `🏡 العقار: ${selectedPropertyName}\n` +
-        `💚 الإيرادات: ${toAr(formatAmount(yearly.totals.revenue))}\n` +
-        `🔴 المصروفات: ${toAr(formatAmount(yearly.totals.expenses))}\n` +
-        `⭐ صافي الربح: ${toAr(formatAmountSigned(yearly.totals.netProfit))}\n` +
-        `✨ منصة تكية لإدارة الشاليهات`;
+        `🏡 المنشأة: ${selectedPropertyName}\n` +
+        `💰 الإيرادات: ${toAr(formatAmount(yearly.totals.revenue))} ر.س\n` +
+        `🔴 المصروفات: ${toAr(formatAmount(yearly.totals.expenses))} ر.س\n` +
+        `⭐ صافي الربح: ${toAr(formatAmountSigned(yearly.totals.netProfit))} ر.س\n` +
+        `✨ منصة تكية لإدارة الحجوزات`;
     } else return;
 
     // اسم الملف: أرقام قياسية فقط لضمان تمريرها سليمة عبر واتساب
