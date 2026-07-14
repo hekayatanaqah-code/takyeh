@@ -16301,6 +16301,12 @@ function ReportsTab() {
     return { gregorian, hijri };
   }, [repAllBookings, repAllExpenses, selectedSubmissionId]);
 
+  // ── Gregorian month options filtered to only months that have actual data ───
+  const filteredMonthOptions = useMemo(() => {
+    const nowKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+    return monthOptions.filter(o => o.val === nowKey || monthsWithDataSet.gregorian.has(o.val));
+  }, [monthOptions, monthsWithDataSet]);
+
   // ── Compute monthly booking breakdown for the selected month/property ───
   const repBreakdown = useMemo(() => {
     const getAddonSum = (b: OwnerBooking): number => {
@@ -16611,7 +16617,7 @@ function ReportsTab() {
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {monthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+                  {filteredMonthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -16674,7 +16680,7 @@ function ReportsTab() {
               <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {monthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
+                  {filteredMonthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -16832,17 +16838,15 @@ function ReportsTab() {
                     const isCurrentMonthOption = isCurrentYear && mNum === maxMonth;
                     const monthKey = `${selYearNum}-${String(mNum).padStart(2, "0")}`;
                     const hasData = (isHijri ? monthsWithDataSet.hijri : monthsWithDataSet.gregorian).has(monthKey);
-                    /* الأشهر الماضية بدون حجوزات أو مصروفات فعلية تُعطّل مثل الأشهر المستقبلية */
-                    const isEmptyPast = !isFuture && !isCurrentMonthOption && !hasData;
+                    /* أشهر مستقبلية أو فارغة تماماً → تُخفى كلياً من القائمة */
+                    const hide = isFuture || (!isCurrentMonthOption && !hasData);
                     return {
                       val: String(mNum),
                       label: isHijri ? HIJRI_MONTHS_AR[i] : GREGORIAN_MONTHS_AR[i],
-                      disabled: isFuture || isEmptyPast,
+                      hide,
                     };
-                  }).map(o => (
-                    <SelectItem key={o.val} value={o.val} disabled={o.disabled}
-                      className={o.disabled ? "opacity-30 cursor-not-allowed" : ""}
-                    >
+                  }).filter(o => !o.hide).map(o => (
+                    <SelectItem key={o.val} value={o.val}>
                       {o.label}
                     </SelectItem>
                   ))}
