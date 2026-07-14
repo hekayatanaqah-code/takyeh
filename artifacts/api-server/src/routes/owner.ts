@@ -3915,6 +3915,52 @@ router.get("/service-clients", async (req, res) => {
   );
 });
 
+/* ── Report Years (years that have actual data) ─────────────── */
+router.get("/report-years", async (req, res) => {
+  const allOwnerIds = await getOwnerIds(req);
+  const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
+
+  const bConds: any[] = [inArray(ownerBookingsTable.ownerId, allOwnerIds), isNull(ownerBookingsTable.cancelledAt)];
+  if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
+  const bookingRows = await db
+    .select({ d: ownerBookingsTable.bookingDate })
+    .from(ownerBookingsTable)
+    .where(and(...bConds));
+
+  const eConds: any[] = [inArray(ownerExpensesTable.ownerId, allOwnerIds)];
+  if (submissionId) eConds.push(eq(ownerExpensesTable.submissionId, submissionId));
+  const expenseRows = await db
+    .select({ d: ownerExpensesTable.dateStr })
+    .from(ownerExpensesTable)
+    .where(and(...eConds));
+
+  const allDates = [
+    ...bookingRows.map(r => r.d),
+    ...expenseRows.map(r => r.d),
+  ].filter(Boolean) as string[];
+
+  const gregYears = new Set<number>();
+  const hijriYears = new Set<number>();
+
+  for (const d of allDates) {
+    const gYear = parseInt(d.slice(0, 4), 10);
+    if (!isNaN(gYear)) gregYears.add(gYear);
+    const hym = getHijriYM(d);
+    if (hym.year) hijriYears.add(hym.year);
+  }
+
+  // Always include the current year (Gregorian + Hijri) even if no data yet
+  const nowGreg = new Date().getFullYear();
+  gregYears.add(nowGreg);
+  const nowHijri = getHijriYM(new Date().toISOString().slice(0, 10));
+  if (nowHijri.year) hijriYears.add(nowHijri.year);
+
+  return res.json({
+    gregorianYears: [...gregYears].sort((a, b) => b - a),
+    hijriYears: [...hijriYears].sort((a, b) => b - a),
+  });
+});
+
 /* ── Yearly Summary ─────────────────────────────────────────── */
 
 router.get("/yearly-summary", async (req, res) => {

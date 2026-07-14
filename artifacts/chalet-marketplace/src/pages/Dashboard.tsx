@@ -16367,15 +16367,27 @@ function ReportsTab() {
     return Math.min(100, Math.round((report.totalDays / report.daysInMonth) * 100));
   }, [report]);
 
+  const { data: reportYears } = useQuery<{ gregorianYears: number[]; hijriYears: number[] }>({
+    queryKey: ["owner", "report-years", selectedSubmissionId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedSubmissionId && selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
+      const r = await apiFetch(`/report-years?${params}`);
+      if (!r.ok) throw new Error("failed");
+      return r.json();
+    },
+    staleTime: 60_000,
+  });
+
   const yearOptions = useMemo(() => {
-    const cur = new Date().getFullYear();
-    return [cur, cur - 1, cur - 2].map((y) => ({ val: String(y), label: String(y) }));
-  }, []);
+    const years = reportYears?.gregorianYears ?? [new Date().getFullYear()];
+    return years.map((y) => ({ val: String(y), label: String(y) }));
+  }, [reportYears]);
 
   const hijriYearOptions = useMemo(() => {
-    const cur = parseInt(new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric" }).format(new Date()), 10);
-    return [cur, cur - 1, cur - 2].map((y) => ({ val: String(y), label: `${y} هـ` }));
-  }, []);
+    const years = reportYears?.hijriYears ?? [parseInt(new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric" }).format(new Date()), 10)];
+    return years.map((y) => ({ val: String(y), label: `${y} هـ` }));
+  }, [reportYears]);
 
   const slotLabels: Record<string, { icon: ReactElement; label: string }> = {
     morning:     { icon: <Sunrise className="w-4 h-4" />,  label: "صباحي" },
