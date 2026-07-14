@@ -16408,7 +16408,7 @@ function ReportsTab() {
 `📊 *تقرير شهر ${monthLabel}*
 🏡 *المنشأة:* ${selectedPropertyName}
 🗓️ *الحجوزات:* ${toAr(report.totalBookings)} • *الإشغال:* ${toAr(occupancy)}٪
-💰 *صافي الربح:* ${financial ? toAr(formatAmountSigned(financial.netProfit)) : "—"}
+📈 *صافي الربح:* ${financial ? toAr(formatAmountSigned(financial.netProfit)) : "—"}
 ✨ *منصة تكية لإدارة الحجوزات*`;
       console.log("[WA-SHARE] bodyText:", bodyText);
     } else if (viewMode === "yearly" && yearly) {
