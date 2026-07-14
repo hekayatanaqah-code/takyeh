@@ -16372,7 +16372,7 @@ function ReportsTab() {
     queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedSubmissionId && selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
-      const r = await apiFetch(`/report-years?${params}`);
+      const r = await apiFetch(`/owner/report-years?${params}`);
       if (!r.ok) throw new Error("failed");
       return r.json();
     },
