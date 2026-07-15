@@ -7209,84 +7209,135 @@ function SectionGuidesAdminTab() {
   }
 
   return (
-    <div className="space-y-4 p-1">
-      <div className="flex items-center gap-3">
-        <BookOpen className="w-5 h-5 text-primary shrink-0" />
+    <div className="space-y-5 p-1">
+      {/* Header */}
+      <div className="flex items-start gap-3 pb-1 border-b border-border">
+        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <BookOpen className="w-4.5 h-4.5 text-primary" />
+        </div>
         <div>
-          <h2 className="text-lg font-bold text-foreground">إدارة شروحات الأقسام</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">أضف فيديوهات شرح لكل قسم — يمكن إضافة أكثر من فيديو لنفس القسم. سيظهر للملاك زر ▶ شروحات القسم</p>
+          <h2 className="text-base font-bold text-foreground">إدارة شروحات الأقسام</h2>
+          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+            أضف فيديوهات يوتيوب لكل قسم — يمكن إضافة أكثر من فيديو للقسم الواحد.
+            سيظهر للمالك زر <span className="font-semibold text-primary">شروحات القسم</span> تلقائياً.
+          </p>
         </div>
       </div>
+
+      {/* Sections */}
       <div className="space-y-3">
         {GUIDE_SECTIONS.map(({ key, label }) => {
           const sectionGuides = guides.filter(g => g.sectionKey === key);
           const entry = newEntries[key] ?? { title: "", url: "", saving: false };
+          const isOpen = !!showAdd[key];
+
           return (
-            <div key={key} className="bg-card border border-border rounded-xl overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 bg-muted/30 border-b border-border">
-                <Play className="w-3.5 h-3.5 text-primary shrink-0 fill-primary/40" />
-                <p className="font-bold text-sm text-foreground flex-1">{label}</p>
-                <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">{key}</span>
-                <span className="text-xs text-muted-foreground">{sectionGuides.length > 0 ? `${toAr(sectionGuides.length)} فيديو` : "لا يوجد"}</span>
+            <div key={key} className="rounded-xl border border-border bg-card overflow-hidden">
+
+              {/* ── Section header row ── */}
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm text-foreground leading-none">{label}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1 font-mono">{key}</p>
+                </div>
+                {sectionGuides.length > 0 ? (
+                  <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
+                    {toAr(sectionGuides.length)} فيديو
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground shrink-0">لا يوجد</span>
+                )}
                 <button
                   onClick={() => toggleAdd(key)}
-                  className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                  className={`shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                    isOpen
+                      ? "bg-muted text-muted-foreground hover:bg-muted/80"
+                      : "bg-primary/10 text-primary hover:bg-primary/20"
+                  }`}
                 >
-                  {showAdd[key] ? "إلغاء" : "+ إضافة فيديو"}
+                  {isOpen ? "إلغاء" : "+ إضافة فيديو"}
                 </button>
               </div>
-              <div className="divide-y divide-border">
-                {sectionGuides.map(g => (
-                  <div key={g.id} className="flex items-center gap-3 px-4 py-2.5">
-                    <Play className="w-3 h-3 text-primary fill-primary/30 shrink-0" />
-                    <span className="text-sm text-foreground flex-1 font-medium">{g.title}</span>
-                    <a
-                      href={g.videoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline shrink-0"
-                    >
-                      معاينة ↗
-                    </a>
-                    <button
-                      onClick={() => deleteGuide(g.id)}
-                      disabled={deleting[g.id]}
-                      className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40 transition-colors shrink-0 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30"
-                    >
-                      {deleting[g.id] ? "..." : "حذف"}
-                    </button>
-                  </div>
-                ))}
-                {showAdd[key] && (
-                  <div className="px-4 py-3 bg-muted/20 space-y-2">
-                    <input
-                      type="text"
-                      dir="rtl"
-                      placeholder="عنوان الفيديو (مثال: طريقة إضافة موسم جديد)"
-                      value={entry.title}
-                      onChange={e => setNewEntries(n => ({ ...n, [key]: { ...n[key], title: e.target.value } }))}
-                      className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    />
-                    <div className="flex gap-2">
+
+              {/* ── Existing videos list ── */}
+              {sectionGuides.length > 0 && (
+                <div className="border-t border-border divide-y divide-border/60">
+                  {sectionGuides.map((g, idx) => (
+                    <div key={g.id} className="flex items-center gap-3 px-4 py-2.5 bg-muted/20">
+                      <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
+                        {toAr(idx + 1)}
+                      </span>
+                      <span className="flex-1 text-sm font-medium text-foreground truncate">{g.title}</span>
+                      <a
+                        href={g.videoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 text-[11px] text-primary/80 hover:text-primary hover:underline"
+                      >
+                        معاينة ↗
+                      </a>
+                      <button
+                        onClick={() => deleteGuide(g.id)}
+                        disabled={deleting[g.id]}
+                        className="shrink-0 text-[11px] font-medium text-red-500 hover:text-red-600 disabled:opacity-40 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                      >
+                        {deleting[g.id] ? "..." : "حذف"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ── Add video form ── */}
+              {isOpen && (
+                <div className="border-t border-primary/20 bg-primary/5 px-4 py-4">
+                  <p className="text-xs font-bold text-primary mb-3 flex items-center gap-1.5">
+                    <Play className="w-3 h-3 fill-primary" />
+                    إضافة فيديو شرح جديد
+                  </p>
+                  <div className="space-y-2.5">
+                    {/* Title field */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-foreground mb-1">
+                        عنوان الفيديو الشارح
+                      </label>
+                      <input
+                        type="text"
+                        dir="rtl"
+                        placeholder="مثال: طريقة إضافة شاليه جديد"
+                        value={entry.title}
+                        onChange={e => setNewEntries(n => ({ ...n, [key]: { ...n[key], title: e.target.value } }))}
+                        className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                    </div>
+                    {/* URL field */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-foreground mb-1">
+                        رابط يوتيوب (YouTube URL)
+                      </label>
                       <input
                         type="url"
                         dir="ltr"
                         placeholder="https://www.youtube.com/watch?v=..."
                         value={entry.url}
                         onChange={e => setNewEntries(n => ({ ...n, [key]: { ...n[key], url: e.target.value } }))}
-                        className="flex-1 h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 font-mono text-xs"
                       />
+                    </div>
+                    {/* Save button */}
+                    <div className="flex justify-end pt-1">
                       <button
                         onClick={() => addGuide(key)}
                         disabled={entry.saving || !entry.title.trim() || !entry.url.trim()}
-                        className="shrink-0 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                        className="h-9 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 disabled:opacity-50 transition-colors"
                       >
-                        {entry.saving ? "جاري..." : "حفظ"}
+                        {entry.saving ? "جاري الحفظ..." : "حفظ الفيديو"}
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
             </div>
           );
         })}
