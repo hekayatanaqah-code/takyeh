@@ -1463,6 +1463,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
   }
   return (
     <div className="space-y-4">
+      <SectionGuideButton sectionKey="chalets" />
       {/* Plan limit banner */}
       {planLimits && (
         <div className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border ${
@@ -5315,8 +5316,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-foreground">سجل وتقويم الحجوزات</h2>
+      <div className="flex items-center gap-3 flex-wrap justify-between">
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-bold text-foreground">سجل وتقويم الحجوزات</h2>
+          <SectionGuideButton sectionKey="calendar" />
+        </div>
         <Button onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } setAddOpen(true); }} size="sm" disabled={isReadOnly}>
           <Plus className="w-4 h-4 me-2" />
           إضافة حجز يدوي
@@ -8357,6 +8361,7 @@ function ChaletServicesTab() {
             <h2 className="font-bold text-lg text-foreground">إدارة الخدمات والمرافق</h2>
             <p className="text-muted-foreground text-sm">أضف خدمات ومرافق إضافية لكل شاليه (مدفوعة أو مجانية)</p>
           </div>
+          <SectionGuideButton sectionKey="services" />
         </div>
       </div>
 
@@ -10947,6 +10952,7 @@ function BankLedgerTab() {
             <h3 className="font-bold text-base text-foreground">سجل الحساب البنكي</h3>
             <p className="text-[11px] text-muted-foreground">سجل مفصّل لجميع الحوالات والإيداعات البنكية</p>
           </div>
+          <SectionGuideButton sectionKey="ledger" />
           {!bkLoading && (
             <div className="ms-auto text-xs font-semibold text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg">
               {ledgerEntries.length} معاملة
@@ -12952,6 +12958,7 @@ function TransactionHistoryTab() {
             <h3 className="font-bold text-base text-foreground">سجل المعاملات المالية</h3>
             <p className="text-[11px] text-muted-foreground">سجل مفصّل لجميع الإيرادات والمصروفات</p>
           </div>
+          <SectionGuideButton sectionKey="transactions" />
           {!isLoading && (
             <div className="ms-auto text-xs font-semibold text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg">
               {items.length} معاملة
@@ -18128,7 +18135,10 @@ function ReviewsTab() {
             <Star className="w-5 h-5 text-amber-600" />
           </div>
           <div>
-            <h2 className="font-bold text-lg text-foreground">إرسال رابط التقييم للضيوف</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-bold text-lg text-foreground">إرسال رابط التقييم للضيوف</h2>
+              <SectionGuideButton sectionKey="reviews" />
+            </div>
             <p className="text-muted-foreground text-sm">أنشئ رابطاً خاصاً لكل ضيف ليقيّم تجربته</p>
           </div>
         </div>
@@ -18817,7 +18827,10 @@ function DepositsTab() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-foreground">إدارة التأمينات</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl font-bold text-foreground">إدارة التأمينات</h2>
+            <SectionGuideButton sectionKey="deposits" />
+          </div>
           <p className="text-sm text-muted-foreground mt-0.5">
             جميع الحجوزات التي تحتوي على مبلغ تأمين
           </p>
@@ -19538,7 +19551,10 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h3 className="font-bold text-foreground text-lg">المواسم والأعياد</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-bold text-foreground text-lg">المواسم والأعياد</h3>
+            <SectionGuideButton sectionKey="seasons" />
+          </div>
           <p className="text-sm text-muted-foreground">حدد فترات بأسعار خاصة تُطبَّق تلقائياً على الحجوزات</p>
         </div>
         <Button size="sm" onClick={() => { resetForm(); setAddOpen(true); }} className="gap-1.5 rounded-xl">
@@ -20021,8 +20037,11 @@ function CustomersTab() {
     <div className="flex gap-4 min-h-[520px]" dir="rtl">
       {/* ── Left panel: customer list ── */}
       <div className={`flex flex-col gap-3 ${selected ? "hidden lg:flex lg:w-72 shrink-0" : "w-full"}`}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-foreground">عملائي</h2>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-foreground">عملائي</h2>
+            <SectionGuideButton sectionKey="customers" />
+          </div>
           <span className="text-xs text-muted-foreground">{toAr(mergedCustomers.length)} عميل</span>
         </div>
 
@@ -20850,6 +20869,7 @@ function OwnerMessageSettingsTab() {
                 <Send className="w-5 h-5" />
               </div>
               <h2 className="text-xl font-extrabold text-foreground">إعدادات رسائل واتساب المجانية</h2>
+              <SectionGuideButton sectionKey="messageSettings" />
             </div>
             <p className="text-sm text-muted-foreground">
               عدّل القوالب ثم اخترها من بطاقة الحجز لفتح واتساب برسالة جاهزة عبر رابط wa.me بدون أي خدمة مدفوعة.
@@ -21594,7 +21614,10 @@ export default function Dashboard() {
                 <h1 className="text-2xl font-bold text-foreground">
                   {isImpersonating ? `عرض حساب: ${impersonation.ownerName ?? "المالك"}` : `أهلاً، ${user?.firstName ?? "عزيزنا"} 👋`}
                 </h1>
-                <p className="text-muted-foreground mt-1">لوحة تحكمك الموحدة — الشاليهات والخدمات في مكان واحد</p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <p className="text-muted-foreground">لوحة تحكمك الموحدة — الشاليهات والخدمات في مكان واحد</p>
+                  <SectionGuideButton sectionKey="dashboard" />
+                </div>
               </>
             )}
           </div>
@@ -22877,7 +22900,10 @@ function ContractsArchiveTab() {
           <ScrollText className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-foreground">قائمة العقود الرقمية</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl font-bold text-foreground">قائمة العقود الرقمية</h2>
+            <SectionGuideButton sectionKey="digitalContracts" />
+          </div>
           <p className="text-sm text-muted-foreground">سجل كامل بجميع عقود الإيجار الموقَّعة والمعلَّقة</p>
         </div>
       </div>
