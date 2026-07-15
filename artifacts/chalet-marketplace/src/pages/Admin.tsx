@@ -51,7 +51,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, FileText, Check, Video, Mail, MessageSquare, Send, Inbox, Smartphone, Download, Paperclip } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, FileText, Check, Video, Mail, MessageSquare, Send, Inbox, Smartphone, Download, Paperclip, BookOpen, Play } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -7119,6 +7119,118 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   Section Guides Admin Tab
+   ══════════════════════════════════════════════════════════════ */
+const GUIDE_SECTIONS = [
+  { key: "calendar",      label: "التقويم والحجوزات" },
+  { key: "revenues",      label: "الإيرادات" },
+  { key: "expenses",      label: "المصروفات" },
+  { key: "employees",     label: "الموظفون" },
+  { key: "reports",       label: "التقارير المالية" },
+  { key: "transactions",  label: "سجل المعاملات" },
+  { key: "chalets",       label: "إدارة الشاليهات" },
+  { key: "services",      label: "الخدمات والمرافق" },
+  { key: "customers",     label: "العملاء" },
+  { key: "dashboard",     label: "لوحة الرئيسية" },
+] as const;
+
+function getYouTubeEmbedUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    let id: string | null = null;
+    if (u.hostname === "youtu.be") id = u.pathname.slice(1);
+    else if (u.hostname.includes("youtube.com")) id = u.searchParams.get("v");
+    return id ? `https://www.youtube.com/embed/${id}` : null;
+  } catch { return null; }
+}
+
+function SectionGuidesAdminTab() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data: guides = [] } = useQuery<{ section_key: string; video_url: string | null }[]>({
+    queryKey: ["admin", "section-guides"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/section-guides");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const map: Record<string, string> = {};
+    for (const g of guides) map[g.section_key] = g.video_url ?? "";
+    setUrls(map);
+  }, [guides]);
+
+  async function save(key: string) {
+    setSaving(s => ({ ...s, [key]: true }));
+    try {
+      const r = await apiFetch(`/admin/section-guides/${key}`, {
+        method: "PUT",
+        body: JSON.stringify({ videoUrl: urls[key] || null }),
+      });
+      if (!r.ok) throw new Error();
+      await qc.invalidateQueries({ queryKey: ["admin", "section-guides"] });
+      toast({ title: "تم الحفظ", description: "تم تحديث رابط الفيديو بنجاح" });
+    } catch {
+      toast({ title: "خطأ", description: "تعذّر الحفظ", variant: "destructive" });
+    } finally {
+      setSaving(s => ({ ...s, [key]: false }));
+    }
+  }
+
+  return (
+    <div className="space-y-4 p-1">
+      <div className="flex items-center gap-3">
+        <BookOpen className="w-5 h-5 text-primary shrink-0" />
+        <div>
+          <h2 className="text-lg font-bold text-foreground">إدارة شروحات الأقسام</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">أضف رابط يوتيوب (Unlisted) لكل قسم — سيظهر زر ▶ شرح القسم للملاك تلقائياً عند وجود رابط</p>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {GUIDE_SECTIONS.map(({ key, label }) => {
+          const embedUrl = urls[key] ? getYouTubeEmbedUrl(urls[key]) : null;
+          return (
+            <div key={key} className="bg-card border border-border rounded-xl p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Play className="w-3.5 h-3.5 text-primary shrink-0 fill-primary/40" />
+                <p className="font-semibold text-sm text-foreground flex-1">{label}</p>
+                <span className="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">{key}</span>
+                {embedUrl && (
+                  <a href={urls[key]} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                    معاينة ↗
+                  </a>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  dir="ltr"
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  value={urls[key] ?? ""}
+                  onChange={e => setUrls(u => ({ ...u, [key]: e.target.value }))}
+                  className="flex-1 h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+                <button
+                  onClick={() => save(key)}
+                  disabled={saving[key]}
+                  className="shrink-0 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  {saving[key] ? "جاري..." : "حفظ"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
    Contact Inquiries Tab
    ══════════════════════════════════════════════════════════════ */
 function ContactInquiriesTab() {
@@ -7462,6 +7574,7 @@ const ALL_TABS = [
   { id: "siteSettings",            label: "إعدادات الموقع",        icon: Settings },
   { id: "communicationSettings",   label: "إعدادات التواصل",       icon: Mail },
   { id: "termsManagement",         label: "شروط الاستخدام",        icon: FileCheck },
+  { id: "sectionGuides",           label: "شروحات الأقسام",        icon: BookOpen },
   { id: "adminStaff",              label: "موظفو الإدارة",         icon: Shield },
   { id: "directAdd",               label: "إضافة شاليه / مالك",   icon: Plus },
 ] as const;
@@ -7479,7 +7592,7 @@ const ADMIN_NAV_GROUPS: Array<{
   { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "adminStaff", "directAdd"] },
   { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "services", "reviews", "ownerInbox", "waSubscribers"] },
   { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
-  { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "communicationSettings", "contactInquiries", "termsManagement"] },
+  { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "communicationSettings", "contactInquiries", "termsManagement", "sectionGuides"] },
 ];
 
 /* ══════════════════════════════════════════════════════════════
@@ -8681,6 +8794,7 @@ export default function Admin() {
         {activeTab === "siteSettings"          && <SettingsTab />}
         {activeTab === "communicationSettings" && <CommunicationSettingsTab />}
         {activeTab === "termsManagement"     && <TermsManagementTab />}
+        {activeTab === "sectionGuides"       && <SectionGuidesAdminTab />}
         {activeTab === "adminStaff"          && <AdminStaffTab isSuperAdmin={isSuperAdmin} currentUserName={displayName ?? ""} />}
         {activeTab === "directAdd"           && <DirectAddTab />}
       </main>

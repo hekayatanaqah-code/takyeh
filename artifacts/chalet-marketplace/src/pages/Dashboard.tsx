@@ -1293,108 +1293,6 @@ function SectionGuideButton({ sectionKey }: { sectionKey: string }) {
   );
 }
 
-const GUIDE_SECTIONS = [
-  { key: "calendar",      label: "التقويم والحجوزات" },
-  { key: "revenues",      label: "الإيرادات" },
-  { key: "expenses",      label: "المصروفات" },
-  { key: "employees",     label: "الموظفون" },
-  { key: "reports",       label: "التقارير المالية" },
-  { key: "transactions",  label: "سجل المعاملات" },
-  { key: "chalets",       label: "إدارة الشاليهات" },
-  { key: "services",      label: "الخدمات والمرافق" },
-  { key: "customers",     label: "العملاء" },
-  { key: "dashboard",     label: "لوحة الرئيسية" },
-] as const;
-
-function AdminGuidesTab() {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const { data: guides = [] } = useQuery<{ section_key: string; video_url: string | null }[]>({
-    queryKey: ["section-guides"],
-    queryFn: async () => {
-      const r = await apiFetch("/admin/section-guides");
-      if (!r.ok) return [];
-      return r.json();
-    },
-  });
-  const [urls, setUrls] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<Record<string, boolean>>({});
-
-  useEffect(() => {
-    const map: Record<string, string> = {};
-    for (const g of guides) map[g.section_key] = g.video_url ?? "";
-    setUrls(map);
-  }, [guides]);
-
-  async function save(key: string) {
-    setSaving(s => ({ ...s, [key]: true }));
-    try {
-      const r = await apiFetch(`/admin/section-guides/${key}`, {
-        method: "PUT",
-        body: JSON.stringify({ videoUrl: urls[key] || null }),
-      });
-      if (!r.ok) throw new Error();
-      await qc.invalidateQueries({ queryKey: ["section-guides"] });
-      toast({ title: "تم الحفظ", description: "تم تحديث رابط الفيديو بنجاح" });
-    } catch {
-      toast({ title: "خطأ", description: "تعذّر الحفظ", variant: "destructive" });
-    } finally {
-      setSaving(s => ({ ...s, [key]: false }));
-    }
-  }
-
-  const preview = (key: string) => {
-    const url = urls[key];
-    if (!url) return null;
-    return getYouTubeEmbedUrl(url);
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <BookOpen className="w-5 h-5 text-primary shrink-0" />
-        <div>
-          <h2 className="text-lg font-bold text-foreground">إدارة شروحات الأقسام</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">أضف رابط يوتيوب (Unlisted) لكل قسم — سيظهر زر ▶ شرح القسم للملاك تلقائياً</p>
-        </div>
-      </div>
-      <div className="space-y-3">
-        {GUIDE_SECTIONS.map(({ key, label }) => (
-          <div key={key} className="bg-card border border-border rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <Play className="w-3.5 h-3.5 text-primary shrink-0 fill-primary/40" />
-              <p className="font-semibold text-sm text-foreground flex-1">{label}</p>
-              <span className="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">{key}</span>
-              {preview(key) && (
-                <a
-                  href={urls[key]}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-primary hover:underline"
-                >
-                  معاينة ↗
-                </a>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="url"
-                dir="ltr"
-                placeholder="https://www.youtube.com/watch?v=..."
-                value={urls[key] ?? ""}
-                onChange={e => setUrls(u => ({ ...u, [key]: e.target.value }))}
-                className="flex-1 h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-              <Button size="sm" onClick={() => save(key)} disabled={saving[key]} className="shrink-0">
-                {saving[key] ? "جاري..." : "حفظ"}
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 /* ════════════════════════════════════════════════════════════════ */
 
 function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any[] | undefined; isLoading: boolean; ownerChalets: any[] }) {
@@ -21129,7 +21027,7 @@ function fromEasternArabic(s: string): string {
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
-  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history" | "ledger" | "guides">("revenue");
+  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history" | "ledger">("revenue");
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
@@ -21936,7 +21834,6 @@ export default function Dashboard() {
             { id: "reports",       label: "التقارير المالية",      icon: <BarChart2 className="w-4 h-4" />,    color: "text-indigo-600" },
             { id: "support",       label: "مركز الدعم",            icon: <MessageSquare className="w-4 h-4" />, color: "text-primary" },
             { id: "history",       label: "سجل المعاملات المالية", icon: <ListChecks className="w-4 h-4" />,    color: "text-slate-600" },
-            { id: "guides",        label: "شروحات الأقسام",        icon: <BookOpen className="w-4 h-4" />,      color: "text-primary" },
           ] as const;
           return (
             <motion.div key="admin-finance-mode" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
@@ -22065,7 +21962,6 @@ export default function Dashboard() {
                 {adminFinanceTab === "reports"       && <ReportsTab />}
                 {adminFinanceTab === "support"       && <OwnerSupportTab />}
                 {adminFinanceTab === "history"       && <TransactionHistoryTab />}
-                {adminFinanceTab === "guides"        && <AdminGuidesTab />}
               </div>
               </AdminFinanceCtx.Provider>
             </motion.div>
