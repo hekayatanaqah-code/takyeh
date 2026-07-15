@@ -7123,16 +7123,22 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
    Section Guides Admin Tab
    ══════════════════════════════════════════════════════════════ */
 const GUIDE_SECTIONS = [
-  { key: "calendar",      label: "التقويم والحجوزات" },
-  { key: "revenues",      label: "الإيرادات" },
-  { key: "expenses",      label: "المصروفات" },
-  { key: "employees",     label: "الموظفون" },
-  { key: "reports",       label: "التقارير المالية" },
-  { key: "transactions",  label: "سجل المعاملات" },
-  { key: "chalets",       label: "إدارة الشاليهات" },
-  { key: "services",      label: "الخدمات والمرافق" },
-  { key: "customers",     label: "العملاء" },
-  { key: "dashboard",     label: "لوحة الرئيسية" },
+  { key: "dashboard",        label: "لوحة الرئيسية" },
+  { key: "calendar",         label: "التقويم والحجوزات" },
+  { key: "revenues",         label: "الإيرادات" },
+  { key: "expenses",         label: "المصروفات" },
+  { key: "employees",        label: "الموظفون" },
+  { key: "reports",          label: "التقارير المالية" },
+  { key: "transactions",     label: "سجل المعاملات المالية" },
+  { key: "ledger",           label: "سجل الحساب البنكي" },
+  { key: "chalets",          label: "إدارة الشاليهات" },
+  { key: "services",         label: "الخدمات والمرافق" },
+  { key: "customers",        label: "العملاء" },
+  { key: "seasons",          label: "المواسم والأعياد" },
+  { key: "reviews",          label: "التقييمات" },
+  { key: "deposits",         label: "إدارة التأمينات" },
+  { key: "digitalContracts", label: "العقود الرقمية" },
+  { key: "messageSettings",  label: "إعدادات الرسائل الآلية" },
 ] as const;
 
 function getYouTubeEmbedUrl(url: string): string | null {
@@ -7145,10 +7151,13 @@ function getYouTubeEmbedUrl(url: string): string | null {
   } catch { return null; }
 }
 
+type GuideRow = { id: number; sectionKey: string; title: string; videoUrl: string };
+type NewEntry = { title: string; url: string; saving: boolean };
+
 function SectionGuidesAdminTab() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { data: guides = [] } = useQuery<{ section_key: string; video_url: string | null }[]>({
+  const { data: guides = [] } = useQuery<GuideRow[]>({
     queryKey: ["admin", "section-guides"],
     queryFn: async () => {
       const r = await apiFetch("/admin/section-guides");
@@ -7156,29 +7165,46 @@ function SectionGuidesAdminTab() {
       return r.json();
     },
   });
-  const [urls, setUrls] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [newEntries, setNewEntries] = useState<Record<string, NewEntry>>({});
+  const [showAdd, setShowAdd]       = useState<Record<string, boolean>>({});
+  const [deleting, setDeleting]     = useState<Record<number, boolean>>({});
 
-  useEffect(() => {
-    const map: Record<string, string> = {};
-    for (const g of guides) map[g.section_key] = g.video_url ?? "";
-    setUrls(map);
-  }, [guides]);
+  function toggleAdd(key: string) {
+    setShowAdd(s => ({ ...s, [key]: !s[key] }));
+    if (!newEntries[key]) setNewEntries(e => ({ ...e, [key]: { title: "", url: "", saving: false } }));
+  }
 
-  async function save(key: string) {
-    setSaving(s => ({ ...s, [key]: true }));
+  async function addGuide(key: string) {
+    const e = newEntries[key];
+    if (!e?.title.trim() || !e?.url.trim()) return;
+    setNewEntries(n => ({ ...n, [key]: { ...n[key], saving: true } }));
     try {
-      const r = await apiFetch(`/admin/section-guides/${key}`, {
-        method: "PUT",
-        body: JSON.stringify({ videoUrl: urls[key] || null }),
+      const r = await apiFetch("/admin/section-guides", {
+        method: "POST",
+        body: JSON.stringify({ sectionKey: key, title: e.title.trim(), videoUrl: e.url.trim() }),
       });
       if (!r.ok) throw new Error();
       await qc.invalidateQueries({ queryKey: ["admin", "section-guides"] });
-      toast({ title: "تم الحفظ", description: "تم تحديث رابط الفيديو بنجاح" });
+      setNewEntries(n => ({ ...n, [key]: { title: "", url: "", saving: false } }));
+      setShowAdd(s => ({ ...s, [key]: false }));
+      toast({ title: "تمت الإضافة ✓", description: `تمت إضافة "${e.title.trim()}" بنجاح` });
     } catch {
       toast({ title: "خطأ", description: "تعذّر الحفظ", variant: "destructive" });
+      setNewEntries(n => ({ ...n, [key]: { ...n[key], saving: false } }));
+    }
+  }
+
+  async function deleteGuide(id: number) {
+    setDeleting(d => ({ ...d, [id]: true }));
+    try {
+      const r = await apiFetch(`/admin/section-guides/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+      await qc.invalidateQueries({ queryKey: ["admin", "section-guides"] });
+      toast({ title: "تم الحذف" });
+    } catch {
+      toast({ title: "خطأ", description: "تعذّر الحذف", variant: "destructive" });
     } finally {
-      setSaving(s => ({ ...s, [key]: false }));
+      setDeleting(d => ({ ...d, [id]: false }));
     }
   }
 
@@ -7188,40 +7214,78 @@ function SectionGuidesAdminTab() {
         <BookOpen className="w-5 h-5 text-primary shrink-0" />
         <div>
           <h2 className="text-lg font-bold text-foreground">إدارة شروحات الأقسام</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">أضف رابط يوتيوب (Unlisted) لكل قسم — سيظهر زر ▶ شرح القسم للملاك تلقائياً عند وجود رابط</p>
+          <p className="text-xs text-muted-foreground mt-0.5">أضف فيديوهات شرح لكل قسم — يمكن إضافة أكثر من فيديو لنفس القسم. سيظهر للملاك زر ▶ شروحات القسم</p>
         </div>
       </div>
       <div className="space-y-3">
         {GUIDE_SECTIONS.map(({ key, label }) => {
-          const embedUrl = urls[key] ? getYouTubeEmbedUrl(urls[key]) : null;
+          const sectionGuides = guides.filter(g => g.sectionKey === key);
+          const entry = newEntries[key] ?? { title: "", url: "", saving: false };
           return (
-            <div key={key} className="bg-card border border-border rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-2">
+            <div key={key} className="bg-card border border-border rounded-xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 bg-muted/30 border-b border-border">
                 <Play className="w-3.5 h-3.5 text-primary shrink-0 fill-primary/40" />
-                <p className="font-semibold text-sm text-foreground flex-1">{label}</p>
-                <span className="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">{key}</span>
-                {embedUrl && (
-                  <a href={urls[key]} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
-                    معاينة ↗
-                  </a>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="url"
-                  dir="ltr"
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  value={urls[key] ?? ""}
-                  onChange={e => setUrls(u => ({ ...u, [key]: e.target.value }))}
-                  className="flex-1 h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
+                <p className="font-bold text-sm text-foreground flex-1">{label}</p>
+                <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">{key}</span>
+                <span className="text-xs text-muted-foreground">{sectionGuides.length > 0 ? `${toAr(sectionGuides.length)} فيديو` : "لا يوجد"}</span>
                 <button
-                  onClick={() => save(key)}
-                  disabled={saving[key]}
-                  className="shrink-0 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  onClick={() => toggleAdd(key)}
+                  className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
                 >
-                  {saving[key] ? "جاري..." : "حفظ"}
+                  {showAdd[key] ? "إلغاء" : "+ إضافة فيديو"}
                 </button>
+              </div>
+              <div className="divide-y divide-border">
+                {sectionGuides.map(g => (
+                  <div key={g.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <Play className="w-3 h-3 text-primary fill-primary/30 shrink-0" />
+                    <span className="text-sm text-foreground flex-1 font-medium">{g.title}</span>
+                    <a
+                      href={g.videoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline shrink-0"
+                    >
+                      معاينة ↗
+                    </a>
+                    <button
+                      onClick={() => deleteGuide(g.id)}
+                      disabled={deleting[g.id]}
+                      className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40 transition-colors shrink-0 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30"
+                    >
+                      {deleting[g.id] ? "..." : "حذف"}
+                    </button>
+                  </div>
+                ))}
+                {showAdd[key] && (
+                  <div className="px-4 py-3 bg-muted/20 space-y-2">
+                    <input
+                      type="text"
+                      dir="rtl"
+                      placeholder="عنوان الفيديو (مثال: طريقة إضافة موسم جديد)"
+                      value={entry.title}
+                      onChange={e => setNewEntries(n => ({ ...n, [key]: { ...n[key], title: e.target.value } }))}
+                      className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        dir="ltr"
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        value={entry.url}
+                        onChange={e => setNewEntries(n => ({ ...n, [key]: { ...n[key], url: e.target.value } }))}
+                        className="flex-1 h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <button
+                        onClick={() => addGuide(key)}
+                        disabled={entry.saving || !entry.title.trim() || !entry.url.trim()}
+                        className="shrink-0 h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                      >
+                        {entry.saving ? "جاري..." : "حفظ"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           );

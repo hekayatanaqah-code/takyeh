@@ -767,7 +767,9 @@ export type BookingPayment = typeof bookingPaymentsTable.$inferSelect;
 
 /* ── Section Guides (Video Tutorials per dashboard section) ─── */
 export const sectionGuidesTable = pgTable("section_guides", {
-  sectionKey: varchar("section_key", { length: 100 }).primaryKey(),
-  videoUrl:   text("video_url"),
+  id:         serial("id").primaryKey(),
+  sectionKey: varchar("section_key", { length: 100 }).notNull(),
+  title:      varchar("title", { length: 255 }).notNull(),
+  videoUrl:   varchar("video_url", { length: 500 }).notNull(),
 });
 export type SectionGuide = typeof sectionGuidesTable.$inferSelect;

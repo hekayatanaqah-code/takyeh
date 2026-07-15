@@ -5104,7 +5104,7 @@ router.post("/mark-cash-deposited", async (req, res) => {
 /* ── Section Guides — read-only for all authenticated users ── */
 router.get("/section-guides", async (_req, res) => {
   try {
-    const rows = await db.execute(sql`SELECT section_key, video_url FROM section_guides`);
+    const rows = await db.execute(sql`SELECT id, section_key, title, video_url FROM section_guides ORDER BY section_key, id`);
     return res.json((rows as any).rows ?? []);
   } catch (err) {
     console.error("[GET /owner/section-guides]", err);

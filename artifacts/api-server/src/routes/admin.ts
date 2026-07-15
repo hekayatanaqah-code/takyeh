@@ -1952,7 +1952,7 @@ export async function runSubscriptionExpiryJob() {
 /* ── Section Guides ─────────────────────────────────────────── */
 router.get("/section-guides", async (_req, res) => {
   try {
-    const rows = await db.select().from(sectionGuidesTable);
+    const rows = await db.select().from(sectionGuidesTable).orderBy(sectionGuidesTable.sectionKey, sectionGuidesTable.id);
     return res.json(rows);
   } catch (err) {
     console.error("[GET /admin/section-guides]", err);
@@ -1960,16 +1960,41 @@ router.get("/section-guides", async (_req, res) => {
   }
 });
 
-router.put("/section-guides/:key", async (req, res) => {
+router.post("/section-guides", async (req, res) => {
   try {
-    const { key } = req.params;
-    const { videoUrl } = req.body as { videoUrl?: string | null };
-    await db.insert(sectionGuidesTable)
-      .values({ sectionKey: key, videoUrl: videoUrl ?? null })
-      .onConflictDoUpdate({ target: sectionGuidesTable.sectionKey, set: { videoUrl: videoUrl ?? null } });
-    return res.json({ ok: true });
+    const { sectionKey, title, videoUrl } = req.body as { sectionKey: string; title: string; videoUrl: string };
+    if (!sectionKey || !title || !videoUrl) return res.status(400).json({ error: "بيانات ناقصة" });
+    const [row] = await db.insert(sectionGuidesTable).values({ sectionKey, title, videoUrl }).returning();
+    return res.json(row);
+  } catch (err) {
+    console.error("[POST /admin/section-guides]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+router.put("/section-guides/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { title, videoUrl } = req.body as { title?: string; videoUrl?: string };
+    const [row] = await db.update(sectionGuidesTable)
+      .set({ ...(title !== undefined && { title }), ...(videoUrl !== undefined && { videoUrl }) })
+      .where(eq(sectionGuidesTable.id, id))
+      .returning();
+    if (!row) return res.status(404).json({ error: "غير موجود" });
+    return res.json(row);
   } catch (err) {
     console.error("[PUT /admin/section-guides]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+router.delete("/section-guides/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    await db.delete(sectionGuidesTable).where(eq(sectionGuidesTable.id, id));
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[DELETE /admin/section-guides]", err);
     return res.status(500).json({ error: "حدث خطأ" });
   }
 });
