@@ -26,6 +26,7 @@ import {
   ownerSubscriptionsTable,
   contactInquiriesTable,
   ownerTempSessionsTable,
+  sectionGuidesTable,
 } from "@workspace/db/schema";
 import { eq, inArray, and, gt, lt, ne, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
@@ -1948,6 +1949,31 @@ export async function runSubscriptionExpiryJob() {
 }
 
 /* ── GET /admin/wa-subscribers — WhatsApp news subscribers list ── */
+/* ── Section Guides ─────────────────────────────────────────── */
+router.get("/section-guides", async (_req, res) => {
+  try {
+    const rows = await db.select().from(sectionGuidesTable);
+    return res.json(rows);
+  } catch (err) {
+    console.error("[GET /admin/section-guides]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+router.put("/section-guides/:key", async (req, res) => {
+  try {
+    const { key } = req.params;
+    const { videoUrl } = req.body as { videoUrl?: string | null };
+    await db.insert(sectionGuidesTable)
+      .values({ sectionKey: key, videoUrl: videoUrl ?? null })
+      .onConflictDoUpdate({ target: sectionGuidesTable.sectionKey, set: { videoUrl: videoUrl ?? null } });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[PUT /admin/section-guides]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
 router.get("/wa-subscribers", async (_req, res) => {
   try {
     const result = await db.execute(sql`

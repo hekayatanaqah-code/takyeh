@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean, jsonb, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -764,3 +764,10 @@ export const bookingPaymentsTable = pgTable("booking_payments", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 export type BookingPayment = typeof bookingPaymentsTable.$inferSelect;
+
+/* ── Section Guides (Video Tutorials per dashboard section) ─── */
+export const sectionGuidesTable = pgTable("section_guides", {
+  sectionKey: varchar("section_key", { length: 100 }).primaryKey(),
+  videoUrl:   text("video_url"),
+});
+export type SectionGuide = typeof sectionGuidesTable.$inferSelect;

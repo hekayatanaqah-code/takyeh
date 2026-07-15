@@ -5101,4 +5101,15 @@ router.post("/mark-cash-deposited", async (req, res) => {
   return res.json({ ok: true, log });
 });
 
+/* ── Section Guides — read-only for all authenticated users ── */
+router.get("/section-guides", async (_req, res) => {
+  try {
+    const rows = await db.execute(sql`SELECT section_key, video_url FROM section_guides`);
+    return res.json((rows as any).rows ?? []);
+  } catch (err) {
+    console.error("[GET /owner/section-guides]", err);
+    return res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
 export default router;

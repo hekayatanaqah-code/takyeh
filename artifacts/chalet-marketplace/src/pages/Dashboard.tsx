@@ -39,7 +39,7 @@ import {
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
   X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays, PieChart, Save, ScrollText, Check, Printer, ArrowRight,
-  Paperclip, Upload,
+  Paperclip, Upload, Play,
 } from "lucide-react";
 import { Link } from "wouter";
 import takyahLogoSrc from "@assets/image_1783707669452.png";
@@ -1228,6 +1228,174 @@ function PauseChaletDialog({
     </DialogContent>
   );
 }
+
+/* ══ Section Guide helpers ════════════════════════════════════════ */
+function getYouTubeEmbedUrl(url: string): string | null {
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([A-Za-z0-9_-]{11})/);
+  if (!m) return null;
+  return `https://www.youtube.com/embed/${m[1]}?rel=0&modestbranding=1`;
+}
+
+function SectionGuideButton({ sectionKey }: { sectionKey: string }) {
+  const [open, setOpen] = useState(false);
+  const { data: guides = [] } = useQuery<{ section_key: string; video_url: string | null }[]>({
+    queryKey: ["section-guides"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/section-guides");
+      if (!r.ok) return [];
+      return r.json();
+    },
+    staleTime: 5 * 60_000,
+  });
+  const guide = guides.find(g => g.section_key === sectionKey);
+  if (!guide?.video_url) return null;
+  const embedUrl = getYouTubeEmbedUrl(guide.video_url);
+  if (!embedUrl) return null;
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold transition-colors"
+      >
+        <Play className="w-3 h-3 fill-primary" />
+        شرح القسم
+      </button>
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="bg-background rounded-2xl shadow-2xl overflow-hidden w-full max-w-3xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+              <h3 className="font-bold text-foreground text-base flex items-center gap-2">
+                <Play className="w-4 h-4 text-primary fill-primary" />
+                شرح القسم
+              </h3>
+              <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-lg hover:bg-muted">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
+              <iframe
+                src={embedUrl}
+                className="absolute inset-0 w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+const GUIDE_SECTIONS = [
+  { key: "calendar",      label: "التقويم والحجوزات" },
+  { key: "revenues",      label: "الإيرادات" },
+  { key: "expenses",      label: "المصروفات" },
+  { key: "employees",     label: "الموظفون" },
+  { key: "reports",       label: "التقارير المالية" },
+  { key: "transactions",  label: "سجل المعاملات" },
+  { key: "chalets",       label: "إدارة الشاليهات" },
+  { key: "services",      label: "الخدمات والمرافق" },
+  { key: "customers",     label: "العملاء" },
+  { key: "dashboard",     label: "لوحة الرئيسية" },
+] as const;
+
+function AdminGuidesTab() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data: guides = [] } = useQuery<{ section_key: string; video_url: string | null }[]>({
+    queryKey: ["section-guides"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/section-guides");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const map: Record<string, string> = {};
+    for (const g of guides) map[g.section_key] = g.video_url ?? "";
+    setUrls(map);
+  }, [guides]);
+
+  async function save(key: string) {
+    setSaving(s => ({ ...s, [key]: true }));
+    try {
+      const r = await apiFetch(`/admin/section-guides/${key}`, {
+        method: "PUT",
+        body: JSON.stringify({ videoUrl: urls[key] || null }),
+      });
+      if (!r.ok) throw new Error();
+      await qc.invalidateQueries({ queryKey: ["section-guides"] });
+      toast({ title: "تم الحفظ", description: "تم تحديث رابط الفيديو بنجاح" });
+    } catch {
+      toast({ title: "خطأ", description: "تعذّر الحفظ", variant: "destructive" });
+    } finally {
+      setSaving(s => ({ ...s, [key]: false }));
+    }
+  }
+
+  const preview = (key: string) => {
+    const url = urls[key];
+    if (!url) return null;
+    return getYouTubeEmbedUrl(url);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <BookOpen className="w-5 h-5 text-primary shrink-0" />
+        <div>
+          <h2 className="text-lg font-bold text-foreground">إدارة شروحات الأقسام</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">أضف رابط يوتيوب (Unlisted) لكل قسم — سيظهر زر ▶ شرح القسم للملاك تلقائياً</p>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {GUIDE_SECTIONS.map(({ key, label }) => (
+          <div key={key} className="bg-card border border-border rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Play className="w-3.5 h-3.5 text-primary shrink-0 fill-primary/40" />
+              <p className="font-semibold text-sm text-foreground flex-1">{label}</p>
+              <span className="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded">{key}</span>
+              {preview(key) && (
+                <a
+                  href={urls[key]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-primary hover:underline"
+                >
+                  معاينة ↗
+                </a>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                dir="ltr"
+                placeholder="https://www.youtube.com/watch?v=..."
+                value={urls[key] ?? ""}
+                onChange={e => setUrls(u => ({ ...u, [key]: e.target.value }))}
+                className="flex-1 h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+              <Button size="sm" onClick={() => save(key)} disabled={saving[key]} className="shrink-0">
+                {saving[key] ? "جاري..." : "حفظ"}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+/* ════════════════════════════════════════════════════════════════ */
 
 function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any[] | undefined; isLoading: boolean; ownerChalets: any[] }) {
   const qc = useQueryClient();
@@ -11829,6 +11997,7 @@ function RevenueTab() {
         <h2 className="text-lg font-bold text-foreground">
           {unit.type === "chalet" ? `إيرادات: ${(unit as any).name}` : "الإيرادات"}
         </h2>
+        <SectionGuideButton sectionKey="revenues" />
         <div className="ms-auto flex items-center gap-2 flex-wrap justify-end">
           {/* Revenue sub-tab pills */}
           <div className="flex rounded-lg border border-border overflow-hidden text-xs">
@@ -13275,6 +13444,7 @@ function ExpensesTab() {
 
   return (
     <div className="space-y-5">
+      <SectionGuideButton sectionKey="expenses" />
       {/* Quick Entry Form — only for individual unit, not master view */}
       {unit.type !== "all" && (
       <div className="bg-card border border-border rounded-2xl p-5">
@@ -14408,6 +14578,7 @@ function StaffTab() {
 
   return (
     <div className="space-y-5">
+      <SectionGuideButton sectionKey="employees" />
       {/* ── Add Staff Button ── */}
       <div className="flex justify-start">
         <Button onClick={() => setShowAddStaff(true)} className="h-10 px-5 font-bold">
@@ -16571,6 +16742,7 @@ function ReportsTab() {
   return (
     <div className="space-y-6">
 
+      <SectionGuideButton sectionKey="reports" />
       {/* ── View Mode Toggle ── */}
       <div className="flex items-center gap-2 bg-muted/50 rounded-xl p-1 w-fit">
         {(["monthly", "yearly"] as const).map((m) => (
@@ -20957,7 +21129,7 @@ function fromEasternArabic(s: string): string {
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
-  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history" | "ledger">("revenue");
+  const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history" | "ledger" | "guides">("revenue");
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
@@ -21764,6 +21936,7 @@ export default function Dashboard() {
             { id: "reports",       label: "التقارير المالية",      icon: <BarChart2 className="w-4 h-4" />,    color: "text-indigo-600" },
             { id: "support",       label: "مركز الدعم",            icon: <MessageSquare className="w-4 h-4" />, color: "text-primary" },
             { id: "history",       label: "سجل المعاملات المالية", icon: <ListChecks className="w-4 h-4" />,    color: "text-slate-600" },
+            { id: "guides",        label: "شروحات الأقسام",        icon: <BookOpen className="w-4 h-4" />,      color: "text-primary" },
           ] as const;
           return (
             <motion.div key="admin-finance-mode" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
@@ -21892,6 +22065,7 @@ export default function Dashboard() {
                 {adminFinanceTab === "reports"       && <ReportsTab />}
                 {adminFinanceTab === "support"       && <OwnerSupportTab />}
                 {adminFinanceTab === "history"       && <TransactionHistoryTab />}
+                {adminFinanceTab === "guides"        && <AdminGuidesTab />}
               </div>
               </AdminFinanceCtx.Provider>
             </motion.div>
