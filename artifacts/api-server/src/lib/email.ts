@@ -173,6 +173,8 @@ function fmtSigned(amount: number): string {
   return `(${fmtAmt(Math.abs(rounded))})`;
 }
 
+type ReportEmailResult = { ok: boolean; previewUrl?: string; isTest?: boolean; error?: string };
+
 export async function sendReportEmail(opts: {
   to: string;
   chaletName: string;
@@ -190,11 +192,26 @@ export async function sendReportEmail(opts: {
   financial?: { totalRevenue: number; totalExpenses: number; netProfit: number } | null;
   year?: string;
   yearlyTotals?: { revenue: number; expenses: number; netProfit: number } | null;
-}): Promise<boolean> {
-  const transport = getTransport();
-  if (!transport) {
-    console.log(`[Report Email] SMTP not configured — skipping send to ${opts.to}`);
-    return false;
+}): Promise<ReportEmailResult> {
+  let isTest = false;
+  let activeTransport = getTransport();
+
+  if (!activeTransport) {
+    /* ── Ethereal fallback (test email preview) ── */
+    try {
+      const testAccount = await nodemailer.createTestAccount();
+      activeTransport = nodemailer.createTransport({
+        host: "smtp.ethereal.email",
+        port: 587,
+        secure: false,
+        auth: { user: testAccount.user, pass: testAccount.pass },
+      });
+      isTest = true;
+      console.log(`[Report Email] Using Ethereal test account: ${testAccount.user}`);
+    } catch (etherealErr) {
+      console.error("[Report Email] Failed to create Ethereal test account:", etherealErr);
+      return { ok: false, error: "لم يتم تعيين إعدادات SMTP وتعذّر إنشاء حساب تجريبي بديل." };
+    }
   }
 
   const { to, chaletName, monthLabel, pdfUrl, viewMode, report, financial, year, yearlyTotals } = opts;
@@ -318,18 +335,24 @@ export async function sendReportEmail(opts: {
     ? [{ filename: `تقرير_${safeName}_${monthLabel ?? year}.pdf`, content: pdfBuffer, contentType: "application/pdf" }]
     : [];
 
+  const fromAddr = isTest
+    ? `تكية (تجريبي) <no-reply@takiah.app>`
+    : `تكية <${process.env.SMTP_USER}>`;
+
   try {
-    await transport.sendMail({
-      from: `تكية <${process.env.SMTP_USER}>`,
+    const info = await activeTransport.sendMail({
+      from: fromAddr,
       to: to.trim(),
       subject,
       html,
       attachments,
     });
-    return true;
+    const previewUrl = isTest ? (nodemailer.getTestMessageUrl(info) || undefined) : undefined;
+    if (previewUrl) console.log(`[Report Email] Ethereal preview: ${previewUrl}`);
+    return { ok: true, previewUrl: previewUrl as string | undefined, isTest };
   } catch (err) {
     console.error(`[Report Email] sendMail failed:`, err);
-    return false;
+    return { ok: false, error: "فشل إرسال البريد عبر خادم SMTP." };
   }
 }
 

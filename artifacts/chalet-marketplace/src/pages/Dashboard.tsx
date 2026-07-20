@@ -16654,9 +16654,20 @@ function ReportsTab() {
       const r = await apiFetch("/owner/reports/send-email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await r.json().catch(() => ({}));
       if (r.ok && data?.ok) {
-        alert(`✅ تم إرسال التقرير بنجاح إلى ${trimmedEmail}\nالملف PDF مرفق مباشرة في البريد.`);
+        if (data.isTest && data.previewUrl) {
+          /* Ethereal test mode — SMTP not configured */
+          const open = window.confirm(
+            `📧 تم إنشاء البريد بنجاح (وضع تجريبي)\n\n` +
+            `بما أن إعدادات SMTP غير مُعدّة بعد، تم الإرسال عبر خادم بريد تجريبي.\n\n` +
+            `اضغط "موافق" لمعاينة البريد (مع المرفق) في المتصفح.\n\n` +
+            `ملاحظة: لتفعيل الإرسال الحقيقي أضف SMTP_HOST / SMTP_USER / SMTP_PASS في إعدادات البيئة.`
+          );
+          if (open) window.open(data.previewUrl, "_blank");
+        } else {
+          alert(`✅ تم إرسال التقرير بنجاح إلى ${trimmedEmail}\nالملف PDF مرفق مباشرة في البريد.`);
+        }
       } else {
-        alert(data?.error ?? "تعذّر إرسال البريد الإلكتروني — تحقق من إعدادات SMTP.");
+        alert(data?.error ?? "تعذّر إرسال البريد الإلكتروني.");
       }
     } catch (err) {
       console.error("Email share failed:", err);

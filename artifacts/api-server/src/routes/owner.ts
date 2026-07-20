@@ -4216,9 +4216,9 @@ router.post("/reports/send-email", async (req, res) => {
   const { to, chaletName, monthLabel, pdfUrl, viewMode, report, financial, year, yearlyTotals } = req.body;
   if (!to || !pdfUrl || !chaletName) return res.status(400).json({ error: "Missing required fields: to, pdfUrl, chaletName" });
 
-  const ok = await sendReportEmail({ to, chaletName, monthLabel: monthLabel ?? "", pdfUrl, viewMode: viewMode ?? "monthly", report: report ?? null, financial: financial ?? null, year: year ?? undefined, yearlyTotals: yearlyTotals ?? null });
-  if (!ok) return res.status(503).json({ error: "فشل إرسال البريد — تحقق من إعدادات SMTP." });
-  return res.json({ ok: true });
+  const result = await sendReportEmail({ to, chaletName, monthLabel: monthLabel ?? "", pdfUrl, viewMode: viewMode ?? "monthly", report: report ?? null, financial: financial ?? null, year: year ?? undefined, yearlyTotals: yearlyTotals ?? null });
+  if (!result.ok) return res.status(503).json({ error: result.error ?? "فشل إرسال البريد." });
+  return res.json({ ok: true, previewUrl: result.previewUrl, isTest: result.isTest });
 });
 
 router.delete("/reports/archive/:id", async (req, res) => {
