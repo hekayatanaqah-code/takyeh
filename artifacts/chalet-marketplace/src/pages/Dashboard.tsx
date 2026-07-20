@@ -16547,14 +16547,18 @@ function ReportsTab() {
 📈 *صافي الربح:* ${financial ? toAr(formatAmountSigned(financial.netProfit)) : "—"}
 ✨ *منصة تكية لإدارة الحجوزات*`;
       console.log("[WA-SHARE] bodyText:", bodyText);
-    } else if (viewMode === "yearly" && yearly) {
-      titleText = `التقرير السنوي ${toAr(selectedYear)} – ${selectedPropertyName}`;
+    } else if (viewMode === "yearly") {
+      const waYearly = isYearlyHijri ? yearlyHijri : yearly;
+      const waYearStr = isYearlyHijri ? selectedHijriYear : selectedYear;
+      const waYearLabel = isYearlyHijri ? `${selectedHijriYear} هـ` : selectedYear;
+      if (!waYearly) return;
+      titleText = `التقرير السنوي ${toAr(waYearStr)} – ${selectedPropertyName}`;
       bodyText =
-`📊 *التقرير السنوي ${toAr(selectedYear)}*
+`📊 *التقرير السنوي ${toAr(waYearStr)}*
 🏡 *المنشأة:* ${selectedPropertyName}
-💰 *الإيرادات:* ${toAr(formatAmount(yearly.totals.revenue))}
-🔴 *المصروفات:* ${toAr(formatAmount(yearly.totals.expenses))}
-⭐ *صافي الربح:* ${toAr(formatAmountSigned(yearly.totals.netProfit))}
+💰 *الإيرادات:* ${toAr(formatAmount(waYearly.totals.revenue))}
+🔴 *المصروفات:* ${toAr(formatAmount(waYearly.totals.expenses))}
+⭐ *صافي الربح:* ${toAr(formatAmountSigned(waYearly.totals.netProfit))}
 ✨ *منصة تكية لإدارة الحجوزات*`;
       console.log("[WA-SHARE] bodyText:", bodyText);
     } else return;
@@ -16571,21 +16575,25 @@ function ReportsTab() {
         shareFileName = `${gy}-${String(gm).padStart(2, "0")}.pdf`;
       }
     } else {
-      shareFileName = `${selectedYear}.pdf`;
+      const waYearStr = isYearlyHijri ? selectedHijriYear : selectedYear;
+      shareFileName = `${waYearStr}.pdf`;
     }
 
     setWaLoading(true);
     try {
+      const activeWaYearly = isYearlyHijri ? yearlyHijri : yearly;
+      const activeWaYearStr = isYearlyHijri ? selectedHijriYear : selectedYear;
+
       const qr = viewMode === "monthly"
         ? await generateReportQrDataUrl("monthly", selectedMonth)
-        : await generateReportQrDataUrl("yearly", selectedYear);
+        : await generateReportQrDataUrl("yearly", activeWaYearStr);
 
       if (viewMode === "monthly") {
         const logo = await getLogoDataUrl();
         htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel, logo);
-      } else {
-        htmlContent = buildYearlyReportHtml(selectedYear, selectedPropertyName, yearly!, false, qr);
-      }
+      } else if (activeWaYearly) {
+        htmlContent = buildYearlyReportHtml(activeWaYearStr, selectedPropertyName, activeWaYearly, false, qr);
+      } else return;
 
       const { blob } = await htmlToPdfBlob(htmlContent, shareFileName);
       const pdfFile = new File([blob], shareFileName, { type: "application/pdf", lastModified: Date.now() });
@@ -16607,7 +16615,7 @@ function ReportsTab() {
     } finally {
       setWaLoading(false);
     }
-  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal]);
+  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal]);
 
   const handleShareEmail = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -16617,12 +16625,15 @@ function ReportsTab() {
     setEmailLoading(true);
     try {
       /* 1. Generate & upload PDF if not already done */
+      const emailYearly = isYearlyHijri ? yearlyHijri : yearly;
+      const emailYearStr = isYearlyHijri ? selectedHijriYear : selectedYear;
+
       let url = pdfUrl;
       if (!url) {
         if (viewMode === "monthly") {
           url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial, breakdown: repBreakdown, monthTitle: activeMonthLabel });
-        } else if (viewMode === "yearly" && yearly) {
-          url = await generateAndUploadReportPdf("yearly", { year: selectedYear, propertyName: selectedPropertyName, yearly });
+        } else if (viewMode === "yearly" && emailYearly) {
+          url = await generateAndUploadReportPdf("yearly", { year: emailYearStr, propertyName: selectedPropertyName, yearly: emailYearly });
         }
         if (url) setPdfUrl(url);
       }
@@ -16646,9 +16657,9 @@ function ReportsTab() {
           topSlot: report.topSlot,
         };
         if (financial) payload.financial = financial;
-      } else if (viewMode === "yearly" && yearly) {
-        payload.year = selectedYear;
-        payload.yearlyTotals = yearly.totals;
+      } else if (viewMode === "yearly" && emailYearly) {
+        payload.year = emailYearStr;
+        payload.yearlyTotals = emailYearly.totals;
       }
 
       const r = await apiFetch("/owner/reports/send-email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -16675,7 +16686,7 @@ function ReportsTab() {
     } finally {
       setEmailLoading(false);
     }
-  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, shareEmail, pdfUrl, repBreakdown, activeMonthLabel]);
+  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, shareEmail, pdfUrl, repBreakdown, activeMonthLabel]);
 
   const handleSaveToArchive = useCallback(async () => {
     setArchiveSaving(true);
@@ -16725,20 +16736,6 @@ function ReportsTab() {
     <div className="space-y-6">
 
       <SectionGuideButton sectionKey="reports" />
-      {/* ── View Mode Toggle ── */}
-      <div className="flex items-center gap-2 bg-muted/50 rounded-xl p-1 w-fit">
-        {(["monthly", "yearly"] as const).map((m) => (
-          <button
-            key={m}
-            onClick={() => setViewMode(m)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-              viewMode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {m === "monthly" ? "شهري" : "سنوي"}
-          </button>
-        ))}
-      </div>
 
       {/* ── Report Type Selector (only in "all" unit mode) ── */}
       {repUnit.type === "all" && (
@@ -16870,6 +16867,18 @@ function ReportsTab() {
       {/* ── Filters ── */}
       <div className="bg-card border border-border rounded-2xl px-4 py-3">
         <div className="flex items-center gap-2 flex-wrap">
+
+          {/* ٠. شهري / سنوي */}
+          <div className="flex h-9 items-center gap-0 bg-muted/60 border border-border rounded-lg p-0.5 shrink-0">
+            {(["monthly", "yearly"] as const).map((m) => (
+              <button key={m} type="button" onClick={() => setViewMode(m)}
+                className={`h-full px-3 rounded-md text-xs font-bold transition-colors ${
+                  viewMode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                }`}>
+                {m === "monthly" ? "شهري" : "سنوي"}
+              </button>
+            ))}
+          </div>
 
           {/* ١. العقار — أقصى اليمين */}
           <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
@@ -17051,32 +17060,77 @@ function ReportsTab() {
                 ))}
               </div>
 
-              {activeYearly.monthly.some((m) => m.revenue > 0 || m.expenses > 0) && (
-                <div className="bg-card border border-border rounded-2xl p-5">
-                  <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
-                    <BarChart2 className="w-4 h-4 text-primary" />
-                    الإيرادات والمصروفات لعام {activeYearLabel}
-                  </h3>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={activeYearly.monthly.map((m) => ({
-                      name: getMonthShortLabel(m),
-                      الإيرادات: m.revenue,
-                      المصروفات: m.expenses,
-                    }))} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" tick={(props: any) => {
-                        const { x, y, payload } = props;
-                        return <text x={x} y={y + 14} textAnchor="middle" fontSize={11} fill="hsl(var(--muted-foreground))" fontFamily="inherit" direction="rtl" unicodeBidi="embed">{payload.value}</text>;
-                      }} />
-                      <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                      <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: 12 }} formatter={(v: number) => [formatAmount(v)]} />
-                      <Legend wrapperStyle={{ fontSize: 12, direction: "rtl" }} />
-                      <Bar dataKey="الإيرادات" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="المصروفات" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
+              {activeYearly.monthly.some((m) => m.revenue > 0 || m.expenses > 0) && (() => {
+                /* اختصارات أسماء الشهور الهجرية لمحور X */
+                const HIJRI_AXIS: Record<string, string> = {
+                  "محرم": "محرم", "صفر": "صفر",
+                  "ربيع الأول": "رب.١", "ربيع الثاني": "رب.٢",
+                  "جمادى الأولى": "جم.١", "جمادى الآخرة": "جم.٢",
+                  "رجب": "رجب", "شعبان": "شعبان", "رمضان": "رمضان",
+                  "شوال": "شوال", "ذو القعدة": "ذو.ق", "ذو الحجة": "ذو.ح",
+                };
+                const getAxisLabel = (m: any) =>
+                  isYearlyHijri && (m as any).monthName
+                    ? (HIJRI_AXIS[(m as any).monthName] ?? (m as any).monthName.slice(0, 4))
+                    : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "short" });
+                return (
+                  <div className="bg-card border border-border rounded-2xl p-5">
+                    <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
+                      <BarChart2 className="w-4 h-4 text-primary" />
+                      الإيرادات والمصروفات لعام {activeYearLabel}
+                    </h3>
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart
+                        data={activeYearly.monthly.map((m) => ({
+                          name: getAxisLabel(m),
+                          fullName: getMonthLabel(m),
+                          الإيرادات: m.revenue,
+                          المصروفات: m.expenses,
+                        }))}
+                        margin={{ top: 10, right: 4, left: -10, bottom: 55 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis
+                          dataKey="name"
+                          interval={0}
+                          tick={(props: any) => {
+                            const { x, y, payload } = props;
+                            return (
+                              <text
+                                x={x} y={y + 8}
+                                textAnchor="end"
+                                fontSize={10}
+                                fill="hsl(var(--muted-foreground))"
+                                fontFamily="inherit"
+                                transform={`rotate(-40, ${x}, ${y + 8})`}
+                              >
+                                {payload.value}
+                              </text>
+                            );
+                          }}
+                        />
+                        <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                        <Tooltip
+                          contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", fontSize: 12, direction: "rtl" }}
+                          labelFormatter={(_: any, payload: any[]) => payload?.[0]?.payload?.fullName ?? _}
+                          formatter={(v: number) => [formatAmount(v)]}
+                        />
+                        <Bar dataKey="الإيرادات" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="المصروفات" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    {/* دليل الألوان خارج الرسم لمنع التداخل */}
+                    <div className="flex items-center justify-center gap-6 mt-2" dir="rtl">
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="w-3 h-3 rounded-sm bg-green-500 inline-block shrink-0" />الإيرادات
+                      </span>
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="w-3 h-3 rounded-sm bg-red-400 inline-block shrink-0" />المصروفات
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="bg-card border border-border rounded-2xl p-5">
                 <h3 className="font-bold text-foreground text-sm mb-4">تفصيل شهري لعام {activeYearLabel}</h3>
@@ -17091,14 +17145,23 @@ function ReportsTab() {
                       </tr>
                     </thead>
                     <tbody>
-                      {activeYearly.monthly.map((m) => (
-                        <tr key={m.month} className="border-b border-border/50">
-                          <td className="py-2 text-muted-foreground">{getMonthLabel(m)}</td>
-                          <td className="py-2 font-medium text-green-600">{formatAmount(m.revenue)}</td>
-                          <td className="py-2 font-medium text-red-600">{formatAmount(m.expenses)}</td>
-                          <td className={`py-2 font-bold ${m.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmountSigned(m.netProfit)}</td>
-                        </tr>
-                      ))}
+                      {activeYearly.monthly.map((m) => {
+                        const isEmpty = m.revenue === 0 && m.expenses === 0;
+                        return (
+                          <tr key={m.month} className={`border-b border-border/50 ${isEmpty ? "opacity-40" : ""}`}>
+                            <td className="py-2 text-muted-foreground">{getMonthLabel(m)}</td>
+                            <td className="py-2 font-medium text-green-600">
+                              {isEmpty ? <span className="text-muted-foreground/60 font-normal tabular-nums">—</span> : <span className="tabular-nums">{formatAmount(m.revenue)}</span>}
+                            </td>
+                            <td className="py-2 font-medium text-red-600">
+                              {isEmpty ? <span className="text-muted-foreground/60 font-normal tabular-nums">—</span> : <span className="tabular-nums">{formatAmount(m.expenses)}</span>}
+                            </td>
+                            <td className={`py-2 font-bold ${m.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>
+                              {isEmpty ? <span className="text-muted-foreground/60 font-normal tabular-nums">—</span> : <span className="tabular-nums">{formatAmountSigned(m.netProfit)}</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 border-border">
