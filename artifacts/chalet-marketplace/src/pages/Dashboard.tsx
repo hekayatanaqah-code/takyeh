@@ -17079,7 +17079,7 @@ function ReportsTab() {
                       <BarChart2 className="w-4 h-4 text-primary" />
                       الإيرادات والمصروفات لعام {activeYearLabel}
                     </h3>
-                    <ResponsiveContainer width="100%" height={280}>
+                    <ResponsiveContainer width="100%" height={260}>
                       <BarChart
                         data={activeYearly.monthly.map((m) => ({
                           name: getAxisLabel(m),
@@ -17087,7 +17087,7 @@ function ReportsTab() {
                           الإيرادات: m.revenue,
                           المصروفات: m.expenses,
                         }))}
-                        margin={{ top: 10, right: 4, left: -10, bottom: 55 }}
+                        margin={{ top: 10, right: 4, left: -10, bottom: 28 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                         <XAxis
@@ -17097,12 +17097,11 @@ function ReportsTab() {
                             const { x, y, payload } = props;
                             return (
                               <text
-                                x={x} y={y + 8}
-                                textAnchor="end"
-                                fontSize={10}
+                                x={x} y={y + 14}
+                                textAnchor="middle"
+                                fontSize={9}
                                 fill="hsl(var(--muted-foreground))"
                                 fontFamily="inherit"
-                                transform={`rotate(-40, ${x}, ${y + 8})`}
                               >
                                 {payload.value}
                               </text>
@@ -22047,8 +22046,8 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              {/* ── Unit Selector (for Revenue / Expenses / Reports tabs) ── */}
-              {(adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "reports" || adminFinanceTab === "ledger") && (
+              {/* ── Unit Selector (for Revenue / Expenses / Ledger tabs — Reports has its own inline filter) ── */}
+              {(adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "ledger") && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                     <BarChart2 className="w-3.5 h-3.5" />عرض التقارير المالية لـ:
