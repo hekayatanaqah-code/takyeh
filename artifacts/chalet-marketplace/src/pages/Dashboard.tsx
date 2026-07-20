@@ -16612,35 +16612,59 @@ function ReportsTab() {
   const handleShareEmail = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!shareEmail) { alert("يرجى إدخال البريد الإلكتروني في إعدادات المشاركة"); return; }
-    let url = pdfUrl;
-    if (!url) {
-      setEmailLoading(true);
-      try {
+    const trimmedEmail = shareEmail.trim();
+    if (!trimmedEmail) { alert("يرجى إدخال البريد الإلكتروني في إعدادات المشاركة"); return; }
+    setEmailLoading(true);
+    try {
+      /* 1. Generate & upload PDF if not already done */
+      let url = pdfUrl;
+      if (!url) {
         if (viewMode === "monthly") {
           url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial, breakdown: repBreakdown, monthTitle: activeMonthLabel });
         } else if (viewMode === "yearly" && yearly) {
           url = await generateAndUploadReportPdf("yearly", { year: selectedYear, propertyName: selectedPropertyName, yearly });
         }
         if (url) setPdfUrl(url);
-      } catch (e) { console.error(e); } finally { setEmailLoading(false); }
+      }
+      if (!url) { alert("تعذّر إنشاء ملف PDF — يرجى المحاولة مرة أخرى"); return; }
+
+      /* 2. Send via backend (real email with PDF attachment) */
+      const payload: Record<string, unknown> = {
+        to: trimmedEmail,
+        chaletName: selectedPropertyName,
+        monthLabel: activeMonthLabel,
+        pdfUrl: url,
+        viewMode,
+      };
+      if (viewMode === "monthly" && report) {
+        payload.report = {
+          totalBookings: report.totalBookings,
+          occupancyRate: report.occupancyRate,
+          totalDays: report.totalDays,
+          daysInMonth: report.daysInMonth,
+          slotStats: report.slotStats,
+          topSlot: report.topSlot,
+        };
+        if (financial) payload.financial = financial;
+      } else if (viewMode === "yearly" && yearly) {
+        payload.year = selectedYear;
+        payload.yearlyTotals = yearly.totals;
+      }
+
+      const r = await apiFetch("/owner/reports/send-email", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data?.ok) {
+        alert(`✅ تم إرسال التقرير بنجاح إلى ${trimmedEmail}\nالملف PDF مرفق مباشرة في البريد.`);
+      } else {
+        alert(data?.error ?? "تعذّر إرسال البريد الإلكتروني — تحقق من إعدادات SMTP.");
+      }
+    } catch (err) {
+      console.error("Email share failed:", err);
+      alert("حدث خطأ أثناء إرسال البريد — يرجى المحاولة لاحقاً.");
+    } finally {
+      setEmailLoading(false);
     }
-    let subject = "";
-    let body = "";
-    if (viewMode === "monthly" && report) {
-      subject = `تقرير شهري – ${activeMonthLabel}`;
-      body = `${selectedPropertyName}\n\nالحجوزات: ${report.totalBookings}\nالإشغال: ${report.occupancyRate}%` +
-        (financial ? `\nصافي الربح: ${formatAmountSigned(financial.netProfit)}` : "") +
-        (url ? `\n\nرابط التقرير PDF:\n${url}` : "") +
-        `\n\nحكاية أناقة – شاليهات القصيم`;
-    } else if (viewMode === "yearly" && yearly) {
-      subject = `التقرير السنوي – ${selectedYear}`;
-      body = `${selectedPropertyName}\n\nإيرادات: ${formatAmount(yearly.totals.revenue)}\nمصروفات: ${formatAmount(yearly.totals.expenses)}\nصافي: ${formatAmountSigned(yearly.totals.netProfit)}` +
-        (url ? `\n\nرابط التقرير PDF:\n${url}` : "") +
-        `\n\nحكاية أناقة – شاليهات القصيم`;
-    }
-    window.open(`mailto:${shareEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
-  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, shareEmail, pdfUrl, monthOptions]);
+  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, shareEmail, pdfUrl, repBreakdown, activeMonthLabel]);
 
   const handleSaveToArchive = useCallback(async () => {
     setArchiveSaving(true);
@@ -17411,7 +17435,7 @@ function ReportsTab() {
                             {icon} {label}
                             {isTop && count > 0 && <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold">الأعلى</span>}
                           </span>
-                          <span className="font-semibold">{count} · {pct.toLocaleString("ar-SA")}٪</span>
+                          <span className="font-semibold" dir="rtl">{pct.toLocaleString("ar-SA")}٪ ({count.toLocaleString("ar-SA")} حجز)</span>
                         </div>
                         <div className="w-full bg-muted rounded-full h-2">
                           <div className={`h-2 rounded-full transition-all duration-500 ${isTop && count > 0 ? "bg-primary" : "bg-muted-foreground/40"}`} style={{ width: `${pct}%` }} />

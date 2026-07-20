@@ -36,7 +36,7 @@ import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull, or } from
 import { randomBytes, createHash, randomInt } from "crypto";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
-import { sendOtpEmail } from "../lib/email";
+import { sendOtpEmail, sendReportEmail } from "../lib/email";
 
 const router = Router();
 
@@ -4209,6 +4209,16 @@ router.post("/reports/archive", async (req, res) => {
     .values({ ownerId, reportType, reportPeriod, submissionId: submissionId ?? null, propertyName, pdfUrl: pdfUrl ?? null, data })
     .returning();
   return res.json(created);
+});
+
+/* ── POST /owner/reports/send-email ── send report as real email with PDF attachment */
+router.post("/reports/send-email", async (req, res) => {
+  const { to, chaletName, monthLabel, pdfUrl, viewMode, report, financial, year, yearlyTotals } = req.body;
+  if (!to || !pdfUrl || !chaletName) return res.status(400).json({ error: "Missing required fields: to, pdfUrl, chaletName" });
+
+  const ok = await sendReportEmail({ to, chaletName, monthLabel: monthLabel ?? "", pdfUrl, viewMode: viewMode ?? "monthly", report: report ?? null, financial: financial ?? null, year: year ?? undefined, yearlyTotals: yearlyTotals ?? null });
+  if (!ok) return res.status(503).json({ error: "فشل إرسال البريد — تحقق من إعدادات SMTP." });
+  return res.json({ ok: true });
 });
 
 router.delete("/reports/archive/:id", async (req, res) => {
