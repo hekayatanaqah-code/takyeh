@@ -15903,7 +15903,7 @@ type ReportBreakdown = {
   totBase: number; totSvc: number; totTotal: number;
 } | null;
 
-const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:36px 40px;background:#fff;}.header{border-bottom:3px solid #8C6246;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#8C6246;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.section{margin-bottom:24px;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#8C6246;border-right:3px solid #8C6246;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 14px;}.kpi-label{font-size:12px;color:#333;font-weight:600;margin-bottom:5px;}.kpi-value{font-size:20px;font-weight:700;color:#111;line-height:1.25;}.kpi-note{font-size:10.5px;color:#555;font-weight:500;margin-top:3px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;word-wrap:break-word;}th,td{vertical-align:middle!important;line-height:normal!important;padding-top:10px!important;padding-bottom:10px!important;padding-left:12px!important;padding-right:12px!important;}th{background:#8C6246;color:#fff;text-align:right;}td{border-bottom:1px solid #ede9dd;word-break:break-word;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #8C6246;}.report-table th,.report-table td,.report-table tfoot td{vertical-align:middle!important;line-height:normal!important;padding-top:10px!important;padding-bottom:10px!important;height:auto!important;}.report-table th span,.report-table th p,.report-table td span,.report-table td p,.report-table tfoot td span,.report-table tfoot td p{vertical-align:middle!important;line-height:normal!important;}.slot-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}.slot-chip{background:#faf9f6;border:1px solid #e8e2d0;border-radius:6px;padding:5px 12px;font-size:12px;color:#555;}.footer{margin-top:32px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
+const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:20px 32px;background:#fff;}.header{border-bottom:3px solid #8C6246;padding-bottom:10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#8C6246;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.section{margin-bottom:10px;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:10px;}.section-title{font-size:14px;font-weight:700;color:#8C6246;border-right:3px solid #8C6246;padding-right:10px;margin-bottom:6px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:7px 10px;}.kpi-label{font-size:11px;color:#333;font-weight:600;margin-bottom:2px;}.kpi-value{font-size:17px;font-weight:700;color:#111;line-height:1.2;}.kpi-note{font-size:10px;color:#555;font-weight:500;margin-top:2px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;word-wrap:break-word;}th,td{vertical-align:middle!important;line-height:normal!important;padding:0!important;}th{background:#8C6246;color:#fff;text-align:right;}td{border-bottom:1px solid #ede9dd;word-break:break-word;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #8C6246;}.report-table th,.report-table td,.report-table tfoot td{vertical-align:middle!important;padding:0!important;}.report-table th>div,.report-table td>div{display:flex;align-items:center;}.slot-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}.slot-chip{background:#faf9f6;border:1px solid #e8e2d0;border-radius:6px;padding:5px 12px;font-size:12px;color:#555;}.footer{margin-top:12px;text-align:center;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:6px;}`;
 
 function buildRevBarSvg(dailyRevenue: { day: number; revenue: number }[]): string {
   if (!dailyRevenue || dailyRevenue.length === 0) return "";
@@ -15928,9 +15928,9 @@ function buildMonthlyBarChartSvg(
 ): string {
   if (!monthly || monthly.length === 0) return "";
   const W        = 670;
-  const BAR_H    = 100;          // bar area height; baseline sits at y=100
-  const LABEL_Y  = BAR_H + 18;  // month-name text baseline = 118
-  const H        = LABEL_Y + 14; // total SVG height = 132 (labels fully visible)
+  const BAR_H    = 80;           // bar area height; baseline sits at y=80
+  const LABEL_Y  = BAR_H + 16;  // month-name text baseline = 96
+  const H        = LABEL_Y + 12; // total SVG height = 108 (labels fully visible)
 
   const maxVal = Math.max(...monthly.flatMap(m => [m.revenue, m.expenses]), 1);
   const n = monthly.length;
@@ -16069,7 +16069,7 @@ function buildYearlyReportHtml(
       : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
     const isEmpty = m.revenue === 0 && m.expenses === 0;
     const netCls = m.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626";
-    const F = `display:flex;align-items:center;padding:8px 12px;min-height:36px;`;
+    const F = `display:flex;align-items:center;padding:4px 8px;min-height:28px;`;
     return `<tr>
       <td style="padding:0;font-weight:600"><div style="${F}">${label}</div></td>
       <td style="padding:0"><div style="${F}">${m.revenue > 0 ? formatAmount(m.revenue) : DASH}</div></td>
@@ -16105,21 +16105,21 @@ ${qrHtml}</div>
 <div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح السنوي</div><div class="kpi-value" style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</div><div class="kpi-note">الإيرادات − المصروفات</div></div>
 </div></div>
 
-${chartSvg ? `<div class="section"><div class="section-title">أداء الإيرادات والمصروفات السنوية</div><div style="display:flex;align-items:center;gap:20px;margin-bottom:14px;direction:rtl;"><span style="display:flex;align-items:center;gap:9px;font-size:11px;color:#333;font-weight:600;"><span style="width:12px;height:12px;background:#16a34a;border-radius:3px;display:inline-block;flex-shrink:0;"></span>إيرادات</span><span style="display:flex;align-items:center;gap:9px;font-size:11px;color:#333;font-weight:600;"><span style="width:12px;height:12px;background:#dc2626;border-radius:3px;display:inline-block;flex-shrink:0;"></span>مصروفات</span></div><div style="padding-bottom:10px;">${chartSvg}</div></div>` : ""}
+${chartSvg ? `<div class="section"><div class="section-title">أداء الإيرادات والمصروفات السنوية</div><div style="display:flex;align-items:center;gap:20px;margin-bottom:6px;direction:rtl;"><span style="display:flex;align-items:center;gap:9px;font-size:11px;color:#333;font-weight:600;"><span style="width:12px;height:12px;background:#16a34a;border-radius:3px;display:inline-block;flex-shrink:0;"></span>إيرادات</span><span style="display:flex;align-items:center;gap:9px;font-size:11px;color:#333;font-weight:600;"><span style="width:12px;height:12px;background:#dc2626;border-radius:3px;display:inline-block;flex-shrink:0;"></span>مصروفات</span></div><div style="padding-bottom:10px;">${chartSvg}</div></div>` : ""}
 
 <div class="section-auto"><div class="section-title">تفاصيل الإيرادات والمصروفات</div>
 <table class="report-table"><thead><tr>
-<th style="padding:0"><div style="display:flex;align-items:center;padding:8px 12px;min-height:36px;">الشهر</div></th>
-<th style="padding:0"><div style="display:flex;align-items:center;padding:8px 12px;min-height:36px;">الإيرادات (ر.س)</div></th>
-<th style="padding:0"><div style="display:flex;align-items:center;padding:8px 12px;min-height:36px;">المصروفات (ر.س)</div></th>
-<th style="padding:0"><div style="display:flex;align-items:center;padding:8px 12px;min-height:36px;">صافي الربح (ر.س)</div></th>
+<th style="padding:0"><div style="display:flex;align-items:center;padding:4px 8px;min-height:28px;">الشهر</div></th>
+<th style="padding:0"><div style="display:flex;align-items:center;padding:4px 8px;min-height:28px;">الإيرادات (ر.س)</div></th>
+<th style="padding:0"><div style="display:flex;align-items:center;padding:4px 8px;min-height:28px;">المصروفات (ر.س)</div></th>
+<th style="padding:0"><div style="display:flex;align-items:center;padding:4px 8px;min-height:28px;">صافي الربح (ر.س)</div></th>
 </tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr>
-<td style="padding:0"><div style="display:flex;align-items:center;padding:8px 12px;min-height:36px;">الإجمالي السنوي</div></td>
-<td style="padding:0"><div style="display:flex;align-items:center;padding:8px 12px;min-height:36px;">${formatAmount(yearly.totals.revenue)}</div></td>
-<td style="padding:0"><div style="display:flex;align-items:center;padding:8px 12px;min-height:36px;">${formatAmount(yearly.totals.expenses)}</div></td>
-<td style="padding:0;${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}"><div style="display:flex;align-items:center;padding:8px 12px;min-height:36px;">${formatAmountSigned(yearly.totals.netProfit)}</div></td>
+<td style="padding:0"><div style="display:flex;align-items:center;padding:4px 8px;min-height:28px;">الإجمالي السنوي</div></td>
+<td style="padding:0"><div style="display:flex;align-items:center;padding:4px 8px;min-height:28px;">${formatAmount(yearly.totals.revenue)}</div></td>
+<td style="padding:0"><div style="display:flex;align-items:center;padding:4px 8px;min-height:28px;">${formatAmount(yearly.totals.expenses)}</div></td>
+<td style="padding:0;${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}"><div style="display:flex;align-items:center;padding:4px 8px;min-height:28px;">${formatAmountSigned(yearly.totals.netProfit)}</div></td>
 </tr></tfoot>
 </table></div>
 
