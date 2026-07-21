@@ -15960,13 +15960,12 @@ function buildMonthlyBarChartSvg(
 
   const baseline = `<line x1="0" y1="${BAR_BOTTOM}" x2="${W}" y2="${BAR_BOTTOM}" stroke="#e8e2d0" stroke-width="1"/>`;
 
-  /* ── Legend at the top, right-aligned ── */
-  const lgCX = W / 2;
+  /* ── Legend top-right corner — fully clear of all bar groups ── */
   const legend = [
-    `<rect x="${lgCX - 90}" y="${LEGEND_Y}" width="10" height="10" fill="#16a34a" rx="2"/>`,
-    `<text x="${lgCX - 76}" y="${LEGEND_Y + 9}" font-size="10" fill="#555" font-family="Segoe UI,Tahoma,Arial,sans-serif">إيرادات</text>`,
-    `<rect x="${lgCX + 14}" y="${LEGEND_Y}" width="10" height="10" fill="#dc2626" rx="2"/>`,
-    `<text x="${lgCX + 28}" y="${LEGEND_Y + 9}" font-size="10" fill="#555" font-family="Segoe UI,Tahoma,Arial,sans-serif">مصروفات</text>`,
+    `<rect x="526" y="${LEGEND_Y}" width="10" height="10" fill="#16a34a" rx="2"/>`,
+    `<text x="540" y="${LEGEND_Y + 9}" font-size="10" fill="#555" font-family="Segoe UI,Tahoma,Arial,sans-serif">إيرادات</text>`,
+    `<rect x="600" y="${LEGEND_Y}" width="10" height="10" fill="#dc2626" rx="2"/>`,
+    `<text x="614" y="${LEGEND_Y + 9}" font-size="10" fill="#555" font-family="Segoe UI,Tahoma,Arial,sans-serif">مصروفات</text>`,
   ].join("");
 
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;height:${H}px;display:block;">${baseline}${bars}${legend}</svg>`;
