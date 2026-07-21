@@ -15927,13 +15927,10 @@ function buildMonthlyBarChartSvg(
   monthly: { month: string; revenue: number; expenses: number }[]
 ): string {
   if (!monthly || monthly.length === 0) return "";
-  const W = 670;
-  const LEGEND_Y  = 2;      // legend rect top — sits above bars
-  const BAR_TOP   = 22;     // bars start below legend
-  const BAR_H     = 92;     // height of bar area
-  const BAR_BOTTOM = BAR_TOP + BAR_H;  // baseline y = 114
-  const LABEL_Y   = BAR_BOTTOM + 18;  // month labels y = 132 (18px gap)
-  const H         = LABEL_Y + 10;     // total SVG height = 142
+  const W        = 670;
+  const BAR_H    = 100;          // bar area height; baseline sits at y=100
+  const LABEL_Y  = BAR_H + 18;  // month-name text baseline = 118
+  const H        = LABEL_Y + 14; // total SVG height = 132 (labels fully visible)
 
   const maxVal = Math.max(...monthly.flatMap(m => [m.revenue, m.expenses]), 1);
   const n = monthly.length;
@@ -15952,23 +15949,16 @@ function buildMonthlyBarChartSvg(
       ? (HIJRI_MONTHS_AR[monthIdx]?.slice(0, 3) ?? toAr(monthIdx + 1))
       : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "short" });
     return [
-      `<rect x="${gx}" y="${BAR_BOTTOM - (revH || 1)}" width="${barW}" height="${revH || 1}" fill="#16a34a" rx="2" opacity="${revH > 0 ? "0.85" : "0.12"}"/>`,
-      `<rect x="${gx + barW + 3}" y="${BAR_BOTTOM - (expH || 1)}" width="${barW}" height="${expH || 1}" fill="#dc2626" rx="2" opacity="${expH > 0 ? "0.7" : "0.12"}"/>`,
+      `<rect x="${gx}" y="${BAR_H - (revH || 1)}" width="${barW}" height="${revH || 1}" fill="#16a34a" rx="2" opacity="${revH > 0 ? "0.85" : "0.12"}"/>`,
+      `<rect x="${gx + barW + 3}" y="${BAR_H - (expH || 1)}" width="${barW}" height="${expH || 1}" fill="#dc2626" rx="2" opacity="${expH > 0 ? "0.7" : "0.12"}"/>`,
       `<text x="${gx + groupW / 2}" y="${LABEL_Y}" text-anchor="middle" font-size="10" font-weight="600" fill="#444" font-family="Segoe UI,Tahoma,Arial,sans-serif">${label}</text>`,
     ].join("");
   }).join("");
 
-  const baseline = `<line x1="0" y1="${BAR_BOTTOM}" x2="${W}" y2="${BAR_BOTTOM}" stroke="#e8e2d0" stroke-width="1"/>`;
+  const baseline = `<line x1="0" y1="${BAR_H}" x2="${W}" y2="${BAR_H}" stroke="#e8e2d0" stroke-width="1"/>`;
 
-  /* ── Legend top-right corner — fully clear of all bar groups ── */
-  const legend = [
-    `<rect x="526" y="${LEGEND_Y}" width="10" height="10" fill="#16a34a" rx="2"/>`,
-    `<text x="540" y="${LEGEND_Y + 9}" font-size="10" fill="#555" font-family="Segoe UI,Tahoma,Arial,sans-serif">إيرادات</text>`,
-    `<rect x="600" y="${LEGEND_Y}" width="10" height="10" fill="#dc2626" rx="2"/>`,
-    `<text x="614" y="${LEGEND_Y + 9}" font-size="10" fill="#555" font-family="Segoe UI,Tahoma,Arial,sans-serif">مصروفات</text>`,
-  ].join("");
-
-  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;height:${H}px;display:block;">${baseline}${bars}${legend}</svg>`;
+  /* Legend is rendered as HTML outside the SVG — no legend inside SVG */
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;height:${H}px;display:block;">${baseline}${bars}</svg>`;
 }
 
 function buildMonthlyReportHtml(
@@ -16114,7 +16104,7 @@ ${qrHtml}</div>
 <div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح السنوي</div><div class="kpi-value" style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</div><div class="kpi-note">الإيرادات − المصروفات</div></div>
 </div></div>
 
-${chartSvg ? `<div class="section"><div class="section-title">أداء الإيرادات والمصروفات السنوية</div>${chartSvg}</div>` : ""}
+${chartSvg ? `<div class="section"><div class="section-title">أداء الإيرادات والمصروفات السنوية</div><div style="display:flex;align-items:center;gap:20px;margin-bottom:14px;direction:rtl;"><span style="display:flex;align-items:center;gap:9px;font-size:11px;color:#333;font-weight:600;"><span style="width:12px;height:12px;background:#16a34a;border-radius:3px;display:inline-block;flex-shrink:0;"></span>إيرادات</span><span style="display:flex;align-items:center;gap:9px;font-size:11px;color:#333;font-weight:600;"><span style="width:12px;height:12px;background:#dc2626;border-radius:3px;display:inline-block;flex-shrink:0;"></span>مصروفات</span></div><div style="padding-bottom:10px;">${chartSvg}</div></div>` : ""}
 
 <div class="section-auto"><div class="section-title">تفاصيل الإيرادات والمصروفات</div>
 <table><thead><tr><th>الشهر</th><th>الإيرادات (ر.س)</th><th>المصروفات (ر.س)</th><th>صافي الربح (ر.س)</th></tr></thead>
