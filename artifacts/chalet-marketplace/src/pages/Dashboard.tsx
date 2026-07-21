@@ -15927,17 +15927,22 @@ function buildMonthlyBarChartSvg(
   monthly: { month: string; revenue: number; expenses: number }[]
 ): string {
   if (!monthly || monthly.length === 0) return "";
-  const W = 670, H = 130;
-  const chartH = H - 26;
+  const W = 670;
+  const BAR_BOTTOM = 108;   // y of baseline (bars sit above this)
+  const LABEL_Y   = 122;    // y of month-name text baseline (14px below bars)
+  const LEGEND_Y  = 142;    // y of legend row (rect top, 20px below labels)
+  const H         = 158;    // total SVG height
+
   const maxVal = Math.max(...monthly.flatMap(m => [m.revenue, m.expenses]), 1);
   const n = monthly.length;
   const GROUP_GAP = 5;
   const groupW = Math.floor((W - GROUP_GAP * (n + 1)) / n);
   const barW = Math.max(4, Math.floor((groupW - 3) / 2));
+
   const bars = monthly.map((m, i) => {
     const gx = GROUP_GAP + i * (groupW + GROUP_GAP);
-    const revH = m.revenue > 0 ? Math.max(3, Math.round((m.revenue / maxVal) * chartH)) : 0;
-    const expH = m.expenses > 0 ? Math.max(3, Math.round((m.expenses / maxVal) * chartH)) : 0;
+    const revH = m.revenue > 0 ? Math.max(3, Math.round((m.revenue / maxVal) * BAR_BOTTOM)) : 0;
+    const expH = m.expenses > 0 ? Math.max(3, Math.round((m.expenses / maxVal) * BAR_BOTTOM)) : 0;
     const [, mm] = m.month.split("-");
     const monthIdx = parseInt(mm, 10) - 1;
     const yearPart = parseInt(m.month.split("-")[0], 10);
@@ -15945,15 +15950,24 @@ function buildMonthlyBarChartSvg(
       ? (HIJRI_MONTHS_AR[monthIdx]?.slice(0, 3) ?? toAr(monthIdx + 1))
       : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "short" });
     return [
-      `<rect x="${gx}" y="${chartH - (revH || 1)}" width="${barW}" height="${revH || 1}" fill="#8C6246" rx="2" opacity="${revH > 0 ? "0.85" : "0.12"}"/>`,
-      `<rect x="${gx + barW + 3}" y="${chartH - (expH || 1)}" width="${barW}" height="${expH || 1}" fill="#dc2626" rx="2" opacity="${expH > 0 ? "0.7" : "0.12"}"/>`,
-      `<text x="${gx + groupW / 2}" y="${H - 8}" text-anchor="middle" font-size="9" fill="#777" font-family="Segoe UI,Tahoma,Arial,sans-serif">${label}</text>`,
+      `<rect x="${gx}" y="${BAR_BOTTOM - (revH || 1)}" width="${barW}" height="${revH || 1}" fill="#16a34a" rx="2" opacity="${revH > 0 ? "0.85" : "0.12"}"/>`,
+      `<rect x="${gx + barW + 3}" y="${BAR_BOTTOM - (expH || 1)}" width="${barW}" height="${expH || 1}" fill="#dc2626" rx="2" opacity="${expH > 0 ? "0.7" : "0.12"}"/>`,
+      `<text x="${gx + groupW / 2}" y="${LABEL_Y}" text-anchor="middle" font-size="9.5" fill="#666" font-family="Segoe UI,Tahoma,Arial,sans-serif">${label}</text>`,
     ].join("");
   }).join("");
-  const baseline = `<line x1="0" y1="${chartH}" x2="${W}" y2="${chartH}" stroke="#e8e2d0" stroke-width="1"/>`;
-  const lgX = 0;
-  const legend = `<rect x="${lgX}" y="4" width="10" height="10" fill="#8C6246" rx="2"/><text x="${lgX + 14}" y="13.5" font-size="10" fill="#555" font-family="Segoe UI,Tahoma,Arial,sans-serif">إيرادات</text><rect x="${lgX + 68}" y="4" width="10" height="10" fill="#dc2626" rx="2"/><text x="${lgX + 82}" y="13.5" font-size="10" fill="#555" font-family="Segoe UI,Tahoma,Arial,sans-serif">مصروفات</text>`;
-  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;height:${H}px;display:block;overflow:visible;">${baseline}${bars}${legend}</svg>`;
+
+  const baseline = `<line x1="0" y1="${BAR_BOTTOM}" x2="${W}" y2="${BAR_BOTTOM}" stroke="#e8e2d0" stroke-width="1"/>`;
+
+  /* ── Legend centred at the bottom ── */
+  const lgCX = W / 2;
+  const legend = [
+    `<rect x="${lgCX - 90}" y="${LEGEND_Y}" width="10" height="10" fill="#16a34a" rx="2"/>`,
+    `<text x="${lgCX - 76}" y="${LEGEND_Y + 9}" font-size="10" fill="#555" font-family="Segoe UI,Tahoma,Arial,sans-serif">إيرادات</text>`,
+    `<rect x="${lgCX + 14}" y="${LEGEND_Y}" width="10" height="10" fill="#dc2626" rx="2"/>`,
+    `<text x="${lgCX + 28}" y="${LEGEND_Y + 9}" font-size="10" fill="#555" font-family="Segoe UI,Tahoma,Arial,sans-serif">مصروفات</text>`,
+  ].join("");
+
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;height:${H}px;display:block;">${baseline}${bars}${legend}</svg>`;
 }
 
 function buildMonthlyReportHtml(
