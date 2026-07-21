@@ -15892,7 +15892,8 @@ async function printYearlyReport(
   const win = window.open("", "_blank", "width=794,height=1123");
   if (!win) return;
   const qr = await generateReportQrDataUrl("yearly", year);
-  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr));
+  const logo = await getLogoDataUrl();
+  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo));
   win.document.close();
 }
 
@@ -15919,6 +15920,40 @@ function buildRevBarSvg(dailyRevenue: { day: number; revenue: number }[]): strin
   }).join("");
   const svgW = gap + n * (barW + gap);
   return `<svg width="${svgW}" height="${H}" xmlns="http://www.w3.org/2000/svg" style="direction:ltr;display:block;">${bars}</svg>`;
+}
+
+/* ── Annual bar chart: grouped monthly revenue + expenses bars ── */
+function buildMonthlyBarChartSvg(
+  monthly: { month: string; revenue: number; expenses: number }[]
+): string {
+  if (!monthly || monthly.length === 0) return "";
+  const W = 670, H = 130;
+  const chartH = H - 26;
+  const maxVal = Math.max(...monthly.flatMap(m => [m.revenue, m.expenses]), 1);
+  const n = monthly.length;
+  const GROUP_GAP = 5;
+  const groupW = Math.floor((W - GROUP_GAP * (n + 1)) / n);
+  const barW = Math.max(4, Math.floor((groupW - 3) / 2));
+  const bars = monthly.map((m, i) => {
+    const gx = GROUP_GAP + i * (groupW + GROUP_GAP);
+    const revH = m.revenue > 0 ? Math.max(3, Math.round((m.revenue / maxVal) * chartH)) : 0;
+    const expH = m.expenses > 0 ? Math.max(3, Math.round((m.expenses / maxVal) * chartH)) : 0;
+    const [, mm] = m.month.split("-");
+    const monthIdx = parseInt(mm, 10) - 1;
+    const yearPart = parseInt(m.month.split("-")[0], 10);
+    const label = yearPart < 1800
+      ? (HIJRI_MONTHS_AR[monthIdx]?.slice(0, 3) ?? toAr(monthIdx + 1))
+      : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "short" });
+    return [
+      `<rect x="${gx}" y="${chartH - (revH || 1)}" width="${barW}" height="${revH || 1}" fill="#8C6246" rx="2" opacity="${revH > 0 ? "0.85" : "0.12"}"/>`,
+      `<rect x="${gx + barW + 3}" y="${chartH - (expH || 1)}" width="${barW}" height="${expH || 1}" fill="#dc2626" rx="2" opacity="${expH > 0 ? "0.7" : "0.12"}"/>`,
+      `<text x="${gx + groupW / 2}" y="${H - 8}" text-anchor="middle" font-size="9" fill="#777" font-family="Segoe UI,Tahoma,Arial,sans-serif">${label}</text>`,
+    ].join("");
+  }).join("");
+  const baseline = `<line x1="0" y1="${chartH}" x2="${W}" y2="${chartH}" stroke="#e8e2d0" stroke-width="1"/>`;
+  const lgX = 0;
+  const legend = `<rect x="${lgX}" y="4" width="10" height="10" fill="#8C6246" rx="2"/><text x="${lgX + 14}" y="13.5" font-size="10" fill="#555" font-family="Segoe UI,Tahoma,Arial,sans-serif">إيرادات</text><rect x="${lgX + 68}" y="4" width="10" height="10" fill="#dc2626" rx="2"/><text x="${lgX + 82}" y="13.5" font-size="10" fill="#555" font-family="Segoe UI,Tahoma,Arial,sans-serif">مصروفات</text>`;
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;height:${H}px;display:block;overflow:visible;">${baseline}${bars}${legend}</svg>`;
 }
 
 function buildMonthlyReportHtml(
@@ -16009,6 +16044,7 @@ function buildYearlyReportHtml(
   yearly: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } },
   forPrint = false,
   qrDataUrl: string | null = null,
+  logoDataUrl: string | null = null,
 ): string {
   const _nowY = new Date();
   const _hcY = toHijriComponents(_nowY);
@@ -16017,32 +16053,60 @@ function buildYearlyReportHtml(
   const printDate = `${_hijriPrintY} | ${_gregPrintY}`;
   const hijriYearY = toAr(_hcY.year);
   const gregYearY = toAr(_nowY.getFullYear());
+
+  const DASH = `<span style="color:#ccc;font-size:14px;line-height:1;">—</span>`;
   const rows = yearly.monthly.map(m => {
-    const label = new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
-    const cls = m.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626";
-    return `<tr><td>${label}</td><td>${formatAmount(m.revenue)}</td><td>${formatAmount(m.expenses)}</td><td style="${cls}">${formatAmountSigned(m.netProfit)}</td></tr>`;
+    const [, mm] = m.month.split("-");
+    const monthIdx = parseInt(mm, 10) - 1;
+    const yearPart = parseInt(m.month.split("-")[0], 10);
+    const label = yearPart < 1800
+      ? (HIJRI_MONTHS_AR[monthIdx] ?? mm)
+      : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
+    const isEmpty = m.revenue === 0 && m.expenses === 0;
+    const netCls = m.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626";
+    return `<tr>
+      <td style="font-weight:600">${label}</td>
+      <td>${m.revenue > 0 ? formatAmount(m.revenue) : DASH}</td>
+      <td>${m.expenses > 0 ? formatAmount(m.expenses) : DASH}</td>
+      <td style="${isEmpty ? "" : netCls}">${isEmpty ? DASH : formatAmountSigned(m.netProfit)}</td>
+    </tr>`;
   }).join("");
+
   const scriptTag = forPrint ? `<script>window.onload=function(){window.print();};<\/script>` : "";
   const qrHtml = qrDataUrl
     ? `<div class="qr-block"><img src="${qrDataUrl}" class="qr-img" /><div class="qr-caption">مسح للتحقق</div></div>`
     : `<div class="qr-block" style="width:80px;"></div>`;
+  const logoHtml = logoDataUrl
+    ? `<img src="${logoDataUrl}" style="height:68px;width:auto;object-fit:contain;display:block;" alt="تكية" />`
+    : `<svg width="148" height="52" viewBox="0 0 148 52" xmlns="http://www.w3.org/2000/svg"><polygon points="10,27 26,11 42,27" fill="none" stroke="#8C6246" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><rect x="14" y="26" width="24" height="18" rx="2" fill="#8C6246" opacity="0.1" stroke="#8C6246" stroke-width="2"/><rect x="21" y="31" width="10" height="13" rx="1.5" fill="#8C6246" opacity="0.45"/><line x1="52" y1="10" x2="52" y2="43" stroke="#d9c9b8" stroke-width="1"/><text x="60" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="21" font-weight="900" fill="#8C6246">تكية</text><text x="60" y="42" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="9.5" fill="#a07852">منصة الشاليهات</text></svg>`;
+  const chartSvg = buildMonthlyBarChartSvg(yearly.monthly);
+  const printMediaCss = `@page{margin:0!important;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
+
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <title>التقرير_السنوي_${year}.pdf</title>
-<style>${REPORT_CSS}@page{margin:0!important;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}}</style></head>
+<style>${REPORT_CSS}${printMediaCss}</style></head>
 <body><div class="page">
+
 <div class="header">
-<div class="header-brand"><svg width="148" height="52" viewBox="0 0 148 52" xmlns="http://www.w3.org/2000/svg"><polygon points="10,27 26,11 42,27" fill="none" stroke="#8C6246" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><rect x="14" y="26" width="24" height="18" rx="2" fill="#8C6246" opacity="0.1" stroke="#8C6246" stroke-width="2"/><rect x="21" y="31" width="10" height="13" rx="1.5" fill="#8C6246" opacity="0.45"/><line x1="52" y1="10" x2="52" y2="43" stroke="#d9c9b8" stroke-width="1"/><text x="60" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="21" font-weight="900" fill="#8C6246">تكية</text><text x="60" y="42" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="9.5" fill="#a07852">منصة الشاليهات</text></svg></div>
+<div class="header-brand">${logoHtml}</div>
 <div class="header-center"><div class="report-title">التقرير السنوي – ${year}</div><div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
-<div class="kpi-grid" style="margin-bottom:24px">
-<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.revenue)}</div></div>
-<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.expenses)}</div></div>
-<div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح السنوي</div><div class="kpi-value" style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</div></div>
-</div>
+
+<div class="section"><div class="section-title">الملخص المالي السنوي</div>
+<div class="kpi-grid">
+<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.revenue)}</div><div class="kpi-note">مجموع الإيرادات الشهرية</div></div>
+<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.expenses)}</div><div class="kpi-note">مجموع المصروفات الشهرية</div></div>
+<div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح السنوي</div><div class="kpi-value" style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</div><div class="kpi-note">الإيرادات − المصروفات</div></div>
+</div></div>
+
+${chartSvg ? `<div class="section"><div class="section-title">أداء الإيرادات والمصروفات الشهرية</div>${chartSvg}</div>` : ""}
+
+<div class="section-auto"><div class="section-title">تفاصيل الإيرادات والمصروفات الشهرية</div>
 <table><thead><tr><th>الشهر</th><th>الإيرادات (ر.س)</th><th>المصروفات (ر.س)</th><th>صافي الربح (ر.س)</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr><td>الإجمالي السنوي</td><td>${formatAmount(yearly.totals.revenue)}</td><td>${formatAmount(yearly.totals.expenses)}</td><td style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</td></tr></tfoot>
-</table>
+</table></div>
+
 <div class="footer" style="font-size:12px;font-weight:500;color:#666;">تم إصدار هذا التقرير عبر منصة تكية · ${hijriYearY} هـ / ${gregYearY} م</div>
 </div>${scriptTag}</body></html>`;
 }
@@ -16168,7 +16232,8 @@ async function generateAndUploadReportPdf(
   } else {
     fileName = `Annual_Report_${params.year ?? new Date().getFullYear()}.pdf`;
     const qr = await generateReportQrDataUrl("yearly", params.year!);
-    html = buildYearlyReportHtml(params.year!, params.propertyName, params.yearly!, false, qr);
+    const logo = await getLogoDataUrl();
+    html = buildYearlyReportHtml(params.year!, params.propertyName, params.yearly!, false, qr, logo);
   }
 
   const { blob } = await htmlToPdfBlob(html, fileName);
@@ -16607,7 +16672,8 @@ function ReportsTab() {
         const logo = await getLogoDataUrl();
         htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel, logo);
       } else if (activeWaYearly) {
-        htmlContent = buildYearlyReportHtml(activeWaYearStr, selectedPropertyName, activeWaYearly, false, qr);
+        const logo = await getLogoDataUrl();
+        htmlContent = buildYearlyReportHtml(activeWaYearStr, selectedPropertyName, activeWaYearly, false, qr, logo);
       } else return;
 
       const { blob } = await htmlToPdfBlob(htmlContent, shareFileName);
