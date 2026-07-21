@@ -15928,10 +15928,12 @@ function buildMonthlyBarChartSvg(
 ): string {
   if (!monthly || monthly.length === 0) return "";
   const W = 670;
-  const BAR_BOTTOM = 108;   // y of baseline (bars sit above this)
-  const LABEL_Y   = 122;    // y of month-name text baseline (14px below bars)
-  const LEGEND_Y  = 142;    // y of legend row (rect top, 20px below labels)
-  const H         = 158;    // total SVG height
+  const LEGEND_Y  = 2;      // legend rect top — sits above bars
+  const BAR_TOP   = 22;     // bars start below legend
+  const BAR_H     = 92;     // height of bar area
+  const BAR_BOTTOM = BAR_TOP + BAR_H;  // baseline y = 114
+  const LABEL_Y   = BAR_BOTTOM + 18;  // month labels y = 132 (18px gap)
+  const H         = LABEL_Y + 10;     // total SVG height = 142
 
   const maxVal = Math.max(...monthly.flatMap(m => [m.revenue, m.expenses]), 1);
   const n = monthly.length;
@@ -15941,8 +15943,8 @@ function buildMonthlyBarChartSvg(
 
   const bars = monthly.map((m, i) => {
     const gx = GROUP_GAP + i * (groupW + GROUP_GAP);
-    const revH = m.revenue > 0 ? Math.max(3, Math.round((m.revenue / maxVal) * BAR_BOTTOM)) : 0;
-    const expH = m.expenses > 0 ? Math.max(3, Math.round((m.expenses / maxVal) * BAR_BOTTOM)) : 0;
+    const revH = m.revenue > 0 ? Math.max(3, Math.round((m.revenue / maxVal) * BAR_H)) : 0;
+    const expH = m.expenses > 0 ? Math.max(3, Math.round((m.expenses / maxVal) * BAR_H)) : 0;
     const [, mm] = m.month.split("-");
     const monthIdx = parseInt(mm, 10) - 1;
     const yearPart = parseInt(m.month.split("-")[0], 10);
@@ -15952,13 +15954,13 @@ function buildMonthlyBarChartSvg(
     return [
       `<rect x="${gx}" y="${BAR_BOTTOM - (revH || 1)}" width="${barW}" height="${revH || 1}" fill="#16a34a" rx="2" opacity="${revH > 0 ? "0.85" : "0.12"}"/>`,
       `<rect x="${gx + barW + 3}" y="${BAR_BOTTOM - (expH || 1)}" width="${barW}" height="${expH || 1}" fill="#dc2626" rx="2" opacity="${expH > 0 ? "0.7" : "0.12"}"/>`,
-      `<text x="${gx + groupW / 2}" y="${LABEL_Y}" text-anchor="middle" font-size="9.5" fill="#666" font-family="Segoe UI,Tahoma,Arial,sans-serif">${label}</text>`,
+      `<text x="${gx + groupW / 2}" y="${LABEL_Y}" text-anchor="middle" font-size="10" font-weight="600" fill="#444" font-family="Segoe UI,Tahoma,Arial,sans-serif">${label}</text>`,
     ].join("");
   }).join("");
 
   const baseline = `<line x1="0" y1="${BAR_BOTTOM}" x2="${W}" y2="${BAR_BOTTOM}" stroke="#e8e2d0" stroke-width="1"/>`;
 
-  /* ── Legend centred at the bottom ── */
+  /* ── Legend at the top, right-aligned ── */
   const lgCX = W / 2;
   const legend = [
     `<rect x="${lgCX - 90}" y="${LEGEND_Y}" width="10" height="10" fill="#16a34a" rx="2"/>`,
@@ -16103,19 +16105,19 @@ function buildYearlyReportHtml(
 
 <div class="header">
 <div class="header-brand">${logoHtml}</div>
-<div class="header-center"><div class="report-title">التقرير السنوي – ${year}</div><div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
+<div class="header-center"><div class="report-title">التقرير السنوي – ${toAr(year)}</div><div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
 
 <div class="section"><div class="section-title">الملخص المالي السنوي</div>
 <div class="kpi-grid">
-<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.revenue)}</div><div class="kpi-note">مجموع الإيرادات الشهرية</div></div>
-<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.expenses)}</div><div class="kpi-note">مجموع المصروفات الشهرية</div></div>
+<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.revenue)}</div><div class="kpi-note">مجموع الإيرادات السنوية</div></div>
+<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.expenses)}</div><div class="kpi-note">مجموع المصروفات السنوية</div></div>
 <div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح السنوي</div><div class="kpi-value" style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</div><div class="kpi-note">الإيرادات − المصروفات</div></div>
 </div></div>
 
-${chartSvg ? `<div class="section"><div class="section-title">أداء الإيرادات والمصروفات الشهرية</div>${chartSvg}</div>` : ""}
+${chartSvg ? `<div class="section"><div class="section-title">أداء الإيرادات والمصروفات السنوية</div>${chartSvg}</div>` : ""}
 
-<div class="section-auto"><div class="section-title">تفاصيل الإيرادات والمصروفات الشهرية</div>
+<div class="section-auto"><div class="section-title">تفاصيل الإيرادات والمصروفات</div>
 <table><thead><tr><th>الشهر</th><th>الإيرادات (ر.س)</th><th>المصروفات (ر.س)</th><th>صافي الربح (ر.س)</th></tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr><td>الإجمالي السنوي</td><td>${formatAmount(yearly.totals.revenue)}</td><td>${formatAmount(yearly.totals.expenses)}</td><td style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</td></tr></tfoot>
