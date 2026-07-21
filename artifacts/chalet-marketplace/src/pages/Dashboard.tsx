@@ -16199,9 +16199,10 @@ function ReportsTab() {
     const { year, month } = getHijriYMClient(new Date());
     return year ? `${year}-${String(month).padStart(2, "0")}` : "";
   });
-  const [selectedHijriYear, setSelectedHijriYear] = useState(() =>
-    String(new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric" }).format(new Date()))
-  );
+  const [selectedHijriYear, setSelectedHijriYear] = useState(() => {
+    const { year } = getHijriYMClient(new Date());
+    return String(year || nowHijriYearNum || 1448);
+  });
   const [sharePhone, setSharePhone] = useState(() => localStorage.getItem("reportSharePhone") ?? "");
   const [shareEmail, setShareEmail] = useState(() => localStorage.getItem("reportShareEmail") ?? "");
   const [showShare, setShowShare] = useState(false);
@@ -16509,8 +16510,22 @@ function ReportsTab() {
   }, [reportYears]);
 
   const hijriYearOptions = useMemo(() => {
-    const years = reportYears?.hijriYears ?? [parseInt(new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric" }).format(new Date()), 10)];
+    const years = reportYears?.hijriYears ?? [nowHijriYearNum || 1448];
     return years.map((y) => ({ val: String(y), label: `${y} هـ` }));
+  }, [reportYears]);
+
+  /* ── Auto-select the latest available year whenever reportYears loads or changes ── */
+  useEffect(() => {
+    if (!reportYears) return;
+    const gregStrs = reportYears.gregorianYears.map(String);
+    const hijrStrs = reportYears.hijriYears.map(String);
+    if (gregStrs.length > 0 && !gregStrs.includes(selectedYear)) {
+      setSelectedYear(gregStrs[0]);
+    }
+    if (hijrStrs.length > 0 && !hijrStrs.includes(selectedHijriYear)) {
+      setSelectedHijriYear(hijrStrs[0]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportYears]);
 
   const slotLabels: Record<string, { icon: ReactElement; label: string }> = {
@@ -16898,8 +16913,18 @@ function ReportsTab() {
             {(["gregorian", "hijri"] as const).map((c) => (
               <button key={c} type="button"
                 onClick={() => {
-                  if (viewMode === "monthly") setIsHijri(c === "hijri");
-                  else setIsYearlyHijri(c === "hijri");
+                  if (viewMode === "monthly") {
+                    setIsHijri(c === "hijri");
+                  } else {
+                    const toHijri = c === "hijri";
+                    setIsYearlyHijri(toHijri);
+                    /* ── Snap immediately to latest year of the new calendar ── */
+                    if (toHijri && reportYears?.hijriYears?.length) {
+                      setSelectedHijriYear(String(reportYears.hijriYears[0]));
+                    } else if (!toHijri && reportYears?.gregorianYears?.length) {
+                      setSelectedYear(String(reportYears.gregorianYears[0]));
+                    }
+                  }
                 }}
                 className={`h-full px-3 rounded-md text-xs font-bold transition-colors ${
                   (viewMode === "monthly" ? isHijri : isYearlyHijri) === (c === "hijri")
