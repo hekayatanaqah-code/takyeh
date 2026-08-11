@@ -15929,11 +15929,11 @@ function buildMonthlyBarChartSvg(
   if (!monthly || monthly.length === 0) return "";
   const W        = 670;
   const BAR_H    = 100;          // bar area height; baseline sits at y=100
-  const LABEL_Y  = BAR_H + 26;  // month-name text baseline = 126 (ample gap from bars)
-  const H        = LABEL_Y + 24; // total SVG height = 150 (room for font-size 11)
+  const LABEL_Y  = BAR_H + 12;  // start of rotated label anchor (close under baseline)
+  const H        = LABEL_Y + 68; // extra height for −45° rotated full names
 
-  // Short unique Hijri month abbreviations (no slice — avoids identical "ربي"/"جما")
-  const HIJRI_SHORT = ["محرم","صفر","رب١","رب٢","جما١","جما٢","رجب","شعبان","رمضان","شوال","قعدة","حجة"];
+  // Full Hijri month names — displayed rotated so they never truncate
+  const HIJRI_FULL = ["محرم","صفر","ربيع الأول","ربيع الثاني","جمادى الأولى","جمادى الثانية","رجب","شعبان","رمضان","شوال","ذو القعدة","ذو الحجة"];
 
   const maxVal = Math.max(...monthly.flatMap(m => [m.revenue, m.expenses]), 1);
   const n = monthly.length;
@@ -15948,13 +15948,19 @@ function buildMonthlyBarChartSvg(
     const [, mm] = m.month.split("-");
     const monthIdx = parseInt(mm, 10) - 1;
     const yearPart = parseInt(m.month.split("-")[0], 10);
-    const label = yearPart < 1800
-      ? (HIJRI_SHORT[monthIdx] ?? toAr(monthIdx + 1))
+    const isHijri = yearPart < 1800;
+    const label = isHijri
+      ? (HIJRI_FULL[monthIdx] ?? toAr(monthIdx + 1))
       : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "short" });
+    const cx = gx + groupW / 2;
+    // Gregorian short names fit horizontally; Hijri full names are rotated −45°
+    const labelEl = isHijri
+      ? `<text x="${cx}" y="${LABEL_Y}" text-anchor="end" transform="rotate(-45,${cx},${LABEL_Y})" font-size="10" font-weight="600" fill="#444" font-family="Segoe UI,Tahoma,Arial,sans-serif">${label}</text>`
+      : `<text x="${cx}" y="${LABEL_Y + 16}" text-anchor="middle" font-size="11" font-weight="600" fill="#444" font-family="Segoe UI,Tahoma,Arial,sans-serif">${label}</text>`;
     return [
       `<rect x="${gx}" y="${BAR_H - (revH || 1)}" width="${barW}" height="${revH || 1}" fill="#16a34a" rx="2" opacity="${revH > 0 ? "0.85" : "0.12"}"/>`,
       `<rect x="${gx + barW + 3}" y="${BAR_H - (expH || 1)}" width="${barW}" height="${expH || 1}" fill="#dc2626" rx="2" opacity="${expH > 0 ? "0.7" : "0.12"}"/>`,
-      `<text x="${gx + groupW / 2}" y="${LABEL_Y}" text-anchor="middle" font-size="11" font-weight="600" fill="#444" font-family="Segoe UI,Tahoma,Arial,sans-serif">${label}</text>`,
+      labelEl,
     ].join("");
   }).join("");
 
