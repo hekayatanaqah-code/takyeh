@@ -15903,7 +15903,7 @@ type ReportBreakdown = {
   totBase: number; totSvc: number; totTotal: number;
 } | null;
 
-const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:36px 40px;background:#fff;}.header{border-bottom:3px solid #8C6246;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#8C6246;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.section{margin-bottom:24px;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#8C6246;border-right:3px solid #8C6246;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:14px 14px 12px;}.kpi-label{font-size:12px;color:#333;font-weight:600;margin-bottom:5px;}.kpi-value{font-size:20px;font-weight:700;color:#111;line-height:1.25;}.kpi-note{font-size:10.5px;color:#555;font-weight:500;margin-top:3px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;word-wrap:break-word;}th{background:#8C6246;color:#fff;padding:6px 8px;text-align:right;vertical-align:middle;}td{padding:6px 8px;border-bottom:1px solid #ede9dd;word-break:break-word;vertical-align:middle;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #8C6246;}table th,table td,table tfoot td{vertical-align:middle!important;padding-top:4px!important;padding-bottom:8px!important;line-height:1!important;}.slot-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}.slot-chip{background:#faf9f6;border:1px solid #e8e2d0;border-radius:6px;padding:5px 12px;font-size:12px;color:#555;}.footer{margin-top:32px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
+const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:36px 40px;background:#fff;}.header{border-bottom:3px solid #8C6246;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#8C6246;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.section{margin-bottom:24px;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#8C6246;border-right:3px solid #8C6246;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:14px 14px 12px;}.kpi-label{font-size:12px;color:#333;font-weight:600;margin-bottom:5px;}.kpi-value{font-size:20px;font-weight:700;color:#111;line-height:1.25;}.kpi-note{font-size:10.5px;color:#555;font-weight:500;margin-top:3px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;word-wrap:break-word;}th{background:#8C6246;color:#fff;padding:6px 8px;text-align:right;vertical-align:middle;}td{padding:6px 8px;border-bottom:1px solid #ede9dd;word-break:break-word;vertical-align:middle;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #8C6246;}table th,table td,table tfoot td{vertical-align:middle!important;padding:6px 8px!important;line-height:1.3!important;}.slot-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}.slot-chip{background:#faf9f6;border:1px solid #e8e2d0;border-radius:6px;padding:5px 12px;font-size:12px;color:#555;}.footer{margin-top:32px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
 
 function buildRevBarSvg(dailyRevenue: { day: number; revenue: number }[]): string {
   if (!dailyRevenue || dailyRevenue.length === 0) return "";
@@ -16196,9 +16196,12 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
+    // Threshold: ignore trailing sliver < 4% of page height (avoids blank second page)
+    const MIN_SLICE_PX = Math.round(pageHeightCanvasPx * 0.04);
     let srcY = 0;
     let pageIndex = 0;
     while (srcY < canvas.height) {
+      if (canvas.height - srcY < MIN_SLICE_PX) break; // skip near-empty trailing slice
       if (pageIndex > 0) pdf.addPage();
 
       // White background for this page
@@ -16656,31 +16659,34 @@ function ReportsTab() {
       const waYearStr = isYearlyHijri ? selectedHijriYear : selectedYear;
       const waYearLabel = isYearlyHijri ? `${selectedHijriYear} هـ` : selectedYear;
       if (!waYearly) return;
-      titleText = `التقرير السنوي ${toAr(waYearStr)} – ${selectedPropertyName}`;
+      const calTypeLabel = isYearlyHijri ? "الهجري" : "الميلادي";
+      titleText = `التقرير السنوي ${calTypeLabel} - ${toAr(waYearStr)} – ${selectedPropertyName}`;
       bodyText =
-`📊 *التقرير السنوي ${toAr(waYearStr)}*
-🏡 *المنشأة:* ${selectedPropertyName}
-💰 *الإيرادات:* ${toAr(formatAmount(waYearly.totals.revenue))}
-🔴 *المصروفات:* ${toAr(formatAmount(waYearly.totals.expenses))}
-⭐ *صافي الربح:* ${toAr(formatAmountSigned(waYearly.totals.netProfit))}
-✨ *منصة تكية لإدارة الحجوزات*`;
+`📊 التقرير السنوي ${calTypeLabel} - ${toAr(waYearStr)}
+🏡 المنشأة: ${selectedPropertyName}
+💰 الإيرادات: ${toAr(formatAmount(waYearly.totals.revenue))} ر.س
+🔴 المصروفات: ${toAr(formatAmount(waYearly.totals.expenses))} ر.س
+⭐ صافي الربح: ${toAr(formatAmountSigned(waYearly.totals.netProfit))} ر.س
+
+✨ منصة تكية لإدارة الحجوزات`;
       console.log("[WA-SHARE] bodyText:", bodyText);
     } else return;
 
-    // اسم الملف: أرقام قياسية فقط لضمان تمريرها سليمة عبر واتساب
-    // شهري هجري  → 1447-10.pdf  |  شهري ميلادي → 2026-07.pdf  |  سنوي → 2026.pdf
+    // اسم الملف بالعربي الكامل مع اسم المنشأة (مسافات → شرطة سفلية)
+    const safePropName = selectedPropertyName.replace(/\s+/g, "_");
     let shareFileName: string;
     if (viewMode === "monthly") {
       if (isHijri && selectedHijriMonthVal) {
         const [hy, hm] = selectedHijriMonthVal.split("-").map(Number);
-        shareFileName = `${hy}-${String(hm).padStart(2, "0")}.pdf`;
+        shareFileName = `التقرير_الشهري_الهجري_${hy}-${String(hm).padStart(2, "0")}_${safePropName}.pdf`;
       } else {
         const [gy, gm] = selectedMonth.split("-").map(Number);
-        shareFileName = `${gy}-${String(gm).padStart(2, "0")}.pdf`;
+        shareFileName = `التقرير_الشهري_الميلادي_${gy}-${String(gm).padStart(2, "0")}_${safePropName}.pdf`;
       }
     } else {
       const waYearStr = isYearlyHijri ? selectedHijriYear : selectedYear;
-      shareFileName = `${waYearStr}.pdf`;
+      const calSuffix = isYearlyHijri ? "الهجري" : "الميلادي";
+      shareFileName = `التقرير_السنوي_${calSuffix}_${waYearStr}_${safePropName}.pdf`;
     }
 
     setWaLoading(true);
