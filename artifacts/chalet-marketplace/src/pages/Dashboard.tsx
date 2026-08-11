@@ -15955,7 +15955,9 @@ function buildMonthlyBarChartSvg(
     const cx = gx + groupW / 2;
     // All months: single line, −45° rotation from anchor point, text-anchor="end"
     // so right-end of text sits at (cx, LABEL_Y) and text extends diagonally down-left
-    const labelEl = `<text x="${cx}" y="${LABEL_Y}" text-anchor="end" transform="rotate(-45,${cx},${LABEL_Y})" font-size="10" font-weight="600" fill="#444" font-family="Segoe UI,Tahoma,Arial,sans-serif">${label}</text>`;
+    // g-transform pattern: translate to anchor, rotate -45°, draw text from x=0 going left.
+    // direction="rtl" + text-anchor="start" anchors the first Arabic char at (cx,LABEL_Y).
+    const labelEl = `<g transform="translate(${cx},${LABEL_Y}) rotate(-45)"><text x="0" y="0" direction="rtl" text-anchor="start" font-size="10" font-weight="600" fill="#444" font-family="Segoe UI,Tahoma,Arial,sans-serif">${label}</text></g>`;
     return [
       `<rect x="${gx}" y="${BAR_H - (revH || 1)}" width="${barW}" height="${revH || 1}" fill="#16a34a" rx="2" opacity="${revH > 0 ? "0.85" : "0.12"}"/>`,
       `<rect x="${gx + barW + 3}" y="${BAR_H - (expH || 1)}" width="${barW}" height="${expH || 1}" fill="#dc2626" rx="2" opacity="${expH > 0 ? "0.7" : "0.12"}"/>`,
