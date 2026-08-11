@@ -15929,8 +15929,8 @@ function buildMonthlyBarChartSvg(
   if (!monthly || monthly.length === 0) return "";
   const W        = 670;
   const BAR_H    = 100;          // bar area height; baseline sits at y=100
-  const LABEL_Y  = BAR_H + 18;  // anchor point for rotated labels (gap below baseline)
-  const H        = LABEL_Y + 72; // room for longest name rotated −45° from center
+  const LABEL_Y  = BAR_H + 36;  // anchor point: 36px below baseline — guaranteed no overlap
+  const H        = LABEL_Y + 72; // room for longest name rotated −45°
 
   // Full Hijri month names — single line, never truncated
   const HIJRI_FULL = ["محرم","صفر","ربيع الأول","ربيع الآخر","جمادى الأولى","جمادى الآخرة","رجب","شعبان","رمضان","شوال","ذو القعدة","ذو الحجة"];
@@ -15955,7 +15955,7 @@ function buildMonthlyBarChartSvg(
     const cx = gx + groupW / 2;
     // All months: single line, −45° rotation from anchor point, text-anchor="end"
     // so right-end of text sits at (cx, LABEL_Y) and text extends diagonally down-left
-    const labelEl = `<text x="${cx}" y="${LABEL_Y}" text-anchor="end" dominant-baseline="hanging" transform="rotate(-45,${cx},${LABEL_Y})" font-size="10" font-weight="600" fill="#444" font-family="Segoe UI,Tahoma,Arial,sans-serif" xml:space="preserve">${label}</text>`;
+    const labelEl = `<text x="${cx}" y="${LABEL_Y}" text-anchor="end" transform="rotate(-45,${cx},${LABEL_Y})" font-size="10" font-weight="600" fill="#444" font-family="Segoe UI,Tahoma,Arial,sans-serif">${label}</text>`;
     return [
       `<rect x="${gx}" y="${BAR_H - (revH || 1)}" width="${barW}" height="${revH || 1}" fill="#16a34a" rx="2" opacity="${revH > 0 ? "0.85" : "0.12"}"/>`,
       `<rect x="${gx + barW + 3}" y="${BAR_H - (expH || 1)}" width="${barW}" height="${expH || 1}" fill="#dc2626" rx="2" opacity="${expH > 0 ? "0.7" : "0.12"}"/>`,
