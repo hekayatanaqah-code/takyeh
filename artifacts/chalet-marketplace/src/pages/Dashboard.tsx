@@ -15936,12 +15936,14 @@ function buildMonthlyBarChartSvg(
   const HIJRI_FULL = ["محرم","صفر","ربيع الأول","ربيع الآخر","جمادى الأولى","جمادى الآخرة","رجب","شعبان","رمضان","شوال","ذو القعدة","ذو الحجة"];
 
   const maxVal = Math.max(...monthly.flatMap(m => [m.revenue, m.expenses]), 1);
-  const n = monthly.length;
+  // Reverse for RTL display: first month (محرم/يناير) at rightmost position
+  const monthsRTL = [...monthly].reverse();
+  const n = monthsRTL.length;
   const GROUP_GAP = 5;
   const groupW = Math.floor((W - GROUP_GAP * (n + 1)) / n);
   const barW = Math.max(4, Math.floor((groupW - 3) / 2));
 
-  const bars = monthly.map((m, i) => {
+  const bars = monthsRTL.map((m, i) => {
     const gx = GROUP_GAP + i * (groupW + GROUP_GAP);
     const revH = m.revenue > 0 ? Math.max(3, Math.round((m.revenue / maxVal) * BAR_H)) : 0;
     const expH = m.expenses > 0 ? Math.max(3, Math.round((m.expenses / maxVal) * BAR_H)) : 0;
