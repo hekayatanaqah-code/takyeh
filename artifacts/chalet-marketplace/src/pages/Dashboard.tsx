@@ -15903,7 +15903,7 @@ type ReportBreakdown = {
   totBase: number; totSvc: number; totTotal: number;
 } | null;
 
-const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:36px 40px;background:#fff;}.header{border-bottom:3px solid #8C6246;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#8C6246;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.section{margin-bottom:24px;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#8C6246;border-right:3px solid #8C6246;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:14px 14px 12px;}.kpi-label{font-size:12px;color:#333;font-weight:600;margin-bottom:5px;}.kpi-value{font-size:20px;font-weight:700;color:#111;line-height:1.25;}.kpi-note{font-size:10.5px;color:#555;font-weight:500;margin-top:3px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;word-wrap:break-word;}th{background:#8C6246;color:#fff;padding:6px 8px;text-align:right;vertical-align:middle;}td{padding:6px 8px;border-bottom:1px solid #ede9dd;word-break:break-word;vertical-align:middle;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #8C6246;}table th,table td,table tfoot td{vertical-align:middle!important;padding:6px 8px!important;line-height:1.3!important;}.slot-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}.slot-chip{background:#faf9f6;border:1px solid #e8e2d0;border-radius:6px;padding:5px 12px;font-size:12px;color:#555;}.footer{margin-top:32px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
+const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:36px 40px;background:#fff;}.header{border-bottom:3px solid #8C6246;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#8C6246;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.section{margin-bottom:24px;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:24px;}.section-title{font-size:15px;font-weight:700;color:#8C6246;border-right:3px solid #8C6246;padding-right:10px;margin-bottom:12px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:14px 14px 12px;}.kpi-label{font-size:12px;color:#333;font-weight:600;margin-bottom:5px;}.kpi-value{font-size:20px;font-weight:700;color:#111;line-height:1.25;}.kpi-note{font-size:10.5px;color:#555;font-weight:500;margin-top:3px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;word-wrap:break-word;}th{background:#8C6246;color:#fff;padding:6px 8px;text-align:right;vertical-align:middle;}td{padding:6px 8px;border-bottom:1px solid #ede9dd;word-break:break-word;vertical-align:middle;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #8C6246;}table th,table td,table tfoot td{vertical-align:middle!important;padding:8px 10px!important;line-height:1.2!important;}.slot-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}.slot-chip{background:#faf9f6;border:1px solid #e8e2d0;border-radius:6px;padding:5px 12px;font-size:12px;color:#555;}.footer{margin-top:32px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:10px;}`;
 
 function buildRevBarSvg(dailyRevenue: { day: number; revenue: number }[]): string {
   if (!dailyRevenue || dailyRevenue.length === 0) return "";
@@ -16004,7 +16004,7 @@ function buildMonthlyReportHtml(
     : `<div class="qr-block" style="width:80px;"></div>`;
   const insuranceHeld = financial?.totalInsuranceHeld ?? 0;
   const insuranceDeducted = financial?.totalInsuranceDeducted ?? 0;
-  const printMediaCss = `@page{margin:0!important;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
+  const printMediaCss = `@page{size:A4;margin:0!important;}@media print{html,body{max-height:297mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
   const dailyChartSvg = report?.dailyRevenue && report.dailyRevenue.length > 0
     ? buildRevBarSvg(report.dailyRevenue) : "";
@@ -16097,7 +16097,7 @@ function buildYearlyReportHtml(
     ? `<img src="${logoDataUrl}" style="height:68px;width:auto;object-fit:contain;display:block;" alt="تكية" />`
     : `<svg width="148" height="52" viewBox="0 0 148 52" xmlns="http://www.w3.org/2000/svg"><polygon points="10,27 26,11 42,27" fill="none" stroke="#8C6246" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><rect x="14" y="26" width="24" height="18" rx="2" fill="#8C6246" opacity="0.1" stroke="#8C6246" stroke-width="2"/><rect x="21" y="31" width="10" height="13" rx="1.5" fill="#8C6246" opacity="0.45"/><line x1="52" y1="10" x2="52" y2="43" stroke="#d9c9b8" stroke-width="1"/><text x="60" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="21" font-weight="900" fill="#8C6246">تكية</text><text x="60" y="42" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="9.5" fill="#a07852">منصة الشاليهات</text></svg>`;
   const chartSvg = buildMonthlyBarChartSvg(yearly.monthly);
-  const printMediaCss = `@page{margin:0!important;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
+  const printMediaCss = `@page{size:A4;margin:0!important;}@media print{html,body{max-height:297mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <title>التقرير_السنوي_${toAr(year)}${Number(year) < 1900 ? " هـ" : ""}.pdf</title>
@@ -16672,21 +16672,20 @@ function ReportsTab() {
       console.log("[WA-SHARE] bodyText:", bodyText);
     } else return;
 
-    // اسم الملف بالعربي الكامل مع اسم المنشأة (مسافات → شرطة سفلية)
-    const safePropName = selectedPropertyName.replace(/\s+/g, "_");
+    // اسم الملف: أرقام فقط لضمان عدم تكسير النص العربي في واتساب
+    // شهري هجري → 1447-10.pdf | شهري ميلادي → 2026-07.pdf | سنوي → 1448.pdf / 2026.pdf
     let shareFileName: string;
     if (viewMode === "monthly") {
       if (isHijri && selectedHijriMonthVal) {
         const [hy, hm] = selectedHijriMonthVal.split("-").map(Number);
-        shareFileName = `التقرير_الشهري_الهجري_${hy}-${String(hm).padStart(2, "0")}_${safePropName}.pdf`;
+        shareFileName = `${hy}-${String(hm).padStart(2, "0")}.pdf`;
       } else {
         const [gy, gm] = selectedMonth.split("-").map(Number);
-        shareFileName = `التقرير_الشهري_الميلادي_${gy}-${String(gm).padStart(2, "0")}_${safePropName}.pdf`;
+        shareFileName = `${gy}-${String(gm).padStart(2, "0")}.pdf`;
       }
     } else {
       const waYearStr = isYearlyHijri ? selectedHijriYear : selectedYear;
-      const calSuffix = isYearlyHijri ? "الهجري" : "الميلادي";
-      shareFileName = `التقرير_السنوي_${calSuffix}_${waYearStr}_${safePropName}.pdf`;
+      shareFileName = `${waYearStr}.pdf`;
     }
 
     setWaLoading(true);
