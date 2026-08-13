@@ -16112,21 +16112,9 @@ ${qrHtml}</div>
 
 <div class="section"><div class="section-title" style="margin:0 0 10px 0;line-height:1.2;padding-top:2px;padding-bottom:0;">الملخص المالي السنوي</div>
 <div style="display:flex;gap:12px;margin-bottom:20px;">
-  <div class="kpi-card kpi-green" style="flex:1;height:90px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:0 16px;vertical-align:middle;">
-    <div class="kpi-label" style="margin:0 0 4px 0;font-size:11px;color:#333;font-weight:600;">إجمالي الإيرادات السنوية</div>
-    <div class="kpi-value" style="margin:0 0 4px 0;font-size:17px;color:#111;font-weight:700;line-height:1.2;">${yearly.totals.revenue.toLocaleString("ar-SA")} ر.س</div>
-    <div class="kpi-note" style="margin:0;font-size:10px;color:#555;font-weight:500;">مجموع الإيرادات السنوية</div>
-  </div>
-  <div class="kpi-card kpi-red" style="flex:1;height:90px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:0 16px;vertical-align:middle;">
-    <div class="kpi-label" style="margin:0 0 4px 0;font-size:11px;color:#333;font-weight:600;">إجمالي المصروفات السنوية</div>
-    <div class="kpi-value" style="margin:0 0 4px 0;font-size:17px;color:#111;font-weight:700;line-height:1.2;">${yearly.totals.expenses.toLocaleString("ar-SA")} ر.س</div>
-    <div class="kpi-note" style="margin:0;font-size:10px;color:#555;font-weight:500;">مجموع المصروفات السنوية</div>
-  </div>
-  <div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}" style="flex:1;height:90px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:0 16px;vertical-align:middle;">
-    <div class="kpi-label" style="margin:0 0 4px 0;font-size:11px;color:#333;font-weight:600;">صافي الربح السنوي</div>
-    <div class="kpi-value" style="margin:0 0 4px 0;font-size:17px;font-weight:700;line-height:1.2;color:${yearly.totals.netProfit >= 0 ? "#16a34a" : "#dc2626"};">${yearly.totals.netProfit.toLocaleString("ar-SA")} ر.س</div>
-    <div class="kpi-note" style="margin:0;font-size:10px;color:#555;font-weight:500;">الإيرادات - المصروفات</div>
-  </div>
+  <div class="kpi-card kpi-green" style="flex:1;height:90px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:0 16px;"><div class="kpi-label" style="margin:0 0 4px 0;padding-top:0;font-size:11px;color:#333;font-weight:600;">إجمالي الإيرادات السنوية</div><div class="kpi-value" style="margin:0 0 4px 0;padding:0;font-size:17px;color:#111;font-weight:700;line-height:1.2;">${yearly.totals.revenue.toLocaleString("ar-SA")} ر.س</div><div class="kpi-note" style="margin:0;padding:0;font-size:10px;color:#555;font-weight:500;">مجموع الإيرادات السنوية</div></div>
+  <div class="kpi-card kpi-red" style="flex:1;height:90px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:0 16px;"><div class="kpi-label" style="margin:0 0 4px 0;padding-top:0;font-size:11px;color:#333;font-weight:600;">إجمالي المصروفات السنوية</div><div class="kpi-value" style="margin:0 0 4px 0;padding:0;font-size:17px;color:#111;font-weight:700;line-height:1.2;">${yearly.totals.expenses.toLocaleString("ar-SA")} ر.س</div><div class="kpi-note" style="margin:0;padding:0;font-size:10px;color:#555;font-weight:500;">مجموع المصروفات السنوية</div></div>
+  <div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}" style="flex:1;height:90px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:0 16px;"><div class="kpi-label" style="margin:0 0 4px 0;padding-top:0;font-size:11px;color:#333;font-weight:600;">صافي الربح السنوي</div><div class="kpi-value" style="margin:0 0 4px 0;padding:0;font-size:17px;font-weight:700;line-height:1.2;color:${yearly.totals.netProfit >= 0 ? "#16a34a" : "#dc2626"};">${yearly.totals.netProfit.toLocaleString("ar-SA")} ر.س</div><div class="kpi-note" style="margin:0;padding:0;font-size:10px;color:#555;font-weight:500;">الإيرادات - المصروفات</div></div>
 </div></div>
 
 ${chartSvg ? `<div class="section"><div class="section-title" style="margin:0 0 8px 0;line-height:1.2;padding-top:2px;padding-bottom:0;">أداء الإيرادات والمصروفات السنوية</div><div style="display:flex;align-items:center;gap:20px;margin-bottom:6px;direction:rtl;"><span style="display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-size:11px;color:#333;font-weight:600;"><span style="width:12px;height:12px;background:#16a34a;border-radius:3px;flex-shrink:0;display:inline-block;"></span><span>إيرادات</span></span><span style="display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-size:11px;color:#333;font-weight:600;"><span style="width:12px;height:12px;background:#dc2626;border-radius:3px;flex-shrink:0;display:inline-block;"></span><span>مصروفات</span></span></div><div style="padding-bottom:10px;">${chartSvg}</div></div>` : ""}
