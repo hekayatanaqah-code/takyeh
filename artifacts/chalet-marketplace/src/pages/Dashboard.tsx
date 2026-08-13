@@ -16111,21 +16111,21 @@ function buildYearlyReportHtml(
 ${qrHtml}</div>
 
 <div class="section"><div class="section-title" style="margin:0 0 10px 0;line-height:1.2;padding-top:2px;">الملخص المالي السنوي</div>
-<div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:20px;">
-  <div style="flex:1;border:1px solid #bbf7d0;background-color:#f0fdf4;border-radius:8px;padding:12px;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:85px;">
-    <div style="font-size:11px;color:#333;font-weight:600;margin-bottom:4px;">إجمالي الإيرادات السنوية</div>
-    <div style="font-size:17px;color:#111;font-weight:700;line-height:1;">${formatAmount(yearly.totals.revenue)} <span style="font-size:11px;">ر.س</span></div>
-    <div style="font-size:10px;color:#555;margin-top:4px;">مجموع الإيرادات السنوية</div>
+<div style="display:flex;gap:12px;margin-bottom:20px;">
+  <div class="kpi-card kpi-green" style="flex:1;min-height:95px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:12px 16px;">
+    <div class="kpi-label" style="margin:0 0 4px 0;font-size:11px;color:#333;font-weight:600;">إجمالي الإيرادات السنوية</div>
+    <div class="kpi-value" style="margin:0 0 4px 0;font-size:17px;color:#111;font-weight:700;line-height:1.2;">${yearly.totals.revenue.toLocaleString("ar-SA")} ر.س</div>
+    <div class="kpi-note" style="margin:0;font-size:10px;color:#555;font-weight:500;">مجموع الإيرادات السنوية</div>
   </div>
-  <div style="flex:1;border:1px solid #fecdd3;background-color:#fff1f2;border-radius:8px;padding:12px;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:85px;">
-    <div style="font-size:11px;color:#333;font-weight:600;margin-bottom:4px;">إجمالي المصروفات السنوية</div>
-    <div style="font-size:17px;color:#111;font-weight:700;line-height:1;">${formatAmount(yearly.totals.expenses)} <span style="font-size:11px;">ر.س</span></div>
-    <div style="font-size:10px;color:#555;margin-top:4px;">مجموع المصروفات السنوية</div>
+  <div class="kpi-card kpi-red" style="flex:1;min-height:95px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:12px 16px;">
+    <div class="kpi-label" style="margin:0 0 4px 0;font-size:11px;color:#333;font-weight:600;">إجمالي المصروفات السنوية</div>
+    <div class="kpi-value" style="margin:0 0 4px 0;font-size:17px;color:#111;font-weight:700;line-height:1.2;">${yearly.totals.expenses.toLocaleString("ar-SA")} ر.س</div>
+    <div class="kpi-note" style="margin:0;font-size:10px;color:#555;font-weight:500;">مجموع المصروفات السنوية</div>
   </div>
-  <div style="flex:1;border:1px solid ${yearly.totals.netProfit >= 0 ? "#bbf7d0;background-color:#f0fdf4" : "#fecdd3;background-color:#fff1f2"};border-radius:8px;padding:12px;display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:85px;">
-    <div style="font-size:11px;color:#333;font-weight:600;margin-bottom:4px;">صافي الربح السنوي</div>
-    <div style="font-size:17px;font-weight:700;line-height:1;${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)} <span style="font-size:11px;">ر.س</span></div>
-    <div style="font-size:10px;color:#555;margin-top:4px;">الإيرادات - المصروفات</div>
+  <div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}" style="flex:1;min-height:95px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:12px 16px;">
+    <div class="kpi-label" style="margin:0 0 4px 0;font-size:11px;color:#333;font-weight:600;">صافي الربح السنوي</div>
+    <div class="kpi-value" style="margin:0 0 4px 0;font-size:17px;font-weight:700;line-height:1.2;color:${yearly.totals.netProfit >= 0 ? "#16a34a" : "#dc2626"};">${yearly.totals.netProfit.toLocaleString("ar-SA")} ر.س</div>
+    <div class="kpi-note" style="margin:0;font-size:10px;color:#555;font-weight:500;">الإيرادات - المصروفات</div>
   </div>
 </div></div>
 

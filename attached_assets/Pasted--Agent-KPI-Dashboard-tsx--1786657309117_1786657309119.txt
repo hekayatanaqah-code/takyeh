@@ -1,0 +1,27 @@
+"يا Agent، أصلح الكروت فوراً باستبدال كود كروت KPI بالكامل في Dashboard.tsx بهذا الكود الصافي.
+لاحظ أن دالة formatAmount تُرجع كلمة (ر.س) تلقائياً، فلا تضف كلمة (ر.س) يدوياً بعدها مطلقاً حتى لا تتكرر!
+
+HTML
+<div style="display: flex; gap: 12px; margin-bottom: 20px;">
+  <!-- كارت الإيرادات -->
+  <div class="kpi-card kpi-green" style="flex: 1; min-height: 95px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 12px 16px;">
+    <div class="kpi-label" style="margin: 0 0 4px 0; font-size: 11px; color: #333; font-weight: 600;">إجمالي الإيرادات السنوية</div>
+    <div class="kpi-value" style="margin: 0 0 4px 0; font-size: 17px; color: #111; font-weight: 700; line-height: 1.2;">${yearly.totals.revenue.toLocaleString('ar-SA')} ر.س</div>
+    <div class="kpi-note" style="margin: 0; font-size: 10px; color: #555; font-weight: 500;">مجموع الإيرادات السنوية</div>
+  </div>
+
+  <!-- كارت المصروفات -->
+  <div class="kpi-card kpi-red" style="flex: 1; min-height: 95px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 12px 16px;">
+    <div class="kpi-label" style="margin: 0 0 4px 0; font-size: 11px; color: #333; font-weight: 600;">إجمالي المصروفات السنوية</div>
+    <div class="kpi-value" style="margin: 0 0 4px 0; font-size: 17px; color: #111; font-weight: 700; line-height: 1.2;">${yearly.totals.expenses.toLocaleString('ar-SA')} ر.س</div>
+    <div class="kpi-note" style="margin: 0; font-size: 10px; color: #555; font-weight: 500;">مجموع المصروفات السنوية</div>
+  </div>
+
+  <!-- كارت الربح -->
+  <div class="kpi-card ${yearly.totals.netProfit >= 0 ? 'kpi-green' : 'kpi-red'}" style="flex: 1; min-height: 95px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 12px 16px;">
+    <div class="kpi-label" style="margin: 0 0 4px 0; font-size: 11px; color: #333; font-weight: 600;">صافي الربح السنوي</div>
+    <div class="kpi-value" style="margin: 0 0 4px 0; font-size: 17px; font-weight: 700; line-height: 1.2; color: ${yearly.totals.netProfit >= 0 ? '#16a34a' : '#dc2626'};">${yearly.totals.netProfit.toLocaleString('ar-SA')} ر.س</div>
+    <div class="kpi-note" style="margin: 0; font-size: 10px; color: #555; font-weight: 500;">الإيرادات - المصروفات</div>
+  </div>
+</div>
+استبدل قطعة الكروت بهذا الكود المباشر الآن واعرض الشاشة."
