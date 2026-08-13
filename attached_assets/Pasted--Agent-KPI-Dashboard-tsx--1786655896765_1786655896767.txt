@@ -1,0 +1,26 @@
+"يا Agent، قم باستبدال كود كروت الـ KPI الحالي في Dashboard.tsx بهذا البلوك المباشر والمنسق بالكامل للتوسيط (دون استخدام tables):
+
+HTML
+<div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 20px;">
+  <!-- كارت الإيرادات -->
+  <div style="flex: 1; border: 1px solid #bbf7d0; background-color: #f0fdf4; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 85px;">
+    <div style="font-size: 11px; color: #333; font-weight: 600; margin-bottom: 4px;">إجمالي الإيرادات السنوية</div>
+    <div style="font-size: 17px; color: #111; font-weight: 700; line-height: 1;">${formatAmount(yearly.totals.revenue)} <span style="font-size: 11px;">ر.س</span></div>
+    <div style="font-size: 10px; color: #555; margin-top: 4px;">مجموع الإيرادات السنوية</div>
+  </div>
+
+  <!-- كارت المصروفات -->
+  <div style="flex: 1; border: 1px solid #fecdd3; background-color: #fff1f2; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 85px;">
+    <div style="font-size: 11px; color: #333; font-weight: 600; margin-bottom: 4px;">إجمالي المصروفات السنوية</div>
+    <div style="font-size: 17px; color: #111; font-weight: 700; line-height: 1;">${formatAmount(yearly.totals.expenses)} <span style="font-size: 11px;">ر.س</span></div>
+    <div style="font-size: 10px; color: #555; margin-top: 4px;">مجموع المصروفات السنوية</div>
+  </div>
+
+  <!-- كارت الربح -->
+  <div style="flex: 1; border: 1px solid #bbf7d0; background-color: #f0fdf4; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 85px;">
+    <div style="font-size: 11px; color: #333; font-weight: 600; margin-bottom: 4px;">صافي الربح السنوي</div>
+    <div style="font-size: 17px; color: #16a34a; font-weight: 700; line-height: 1;">${formatAmountSigned(yearly.totals.netProfit)} <span style="font-size: 11px;">ر.س</span></div>
+    <div style="font-size: 10px; color: #555; margin-top: 4px;">الإيرادات - المصروفات</div>
+  </div>
+</div>
+استبدل هذا البلوك بالكامل الآن واعرض الشاشة فوراً."
