@@ -16072,6 +16072,7 @@ function buildYearlyReportHtml(
   const gregYearY = toAr(_nowY.getFullYear());
 
   const DASH = `<span style="color:#ccc;font-size:14px;line-height:1;">—</span>`;
+  const TD = `style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;line-height:1.2;"`;
   const rows = yearly.monthly.map(m => {
     const [, mm] = m.month.split("-");
     const monthIdx = parseInt(mm, 10) - 1;
@@ -16082,10 +16083,10 @@ function buildYearlyReportHtml(
     const isEmpty = m.revenue === 0 && m.expenses === 0;
     const netCls = m.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626";
     return `<tr>
-      <td style="font-weight:600">${label}</td>
-      <td>${m.revenue > 0 ? formatAmount(m.revenue) : DASH}</td>
-      <td>${m.expenses > 0 ? formatAmount(m.expenses) : DASH}</td>
-      <td style="${isEmpty ? "" : netCls}">${isEmpty ? DASH : formatAmountSigned(m.netProfit)}</td>
+      <td ${TD} style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;line-height:1.2;font-weight:600;">${label}</td>
+      <td ${TD}>${m.revenue > 0 ? formatAmount(m.revenue) : DASH}</td>
+      <td ${TD}>${m.expenses > 0 ? formatAmount(m.expenses) : DASH}</td>
+      <td ${TD} style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;line-height:1.2;${isEmpty ? "" : netCls}">${isEmpty ? DASH : formatAmountSigned(m.netProfit)}</td>
     </tr>`;
   }).join("");
 
@@ -16109,25 +16110,25 @@ function buildYearlyReportHtml(
 <div class="header-center"><div class="report-title">التقرير السنوي – ${toAr(year)}</div><div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
 
-<div class="section"><div class="section-title" style="margin-bottom:10px;">الملخص المالي السنوي</div>
+<div class="section"><div class="section-title" style="display:flex;align-items:center;margin-bottom:10px;">الملخص المالي السنوي</div>
 <div class="kpi-grid">
-<div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.revenue)}</div><div class="kpi-note">مجموع الإيرادات السنوية</div></div>
-<div class="kpi-card kpi-red"><div class="kpi-label">إجمالي المصروفات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.expenses)}</div><div class="kpi-note">مجموع المصروفات السنوية</div></div>
-<div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}"><div class="kpi-label">صافي الربح السنوي</div><div class="kpi-value" style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</div><div class="kpi-note">الإيرادات − المصروفات</div></div>
+<div class="kpi-card kpi-green" style="display:flex;flex-direction:column;justify-content:center;align-items:flex-start;text-align:right;direction:rtl;padding:12px 16px;"><div class="kpi-label">إجمالي الإيرادات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.revenue)}</div><div class="kpi-note">مجموع الإيرادات السنوية</div></div>
+<div class="kpi-card kpi-red" style="display:flex;flex-direction:column;justify-content:center;align-items:flex-start;text-align:right;direction:rtl;padding:12px 16px;"><div class="kpi-label">إجمالي المصروفات السنوية</div><div class="kpi-value">${formatAmount(yearly.totals.expenses)}</div><div class="kpi-note">مجموع المصروفات السنوية</div></div>
+<div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}" style="display:flex;flex-direction:column;justify-content:center;align-items:flex-start;text-align:right;direction:rtl;padding:12px 16px;"><div class="kpi-label">صافي الربح السنوي</div><div class="kpi-value" style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</div><div class="kpi-note">الإيرادات − المصروفات</div></div>
 </div></div>
 
-${chartSvg ? `<div class="section"><div class="section-title">أداء الإيرادات والمصروفات السنوية</div><div style="display:flex;align-items:center;gap:20px;margin-bottom:6px;direction:rtl;"><span class="legend-item" style="font-size:11px;color:#333;font-weight:600;"><span style="width:12px;height:12px;background:#16a34a;border-radius:3px;display:inline-block;flex-shrink:0;"></span><span>إيرادات</span></span><span class="legend-item" style="font-size:11px;color:#333;font-weight:600;"><span style="width:12px;height:12px;background:#dc2626;border-radius:3px;display:inline-block;flex-shrink:0;"></span><span>مصروفات</span></span></div><div style="padding-bottom:10px;">${chartSvg}</div></div>` : ""}
+${chartSvg ? `<div class="section"><div class="section-title" style="display:flex;align-items:center;margin-bottom:8px;">أداء الإيرادات والمصروفات السنوية</div><div style="display:flex;align-items:center;gap:20px;margin-bottom:6px;direction:rtl;"><span class="legend-item" style="font-size:11px;color:#333;font-weight:600;"><span style="width:12px;height:12px;background:#16a34a;border-radius:3px;display:inline-block;flex-shrink:0;"></span><span>إيرادات</span></span><span class="legend-item" style="font-size:11px;color:#333;font-weight:600;"><span style="width:12px;height:12px;background:#dc2626;border-radius:3px;display:inline-block;flex-shrink:0;"></span><span>مصروفات</span></span></div><div style="padding-bottom:10px;">${chartSvg}</div></div>` : ""}
 
-<div class="section-auto"><div class="section-title" style="margin-bottom:10px;">تفاصيل الإيرادات والمصروفات</div>
+<div class="section-auto"><div class="section-title" style="display:flex;align-items:center;margin-bottom:10px;">تفاصيل الإيرادات والمصروفات</div>
 <table><thead><tr>
-<th>الشهر</th><th>الإيرادات (ر.س)</th><th>المصروفات (ر.س)</th><th>صافي الربح (ر.س)</th>
+<th style="height:38px;padding:10px 8px 4px;text-align:right;direction:rtl;vertical-align:top;">الشهر</th><th style="height:38px;padding:10px 8px 4px;text-align:right;direction:rtl;vertical-align:top;">الإيرادات (ر.س)</th><th style="height:38px;padding:10px 8px 4px;text-align:right;direction:rtl;vertical-align:top;">المصروفات (ر.س)</th><th style="height:38px;padding:10px 8px 4px;text-align:right;direction:rtl;vertical-align:top;">صافي الربح (ر.س)</th>
 </tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr>
-<td>الإجمالي السنوي</td>
-<td>${formatAmount(yearly.totals.revenue)}</td>
-<td>${formatAmount(yearly.totals.expenses)}</td>
-<td style="${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</td>
+<td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;">الإجمالي السنوي</td>
+<td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;">${formatAmount(yearly.totals.revenue)}</td>
+<td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;">${formatAmount(yearly.totals.expenses)}</td>
+<td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</td>
 </tr></tfoot>
 </table></div>
 
