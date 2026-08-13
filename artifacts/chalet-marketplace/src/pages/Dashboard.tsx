@@ -16072,7 +16072,7 @@ function buildYearlyReportHtml(
   const gregYearY = toAr(_nowY.getFullYear());
 
   const DASH = `<span style="color:#ccc;font-size:14px;line-height:1;">—</span>`;
-  const TD = `style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;line-height:1.2;"`;
+  const tdBase = `height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;line-height:1.2;`;
   const rows = yearly.monthly.map(m => {
     const [, mm] = m.month.split("-");
     const monthIdx = parseInt(mm, 10) - 1;
@@ -16081,12 +16081,12 @@ function buildYearlyReportHtml(
       ? (HIJRI_MONTHS_AR[monthIdx] ?? mm)
       : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
     const isEmpty = m.revenue === 0 && m.expenses === 0;
-    const netCls = m.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626";
+    const netCls = m.netProfit >= 0 ? "color:#16a34a;" : "color:#dc2626;";
     return `<tr>
-      <td ${TD} style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;line-height:1.2;font-weight:600;">${label}</td>
-      <td ${TD}>${m.revenue > 0 ? formatAmount(m.revenue) : DASH}</td>
-      <td ${TD}>${m.expenses > 0 ? formatAmount(m.expenses) : DASH}</td>
-      <td ${TD} style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;line-height:1.2;${isEmpty ? "" : netCls}">${isEmpty ? DASH : formatAmountSigned(m.netProfit)}</td>
+      <td style="${tdBase}font-weight:600;">${label}</td>
+      <td style="${tdBase}">${m.revenue > 0 ? formatAmount(m.revenue) : DASH}</td>
+      <td style="${tdBase}">${m.expenses > 0 ? formatAmount(m.expenses) : DASH}</td>
+      <td style="${tdBase}${isEmpty ? "" : netCls}">${isEmpty ? DASH : formatAmountSigned(m.netProfit)}</td>
     </tr>`;
   }).join("");
 
