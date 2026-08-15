@@ -67,6 +67,8 @@ interface DualCalendarPickerProps {
   mode?: "hijri" | "gregorian";
 }
 
+type PickerView = "days" | "months" | "years";
+
 /* ── Main component ── */
 export function DualCalendarPicker({
   value,
@@ -79,6 +81,7 @@ export function DualCalendarPicker({
   mode = "hijri",
 }: DualCalendarPickerProps) {
   const [open, setOpen] = React.useState(false);
+  const [pickerView, setPickerView] = React.useState<PickerView>("days");
 
   /* ── Hijri navigation state ── */
   const _initH = React.useMemo(() => {
@@ -111,6 +114,11 @@ export function DualCalendarPicker({
     }
   }, [value]);
 
+  /* Reset to days view when popover closes */
+  React.useEffect(() => {
+    if (!open) setPickerView("days");
+  }, [open]);
+
   /* ── Hijri month grid ── */
   const hijriMonthDays = React.useMemo(
     () => getHijriMonthDays(pickerHY, pickerHM),
@@ -124,6 +132,42 @@ export function DualCalendarPicker({
 
   const minDateStr = minDate ?? "";
   const todayStr = toGregorianStr(new Date());
+
+  /* ── Year/month ranges for picker ── */
+  const nowH = React.useMemo(() => toHijriComponents(new Date()), []);
+  const nowG = React.useMemo(() => ({ year: new Date().getFullYear(), month: new Date().getMonth() }), []);
+
+  const minHY = React.useMemo(() => {
+    if (minDate) { try { return toHijriComponents(new Date(minDate + "T12:00:00")).year; } catch { /* */ } }
+    return nowH.year - 12;
+  }, [minDate, nowH.year]);
+
+  const minGY = React.useMemo(() => {
+    if (minDate) { try { return new Date(minDate + "T12:00:00").getFullYear(); } catch { /* */ } }
+    return nowG.year - 10;
+  }, [minDate, nowG.year]);
+
+  const minHM = React.useMemo(() => {
+    if (minDate) { try { return toHijriComponents(new Date(minDate + "T12:00:00")).month; } catch { /* */ } }
+    return 1;
+  }, [minDate]);
+
+  const minGM = React.useMemo(() => {
+    if (minDate) { try { return new Date(minDate + "T12:00:00").getMonth(); } catch { /* */ } }
+    return 0;
+  }, [minDate]);
+
+  /* Hijri year list — newest first */
+  const hijriYears = React.useMemo(
+    () => Array.from({ length: nowH.year - minHY + 1 }, (_, i) => nowH.year - i),
+    [nowH.year, minHY],
+  );
+
+  /* Gregorian year list — newest first */
+  const gregYears = React.useMemo(
+    () => Array.from({ length: nowG.year - minGY + 1 }, (_, i) => nowG.year - i),
+    [nowG.year, minGY],
+  );
 
   /* ── Navigation ── */
   const goPrevHijri = () => { const p = prevHijriMonth(pickerHY, pickerHM); setPickerHY(p.year); setPickerHM(p.month); };
@@ -146,6 +190,23 @@ export function DualCalendarPicker({
   /* ── Trigger label ── */
   const primaryLabel  = mode === "gregorian" ? gregorian : hijri;
   const secondaryLabel = mode === "gregorian" ? hijri     : gregorian;
+
+  /* ── Helpers: disable year/month in picker ── */
+  const isYearDisabled = (y: number) => {
+    if (mode === "hijri") return y > nowH.year;
+    return y > nowG.year;
+  };
+  const isMonthDisabledInYear = (m: number /* 1-based for hijri, 0-based for greg */) => {
+    if (mode === "hijri") {
+      if (pickerHY === minHY && m < minHM) return true;
+      if (pickerHY === nowH.year && m > nowH.month) return true;
+      return false;
+    } else {
+      if (pickerGY === minGY && m < minGM) return true;
+      if (pickerGY === nowG.year && m > nowG.month) return true;
+      return false;
+    }
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -182,152 +243,257 @@ export function DualCalendarPicker({
         side="bottom"
         dir="rtl"
       >
-        {/* ── Header ── */}
-        <div className="flex items-center justify-between mb-3 gap-2">
-          {/* RTL: right button = next month */}
-          <button
-            type="button"
-            onClick={goNext}
-            className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-base font-bold text-muted-foreground"
-            aria-label="الشهر التالي"
-          >›</button>
-
-          <div className="flex-1 text-center">
-            {mode === "hijri" ? (
-              <>
-                <p className="text-[1rem] font-bold text-foreground leading-tight">
-                  {HIJRI_MONTHS_AR[pickerHM - 1]} {pickerHY} هـ
-                </p>
-                <p className="text-[0.68rem] font-normal text-muted-foreground leading-tight mt-0.5">
-                  {getGregRangeLabel(hijriMonthDays)}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-[1rem] font-bold text-foreground leading-tight">
-                  {GREG_MONTHS_AR[pickerGM]} {pickerGY} م
-                </p>
-                <p className="text-[0.68rem] font-normal text-muted-foreground leading-tight mt-0.5">
-                  {(() => {
-                    try {
-                      const d1 = new Date(pickerGY, pickerGM, 1);
-                      const h1 = toHijriComponents(d1);
-                      const d2 = new Date(pickerGY, pickerGM + 1, 0);
-                      const h2 = toHijriComponents(d2);
-                      if (h1.month === h2.month)
-                        return `${HIJRI_MONTHS_AR[h1.month - 1]} ${h1.year} هـ`;
-                      return `${HIJRI_MONTHS_AR[h1.month - 1]} – ${HIJRI_MONTHS_AR[h2.month - 1]} ${h2.year} هـ`;
-                    } catch { return ""; }
-                  })()}
-                </p>
-              </>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={goPrev}
-            className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-base font-bold text-muted-foreground"
-            aria-label="الشهر السابق"
-          >‹</button>
-        </div>
-
-        {/* ── Day-of-week headers ── */}
-        <div className="grid grid-cols-7 mb-1">
-          {DAYS_SHORT.map((d) => (
-            <div key={d} className="text-center text-[0.65rem] font-semibold text-muted-foreground select-none pb-1">{d}</div>
-          ))}
-        </div>
-
-        {/* ── Day cells ── */}
-        {mode === "hijri" ? (
-          <div className="grid grid-cols-7 gap-[2px]">
-            {Array.from({ length: hijriFirstDOW }).map((_, i) => <div key={`pad-${i}`} />)}
-            {hijriMonthDays.map(({ date, hijriDay }) => {
-              const gregStr = toGregorianStr(date);
-              const isSelected = value === gregStr;
-              const isToday = todayStr === gregStr;
-              const isDisabled = !!minDateStr && gregStr < minDateStr;
-              return (
-                <button
-                  key={gregStr}
-                  type="button"
-                  disabled={isDisabled}
-                  onClick={() => { onChange(gregStr); flushSync(() => setOpen(false)); }}
-                  className={cn(
-                    "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors",
-                    isDisabled && "opacity-30 pointer-events-none",
-                    isSelected ? "bg-primary text-primary-foreground"
-                      : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
-                      : "hover:bg-accent",
-                  )}
-                >
-                  <span className="text-[1.1rem] font-bold leading-none">{hijriDay.toLocaleString("ar-SA")}</span>
-                  <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#a1a1aa" }}>
-                    {date.getDate()}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="grid grid-cols-7 gap-[2px]">
-            {Array.from({ length: gregFirst }).map((_, i) => <div key={`pad-${i}`} />)}
-            {Array.from({ length: gregDayCount }, (_, i) => i + 1).map((day) => {
-              const gregStr = gregDateStr(pickerGY, pickerGM, day);
-              const isSelected = value === gregStr;
-              const isToday = todayStr === gregStr;
-              const isDisabled = !!minDateStr && gregStr < minDateStr;
-              let hijriDay = 0;
-              try { hijriDay = toHijriComponents(new Date(gregStr + "T12:00:00")).day; } catch { /* */ }
-              return (
-                <button
-                  key={gregStr}
-                  type="button"
-                  disabled={isDisabled}
-                  onClick={() => { onChange(gregStr); flushSync(() => setOpen(false)); }}
-                  className={cn(
-                    "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors",
-                    isDisabled && "opacity-30 pointer-events-none",
-                    isSelected ? "bg-primary text-primary-foreground"
-                      : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
-                      : "hover:bg-accent",
-                  )}
-                >
-                  {/* Gregorian day — large, bold */}
-                  <span className="text-[1.1rem] font-bold leading-none">{day.toLocaleString("ar-SA")}</span>
-                  {/* Hijri day — small, muted */}
-                  <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#a1a1aa" }}>
-                    {hijriDay > 0 ? hijriDay.toLocaleString("ar-SA") : ""}
-                  </span>
-                </button>
-              );
-            })}
+        {/* ══ YEARS VIEW ══ */}
+        {pickerView === "years" && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-bold text-foreground">اختر السنة</span>
+              <button
+                type="button"
+                onClick={() => setPickerView("days")}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-accent"
+              >✕</button>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5 max-h-60 overflow-y-auto">
+              {(mode === "hijri" ? hijriYears : gregYears).map((y) => {
+                const disabled = isYearDisabled(y);
+                const isCurrent = mode === "hijri" ? y === pickerHY : y === pickerGY;
+                return (
+                  <button
+                    key={y}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      if (mode === "hijri") setPickerHY(y);
+                      else setPickerGY(y);
+                      setPickerView("months");
+                    }}
+                    className={cn(
+                      "py-2 rounded-lg text-sm font-semibold transition-colors",
+                      disabled && "opacity-30 pointer-events-none",
+                      isCurrent
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-accent text-foreground",
+                    )}
+                  >
+                    {mode === "hijri"
+                      ? `${y} هـ`
+                      : `${y} م`}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {/* ── Footer ── */}
-        <div className="mt-3 pt-2.5 border-t border-border flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => {
-              const today = new Date();
-              const h = toHijriComponents(today);
-              setPickerHY(h.year); setPickerHM(h.month);
-              setPickerGY(today.getFullYear()); setPickerGM(today.getMonth());
-              onChange(todayStr);
-              flushSync(() => setOpen(false));
-            }}
-            className="text-[0.7rem] text-primary hover:text-primary/80 font-medium transition-colors"
-          >اليوم</button>
-          {value && (
-            <button
-              type="button"
-              onClick={() => { onChange(""); flushSync(() => setOpen(false)); }}
-              className="text-[0.7rem] text-muted-foreground hover:text-destructive transition-colors"
-            >مسح</button>
-          )}
-        </div>
+        {/* ══ MONTHS VIEW ══ */}
+        {pickerView === "months" && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <button
+                type="button"
+                onClick={() => setPickerView("years")}
+                className="text-xs text-primary hover:text-primary/80 transition-colors font-semibold"
+              >
+                {mode === "hijri" ? `${pickerHY} هـ` : `${pickerGY} م`}
+              </button>
+              <span className="text-sm font-bold text-foreground">اختر الشهر</span>
+              <button
+                type="button"
+                onClick={() => setPickerView("days")}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-accent"
+              >✕</button>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(mode === "hijri" ? HIJRI_MONTHS_AR : GREG_MONTHS_AR).map((name, idx) => {
+                const mNum = mode === "hijri" ? idx + 1 : idx; // hijri: 1-based, greg: 0-based
+                const disabled = isMonthDisabledInYear(mNum);
+                const isCurrent = mode === "hijri" ? pickerHM === mNum : pickerGM === mNum;
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      if (mode === "hijri") setPickerHM(mNum);
+                      else setPickerGM(mNum);
+                      setPickerView("days");
+                    }}
+                    className={cn(
+                      "py-2 rounded-lg text-sm font-semibold transition-colors",
+                      disabled && "opacity-30 pointer-events-none",
+                      isCurrent
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-accent text-foreground",
+                    )}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ══ DAYS VIEW ══ */}
+        {pickerView === "days" && (
+          <>
+            {/* ── Header ── */}
+            <div className="flex items-center justify-between mb-3 gap-2">
+              {/* RTL: right button = next month */}
+              <button
+                type="button"
+                onClick={goNext}
+                className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-base font-bold text-muted-foreground"
+                aria-label="الشهر التالي"
+              >›</button>
+
+              {/* Clickable month/year header → opens year picker */}
+              <button
+                type="button"
+                onClick={() => setPickerView("years")}
+                className="flex-1 text-center rounded-lg py-1 hover:bg-accent transition-colors group"
+                title="اختر السنة والشهر مباشرة"
+              >
+                {mode === "hijri" ? (
+                  <>
+                    <p className="text-[1rem] font-bold text-foreground leading-tight group-hover:text-primary transition-colors">
+                      {HIJRI_MONTHS_AR[pickerHM - 1]} {pickerHY} هـ
+                      <span className="mr-1 text-xs text-muted-foreground/60">▾</span>
+                    </p>
+                    <p className="text-[0.68rem] font-normal text-muted-foreground leading-tight mt-0.5">
+                      {getGregRangeLabel(hijriMonthDays)}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[1rem] font-bold text-foreground leading-tight group-hover:text-primary transition-colors">
+                      {GREG_MONTHS_AR[pickerGM]} {pickerGY} م
+                      <span className="mr-1 text-xs text-muted-foreground/60">▾</span>
+                    </p>
+                    <p className="text-[0.68rem] font-normal text-muted-foreground leading-tight mt-0.5">
+                      {(() => {
+                        try {
+                          const d1 = new Date(pickerGY, pickerGM, 1);
+                          const h1 = toHijriComponents(d1);
+                          const d2 = new Date(pickerGY, pickerGM + 1, 0);
+                          const h2 = toHijriComponents(d2);
+                          if (h1.month === h2.month)
+                            return `${HIJRI_MONTHS_AR[h1.month - 1]} ${h1.year} هـ`;
+                          return `${HIJRI_MONTHS_AR[h1.month - 1]} – ${HIJRI_MONTHS_AR[h2.month - 1]} ${h2.year} هـ`;
+                        } catch { return ""; }
+                      })()}
+                    </p>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={goPrev}
+                className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-base font-bold text-muted-foreground"
+                aria-label="الشهر السابق"
+              >‹</button>
+            </div>
+
+            {/* ── Day-of-week headers ── */}
+            <div className="grid grid-cols-7 mb-1">
+              {DAYS_SHORT.map((d) => (
+                <div key={d} className="text-center text-[0.65rem] font-semibold text-muted-foreground select-none pb-1">{d}</div>
+              ))}
+            </div>
+
+            {/* ── Day cells ── */}
+            {mode === "hijri" ? (
+              <div className="grid grid-cols-7 gap-[2px]">
+                {Array.from({ length: hijriFirstDOW }).map((_, i) => <div key={`pad-${i}`} />)}
+                {hijriMonthDays.map(({ date, hijriDay }) => {
+                  const gregStr = toGregorianStr(date);
+                  const isSelected = value === gregStr;
+                  const isToday = todayStr === gregStr;
+                  const isDisabled = !!minDateStr && gregStr < minDateStr;
+                  return (
+                    <button
+                      key={gregStr}
+                      type="button"
+                      disabled={isDisabled}
+                      onClick={() => { onChange(gregStr); flushSync(() => setOpen(false)); }}
+                      className={cn(
+                        "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors",
+                        isDisabled && "opacity-30 pointer-events-none",
+                        isSelected ? "bg-primary text-primary-foreground"
+                          : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
+                          : "hover:bg-accent",
+                      )}
+                    >
+                      <span className="text-[1.1rem] font-bold leading-none">{hijriDay.toLocaleString("ar-SA")}</span>
+                      <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#a1a1aa" }}>
+                        {date.getDate()}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="grid grid-cols-7 gap-[2px]">
+                {Array.from({ length: gregFirst }).map((_, i) => <div key={`pad-${i}`} />)}
+                {Array.from({ length: gregDayCount }, (_, i) => i + 1).map((day) => {
+                  const gregStr = gregDateStr(pickerGY, pickerGM, day);
+                  const isSelected = value === gregStr;
+                  const isToday = todayStr === gregStr;
+                  const isDisabled = !!minDateStr && gregStr < minDateStr;
+                  let hijriDay = 0;
+                  try { hijriDay = toHijriComponents(new Date(gregStr + "T12:00:00")).day; } catch { /* */ }
+                  return (
+                    <button
+                      key={gregStr}
+                      type="button"
+                      disabled={isDisabled}
+                      onClick={() => { onChange(gregStr); flushSync(() => setOpen(false)); }}
+                      className={cn(
+                        "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors",
+                        isDisabled && "opacity-30 pointer-events-none",
+                        isSelected ? "bg-primary text-primary-foreground"
+                          : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
+                          : "hover:bg-accent",
+                      )}
+                    >
+                      {/* Gregorian day — large, bold */}
+                      <span className="text-[1.1rem] font-bold leading-none">{day.toLocaleString("ar-SA")}</span>
+                      {/* Hijri day — small, muted */}
+                      <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#a1a1aa" }}>
+                        {hijriDay > 0 ? hijriDay.toLocaleString("ar-SA") : ""}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── Footer ── */}
+            <div className="mt-3 pt-2.5 border-t border-border flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  const today = new Date();
+                  const h = toHijriComponents(today);
+                  setPickerHY(h.year); setPickerHM(h.month);
+                  setPickerGY(today.getFullYear()); setPickerGM(today.getMonth());
+                  onChange(todayStr);
+                  flushSync(() => setOpen(false));
+                }}
+                className="text-[0.7rem] text-primary hover:text-primary/80 font-medium transition-colors"
+              >اليوم</button>
+              {value && (
+                <button
+                  type="button"
+                  onClick={() => { onChange(""); flushSync(() => setOpen(false)); }}
+                  className="text-[0.7rem] text-muted-foreground hover:text-destructive transition-colors"
+                >مسح</button>
+              )}
+            </div>
+          </>
+        )}
       </PopoverContent>
     </Popover>
   );

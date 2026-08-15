@@ -16541,6 +16541,19 @@ function ReportsTab() {
     return { rows, totBase, totSvc, totTotal };
   }, [repAllBookings, selectedMonth, selectedHijriMonthVal, isHijri, selectedSubmissionId]);
 
+  // ── Earliest transaction date (for minDate constraint in custom picker) ───
+  const earliestTransactionDate = useMemo(() => {
+    const dates: string[] = [];
+    for (const b of repAllBookings) {
+      if (b.bookingDate && !b.cancelledAt) dates.push(b.bookingDate);
+    }
+    for (const e of repAllExpenses) {
+      if (e.dateStr && Number(e.amount) > 0) dates.push(e.dateStr);
+    }
+    if (dates.length === 0) return undefined;
+    return dates.sort()[0];
+  }, [repAllBookings, repAllExpenses]);
+
   // ── Custom range report data — computed client-side from all bookings/expenses ───
   const customRangeData = useMemo(() => {
     if (!customFrom || !customTo || customFrom > customTo) return null;
@@ -17078,8 +17091,9 @@ function ReportsTab() {
                   <DualCalendarPicker
                     value={customFrom}
                     onChange={setCustomFrom}
-                    placeholder="التاريخ"
+                    placeholder="من تاريخ"
                     compact
+                    minDate={earliestTransactionDate}
                     mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
                   />
                 </div>
@@ -17093,9 +17107,9 @@ function ReportsTab() {
                   <DualCalendarPicker
                     value={customTo}
                     onChange={setCustomTo}
-                    placeholder="التاريخ"
+                    placeholder="إلى تاريخ"
                     compact
-                    minDate={customFrom || undefined}
+                    minDate={customFrom || earliestTransactionDate}
                     mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
                   />
                 </div>
