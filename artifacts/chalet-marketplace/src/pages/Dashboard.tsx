@@ -17091,7 +17091,7 @@ function ReportsTab() {
                   <DualCalendarPicker
                     value={customFrom}
                     onChange={setCustomFrom}
-                    placeholder="من تاريخ"
+                    placeholder="تاريخ"
                     compact
                     minDate={earliestTransactionDate}
                     mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
@@ -17107,7 +17107,7 @@ function ReportsTab() {
                   <DualCalendarPicker
                     value={customTo}
                     onChange={setCustomTo}
-                    placeholder="إلى تاريخ"
+                    placeholder="تاريخ"
                     compact
                     minDate={customFrom || earliestTransactionDate}
                     mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}

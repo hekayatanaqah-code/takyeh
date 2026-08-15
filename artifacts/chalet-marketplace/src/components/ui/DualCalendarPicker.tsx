@@ -270,10 +270,11 @@ export function DualCalendarPicker({
                     }}
                     className={cn(
                       "py-2 rounded-lg text-sm font-semibold transition-colors",
-                      disabled && "opacity-30 pointer-events-none",
-                      isCurrent
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent text-foreground",
+                      disabled ? "pointer-events-none text-[#9ca3af] cursor-not-allowed line-through" : (
+                        isCurrent
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-accent text-foreground"
+                      ),
                     )}
                   >
                     {mode === "hijri"
@@ -321,10 +322,11 @@ export function DualCalendarPicker({
                     }}
                     className={cn(
                       "py-2 rounded-lg text-sm font-semibold transition-colors",
-                      disabled && "opacity-30 pointer-events-none",
-                      isCurrent
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent text-foreground",
+                      disabled ? "pointer-events-none text-[#9ca3af] cursor-not-allowed" : (
+                        isCurrent
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-accent text-foreground"
+                      ),
                     )}
                   >
                     {name}
