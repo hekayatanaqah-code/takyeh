@@ -16267,7 +16267,7 @@ function ReportsTab() {
   const nowHijriYearNum  = _nowHijri.year;
   const nowHijriMonthNum = _nowHijri.month;
 
-  const [viewMode, setViewMode] = useState<"monthly" | "yearly">("monthly");
+  const [viewMode, setViewMode] = useState<"monthly" | "yearly" | "custom">("monthly");
   const [reportType, setReportType] = useState<"chalets" | "services" | "unified">("chalets");
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [selectedYear, setSelectedYear] = useState(currentYear);
@@ -16291,6 +16291,8 @@ function ReportsTab() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [archiveSaving, setArchiveSaving] = useState(false);
   const [archiveSavedId, setArchiveSavedId] = useState<number | null>(null);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const qc = useQueryClient();
 
   useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, reportType]);
@@ -16461,7 +16463,7 @@ function ReportsTab() {
       if (!r.ok) return [];
       return r.json();
     },
-    enabled: viewMode === "monthly",
+    enabled: viewMode === "monthly" || viewMode === "custom",
   });
 
   // ── Fetch all owner expenses so we can tell which months actually have data ───
@@ -16538,6 +16540,36 @@ function ReportsTab() {
     console.log("[تكية Reports] bookings:", rows.length, "| إيجار:", totBase, "| خدمات:", totSvc, "| إجمالي:", totTotal);
     return { rows, totBase, totSvc, totTotal };
   }, [repAllBookings, selectedMonth, selectedHijriMonthVal, isHijri, selectedSubmissionId]);
+
+  // ── Custom range report data — computed client-side from all bookings/expenses ───
+  const customRangeData = useMemo(() => {
+    if (!customFrom || !customTo || customFrom > customTo) return null;
+    const propMatch = (sid: number | string | null | undefined) =>
+      selectedSubmissionId === "all" || String(sid) === selectedSubmissionId;
+    const monthMap = new Map<string, { revenue: number; expenses: number }>();
+    const ensureMonth = (key: string) => { if (!monthMap.has(key)) monthMap.set(key, { revenue: 0, expenses: 0 }); return monthMap.get(key)!; };
+    for (const b of repAllBookings) {
+      if (!b.bookingDate || b.cancelledAt || !propMatch(b.submissionId)) continue;
+      if (b.bookingDate < customFrom || b.bookingDate > customTo) continue;
+      const rev = Math.round(Number(b.totalPrice ?? b.revenueAmount ?? b.depositPaid ?? 0));
+      if (rev <= 0) continue;
+      ensureMonth(b.bookingDate.slice(0, 7)).revenue += rev;
+    }
+    for (const e of repAllExpenses) {
+      if (!e.dateStr || !(Number(e.amount) > 0)) continue;
+      if (e.submissionId != null && !propMatch(e.submissionId)) continue;
+      if (e.dateStr < customFrom || e.dateStr > customTo) continue;
+      ensureMonth(e.dateStr.slice(0, 7)).expenses += Math.round(Number(e.amount));
+    }
+    const monthly = Array.from(monthMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, { revenue, expenses }]) => ({ month, revenue, expenses, netProfit: revenue - expenses }));
+    const totals = monthly.reduce(
+      (acc, m) => ({ revenue: acc.revenue + m.revenue, expenses: acc.expenses + m.expenses, netProfit: acc.netProfit + m.netProfit }),
+      { revenue: 0, expenses: 0, netProfit: 0 }
+    );
+    return { monthly, totals };
+  }, [repAllBookings, repAllExpenses, customFrom, customTo, selectedSubmissionId]);
 
   const hijriMonthOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -16657,10 +16689,21 @@ function ReportsTab() {
 
 ✨ منصة تكية لإدارة الحجوزات`;
       console.log("[WA-SHARE] bodyText:", bodyText);
+    } else if (viewMode === "custom" && customRangeData) {
+      const rangeLabel = customFrom && customTo ? `${customFrom} → ${customTo}` : "فترة مخصصة";
+      titleText = `تقرير مخصص: ${rangeLabel} – ${selectedPropertyName}`;
+      bodyText =
+`📊 تقرير مخصص: ${rangeLabel}
+🏡 المنشأة: ${selectedPropertyName}
+💰 الإيرادات: ${toAr(formatAmount(customRangeData.totals.revenue))} ر.س
+🔴 المصروفات: ${toAr(formatAmount(customRangeData.totals.expenses))} ر.س
+⭐ صافي الربح: ${toAr(formatAmountSigned(customRangeData.totals.netProfit))} ر.س
+
+✨ منصة تكية لإدارة الحجوزات`;
+      console.log("[WA-SHARE] bodyText:", bodyText);
     } else return;
 
     // اسم الملف: أرقام فقط لضمان عدم تكسير النص العربي في واتساب
-    // شهري هجري → 1447-10.pdf | شهري ميلادي → 2026-07.pdf | سنوي → 1448.pdf / 2026.pdf
     let shareFileName: string;
     if (viewMode === "monthly") {
       if (isHijri && selectedHijriMonthVal) {
@@ -16670,6 +16713,8 @@ function ReportsTab() {
         const [gy, gm] = selectedMonth.split("-").map(Number);
         shareFileName = `${gy}-${String(gm).padStart(2, "0")}.pdf`;
       }
+    } else if (viewMode === "custom") {
+      shareFileName = `custom-${customFrom}-${customTo}.pdf`;
     } else {
       const waYearStr = isYearlyHijri ? selectedHijriYear : selectedYear;
       shareFileName = `${waYearStr}.pdf`;
@@ -16687,6 +16732,10 @@ function ReportsTab() {
       if (viewMode === "monthly") {
         const logo = await getLogoDataUrl();
         htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel, logo);
+      } else if (viewMode === "custom" && customRangeData) {
+        const logo = await getLogoDataUrl();
+        const rangeLabel = customFrom && customTo ? `${customFrom} → ${customTo}` : "فترة مخصصة";
+        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, customRangeData as any, false, qr, logo);
       } else if (activeWaYearly) {
         const logo = await getLogoDataUrl();
         htmlContent = buildYearlyReportHtml(activeWaYearStr, selectedPropertyName, activeWaYearly, false, qr, logo);
@@ -16712,7 +16761,7 @@ function ReportsTab() {
     } finally {
       setWaLoading(false);
     }
-  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal]);
+  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal, customFrom, customTo, customRangeData]);
 
   const handleShareEmail = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -16965,14 +17014,14 @@ function ReportsTab() {
       <div className="bg-card border border-border rounded-2xl px-4 py-3">
         <div className="flex items-center gap-2 flex-wrap">
 
-          {/* ٠. شهري / سنوي */}
+          {/* ٠. شهري / سنوي / مخصص */}
           <div className="flex h-9 items-center gap-0 bg-muted/60 border border-border rounded-lg p-0.5 shrink-0">
-            {(["monthly", "yearly"] as const).map((m) => (
+            {(["monthly", "yearly", "custom"] as const).map((m) => (
               <button key={m} type="button" onClick={() => setViewMode(m)}
                 className={`h-full px-3 rounded-md text-xs font-bold transition-colors ${
                   viewMode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}>
-                {m === "monthly" ? "شهري" : "سنوي"}
+                {m === "monthly" ? "شهري" : m === "yearly" ? "سنوي" : "مخصص"}
               </button>
             ))}
           </div>
@@ -16990,8 +17039,8 @@ function ReportsTab() {
             </SelectContent>
           </Select>
 
-          {/* ٢. نوع التقويم — أزرار التبديل */}
-          <div className="flex h-9 items-center gap-0 bg-muted/60 border border-border rounded-lg p-0.5 shrink-0">
+          {/* ٢. نوع التقويم — أزرار التبديل (مخفي في وضع مخصص) */}
+          {viewMode !== "custom" && <div className="flex h-9 items-center gap-0 bg-muted/60 border border-border rounded-lg p-0.5 shrink-0">
             {(["gregorian", "hijri"] as const).map((c) => (
               <button key={c} type="button"
                 onClick={() => {
@@ -17017,10 +17066,34 @@ function ReportsTab() {
                 {c === "hijri" ? "هجري" : "ميلادي"}
               </button>
             ))}
-          </div>
+          </div>}
 
-          {/* ٣. السنة */}
-          {viewMode === "monthly" ? (
+          {/* ٢ب. حقول الفترة المخصصة */}
+          {viewMode === "custom" && (<>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <label className="text-xs text-muted-foreground font-medium whitespace-nowrap">من:</label>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={e => setCustomFrom(e.target.value)}
+                max={customTo || undefined}
+                className="h-9 px-2 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <label className="text-xs text-muted-foreground font-medium whitespace-nowrap">إلى:</label>
+              <input
+                type="date"
+                value={customTo}
+                onChange={e => setCustomTo(e.target.value)}
+                min={customFrom || undefined}
+                className="h-9 px-2 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+          </>)}
+
+          {/* ٣. السنة (مخفي في وضع مخصص) */}
+          {viewMode !== "custom" && (viewMode === "monthly" ? (
             <Select
               value={isHijri ? selectedHijriMonthVal.split("-")[0] : selectedMonth.split("-")[0]}
               onValueChange={(y) => {
@@ -17071,7 +17144,7 @@ function ReportsTab() {
                 ))}
               </SelectContent>
             </Select>
-          )}
+          ))}
 
           {/* ٤. الشهر — أقصى اليسار (فقط في العرض الشهري) */}
           {viewMode === "monthly" && (() => {
@@ -17334,6 +17407,120 @@ function ReportsTab() {
             </div>
           )}
         </>
+        );
+      })()}
+
+      {/* ── CUSTOM RANGE VIEW ── */}
+      {viewMode === "custom" && (() => {
+        const rangeLabel = customFrom && customTo ? `${customFrom} → ${customTo}` : null;
+        return (
+          <>
+            {!customFrom || !customTo ? (
+              <div className="bg-card border border-dashed border-border rounded-2xl p-10 text-center">
+                <CalendarDays className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">حدد تاريخ البداية والنهاية لعرض التقرير المخصص</p>
+              </div>
+            ) : customFrom > customTo ? (
+              <div className="bg-card border border-dashed border-destructive/40 rounded-2xl p-10 text-center">
+                <p className="text-destructive text-sm">تاريخ البداية يجب أن يكون قبل تاريخ النهاية</p>
+              </div>
+            ) : !customRangeData || customRangeData.monthly.length === 0 ? (
+              <div className="bg-card border border-dashed border-border rounded-2xl p-10 text-center">
+                <BarChart2 className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">لا توجد بيانات في الفترة المحددة</p>
+              </div>
+            ) : (
+              <>
+                {/* KPI cards */}
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: "إجمالي الإيرادات", value: formatAmount(customRangeData.totals.revenue), color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", icon: <TrendingUp className="w-5 h-5" />, valueColor: "text-foreground" },
+                    { label: "إجمالي المصروفات", value: formatAmount(customRangeData.totals.expenses), color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", icon: <TrendingDown className="w-5 h-5" />, valueColor: "text-foreground" },
+                    { label: "صافي الربح", value: formatAmountSigned(customRangeData.totals.netProfit), color: customRangeData.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700", icon: <RiyalIcon className="w-4 h-4" />, valueColor: customRangeData.totals.netProfit >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400" },
+                  ].map((s) => (
+                    <div key={s.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>{s.icon}</div>
+                      <p className={`text-xl font-bold leading-none ${s.valueColor}`}>{s.value}</p>
+                      <p className="text-xs text-muted-foreground">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Monthly breakdown table */}
+                <div className="bg-card border border-border rounded-2xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border">
+                    <h3 className="font-bold text-sm">التفاصيل الشهرية — {rangeLabel}</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="px-4 py-2.5 text-right font-semibold text-xs text-muted-foreground">الشهر</th>
+                          <th className="px-4 py-2.5 text-right font-semibold text-xs text-muted-foreground">الإيرادات</th>
+                          <th className="px-4 py-2.5 text-right font-semibold text-xs text-muted-foreground">المصروفات</th>
+                          <th className="px-4 py-2.5 text-right font-semibold text-xs text-muted-foreground">صافي الربح</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {customRangeData.monthly.map((m) => (
+                          <tr key={m.month} className="hover:bg-muted/30 transition-colors">
+                            <td className="px-4 py-2.5">{new Date(m.month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" })}</td>
+                            <td className="px-4 py-2.5 text-green-600 font-medium">{formatAmount(m.revenue)}</td>
+                            <td className="px-4 py-2.5 text-red-600 font-medium">{formatAmount(m.expenses)}</td>
+                            <td className={`px-4 py-2.5 font-bold ${m.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmountSigned(m.netProfit)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="border-t-2 border-border">
+                        <tr className="bg-muted/30">
+                          <td className="px-4 py-2.5 font-bold">الإجمالي</td>
+                          <td className="px-4 py-2.5 font-bold text-green-600">{formatAmount(customRangeData.totals.revenue)}</td>
+                          <td className="px-4 py-2.5 font-bold text-red-600">{formatAmount(customRangeData.totals.expenses)}</td>
+                          <td className={`px-4 py-2.5 font-bold ${customRangeData.totals.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmountSigned(customRangeData.totals.netProfit)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex flex-wrap gap-2 justify-end">
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const rangeStr = customFrom && customTo ? `${customFrom} → ${customTo}` : "مخصص";
+                    printYearlyReport(rangeStr, selectedPropertyName, customRangeData as any);
+                  }} className="gap-2">
+                    <FileText className="w-4 h-4" />طباعة التقرير
+                  </Button>
+                  <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleShareWhatsApp}
+                      disabled={waLoading || emailLoading}
+                      className="gap-2 border-green-600 text-green-700 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-950"
+                    >
+                      {waLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                      {waLoading ? "جاري إنشاء PDF…" : "واتساب PDF"}
+                    </Button>
+                  </div>
+                  <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleShareEmail}
+                      disabled={emailLoading || waLoading}
+                      className="gap-2 border-blue-600 text-blue-700 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950"
+                    >
+                      {emailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                      {emailLoading ? "جاري الإرسال…" : "بريد إلكتروني"}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </>
         );
       })()}
 
