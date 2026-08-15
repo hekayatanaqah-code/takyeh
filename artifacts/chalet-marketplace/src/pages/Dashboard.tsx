@@ -17393,7 +17393,7 @@ function ReportsTab() {
                     className="gap-2 border-green-600 text-green-700 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-950"
                   >
                     {waLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                    {waLoading ? "جاري إنشاء PDF…" : "واتساب PDF"}
+                    {waLoading ? "جاري إنشاء PDF…" : "مشاركة عبر واتساب"}
                   </Button>
                 </div>
                 <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
@@ -17437,7 +17437,25 @@ function ReportsTab() {
 
       {/* ── CUSTOM RANGE VIEW ── */}
       {viewMode === "custom" && (() => {
-        const rangeLabel = customFrom && customTo ? `${customFrom} → ${customTo}` : null;
+        const customCalMode = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
+        const fmtCustomDate = (d: string) => {
+          try {
+            const dt = new Date(d + "T12:00:00");
+            return customCalMode === "hijri"
+              ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "short", day: "numeric" })
+              : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions);
+          } catch { return d; }
+        };
+        const fmtCustomMonth = (monthStr: string) => {
+          try {
+            const dt = new Date(monthStr + "-15T12:00:00");
+            return customCalMode === "hijri"
+              ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long" })
+              : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" } as Intl.DateTimeFormatOptions);
+          } catch { return monthStr; }
+        };
+        const rangeLabel = customFrom && customTo ? `${fmtCustomDate(customFrom)} → ${fmtCustomDate(customTo)}` : null;
+        const tableTitle = `التفاصيل ${customCalMode === "hijri" ? "الهجرية" : "الميلادية"} — ${rangeLabel}`;
         return (
           <>
             {!customFrom || !customTo ? (
@@ -17474,7 +17492,7 @@ function ReportsTab() {
                 {/* Monthly breakdown table */}
                 <div className="bg-card border border-border rounded-2xl overflow-hidden">
                   <div className="px-4 py-3 border-b border-border">
-                    <h3 className="font-bold text-sm">التفاصيل الشهرية — {rangeLabel}</h3>
+                    <h3 className="font-bold text-sm">{tableTitle}</h3>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -17489,7 +17507,7 @@ function ReportsTab() {
                       <tbody className="divide-y divide-border">
                         {customRangeData.monthly.map((m) => (
                           <tr key={m.month} className="hover:bg-muted/30 transition-colors">
-                            <td className="px-4 py-2.5">{new Date(m.month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" })}</td>
+                            <td className="px-4 py-2.5">{fmtCustomMonth(m.month)}</td>
                             <td className="px-4 py-2.5 text-green-600 font-medium">{formatAmount(m.revenue)}</td>
                             <td className="px-4 py-2.5 text-red-600 font-medium">{formatAmount(m.expenses)}</td>
                             <td className={`px-4 py-2.5 font-bold ${m.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmountSigned(m.netProfit)}</td>
@@ -17526,7 +17544,7 @@ function ReportsTab() {
                       className="gap-2 border-green-600 text-green-700 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-950"
                     >
                       {waLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                      {waLoading ? "جاري إنشاء PDF…" : "واتساب PDF"}
+                      {waLoading ? "جاري إنشاء PDF…" : "مشاركة عبر واتساب"}
                     </Button>
                   </div>
                   <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
@@ -17852,7 +17870,7 @@ function ReportsTab() {
                     className="gap-2 border-green-600 text-green-700 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-950"
                   >
                     {waLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                    {waLoading ? "جاري إنشاء PDF…" : "واتساب PDF"}
+                    {waLoading ? "جاري إنشاء PDF…" : "مشاركة عبر واتساب"}
                   </Button>
                 </div>
                 <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
@@ -17889,7 +17907,7 @@ function ReportsTab() {
       )}
 
       {/* ── Sharing Settings ── */}
-      <div className="bg-card border border-border rounded-2xl p-5">
+      <div className="bg-card border border-border rounded-2xl p-5 mt-4">
         <button
           onClick={() => setShowShare((v) => !v)}
           className="w-full flex items-center justify-between text-sm font-bold text-foreground"
