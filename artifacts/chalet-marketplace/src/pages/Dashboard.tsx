@@ -17070,26 +17070,21 @@ function ReportsTab() {
 
           {/* ٢ب. حقول الفترة المخصصة */}
           {viewMode === "custom" && (<>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <label className="text-xs text-muted-foreground font-medium whitespace-nowrap">من:</label>
-              <input
-                type="date"
-                value={customFrom}
-                onChange={e => setCustomFrom(e.target.value)}
-                max={customTo || undefined}
-                className="h-9 px-2 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <label className="text-xs text-muted-foreground font-medium whitespace-nowrap">إلى:</label>
-              <input
-                type="date"
-                value={customTo}
-                onChange={e => setCustomTo(e.target.value)}
-                min={customFrom || undefined}
-                className="h-9 px-2 text-sm border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </div>
+            <DualCalendarPicker
+              value={customFrom}
+              onChange={setCustomFrom}
+              placeholder="من تاريخ"
+              label="من"
+              mode="gregorian"
+            />
+            <DualCalendarPicker
+              value={customTo}
+              onChange={setCustomTo}
+              placeholder="إلى تاريخ"
+              label="إلى"
+              minDate={customFrom || undefined}
+              mode="gregorian"
+            />
           </>)}
 
           {/* ٣. السنة (مخفي في وضع مخصص) */}
