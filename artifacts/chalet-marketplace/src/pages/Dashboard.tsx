@@ -17069,23 +17069,39 @@ function ReportsTab() {
           </div>}
 
           {/* ٢ب. حقول الفترة المخصصة */}
-          {viewMode === "custom" && (<>
-            <DualCalendarPicker
-              value={customFrom}
-              onChange={setCustomFrom}
-              placeholder="من تاريخ"
-              label="من"
-              mode="gregorian"
-            />
-            <DualCalendarPicker
-              value={customTo}
-              onChange={setCustomTo}
-              placeholder="إلى تاريخ"
-              label="إلى"
-              minDate={customFrom || undefined}
-              mode="gregorian"
-            />
-          </>)}
+          {viewMode === "custom" && (
+            <div className="flex items-center gap-2 shrink-0">
+              {/* حقل "من" */}
+              <div className="flex items-center gap-1.5 h-9 border border-border bg-background rounded-lg px-3 min-w-[130px] max-w-[160px] cursor-pointer hover:border-primary/60 transition-colors">
+                <span className="text-[11px] font-semibold text-muted-foreground shrink-0 leading-none">من</span>
+                <div className="flex-1 min-w-0">
+                  <DualCalendarPicker
+                    value={customFrom}
+                    onChange={setCustomFrom}
+                    placeholder="التاريخ"
+                    compact
+                    mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
+                  />
+                </div>
+              </div>
+              {/* فاصل */}
+              <span className="text-muted-foreground/60 text-sm select-none shrink-0">←</span>
+              {/* حقل "إلى" */}
+              <div className="flex items-center gap-1.5 h-9 border border-border bg-background rounded-lg px-3 min-w-[130px] max-w-[160px] cursor-pointer hover:border-primary/60 transition-colors">
+                <span className="text-[11px] font-semibold text-muted-foreground shrink-0 leading-none">إلى</span>
+                <div className="flex-1 min-w-0">
+                  <DualCalendarPicker
+                    value={customTo}
+                    onChange={setCustomTo}
+                    placeholder="التاريخ"
+                    compact
+                    minDate={customFrom || undefined}
+                    mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ٣. السنة (مخفي في وضع مخصص) */}
           {viewMode !== "custom" && (viewMode === "monthly" ? (
