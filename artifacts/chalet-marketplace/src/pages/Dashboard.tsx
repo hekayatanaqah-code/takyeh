@@ -16131,7 +16131,7 @@ function buildYearlyReportHtml(
 
 <div class="header">
 <div class="header-brand">${logoHtml}</div>
-<div class="header-center"><div class="report-title">${isCustom ? "التقرير المخصص" : "التقرير السنوي – " + toAr(year)}</div><div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
+<div class="header-center"><div class="report-title">${isCustom ? "التقرير المخصص" : "التقرير السنوي – " + toAr(year)}</div>${(() => { if (!isCustom) return ""; const parts = year.split(" ← "); const fromPart = parts[0]?.trim() ?? ""; const toPart = parts[1]?.trim() ?? ""; return parts.length === 2 ? `<div style="font-size:10.5px;color:#8C6246;font-weight:600;margin-top:5px;border:1px solid #e8e2d0;background:#faf9f6;border-radius:6px;padding:3px 10px;display:inline-block;">الفترة من: ${fromPart} إلى: ${toPart}</div>` : `<div style="font-size:10.5px;color:#555;margin-top:4px;">${year}</div>`; })()}<div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
 
 <div class="section"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="width:4px;height:18px;background:#8C6246;border-radius:2px;flex-shrink:0;display:inline-block;"></span><span style="font-size:14px;font-weight:700;color:#8C6246;margin:0;line-height:1;">${isCustom ? "الملخص المالي" : "الملخص المالي السنوي"}</span></div>
@@ -16608,6 +16608,42 @@ function ReportsTab() {
     return { monthly, totals };
   }, [repAllBookings, repAllExpenses, customFrom, customTo, selectedSubmissionId]);
 
+  // ── Custom range data grouped by Hijri month (for hijri calMode) ─────────
+  const customRangeDataHijri = useMemo(() => {
+    if (!customFrom || !customTo || customFrom > customTo) return null;
+    const propMatch = (sid: number | string | null | undefined) =>
+      selectedSubmissionId === "all" || String(sid) === selectedSubmissionId;
+    const monthMap = new Map<string, { revenue: number; expenses: number }>();
+    const ensureMonth = (key: string) => { if (!monthMap.has(key)) monthMap.set(key, { revenue: 0, expenses: 0 }); return monthMap.get(key)!; };
+    const toHijriKey = (dateStr: string) => {
+      try {
+        const hc = toHijriComponents(new Date(dateStr + "T12:00:00"));
+        return `${hc.year}-${String(hc.month).padStart(2, "0")}`;
+      } catch { return dateStr.slice(0, 7); }
+    };
+    for (const b of repAllBookings) {
+      if (!b.bookingDate || b.cancelledAt || !propMatch(b.submissionId)) continue;
+      if (b.bookingDate < customFrom || b.bookingDate > customTo) continue;
+      const rev = Math.round(Number(b.totalPrice ?? b.revenueAmount ?? b.depositPaid ?? 0));
+      if (rev <= 0) continue;
+      ensureMonth(toHijriKey(b.bookingDate)).revenue += rev;
+    }
+    for (const e of repAllExpenses) {
+      if (!e.dateStr || !(Number(e.amount) > 0)) continue;
+      if (e.submissionId != null && !propMatch(e.submissionId)) continue;
+      if (e.dateStr < customFrom || e.dateStr > customTo) continue;
+      ensureMonth(toHijriKey(e.dateStr)).expenses += Math.round(Number(e.amount));
+    }
+    const monthly = Array.from(monthMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, { revenue, expenses }]) => ({ month, revenue, expenses, netProfit: revenue - expenses }));
+    const totals = monthly.reduce(
+      (acc, m) => ({ revenue: acc.revenue + m.revenue, expenses: acc.expenses + m.expenses, netProfit: acc.netProfit + m.netProfit }),
+      { revenue: 0, expenses: 0, netProfit: 0 }
+    );
+    return { monthly, totals };
+  }, [repAllBookings, repAllExpenses, customFrom, customTo, selectedSubmissionId]);
+
   const hijriMonthOptions = useMemo(() => {
     const seen = new Set<string>();
     const opts: { val: string; year: number; month: number; label: string }[] = [];
@@ -16726,15 +16762,18 @@ function ReportsTab() {
 
 ✨ منصة تكية لإدارة الحجوزات`;
       console.log("[WA-SHARE] bodyText:", bodyText);
-    } else if (viewMode === "custom" && customRangeData) {
+    } else if (viewMode === "custom") {
+      const _waCal = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
+      const _waData = _waCal === "hijri" ? customRangeDataHijri : customRangeData;
+      if (!_waData) return;
       const rangeLabel = customFrom && customTo ? `${customFrom} → ${customTo}` : "فترة مخصصة";
       titleText = `تقرير مخصص: ${rangeLabel} – ${selectedPropertyName}`;
       bodyText =
 `📊 تقرير مخصص: ${rangeLabel}
 🏡 المنشأة: ${selectedPropertyName}
-💰 الإيرادات: ${toAr(formatAmount(customRangeData.totals.revenue))} ر.س
-🔴 المصروفات: ${toAr(formatAmount(customRangeData.totals.expenses))} ر.س
-⭐ صافي الربح: ${toAr(formatAmountSigned(customRangeData.totals.netProfit))} ر.س
+💰 الإيرادات: ${toAr(formatAmount(_waData.totals.revenue))} ر.س
+🔴 المصروفات: ${toAr(formatAmount(_waData.totals.expenses))} ر.س
+⭐ صافي الربح: ${toAr(formatAmountSigned(_waData.totals.netProfit))} ر.س
 
 ✨ منصة تكية لإدارة الحجوزات`;
       console.log("[WA-SHARE] bodyText:", bodyText);
@@ -16769,12 +16808,14 @@ function ReportsTab() {
       if (viewMode === "monthly") {
         const logo = await getLogoDataUrl();
         htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel, logo);
-      } else if (viewMode === "custom" && customRangeData) {
-        const logo = await getLogoDataUrl();
+      } else if (viewMode === "custom") {
         const _shareCalMode = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
+        const _shareData = _shareCalMode === "hijri" ? customRangeDataHijri : customRangeData;
+        if (!_shareData) return;
+        const logo = await getLogoDataUrl();
         const _shareFmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _shareCalMode === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
         const rangeLabel = customFrom && customTo ? `${_shareFmt(customFrom)} ← ${_shareFmt(customTo)}` : "فترة مخصصة";
-        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, customRangeData as any, false, qr, logo, true, _shareCalMode);
+        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, _shareData as any, false, qr, logo, true, _shareCalMode);
       } else if (activeWaYearly) {
         const logo = await getLogoDataUrl();
         htmlContent = buildYearlyReportHtml(activeWaYearStr, selectedPropertyName, activeWaYearly, false, qr, logo);
@@ -16800,7 +16841,7 @@ function ReportsTab() {
     } finally {
       setWaLoading(false);
     }
-  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal, customFrom, customTo, customRangeData]);
+  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal, customFrom, customTo, customRangeData, customRangeDataHijri]);
 
   const handleShareEmail = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -17464,6 +17505,8 @@ function ReportsTab() {
       {/* ── CUSTOM RANGE VIEW ── */}
       {viewMode === "custom" && (() => {
         const customCalMode = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
+        // Pick the right grouped dataset: Hijri groups when calMode=hijri to avoid cross-month bleed
+        const activeCustomData = customCalMode === "hijri" ? customRangeDataHijri : customRangeData;
         const fmtCustomDate = (d: string) => {
           try {
             const dt = new Date(d + "T12:00:00");
@@ -17474,6 +17517,13 @@ function ReportsTab() {
         };
         const fmtCustomMonth = (monthStr: string) => {
           try {
+            const [yrStr, mmStr] = monthStr.split("-");
+            const yr = parseInt(yrStr, 10);
+            const mm = parseInt(mmStr, 10) - 1;
+            if (yr < 1800) {
+              // Hijri key — show name + year directly
+              return `${HIJRI_MONTHS_AR[mm] ?? mmStr} ${toAr(yr)} هـ`;
+            }
             const dt = new Date(monthStr + "-15T12:00:00");
             return customCalMode === "hijri"
               ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long" })
@@ -17493,7 +17543,7 @@ function ReportsTab() {
               <div className="bg-card border border-dashed border-destructive/40 rounded-2xl p-10 text-center">
                 <p className="text-destructive text-sm">تاريخ البداية يجب أن يكون قبل تاريخ النهاية</p>
               </div>
-            ) : !customRangeData || customRangeData.monthly.length === 0 ? (
+            ) : !activeCustomData || activeCustomData.monthly.length === 0 ? (
               <div className="bg-card border border-dashed border-border rounded-2xl p-10 text-center">
                 <BarChart2 className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
                 <p className="text-muted-foreground text-sm">لا توجد بيانات في الفترة المحددة</p>
@@ -17503,9 +17553,9 @@ function ReportsTab() {
                 {/* KPI cards */}
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { label: "إجمالي الإيرادات", value: formatAmount(customRangeData.totals.revenue), color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", icon: <TrendingUp className="w-5 h-5" />, valueColor: "text-foreground" },
-                    { label: "إجمالي المصروفات", value: formatAmount(customRangeData.totals.expenses), color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", icon: <TrendingDown className="w-5 h-5" />, valueColor: "text-foreground" },
-                    { label: "صافي الربح", value: formatAmountSigned(customRangeData.totals.netProfit), color: customRangeData.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700", icon: <RiyalIcon className="w-4 h-4" />, valueColor: customRangeData.totals.netProfit >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400" },
+                    { label: "إجمالي الإيرادات", value: formatAmount(activeCustomData.totals.revenue), color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", icon: <TrendingUp className="w-5 h-5" />, valueColor: "text-foreground" },
+                    { label: "إجمالي المصروفات", value: formatAmount(activeCustomData.totals.expenses), color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", icon: <TrendingDown className="w-5 h-5" />, valueColor: "text-foreground" },
+                    { label: "صافي الربح", value: formatAmountSigned(activeCustomData.totals.netProfit), color: activeCustomData.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700", icon: <RiyalIcon className="w-4 h-4" />, valueColor: activeCustomData.totals.netProfit >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400" },
                   ].map((s) => (
                     <div key={s.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
                       <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>{s.icon}</div>
@@ -17531,7 +17581,7 @@ function ReportsTab() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {customRangeData.monthly.map((m) => (
+                        {activeCustomData.monthly.map((m) => (
                           <tr key={m.month} className="hover:bg-muted/30 transition-colors">
                             <td className="px-4 py-2.5">{fmtCustomMonth(m.month)}</td>
                             <td className="px-4 py-2.5 text-green-600 font-medium">{formatAmount(m.revenue)}</td>
@@ -17543,9 +17593,9 @@ function ReportsTab() {
                       <tfoot className="border-t-2 border-border">
                         <tr className="bg-muted/30">
                           <td className="px-4 py-2.5 font-bold">الإجمالي</td>
-                          <td className="px-4 py-2.5 font-bold text-green-600">{formatAmount(customRangeData.totals.revenue)}</td>
-                          <td className="px-4 py-2.5 font-bold text-red-600">{formatAmount(customRangeData.totals.expenses)}</td>
-                          <td className={`px-4 py-2.5 font-bold ${customRangeData.totals.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmountSigned(customRangeData.totals.netProfit)}</td>
+                          <td className="px-4 py-2.5 font-bold text-green-600">{formatAmount(activeCustomData.totals.revenue)}</td>
+                          <td className="px-4 py-2.5 font-bold text-red-600">{formatAmount(activeCustomData.totals.expenses)}</td>
+                          <td className={`px-4 py-2.5 font-bold ${activeCustomData.totals.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmountSigned(activeCustomData.totals.netProfit)}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -17558,7 +17608,7 @@ function ReportsTab() {
                     const _cm = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
                     const _fmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _cm === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
                     const rangeStr = customFrom && customTo ? `${_fmt(customFrom)} ← ${_fmt(customTo)}` : "مخصص";
-                    printYearlyReport(rangeStr, selectedPropertyName, customRangeData as any, true, _cm);
+                    printYearlyReport(rangeStr, selectedPropertyName, activeCustomData as any, true, _cm);
                   }} className="gap-2">
                     <FileText className="w-4 h-4" />طباعة التقرير
                   </Button>
