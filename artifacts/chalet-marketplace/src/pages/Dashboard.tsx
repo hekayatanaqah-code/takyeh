@@ -15887,13 +15887,15 @@ async function printYearlyReport(
   year: string,
   propertyName: string,
   yearly: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } } | null | undefined,
+  isCustom = false,
+  calMode: "hijri" | "gregorian" = "gregorian",
 ) {
   if (!yearly) return;
   const win = window.open("", "_blank", "width=794,height=1123");
   if (!win) return;
   const qr = await generateReportQrDataUrl("yearly", year);
   const logo = await getLogoDataUrl();
-  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo));
+  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo, isCustom, calMode));
   win.document.close();
 }
 
@@ -15924,7 +15926,8 @@ function buildRevBarSvg(dailyRevenue: { day: number; revenue: number }[]): strin
 
 /* ── Annual bar chart: grouped monthly revenue + expenses bars ── */
 function buildMonthlyBarChartSvg(
-  monthly: { month: string; revenue: number; expenses: number }[]
+  monthly: { month: string; revenue: number; expenses: number }[],
+  calModeOverride?: "hijri" | "gregorian"
 ): string {
   if (!monthly || monthly.length === 0) return "";
   const W        = 670;
@@ -15950,10 +15953,20 @@ function buildMonthlyBarChartSvg(
     const [, mm] = m.month.split("-");
     const monthIdx = parseInt(mm, 10) - 1;
     const yearPart = parseInt(m.month.split("-")[0], 10);
-    const isHijri = yearPart < 1800;
-    const label = isHijri
-      ? (HIJRI_FULL[monthIdx] ?? toAr(monthIdx + 1))
-      : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
+    const resolvedHijri = calModeOverride === "hijri" || (!calModeOverride && yearPart < 1800);
+    let label: string;
+    if (resolvedHijri && yearPart < 1800) {
+      label = HIJRI_FULL[monthIdx] ?? toAr(monthIdx + 1);
+    } else if (resolvedHijri) {
+      // Gregorian month key but display as Hijri
+      try {
+        const dt = new Date(m.month + "-15T12:00:00");
+        const hc = toHijriComponents(dt);
+        label = HIJRI_FULL[hc.month - 1] ?? toAr(hc.month);
+      } catch { label = toAr(monthIdx + 1); }
+    } else {
+      label = new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
+    }
     const cx = gx + groupW / 2;
     // All months: single line, −45° rotation from anchor point, text-anchor="end"
     // so right-end of text sits at (cx, LABEL_Y) and text extends diagonally down-left
@@ -16062,6 +16075,8 @@ function buildYearlyReportHtml(
   forPrint = false,
   qrDataUrl: string | null = null,
   logoDataUrl: string | null = null,
+  isCustom = false,
+  calMode: "hijri" | "gregorian" = "gregorian",
 ): string {
   const _nowY = new Date();
   const _hcY = toHijriComponents(_nowY);
@@ -16077,9 +16092,18 @@ function buildYearlyReportHtml(
     const [, mm] = m.month.split("-");
     const monthIdx = parseInt(mm, 10) - 1;
     const yearPart = parseInt(m.month.split("-")[0], 10);
-    const label = yearPart < 1800
-      ? (HIJRI_MONTHS_AR[monthIdx] ?? mm)
-      : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
+    let label: string;
+    if (yearPart < 1800) {
+      label = HIJRI_MONTHS_AR[monthIdx] ?? mm;
+    } else if (isCustom && calMode === "hijri") {
+      try {
+        const dt = new Date(m.month + "-15T12:00:00");
+        const hc = toHijriComponents(dt);
+        label = HIJRI_MONTHS_AR[hc.month - 1] ?? mm;
+      } catch { label = mm; }
+    } else {
+      label = new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
+    }
     const isEmpty = m.revenue === 0 && m.expenses === 0;
     const netCls = m.netProfit >= 0 ? "color:#16a34a;" : "color:#dc2626;";
     return `<tr>
@@ -16097,27 +16121,27 @@ function buildYearlyReportHtml(
   const logoHtml = logoDataUrl
     ? `<img src="${logoDataUrl}" style="height:68px;width:auto;object-fit:contain;display:block;" alt="تكية" />`
     : `<svg width="148" height="52" viewBox="0 0 148 52" xmlns="http://www.w3.org/2000/svg"><polygon points="10,27 26,11 42,27" fill="none" stroke="#8C6246" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><rect x="14" y="26" width="24" height="18" rx="2" fill="#8C6246" opacity="0.1" stroke="#8C6246" stroke-width="2"/><rect x="21" y="31" width="10" height="13" rx="1.5" fill="#8C6246" opacity="0.45"/><line x1="52" y1="10" x2="52" y2="43" stroke="#d9c9b8" stroke-width="1"/><text x="60" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="21" font-weight="900" fill="#8C6246">تكية</text><text x="60" y="42" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="9.5" fill="#a07852">منصة الشاليهات</text></svg>`;
-  const chartSvg = buildMonthlyBarChartSvg(yearly.monthly);
+  const chartSvg = buildMonthlyBarChartSvg(yearly.monthly, isCustom ? calMode : undefined);
   const printMediaCss = `@page{size:A4;margin:0!important;}@media print{html,body{max-height:297mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
-<title>التقرير_السنوي_${toAr(year)}${Number(year) < 1900 ? " هـ" : ""}.pdf</title>
+<title>${isCustom ? "التقرير_المخصص" : "التقرير_السنوي_" + toAr(year) + (Number(year) < 1900 ? " هـ" : "")}.pdf</title>
 <style>${REPORT_CSS}${printMediaCss}</style></head>
 <body><div class="page">
 
 <div class="header">
 <div class="header-brand">${logoHtml}</div>
-<div class="header-center"><div class="report-title">التقرير السنوي – ${toAr(year)}</div><div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
+<div class="header-center"><div class="report-title">${isCustom ? "التقرير المخصص" : "التقرير السنوي – " + toAr(year)}</div><div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
 
-<div class="section"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="width:4px;height:18px;background:#8C6246;border-radius:2px;flex-shrink:0;display:inline-block;"></span><span style="font-size:14px;font-weight:700;color:#8C6246;margin:0;line-height:1;">الملخص المالي السنوي</span></div>
+<div class="section"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="width:4px;height:18px;background:#8C6246;border-radius:2px;flex-shrink:0;display:inline-block;"></span><span style="font-size:14px;font-weight:700;color:#8C6246;margin:0;line-height:1;">${isCustom ? "الملخص المالي" : "الملخص المالي السنوي"}</span></div>
 <div style="display:flex;gap:12px;margin-bottom:20px;">
-  <div class="kpi-card kpi-green" style="flex:1;display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:center!important;height:100px!important;padding:8px!important;text-align:center!important;"><div style="display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-4px);"><div class="kpi-label" style="margin:0;padding:0;font-size:11px;color:#333;font-weight:600;line-height:1.3;">إجمالي الإيرادات السنوية</div><div class="kpi-value" style="margin:0;padding:0;font-size:17px;color:#111;font-weight:700;line-height:1.2;">${yearly.totals.revenue.toLocaleString("ar-SA")} ر.س</div><div class="kpi-note" style="margin:0;padding:0;font-size:10px;color:#555;font-weight:500;line-height:1.3;">مجموع الإيرادات السنوية</div></div></div>
-  <div class="kpi-card kpi-red" style="flex:1;display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:center!important;height:100px!important;padding:8px!important;text-align:center!important;"><div style="display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-4px);"><div class="kpi-label" style="margin:0;padding:0;font-size:11px;color:#333;font-weight:600;line-height:1.3;">إجمالي المصروفات السنوية</div><div class="kpi-value" style="margin:0;padding:0;font-size:17px;color:#111;font-weight:700;line-height:1.2;">${yearly.totals.expenses.toLocaleString("ar-SA")} ر.س</div><div class="kpi-note" style="margin:0;padding:0;font-size:10px;color:#555;font-weight:500;line-height:1.3;">مجموع المصروفات السنوية</div></div></div>
-  <div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}" style="flex:1;display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:center!important;height:100px!important;padding:8px!important;text-align:center!important;"><div style="display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-4px);"><div class="kpi-label" style="margin:0;padding:0;font-size:11px;color:#333;font-weight:600;line-height:1.3;">صافي الربح السنوي</div><div class="kpi-value" style="margin:0;padding:0;font-size:17px;font-weight:700;line-height:1.2;color:${yearly.totals.netProfit >= 0 ? "#16a34a" : "#dc2626"};">${yearly.totals.netProfit.toLocaleString("ar-SA")} ر.س</div><div class="kpi-note" style="margin:0;padding:0;font-size:10px;color:#555;font-weight:500;line-height:1.3;">الإيرادات - المصروفات</div></div></div>
+  <div class="kpi-card kpi-green" style="flex:1;display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:center!important;height:100px!important;padding:8px!important;text-align:center!important;"><div style="display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-4px);"><div class="kpi-label" style="margin:0;padding:0;font-size:11px;color:#333;font-weight:600;line-height:1.3;">${isCustom ? "إجمالي الإيرادات" : "إجمالي الإيرادات السنوية"}</div><div class="kpi-value" style="margin:0;padding:0;font-size:17px;color:#111;font-weight:700;line-height:1.2;">${yearly.totals.revenue.toLocaleString("ar-SA")} ر.س</div><div class="kpi-note" style="margin:0;padding:0;font-size:10px;color:#555;font-weight:500;line-height:1.3;">${isCustom ? "إجمالي الإيرادات" : "مجموع الإيرادات السنوية"}</div></div></div>
+  <div class="kpi-card kpi-red" style="flex:1;display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:center!important;height:100px!important;padding:8px!important;text-align:center!important;"><div style="display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-4px);"><div class="kpi-label" style="margin:0;padding:0;font-size:11px;color:#333;font-weight:600;line-height:1.3;">${isCustom ? "إجمالي المصروفات" : "إجمالي المصروفات السنوية"}</div><div class="kpi-value" style="margin:0;padding:0;font-size:17px;color:#111;font-weight:700;line-height:1.2;">${yearly.totals.expenses.toLocaleString("ar-SA")} ر.س</div><div class="kpi-note" style="margin:0;padding:0;font-size:10px;color:#555;font-weight:500;line-height:1.3;">${isCustom ? "إجمالي المصروفات" : "مجموع المصروفات السنوية"}</div></div></div>
+  <div class="kpi-card ${yearly.totals.netProfit >= 0 ? "kpi-green" : "kpi-red"}" style="flex:1;display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:center!important;height:100px!important;padding:8px!important;text-align:center!important;"><div style="display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(-4px);"><div class="kpi-label" style="margin:0;padding:0;font-size:11px;color:#333;font-weight:600;line-height:1.3;">${isCustom ? "صافي الربح" : "صافي الربح السنوي"}</div><div class="kpi-value" style="margin:0;padding:0;font-size:17px;font-weight:700;line-height:1.2;color:${yearly.totals.netProfit >= 0 ? "#16a34a" : "#dc2626"};">${yearly.totals.netProfit.toLocaleString("ar-SA")} ر.س</div><div class="kpi-note" style="margin:0;padding:0;font-size:10px;color:#555;font-weight:500;line-height:1.3;">الإيرادات - المصروفات</div></div></div>
 </div></div>
 
-${chartSvg ? `<div class="section"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span style="width:4px;height:18px;background:#8C6246;border-radius:2px;flex-shrink:0;display:inline-block;"></span><span style="font-size:14px;font-weight:700;color:#8C6246;margin:0;line-height:1;">أداء الإيرادات والمصروفات السنوية</span></div><div style="text-align:left;margin-bottom:10px;direction:rtl;"><span style="display:inline-block;margin-left:16px;font-size:11px;color:#333;font-weight:600;"><span style="width:11px;height:11px;background:#16a34a;border-radius:2px;display:inline-block;margin-left:5px;vertical-align:middle;"></span><span style="vertical-align:middle;">إيرادات</span></span><span style="display:inline-block;font-size:11px;color:#333;font-weight:600;"><span style="width:11px;height:11px;background:#dc2626;border-radius:2px;display:inline-block;margin-left:5px;vertical-align:middle;"></span><span style="vertical-align:middle;">مصروفات</span></span></div><div style="padding-bottom:10px;">${chartSvg}</div></div>` : ""}
+${chartSvg ? `<div class="section"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span style="width:4px;height:18px;background:#8C6246;border-radius:2px;flex-shrink:0;display:inline-block;"></span><span style="font-size:14px;font-weight:700;color:#8C6246;margin:0;line-height:1;">${isCustom ? "أداء الإيرادات والمصروفات" : "أداء الإيرادات والمصروفات السنوية"}</span></div><div style="text-align:left;margin-bottom:10px;direction:rtl;"><span style="display:inline-block;margin-left:16px;font-size:11px;color:#333;font-weight:600;"><span style="width:11px;height:11px;background:#16a34a;border-radius:2px;display:inline-block;margin-left:5px;vertical-align:middle;"></span><span style="vertical-align:middle;">إيرادات</span></span><span style="display:inline-block;font-size:11px;color:#333;font-weight:600;"><span style="width:11px;height:11px;background:#dc2626;border-radius:2px;display:inline-block;margin-left:5px;vertical-align:middle;"></span><span style="vertical-align:middle;">مصروفات</span></span></div><div style="padding-bottom:10px;">${chartSvg}</div></div>` : ""}
 
 <div class="section-auto"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="width:4px;height:18px;background:#8C6246;border-radius:2px;flex-shrink:0;display:inline-block;"></span><span style="font-size:14px;font-weight:700;color:#8C6246;margin:0;line-height:1;">تفاصيل الإيرادات والمصروفات</span></div>
 <table><thead><tr>
@@ -16125,7 +16149,7 @@ ${chartSvg ? `<div class="section"><div style="display:flex;align-items:center;g
 </tr></thead>
 <tbody>${rows}</tbody>
 <tfoot><tr>
-<td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;">الإجمالي السنوي</td>
+<td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;">${isCustom ? "الإجمالي" : "الإجمالي السنوي"}</td>
 <td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;">${formatAmount(yearly.totals.revenue)}</td>
 <td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;">${formatAmount(yearly.totals.expenses)}</td>
 <td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</td>
@@ -16747,8 +16771,10 @@ function ReportsTab() {
         htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel, logo);
       } else if (viewMode === "custom" && customRangeData) {
         const logo = await getLogoDataUrl();
-        const rangeLabel = customFrom && customTo ? `${customFrom} → ${customTo}` : "فترة مخصصة";
-        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, customRangeData as any, false, qr, logo);
+        const _shareCalMode = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
+        const _shareFmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _shareCalMode === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
+        const rangeLabel = customFrom && customTo ? `${_shareFmt(customFrom)} ← ${_shareFmt(customTo)}` : "فترة مخصصة";
+        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, customRangeData as any, false, qr, logo, true, _shareCalMode);
       } else if (activeWaYearly) {
         const logo = await getLogoDataUrl();
         htmlContent = buildYearlyReportHtml(activeWaYearStr, selectedPropertyName, activeWaYearly, false, qr, logo);
@@ -17406,7 +17432,7 @@ function ReportsTab() {
                     className="gap-2 border-blue-600 text-blue-700 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950"
                   >
                     {emailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                    {emailLoading ? "جاري الإرسال…" : "بريد إلكتروني"}
+                    {emailLoading ? "جاري الإرسال…" : "إرسال عبر البريد"}
                   </Button>
                 </div>
                 <Button
@@ -17529,8 +17555,10 @@ function ReportsTab() {
                 {/* Action buttons */}
                 <div className="flex flex-wrap gap-2 justify-end">
                   <Button variant="outline" size="sm" onClick={() => {
-                    const rangeStr = customFrom && customTo ? `${customFrom} → ${customTo}` : "مخصص";
-                    printYearlyReport(rangeStr, selectedPropertyName, customRangeData as any);
+                    const _cm = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
+                    const _fmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _cm === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
+                    const rangeStr = customFrom && customTo ? `${_fmt(customFrom)} ← ${_fmt(customTo)}` : "مخصص";
+                    printYearlyReport(rangeStr, selectedPropertyName, customRangeData as any, true, _cm);
                   }} className="gap-2">
                     <FileText className="w-4 h-4" />طباعة التقرير
                   </Button>
@@ -17557,7 +17585,7 @@ function ReportsTab() {
                       className="gap-2 border-blue-600 text-blue-700 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950"
                     >
                       {emailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                      {emailLoading ? "جاري الإرسال…" : "بريد إلكتروني"}
+                      {emailLoading ? "جاري الإرسال…" : "إرسال عبر البريد"}
                     </Button>
                   </div>
                 </div>
@@ -17883,7 +17911,7 @@ function ReportsTab() {
                     className="gap-2 border-blue-600 text-blue-700 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-400 dark:hover:bg-blue-950"
                   >
                     {emailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                    {emailLoading ? "جاري الإرسال…" : "بريد إلكتروني"}
+                    {emailLoading ? "جاري الإرسال…" : "إرسال عبر البريد"}
                   </Button>
                 </div>
                 <Button
