@@ -15889,13 +15889,14 @@ async function printYearlyReport(
   yearly: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } } | null | undefined,
   isCustom = false,
   calMode: "hijri" | "gregorian" = "gregorian",
+  isShortPeriod = false,
 ) {
   if (!yearly) return;
   const win = window.open("", "_blank", "width=794,height=1123");
   if (!win) return;
   const qr = await generateReportQrDataUrl("yearly", year);
   const logo = await getLogoDataUrl();
-  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo, isCustom, calMode));
+  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo, isCustom, calMode, isShortPeriod));
   win.document.close();
 }
 
@@ -15950,22 +15951,31 @@ function buildMonthlyBarChartSvg(
     const gx = GROUP_GAP + i * (groupW + GROUP_GAP);
     const revH = m.revenue > 0 ? Math.max(3, Math.round((m.revenue / maxVal) * BAR_H)) : 0;
     const expH = m.expenses > 0 ? Math.max(3, Math.round((m.expenses / maxVal) * BAR_H)) : 0;
-    const [, mm] = m.month.split("-");
-    const monthIdx = parseInt(mm, 10) - 1;
-    const yearPart = parseInt(m.month.split("-")[0], 10);
+    const parts = m.month.split("-");
+    const yearPart = parseInt(parts[0], 10);
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    const isDay = parts.length === 3;
     const resolvedHijri = calModeOverride === "hijri" || (!calModeOverride && yearPart < 1800);
     let label: string;
     if (resolvedHijri && yearPart < 1800) {
-      label = HIJRI_FULL[monthIdx] ?? toAr(monthIdx + 1);
+      // Hijri key
+      label = isDay
+        ? `${toAr(parseInt(parts[2], 10))} ${HIJRI_FULL[monthIdx] ?? parts[1]}`
+        : (HIJRI_FULL[monthIdx] ?? toAr(monthIdx + 1));
     } else if (resolvedHijri) {
-      // Gregorian month key but display as Hijri
+      // Gregorian key, display as Hijri
       try {
-        const dt = new Date(m.month + "-15T12:00:00");
+        const dt = new Date((isDay ? m.month : m.month + "-15") + "T12:00:00");
         const hc = toHijriComponents(dt);
-        label = HIJRI_FULL[hc.month - 1] ?? toAr(hc.month);
+        label = isDay
+          ? `${toAr(hc.day)} ${HIJRI_FULL[hc.month - 1] ?? toAr(hc.month)}`
+          : (HIJRI_FULL[hc.month - 1] ?? toAr(hc.month));
       } catch { label = toAr(monthIdx + 1); }
     } else {
-      label = new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
+      const dt = new Date((isDay ? m.month : m.month + "-15") + "T12:00:00");
+      label = isDay
+        ? dt.toLocaleDateString("ar-SA", { day: "numeric", month: "short" })
+        : dt.toLocaleDateString("ar-SA", { month: "long" });
     }
     const cx = gx + groupW / 2;
     // All months: single line, −45° rotation from anchor point, text-anchor="end"
@@ -16077,6 +16087,7 @@ function buildYearlyReportHtml(
   logoDataUrl: string | null = null,
   isCustom = false,
   calMode: "hijri" | "gregorian" = "gregorian",
+  isShortPeriod = false,
 ): string {
   const _nowY = new Date();
   const _hcY = toHijriComponents(_nowY);
@@ -16089,20 +16100,32 @@ function buildYearlyReportHtml(
   const DASH = `<span style="color:#ccc;font-size:14px;line-height:1;">—</span>`;
   const tdBase = `height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;line-height:1.2;`;
   const rows = yearly.monthly.map(m => {
-    const [, mm] = m.month.split("-");
-    const monthIdx = parseInt(mm, 10) - 1;
-    const yearPart = parseInt(m.month.split("-")[0], 10);
+    const parts = m.month.split("-");
+    const yearPart = parseInt(parts[0], 10);
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    const isDay = parts.length === 3;
     let label: string;
     if (yearPart < 1800) {
-      label = HIJRI_MONTHS_AR[monthIdx] ?? mm;
+      // Hijri key (month or day)
+      if (isDay) {
+        const dd = parseInt(parts[2], 10);
+        label = `${toAr(dd)} ${HIJRI_MONTHS_AR[monthIdx] ?? parts[1]}`;
+      } else {
+        label = HIJRI_MONTHS_AR[monthIdx] ?? parts[1];
+      }
     } else if (isCustom && calMode === "hijri") {
       try {
-        const dt = new Date(m.month + "-15T12:00:00");
+        const dt = new Date((isDay ? m.month : m.month + "-15") + "T12:00:00");
         const hc = toHijriComponents(dt);
-        label = HIJRI_MONTHS_AR[hc.month - 1] ?? mm;
-      } catch { label = mm; }
+        label = isDay
+          ? `${toAr(hc.day)} ${HIJRI_MONTHS_AR[hc.month - 1] ?? parts[1]}`
+          : (HIJRI_MONTHS_AR[hc.month - 1] ?? parts[1]);
+      } catch { label = parts[1]; }
     } else {
-      label = new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
+      const dt = new Date((isDay ? m.month : m.month + "-15") + "T12:00:00");
+      label = isDay
+        ? dt.toLocaleDateString("ar-SA", { day: "numeric", month: "long" })
+        : dt.toLocaleDateString("ar-SA", { month: "long" });
     }
     const isEmpty = m.revenue === 0 && m.expenses === 0;
     const netCls = m.netProfit >= 0 ? "color:#16a34a;" : "color:#dc2626;";
@@ -16131,7 +16154,7 @@ function buildYearlyReportHtml(
 
 <div class="header">
 <div class="header-brand">${logoHtml}</div>
-<div class="header-center"><div class="report-title">${isCustom ? "التقرير المخصص" : "التقرير السنوي – " + toAr(year)}</div>${(() => { if (!isCustom) return ""; const parts = year.split(" ← "); const fromPart = parts[0]?.trim() ?? ""; const toPart = parts[1]?.trim() ?? ""; return parts.length === 2 ? `<div style="font-size:10.5px;color:#8C6246;font-weight:600;margin-top:5px;border:1px solid #e8e2d0;background:#faf9f6;border-radius:6px;padding:3px 10px;display:inline-block;">الفترة من: ${fromPart} إلى: ${toPart}</div>` : `<div style="font-size:10.5px;color:#555;margin-top:4px;">${year}</div>`; })()}<div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
+<div class="header-center"><div class="report-title">${isCustom ? (isShortPeriod ? "تقرير حركة الفترة" : "التقرير المخصص") : "التقرير السنوي – " + toAr(year)}</div>${(() => { if (!isCustom) return ""; const parts = year.split(" ← "); const fromPart = parts[0]?.trim() ?? ""; const toPart = parts[1]?.trim() ?? ""; return parts.length === 2 ? `<div style="font-size:10.5px;color:#8C6246;font-weight:600;margin-top:5px;border:1px solid #e8e2d0;background:#faf9f6;border-radius:6px;padding:3px 10px;display:inline-block;">الفترة من: ${fromPart} إلى: ${toPart}</div>` : `<div style="font-size:10.5px;color:#555;margin-top:4px;">${year}</div>`; })()}<div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
 
 <div class="section"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="width:4px;height:18px;background:#8C6246;border-radius:2px;flex-shrink:0;display:inline-block;"></span><span style="font-size:14px;font-weight:700;color:#8C6246;margin:0;line-height:1;">${isCustom ? "الملخص المالي" : "الملخص المالي السنوي"}</span></div>
@@ -16578,6 +16601,15 @@ function ReportsTab() {
     return dates.sort()[0];
   }, [repAllBookings, repAllExpenses]);
 
+  // ── groupByDay: ≤30 days → daily grouping, else monthly ─────────────────────
+  const groupByDay = useMemo(() => {
+    if (!customFrom || !customTo || customFrom > customTo) return false;
+    const diff = Math.round(
+      (new Date(customTo + "T12:00:00").getTime() - new Date(customFrom + "T12:00:00").getTime()) / 86_400_000
+    ) + 1;
+    return diff <= 30;
+  }, [customFrom, customTo]);
+
   // ── Custom range report data — computed client-side from all bookings/expenses ───
   const customRangeData = useMemo(() => {
     if (!customFrom || !customTo || customFrom > customTo) return null;
@@ -16590,13 +16622,13 @@ function ReportsTab() {
       if (b.bookingDate < customFrom || b.bookingDate > customTo) continue;
       const rev = Math.round(Number(b.totalPrice ?? b.revenueAmount ?? b.depositPaid ?? 0));
       if (rev <= 0) continue;
-      ensureMonth(b.bookingDate.slice(0, 7)).revenue += rev;
+      ensureMonth(groupByDay ? b.bookingDate : b.bookingDate.slice(0, 7)).revenue += rev;
     }
     for (const e of repAllExpenses) {
       if (!e.dateStr || !(Number(e.amount) > 0)) continue;
       if (e.submissionId != null && !propMatch(e.submissionId)) continue;
       if (e.dateStr < customFrom || e.dateStr > customTo) continue;
-      ensureMonth(e.dateStr.slice(0, 7)).expenses += Math.round(Number(e.amount));
+      ensureMonth(groupByDay ? e.dateStr : e.dateStr.slice(0, 7)).expenses += Math.round(Number(e.amount));
     }
     const monthly = Array.from(monthMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
@@ -16606,7 +16638,7 @@ function ReportsTab() {
       { revenue: 0, expenses: 0, netProfit: 0 }
     );
     return { monthly, totals };
-  }, [repAllBookings, repAllExpenses, customFrom, customTo, selectedSubmissionId]);
+  }, [repAllBookings, repAllExpenses, customFrom, customTo, selectedSubmissionId, groupByDay]);
 
   // ── Custom range data grouped by Hijri month (for hijri calMode) ─────────
   const customRangeDataHijri = useMemo(() => {
@@ -16618,8 +16650,9 @@ function ReportsTab() {
     const toHijriKey = (dateStr: string) => {
       try {
         const hc = toHijriComponents(new Date(dateStr + "T12:00:00"));
+        if (groupByDay) return `${hc.year}-${String(hc.month).padStart(2, "0")}-${String(hc.day).padStart(2, "0")}`;
         return `${hc.year}-${String(hc.month).padStart(2, "0")}`;
-      } catch { return dateStr.slice(0, 7); }
+      } catch { return groupByDay ? dateStr : dateStr.slice(0, 7); }
     };
     for (const b of repAllBookings) {
       if (!b.bookingDate || b.cancelledAt || !propMatch(b.submissionId)) continue;
@@ -16642,7 +16675,7 @@ function ReportsTab() {
       { revenue: 0, expenses: 0, netProfit: 0 }
     );
     return { monthly, totals };
-  }, [repAllBookings, repAllExpenses, customFrom, customTo, selectedSubmissionId]);
+  }, [repAllBookings, repAllExpenses, customFrom, customTo, selectedSubmissionId, groupByDay]);
 
   const hijriMonthOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -16815,7 +16848,7 @@ function ReportsTab() {
         const logo = await getLogoDataUrl();
         const _shareFmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _shareCalMode === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
         const rangeLabel = customFrom && customTo ? `${_shareFmt(customFrom)} ← ${_shareFmt(customTo)}` : "فترة مخصصة";
-        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, _shareData as any, false, qr, logo, true, _shareCalMode);
+        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, _shareData as any, false, qr, logo, true, _shareCalMode, groupByDay);
       } else if (activeWaYearly) {
         const logo = await getLogoDataUrl();
         htmlContent = buildYearlyReportHtml(activeWaYearStr, selectedPropertyName, activeWaYearly, false, qr, logo);
@@ -16841,7 +16874,7 @@ function ReportsTab() {
     } finally {
       setWaLoading(false);
     }
-  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal, customFrom, customTo, customRangeData, customRangeDataHijri]);
+  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal, customFrom, customTo, customRangeData, customRangeDataHijri, groupByDay]);
 
   const handleShareEmail = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -17177,6 +17210,7 @@ function ReportsTab() {
                     placeholder="تاريخ"
                     compact
                     minDate={customFrom || earliestTransactionDate}
+                    initialDate={customFrom || undefined}
                     mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
                   />
                 </div>
@@ -17517,21 +17551,32 @@ function ReportsTab() {
         };
         const fmtCustomMonth = (monthStr: string) => {
           try {
-            const [yrStr, mmStr] = monthStr.split("-");
-            const yr = parseInt(yrStr, 10);
-            const mm = parseInt(mmStr, 10) - 1;
+            const parts = monthStr.split("-");
+            const yr = parseInt(parts[0], 10);
+            const mm = parseInt(parts[1], 10) - 1;
+            const isDay = parts.length === 3;
             if (yr < 1800) {
-              // Hijri key — show name + year directly
-              return `${HIJRI_MONTHS_AR[mm] ?? mmStr} ${toAr(yr)} هـ`;
+              // Hijri key
+              if (isDay) {
+                const dd = parseInt(parts[2], 10);
+                return `${toAr(dd)} ${HIJRI_MONTHS_AR[mm] ?? parts[1]}`;
+              }
+              return `${HIJRI_MONTHS_AR[mm] ?? parts[1]} ${toAr(yr)} هـ`;
             }
-            const dt = new Date(monthStr + "-15T12:00:00");
+            // Gregorian key
+            const dt = new Date((isDay ? monthStr : monthStr + "-15") + "T12:00:00");
+            if (isDay) {
+              return customCalMode === "hijri"
+                ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long" })
+                : dt.toLocaleDateString("ar-SA", { day: "numeric", month: "long", calendar: "gregory" } as Intl.DateTimeFormatOptions);
+            }
             return customCalMode === "hijri"
               ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long" })
               : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" } as Intl.DateTimeFormatOptions);
           } catch { return monthStr; }
         };
         const rangeLabel = customFrom && customTo ? `${fmtCustomDate(customFrom)} → ${fmtCustomDate(customTo)}` : null;
-        const tableTitle = `التفاصيل ${customCalMode === "hijri" ? "الهجرية" : "الميلادية"} — ${rangeLabel}`;
+        const tableTitle = `التفاصيل ${groupByDay ? "اليومية" : "الشهرية"} ${customCalMode === "hijri" ? "الهجرية" : "الميلادية"} — ${rangeLabel}`;
         return (
           <>
             {!customFrom || !customTo ? (
@@ -17608,7 +17653,7 @@ function ReportsTab() {
                     const _cm = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
                     const _fmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _cm === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
                     const rangeStr = customFrom && customTo ? `${_fmt(customFrom)} ← ${_fmt(customTo)}` : "مخصص";
-                    printYearlyReport(rangeStr, selectedPropertyName, activeCustomData as any, true, _cm);
+                    printYearlyReport(rangeStr, selectedPropertyName, activeCustomData as any, true, _cm, groupByDay);
                   }} className="gap-2">
                     <FileText className="w-4 h-4" />طباعة التقرير
                   </Button>

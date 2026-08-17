@@ -61,6 +61,8 @@ interface DualCalendarPickerProps {
   onChange: (value: string) => void;
   placeholder?: string;
   minDate?: string;
+  /** When no value is selected, open the picker navigation on this date's month (instead of current month or minDate). */
+  initialDate?: string;
   label?: string;
   className?: string;
   compact?: boolean;
@@ -75,6 +77,7 @@ export function DualCalendarPicker({
   onChange,
   placeholder = "اختر التاريخ",
   minDate,
+  initialDate,
   label,
   className,
   compact = false,
@@ -83,17 +86,16 @@ export function DualCalendarPicker({
   const [open, setOpen] = React.useState(false);
   const [pickerView, setPickerView] = React.useState<PickerView>("days");
 
-  /* ── Hijri navigation state ── */
+  /* ── Hijri navigation state — init on value, then current month (NOT minDate) ── */
   const _initH = React.useMemo(() => {
     if (value) { try { return toHijriComponents(new Date(value + "T12:00:00")); } catch { /* */ } }
-    if (minDate) { try { return toHijriComponents(new Date(minDate + "T12:00:00")); } catch { /* */ } }
     return toHijriComponents(new Date());
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [pickerHY, setPickerHY] = React.useState(_initH.year);
   const [pickerHM, setPickerHM] = React.useState(_initH.month);
 
-  /* ── Gregorian navigation state ── */
+  /* ── Gregorian navigation state — init on value, then current month ── */
   const _initG = React.useMemo(() => {
     const d = value ? new Date(value + "T12:00:00") : new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
@@ -113,6 +115,18 @@ export function DualCalendarPicker({
       } catch { /* */ }
     }
   }, [value]);
+
+  /* When popover opens without a selected value, jump to initialDate's month */
+  React.useEffect(() => {
+    if (open && !value && initialDate) {
+      try {
+        const h = toHijriComponents(new Date(initialDate + "T12:00:00"));
+        setPickerHY(h.year); setPickerHM(h.month);
+        const g = new Date(initialDate + "T12:00:00");
+        setPickerGY(g.getFullYear()); setPickerGM(g.getMonth());
+      } catch { /* */ }
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Reset to days view when popover closes */
   React.useEffect(() => {
