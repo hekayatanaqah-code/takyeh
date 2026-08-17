@@ -15890,13 +15890,14 @@ async function printYearlyReport(
   isCustom = false,
   calMode: "hijri" | "gregorian" = "gregorian",
   isShortPeriod = false,
+  daysDiff?: number,
 ) {
   if (!yearly) return;
   const win = window.open("", "_blank", "width=794,height=1123");
   if (!win) return;
   const qr = await generateReportQrDataUrl("yearly", year);
   const logo = await getLogoDataUrl();
-  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo, isCustom, calMode, isShortPeriod));
+  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo, isCustom, calMode, isShortPeriod, daysDiff));
   win.document.close();
 }
 
@@ -16088,6 +16089,7 @@ function buildYearlyReportHtml(
   isCustom = false,
   calMode: "hijri" | "gregorian" = "gregorian",
   isShortPeriod = false,
+  daysDiff?: number,
 ): string {
   const _nowY = new Date();
   const _hcY = toHijriComponents(_nowY);
@@ -16145,7 +16147,11 @@ function buildYearlyReportHtml(
     ? `<img src="${logoDataUrl}" style="height:68px;width:auto;object-fit:contain;display:block;" alt="تكية" />`
     : `<svg width="148" height="52" viewBox="0 0 148 52" xmlns="http://www.w3.org/2000/svg"><polygon points="10,27 26,11 42,27" fill="none" stroke="#8C6246" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><rect x="14" y="26" width="24" height="18" rx="2" fill="#8C6246" opacity="0.1" stroke="#8C6246" stroke-width="2"/><rect x="21" y="31" width="10" height="13" rx="1.5" fill="#8C6246" opacity="0.45"/><line x1="52" y1="10" x2="52" y2="43" stroke="#d9c9b8" stroke-width="1"/><text x="60" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="21" font-weight="900" fill="#8C6246">تكية</text><text x="60" y="42" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="9.5" fill="#a07852">منصة الشاليهات</text></svg>`;
   const chartSvg = buildMonthlyBarChartSvg(yearly.monthly, isCustom ? calMode : undefined);
-  const printMediaCss = `@page{size:A4;margin:0!important;}@media print{html,body{max-height:297mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
+  // Compact single-page layout for very short periods (≤14 days), multi-page for longer ones
+  const isCompact = isShortPeriod && !!daysDiff && daysDiff <= 14;
+  const printMediaCss = isCompact
+    ? `@page{size:A4;margin:0!important;}@media print{html,body{max-height:297mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.page{padding:6px 22px!important;}.header{padding-bottom:6px!important;margin-bottom:8px!important;}.section{margin-bottom:6px!important;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:6px!important;}.kpi-card{padding:5px 10px!important;}table th,table td,table tfoot td{height:26px!important;padding-top:1px!important;padding-bottom:4px!important;}}`
+    : `@page{size:A4;margin:12mm 10mm!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.page{padding:10px 28px!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <title>${isCustom ? "التقرير_المخصص" : "التقرير_السنوي_" + toAr(year) + (Number(year) < 1900 ? " هـ" : "")}.pdf</title>
@@ -16848,7 +16854,8 @@ function ReportsTab() {
         const logo = await getLogoDataUrl();
         const _shareFmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _shareCalMode === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
         const rangeLabel = customFrom && customTo ? `${_shareFmt(customFrom)} ← ${_shareFmt(customTo)}` : "فترة مخصصة";
-        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, _shareData as any, false, qr, logo, true, _shareCalMode, groupByDay);
+        const _shareDiff = customFrom && customTo ? Math.round((new Date(customTo + "T12:00:00").getTime() - new Date(customFrom + "T12:00:00").getTime()) / 86_400_000) + 1 : undefined;
+        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, _shareData as any, false, qr, logo, true, _shareCalMode, groupByDay, _shareDiff);
       } else if (activeWaYearly) {
         const logo = await getLogoDataUrl();
         htmlContent = buildYearlyReportHtml(activeWaYearStr, selectedPropertyName, activeWaYearly, false, qr, logo);
@@ -17194,6 +17201,7 @@ function ReportsTab() {
                     placeholder="تاريخ"
                     compact
                     minDate={earliestTransactionDate}
+                    maxDate={new Date().toISOString().slice(0, 10)}
                     mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
                   />
                 </div>
@@ -17210,6 +17218,7 @@ function ReportsTab() {
                     placeholder="تاريخ"
                     compact
                     minDate={customFrom || earliestTransactionDate}
+                    maxDate={new Date().toISOString().slice(0, 10)}
                     initialDate={customFrom || undefined}
                     mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
                   />
@@ -17653,7 +17662,8 @@ function ReportsTab() {
                     const _cm = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
                     const _fmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _cm === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
                     const rangeStr = customFrom && customTo ? `${_fmt(customFrom)} ← ${_fmt(customTo)}` : "مخصص";
-                    printYearlyReport(rangeStr, selectedPropertyName, activeCustomData as any, true, _cm, groupByDay);
+                    const _diff = customFrom && customTo ? Math.round((new Date(customTo + "T12:00:00").getTime() - new Date(customFrom + "T12:00:00").getTime()) / 86_400_000) + 1 : undefined;
+                    printYearlyReport(rangeStr, selectedPropertyName, activeCustomData as any, true, _cm, groupByDay, _diff);
                   }} className="gap-2">
                     <FileText className="w-4 h-4" />طباعة التقرير
                   </Button>

@@ -61,6 +61,8 @@ interface DualCalendarPickerProps {
   onChange: (value: string) => void;
   placeholder?: string;
   minDate?: string;
+  /** Inclusive upper bound — days/months/years beyond this date are disabled. */
+  maxDate?: string;
   /** When no value is selected, open the picker navigation on this date's month (instead of current month or minDate). */
   initialDate?: string;
   label?: string;
@@ -77,6 +79,7 @@ export function DualCalendarPicker({
   onChange,
   placeholder = "اختر التاريخ",
   minDate,
+  maxDate,
   initialDate,
   label,
   className,
@@ -145,11 +148,23 @@ export function DualCalendarPicker({
   const gregFirst = gregFirstDOW(pickerGY, pickerGM);
 
   const minDateStr = minDate ?? "";
+  const maxDateStr = maxDate ?? "";
   const todayStr = toGregorianStr(new Date());
 
   /* ── Year/month ranges for picker ── */
   const nowH = React.useMemo(() => toHijriComponents(new Date()), []);
   const nowG = React.useMemo(() => ({ year: new Date().getFullYear(), month: new Date().getMonth() }), []);
+
+  /* Derived max bounds (fall back to today) */
+  const maxH = React.useMemo(() => {
+    if (maxDate) { try { return toHijriComponents(new Date(maxDate + "T12:00:00")); } catch { /* */ } }
+    return nowH;
+  }, [maxDate, nowH]);
+
+  const maxG = React.useMemo(() => {
+    if (maxDate) { try { const d = new Date(maxDate + "T12:00:00"); return { year: d.getFullYear(), month: d.getMonth(), day: d.getDate() }; } catch { /* */ } }
+    return { year: nowG.year, month: nowG.month, day: new Date().getDate() };
+  }, [maxDate, nowG]);
 
   const minHY = React.useMemo(() => {
     if (minDate) { try { return toHijriComponents(new Date(minDate + "T12:00:00")).year; } catch { /* */ } }
@@ -171,16 +186,16 @@ export function DualCalendarPicker({
     return 0;
   }, [minDate]);
 
-  /* Hijri year list — newest first */
+  /* Hijri year list — newest first, capped at maxDate year */
   const hijriYears = React.useMemo(
-    () => Array.from({ length: nowH.year - minHY + 1 }, (_, i) => nowH.year - i),
-    [nowH.year, minHY],
+    () => Array.from({ length: maxH.year - minHY + 1 }, (_, i) => maxH.year - i),
+    [maxH.year, minHY],
   );
 
-  /* Gregorian year list — newest first */
+  /* Gregorian year list — newest first, capped at maxDate year */
   const gregYears = React.useMemo(
-    () => Array.from({ length: nowG.year - minGY + 1 }, (_, i) => nowG.year - i),
-    [nowG.year, minGY],
+    () => Array.from({ length: maxG.year - minGY + 1 }, (_, i) => maxG.year - i),
+    [maxG.year, minGY],
   );
 
   /* ── Navigation ── */
@@ -205,22 +220,32 @@ export function DualCalendarPicker({
   const primaryLabel  = mode === "gregorian" ? gregorian : hijri;
   const secondaryLabel = mode === "gregorian" ? hijri     : gregorian;
 
-  /* ── Helpers: disable year/month in picker ── */
+  /* ── Helpers: disable year/month/day in picker ── */
   const isYearDisabled = (y: number) => {
-    if (mode === "hijri") return y > nowH.year;
-    return y > nowG.year;
+    if (mode === "hijri") return y > maxH.year;
+    return y > maxG.year;
   };
   const isMonthDisabledInYear = (m: number /* 1-based for hijri, 0-based for greg */) => {
     if (mode === "hijri") {
       if (pickerHY === minHY && m < minHM) return true;
-      if (pickerHY === nowH.year && m > nowH.month) return true;
+      if (pickerHY === maxH.year && m > maxH.month) return true;
+      if (pickerHY > maxH.year) return true;
       return false;
     } else {
       if (pickerGY === minGY && m < minGM) return true;
-      if (pickerGY === nowG.year && m > nowG.month) return true;
+      if (pickerGY === maxG.year && m > maxG.month) return true;
+      if (pickerGY > maxG.year) return true;
       return false;
     }
   };
+
+  /* ── Disable the "next month" navigation arrow when already at maxDate's month ── */
+  const isNextMonthDisabled = React.useMemo(() => {
+    if (mode === "hijri") {
+      return pickerHY > maxH.year || (pickerHY === maxH.year && pickerHM >= maxH.month);
+    }
+    return pickerGY > maxG.year || (pickerGY === maxG.year && pickerGM >= maxG.month);
+  }, [mode, pickerHY, pickerHM, pickerGY, pickerGM, maxH, maxG]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -360,7 +385,13 @@ export function DualCalendarPicker({
               <button
                 type="button"
                 onClick={goNext}
-                className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-base font-bold text-muted-foreground"
+                disabled={isNextMonthDisabled}
+                className={cn(
+                  "h-8 w-8 flex items-center justify-center rounded-lg transition-colors text-base font-bold",
+                  isNextMonthDisabled
+                    ? "opacity-25 cursor-not-allowed text-muted-foreground"
+                    : "hover:bg-accent text-muted-foreground",
+                )}
                 aria-label="الشهر التالي"
               >›</button>
 
@@ -427,7 +458,7 @@ export function DualCalendarPicker({
                   const gregStr = toGregorianStr(date);
                   const isSelected = value === gregStr;
                   const isToday = todayStr === gregStr;
-                  const isDisabled = !!minDateStr && gregStr < minDateStr;
+                  const isDisabled = (!!minDateStr && gregStr < minDateStr) || (!!maxDateStr && gregStr > maxDateStr);
                   return (
                     <button
                       key={gregStr}
@@ -457,7 +488,7 @@ export function DualCalendarPicker({
                   const gregStr = gregDateStr(pickerGY, pickerGM, day);
                   const isSelected = value === gregStr;
                   const isToday = todayStr === gregStr;
-                  const isDisabled = !!minDateStr && gregStr < minDateStr;
+                  const isDisabled = (!!minDateStr && gregStr < minDateStr) || (!!maxDateStr && gregStr > maxDateStr);
                   let hijriDay = 0;
                   try { hijriDay = toHijriComponents(new Date(gregStr + "T12:00:00")).day; } catch { /* */ }
                   return (
