@@ -15874,12 +15874,13 @@ async function printMonthlyReport(
   financial: { totalRevenue: number; totalInsuranceHeld?: number; totalInsuranceDeducted?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
   breakdown: ReportBreakdown = null,
   monthTitle: string | null = null,
+  isCurrentPeriod = false,
 ) {
   const win = window.open("", "_blank", "width=900,height=1200");
   if (!win) return;
   const qr = await generateReportQrDataUrl("monthly", month);
   const logo = await getLogoDataUrl();
-  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr, breakdown, monthTitle, logo));
+  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr, breakdown, monthTitle, logo, isCurrentPeriod));
   win.document.close();
 }
 
@@ -15891,13 +15892,14 @@ async function printYearlyReport(
   calMode: "hijri" | "gregorian" = "gregorian",
   isShortPeriod = false,
   daysDiff?: number,
+  isCurrentPeriod = false,
 ) {
   if (!yearly) return;
   const win = window.open("", "_blank", "width=794,height=1123");
   if (!win) return;
   const qr = await generateReportQrDataUrl("yearly", year);
   const logo = await getLogoDataUrl();
-  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo, isCustom, calMode, isShortPeriod, daysDiff));
+  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo, isCustom, calMode, isShortPeriod, daysDiff, isCurrentPeriod));
   win.document.close();
 }
 
@@ -15907,7 +15909,7 @@ type ReportBreakdown = {
   totBase: number; totSvc: number; totTotal: number;
 } | null;
 
-const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:22px 36px;background:#fff;}.header{border-bottom:3px solid #8C6246;padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#8C6246;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.section{margin-bottom:12px;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:12px;}.section-title{font-size:14px;font-weight:700;color:#8C6246;margin-bottom:8px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 16px;display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:flex-start!important;text-align:right!important;direction:rtl!important;}.kpi-label{font-size:11px;color:#333;font-weight:600;margin-bottom:3px;}.kpi-value{font-size:17px;font-weight:700;color:#111;line-height:1.2;}.kpi-note{font-size:10px;color:#555;font-weight:500;margin-top:2px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;word-wrap:break-word;}th{background:#8C6246;color:#fff;padding:6px 8px;text-align:right;vertical-align:middle;}td{padding:6px 8px;border-bottom:1px solid #ede9dd;word-break:break-word;vertical-align:middle;}tr:nth-child(even) td{background:#faf9f6;}tfoot td{font-weight:700;background:#fffbf0;border-top:2px solid #8C6246;}table th,table td,table tfoot td{height:38px!important;text-align:right!important;direction:rtl!important;vertical-align:top!important;line-height:1.2!important;}table td,table tfoot td{padding-top:2px!important;padding-bottom:8px!important;}table th{padding-top:2px!important;padding-bottom:8px!important;}.legend-item{display:inline-flex!important;align-items:center!important;gap:6px!important;}.slot-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}.slot-chip{background:#faf9f6;border:1px solid #e8e2d0;border-radius:6px;padding:5px 12px;font-size:12px;color:#555;}.footer{margin-top:14px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:7px;}`;
+const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:22px 36px;background:#fff;}.header{border-bottom:3px solid #8C6246;padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#8C6246;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.current-period-notice{margin:0 0 12px;padding:8px 12px;border:1px solid #fcd34d;border-radius:8px;background:#fffbeb;color:#92400e;font-size:11px;font-weight:600;text-align:right;}.section{margin-bottom:12px;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:12px;}.section-title{font-size:14px;font-weight:700;color:#8C6246;margin-bottom:8px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 16px;display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:flex-start!important;text-align:right!important;direction:rtl!important;}.kpi-label{font-size:11px;color:#333;font-weight:600;margin-bottom:3px;}.kpi-value{font-size:17px;font-weight:700;color:#111;line-height:1.2;}.kpi-note{font-size:10px;color:#555;font-weight:500;margin-top:2px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;word-wrap:break-word;}th{background:#8C6246;color:#fff;padding:6px 8px;text-align:right;vertical-align:middle;}td{padding:6px 8px;border-bottom:1px solid #ede9dd;word-break:break-word;vertical-align:middle;}tr:nth-child(even) td{background:#faf9f6;}tr.total-row td{font-weight:700;background:#fffbf0;border-top:2px solid #8C6246;}table th,table td{height:38px!important;text-align:right!important;direction:rtl!important;vertical-align:top!important;line-height:1.2!important;}table td{padding-top:2px!important;padding-bottom:8px!important;}table th{padding-top:2px!important;padding-bottom:8px!important;}.total-row{break-inside:avoid;page-break-inside:avoid;}.legend-item{display:inline-flex!important;align-items:center!important;gap:6px!important;}.slot-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}.slot-chip{background:#faf9f6;border:1px solid #e8e2d0;border-radius:6px;padding:5px 12px;font-size:12px;color:#555;}.footer{margin-top:14px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:7px;}`;
 
 function buildRevBarSvg(dailyRevenue: { day: number; revenue: number }[]): string {
   if (!dailyRevenue || dailyRevenue.length === 0) return "";
@@ -16007,6 +16009,7 @@ function buildMonthlyReportHtml(
   breakdown: ReportBreakdown = null,
   monthTitle: string | null = null,
   logoDataUrl: string | null = null,
+  isCurrentPeriod = false,
 ): string {
   const monthStr = toAr(monthTitle ?? new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" }));
   const _now = new Date();
@@ -16028,7 +16031,10 @@ function buildMonthlyReportHtml(
     : `<div class="qr-block" style="width:80px;"></div>`;
   const insuranceHeld = financial?.totalInsuranceHeld ?? 0;
   const insuranceDeducted = financial?.totalInsuranceDeducted ?? 0;
-  const printMediaCss = `@page{size:A4;margin:0!important;}@media print{html,body{max-height:297mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
+  const currentPeriodNotice = isCurrentPeriod
+    ? `<div class="current-period-notice">ملاحظة: هذا التقرير يعرض البيانات المالية المحققة حتى تاريخ اليوم ${printDate}.</div>`
+    : "";
+  const printMediaCss = `@page{size:A4;margin:10mm!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.page{width:100%!important;padding:0!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
   const dailyChartSvg = report?.dailyRevenue && report.dailyRevenue.length > 0
     ? buildRevBarSvg(report.dailyRevenue) : "";
@@ -16052,6 +16058,7 @@ function buildMonthlyReportHtml(
 <div class="header-brand">${logoDataUrl ? `<img src="${logoDataUrl}" style="height:68px;width:auto;object-fit:contain;display:block;" alt="تكية" />` : `<span style="font-size:26px;font-weight:900;color:#8C6246;font-family:Segoe UI,Tahoma,Arial,sans-serif;">تكية</span>`}</div>
 <div class="header-center"><div class="report-title">التقرير الشهري – ${monthStr}</div><div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
+${currentPeriodNotice}
 
 ${financial ? `<div class="section"><div class="section-title">الأداء والملخص المالي</div><div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
 <div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value" style="font-size:18px">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">عربون + محصّل + تلفيات</div></div>
@@ -16090,6 +16097,7 @@ function buildYearlyReportHtml(
   calMode: "hijri" | "gregorian" = "gregorian",
   isShortPeriod = false,
   daysDiff?: number,
+  isCurrentPeriod = false,
 ): string {
   const _nowY = new Date();
   const _hcY = toHijriComponents(_nowY);
@@ -16149,9 +16157,12 @@ function buildYearlyReportHtml(
   const chartSvg = buildMonthlyBarChartSvg(yearly.monthly, isCustom ? calMode : undefined);
   // Compact single-page layout for very short periods (≤14 days), multi-page for longer ones
   const isCompact = isShortPeriod && !!daysDiff && daysDiff <= 14;
+  const currentPeriodNotice = isCurrentPeriod
+    ? `<div class="current-period-notice">ملاحظة: هذا التقرير يعرض البيانات المالية المحققة حتى تاريخ اليوم ${printDate}.</div>`
+    : "";
   const printMediaCss = isCompact
-    ? `@page{size:A4;margin:0!important;}@media print{html,body{max-height:297mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.page{padding:6px 22px!important;}.header{padding-bottom:6px!important;margin-bottom:8px!important;}.section{margin-bottom:6px!important;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:6px!important;}.kpi-card{padding:5px 10px!important;}table th,table td,table tfoot td{height:26px!important;padding-top:1px!important;padding-bottom:4px!important;}}`
-    : `@page{size:A4;margin:12mm 10mm!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.page{padding:10px 28px!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
+    ? `@page{size:A4;margin:10mm!important;}@media print{html,body{max-height:277mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.page{width:100%!important;padding:6px 0!important;}.header{padding-bottom:6px!important;margin-bottom:8px!important;}.section{margin-bottom:6px!important;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:6px!important;}.kpi-card{padding:5px 10px!important;}table th,table td{height:26px!important;padding-top:1px!important;padding-bottom:4px!important;}}`
+    : `@page{size:A4;margin:10mm!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}.page{width:100%!important;padding:0!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <title>${isCustom ? "التقرير_المخصص" : "التقرير_السنوي_" + toAr(year) + (Number(year) < 1900 ? " هـ" : "")}.pdf</title>
@@ -16162,6 +16173,7 @@ function buildYearlyReportHtml(
 <div class="header-brand">${logoHtml}</div>
 <div class="header-center"><div class="report-title">${isCustom ? (isShortPeriod ? "تقرير حركة الفترة" : "التقرير المخصص") : "التقرير السنوي – " + toAr(year)}</div>${(() => { if (!isCustom) return ""; const parts = year.split(" ← "); const fromPart = parts[0]?.trim() ?? ""; const toPart = parts[1]?.trim() ?? ""; return parts.length === 2 ? `<div style="font-size:10.5px;color:#8C6246;font-weight:600;margin-top:5px;border:1px solid #e8e2d0;background:#faf9f6;border-radius:6px;padding:3px 10px;display:inline-block;">الفترة من: ${fromPart} إلى: ${toPart}</div>` : `<div style="font-size:10.5px;color:#555;margin-top:4px;">${year}</div>`; })()}<div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
+${currentPeriodNotice}
 
 <div class="section"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="width:4px;height:18px;background:#8C6246;border-radius:2px;flex-shrink:0;display:inline-block;"></span><span style="font-size:14px;font-weight:700;color:#8C6246;margin:0;line-height:1;">${isCustom ? "الملخص المالي" : "الملخص المالي السنوي"}</span></div>
 <div style="display:flex;gap:12px;margin-bottom:20px;">
@@ -16176,13 +16188,12 @@ ${chartSvg ? `<div class="section"><div style="display:flex;align-items:center;g
 <table><thead><tr>
 <th style="height:38px;padding:10px 8px 4px;text-align:right;direction:rtl;vertical-align:top;">الشهر</th><th style="height:38px;padding:10px 8px 4px;text-align:right;direction:rtl;vertical-align:top;">الإيرادات (ر.س)</th><th style="height:38px;padding:10px 8px 4px;text-align:right;direction:rtl;vertical-align:top;">المصروفات (ر.س)</th><th style="height:38px;padding:10px 8px 4px;text-align:right;direction:rtl;vertical-align:top;">صافي الربح (ر.س)</th>
 </tr></thead>
-<tbody>${rows}</tbody>
-<tfoot><tr>
+<tbody>${rows}<tr class="total-row">
 <td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;">${isCustom ? "الإجمالي" : "الإجمالي السنوي"}</td>
 <td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;">${formatAmount(yearly.totals.revenue)}</td>
 <td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;">${formatAmount(yearly.totals.expenses)}</td>
 <td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</td>
-</tr></tfoot>
+</tr></tbody>
 </table></div>
 
 <div class="footer" style="font-size:12px;font-weight:500;color:#666;">تم إصدار هذا التقرير عبر منصة تكية · ${hijriYearY} هـ / ${gregYearY} م</div>
@@ -16319,6 +16330,10 @@ function ReportsTab() {
   const _nowHijri = getHijriYMClient(_nowRep);
   const nowHijriYearNum  = _nowHijri.year;
   const nowHijriMonthNum = _nowHijri.month;
+  const todayLocalDate = `${_nowRep.getFullYear()}-${String(_nowRep.getMonth() + 1).padStart(2, "0")}-${String(_nowRep.getDate()).padStart(2, "0")}`;
+  const todayReportLabel = _nowRep.toLocaleDateString("ar-SA", {
+    day: "numeric", month: "long", year: "numeric", calendar: "gregory",
+  } as Intl.DateTimeFormatOptions);
 
   const [viewMode, setViewMode] = useState<"monthly" | "yearly" | "custom">("monthly");
   const [reportType, setReportType] = useState<"chalets" | "services" | "unified">("chalets");
@@ -16708,6 +16723,9 @@ function ReportsTab() {
   const activeMonthLabel = isHijri
     ? (report?.hijriMonthLabel ?? hijriMonthOptions.find(o => o.val === selectedHijriMonthVal)?.label ?? selectedHijriMonthVal)
     : (monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth);
+  const isCurrentMonthlyPeriod = isHijri
+    ? selectedHijriMonthVal === `${nowHijriYearNum}-${String(nowHijriMonthNum).padStart(2, "0")}`
+    : selectedMonth === currentMonth;
 
   /* Recalculate occupancy from raw fields to guarantee consistency with displayed text */
   const displayOccupancy = useMemo(() => {
@@ -17201,7 +17219,7 @@ function ReportsTab() {
                     placeholder="تاريخ"
                     compact
                     minDate={earliestTransactionDate}
-                    maxDate={new Date().toISOString().slice(0, 10)}
+                    maxDate={todayLocalDate}
                     mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
                   />
                 </div>
@@ -17218,7 +17236,7 @@ function ReportsTab() {
                     placeholder="تاريخ"
                     compact
                     minDate={customFrom || earliestTransactionDate}
-                    maxDate={new Date().toISOString().slice(0, 10)}
+                    maxDate={todayLocalDate}
                     initialDate={customFrom || undefined}
                     mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
                   />
@@ -17347,6 +17365,9 @@ function ReportsTab() {
         const activeYearly = isYearlyHijri ? yearlyHijri : yearly;
         const activeYearlyLoading = isYearlyHijri ? yearlyHijriLoading : yearlyLoading;
         const activeYearLabel = isYearlyHijri ? `${selectedHijriYear} هـ` : selectedYear;
+        const isCurrentYearlyPeriod = isYearlyHijri
+          ? Number(selectedHijriYear) === nowHijriYearNum
+          : selectedYear === currentYear;
         const getMonthLabel = (m: any) =>
           isYearlyHijri && (m as any).monthName
             ? (m as any).monthName
@@ -17361,6 +17382,12 @@ function ReportsTab() {
             <div className="space-y-4">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
           ) : activeYearly ? (
             <>
+              {isCurrentYearlyPeriod && (
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <p>ملاحظة: هذا التقرير يعرض البيانات المالية المحققة حتى تاريخ اليوم {todayReportLabel} م.</p>
+                </div>
+              )}
               <div className="grid grid-cols-3 gap-3">
                 {[
                   { label: "إجمالي الإيرادات", value: formatAmount(activeYearly.totals.revenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", valueColor: "text-foreground" },
@@ -17490,7 +17517,16 @@ function ReportsTab() {
               </div>
 
               <div className="flex flex-wrap gap-2 justify-end">
-                <Button variant="outline" size="sm" onClick={() => printYearlyReport(isYearlyHijri ? activeYearLabel : selectedYear, selectedPropertyName, activeYearly as any)} className="gap-2">
+                <Button variant="outline" size="sm" onClick={() => printYearlyReport(
+                  isYearlyHijri ? activeYearLabel : selectedYear,
+                  selectedPropertyName,
+                  activeYearly as any,
+                  false,
+                  isYearlyHijri ? "hijri" : "gregorian",
+                  false,
+                  undefined,
+                  isCurrentYearlyPeriod,
+                )} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير السنوي
                 </Button>
                 <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
@@ -17807,6 +17843,13 @@ function ReportsTab() {
             </div>
           )}
 
+          {isCurrentMonthlyPeriod && (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <p>ملاحظة: هذا التقرير يعرض البيانات المالية المحققة حتى تاريخ اليوم {todayReportLabel} م.</p>
+            </div>
+          )}
+
           {financial && (
             <>
               <div className="grid grid-cols-3 gap-3">
@@ -17990,7 +18033,15 @@ function ReportsTab() {
               </div>
 
               <div className="flex flex-wrap gap-2 justify-end">
-                <Button variant="outline" size="sm" onClick={() => printMonthlyReport(selectedMonth, selectedPropertyName, report, financial, repBreakdown, activeMonthLabel)} className="gap-2">
+                <Button variant="outline" size="sm" onClick={() => printMonthlyReport(
+                  selectedMonth,
+                  selectedPropertyName,
+                  report,
+                  financial,
+                  repBreakdown,
+                  activeMonthLabel,
+                  isCurrentMonthlyPeriod,
+                )} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير
                 </Button>
                 <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
