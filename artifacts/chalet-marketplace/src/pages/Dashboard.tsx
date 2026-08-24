@@ -16034,7 +16034,7 @@ function buildMonthlyReportHtml(
   const currentPeriodNotice = isCurrentPeriod
     ? `<div class="current-period-notice">ملاحظة: هذا التقرير يعرض البيانات المالية المحققة حتى تاريخ اليوم ${printDate}.</div>`
     : "";
-  const printMediaCss = `@page{size:A4 portrait;margin:12mm 10mm 12mm 10mm!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:0!important;}table{margin-top:10px!important;margin-bottom:10px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.page{width:100%!important;padding:0!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
+  const printMediaCss = `@page{size:A4 portrait;margin:0!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:0!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:15mm 12mm!important;}.page{width:100%!important;padding:0!important;}.print-container.page{padding:15mm 12mm!important;}table{margin-top:10px!important;margin-bottom:10px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
   const dailyChartSvg = report?.dailyRevenue && report.dailyRevenue.length > 0
     ? buildRevBarSvg(report.dailyRevenue) : "";
@@ -16052,7 +16052,7 @@ function buildMonthlyReportHtml(
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <title>التقرير_الشهري_${monthStr}.pdf</title>
 <style>${REPORT_CSS}${printMediaCss}</style></head>
-<body><div class="page">
+<body><div class="page print-container">
 
 <div class="header">
 <div class="header-brand">${logoDataUrl ? `<img src="${logoDataUrl}" style="height:68px;width:auto;object-fit:contain;display:block;" alt="تكية" />` : `<span style="font-size:26px;font-weight:900;color:#8C6246;font-family:Segoe UI,Tahoma,Arial,sans-serif;">تكية</span>`}</div>
@@ -16161,13 +16161,13 @@ function buildYearlyReportHtml(
     ? `<div class="current-period-notice">ملاحظة: هذا التقرير يعرض البيانات المالية المحققة حتى تاريخ اليوم ${printDate}.</div>`
     : "";
   const printMediaCss = isCompact
-    ? `@page{size:A4 portrait;margin:12mm 10mm 12mm 10mm!important;}@media print{html,body{max-height:277mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:0!important;}table{margin-top:10px!important;margin-bottom:10px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.page{width:100%!important;padding:0!important;}.header{padding-bottom:6px!important;margin-bottom:8px!important;}.section{margin-bottom:6px!important;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:6px!important;}.kpi-card{padding:5px 10px!important;}table th,table td{height:26px!important;padding-top:1px!important;padding-bottom:4px!important;}}`
-    : `@page{size:A4 portrait;margin:12mm 10mm 12mm 10mm!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:0!important;}table{margin-top:10px!important;margin-bottom:10px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.page{width:100%!important;padding:0!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
+    ? `@page{size:A4 portrait;margin:0!important;}@media print{html,body{max-height:277mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:0!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:15mm 12mm!important;}.page{width:100%!important;padding:0!important;}.print-container.page{padding:15mm 12mm!important;}table{margin-top:10px!important;margin-bottom:10px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.header{padding-bottom:6px!important;margin-bottom:8px!important;}.section{margin-bottom:6px!important;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:6px!important;}.kpi-card{padding:5px 10px!important;}table th,table td{height:26px!important;padding-top:1px!important;padding-bottom:4px!important;}}`
+    : `@page{size:A4 portrait;margin:0!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:0!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:15mm 12mm!important;}.page{width:100%!important;padding:0!important;}.print-container.page{padding:15mm 12mm!important;}table{margin-top:10px!important;margin-bottom:10px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <title>${isCustom ? "التقرير_المخصص" : "التقرير_السنوي_" + toAr(year) + (Number(year) < 1900 ? " هـ" : "")}.pdf</title>
 <style>${REPORT_CSS}${printMediaCss}</style></head>
-<body><div class="page">
+<body><div class="page print-container">
 
 <div class="header">
 <div class="header-brand">${logoHtml}</div>
