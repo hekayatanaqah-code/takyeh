@@ -12813,6 +12813,29 @@ function formatAmountSigned(n: number) {
   return n < 0 ? `(${formatted})` : formatted;
 }
 
+function formatWhatsAppAmount(n: number) {
+  const amount = toAr(Math.round(Math.abs(n)).toLocaleString("en-US"));
+  return n < 0 ? `(${amount}) ر.س` : `${amount} ر.س`;
+}
+
+function formatWhatsAppHijriDate(dateStr: string) {
+  try {
+    const date = new Date(`${dateStr}T12:00:00`);
+    if (isNaN(date.getTime())) return toAr(dateStr);
+    const { day, month, year } = toHijriComponents(date);
+    return `${toAr(day)} ${HIJRI_MONTHS_AR[month - 1] ?? ""} ${toAr(year)} هـ`;
+  } catch {
+    return toAr(dateStr);
+  }
+}
+
+function cleanReportFilePart(value: string) {
+  return value
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/^_+|_+$/g, "") || "العقارات";
+}
+
 /* ── Expenses Tab ────────────────────────────────── */
 interface OwnerExpense {
   id: number;
@@ -16798,9 +16821,9 @@ function ReportsTab() {
         : report.occupancyRate;
       bodyText =
 `📊 *تقرير شهر ${monthLabel}*
-🏡 *المنشأة:* ${selectedPropertyName}
+🏠 *المنشأة:* ${toAr(selectedPropertyName)}
 🗓️ *الحجوزات:* ${toAr(report.totalBookings)} • *الإشغال:* ${toAr(occupancy)}٪
-📈 *صافي الربح:* ${financial ? toAr(formatAmountSigned(financial.netProfit)) : "—"}
+📈 *صافي الربح:* ${financial ? formatWhatsAppAmount(financial.netProfit) : "—"}
 ✨ *منصة تكية لإدارة الحجوزات*`;
       console.log("[WA-SHARE] bodyText:", bodyText);
     } else if (viewMode === "yearly") {
@@ -16812,10 +16835,10 @@ function ReportsTab() {
       titleText = `التقرير السنوي ${calTypeLabel} - ${toAr(waYearStr)} – ${selectedPropertyName}`;
       bodyText =
 `📊 التقرير السنوي ${calTypeLabel} - ${toAr(waYearStr)}
-🏡 المنشأة: ${selectedPropertyName}
-💰 الإيرادات: ${toAr(formatAmount(waYearly.totals.revenue))} ر.س
-🔴 المصروفات: ${toAr(formatAmount(waYearly.totals.expenses))} ر.س
-⭐ صافي الربح: ${toAr(formatAmountSigned(waYearly.totals.netProfit))} ر.س
+🏠 المنشأة: ${toAr(selectedPropertyName)}
+💰 الإيرادات: ${formatWhatsAppAmount(waYearly.totals.revenue)}
+💸 المصروفات: ${formatWhatsAppAmount(waYearly.totals.expenses)}
+📈 صافي الربح: ${formatWhatsAppAmount(waYearly.totals.netProfit)}
 
 ✨ منصة تكية لإدارة الحجوزات`;
       console.log("[WA-SHARE] bodyText:", bodyText);
@@ -16823,20 +16846,23 @@ function ReportsTab() {
       const _waCal = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
       const _waData = _waCal === "hijri" ? customRangeDataHijri : customRangeData;
       if (!_waData) return;
-      const rangeLabel = customFrom && customTo ? `${customFrom} → ${customTo}` : "فترة مخصصة";
-      titleText = `تقرير مخصص: ${rangeLabel} – ${selectedPropertyName}`;
+      const waRangeLabel = customFrom && customTo
+        ? `من ${formatWhatsAppHijriDate(customFrom)} إلى ${formatWhatsAppHijriDate(customTo)}`
+        : "فترة مخصصة";
+      titleText = `تقرير الحركة المالية – ${selectedPropertyName}`;
       bodyText =
-`📊 تقرير مخصص: ${rangeLabel}
-🏡 المنشأة: ${selectedPropertyName}
-💰 الإيرادات: ${toAr(formatAmount(_waData.totals.revenue))} ر.س
-🔴 المصروفات: ${toAr(formatAmount(_waData.totals.expenses))} ر.س
-⭐ صافي الربح: ${toAr(formatAmountSigned(_waData.totals.netProfit))} ر.س
+`📊 تقرير الحركة المالية
+🏠 المنشأة: ${toAr(selectedPropertyName)}
+📅 الفترة: ${waRangeLabel}
+💰 الإيرادات: ${formatWhatsAppAmount(_waData.totals.revenue)}
+💸 المصروفات: ${formatWhatsAppAmount(_waData.totals.expenses)}
+📈 صافي الربح: ${formatWhatsAppAmount(_waData.totals.netProfit)}
 
 ✨ منصة تكية لإدارة الحجوزات`;
       console.log("[WA-SHARE] bodyText:", bodyText);
     } else return;
 
-    // اسم الملف: أرقام فقط لضمان عدم تكسير النص العربي في واتساب
+    // اسم الملف العربي النظيف لتقرير الفترة المخصصة
     let shareFileName: string;
     if (viewMode === "monthly") {
       if (isHijri && selectedHijriMonthVal) {
@@ -16847,7 +16873,7 @@ function ReportsTab() {
         shareFileName = `${gy}-${String(gm).padStart(2, "0")}.pdf`;
       }
     } else if (viewMode === "custom") {
-      shareFileName = `custom-${customFrom}-${customTo}.pdf`;
+      shareFileName = `تقرير_المالي_${cleanReportFilePart(selectedPropertyName)}.pdf`;
     } else {
       const waYearStr = isYearlyHijri ? selectedHijriYear : selectedYear;
       shareFileName = `${waYearStr}.pdf`;
