@@ -12924,6 +12924,9 @@ function TransactionHistoryTab() {
   const [histYear, setHistYear] = useState<string>("");
   const [histMonth, setHistMonth] = useState<string>("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(10);
+  const historyTableRef = useRef<HTMLDivElement>(null);
 
   const submissionId = unit.type === "chalet" ? unit.submissionId : undefined;
 
@@ -12991,6 +12994,43 @@ function TransactionHistoryTab() {
     return true;
   }), [allItems, histCalType, histYear, histMonth]);
 
+  const totalHistoryPages = Math.max(1, Math.ceil(items.length / historyPageSize));
+  const safeHistoryPage = Math.min(historyPage, totalHistoryPages);
+  const paginatedItems = useMemo(() => {
+    const start = (safeHistoryPage - 1) * historyPageSize;
+    return items.slice(start, start + historyPageSize);
+  }, [items, safeHistoryPage, historyPageSize]);
+  const historyPageNumbers = useMemo<(number | "ellipsis")[]>(() => {
+    if (totalHistoryPages <= 7) {
+      return Array.from({ length: totalHistoryPages }, (_, index) => index + 1);
+    }
+    const candidates = new Set([1, totalHistoryPages, safeHistoryPage - 1, safeHistoryPage, safeHistoryPage + 1]);
+    const sorted = Array.from(candidates).filter(page => page >= 1 && page <= totalHistoryPages).sort((a, b) => a - b);
+    const result: (number | "ellipsis")[] = [];
+    sorted.forEach((page, index) => {
+      if (index > 0 && page - sorted[index - 1] > 1) result.push("ellipsis");
+      result.push(page);
+    });
+    return result;
+  }, [safeHistoryPage, totalHistoryPages]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [histCalType, histYear, histMonth, historyPageSize]);
+
+  useEffect(() => {
+    if (historyPage > totalHistoryPages) setHistoryPage(totalHistoryPages);
+  }, [historyPage, totalHistoryPages]);
+
+  const changeHistoryPage = (page: number) => {
+    const nextPage = Math.max(1, Math.min(page, totalHistoryPages));
+    if (nextPage === safeHistoryPage) return;
+    setHistoryPage(nextPage);
+    requestAnimationFrame(() => {
+      historyTableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   const typeLabel = (t: string, method: string) => {
     if (t === "income") {
       const m = method === "transfer" ? "حوالة" : method === "pos" ? "شبكة" : "كاش";
@@ -13035,12 +13075,12 @@ function TransactionHistoryTab() {
           <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
             {(["hijri", "gregorian"] as const).map(mode => (
               <button key={mode} type="button"
-                onClick={() => { setHistCalType(mode); setHistYear(""); setHistMonth(""); }}
+                onClick={() => { setHistCalType(mode); setHistYear(""); setHistMonth(""); setHistoryPage(1); }}
                 className={`text-xs px-3 py-1.5 font-medium transition-colors ${histCalType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
               >{mode === "hijri" ? "هجري" : "ميلادي"}</button>
             ))}
           </div>
-          <Select value={histYear || "__all__"} onValueChange={yr => { setHistYear(yr === "__all__" ? "" : yr); setHistMonth(""); }}>
+           <Select value={histYear || "__all__"} onValueChange={yr => { setHistYear(yr === "__all__" ? "" : yr); setHistMonth(""); setHistoryPage(1); }}>
             <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7rem] shrink-0" dir="rtl">
               {histYear
                 ? <span className="text-sm font-medium">{histCalType === "hijri" ? `${toArN(Number(histYear))} هـ` : `${toArN(Number(histYear))} م`}</span>
@@ -13057,7 +13097,7 @@ function TransactionHistoryTab() {
           </Select>
           <Select
             value={!histYear ? "all" : (histMonth || "all")}
-            onValueChange={v => { if (histYear) setHistMonth(v === "all" ? "" : v); }}
+             onValueChange={v => { if (histYear) { setHistMonth(v === "all" ? "" : v); setHistoryPage(1); } }}
             disabled={!histYear}
           >
             <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[8rem] shrink-0" dir="rtl">
@@ -13112,7 +13152,7 @@ function TransactionHistoryTab() {
           <div className="text-3xl mb-2">📭</div>لا توجد معاملات في هذه الفترة
         </div>
       ) : (
-        <div className="rounded-2xl border border-border overflow-hidden">
+         <div ref={historyTableRef} className="rounded-2xl border border-border overflow-hidden scroll-mt-4">
           <div className="overflow-x-auto">
             <table className="w-full text-sm" dir="rtl">
               <thead className="bg-muted/50 text-xs font-bold text-muted-foreground">
@@ -13126,7 +13166,7 @@ function TransactionHistoryTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {items.map(item => {
+                 {paginatedItems.map(item => {
                   const tl = typeLabel(item.type, item.method);
                   const sl = statusLabel(item.status);
                   const isIncome = item.type === "income";
@@ -13234,6 +13274,68 @@ function TransactionHistoryTab() {
               </tbody>
             </table>
           </div>
+           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/20 px-4 py-3" dir="rtl">
+             <div className="text-xs text-muted-foreground tabular-nums">
+               عرض {toArN(items.length === 0 ? 0 : (safeHistoryPage - 1) * historyPageSize + 1)} إلى {toArN(Math.min(safeHistoryPage * historyPageSize, items.length))} من أصل {toArN(items.length)} معاملة
+             </div>
+             <div className="flex flex-wrap items-center justify-end gap-2">
+               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                 <span>عدد المعاملات:</span>
+                 <Select
+                   value={String(historyPageSize)}
+                   onValueChange={(value) => { setHistoryPageSize(Number(value)); setHistoryPage(1); }}
+                 >
+                   <SelectTrigger className="h-8 w-[4.5rem] rounded-lg bg-background text-xs" dir="rtl">
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent dir="rtl">
+                     {[10, 25, 50].map(size => (
+                       <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
+               </div>
+               {totalHistoryPages > 1 && (
+                 <div className="flex items-center gap-1" dir="ltr">
+                   <Button
+                     type="button"
+                     variant="outline"
+                     size="sm"
+                     onClick={() => changeHistoryPage(safeHistoryPage - 1)}
+                     disabled={safeHistoryPage === 1}
+                     className="h-8 gap-1 px-2.5 text-xs"
+                   >
+                     <ChevronLeft className="h-3.5 w-3.5" />السابق
+                   </Button>
+                   {historyPageNumbers.map((page, index) => page === "ellipsis" ? (
+                     <span key={`ellipsis-${index}`} className="px-1 text-xs text-muted-foreground">…</span>
+                   ) : (
+                     <Button
+                       key={page}
+                       type="button"
+                       variant={page === safeHistoryPage ? "default" : "outline"}
+                       size="sm"
+                       onClick={() => changeHistoryPage(page)}
+                       aria-current={page === safeHistoryPage ? "page" : undefined}
+                       className="h-8 min-w-8 px-2 text-xs tabular-nums"
+                     >
+                       {page}
+                     </Button>
+                   ))}
+                   <Button
+                     type="button"
+                     variant="outline"
+                     size="sm"
+                     onClick={() => changeHistoryPage(safeHistoryPage + 1)}
+                     disabled={safeHistoryPage === totalHistoryPages}
+                     className="h-8 gap-1 px-2.5 text-xs"
+                   >
+                     التالي<ChevronRight className="h-3.5 w-3.5" />
+                   </Button>
+                 </div>
+               )}
+             </div>
+           </div>
         </div>
       )}
 
