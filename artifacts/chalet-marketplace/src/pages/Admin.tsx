@@ -1849,12 +1849,21 @@ const BLANK_SERVICE: ServiceFormData = {
   whatsappNumber: "", price: "", priceNote: "", city: "",
 };
 
-function ServicesTab() {
+function ServicesTab({ openNewFormRequest = 0 }: { openNewFormRequest?: number }) {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [form, setForm] = useState<ServiceFormData>(BLANK_SERVICE);
+
+  useEffect(() => {
+    if (openNewFormRequest > 0) {
+      setEditId(null);
+      setForm(BLANK_SERVICE);
+      setShowForm(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [openNewFormRequest]);
 
   const { data: services = [], isLoading } = useQuery({
     queryKey: ["admin", "services"],
@@ -5530,8 +5539,11 @@ function OwnerPickerInput({
   );
 }
 
-function DirectAddTab() {
+type DirectAddMode = "property" | "owner" | "service";
+
+function DirectAddTab({ mode }: { mode: DirectAddMode }) {
   const qc = useQueryClient();
+  const ownerOnly = mode === "owner";
 
   const { data: daCategories = [] } = useQuery<{ id: number; nameAr: string; emoji: string }[]>({
     queryKey: ["categories"],
@@ -5548,11 +5560,11 @@ function DirectAddTab() {
   const galleryInputRef  = useRef<HTMLInputElement>(null);
   const svcVideoInputRef = useRef<HTMLInputElement>(null);
 
-  const [assetType, setAssetType] = useState<"chalet" | "service">("chalet");
+  const [assetType, setAssetType] = useState<"chalet" | "service">(mode === "service" ? "service" : "chalet");
 
   /* ── Owner ── */
   const [ownerId, setOwnerId]             = useState("");
-  const [showNewOwner, setShowNewOwner]   = useState(false);
+  const [showNewOwner, setShowNewOwner]   = useState(mode === "owner");
   const [newOwner, setNewOwner]           = useState({ fullName: "", phone: "", email: "", password: "", confirmPassword: "" });
   const [showNewOwnerPw, setShowNewOwnerPw]   = useState(false);
   const [showNewOwnerCPw, setShowNewOwnerCPw] = useState(false);
@@ -5670,6 +5682,15 @@ function DirectAddTab() {
     setSvcLogoUrl(null); setSvcGallery([]); setSvcVideo(null); setSvcLegal(false);
     setError(null); setSuccess(null);
   }
+
+  useEffect(() => {
+    setAssetType(mode === "service" ? "service" : "chalet");
+    resetAll();
+    setShowNewOwner(ownerOnly);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    // The add menu intentionally starts each form with fresh values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
 
   async function handleRegisterOwner(e: React.MouseEvent) {
     e.preventDefault();
@@ -5801,22 +5822,28 @@ function DirectAddTab() {
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-16">
       <div>
-        <h2 className="text-xl font-bold text-white">إضافة وحدة جديدة مباشرة</h2>
-        <p className="text-slate-400 text-sm mt-1">أنشئ شاليهاً أو مزود خدمة تحت حساب مالك موجود — يُفعّل فوراً دون مراجعة.</p>
+        <h2 className="text-xl font-bold text-white">
+          {mode === "owner" ? "إضافة مالك جديد" : mode === "service" ? "إضافة مزود خدمة جديد" : "إضافة عقار جديد"}
+        </h2>
+        <p className="text-slate-400 text-sm mt-1">
+          {mode === "owner"
+            ? "أنشئ حساب مالك جديداً ليتمكن من تسجيل الدخول وإدارة عقاراته."
+            : "أنشئ عقاراً أو مزود خدمة تحت حساب مالك موجود — يُفعّل فوراً دون مراجعة."}
+        </p>
       </div>
 
       {/* Type toggle */}
-      <div className="flex rounded-lg overflow-hidden border border-slate-700">
+      {!ownerOnly && <div className="flex rounded-lg overflow-hidden border border-slate-700">
         <button type="button" onClick={() => { setAssetType("chalet"); resetAll(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType==="chalet" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}>🏡 شاليه</button>
         <button type="button" onClick={() => { setAssetType("service"); resetAll(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType==="service" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}>🎪 مزود خدمة</button>
-      </div>
+      </div>}
 
       <form onSubmit={handleSubmit} className="space-y-6">
 
         {/* ── OWNER SECTION ── */}
         <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
-          <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">المالك</h3>
-          <div className="space-y-1.5">
+          <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">{ownerOnly ? "بيانات المالك الجديد" : "المالك"}</h3>
+          {!ownerOnly && <div className="space-y-1.5">
             <label className="text-sm text-slate-300 font-medium">اختر مالكاً موجوداً</label>
             {owners.length === 0
               ? <p className="text-slate-500 text-sm py-2">لا يوجد ملاك مسجّلون بعد</p>
@@ -5827,11 +5854,11 @@ function DirectAddTab() {
                 ✓ تم اختيار: {owners.find(o => o.ownerId === ownerId)?.ownerName ?? ownerId}
               </p>
             )}
-          </div>
+          </div>}
           {ownerRegOk && <div className="text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 text-sm">{ownerRegOk}</div>}
-          <button type="button" onClick={() => setShowNewOwner(v => !v)} className="text-amber-400 text-sm hover:underline underline-offset-2">
+          {!ownerOnly && <button type="button" onClick={() => setShowNewOwner(v => !v)} className="text-amber-400 text-sm hover:underline underline-offset-2">
             {showNewOwner ? "← إخفاء نموذج التسجيل" : "+ تسجيل مالك جديد"}
-          </button>
+          </button>}
           {showNewOwner && (
             <div className="border border-slate-600 rounded-lg p-4 space-y-3 bg-slate-900/60">
               <p className="text-xs text-slate-400">سيُسجَّل المالك ويمكنه تسجيل الدخول بالبريد/الهاتف وكلمة المرور.</p>
@@ -5867,7 +5894,7 @@ function DirectAddTab() {
         </section>
 
         {/* ──── CHALET FIELDS ──── */}
-        {assetType === "chalet" && <>
+        {!ownerOnly && assetType === "chalet" && <>
           {/* Basic Info */}
           <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
             <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">المعلومات الأساسية</h3>
@@ -6152,7 +6179,7 @@ function DirectAddTab() {
         </>}
 
         {/* ──── SERVICE FIELDS ──── */}
-        {assetType === "service" && <>
+        {!ownerOnly && assetType === "service" && <>
           {/* Basic Info */}
           <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
             <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">المعلومات الأساسية</h3>
@@ -6327,7 +6354,7 @@ function DirectAddTab() {
           </div>
         )}
 
-        <Button
+        {!ownerOnly && <Button
           type="submit"
           disabled={submitting || !ownerId
             || (assetType==="chalet" && (!cForm.nameAr||!cForm.location||!cForm.district||!propertyType||!sections||!cForm.price||!legalAccepted))
@@ -6336,7 +6363,7 @@ function DirectAddTab() {
         >
           {submitting ? <Loader2 className="animate-spin w-5 h-5 ml-2" /> : <Plus className="w-5 h-5 ml-2" />}
           {assetType==="chalet" ? "إضافة الشاليه الآن" : "إضافة مزود الخدمة الآن"}
-        </Button>
+        </Button>}
       </form>
     </div>
   );
@@ -8601,6 +8628,8 @@ export default function Admin() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { adminStaffUser, isAdminStaff, permissions: adminPerms, isLoading: staffLoading, logout: adminStaffLogout } = useAdminStaffAuth();
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [directAddMode, setDirectAddMode] = useState<DirectAddMode>("property");
+  const [serviceAddRequest, setServiceAddRequest] = useState(0);
 
   const { data: accessCheck, isLoading: checkLoading, error: checkError } = useQuery({
     queryKey: ["admin", "access-check"],
@@ -8654,7 +8683,7 @@ export default function Admin() {
   const visibleTabIds = useMemo(() => new Set(navGroups.flatMap((group) => group.tabs.map((tab) => tab.id))), [navGroups]);
 
   useEffect(() => {
-    if (tabs.length > 0 && (!tabs.find((t) => t.id === activeTab) || !visibleTabIds.has(activeTab))) {
+    if (activeTab !== "directAdd" && tabs.length > 0 && (!tabs.find((t) => t.id === activeTab) || !visibleTabIds.has(activeTab))) {
       const firstVisible = navGroups[0]?.tabs[0]?.id ?? tabs[0].id;
       setActiveTab(firstVisible as TabId);
     }
@@ -8758,18 +8787,25 @@ export default function Admin() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-52 border-slate-700 bg-slate-900 p-2 text-slate-100 shadow-2xl">
                 <DropdownMenuItem
-                  onClick={() => setActiveTab("directAdd")}
+                  onClick={() => { setDirectAddMode("property"); setActiveTab("directAdd"); }}
                   className="flex cursor-pointer items-center gap-2.5 rounded-xl px-3.5 py-3 text-sm text-slate-300 transition-colors focus:bg-slate-800 focus:text-white"
                 >
                   <Home className="w-4 h-4 text-amber-400" />
-                  إضافة شاليه جديد
+                  إضافة عقار جديد
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => setActiveTab("directAdd")}
+                  onClick={() => { setDirectAddMode("owner"); setActiveTab("directAdd"); }}
                   className="flex cursor-pointer items-center gap-2.5 rounded-xl px-3.5 py-3 text-sm text-slate-300 transition-colors focus:bg-slate-800 focus:text-white"
                 >
                   <Users className="w-4 h-4 text-sky-400" />
                   إضافة مالك جديد
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => { setServiceAddRequest((request) => request + 1); setActiveTab("services"); }}
+                  className="flex cursor-pointer items-center gap-2.5 rounded-xl px-3.5 py-3 text-sm text-slate-300 transition-colors focus:bg-slate-800 focus:text-white"
+                >
+                  <Wrench className="w-4 h-4 text-emerald-400" />
+                  إضافة خدمة جديدة
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -8895,7 +8931,7 @@ export default function Admin() {
         {activeTab === "submissions"          && <SubmissionsTab isSuperAdmin={isSuperAdmin} />}
         {activeTab === "partnerApplications" && <PartnerApplicationsTab />}
         {activeTab === "platformRevenue"      && <PlatformRevenueTab />}
-        {activeTab === "services"             && <ServicesTab />}
+        {activeTab === "services"             && <ServicesTab openNewFormRequest={serviceAddRequest} />}
         {activeTab === "serviceCategories"   && <ServiceCategoriesTab />}
         {activeTab === "expenseCategories"   && <ExpenseCategoriesTab />}
         {activeTab === "locations"           && <LocationsTab />}
@@ -8912,7 +8948,7 @@ export default function Admin() {
         {activeTab === "termsManagement"     && <TermsManagementTab />}
         {activeTab === "sectionGuides"       && <SectionGuidesAdminTab />}
         {activeTab === "adminStaff"          && <AdminStaffTab isSuperAdmin={isSuperAdmin} currentUserName={displayName ?? ""} />}
-        {activeTab === "directAdd"           && <DirectAddTab />}
+        {activeTab === "directAdd"           && <DirectAddTab mode={directAddMode} />}
       </main>
     </div>
   );
