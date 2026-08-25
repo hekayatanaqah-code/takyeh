@@ -1846,7 +1846,7 @@ router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
     coverageTags: z.array(z.string()).optional().default([]),
     customFeatureTags: z.array(z.string()).optional().default([]),
     logoUrl: z.string().optional().nullable(),
-    galleryPhotos: z.array(z.string()).optional().default([]),
+    galleryPhotos: z.array(z.string()).min(3, "يجب إضافة ٣ صور على الأقل للمعرض"),
     videoUrl: z.string().optional().nullable(),
   }).safeParse(req.body);
 
@@ -1855,6 +1855,16 @@ router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
   }
 
   const data = body.data;
+
+  /* Add manually entered coverage cities to the searchable city catalog. */
+  for (const coverageCity of [...new Set(data.coverageTags.map(city => city.trim()).filter(Boolean))]) {
+    const [existingCity] = await db
+      .select({ id: citiesCatalogTable.id })
+      .from(citiesCatalogTable)
+      .where(sql`LOWER(${citiesCatalogTable.name}) = LOWER(${coverageCity})`)
+      .limit(1);
+    if (!existingCity) await db.insert(citiesCatalogTable).values({ name: coverageCity });
+  }
 
   /* Uniqueness check */
   const [dup] = await db
@@ -1881,7 +1891,7 @@ router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
     yearsOfExperience: data.yearsOfExperience ?? null,
     coverageTags: data.coverageTags ?? [],
     customFeatureTags: data.customFeatureTags ?? [],
-    logoUrl: data.logoUrl || null,
+    logoUrl: data.logoUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160'%3E%3Crect width='160' height='160' rx='32' fill='%231e293b'/%3E%3Ccircle cx='80' cy='80' r='48' fill='%23f59e0b' opacity='.18'/%3E%3Cpath d='M48 98V72l32-22 32 22v26l-32 18-32-18Zm32-27 22 15v-9L80 62 58 77v9l22-15Z' fill='%23fbbf24'/%3E%3C/svg%3E",
     galleryPhotos: data.galleryPhotos ?? [],
     videoUrl: data.videoUrl || null,
   };

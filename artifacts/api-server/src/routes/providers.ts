@@ -23,9 +23,20 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 /* ── Public: list approved providers ─────────────── */
 router.get("/", async (req, res) => {
   const category = typeof req.query.category === "string" ? req.query.category : undefined;
-  const conditions = [eq(serviceProvidersTable.isActive, true)] as ReturnType<typeof eq>[];
+  const city = typeof req.query.city === "string" ? req.query.city.trim() : undefined;
+  const conditions: any[] = [eq(serviceProvidersTable.isActive, true)];
   if (category && category !== "all") {
     conditions.push(eq(serviceProvidersTable.category, category));
+  }
+  if (city && city !== "all") {
+    conditions.push(sql`(
+      LOWER(${serviceProvidersTable.city}) = LOWER(${city})
+      OR EXISTS (
+        SELECT 1
+        FROM UNNEST(${serviceProvidersTable.coverageTags}) AS coverage(city_name)
+        WHERE LOWER(coverage.city_name) = LOWER(${city})
+      )
+    )`);
   }
   const rows = await db
     .select()

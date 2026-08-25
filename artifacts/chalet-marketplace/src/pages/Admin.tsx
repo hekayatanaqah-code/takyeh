@@ -5414,6 +5414,7 @@ const DA_SECTIONS_OPTS = [
 ];
 const DA_DAY_NAMES = ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
 const DA_DEFAULT_TERMS = "يمنع التدخين داخل العقار\nوقت تسجيل الخروج الساعة ١٠:٠٠ صباحاً\nيمنع إحضار الحيوانات الأليفة\nالضيوف المسموح بهم فقط كما هو محدد عند الحجز\nأي أضرار تلحق بالمكان تُحسب على الضيف";
+const DA_SERVICE_DEFAULT_LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160'%3E%3Crect width='160' height='160' rx='32' fill='%231e293b'/%3E%3Ccircle cx='80' cy='80' r='48' fill='%23f59e0b' opacity='.18'/%3E%3Cpath d='M48 98V72l32-22 32 22v26l-32 18-32-18Zm32-27 22 15v-9L80 62 58 77v9l22-15Z' fill='%23fbbf24'/%3E%3C/svg%3E";
 type DA_DayRow = { morning: string; evening: string; fullday: string };
 const daInitGrid = (): Record<number, DA_DayRow> =>
   Object.fromEntries([0,1,2,3,4,5,6].map(d => [d, { morning: "", evening: "", fullday: "" }]));
@@ -5608,6 +5609,9 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
     yearsOfExperience: "", descriptionAr: "",
   });
   const [coverageTags,      setCoverageTags]      = useState<string[]>([]);
+  const [customServiceCategory, setCustomServiceCategory] = useState("");
+  const [coverageCityInput, setCoverageCityInput] = useState("");
+  const [showCoverageCityInput, setShowCoverageCityInput] = useState(false);
   const [customFeatureTags, setCustomFeatureTags] = useState<string[]>([]);
   const [customFeatureInput, setCustomFeatureInput] = useState("");
   const [svcLogoUrl,  setSvcLogoUrl]  = useState<string | null>(null);
@@ -5676,7 +5680,8 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
     setCCitySelectVal(""); setCCustomCity(""); setSCitySelectVal(""); setSCustomCity("");
     setCSelectedCityId(null); setCDistrictSelectVal(""); setCCustomDistrict("");
     setSForm({ businessName:"", city:"", category:"", whatsapp:"", yearsOfExperience:"", descriptionAr:"" });
-    setCoverageTags([]); setCustomFeatureTags([]); setCustomFeatureInput("");
+    setCoverageTags([]); setCustomServiceCategory(""); setCoverageCityInput(""); setShowCoverageCityInput(false);
+    setCustomFeatureTags([]); setCustomFeatureInput("");
     setSvcLogoUrl(null); setSvcGallery([]); setSvcVideo(null); setSvcLegal(false);
     setError(null); setSuccess(null);
   }
@@ -5724,6 +5729,9 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
     e.preventDefault();
     setError(null); setSuccess(null);
     if (!ownerId) { setError("يجب اختيار المالك"); return; }
+    const resolvedServiceCategory = sForm.category === "__other__"
+      ? customServiceCategory.trim()
+      : sForm.category;
 
     /* ── Resolve custom cities ── */
     let resolvedCLocation = cCitySelectVal === "__other__" ? "" : cForm.location;
@@ -5766,7 +5774,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
       if (chaletPhotos.length === 0) { setError("يجب إضافة صورة واحدة على الأقل"); return; }
       if (!legalAccepted) { setError("يجب الموافقة على الإقرار القانوني"); return; }
     } else {
-      if (!sForm.businessName.trim() || !resolvedSCity || !sForm.category) { setError("اسم النشاط والمدينة والفئة مطلوبة"); return; }
+      if (!sForm.businessName.trim() || !resolvedSCity || !resolvedServiceCategory) { setError("اسم النشاط والمدينة والفئة مطلوبة"); return; }
       if (!sForm.whatsapp.trim()) { setError("رقم الواتساب مطلوب"); return; }
       if (svcGallery.length < 3) { setError("يجب إضافة ٣ صور على الأقل للمعرض"); return; }
       if (!svcLegal) { setError("يجب الموافقة على الإقرار القانوني"); return; }
@@ -5802,10 +5810,10 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
         })});
       } else {
         r = await apiFetch("/admin/direct-add-service", { method:"POST", body: JSON.stringify({
-          ownerId, businessName: sForm.businessName.trim(), category: sForm.category, city: resolvedSCity,
+          ownerId, businessName: sForm.businessName.trim(), category: resolvedServiceCategory, city: resolvedSCity,
           whatsappNumber: sForm.whatsapp.trim(), descriptionAr: sForm.descriptionAr || null,
           yearsOfExperience: sForm.yearsOfExperience ? Number(sForm.yearsOfExperience) : null,
-          coverageTags, customFeatureTags, logoUrl: svcLogoUrl, galleryPhotos: svcGallery, videoUrl: svcVideo,
+          coverageTags, customFeatureTags, logoUrl: svcLogoUrl || DA_SERVICE_DEFAULT_LOGO, galleryPhotos: svcGallery, videoUrl: svcVideo,
         })});
       }
       const json = await r.json().catch(() => ({}));
@@ -5814,6 +5822,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
         setSuccess(assetType === "chalet" ? `تم إضافة "${cForm.nameAr}" بنجاح ✓` : `تم إضافة "${sForm.businessName}" بنجاح ✓`);
         resetAll();
         qc.invalidateQueries({ queryKey: ["admin","owners"] });
+        qc.invalidateQueries({ queryKey: ["admin","cities"] });
       }
     } catch { setError("فشل الاتصال بالخادم"); }
     finally { setSubmitting(false); }
@@ -6207,12 +6216,22 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm text-slate-300 font-medium">فئة الخدمة *</label>
-                <Select value={sForm.category} onValueChange={v => setSForm(f => ({...f, category: v}))}>
+                <Select value={sForm.category} onValueChange={v => {
+                  setSForm(f => ({...f, category: v}));
+                  if (v !== "__other__") setCustomServiceCategory("");
+                }}>
                   <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر الفئة..." /></SelectTrigger>
                   <SelectContent className="bg-slate-900 border-slate-700">
                     {serviceCategories.map(cat => <SelectItem key={cat.key} value={cat.key} className="text-white focus:bg-slate-700">{cat.emoji} {cat.labelAr}</SelectItem>)}
+                    <SelectItem value="__other__" className="text-amber-400 focus:bg-slate-700">فئة أخرى...</SelectItem>
                   </SelectContent>
                 </Select>
+                {sForm.category === "__other__" && (
+                  <div className="space-y-1 mt-2">
+                    <label className="text-xs text-slate-400">اكتب اسم فئة الخدمة*</label>
+                    <Input value={customServiceCategory} onChange={e => setCustomServiceCategory(e.target.value)} placeholder="مثال: تصوير مناسبات" className="bg-slate-900 border-slate-600 text-white" autoFocus />
+                  </div>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -6245,7 +6264,38 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
                     </button>
                   );
                 })}
+                <button type="button" onClick={() => setShowCoverageCityInput(v => !v)} className="px-3 py-1.5 rounded-lg border border-dashed border-amber-500/60 bg-amber-500/5 text-amber-300 text-sm transition-colors hover:bg-amber-500/10">
+                  + إضافة مدينة أخرى
+                </button>
               </div>
+              {showCoverageCityInput && (
+                <div className="flex gap-2 pt-1">
+                  <Input value={coverageCityInput} onChange={e => setCoverageCityInput(e.target.value)} onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const cityName = coverageCityInput.trim();
+                      if (!cityName) return;
+                      setCoverageTags(tags => tags.some(tag => tag.toLowerCase() === cityName.toLowerCase()) ? tags : [...tags, cityName]);
+                      setCoverageCityInput(""); setShowCoverageCityInput(false);
+                    }
+                  }} placeholder="اكتب اسم المدينة" className="bg-slate-900 border-slate-600 text-white flex-1" autoFocus />
+                  <Button type="button" onClick={() => {
+                    const cityName = coverageCityInput.trim();
+                    if (!cityName) return;
+                    setCoverageTags(tags => tags.some(tag => tag.toLowerCase() === cityName.toLowerCase()) ? tags : [...tags, cityName]);
+                    setCoverageCityInput(""); setShowCoverageCityInput(false);
+                  }} className="bg-slate-700 hover:bg-slate-600 text-white px-3">إضافة</Button>
+                </div>
+              )}
+              {coverageTags.some(tag => !cities.some(city => city.name === tag)) && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {coverageTags.filter(tag => !cities.some(city => city.name === tag)).map(tag => (
+                    <span key={tag} className="flex items-center gap-1 px-2 py-1 bg-amber-500/10 border border-amber-500/30 rounded-full text-amber-300 text-xs">
+                      {tag}<button type="button" onClick={() => setCoverageTags(tags => tags.filter(city => city !== tag))} className="hover:text-red-400">×</button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm text-slate-300 font-medium">مميزات مخصصة</label>
@@ -6278,13 +6328,19 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
               }} />
               {svcLogoUrl ? (
                 <div className="flex items-center gap-3">
-                  <img src={svcLogoUrl} className="w-16 h-16 object-cover rounded-lg border border-slate-600" alt="logo" />
+                  <img src={svcLogoUrl} className="w-16 h-16 object-cover rounded-lg border border-slate-600" alt="شعار النشاط" />
                   <button type="button" onClick={() => setSvcLogoUrl(null)} className="text-red-400 text-xs hover:underline">إزالة</button>
                 </div>
               ) : (
-                <button type="button" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo} className="w-full border-2 border-dashed border-slate-600 rounded-lg py-5 text-center text-slate-400 hover:border-amber-500/50 hover:text-amber-400 transition-colors disabled:opacity-50">
-                  {uploadingLogo ? <Loader2 className="animate-spin w-4 h-4 mx-auto" /> : <><ImageIcon className="w-5 h-5 mx-auto mb-1" /><div className="text-sm">رفع الشعار</div></>}
-                </button>
+                <div className="flex items-center gap-3 border-2 border-dashed border-slate-600 rounded-lg p-3">
+                  <img src={DA_SERVICE_DEFAULT_LOGO} className="w-16 h-16 object-cover rounded-lg border border-slate-600" alt="الشعار الافتراضي للنشاط" />
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-300">سيُستخدم الشعار الافتراضي عند عدم الرفع</p>
+                    <button type="button" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo} className="mt-1 text-sm text-amber-400 hover:text-amber-300 disabled:opacity-50">
+                      {uploadingLogo ? <span className="inline-flex items-center gap-1"><Loader2 className="animate-spin w-3.5 h-3.5" />جاري الرفع...</span> : "رفع شعار مخصص"}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
             {/* Gallery */}
@@ -6337,7 +6393,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
           <section className="bg-slate-800/50 border border-amber-500/20 rounded-xl p-5">
             <div className="flex items-start gap-3 cursor-pointer" onClick={() => setSvcLegal(v => !v)}>
               <div className={`w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${svcLegal ? "bg-amber-500 border-amber-500" : "border-slate-600"}`}>{svcLegal && <Check className="w-3 h-3 text-slate-900" />}</div>
-              <p className="text-sm text-slate-300">أقرّ بأن جميع المعلومات المدخلة صحيحة وأن صاحب النشاط وافق على شروط المنصة وأذن بنشر هذه البطاقة.</p>
+              <p className="text-sm text-slate-300">أقرّ بأن جميع المعلومات المدخلة صحيحة وأن صاحب النشاط يوافق على شروط المنصة ويأذن بنشر هذه البطاقة.</p>
             </div>
           </section>
         </>}
@@ -6358,11 +6414,11 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
           type="submit"
           disabled={submitting || !ownerId
             || (assetType==="chalet" && (!cForm.nameAr||!cForm.location||!cForm.district||!propertyType||!sections||!cForm.price||!legalAccepted))
-            || (assetType==="service" && (!sForm.businessName||!sForm.city||!sForm.category||!sForm.whatsapp||!svcLegal))}
+            || (assetType==="service" && (!sForm.businessName||!(sCitySelectVal === "__other__" ? sCustomCity.trim() : sForm.city)||!(sForm.category === "__other__" ? customServiceCategory.trim() : sForm.category)||!sForm.whatsapp||svcGallery.length < 3||!svcLegal))}
           className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold py-3 text-base"
         >
           {submitting ? <Loader2 className="animate-spin w-5 h-5 ml-2" /> : <Plus className="w-5 h-5 ml-2" />}
-          {assetType==="chalet" ? "إضافة العقار الآن" : "إضافة مزود الخدمة الآن"}
+          {assetType==="chalet" ? "إضافة العقار الآن" : "+ إضافة مزود الخدمة / الفعالية الآن"}
         </Button>}
       </form>
     </div>

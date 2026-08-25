@@ -67,6 +67,7 @@ interface ServiceProvider {
   whatsappNumber: string;
   logoUrl: string | null;
   galleryPhotos: string[];
+  coverageTags: string[];
   isActive: boolean;
 }
 
@@ -239,11 +240,13 @@ export default function Services() {
 
   /* ── Approved owner providers (filtered by category) ── */
   const { data: providers = [], isLoading: providersLoading } = useQuery<ServiceProvider[]>({
-    queryKey: ["providers", activeCategory],
+    queryKey: ["providers", activeCategory, cityFilter],
     queryFn: async () => {
-      const url = activeCategory === "all"
-        ? `${BASE}/api/providers`
-        : `${BASE}/api/providers?category=${activeCategory}`;
+      const params = new URLSearchParams();
+      if (activeCategory !== "all") params.set("category", activeCategory);
+      if (cityFilter && cityFilter !== "all") params.set("city", cityFilter);
+      const query = params.toString();
+      const url = `${BASE}/api/providers${query ? `?${query}` : ""}`;
       const r = await fetch(url, { credentials: "include" });
       if (!r.ok) return [];
       return r.json();
@@ -261,7 +264,10 @@ export default function Services() {
 
   const filteredProviders = useMemo(() =>
     cityFilter && cityFilter !== "all"
-      ? providers.filter((p) => p.city === cityFilter)
+      ? providers.filter((p) =>
+          p.city === cityFilter ||
+          (p.coverageTags ?? []).some((city) => city.trim().toLowerCase() === cityFilter.trim().toLowerCase())
+        )
       : providers,
     [providers, cityFilter]);
 
