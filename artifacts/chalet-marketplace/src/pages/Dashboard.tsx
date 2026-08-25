@@ -12836,6 +12836,12 @@ function cleanReportFilePart(value: string) {
     .replace(/^_+|_+$/g, "") || "العقارات";
 }
 
+function utf8SafeFileName(fileName: string) {
+  // Encode the transport value as UTF-8, then decode it back for File.name.
+  // This prevents mojibake while keeping the visible filename Arabic.
+  return decodeURIComponent(encodeURIComponent(fileName));
+}
+
 /* ── Expenses Tab ────────────────────────────────── */
 interface OwnerExpense {
   id: number;
@@ -16326,12 +16332,12 @@ async function generateAndUploadReportPdf(
   let fileName: string;
 
   if (type === "monthly") {
-    fileName = `Monthly_Report_${params.month ?? "report"}.pdf`;
+    fileName = `تقرير_المالي_${cleanReportFilePart(params.propertyName)}.pdf`;
     const qr = await generateReportQrDataUrl("monthly", params.month!);
     const logo = await getLogoDataUrl();
     html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial, false, qr, params.breakdown ?? null, params.monthTitle ?? null, logo);
   } else {
-    fileName = `Annual_Report_${params.year ?? new Date().getFullYear()}.pdf`;
+    fileName = `تقرير_المالي_${cleanReportFilePart(params.propertyName)}.pdf`;
     const qr = await generateReportQrDataUrl("yearly", params.year!);
     const logo = await getLogoDataUrl();
     html = buildYearlyReportHtml(params.year!, params.propertyName, params.yearly!, false, qr, logo);
@@ -16862,22 +16868,10 @@ function ReportsTab() {
       console.log("[WA-SHARE] bodyText:", bodyText);
     } else return;
 
-    // اسم الملف العربي النظيف لتقرير الفترة المخصصة
-    let shareFileName: string;
-    if (viewMode === "monthly") {
-      if (isHijri && selectedHijriMonthVal) {
-        const [hy, hm] = selectedHijriMonthVal.split("-").map(Number);
-        shareFileName = `${hy}-${String(hm).padStart(2, "0")}.pdf`;
-      } else {
-        const [gy, gm] = selectedMonth.split("-").map(Number);
-        shareFileName = `${gy}-${String(gm).padStart(2, "0")}.pdf`;
-      }
-    } else if (viewMode === "custom") {
-      shareFileName = `تقرير_المالي_${cleanReportFilePart(selectedPropertyName)}.pdf`;
-    } else {
-      const waYearStr = isYearlyHijri ? selectedHijriYear : selectedYear;
-      shareFileName = `${waYearStr}.pdf`;
-    }
+    // اسم عربي رسمي موحّد لكل التقارير
+    const shareFileName = utf8SafeFileName(
+      `تقرير_المالي_${cleanReportFilePart(selectedPropertyName)}.pdf`,
+    );
 
     setWaLoading(true);
     try {
