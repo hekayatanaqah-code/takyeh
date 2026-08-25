@@ -5532,6 +5532,13 @@ function OwnerPickerInput({
 
 type DirectAddMode = "property" | "owner" | "service";
 
+function normalizeOwnerPhone(value: string): string {
+  let digits = fromAr(value).replace(/\D/g, "");
+  if (digits.startsWith("966")) digits = digits.slice(3);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+  return digits ? `0${digits}` : "";
+}
+
 function DirectAddTab({ mode }: { mode: DirectAddMode }) {
   const qc = useQueryClient();
   const ownerOnly = mode === "owner";
@@ -5688,21 +5695,23 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
     setOwnerRegErr(null); setOwnerRegOk(null);
     if (!newOwner.fullName.trim()) { setOwnerRegErr("الاسم الكامل مطلوب"); return; }
     if (!newOwner.phone.trim())    { setOwnerRegErr("رقم الجوال مطلوب"); return; }
-    if (!newOwner.email.trim())    { setOwnerRegErr("البريد الإلكتروني مطلوب"); return; }
     if (newOwner.password.length < 6) { setOwnerRegErr("كلمة المرور يجب أن تكون ٦ أحرف على الأقل"); return; }
     if (newOwner.password !== newOwner.confirmPassword) { setOwnerRegErr("كلمتا المرور غير متطابقتين"); return; }
+    const phone = normalizeOwnerPhone(newOwner.phone);
     setRegisteringOwner(true);
     try {
       const r = await apiFetch("/register-owner", { method: "POST", body: JSON.stringify({
         fullName: newOwner.fullName.trim(),
-        phone: newOwner.phone.trim(),
-        email: newOwner.email.trim(),
+        phone,
+        email: newOwner.email.trim() || undefined,
         password: newOwner.password
       }) });
       const json = await r.json().catch(() => ({}));
       if (!r.ok) { setOwnerRegErr(json.error ?? "حدث خطأ أثناء التسجيل"); }
       else {
-        setOwnerRegOk(`✓ تم تسجيل "${newOwner.fullName}" بنجاح — سيظهر في قائمة الطلبات بعد تحقق البريد الإلكتروني`);
+        setOwnerRegOk(newOwner.email.trim()
+          ? `✓ تم تسجيل "${newOwner.fullName}" بنجاح — سيظهر في قائمة الطلبات بعد تحقق البريد الإلكتروني`
+          : `✓ تم تسجيل "${newOwner.fullName}" بنجاح — رقم الجوال هو المعرّف الرئيسي للحساب`);
         setNewOwner({ fullName:"", phone:"", email:"", password:"", confirmPassword:"" });
         setShowNewOwner(false);
         qc.invalidateQueries({ queryKey: ["admin","owners"] });
@@ -5852,11 +5861,11 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
           </button>}
           {showNewOwner && (
             <div className="border border-slate-600 rounded-lg p-4 space-y-3 bg-slate-900/60">
-              <p className="text-xs text-slate-400">سيُسجَّل المالك ويمكنه تسجيل الدخول بالبريد/الهاتف وكلمة المرور.</p>
+              <p className="text-xs text-slate-400">سيُسجَّل المالك برقم جواله، ويمكن إضافة البريد الإلكتروني اختياريًا.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1 col-span-2"><label className="text-xs text-slate-400">الاسم الكامل *</label><Input value={newOwner.fullName} onChange={e => setNewOwner(v => ({...v, fullName: e.target.value}))} placeholder="محمد عبدالله السليم" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
-                <div className="space-y-1"><label className="text-xs text-slate-400">رقم الجوال *</label><Input value={toAr(newOwner.phone)} onChange={e => setNewOwner(v => ({...v, phone: fromAr(e.target.value)}))} placeholder="٠٥XXXXXXXX" data-no-arabic inputMode="numeric" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
-                <div className="space-y-1"><label className="text-xs text-slate-400">البريد الإلكتروني *</label><Input value={newOwner.email} onChange={e => setNewOwner(v => ({...v, email: e.target.value}))} placeholder="example@email.com" type="email" className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
+                <div className="space-y-1"><label className="text-xs text-slate-400">رقم الجوال *</label><div className="flex h-8 rounded-md border border-slate-600 bg-slate-800 overflow-hidden" dir="ltr"><span className="inline-flex items-center px-2 border-r border-slate-600 text-slate-400 text-xs font-medium select-none">+966</span><Input value={toAr(newOwner.phone)} onChange={e => setNewOwner(v => { let digits = fromAr(e.target.value).replace(/\D/g, ""); if (digits.startsWith("966")) digits = digits.slice(3); return {...v, phone: digits.replace(/^0/, "")}; })} placeholder="٥XXXXXXXX" data-no-arabic inputMode="numeric" className="flex-1 h-full border-0 rounded-none bg-transparent text-white text-sm focus-visible:ring-0" /></div></div>
+                <div className="space-y-1"><label className="text-xs text-slate-400">البريد الإلكتروني</label><Input value={newOwner.email} onChange={e => setNewOwner(v => ({...v, email: e.target.value}))} placeholder="example@email.com (اختياري)" type="email" data-no-arabic className="bg-slate-800 border-slate-600 text-white text-sm h-8" /></div>
                 <div className="space-y-1 col-span-2">
                   <label className="text-xs text-slate-400">كلمة المرور * (٦ أحرف على الأقل)</label>
                   <div className="relative">
@@ -5877,7 +5886,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
                 </div>
               </div>
               {ownerRegErr && <p className="text-red-400 text-xs">{ownerRegErr}</p>}
-              <Button type="button" onClick={handleRegisterOwner} disabled={registeringOwner || !newOwner.fullName.trim() || !newOwner.phone.trim() || !newOwner.email.trim() || !newOwner.password || !newOwner.confirmPassword} className="bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs h-8 px-4">
+              <Button type="button" onClick={handleRegisterOwner} disabled={registeringOwner || !newOwner.fullName.trim() || !newOwner.phone.trim() || !newOwner.password || !newOwner.confirmPassword} className="bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs h-8 px-4">
                 {registeringOwner ? <Loader2 className="animate-spin w-3 h-3 ml-1" /> : <Plus className="w-3 h-3 ml-1" />}تسجيل المالك
               </Button>
             </div>

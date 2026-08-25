@@ -151,24 +151,29 @@ router.post("/auth/check-exists", async (req, res) => {
 router.post("/register-owner", async (req, res) => {
   const { fullName, phone, email, password } = req.body ?? {};
 
-  if (!fullName || !phone || !email || !password) {
+  if (!fullName || !phone || !password) {
     return res.status(400).json({ error: "يرجى تعبئة جميع الحقول المطلوبة" });
   }
   if (String(password).length < 6) {
     return res.status(400).json({ error: "كلمة المرور يجب أن تكون ٦ أحرف على الأقل" });
   }
 
-  const emailLower = String(email).trim().toLowerCase();
+  const emailLower = String(email ?? "").trim().toLowerCase();
 
   try {
-    const emailCheck = await db.execute(
-      sql`SELECT id FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
-    );
-    if (((emailCheck as any).rows as any[]).length > 0) {
-      return res.status(409).json({ error: "هذا البريد الإلكتروني مسجّل مسبقاً — إذا لم يتم التفعيل تواصل مع الإدارة" });
+    if (emailLower) {
+      const emailCheck = await db.execute(
+        sql`SELECT id FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
+      );
+      if (((emailCheck as any).rows as any[]).length > 0) {
+        return res.status(409).json({ error: "هذا البريد الإلكتروني مسجّل مسبقاً — إذا لم يتم التفعيل تواصل مع الإدارة" });
+      }
     }
 
-    const phoneClean = String(phone).trim().replace(/\s+/g, "");
+    let phoneClean = String(phone).trim().replace(/\s+/g, "").replace(/[^\d+]/g, "");
+    if (phoneClean.startsWith("+966")) phoneClean = phoneClean.slice(4);
+    else if (phoneClean.startsWith("966")) phoneClean = phoneClean.slice(3);
+    if (!phoneClean.startsWith("0")) phoneClean = `0${phoneClean}`;
     const phoneCheck = await db.execute(
       sql`SELECT id FROM owner_applications WHERE phone = ${phoneClean} LIMIT 1`
     );
@@ -188,32 +193,34 @@ router.post("/register-owner", async (req, res) => {
             ${nameClean},
             'chalet',
             ${phoneClean},
-            ${emailLower},
+             ${emailLower || null},
             ${passwordHash},
             'pending',
-            false
+             ${!emailLower}
           )`
     );
 
-    /* Fetch settings to determine OTP behaviour */
-    const settings = await getSettings(["email_otp_enabled", "email_otp_subject", "email_otp_template"]).catch(() => ({} as Record<string, string>));
-    const emailOtpEnabled = settings.email_otp_enabled !== "false"; // default: true
+    if (emailLower) {
+      /* Fetch settings to determine OTP behaviour */
+      const settings = await getSettings(["email_otp_enabled", "email_otp_subject", "email_otp_template"]).catch(() => ({} as Record<string, string>));
+      const emailOtpEnabled = settings.email_otp_enabled !== "false"; // default: true
 
-    const code = generateCode();
-    await createOtp(emailLower, code);
+      const code = generateCode();
+      await createOtp(emailLower, code);
 
-    if (emailOtpEnabled) {
-      sendOtpEmail(emailLower, nameClean, code, {
-        subject: settings.email_otp_subject || undefined,
-        template: settings.email_otp_template || undefined,
-      }).catch(() => {});
-    } else {
-      console.log(`[OTP] Email OTP disabled by admin — Code for ${emailLower}: ${code}`);
+      if (emailOtpEnabled) {
+        sendOtpEmail(emailLower, nameClean, code, {
+          subject: settings.email_otp_subject || undefined,
+          template: settings.email_otp_template || undefined,
+        }).catch(() => {});
+      } else {
+        console.log(`[OTP] Email OTP disabled by admin — Code for ${emailLower}: ${code}`);
+      }
     }
 
-    console.log(`[New Partner Application] Name: ${nameClean}, Email: ${emailLower}`);
+    console.log(`[New Partner Application] Name: ${nameClean}, Phone: ${phoneClean}, Email: ${emailLower || "not provided"}`);
 
-    return res.status(201).json({ ok: true, requiresVerification: true, email: emailLower });
+    return res.status(201).json({ ok: true, requiresVerification: Boolean(emailLower), email: emailLower || null });
   } catch (err) {
     console.error("[register-owner] Error:", err);
     return res.status(500).json({ error: "حدث خطأ أثناء التسجيل، يرجى المحاولة لاحقاً" });
