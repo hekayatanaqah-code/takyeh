@@ -12829,17 +12829,53 @@ function formatWhatsAppHijriDate(dateStr: string) {
   }
 }
 
-function cleanReportFilePart(value: string) {
-  return value
-    .replace(/[\\/:*?"<>|]/g, "_")
-    .replace(/\s+/g, "_")
-    .replace(/^_+|_+$/g, "") || "العقارات";
+type ReportCalendarMode = "hijri" | "gregorian";
+type ReportViewMode = "monthly" | "yearly" | "custom";
+
+function toEnglishDigits(value: string | number) {
+  return String(value)
+    .replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 0x06F0));
 }
 
-function utf8SafeFileName(fileName: string) {
-  // Encode the transport value as UTF-8, then decode it back for File.name.
-  // This prevents mojibake while keeping the visible filename Arabic.
-  return decodeURIComponent(encodeURIComponent(fileName));
+function padReportNumber(value: string | number, length: number) {
+  return toEnglishDigits(value).replace(/\D/g, "").padStart(length, "0");
+}
+
+function formatReportFileDate(dateStr: string, calMode: ReportCalendarMode) {
+  const date = new Date(`${dateStr}T12:00:00`);
+  if (Number.isNaN(date.getTime())) throw new Error(`Invalid report date: ${dateStr}`);
+  if (calMode === "gregorian") {
+    return `${padReportNumber(date.getFullYear(), 4)}-${padReportNumber(date.getMonth() + 1, 2)}-${padReportNumber(date.getDate(), 2)}`;
+  }
+  const { year, month, day } = toHijriComponents(date);
+  return `${padReportNumber(year, 4)}-${padReportNumber(month, 2)}-${padReportNumber(day, 2)}`;
+}
+
+function buildReportFileName(options: {
+  viewMode: ReportViewMode;
+  calMode: ReportCalendarMode;
+  month?: string;
+  hijriMonth?: string;
+  year?: string;
+  hijriYear?: string;
+  from?: string;
+  to?: string;
+}) {
+  const { viewMode, calMode } = options;
+  if (viewMode === "custom") {
+    if (!options.from || !options.to) throw new Error("Custom report dates are required");
+    return `${formatReportFileDate(options.from, calMode)}-${formatReportFileDate(options.to, calMode)}.pdf`;
+  }
+  if (viewMode === "monthly") {
+    const monthKey = calMode === "hijri" ? options.hijriMonth : options.month;
+    if (!monthKey) throw new Error("Report month is required");
+    const [year, month] = toEnglishDigits(monthKey).split("-");
+    return `${padReportNumber(year, 4)}-${padReportNumber(month, 2)}.pdf`;
+  }
+  const year = calMode === "hijri" ? options.hijriYear : options.year;
+  if (!year) throw new Error("Report year is required");
+  return `${padReportNumber(year, 4)}.pdf`;
 }
 
 /* ── Expenses Tab ────────────────────────────────── */
@@ -15904,12 +15940,15 @@ async function printMonthlyReport(
   breakdown: ReportBreakdown = null,
   monthTitle: string | null = null,
   isCurrentPeriod = false,
+  calMode: ReportCalendarMode = "gregorian",
+  hijriMonth?: string,
 ) {
   const win = window.open("", "_blank", "width=900,height=1200");
   if (!win) return;
   const qr = await generateReportQrDataUrl("monthly", month);
   const logo = await getLogoDataUrl();
-  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr, breakdown, monthTitle, logo, isCurrentPeriod));
+  const fileName = buildReportFileName({ viewMode: "monthly", calMode, month, hijriMonth });
+  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr, breakdown, monthTitle, logo, isCurrentPeriod, fileName));
   win.document.close();
 }
 
@@ -15922,13 +15961,20 @@ async function printYearlyReport(
   isShortPeriod = false,
   daysDiff?: number,
   isCurrentPeriod = false,
+  fileName?: string,
 ) {
   if (!yearly) return;
   const win = window.open("", "_blank", "width=794,height=1123");
   if (!win) return;
   const qr = await generateReportQrDataUrl("yearly", year);
   const logo = await getLogoDataUrl();
-  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo, isCustom, calMode, isShortPeriod, daysDiff, isCurrentPeriod));
+  const resolvedFileName = fileName ?? buildReportFileName({
+    viewMode: "yearly",
+    calMode,
+    year: calMode === "gregorian" ? year : undefined,
+    hijriYear: calMode === "hijri" ? year : undefined,
+  });
+  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo, isCustom, calMode, isShortPeriod, daysDiff, isCurrentPeriod, resolvedFileName));
   win.document.close();
 }
 
@@ -16039,6 +16085,7 @@ function buildMonthlyReportHtml(
   monthTitle: string | null = null,
   logoDataUrl: string | null = null,
   isCurrentPeriod = false,
+  fileName = "0000.pdf",
 ): string {
   const monthStr = toAr(monthTitle ?? new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" }));
   const _now = new Date();
@@ -16079,7 +16126,7 @@ function buildMonthlyReportHtml(
   ].filter(Boolean).join("") : "";
 
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
-<title>التقرير_الشهري_${monthStr}.pdf</title>
+ <title>${fileName}</title>
 <style>${REPORT_CSS}${printMediaCss}</style></head>
 <body><div class="page print-container">
 
@@ -16127,6 +16174,7 @@ function buildYearlyReportHtml(
   isShortPeriod = false,
   daysDiff?: number,
   isCurrentPeriod = false,
+  fileName = "0000.pdf",
 ): string {
   const _nowY = new Date();
   const _hcY = toHijriComponents(_nowY);
@@ -16194,7 +16242,7 @@ function buildYearlyReportHtml(
     : `@page{size:A4 portrait;margin:0!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:12mm!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:0!important;}.page{width:100%!important;padding:0!important;}table{break-before:auto;margin-top:12mm!important;margin-bottom:15mm!important;border-collapse:collapse;}thead{display:table-header-group;}thead tr th{padding-top:10px!important;padding-bottom:10px!important;border-top:18px solid transparent!important;background-clip:padding-box!important;}thead tr:first-child th{padding-top:15px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
-<title>${isCustom ? "التقرير_المخصص" : "التقرير_السنوي_" + toAr(year) + (Number(year) < 1900 ? " هـ" : "")}.pdf</title>
+ <title>${fileName}</title>
 <style>${REPORT_CSS}${printMediaCss}</style></head>
 <body><div class="page print-container">
 
@@ -16319,28 +16367,38 @@ async function generateAndUploadReportPdf(
   type: "monthly" | "yearly",
   params: {
     month?: string;
+    hijriMonth?: string;
     year?: string;
+    hijriYear?: string;
     propertyName: string;
     report?: MonthReport | null;
     financial?: { totalRevenue: number; totalInsuranceHeld?: number; totalInsuranceDeducted?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null;
     yearly?: { monthly: { month: string; revenue: number; expenses: number; netProfit: number }[]; totals: { revenue: number; expenses: number; netProfit: number } } | null;
     breakdown?: ReportBreakdown;
     monthTitle?: string | null;
+    calMode?: ReportCalendarMode;
+    fileName?: string;
   }
 ): Promise<string | null> {
   let html: string;
-  let fileName: string;
+  const calMode = params.calMode ?? "gregorian";
+  const fileName = params.fileName ?? buildReportFileName({
+    viewMode: type,
+    calMode,
+    month: params.month,
+    hijriMonth: params.hijriMonth,
+    year: params.year,
+    hijriYear: params.hijriYear,
+  });
 
   if (type === "monthly") {
-    fileName = `تقرير_المالي_${cleanReportFilePart(params.propertyName)}.pdf`;
     const qr = await generateReportQrDataUrl("monthly", params.month!);
     const logo = await getLogoDataUrl();
-    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial, false, qr, params.breakdown ?? null, params.monthTitle ?? null, logo);
+    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial, false, qr, params.breakdown ?? null, params.monthTitle ?? null, logo, false, fileName);
   } else {
-    fileName = `تقرير_المالي_${cleanReportFilePart(params.propertyName)}.pdf`;
     const qr = await generateReportQrDataUrl("yearly", params.year!);
     const logo = await getLogoDataUrl();
-    html = buildYearlyReportHtml(params.year!, params.propertyName, params.yearly!, false, qr, logo);
+    html = buildYearlyReportHtml(params.year!, params.propertyName, params.yearly!, false, qr, logo, false, calMode, false, undefined, false, fileName);
   }
 
   const { blob } = await htmlToPdfBlob(html, fileName);
@@ -16868,10 +16926,21 @@ function ReportsTab() {
       console.log("[WA-SHARE] bodyText:", bodyText);
     } else return;
 
-    // اسم عربي رسمي موحّد لكل التقارير
-    const shareFileName = utf8SafeFileName(
-      `تقرير_المالي_${cleanReportFilePart(selectedPropertyName)}.pdf`,
-    );
+    const shareCalMode: ReportCalendarMode = viewMode === "yearly"
+      ? (isYearlyHijri ? "hijri" : "gregorian")
+      : viewMode === "monthly"
+        ? (isHijri ? "hijri" : "gregorian")
+        : ((localStorage.getItem("revCalType") as ReportCalendarMode) ?? "gregorian");
+    const shareFileName = buildReportFileName({
+      viewMode,
+      calMode: shareCalMode,
+      month: selectedMonth,
+      hijriMonth: selectedHijriMonthVal,
+      year: selectedYear,
+      hijriYear: selectedHijriYear,
+      from: customFrom,
+      to: customTo,
+    });
 
     setWaLoading(true);
     try {
@@ -16884,7 +16953,7 @@ function ReportsTab() {
 
       if (viewMode === "monthly") {
         const logo = await getLogoDataUrl();
-        htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel, logo);
+        htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel, logo, false, shareFileName);
       } else if (viewMode === "custom") {
         const _shareCalMode = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
         const _shareData = _shareCalMode === "hijri" ? customRangeDataHijri : customRangeData;
@@ -16893,10 +16962,10 @@ function ReportsTab() {
         const _shareFmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _shareCalMode === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
         const rangeLabel = customFrom && customTo ? `${_shareFmt(customFrom)} ← ${_shareFmt(customTo)}` : "فترة مخصصة";
         const _shareDiff = customFrom && customTo ? Math.round((new Date(customTo + "T12:00:00").getTime() - new Date(customFrom + "T12:00:00").getTime()) / 86_400_000) + 1 : undefined;
-        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, _shareData as any, false, qr, logo, true, _shareCalMode, groupByDay, _shareDiff);
+        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, _shareData as any, false, qr, logo, true, _shareCalMode, groupByDay, _shareDiff, false, shareFileName);
       } else if (activeWaYearly) {
         const logo = await getLogoDataUrl();
-        htmlContent = buildYearlyReportHtml(activeWaYearStr, selectedPropertyName, activeWaYearly, false, qr, logo);
+        htmlContent = buildYearlyReportHtml(activeWaYearStr, selectedPropertyName, activeWaYearly, false, qr, logo, false, shareCalMode, false, undefined, false, shareFileName);
       } else return;
 
       const { blob } = await htmlToPdfBlob(htmlContent, shareFileName);
@@ -16935,9 +17004,24 @@ function ReportsTab() {
       let url = pdfUrl;
       if (!url) {
         if (viewMode === "monthly") {
-          url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial, breakdown: repBreakdown, monthTitle: activeMonthLabel });
+          url = await generateAndUploadReportPdf("monthly", {
+            month: selectedMonth,
+            hijriMonth: selectedHijriMonthVal,
+            calMode: isHijri ? "hijri" : "gregorian",
+            propertyName: selectedPropertyName,
+            report,
+            financial,
+            breakdown: repBreakdown,
+            monthTitle: activeMonthLabel,
+          });
         } else if (viewMode === "yearly" && emailYearly) {
-          url = await generateAndUploadReportPdf("yearly", { year: emailYearStr, propertyName: selectedPropertyName, yearly: emailYearly });
+          url = await generateAndUploadReportPdf("yearly", {
+            year: emailYearStr,
+            hijriYear: selectedHijriYear,
+            calMode: isYearlyHijri ? "hijri" : "gregorian",
+            propertyName: selectedPropertyName,
+            yearly: emailYearly,
+          });
         }
         if (url) setPdfUrl(url);
       }
@@ -16990,7 +17074,7 @@ function ReportsTab() {
     } finally {
       setEmailLoading(false);
     }
-  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, shareEmail, pdfUrl, repBreakdown, activeMonthLabel]);
+  }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, shareEmail, pdfUrl, repBreakdown, activeMonthLabel]);
 
   const handleSaveToArchive = useCallback(async () => {
     setArchiveSaving(true);
@@ -16998,9 +17082,24 @@ function ReportsTab() {
       let url = pdfUrl;
       if (!url) {
         if (viewMode === "monthly") {
-          url = await generateAndUploadReportPdf("monthly", { month: selectedMonth, propertyName: selectedPropertyName, report, financial, breakdown: repBreakdown, monthTitle: activeMonthLabel });
-        } else if (viewMode === "yearly" && yearly) {
-          url = await generateAndUploadReportPdf("yearly", { year: selectedYear, propertyName: selectedPropertyName, yearly });
+          url = await generateAndUploadReportPdf("monthly", {
+            month: selectedMonth,
+            hijriMonth: selectedHijriMonthVal,
+            calMode: isHijri ? "hijri" : "gregorian",
+            propertyName: selectedPropertyName,
+            report,
+            financial,
+            breakdown: repBreakdown,
+            monthTitle: activeMonthLabel,
+          });
+        } else if (viewMode === "yearly" && (isYearlyHijri ? yearlyHijri : yearly)) {
+          url = await generateAndUploadReportPdf("yearly", {
+            year: isYearlyHijri ? selectedHijriYear : selectedYear,
+            hijriYear: selectedHijriYear,
+            calMode: isYearlyHijri ? "hijri" : "gregorian",
+            propertyName: selectedPropertyName,
+            yearly: isYearlyHijri ? yearlyHijri : yearly,
+          });
         }
         if (url) setPdfUrl(url);
       }
@@ -17023,7 +17122,7 @@ function ReportsTab() {
     } finally {
       setArchiveSaving(false);
     }
-  }, [viewMode, selectedMonth, selectedYear, selectedSubmissionId, selectedPropertyName, report, financial, yearly, pdfUrl, archiveMutation]);
+  }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, selectedPropertyName, report, financial, yearly, yearlyHijri, pdfUrl, archiveMutation, repBreakdown, activeMonthLabel]);
 
   const planLabels: Record<string, string> = {
     trial: "تجريبي (30 يوم)",
@@ -17546,6 +17645,12 @@ function ReportsTab() {
                   false,
                   undefined,
                   isCurrentYearlyPeriod,
+                  buildReportFileName({
+                    viewMode: "yearly",
+                    calMode: isYearlyHijri ? "hijri" : "gregorian",
+                    year: isYearlyHijri ? undefined : selectedYear,
+                    hijriYear: isYearlyHijri ? selectedHijriYear : undefined,
+                  }),
                 )} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير السنوي
                 </Button>
@@ -17719,7 +17824,17 @@ function ReportsTab() {
                     const _fmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _cm === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
                     const rangeStr = customFrom && customTo ? `${_fmt(customFrom)} ← ${_fmt(customTo)}` : "مخصص";
                     const _diff = customFrom && customTo ? Math.round((new Date(customTo + "T12:00:00").getTime() - new Date(customFrom + "T12:00:00").getTime()) / 86_400_000) + 1 : undefined;
-                    printYearlyReport(rangeStr, selectedPropertyName, activeCustomData as any, true, _cm, groupByDay, _diff);
+                    printYearlyReport(
+                      rangeStr,
+                      selectedPropertyName,
+                      activeCustomData as any,
+                      true,
+                      _cm,
+                      groupByDay,
+                      _diff,
+                      false,
+                      buildReportFileName({ viewMode: "custom", calMode: _cm, from: customFrom, to: customTo }),
+                    );
                   }} className="gap-2">
                     <FileText className="w-4 h-4" />طباعة التقرير
                   </Button>
@@ -18061,6 +18176,8 @@ function ReportsTab() {
                   repBreakdown,
                   activeMonthLabel,
                   isCurrentMonthlyPeriod,
+                  isHijri ? "hijri" : "gregorian",
+                  isHijri ? selectedHijriMonthVal : undefined,
                 )} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير
                 </Button>
