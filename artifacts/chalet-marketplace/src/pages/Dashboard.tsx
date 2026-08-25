@@ -201,6 +201,10 @@ function getBookingMonthKey(dateStr: string | null | undefined, calView: "hijri"
   return `${h.year}-${String(h.month).padStart(2, "0")}`;
 }
 
+function getCurrentFinanceMonth(calView: "hijri" | "gregorian"): string {
+  return getBookingMonthKey(getLocalDateStr(), calView);
+}
+
 function getBookingMonthLabel(key: string, calView: "hijri" | "gregorian"): string {
   const [yearStr, monthStr] = key.split("-");
   const year = Number(yearStr), month = Number(monthStr);
@@ -10855,9 +10859,10 @@ function getHijriYMClient(date: Date): { year: number; month: number } {
 function BankLedgerTab() {
   const { unit } = useAdminFinance();
   const [activeTab, setActiveTab] = useState<"all" | "revenue" | "insurance" | "cash_deposit">("all");
-  const [bankCalType, setBankCalType] = useState<"hijri" | "gregorian">("hijri");
-  const [bankYear, setBankYear] = useState<string>("");
-  const [bankMonth, setBankMonth] = useState<string>("");
+  const [bankCalType, setBankCalType] = useState<"hijri" | "gregorian">("gregorian");
+  const initialBankMonth = getCurrentFinanceMonth("gregorian");
+  const [bankYear, setBankYear] = useState<string>(() => initialBankMonth.split("-")[0]);
+  const [bankMonth, setBankMonth] = useState<string>(() => initialBankMonth);
   const fmtN = (n: number) => n.toLocaleString("ar-SA");
 
   const { data: allBookings = [], isLoading: bkLoading } = useQuery<OwnerBooking[]>({
@@ -10914,6 +10919,7 @@ function BankLedgerTab() {
 
   const bankYearOptions = useMemo(() => {
     const years = new Set<string>();
+    years.add(getCurrentFinanceMonth(bankCalType).split("-")[0]);
     for (const e of ledgerEntries) {
       if (!e.bookingDate) continue;
       years.add(getBookingMonthKey(e.bookingDate, bankCalType).split("-")[0]);
@@ -10923,6 +10929,8 @@ function BankLedgerTab() {
 
   const bankMonthOptions = useMemo(() => {
     const keys = new Set<string>();
+    const currentMonth = getCurrentFinanceMonth(bankCalType);
+    if (currentMonth.startsWith(bankYear)) keys.add(currentMonth);
     for (const e of ledgerEntries) {
       if (!e.bookingDate) continue;
       const key = getBookingMonthKey(e.bookingDate, bankCalType);
@@ -10964,7 +10972,12 @@ function BankLedgerTab() {
           <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
             {(["hijri", "gregorian"] as const).map(mode => (
               <button key={mode} type="button"
-                onClick={() => { setBankCalType(mode); setBankYear(""); setBankMonth(""); }}
+                onClick={() => {
+                  const currentMonth = getCurrentFinanceMonth(mode);
+                  setBankCalType(mode);
+                  setBankYear(currentMonth.split("-")[0]);
+                  setBankMonth(currentMonth);
+                }}
                 className={`text-xs px-3 py-1.5 font-medium transition-colors ${bankCalType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
               >{mode === "hijri" ? "هجري" : "ميلادي"}</button>
             ))}
@@ -10995,10 +11008,10 @@ function BankLedgerTab() {
                 return bankCalType === "hijri"
                   ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]}</span>
                   : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
-              })() : <span className="text-muted-foreground">كل المعاملات</span>}
+              })() : <span className="text-muted-foreground">كل الشهور</span>}
             </SelectTrigger>
             <SelectContent dir="rtl" align="end">
-              <SelectItem value="all"><span className="text-sm">كل المعاملات</span></SelectItem>
+              <SelectItem value="all"><span className="text-sm">كل الشهور</span></SelectItem>
               {bankMonthOptions.map(key => {
                 const [ys, ms] = key.split("-").map(Number);
                 const primary = bankCalType === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
@@ -13135,9 +13148,10 @@ function TransactionHistoryTab() {
   const { unit } = useAdminFinance();
   const qcHist = useQueryClient();
   const { toast } = useToast();
-  const [histCalType, setHistCalType] = useState<"hijri" | "gregorian">("hijri");
-  const [histYear, setHistYear] = useState<string>("");
-  const [histMonth, setHistMonth] = useState<string>("");
+  const [histCalType, setHistCalType] = useState<"hijri" | "gregorian">("gregorian");
+  const initialHistMonth = getCurrentFinanceMonth("gregorian");
+  const [histYear, setHistYear] = useState<string>(() => initialHistMonth.split("-")[0]);
+  const [histMonth, setHistMonth] = useState<string>(() => initialHistMonth);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const submissionId = unit.type === "chalet" ? unit.submissionId : undefined;
@@ -13180,6 +13194,7 @@ function TransactionHistoryTab() {
   /* Build year/month option lists from fetched data (client-side dual calendar) */
   const histYearOptions = useMemo(() => {
     const years = new Set<string>();
+    years.add(getCurrentFinanceMonth(histCalType).split("-")[0]);
     for (const e of allItems) {
       if (!e.date) continue;
       years.add(getBookingMonthKey(e.date, histCalType).split("-")[0]);
@@ -13189,6 +13204,8 @@ function TransactionHistoryTab() {
 
   const histMonthOptions = useMemo(() => {
     const keys = new Set<string>();
+    const currentMonth = getCurrentFinanceMonth(histCalType);
+    if (currentMonth.startsWith(histYear)) keys.add(currentMonth);
     for (const e of allItems) {
       if (!e.date) continue;
       const key = getBookingMonthKey(e.date, histCalType);
@@ -13251,7 +13268,12 @@ function TransactionHistoryTab() {
           <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
             {(["hijri", "gregorian"] as const).map(mode => (
               <button key={mode} type="button"
-                onClick={() => { setHistCalType(mode); setHistYear(""); setHistMonth(""); }}
+                 onClick={() => {
+                   const currentMonth = getCurrentFinanceMonth(mode);
+                   setHistCalType(mode);
+                   setHistYear(currentMonth.split("-")[0]);
+                   setHistMonth(currentMonth);
+                 }}
                 className={`text-xs px-3 py-1.5 font-medium transition-colors ${histCalType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
               >{mode === "hijri" ? "هجري" : "ميلادي"}</button>
             ))}
@@ -13282,10 +13304,10 @@ function TransactionHistoryTab() {
                 return histCalType === "hijri"
                   ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]}</span>
                   : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
-              })() : <span className="text-sm text-muted-foreground">كل المعاملات</span>}
+               })() : <span className="text-sm text-muted-foreground">كل الشهور</span>}
             </SelectTrigger>
             <SelectContent dir="rtl" align="end">
-              <SelectItem value="all"><span className="text-sm">كل المعاملات</span></SelectItem>
+               <SelectItem value="all"><span className="text-sm">كل الشهور</span></SelectItem>
               {histMonthOptions.map(key => {
                 const [ys, ms] = key.split("-").map(Number);
                 const primary = histCalType === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
@@ -13481,8 +13503,9 @@ function ExpensesTab() {
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
   const [expCalType, setExpCalType] = useState<"hijri" | "gregorian">("gregorian");
-  const [expYear, setExpYear] = useState<string>("");
-  const [expMonth, setExpMonth] = useState<string>("");
+  const initialExpenseMonth = getCurrentFinanceMonth("gregorian");
+  const [expYear, setExpYear] = useState<string>(() => initialExpenseMonth.split("-")[0]);
+  const [expMonth, setExpMonth] = useState<string>(() => initialExpenseMonth);
   const [form, setForm] = useState({ categoryId: "", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", customCategory: "", submissionId: "" });
   const [saveAsCategory, setSaveAsCategory] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
@@ -13954,7 +13977,12 @@ function ExpensesTab() {
             <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
               {(["gregorian", "hijri"] as const).map(mode => (
                 <button key={mode} type="button"
-                  onClick={() => { setExpCalType(mode); setExpYear(""); setExpMonth(""); }}
+                  onClick={() => {
+                    const currentMonth = getCurrentFinanceMonth(mode);
+                    setExpCalType(mode);
+                    setExpYear(currentMonth.split("-")[0]);
+                    setExpMonth(currentMonth);
+                  }}
                   className={`text-xs px-3 py-1.5 font-medium transition-colors ${expCalType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                 >{mode === "hijri" ? "هجري" : "ميلادي"}</button>
               ))}
@@ -13985,10 +14013,10 @@ function ExpensesTab() {
                   return expCalType === "hijri"
                     ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]}</span>
                     : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
-                })() : <span className="text-muted-foreground">كل المصروفات</span>}
+                })() : <span className="text-muted-foreground">كل الشهور</span>}
               </SelectTrigger>
               <SelectContent dir="rtl" align="end" className="max-h-[260px]">
-                <SelectItem value="all"><span className="text-sm">كل المصروفات</span></SelectItem>
+                <SelectItem value="all"><span className="text-sm">كل الشهور</span></SelectItem>
                 {expMonthOptions.map(key => {
                   const [ys, ms] = key.split("-").map(Number);
                   const primary = expCalType === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
