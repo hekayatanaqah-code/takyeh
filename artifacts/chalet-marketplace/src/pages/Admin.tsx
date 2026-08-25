@@ -1849,21 +1849,12 @@ const BLANK_SERVICE: ServiceFormData = {
   whatsappNumber: "", price: "", priceNote: "", city: "",
 };
 
-function ServicesTab({ openNewFormRequest = 0 }: { openNewFormRequest?: number }) {
+function ServicesTab() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [form, setForm] = useState<ServiceFormData>(BLANK_SERVICE);
-
-  useEffect(() => {
-    if (openNewFormRequest > 0) {
-      setEditId(null);
-      setForm(BLANK_SERVICE);
-      setShowForm(true);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [openNewFormRequest]);
 
   const { data: services = [], isLoading } = useQuery({
     queryKey: ["admin", "services"],
@@ -5422,7 +5413,7 @@ const DA_SECTIONS_OPTS = [
   { value: "قسمين منفصلة", label: "🔑🔑 قسمين منفصلة" },
 ];
 const DA_DAY_NAMES = ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
-const DA_DEFAULT_TERMS = "يمنع التدخين داخل الشاليه\nوقت تسجيل الخروج الساعة ١٠:٠٠ صباحاً\nيمنع إحضار الحيوانات الأليفة\nالضيوف المسموح بهم فقط كما هو محدد عند الحجز\nأي أضرار تلحق بالمكان تُحسب على الضيف";
+const DA_DEFAULT_TERMS = "يمنع التدخين داخل العقار\nوقت تسجيل الخروج الساعة ١٠:٠٠ صباحاً\nيمنع إحضار الحيوانات الأليفة\nالضيوف المسموح بهم فقط كما هو محدد عند الحجز\nأي أضرار تلحق بالمكان تُحسب على الضيف";
 type DA_DayRow = { morning: string; evening: string; fullday: string };
 const daInitGrid = (): Record<number, DA_DayRow> =>
   Object.fromEntries([0,1,2,3,4,5,6].map(d => [d, { morning: "", evening: "", fullday: "" }]));
@@ -5729,7 +5720,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
     let resolvedCLocation = cCitySelectVal === "__other__" ? "" : cForm.location;
     if (cCitySelectVal === "__other__") {
       const trimmed = cCustomCity.trim();
-      if (!trimmed) { setError("يجب إدخال اسم المدينة للشاليه"); return; }
+      if (!trimmed) { setError("يجب إدخال اسم المدينة للعقار"); return; }
       try {
         const r = await apiFetch("/cities", { method: "POST", body: JSON.stringify({ name: trimmed }) });
         const city = await r.json();
@@ -5823,19 +5814,19 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
     <div className="max-w-3xl mx-auto space-y-6 pb-16">
       <div>
         <h2 className="text-xl font-bold text-white">
-          {mode === "owner" ? "إضافة مالك جديد" : mode === "service" ? "إضافة مزود خدمة جديد" : "إضافة عقار جديد"}
+          {mode === "owner" ? "إضافة مالك جديد" : mode === "service" ? "إضافة مزود خدمة / فعالية جديد" : "إضافة عقار جديد"}
         </h2>
         <p className="text-slate-400 text-sm mt-1">
           {mode === "owner"
             ? "أنشئ حساب مالك جديداً ليتمكن من تسجيل الدخول وإدارة عقاراته."
-            : "أنشئ عقاراً أو مزود خدمة تحت حساب مالك موجود — يُفعّل فوراً دون مراجعة."}
+            : "أنشئ عقاراً أو مزود خدمة/فعالية تحت حساب مالك موجود — يُفعّل فوراً دون مراجعة."}
         </p>
       </div>
 
       {/* Type toggle */}
       {!ownerOnly && <div className="flex rounded-lg overflow-hidden border border-slate-700">
-        <button type="button" onClick={() => { setAssetType("chalet"); resetAll(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType==="chalet" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}>🏡 شاليه</button>
-        <button type="button" onClick={() => { setAssetType("service"); resetAll(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType==="service" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}>🎪 مزود خدمة</button>
+        <button type="button" onClick={() => { setAssetType("chalet"); resetAll(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType==="chalet" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}>🏡 عقار</button>
+        <button type="button" onClick={() => { setAssetType("service"); resetAll(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType==="service" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}>🎪 مزود خدمة / فعالية</button>
       </div>}
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -5899,8 +5890,8 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
           <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
             <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">المعلومات الأساسية</h3>
             <div className="space-y-1.5">
-              <label className="text-sm text-slate-300 font-medium">اسم الشاليه *</label>
-              <Input value={cForm.nameAr} onChange={e => setCForm(f => ({...f, nameAr: e.target.value}))} placeholder="مثال: شاليه الأندلس" className="bg-slate-900 border-slate-600 text-white" required />
+              <label className="text-sm text-slate-300 font-medium">اسم العقار *</label>
+              <Input value={cForm.nameAr} onChange={e => setCForm(f => ({...f, nameAr: e.target.value}))} placeholder="مثال: عقار الأندلس" className="bg-slate-900 border-slate-600 text-white" required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -6077,8 +6068,8 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
           <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
             <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">الوصف والشروط</h3>
             <div className="space-y-1.5">
-              <label className="text-sm text-slate-300 font-medium">وصف الشاليه</label>
-              <Textarea value={cForm.descriptionAr} onChange={e => setCForm(f => ({...f, descriptionAr: e.target.value}))} placeholder="وصف الشاليه والمزايا..." rows={3} className="bg-slate-900 border-slate-600 text-white resize-none" />
+              <label className="text-sm text-slate-300 font-medium">وصف العقار</label>
+              <Textarea value={cForm.descriptionAr} onChange={e => setCForm(f => ({...f, descriptionAr: e.target.value}))} placeholder="وصف العقار والمزايا..." rows={3} className="bg-slate-900 border-slate-600 text-white resize-none" />
             </div>
             <div className="space-y-1.5">
               <label className="text-sm text-slate-300 font-medium">الشروط والأحكام</label>
@@ -6125,7 +6116,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
           <section className="bg-slate-800/50 border border-slate-700 rounded-xl p-5 space-y-4">
             <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">الصور والفيديو</h3>
             <div className="space-y-2">
-              <label className="text-sm text-slate-300 font-medium">صور الشاليه * (حتى ١٥ صورة)</label>
+              <label className="text-sm text-slate-300 font-medium">صور العقار * (حتى ١٥ صورة)</label>
               <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={async e => {
                 const files = Array.from(e.target.files ?? []); if (!files.length) return;
                 setUploadingCPh(true);
@@ -6149,7 +6140,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
               )}
             </div>
             <div className="space-y-2">
-              <label className="text-sm text-slate-300 font-medium">فيديو الشاليه (اختياري)</label>
+              <label className="text-sm text-slate-300 font-medium">فيديو العقار (اختياري)</label>
               <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={async e => {
                 const file = e.target.files?.[0]; if (!file) return;
                 setUploadingCVid(true); const url = await daUploadFile(file, "video"); if (url) setChaletVideo(url);
@@ -6173,7 +6164,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
           <section className="bg-slate-800/50 border border-amber-500/20 rounded-xl p-5">
             <div className="flex items-start gap-3 cursor-pointer" onClick={() => setLegalAccepted(v => !v)}>
               <div className={`w-5 h-5 mt-0.5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${legalAccepted ? "bg-amber-500 border-amber-500" : "border-slate-600"}`}>{legalAccepted && <Check className="w-3 h-3 text-slate-900" />}</div>
-              <p className="text-sm text-slate-300">أقرّ بأن جميع المعلومات المدخلة صحيحة وأن صاحب الوحدة وافق على شروط المنصة وأذن بنشر هذه الوحدة.</p>
+              <p className="text-sm text-slate-300">أقرّ بأن جميع المعلومات المدخلة صحيحة وأن صاحب العقار وافق على شروط المنصة وأذن بنشر هذا العقار.</p>
             </div>
           </section>
         </>}
@@ -6362,7 +6353,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
           className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold py-3 text-base"
         >
           {submitting ? <Loader2 className="animate-spin w-5 h-5 ml-2" /> : <Plus className="w-5 h-5 ml-2" />}
-          {assetType==="chalet" ? "إضافة الشاليه الآن" : "إضافة مزود الخدمة الآن"}
+          {assetType==="chalet" ? "إضافة العقار الآن" : "إضافة مزود الخدمة الآن"}
         </Button>}
       </form>
     </div>
@@ -8629,7 +8620,6 @@ export default function Admin() {
   const { adminStaffUser, isAdminStaff, permissions: adminPerms, isLoading: staffLoading, logout: adminStaffLogout } = useAdminStaffAuth();
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [directAddMode, setDirectAddMode] = useState<DirectAddMode>("property");
-  const [serviceAddRequest, setServiceAddRequest] = useState(0);
 
   const { data: accessCheck, isLoading: checkLoading, error: checkError } = useQuery({
     queryKey: ["admin", "access-check"],
@@ -8801,11 +8791,11 @@ export default function Admin() {
                   إضافة مالك جديد
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => { setServiceAddRequest((request) => request + 1); setActiveTab("services"); }}
+                  onClick={() => { setDirectAddMode("service"); setActiveTab("directAdd"); }}
                   className="flex cursor-pointer items-center gap-2.5 rounded-xl px-3.5 py-3 text-sm text-slate-300 transition-colors focus:bg-slate-800 focus:text-white"
                 >
                   <Wrench className="w-4 h-4 text-emerald-400" />
-                  إضافة خدمة جديدة
+                  إضافة مزود خدمة
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -8931,7 +8921,7 @@ export default function Admin() {
         {activeTab === "submissions"          && <SubmissionsTab isSuperAdmin={isSuperAdmin} />}
         {activeTab === "partnerApplications" && <PartnerApplicationsTab />}
         {activeTab === "platformRevenue"      && <PlatformRevenueTab />}
-        {activeTab === "services"             && <ServicesTab openNewFormRequest={serviceAddRequest} />}
+        {activeTab === "services"             && <ServicesTab />}
         {activeTab === "serviceCategories"   && <ServiceCategoriesTab />}
         {activeTab === "expenseCategories"   && <ExpenseCategoriesTab />}
         {activeTab === "locations"           && <LocationsTab />}
