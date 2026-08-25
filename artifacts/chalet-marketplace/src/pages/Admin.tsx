@@ -7672,7 +7672,7 @@ function WaSubscribersTab() {
 const ALL_TABS = [
   { id: "overview",                label: "الإحصائيات",            icon: BarChart3 },
   { id: "chalets",                 label: "قائمة العقارات",        icon: Home },
-  { id: "submissions",             label: "الطلبات",               icon: Settings },
+  { id: "submissions",             label: "الطلبات/الحجوزات",      icon: Settings },
   { id: "partnerApplications",     label: "طلبات الملاك",          icon: Users },
   { id: "platformRevenue",         label: "ميزانية المنصة",        icon: TrendingUp },
   { id: "services",                label: "خدمات المناسبات",       icon: Wrench },
@@ -7680,11 +7680,11 @@ const ALL_TABS = [
   { id: "expenseCategories",       label: "فئات المصروفات",        icon: Tag },
   { id: "locations",               label: "المدن والأحياء",        icon: Building2 },
   { id: "amenities",               label: "المرافق",                icon: Tag },
-  { id: "categories",              label: "فئات الشاليهات",        icon: Tag },
+  { id: "categories",              label: "فئات العقارات",         icon: Tag },
   { id: "owners",                  label: "الملاك",                 icon: Users },
   { id: "plans",                   label: "خطط الاشتراك",          icon: CreditCard },
-  { id: "reviews",                 label: "التقييمات",             icon: Star },
-  { id: "ownerInbox",              label: "صندوق الوارد / طلبات الملاك", icon: Inbox },
+  { id: "reviews",                 label: "تقييمات العملاء",       icon: Star },
+  { id: "ownerInbox",              label: "صندوق الوارد",          icon: Inbox },
   { id: "contactInquiries",        label: "رسائل التواصل",         icon: Mail },
   { id: "waSubscribers",           label: "قائمة المشتركين",       icon: Smartphone },
   { id: "siteSettings",            label: "إعدادات الموقع",        icon: Settings },
@@ -7704,9 +7704,9 @@ const ADMIN_NAV_GROUPS: Array<{
   tabs: TabId[];
 }> = [
   { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
-  { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "amenities", "locations", "directAdd"] },
-  { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "adminStaff", "directAdd"] },
-  { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "services", "reviews", "ownerInbox", "waSubscribers"] },
+  { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "serviceCategories", "amenities", "locations"] },
+  { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "ownerInbox", "adminStaff"] },
+  { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "reviews", "waSubscribers", "services"] },
   { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
   { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "communicationSettings", "contactInquiries", "termsManagement", "sectionGuides"] },
 ];
@@ -8734,7 +8734,7 @@ export default function Admin() {
           <div>
             <h1 className="text-white font-bold text-lg leading-none">لوحة التحكم</h1>
             <p className="text-slate-400 text-xs mt-0.5">
-              {isSuperAdmin ? "المشرف العام — شاليهات القصيم" : `موظف إدارة — ${adminStaffUser?.name ?? ""}`}
+              {isSuperAdmin ? "المشرف العام — منصة تكية للحجوزات" : `موظف إدارة — ${adminStaffUser?.name ?? ""}`}
             </p>
           </div>
         </div>
@@ -8837,8 +8837,8 @@ export default function Admin() {
               );
             }
 
-            const isOperations = group.id === "operations";
-            const operationsBadge = isOperations && newSupportCount > 0 ? newSupportCount : 0;
+            const isUsers = group.id === "users";
+            const usersBadge = isUsers && newSupportCount > 0 ? newSupportCount : 0;
 
             return (
               <DropdownMenu key={group.id} dir="rtl">
@@ -8852,9 +8852,9 @@ export default function Admin() {
                   >
                     <GroupIcon className={`w-4 h-4 ${isGroupActive ? "text-amber-300" : "text-slate-400"}`} />
                     {group.label}
-                    {operationsBadge > 0 && (
+                    {usersBadge > 0 && (
                       <span className="absolute -top-1.5 -left-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 shadow-md">
-                        {operationsBadge}
+                        {usersBadge}
                       </span>
                     )}
                     <ChevronDown className={`w-3.5 h-3.5 ${isGroupActive ? "text-amber-300" : "opacity-70"}`} />
