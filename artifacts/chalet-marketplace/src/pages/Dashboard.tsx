@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useCallback, createContext, useContext, Fragment, type ReactElement } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback, createContext, useContext, Fragment, type ReactElement, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -11035,8 +11035,11 @@ function BankLedgerTab() {
             <div className="text-3xl mb-2">📭</div>لا توجد بيانات
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[620px]">
+          <PaginatedItems items={filtered} resetKey={`${activeTab}|${bankCalType}|${bankYear}|${bankMonth}`}>
+            {(pagination) => (
+              <div ref={pagination.tableRef} className="scroll-mt-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[620px]">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">تاريخ الحوالة</th>
@@ -11048,7 +11051,7 @@ function BankLedgerTab() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((e, i) => {
+                {pagination.paginatedItems.map((e, i) => {
                   const _dualDate = e.bookingDate ? formatDualDate(e.bookingDate) : null;
                   const typeInfo = {
                     revenue:      { label: "🏠 حجز",        cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
@@ -11096,8 +11099,19 @@ function BankLedgerTab() {
                   <td />
                 </tr>
               </tfoot>
-            </table>
-          </div>
+                  </table>
+                </div>
+                <PaginationBar
+                  page={pagination.page}
+                  pageSize={pagination.pageSize}
+                  totalItems={filtered.length}
+                  totalPages={pagination.totalPages}
+                  onPageChange={pagination.goToPage}
+                  onPageSizeChange={pagination.changePageSize}
+                />
+              </div>
+            )}
+          </PaginatedItems>
         )}
       </div>
     </div>
@@ -11869,8 +11883,11 @@ function RevenueTab() {
           ) : filteredSvcRows.length === 0 ? (
             <div className="text-center text-muted-foreground text-sm py-8">لا توجد إيرادات لهذا الشهر</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[480px]">
+            <PaginatedItems items={filteredSvcRows} resetKey={`${selectedMonth}|${svcFilter}`}>
+              {(pagination) => (
+                <div ref={pagination.tableRef} className="scroll-mt-4">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[480px]">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-right py-2 px-3 text-xs font-semibold text-muted-foreground">العميل</th>
@@ -11881,7 +11898,7 @@ function RevenueTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSvcRows.map((row, i) => {
+                  {pagination.paginatedItems.map((row, i) => {
                     const { hijri, gregorian } = formatDualDate(row.dateStr);
                     const meta = TYPE_META[row.type];
                     return (
@@ -11926,8 +11943,19 @@ function RevenueTab() {
                     <td />
                   </tr>
                 </tfoot>
-              </table>
-            </div>
+                    </table>
+                  </div>
+                  <PaginationBar
+                    page={pagination.page}
+                    pageSize={pagination.pageSize}
+                    totalItems={filteredSvcRows.length}
+                    totalPages={pagination.totalPages}
+                    onPageChange={pagination.goToPage}
+                    onPageSizeChange={pagination.changePageSize}
+                  />
+                </div>
+              )}
+            </PaginatedItems>
           )}
         </div>
       </div>
@@ -12139,8 +12167,11 @@ function RevenueTab() {
           ) : filteredReceivables.length === 0 ? (
             <div className="text-center text-muted-foreground text-sm py-12">✅ لا توجد مستحقات معلقة</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[480px]">
+            <PaginatedItems items={filteredReceivables} resetKey={`${pendingCalType}|${pendingYear}|${pendingFilterMonth}`}>
+              {(pagination) => (
+                <div ref={pagination.tableRef} className="scroll-mt-4">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm min-w-[480px]">
                 <thead>
                   <tr className="border-b border-border bg-muted/30">
                     <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">اسم المستأجر</th>
@@ -12150,7 +12181,7 @@ function RevenueTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredReceivables.map(bk => {
+                  {pagination.paginatedItems.map(bk => {
                     const _bkDual = bk.bookingDate ? formatDualDate(bk.bookingDate) : null;
                     const _hijriStr = _bkDual?.hijri.replace(/\s*هـ\s*$/, "") ?? "";
                     const _gregStr  = _bkDual?.gregorian ?? "";
@@ -12190,8 +12221,19 @@ function RevenueTab() {
                     </td>
                   </tr>
                 </tfoot>
-              </table>
-            </div>
+                    </table>
+                  </div>
+                  <PaginationBar
+                    page={pagination.page}
+                    pageSize={pagination.pageSize}
+                    totalItems={filteredReceivables.length}
+                    totalPages={pagination.totalPages}
+                    onPageChange={pagination.goToPage}
+                    onPageSizeChange={pagination.changePageSize}
+                  />
+                </div>
+              )}
+            </PaginatedItems>
           )}
         </div>
       )}
@@ -12916,6 +12958,179 @@ function catColorClass(color: string) {
   return COLOR_CLASSES[color] ?? COLOR_CLASSES.slate;
 }
 
+type PaginationPageSize = 10 | 25 | 50 | 100;
+type ListPaginationState<T> = {
+  page: number;
+  pageSize: PaginationPageSize;
+  totalPages: number;
+  paginatedItems: T[];
+  tableRef: RefObject<HTMLDivElement | null>;
+  goToPage: (page: number) => void;
+  changePageSize: (size: PaginationPageSize) => void;
+};
+
+function useListPagination<T>(items: T[], resetKey: string): ListPaginationState<T> {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PaginationPageSize>(10);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginatedItems = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return items.slice(start, start + pageSize);
+  }, [items, safePage, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [resetKey, pageSize]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const scrollToTable = () => {
+    requestAnimationFrame(() => {
+      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const goToPage = (nextPage: number) => {
+    const next = Math.max(1, Math.min(nextPage, totalPages));
+    if (next === safePage) return;
+    setPage(next);
+    scrollToTable();
+  };
+
+  const changePageSize = (nextSize: PaginationPageSize) => {
+    setPageSize(nextSize);
+    setPage(1);
+    scrollToTable();
+  };
+
+  return {
+    page: safePage,
+    pageSize,
+    totalPages,
+    paginatedItems,
+    tableRef,
+    goToPage,
+    changePageSize,
+  };
+}
+
+function PaginatedItems<T>({
+  items,
+  resetKey,
+  children,
+}: {
+  items: T[];
+  resetKey: string;
+  children: (pagination: ListPaginationState<T>) => ReactNode;
+}) {
+  const pagination = useListPagination(items, resetKey);
+  return <>{children(pagination)}</>;
+}
+
+function PaginationBar({
+  page,
+  pageSize,
+  totalItems,
+  totalPages,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageSize: PaginationPageSize;
+  totalItems: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: PaginationPageSize) => void;
+}) {
+  const pageNumbers = useMemo<(number | "ellipsis")[]>(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+    const candidates = new Set([1, totalPages, page - 1, page, page + 1]);
+    const sorted = Array.from(candidates)
+      .filter(candidate => candidate >= 1 && candidate <= totalPages)
+      .sort((a, b) => a - b);
+    const result: (number | "ellipsis")[] = [];
+    sorted.forEach((candidate, index) => {
+      if (index > 0 && candidate - sorted[index - 1] > 1) result.push("ellipsis");
+      result.push(candidate);
+    });
+    return result;
+  }, [page, totalPages]);
+
+  const firstItem = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastItem = Math.min(page * pageSize, totalItems);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/20 px-4 py-3" dir="rtl">
+      <div className="text-xs text-muted-foreground tabular-nums">
+        عرض {toArN(firstItem)} إلى {toArN(lastItem)} من أصل {toArN(totalItems)}
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span>عدد العناصر:</span>
+          <Select value={String(pageSize)} onValueChange={(value) => onPageSizeChange(Number(value) as PaginationPageSize)}>
+            <SelectTrigger className="h-8 w-[4.5rem] rounded-lg bg-background text-xs" dir="rtl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent dir="rtl">
+              {[10, 25, 50, 100].map(size => (
+                <SelectItem key={size} value={String(size)}>{toArN(size)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1" dir="ltr">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(page - 1)}
+              disabled={page === 1}
+              aria-label="الصفحة السابقة"
+              className="h-8 gap-1 px-2.5 text-xs"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />السابق
+            </Button>
+            {pageNumbers.map((pageNumber, index) => pageNumber === "ellipsis" ? (
+              <span key={`ellipsis-${index}`} className="px-1 text-xs text-muted-foreground">…</span>
+            ) : (
+              <Button
+                key={pageNumber}
+                type="button"
+                variant={pageNumber === page ? "default" : "outline"}
+                size="sm"
+                onClick={() => onPageChange(pageNumber)}
+                aria-current={pageNumber === page ? "page" : undefined}
+                aria-label={`الصفحة ${toArN(pageNumber)}`}
+                className="h-8 min-w-8 px-2 text-xs tabular-nums"
+              >
+                {toArN(pageNumber)}
+              </Button>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onPageChange(page + 1)}
+              disabled={page === totalPages}
+              aria-label="الصفحة التالية"
+              className="h-8 gap-1 px-2.5 text-xs"
+            >
+              التالي<ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TransactionHistoryTab() {
   const { unit } = useAdminFinance();
   const qcHist = useQueryClient();
@@ -12924,9 +13139,6 @@ function TransactionHistoryTab() {
   const [histYear, setHistYear] = useState<string>("");
   const [histMonth, setHistMonth] = useState<string>("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historyPageSize, setHistoryPageSize] = useState(10);
-  const historyTableRef = useRef<HTMLDivElement>(null);
 
   const submissionId = unit.type === "chalet" ? unit.submissionId : undefined;
 
@@ -12993,43 +13205,7 @@ function TransactionHistoryTab() {
     if (histYear) return key.startsWith(histYear);
     return true;
   }), [allItems, histCalType, histYear, histMonth]);
-
-  const totalHistoryPages = Math.max(1, Math.ceil(items.length / historyPageSize));
-  const safeHistoryPage = Math.min(historyPage, totalHistoryPages);
-  const paginatedItems = useMemo(() => {
-    const start = (safeHistoryPage - 1) * historyPageSize;
-    return items.slice(start, start + historyPageSize);
-  }, [items, safeHistoryPage, historyPageSize]);
-  const historyPageNumbers = useMemo<(number | "ellipsis")[]>(() => {
-    if (totalHistoryPages <= 7) {
-      return Array.from({ length: totalHistoryPages }, (_, index) => index + 1);
-    }
-    const candidates = new Set([1, totalHistoryPages, safeHistoryPage - 1, safeHistoryPage, safeHistoryPage + 1]);
-    const sorted = Array.from(candidates).filter(page => page >= 1 && page <= totalHistoryPages).sort((a, b) => a - b);
-    const result: (number | "ellipsis")[] = [];
-    sorted.forEach((page, index) => {
-      if (index > 0 && page - sorted[index - 1] > 1) result.push("ellipsis");
-      result.push(page);
-    });
-    return result;
-  }, [safeHistoryPage, totalHistoryPages]);
-
-  useEffect(() => {
-    setHistoryPage(1);
-  }, [histCalType, histYear, histMonth, historyPageSize]);
-
-  useEffect(() => {
-    if (historyPage > totalHistoryPages) setHistoryPage(totalHistoryPages);
-  }, [historyPage, totalHistoryPages]);
-
-  const changeHistoryPage = (page: number) => {
-    const nextPage = Math.max(1, Math.min(page, totalHistoryPages));
-    if (nextPage === safeHistoryPage) return;
-    setHistoryPage(nextPage);
-    requestAnimationFrame(() => {
-      historyTableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  };
+  const historyPagination = useListPagination(items, `${histCalType}|${histYear}|${histMonth}`);
 
   const typeLabel = (t: string, method: string) => {
     if (t === "income") {
@@ -13075,12 +13251,12 @@ function TransactionHistoryTab() {
           <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
             {(["hijri", "gregorian"] as const).map(mode => (
               <button key={mode} type="button"
-                onClick={() => { setHistCalType(mode); setHistYear(""); setHistMonth(""); setHistoryPage(1); }}
+                onClick={() => { setHistCalType(mode); setHistYear(""); setHistMonth(""); }}
                 className={`text-xs px-3 py-1.5 font-medium transition-colors ${histCalType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
               >{mode === "hijri" ? "هجري" : "ميلادي"}</button>
             ))}
           </div>
-           <Select value={histYear || "__all__"} onValueChange={yr => { setHistYear(yr === "__all__" ? "" : yr); setHistMonth(""); setHistoryPage(1); }}>
+           <Select value={histYear || "__all__"} onValueChange={yr => { setHistYear(yr === "__all__" ? "" : yr); setHistMonth(""); }}>
             <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7rem] shrink-0" dir="rtl">
               {histYear
                 ? <span className="text-sm font-medium">{histCalType === "hijri" ? `${toArN(Number(histYear))} هـ` : `${toArN(Number(histYear))} م`}</span>
@@ -13097,7 +13273,7 @@ function TransactionHistoryTab() {
           </Select>
           <Select
             value={!histYear ? "all" : (histMonth || "all")}
-             onValueChange={v => { if (histYear) { setHistMonth(v === "all" ? "" : v); setHistoryPage(1); } }}
+              onValueChange={v => { if (histYear) setHistMonth(v === "all" ? "" : v); }}
             disabled={!histYear}
           >
             <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[8rem] shrink-0" dir="rtl">
@@ -13152,7 +13328,7 @@ function TransactionHistoryTab() {
           <div className="text-3xl mb-2">📭</div>لا توجد معاملات في هذه الفترة
         </div>
       ) : (
-         <div ref={historyTableRef} className="rounded-2xl border border-border overflow-hidden scroll-mt-4">
+         <div ref={historyPagination.tableRef} className="rounded-2xl border border-border overflow-hidden scroll-mt-4">
           <div className="overflow-x-auto">
             <table className="w-full text-sm" dir="rtl">
               <thead className="bg-muted/50 text-xs font-bold text-muted-foreground">
@@ -13166,7 +13342,7 @@ function TransactionHistoryTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                 {paginatedItems.map(item => {
+                 {historyPagination.paginatedItems.map(item => {
                   const tl = typeLabel(item.type, item.method);
                   const sl = statusLabel(item.status);
                   const isIncome = item.type === "income";
@@ -13274,68 +13450,14 @@ function TransactionHistoryTab() {
               </tbody>
             </table>
           </div>
-           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/20 px-4 py-3" dir="rtl">
-             <div className="text-xs text-muted-foreground tabular-nums">
-               عرض {toArN(items.length === 0 ? 0 : (safeHistoryPage - 1) * historyPageSize + 1)} إلى {toArN(Math.min(safeHistoryPage * historyPageSize, items.length))} من أصل {toArN(items.length)} معاملة
-             </div>
-             <div className="flex flex-wrap items-center justify-end gap-2">
-               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                 <span>عدد المعاملات:</span>
-                 <Select
-                   value={String(historyPageSize)}
-                   onValueChange={(value) => { setHistoryPageSize(Number(value)); setHistoryPage(1); }}
-                 >
-                   <SelectTrigger className="h-8 w-[4.5rem] rounded-lg bg-background text-xs" dir="rtl">
-                     <SelectValue />
-                   </SelectTrigger>
-                   <SelectContent dir="rtl">
-                     {[10, 25, 50].map(size => (
-                       <SelectItem key={size} value={String(size)}>{size}</SelectItem>
-                     ))}
-                   </SelectContent>
-                 </Select>
-               </div>
-               {totalHistoryPages > 1 && (
-                 <div className="flex items-center gap-1" dir="ltr">
-                   <Button
-                     type="button"
-                     variant="outline"
-                     size="sm"
-                     onClick={() => changeHistoryPage(safeHistoryPage - 1)}
-                     disabled={safeHistoryPage === 1}
-                     className="h-8 gap-1 px-2.5 text-xs"
-                   >
-                     <ChevronLeft className="h-3.5 w-3.5" />السابق
-                   </Button>
-                   {historyPageNumbers.map((page, index) => page === "ellipsis" ? (
-                     <span key={`ellipsis-${index}`} className="px-1 text-xs text-muted-foreground">…</span>
-                   ) : (
-                     <Button
-                       key={page}
-                       type="button"
-                       variant={page === safeHistoryPage ? "default" : "outline"}
-                       size="sm"
-                       onClick={() => changeHistoryPage(page)}
-                       aria-current={page === safeHistoryPage ? "page" : undefined}
-                       className="h-8 min-w-8 px-2 text-xs tabular-nums"
-                     >
-                       {page}
-                     </Button>
-                   ))}
-                   <Button
-                     type="button"
-                     variant="outline"
-                     size="sm"
-                     onClick={() => changeHistoryPage(safeHistoryPage + 1)}
-                     disabled={safeHistoryPage === totalHistoryPages}
-                     className="h-8 gap-1 px-2.5 text-xs"
-                   >
-                     التالي<ChevronRight className="h-3.5 w-3.5" />
-                   </Button>
-                 </div>
-               )}
-             </div>
-           </div>
+           <PaginationBar
+             page={historyPagination.page}
+             pageSize={historyPagination.pageSize}
+             totalItems={items.length}
+             totalPages={historyPagination.totalPages}
+             onPageChange={historyPagination.goToPage}
+             onPageSizeChange={historyPagination.changePageSize}
+           />
         </div>
       )}
 
@@ -13893,8 +14015,11 @@ function ExpensesTab() {
             <p className="text-sm">لا توجد مصروفات في هذا الشهر</p>
           </div>
         ) : (
-          <div className="rounded-xl overflow-hidden border border-border/40">
-            <table className="w-full table-fixed border-collapse" dir="rtl">
+          <PaginatedItems items={filteredExpenses} resetKey={`${expCalType}|${expYear}|${expMonth}|${unit.type}|${unit.type === "chalet" ? (unit as any).submissionId ?? "" : ""}`}>
+            {(pagination) => (
+              <div ref={pagination.tableRef} className="rounded-xl overflow-hidden border border-border/40 scroll-mt-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full table-fixed border-collapse" dir="rtl">
               <colgroup>
                 <col className="w-[15%]" />
                 {expShowProp && <col className="w-[15%]" />}
@@ -13916,7 +14041,7 @@ function ExpensesTab() {
                 </tr>
               </thead>
               <tbody>
-                {filteredExpenses.map((exp, idx) => {
+                {pagination.paginatedItems.map((exp, idx) => {
                   const cat = catDisplayMap[exp.category] ?? { label: exp.category, emoji: "✨", colorClass: "bg-slate-100 text-slate-700" };
                   const displayLabel = exp.customCategory ? exp.customCategory : cat.label;
                   const displayDate = expCalType === "hijri"
@@ -13969,8 +14094,19 @@ function ExpensesTab() {
                   );
                 })}
               </tbody>
-            </table>
-          </div>
+                  </table>
+                </div>
+                <PaginationBar
+                  page={pagination.page}
+                  pageSize={pagination.pageSize}
+                  totalItems={filteredExpenses.length}
+                  totalPages={pagination.totalPages}
+                  onPageChange={pagination.goToPage}
+                  onPageSizeChange={pagination.changePageSize}
+                />
+              </div>
+            )}
+          </PaginatedItems>
         )}
 
         {expenses.length > 0 && (
@@ -14677,8 +14813,13 @@ function StaffTab() {
     : 0;
 
   /* ── mock data shown when no real records yet ── */
-  const MOCK_STAFF_ITEM = {
+  const MOCK_STAFF_ITEM: StaffMember & {
+    assignedToType: "chalet";
+    assignedToId: null;
+    assignedToName: string;
+  } = {
     id: -1, name: "محمد أحمد", baseSalary: "4000", username: null,
+    isActive: true, createdAt: "2026-01-01T00:00:00.000Z",
     permissions: { manageBookings: true } as StaffPermissions,
     assignedToType: "chalet" as const, assignedToId: null, assignedToName: "شاليه الياسمين",
   };
@@ -14886,8 +15027,11 @@ function StaffTab() {
         {isLoading ? (
           <div className="space-y-3">{[1,2,3].map((i) => <Skeleton key={i} className="h-10 rounded-xl" />)}</div>
         ) : (
-          <div className="rounded-xl overflow-hidden border border-border/40">
-            <table className="w-full table-fixed border-collapse" dir="rtl">
+          <PaginatedItems items={displayStaff} resetKey={displayStaff.map(member => member.id).join("|")}>
+            {(pagination) => (
+              <div ref={pagination.tableRef} className="rounded-xl overflow-hidden border border-border/40 scroll-mt-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full table-fixed border-collapse" dir="rtl">
               <colgroup>
                 <col className="w-[28%]" />
                 <col className="w-[18%]" />
@@ -14903,7 +15047,7 @@ function StaffTab() {
                 </tr>
               </thead>
               <tbody>
-                {displayStaff.map((member, idx) => {
+                {pagination.paginatedItems.map((member, idx) => {
                   const isMock = (member.id as number) < 0;
                   const unitLabel = (member as any).assignedToName
                     ?? ((member as any).assignedToType === "chalet"
@@ -14967,8 +15111,19 @@ function StaffTab() {
                   );
                 })}
               </tbody>
-            </table>
-          </div>
+                  </table>
+                </div>
+                <PaginationBar
+                  page={pagination.page}
+                  pageSize={pagination.pageSize}
+                  totalItems={displayStaff.length}
+                  totalPages={pagination.totalPages}
+                  onPageChange={pagination.goToPage}
+                  onPageSizeChange={pagination.changePageSize}
+                />
+              </div>
+            )}
+          </PaginatedItems>
         )}
       </div>
 
@@ -15011,8 +15166,11 @@ function StaffTab() {
         {histLoading ? (
           <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-10 rounded-xl" />)}</div>
         ) : (
-          <div className="rounded-xl overflow-hidden border border-border/40">
-            <table className="w-full table-fixed border-collapse text-sm" dir="rtl">
+          <PaginatedItems items={displayHistory} resetKey={displayHistory.map(log => log.id).join("|")}>
+            {(pagination) => (
+              <div ref={pagination.tableRef} className="rounded-xl overflow-hidden border border-border/40 scroll-mt-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full table-fixed border-collapse text-sm" dir="rtl">
               <colgroup>
                 <col className="w-[4%]" />
                 <col className="w-[16%]" />
@@ -15048,7 +15206,7 @@ function StaffTab() {
                 </tr>
               </thead>
               <tbody>
-                {displayHistory.map((log, idx) => {
+                {pagination.paginatedItems.map((log, idx) => {
                   const isMock = (log.id as number) < 0;
                   const base = Number((log as any).baseSalary ?? 0);
                   const bonus = Number(log.bonus);
@@ -15133,8 +15291,19 @@ function StaffTab() {
                   );
                 })}
               </tbody>
-            </table>
-          </div>
+                  </table>
+                </div>
+                <PaginationBar
+                  page={pagination.page}
+                  pageSize={pagination.pageSize}
+                  totalItems={displayHistory.length}
+                  totalPages={pagination.totalPages}
+                  onPageChange={pagination.goToPage}
+                  onPageSizeChange={pagination.changePageSize}
+                />
+              </div>
+            )}
+          </PaginatedItems>
         )}
       </div>
 
@@ -16673,6 +16842,7 @@ function ReportsTab() {
     },
     enabled: showArchive,
   });
+  const archivePagination = useListPagination(archive, archive.map((report: any) => report.id).join("|"));
 
   const { data: svcRepSummary } = useQuery<{ totalRevenue: number; totalDeposits: number; totalInsurance: number; byProvider: { id: number; name: string; revenue: number; deposits: number; insurance: number }[] }>({
     queryKey: ["owner", "service-revenue-summary-rep", selectedMonth],
@@ -18380,8 +18550,9 @@ function ReportsTab() {
             {archive.length === 0 ? (
               <p className="text-center text-sm text-muted-foreground py-6">لا توجد تقارير محفوظة بعد</p>
             ) : (
-              <div className="space-y-2">
-                {archive.map((a: any) => (
+              <>
+                <div ref={archivePagination.tableRef} className="space-y-2 scroll-mt-4">
+                {archivePagination.paginatedItems.map((a: any) => (
                   <div key={a.id} className="flex items-center justify-between p-3 bg-muted/40 rounded-xl gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-foreground">
@@ -18414,7 +18585,16 @@ function ReportsTab() {
                     </div>
                   </div>
                 ))}
-              </div>
+                </div>
+                <PaginationBar
+                  page={archivePagination.page}
+                  pageSize={archivePagination.pageSize}
+                  totalItems={archive.length}
+                  totalPages={archivePagination.totalPages}
+                  onPageChange={archivePagination.goToPage}
+                  onPageSizeChange={archivePagination.changePageSize}
+                />
+              </>
             )}
           </div>
         )}
@@ -18433,12 +18613,10 @@ interface OwnerNotifRow {
 }
 
 type NotifFilter = "all" | "new_booking" | "booking_reminder";
-const NOTIF_PAGE_SIZE = 8;
 
 function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
   const qc = useQueryClient();
   const [activeFilter, setActiveFilter] = useState<NotifFilter>("all");
-  const [showAll, setShowAll] = useState(false);
 
   const { data: rawNotifications = [], isLoading } = useQuery<OwnerNotifRow[]>({
     queryKey: ["owner", "notifications"],
@@ -18476,8 +18654,7 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
     ? allNotifs
     : allNotifs.filter(n => n.type === activeFilter);
 
-  const visible = showAll ? filtered : filtered.slice(0, NOTIF_PAGE_SIZE);
-  const hasMore = !showAll && filtered.length > NOTIF_PAGE_SIZE;
+  const notificationPagination = useListPagination(filtered, activeFilter);
   const unread = allNotifs.filter(n => !n.isRead);
 
   const TABS: { key: NotifFilter; label: string; icon: string }[] = [
@@ -18562,7 +18739,7 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
             return (
               <button
                 key={tab.key}
-                onClick={() => { setActiveFilter(tab.key); setShowAll(false); }}
+                onClick={() => setActiveFilter(tab.key)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   isActive
                     ? "bg-primary text-primary-foreground shadow-sm"
@@ -18591,20 +18768,17 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
           </div>
         ) : (
           <>
-            <div className="max-h-[480px] overflow-y-auto divide-y divide-border/60 overscroll-contain">
-              {visible.map(renderNotif)}
+            <div ref={notificationPagination.tableRef} className="max-h-[480px] overflow-y-auto divide-y divide-border/60 overscroll-contain scroll-mt-4">
+              {notificationPagination.paginatedItems.map(renderNotif)}
             </div>
-            {hasMore && (
-              <div className="border-t border-border px-5 py-3 bg-muted/20 flex justify-center">
-                <button
-                  onClick={() => setShowAll(true)}
-                  className="flex items-center gap-2 text-sm text-primary hover:text-primary/80 font-medium transition-colors"
-                >
-                  <ChevronDown className="w-4 h-4" />
-                  عرض الإشعارات السابقة ({toArN(filtered.length - NOTIF_PAGE_SIZE)} إشعار)
-                </button>
-              </div>
-            )}
+            <PaginationBar
+              page={notificationPagination.page}
+              pageSize={notificationPagination.pageSize}
+              totalItems={filtered.length}
+              totalPages={notificationPagination.totalPages}
+              onPageChange={notificationPagination.goToPage}
+              onPageSizeChange={notificationPagination.changePageSize}
+            />
           </>
         )}
       </div>
@@ -24220,6 +24394,7 @@ function OwnerSupportTab() {
   }
 
   const unreadReplies = history.filter((m) => m.admin_reply && !m.is_read_by_owner).length;
+  const supportPagination = useListPagination(history, history.map(message => message.id).join("|"));
 
   return (
     <div className="max-w-2xl mx-auto space-y-5 py-4">
@@ -24373,7 +24548,9 @@ function OwnerSupportTab() {
             <p className="text-muted-foreground/60 text-xs mt-1">أرسل طلبك الأول عبر زر "طلب جديد" أعلاه</p>
           </div>
         ) : (
-          history.map((msg) => {
+          <>
+          <div ref={supportPagination.tableRef} className="space-y-3 scroll-mt-4">
+          {supportPagination.paginatedItems.map((msg) => {
             const isExp = expandedId === msg.id;
             const statusInfo = SUPPORT_STATUS_AR[msg.status] ?? { label: msg.status, color: "text-muted-foreground bg-muted border-border" };
             const hasUnread = msg.admin_reply && !msg.is_read_by_owner;
@@ -24468,7 +24645,17 @@ function OwnerSupportTab() {
                 )}
               </div>
             );
-          })
+          })}
+          </div>
+          <PaginationBar
+            page={supportPagination.page}
+            pageSize={supportPagination.pageSize}
+            totalItems={history.length}
+            totalPages={supportPagination.totalPages}
+            onPageChange={supportPagination.goToPage}
+            onPageSizeChange={supportPagination.changePageSize}
+          />
+          </>
         )}
       </div>
 
