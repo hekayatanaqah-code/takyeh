@@ -34,9 +34,11 @@ export default function Login() {
     setIsAdminBlock(false);
     setLoading(true);
     try {
-      const endpoint = trimmed.includes("@") ? "/api/owner-login" : "/api/unified-login";
-      const body = trimmed.includes("@")
-        ? JSON.stringify({ email: trimmed, password, rememberMe })
+      const isEmail = trimmed.includes("@");
+      const isPhone = /^[+\d٠-٩\s()-]+$/.test(trimmed);
+      const endpoint = isEmail || isPhone ? "/api/owner-login" : "/api/unified-login";
+      const body = isEmail || isPhone
+        ? JSON.stringify({ identifier: trimmed, password, rememberMe })
         : JSON.stringify({ username: trimmed, password, rememberMe });
 
       const r = await fetch(`${BASE}${endpoint}`, {
@@ -94,11 +96,11 @@ export default function Login() {
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-[#4A4A4A] mb-2">
-              البريد الإلكتروني
+              البريد الإلكتروني أو رقم الجوال
             </label>
             <input
               type="text"
-              placeholder="أدخل بريدك الإلكتروني"
+              placeholder="أدخل بريدك الإلكتروني أو رقم الجوال"
               value={input}
               onChange={(e) => { setInput(e.target.value); setError(null); setIsAdminBlock(false); }}
               autoComplete="username"

@@ -329,22 +329,32 @@ router.post("/resend-otp", async (req, res) => {
 });
 
 /* ── POST /owner-login ──────────────────────────────────────
-   Custom email+password login for chalet owners.
-   Looks up owner_applications, validates bcrypt password, then
+   Custom email/phone+password login for chalet owners.
+   Looks up owner_applications by either email or normalized phone,
+   validates bcrypt password, then
    creates a platform session (sid cookie) so authMiddleware
    can set req.user correctly for all /owner/* routes.
    ─────────────────────────────────────────────────────────── */
 router.post("/owner-login", async (req, res) => {
-  const { email, password, rememberMe } = req.body ?? {};
-  if (!email || !password) {
-    return res.status(400).json({ error: "البريد الإلكتروني وكلمة المرور مطلوبان" });
+  const { identifier: rawIdentifier, email: legacyEmail, password, rememberMe } = req.body ?? {};
+  const identifier = String(rawIdentifier ?? legacyEmail ?? "").trim();
+  if (!identifier || !password) {
+    return res.status(400).json({ error: "البريد الإلكتروني أو رقم الجوال وكلمة المرور مطلوبان" });
   }
-  const emailLower = String(email).trim().toLowerCase();
+  const identifierDigits = identifier.replace(/[٠-٩]/g, digit => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)));
+  let phoneIdentifier = identifierDigits.replace(/\s+/g, "").replace(/[^\d+]/g, "");
+  if (phoneIdentifier.startsWith("+966")) phoneIdentifier = phoneIdentifier.slice(4);
+  else if (phoneIdentifier.startsWith("966")) phoneIdentifier = phoneIdentifier.slice(3);
+  if (phoneIdentifier && !phoneIdentifier.startsWith("0")) phoneIdentifier = `0${phoneIdentifier}`;
+  const emailIdentifier = identifier.toLowerCase();
 
   try {
     const appResult = await db.execute(
       sql`SELECT id, full_name, phone, email, password_hash, email_verified, status
-          FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
+          FROM owner_applications
+          WHERE LOWER(email) = LOWER(${emailIdentifier})
+             OR phone = ${phoneIdentifier}
+          LIMIT 1`
     );
     const app = ((appResult as any).rows as Array<{
       id: number; full_name: string; phone: string; email: string;
@@ -352,7 +362,7 @@ router.post("/owner-login", async (req, res) => {
     }>)[0];
 
     if (!app) {
-      return res.status(401).json({ error: "لا يوجد حساب مرتبط بهذا البريد الإلكتروني" });
+      return res.status(401).json({ error: "لا يوجد حساب مرتبط بهذا البريد الإلكتروني أو رقم الجوال" });
     }
     if (!app.email_verified) {
       return res.status(403).json({ error: "يرجى التحقق من بريدك الإلكتروني أولاً قبل تسجيل الدخول" });
@@ -374,7 +384,7 @@ router.post("/owner-login", async (req, res) => {
       const [replUser] = await db
         .select({ id: usersTable.id })
         .from(usersTable)
-        .where(eq(usersTable.email, emailLower))
+        .where(eq(usersTable.email, String(app.email ?? "").toLowerCase()))
         .limit(1);
       if (replUser?.id) userId = replUser.id;
     } catch { /* ignore — non-critical */ }
