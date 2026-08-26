@@ -20,7 +20,7 @@ const options: { type: BizType; icon: React.ReactNode; label: string; desc: stri
     type: "chalet",
     icon: <Building2 className="w-7 h-7" />,
     label: "مالك عقار",
-    desc: "أدر حجوزات شاليهاتك أو استراحاتك من لوحة تحكم واحدة",
+    desc: "أدر حجوزات عقاراتك من لوحة تحكم واحدة",
   },
   {
     type: "service",
