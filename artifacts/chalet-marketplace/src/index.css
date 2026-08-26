@@ -184,6 +184,12 @@ input, textarea, select, [contenteditable] {
 }
 
 @layer utilities {
+  .register-login-link:hover,
+  .register-return-link:hover {
+    text-decoration-line: underline;
+    text-underline-offset: 3px;
+  }
+
   input[type="search"]::-webkit-search-cancel-button {
     @apply hidden;
   }

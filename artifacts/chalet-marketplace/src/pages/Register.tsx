@@ -6,6 +6,12 @@ import { toAr, fromAr } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+const normalizeLocalPhoneInput = (value: string) => {
+  const digits = fromAr(value).replace(/\D/g, "");
+  if (digits.startsWith("966")) return `0${digits.slice(3).replace(/^0/, "")}`;
+  return digits.startsWith("0") ? digits : `0${digits}`;
+};
+
 export default function Register() {
   const [, navigate] = useLocation();
   const { data: settings = {} } = useQuery<Record<string, string>>({
@@ -253,16 +259,26 @@ export default function Register() {
             {/* Phone */}
             <div>
               <label className={labelCls}>رقم الجوال <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="٠٥١٢٣٤٥٦٧٨"
-                value={toAr(form.phone)}
-                onChange={(e) => update("phone", fromAr(e.target.value))}
-                dir="ltr"
-                className={`${inputCls} text-left ${fieldErrors.phone ? "border-red-400 focus:border-red-400" : ""}`}
-                required
-              />
+              <div className="relative">
+                <span
+                  aria-hidden="true"
+                  dir="ltr"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#4B4B4B] font-bold text-sm select-none pointer-events-none"
+                >
+                  +966
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="٥١٢٣٤٥٦٧٨"
+                  value={toAr(form.phone.replace(/^0/, ""))}
+                  onChange={(e) => update("phone", normalizeLocalPhoneInput(e.target.value))}
+                  dir="ltr"
+                  className={`${inputCls} text-left pl-20 ${fieldErrors.phone ? "border-red-400 focus:border-red-400" : ""}`}
+                  required
+                  aria-label="رقم الجوال بعد رمز الدولة +966"
+                />
+              </div>
               {fieldErrors.phone && (
                 <p className="text-xs text-red-500 font-medium mt-1">{fieldErrors.phone}</p>
               )}
@@ -368,15 +384,15 @@ export default function Register() {
             </button>
           </form>
 
-          <p className="text-center text-sm text-[#7A7A7A] mt-6">
+          <p className="text-center text-sm text-[#4B4B4B] mt-6">
             لديك حساب بالفعل؟{" "}
-            <a href={`${BASE}/login`} className="text-[#8C6246] hover:underline font-bold">
+            <a href={`${BASE}/login`} className="register-login-link text-[#8C6246] font-bold">
               تسجيل الدخول
             </a>
           </p>
         </div>
 
-        <a href={`${BASE}/`} className="text-xs text-[#9E9E9E] hover:underline mt-5">
+        <a href={`${BASE}/`} className="register-return-link text-xs text-[#4B4B4B] mt-5">
           العودة لتصفح منصة تكيّة
         </a>
       </div>
