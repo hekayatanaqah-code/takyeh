@@ -21,6 +21,14 @@ function normalizeLocalPhoneInput(value: string): string {
   return digits.startsWith("0") ? digits : `0${digits}`;
 }
 
+function normalizeSaudiSubscriberInput(value: string): string {
+  const digits = arToEn(value).replace(/\D/g, "");
+  const withoutCountryCode = digits.startsWith("966") ? digits.slice(3) : digits;
+  return withoutCountryCode.startsWith("0")
+    ? withoutCountryCode.slice(1)
+    : withoutCountryCode;
+}
+
 function getAccountParams(): { email: string; phone: string } {
   const params = new URLSearchParams(window.location.search);
   return {
@@ -197,17 +205,18 @@ export default function VerifyPhone() {
   }
 
   function openChangePhoneDialog() {
-    setNewPhone(currentPhone);
+    setNewPhone(currentPhone.replace(/^0/, ""));
     setChangePhoneError(null);
     setChangePhoneOpen(true);
   }
 
   async function handleChangePhone() {
-    const normalizedPhone = normalizeLocalPhoneInput(newPhone);
-    if (!/^05\d{8}$/.test(normalizedPhone)) {
-      setChangePhoneError("رقم الجوال يجب أن يبدأ بـ ٠٥ ويتكون من ١٠ أرقام");
+    const subscriberPhone = normalizeSaudiSubscriberInput(newPhone);
+    if (!/^5\d{8}$/.test(subscriberPhone)) {
+      setChangePhoneError("أدخل رقم الجوال بصيغة 5XXXXXXXX بعد بادئة +966");
       return;
     }
+    const normalizedPhone = `0${subscriberPhone}`;
     if (normalizedPhone === currentPhone) {
       setChangePhoneError("يرجى إدخال رقم جوال جديد");
       return;
@@ -220,7 +229,7 @@ export default function VerifyPhone() {
       const r = await fetch(`${BASE}/api/change-phone`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...lookupBody, newPhone: normalizedPhone }),
+        body: JSON.stringify({ ...lookupBody, newPhone: subscriberPhone }),
       });
       const data = await r.json();
       if (!r.ok) {
@@ -229,7 +238,7 @@ export default function VerifyPhone() {
       }
 
       setCurrentPhone(normalizedPhone);
-      setNewPhone(normalizedPhone);
+      setNewPhone(subscriberPhone);
       const params = new URLSearchParams(window.location.search);
       params.set("phone", normalizedPhone);
       window.history.replaceState(
@@ -343,13 +352,13 @@ export default function VerifyPhone() {
                   dir="ltr"
                   value={toAr(newPhone)}
                   onChange={(e) => {
-                    setNewPhone(normalizeLocalPhoneInput(e.target.value));
+                    setNewPhone(normalizeSaudiSubscriberInput(e.target.value));
                     setChangePhoneError(null);
                   }}
-                  placeholder="05xxxxxxxx"
+                  placeholder="512345678"
                   disabled={changingPhone}
                   autoComplete="tel"
-                  className="h-11 min-w-0 flex-1 px-3 rounded-xl border border-[#E0E0E0] text-sm text-[#2D2D2D] focus:outline-none focus:border-[#8C6246] transition-colors"
+                  className="h-11 min-w-0 flex-1 px-3 rounded-xl border border-[#E0E0E0] text-sm text-right text-[#2D2D2D] focus:outline-none focus:border-[#8C6246] transition-colors"
                 />
               </div>
             </div>
