@@ -282,11 +282,18 @@ export default function VerifyPhone() {
                 { label: "تفعيل رقم الجوال عبر الواتساب", done: true },
                 { label: "تحديد نوع نشاطك وإعداد حسابك", done: false },
               ].map((step, i) => (
-                <li key={i} className="flex items-center gap-2 text-xs">
+                <li key={i} className="flex items-center gap-3 py-1 text-xs leading-5">
                   <span className={`w-5 h-5 rounded-full font-bold text-[10px] flex items-center justify-center shrink-0 ${step.done ? "bg-[#8C6246] text-white" : "bg-[#D9C3B0] text-[#734f36]"}`}>
                     {step.done ? "✓" : i + 1}
                   </span>
-                  <span className={step.done ? "text-[#8C6246] font-medium line-through" : "text-[#555555] font-medium"}>
+                  <span
+                    className={`min-w-0 leading-5 font-medium ${step.done ? "text-[#8C6246]" : "text-[#555555]"}`}
+                    style={step.done ? {
+                      textDecorationLine: "line-through",
+                      textDecorationColor: "#8C6246",
+                      textDecorationThickness: "1px",
+                    } : undefined}
+                  >
                     {step.label}
                   </span>
                 </li>
