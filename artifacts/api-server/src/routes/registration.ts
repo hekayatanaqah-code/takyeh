@@ -577,6 +577,86 @@ router.post("/resend-phone-otp", async (req, res) => {
   }
 });
 
+/* ── POST /change-phone ────────────────────────────────────────
+   Replaces the phone number for an unverified owner and issues a
+   fresh OTP for the new number.
+   ─────────────────────────────────────────────────────────── */
+router.post("/change-phone", async (req, res): Promise<void> => {
+  const { email, phone, newPhone } = req.body ?? {};
+  if (!email && !phone) {
+    res.status(400).json({ error: "البريد أو رقم الجوال مطلوب" });
+    return;
+  }
+  const emailLower = String(email ?? "").trim().toLowerCase();
+  const newPhoneClean = normalizePhone(newPhone);
+  if (!/^05\d{8}$/.test(newPhoneClean)) {
+    res.status(400).json({ error: "رقم الجوال الجديد يجب أن يبدأ بـ 05 ويتكون من 10 أرقام" });
+    return;
+  }
+
+  try {
+    const currentPhone = normalizePhone(phone);
+    const result = emailLower
+      ? await db.execute(sql`
+          SELECT id, phone, phone_verified
+          FROM owner_applications
+          WHERE LOWER(email) = LOWER(${emailLower}) LIMIT 1
+        `)
+      : await db.execute(sql`
+          SELECT id, phone, phone_verified
+          FROM owner_applications
+          WHERE phone = ${currentPhone} LIMIT 1
+        `);
+    const rows = (result as any).rows as Array<{
+      id: number;
+      phone: string;
+      phone_verified: boolean;
+    }>;
+    const app = rows[0];
+    if (!app) {
+      res.status(404).json({ error: "الحساب غير موجود" });
+      return;
+    }
+    if (app.phone_verified) {
+      res.status(400).json({ error: "لا يمكن تغيير رقم جوال مفعّل" });
+      return;
+    }
+    if (app.phone === newPhoneClean) {
+      res.status(400).json({ error: "يرجى إدخال رقم جوال جديد" });
+      return;
+    }
+
+    const duplicate = await db.execute(sql`
+      SELECT id FROM owner_applications
+      WHERE phone = ${newPhoneClean} AND id <> ${app.id}
+      LIMIT 1
+    `);
+    if (((duplicate as any).rows as Array<{ id: number }>).length > 0) {
+      res.status(409).json({ error: "رقم الجوال الجديد مسجّل مسبقاً" });
+      return;
+    }
+
+    await db.execute(
+      sql`UPDATE phone_otp_tokens SET used_at = now() WHERE phone = ${app.phone} AND used_at IS NULL`
+    );
+    await db.execute(
+      sql`UPDATE owner_applications
+          SET phone = ${newPhoneClean}, phone_verified = false, phone_verified_at = NULL
+          WHERE id = ${app.id}`
+    );
+
+    const code = generateCode();
+    await createPhoneOtp(newPhoneClean, code);
+    if (process.env.NODE_ENV === "development") {
+      req.log.debug({ phone: newPhoneClean }, "Phone OTP issued after phone change");
+    }
+    res.json({ ok: true, maskedPhone: maskPhone(newPhoneClean) });
+  } catch (err) {
+    req.log.error({ err }, "Failed to change phone number");
+    res.status(500).json({ error: "حدث خطأ أثناء تحديث رقم الجوال" });
+  }
+});
+
 /* ── GET /admin/applications ────────────────────────────────
    Returns all partner applications (admin only).
    ─────────────────────────────────────────────────────────── */

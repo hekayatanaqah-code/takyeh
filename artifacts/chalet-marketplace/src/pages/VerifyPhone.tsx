@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { CheckCircle2, Phone, RefreshCw, ShieldCheck, ArrowRight, MessageCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toAr } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const RESEND_SECONDS = 60;
@@ -11,6 +13,13 @@ const IS_DEV = import.meta.env.DEV;
 const EN_TO_AR: Record<string, string> = { '0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩' };
 const arToEn = (s: string) => s.replace(/[٠-٩]/g, n => String(n.charCodeAt(0) - 0x0660));
 const DEV_DIGITS = "١٢٣٤٥٦".split("");
+
+function normalizeLocalPhoneInput(value: string): string {
+  const digits = arToEn(value).replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("966")) return `0${digits.slice(3).replace(/^0/, "")}`;
+  return digits.startsWith("0") ? digits : `0${digits}`;
+}
 
 function getAccountParams(): { email: string; phone: string } {
   const params = new URLSearchParams(window.location.search);
@@ -23,10 +32,11 @@ function getAccountParams(): { email: string; phone: string } {
 export default function VerifyPhone() {
   const [, navigate] = useLocation();
   const { email, phone } = getAccountParams();
-  const accountBody = email ? { email } : { phone };
+  const [currentPhone, setCurrentPhone] = useState(() => normalizeLocalPhoneInput(phone));
+  const accountBody = email ? { email } : { phone: currentPhone };
   const onboardingQuery = email
     ? `email=${encodeURIComponent(email)}`
-    : `phone=${encodeURIComponent(phone)}`;
+    : `phone=${encodeURIComponent(currentPhone)}`;
 
   const [digits, setDigits]       = useState<string[]>(Array(6).fill(""));
   const [loading, setLoading]     = useState(false);
@@ -37,6 +47,10 @@ export default function VerifyPhone() {
   const [canResend, setCanResend] = useState(false);
   const [maskedPhone, setMaskedPhone] = useState("");
   const [otpSent, setOtpSent]     = useState(false);
+  const [changePhoneOpen, setChangePhoneOpen] = useState(false);
+  const [newPhone, setNewPhone] = useState(() => normalizeLocalPhoneInput(phone));
+  const [changingPhone, setChangingPhone] = useState(false);
+  const [changePhoneError, setChangePhoneError] = useState<string | null>(null);
   const inputRefs = useRef<Array<HTMLInputElement | null>>(Array(6).fill(null));
 
   const { data: pageContent } = useQuery<{ site_logo_url?: string }>({
@@ -113,7 +127,7 @@ export default function VerifyPhone() {
     } finally {
       setLoading(false);
     }
-  }, [email, phone, loading]);
+  }, [email, currentPhone, loading]);
 
   function setDigit(idx: number, digit: string) {
     const next = [...digits];
@@ -182,6 +196,62 @@ export default function VerifyPhone() {
     }
   }
 
+  function openChangePhoneDialog() {
+    setNewPhone(currentPhone);
+    setChangePhoneError(null);
+    setChangePhoneOpen(true);
+  }
+
+  async function handleChangePhone() {
+    const normalizedPhone = normalizeLocalPhoneInput(newPhone);
+    if (!/^05\d{8}$/.test(normalizedPhone)) {
+      setChangePhoneError("رقم الجوال يجب أن يبدأ بـ ٠٥ ويتكون من ١٠ أرقام");
+      return;
+    }
+    if (normalizedPhone === currentPhone) {
+      setChangePhoneError("يرجى إدخال رقم جوال جديد");
+      return;
+    }
+
+    setChangingPhone(true);
+    setChangePhoneError(null);
+    try {
+      const lookupBody = email ? { email } : { phone: currentPhone };
+      const r = await fetch(`${BASE}/api/change-phone`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...lookupBody, newPhone: normalizedPhone }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        setChangePhoneError(data.error ?? "تعذّر تحديث رقم الجوال");
+        return;
+      }
+
+      setCurrentPhone(normalizedPhone);
+      setNewPhone(normalizedPhone);
+      const params = new URLSearchParams(window.location.search);
+      params.set("phone", normalizedPhone);
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}?${params.toString()}${window.location.hash}`,
+      );
+      if (data.maskedPhone) setMaskedPhone(data.maskedPhone);
+      setDigits(Array(6).fill(""));
+      setCountdown(RESEND_SECONDS);
+      setCanResend(false);
+      setOtpSent(true);
+      setError(null);
+      setChangePhoneOpen(false);
+      setTimeout(() => inputRefs.current[0]?.focus(), 100);
+    } catch {
+      setChangePhoneError("تعذّر الاتصال بالخادم");
+    } finally {
+      setChangingPhone(false);
+    }
+  }
+
   /* ── Success Screen ── */
   if (verified) {
     return (
@@ -228,6 +298,89 @@ export default function VerifyPhone() {
 
   return (
     <div className="min-h-screen bg-[#FBF9F6] flex flex-col items-center justify-center px-4 py-10" dir="rtl">
+      <Dialog
+        open={changePhoneOpen}
+        onOpenChange={(open) => {
+          if (!changingPhone) {
+            setChangePhoneOpen(open);
+            if (!open) setChangePhoneError(null);
+          }
+        }}
+      >
+        <DialogContent dir="rtl" className="max-w-sm rounded-2xl">
+          <DialogHeader className="text-right">
+            <DialogTitle className="flex items-center gap-2 text-[#2D2D2D]">
+              <span className="w-9 h-9 rounded-xl bg-[#F5EEE9] text-[#8C6246] flex items-center justify-center shrink-0">
+                <Phone className="w-4 h-4" />
+              </span>
+              تعديل رقم الجوال
+            </DialogTitle>
+            <DialogDescription className="text-right leading-relaxed">
+              أدخل الرقم الجديد، وسيتم إرسال رمز تفعيل جديد إليه.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-xl bg-[#FBF9F6] border border-[#E8DED5] px-4 py-3">
+              <p className="text-xs text-[#777777] mb-1">رقم الجوال الحالي</p>
+              <bdo dir="ltr" className="inline-block text-sm text-[#8C6246] font-bold tabular-nums">
+                {maskedPhone || "—"}
+              </bdo>
+            </div>
+
+            <div>
+              <label htmlFor="new-phone-number" className="block text-sm font-semibold text-[#4A4A4A] mb-2">
+                رقم الجوال الجديد
+              </label>
+              <div className="flex items-center gap-2" dir="ltr">
+                <span className="h-11 px-3 rounded-xl border border-[#E0E0E0] bg-[#FBF9F6] text-[#8C6246] font-bold text-sm flex items-center shrink-0">
+                  +966
+                </span>
+                <input
+                  id="new-phone-number"
+                  type="tel"
+                  inputMode="tel"
+                  dir="ltr"
+                  value={toAr(newPhone)}
+                  onChange={(e) => {
+                    setNewPhone(normalizeLocalPhoneInput(e.target.value));
+                    setChangePhoneError(null);
+                  }}
+                  placeholder="05xxxxxxxx"
+                  disabled={changingPhone}
+                  autoComplete="tel"
+                  className="h-11 min-w-0 flex-1 px-3 rounded-xl border border-[#E0E0E0] text-sm text-[#2D2D2D] focus:outline-none focus:border-[#8C6246] transition-colors"
+                />
+              </div>
+            </div>
+
+            {changePhoneError && (
+              <p className="rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs px-3 py-2 text-center">
+                {changePhoneError}
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="flex-row-reverse gap-2 sm:space-x-0">
+            <button
+              type="button"
+              onClick={() => setChangePhoneOpen(false)}
+              disabled={changingPhone}
+              className="flex-1 h-10 rounded-xl border border-[#D9C3B0] text-[#8C6246] font-semibold text-sm hover:bg-[#FBF9F6] disabled:opacity-50 transition-colors"
+            >
+              إلغاء
+            </button>
+            <button
+              type="button"
+              onClick={handleChangePhone}
+              disabled={changingPhone}
+              className="flex-1 h-10 rounded-xl bg-[#8C6246] text-white font-bold text-sm hover:bg-[#7A5538] disabled:opacity-60 transition-colors"
+            >
+              {changingPhone ? "جاري الإرسال…" : "تأكيد وإرسال الرمز"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Logo */}
       <div className="mb-7 select-none flex flex-col items-center gap-1">
@@ -277,7 +430,7 @@ export default function VerifyPhone() {
               </bdo>
               <button
                 type="button"
-                onClick={() => navigate(`/register?phone=${encodeURIComponent(phone)}`)}
+                onClick={openChangePhoneDialog}
                 className="inline-block text-xs text-[#8C6246] font-semibold hover:underline underline-offset-2 transition-colors mr-3"
               >
                 تعديل الرقم
