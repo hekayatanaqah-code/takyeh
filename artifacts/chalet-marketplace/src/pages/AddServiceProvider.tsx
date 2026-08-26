@@ -496,22 +496,6 @@ export default function AddServiceProvider() {
                   {fieldErrors.category && (
                     <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.category}</p>
                   )}
-                  {/* Custom category input — shown only when "other" is selected */}
-                  {form.category === "other" && (
-                    <div className="mt-2 space-y-1">
-                      <Label className="text-xs text-muted-foreground">اسم الفئة المخصصة <span className="text-red-500">*</span></Label>
-                      <Input
-                        value={customCategory}
-                        onChange={(e) => setCustomCategory(e.target.value)}
-                        placeholder="مثال: حلويات، ديكورات، نقليات..."
-                        autoFocus
-                        className={fieldErrors.customCategory ? "border-red-500 ring-1 ring-red-500" : ""}
-                      />
-                      {fieldErrors.customCategory && (
-                        <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.customCategory}</p>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -527,65 +511,93 @@ export default function AddServiceProvider() {
                       <SelectItem value="__other__">مدينة أخرى...</SelectItem>
                     </SelectContent>
                   </Select>
-                  {citySelectVal === "__other__" && (
-                    <Input
-                      placeholder="اكتب اسم المدينة"
-                      value={customCity}
-                      onChange={(e) => setCustomCity(e.target.value)}
-                      className={`mt-1 ${fieldErrors.city ? "border-red-500 ring-1 ring-red-500" : ""}`}
-                      autoFocus
-                    />
-                  )}
                   {fieldErrors.city && (
                     <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.city}</p>
                   )}
                 </div>
               </div>
 
-              {/* Years of Experience */}
-              <div className="space-y-1.5">
-                <Label htmlFor="experience">
-                  <span className="flex items-center gap-1.5">
-                    <Briefcase className="w-4 h-4 text-muted-foreground" />
-                    سنوات الخبرة <span className="text-red-500">*</span>
-                  </span>
-                </Label>
-                <Input
-                  id="experience"
-                  type="text"
-                  inputMode="numeric"
-                    value={toAr(form.yearsOfExperience)}
-                  onChange={(e) => handleChange("yearsOfExperience", fromAr(e.target.value).replace(/[^\d]/g, ""))}
-                  placeholder="مثال: ٥"
-                    className={`w-40 text-right ${fieldErrors.yearsOfExperience ? "border-red-500 ring-1 ring-red-500" : ""}`}
-                    dir="ltr"
-                  required
-                />
-                {fieldErrors.yearsOfExperience
-                  ? <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.yearsOfExperience}</p>
-                  : <p className="text-xs text-muted-foreground">تُعرض للعملاء لبناء الثقة</p>
-                }
-              </div>
-
-              {/* WhatsApp */}
-              <div className="space-y-1.5">
-                <Label htmlFor="whatsapp">رقم واتساب <span className="text-red-500">*</span></Label>
-                <div className="relative">
-                  <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              {/* Custom values — each field gets its own full-width row */}
+              {form.category === "other" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="customCategory">
+                    اسم الفئة المخصصة <span className="text-red-500">*</span>
+                  </Label>
                   <Input
-                    id="whatsapp"
-                    value={toAr(form.whatsappNumber)}
-                    onChange={(e) => handleChange("whatsappNumber", fromAr(e.target.value).replace(/[^\d]/g, ""))}
-                    placeholder="٠٥XXXXXXXX"
-                    className={`pr-10 ${fieldErrors.whatsappNumber ? "border-red-500 ring-1 ring-red-500" : ""}`}
-                    dir="ltr"
-                    data-no-arabic=""
-                    required
+                    id="customCategory"
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                    placeholder="مثال: حلويات، ديكورات، نقليات..."
+                    autoFocus
+                    className={fieldErrors.customCategory ? "border-red-500 ring-1 ring-red-500" : ""}
+                  />
+                  {fieldErrors.customCategory && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.customCategory}</p>
+                  )}
+                </div>
+              )}
+
+              {citySelectVal === "__other__" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="customCity">
+                    اسم المدينة المخصصة <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="customCity"
+                    placeholder="اكتب اسم المدينة"
+                    value={customCity}
+                    onChange={(e) => setCustomCity(e.target.value)}
+                    className={fieldErrors.city ? "border-red-500 ring-1 ring-red-500" : ""}
+                    autoFocus
                   />
                 </div>
-                {fieldErrors.whatsappNumber && (
-                  <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.whatsappNumber}</p>
-                )}
+              )}
+
+              {/* Years of Experience + WhatsApp */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                <div className="space-y-1.5">
+                  <Label htmlFor="experience">
+                    <span className="flex items-center gap-1.5">
+                      <Briefcase className="w-4 h-4 text-muted-foreground" />
+                      سنوات الخبرة <span className="text-red-500">*</span>
+                    </span>
+                  </Label>
+                  <Input
+                    id="experience"
+                    type="text"
+                    inputMode="numeric"
+                    value={toAr(form.yearsOfExperience)}
+                    onChange={(e) => handleChange("yearsOfExperience", fromAr(e.target.value).replace(/[^\d]/g, ""))}
+                    placeholder="مثال: ٥"
+                    className={`w-full text-right ${fieldErrors.yearsOfExperience ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                    dir="ltr"
+                    required
+                  />
+                  {fieldErrors.yearsOfExperience
+                    ? <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.yearsOfExperience}</p>
+                    : <p className="text-xs text-muted-foreground">تُعرض للعملاء لبناء الثقة</p>
+                  }
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="whatsapp">رقم واتساب <span className="text-red-500">*</span></Label>
+                  <div className="relative">
+                    <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="whatsapp"
+                      value={toAr(form.whatsappNumber)}
+                      onChange={(e) => handleChange("whatsappNumber", fromAr(e.target.value).replace(/[^\d]/g, ""))}
+                      placeholder="٠٥XXXXXXXX"
+                      className={`pr-10 ${fieldErrors.whatsappNumber ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                      dir="ltr"
+                      data-no-arabic=""
+                      required
+                    />
+                  </div>
+                  {fieldErrors.whatsappNumber && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.whatsappNumber}</p>
+                  )}
+                </div>
               </div>
 
               {/* Description */}
@@ -937,7 +949,7 @@ export default function AddServiceProvider() {
                   onCheckedChange={(v) => setLegalAccepted(!!v)}
                   className="mt-0.5 shrink-0"
                 />
-                <span className="text-sm text-muted-foreground leading-relaxed group-hover:text-foreground transition-colors">
+                <span className="text-sm font-semibold text-[#4b3323] leading-relaxed group-hover:text-[#362318] transition-colors">
                   أقر بأنني المالك أو المفوض الرسمي لهذه الخدمة، وأتحمل المسؤولية القانونية الكاملة عن صحة البيانات المذكورة، وأوافق على شروط وسياسات منصة تكيّة.
                 </span>
               </label>
