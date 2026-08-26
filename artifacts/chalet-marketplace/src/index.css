@@ -184,6 +184,12 @@ input, textarea, select, [contenteditable] {
 }
 
 @layer utilities {
+  .verify-phone-number {
+    direction: ltr;
+    display: inline-block !important;
+    unicode-bidi: embed;
+  }
+
   .register-login-link:hover,
   .register-return-link:hover,
   .register-terms-close:hover {

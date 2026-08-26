@@ -267,18 +267,18 @@ export default function VerifyPhone() {
               : "جاري إرسال رمز التحقق…"}
           </p>
           {maskedPhone && (
-            <div className="flex items-center justify-center gap-3 mt-1" dir="rtl">
+            <div className="text-center whitespace-nowrap mt-1" dir="rtl">
               <span
-                className="inline-block text-sm text-[#8C6246] font-bold tabular-nums mx-1"
+                className="verify-phone-number inline-block text-sm text-[#8C6246] font-bold tabular-nums"
                 dir="ltr"
-                style={{ direction: "ltr", unicodeBidi: "isolate", display: "inline-block" }}
+                style={{ direction: "ltr", display: "inline-block", unicodeBidi: "embed" }}
               >
                 {maskedPhone}
               </span>
               <button
                 type="button"
                 onClick={() => navigate(`/register?phone=${encodeURIComponent(phone)}`)}
-                className="text-xs text-[#8C6246] font-semibold hover:underline underline-offset-2 transition-colors"
+                className="inline-block text-xs text-[#8C6246] font-semibold hover:underline underline-offset-2 transition-colors mr-3"
               >
                 تعديل الرقم
               </button>
