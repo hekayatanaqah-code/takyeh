@@ -78,7 +78,7 @@ export default function OnboardingWelcome() {
             <TypeIcon className="w-8 h-8 text-[#8C6246]" />
           </div>
           <h2 className="text-xl font-bold text-[#2D2D2D] mb-1">أهلاً بك في تكيّة 🎉</h2>
-          <p className="text-sm text-[#656565] font-medium">
+          <p className="text-sm text-[#5E5E5E] font-medium">
             حسابك جاهز — ابدأ رحلتك الآن
           </p>
         </div>
@@ -130,13 +130,13 @@ export default function OnboardingWelcome() {
         <button
           type="button"
           onClick={() => navigate("/dashboard")}
-          className="w-full text-center text-sm text-[#656565] font-medium hover:text-[#2D2D2D] hover:underline mt-4 transition-colors"
+          className="w-full text-center text-sm text-[#5E5E5E] font-medium hover:text-[#2D2D2D] hover:underline mt-4 transition-colors"
         >
           تخطّ الآن — سأضيف لاحقاً من لوحة التحكم
         </button>
       </div>
 
-      <p className="text-xs text-[#9E9E9E] mt-5">الخطوة ٤ من ٤</p>
+      <p className="text-xs text-[#6B6B6B] mt-5">الخطوة ٤ من ٤</p>
     </div>
   );
 }

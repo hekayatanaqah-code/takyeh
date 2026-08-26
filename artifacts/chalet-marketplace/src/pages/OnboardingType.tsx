@@ -101,7 +101,7 @@ export default function OnboardingType() {
         </div>
 
         <h2 className="text-xl font-bold text-[#2D2D2D] mb-1 text-center">اختر نوع نشاطك</h2>
-        <p className="text-sm text-[#656565] font-medium mb-6 text-center">
+        <p className="text-sm text-[#5E5E5E] font-medium mb-6 text-center">
           سيتم تخصيص لوحة التحكم بناءً على اختيارك
         </p>
 
@@ -129,7 +129,7 @@ export default function OnboardingType() {
               </div>
               <div className="flex-1">
                 <p className="font-bold text-[#2D2D2D] text-base">{opt.label}</p>
-                <p className="text-xs text-[#757575] mt-0.5 leading-relaxed">{opt.desc}</p>
+                <p className="text-xs text-[#626262] mt-0.5 leading-relaxed">{opt.desc}</p>
               </div>
               <div
                 className={[
@@ -169,7 +169,7 @@ export default function OnboardingType() {
       </div>
 
       {/* Step indicator */}
-      <p className="text-xs text-[#9E9E9E] mt-5">الخطوة ٣ من ٤</p>
+      <p className="text-xs text-[#6B6B6B] mt-5">الخطوة ٣ من ٤</p>
     </div>
   );
 }
