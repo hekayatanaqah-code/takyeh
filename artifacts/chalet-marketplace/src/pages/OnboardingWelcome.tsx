@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Gift, Building2, Wrench, Layers2, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Gift, PartyPopper, ArrowLeft, CheckCircle2 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -28,7 +28,6 @@ export default function OnboardingWelcome() {
 
   const addPath  = isBoth ? "/add-chalet" : isChalet ? "/add-chalet" : "/add-service-provider";
   const addLabel = isBoth ? "ابدأ بتجهيز حسابك الآن" : isChalet ? "أضف أول عقارك الآن" : "أضف أول خدمة الآن";
-  const TypeIcon = isBoth ? Layers2 : isChalet ? Building2 : Wrench;
 
   const steps = isBoth
     ? [
@@ -75,7 +74,7 @@ export default function OnboardingWelcome() {
         {/* Welcome header */}
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-16 h-16 bg-[#F4EFEA] rounded-2xl flex items-center justify-center mb-4">
-            <TypeIcon className="w-8 h-8 text-[#8C6246]" />
+            <PartyPopper className="w-8 h-8 text-[#8C6246]" />
           </div>
           <h2 className="text-xl font-bold text-[#2D2D2D] mb-1">أهلاً بك في تكيّة 🎉</h2>
           <p className="text-sm text-[#5E5E5E] font-medium">
@@ -91,15 +90,10 @@ export default function OnboardingWelcome() {
             </div>
             <div>
               <p className="font-bold text-[#2D2D2D] text-sm">أول شهر مجاناً</p>
-              <p className="text-xs text-[#734f36] font-medium">تبدأ فترتك المجانية فور إطلاق نشاطك واستقبال الحجوزات</p>
             </div>
           </div>
           <p className="text-xs text-[#555555] leading-relaxed font-medium">
-            {isBoth
-              ? "يمكنك إضافة عقارك أو خدمتك الآن والاستمتاع بكامل مزايا المنصة مجاناً طوال الشهر الأول من تفعيل استقبال الحجوزات."
-              : isChalet
-              ? "يمكنك إضافة عقارك الآن والاستمتاع بكامل مزايا المنصة مجاناً طوال الشهر الأول من تفعيل استقبال الحجوزات."
-              : "يمكنك إضافة خدمتك الآن والاستمتاع بكامل مزايا المنصة مجاناً طوال الشهر الأول من تفعيل استقبال الحجوزات."}
+            تبدأ فترتك المجانية فور إطلاق نشاطك. يمكنك إضافة خدمتك الآن والاستمتاع بكامل مزايا المنصة مجاناً طوال الشهر الأول.
           </p>
         </div>
 
