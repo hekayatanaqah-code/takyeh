@@ -40,7 +40,7 @@ export default function Register() {
   const logoUrl = settings.site_logo_url || "";
   const [form, setForm] = useState({
     fullName: "",
-    phone: "",
+    phone: normalizeLocalPhoneInput(new URLSearchParams(window.location.search).get("phone") ?? ""),
     email: "",
     password: "",
     confirmPassword: "",
@@ -139,7 +139,7 @@ export default function Register() {
       }
       setShowModal(false);
       if (data.requiresVerification && email.trim()) {
-        navigate(`/verify?email=${encodeURIComponent(email)}`);
+        navigate(`/verify?email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}`);
       } else {
         navigate(`/verify-phone?phone=${encodeURIComponent(phone)}`);
       }

@@ -12,14 +12,17 @@ const EN_TO_AR: Record<string, string> = { '0':'٠','1':'١','2':'٢','3':'٣','
 const arToEn = (s: string) => s.replace(/[٠-٩]/g, n => String(n.charCodeAt(0) - 0x0660));
 const DEV_DIGITS = "١٢٣٤٥٦".split("");
 
-function getEmailFromUrl(): string {
+function getAccountParams(): { email: string; phone: string } {
   const params = new URLSearchParams(window.location.search);
-  return params.get("email") ?? "";
+  return {
+    email: params.get("email") ?? "",
+    phone: params.get("phone") ?? "",
+  };
 }
 
 export default function Verify() {
   const [, navigate] = useLocation();
-  const email = getEmailFromUrl();
+  const { email, phone } = getAccountParams();
 
   const [digits, setDigits] = useState<string[]>(Array(6).fill(""));
   const [loading, setLoading]     = useState(false);
@@ -206,7 +209,10 @@ export default function Verify() {
             </ol>
           </div>
           <button
-            onClick={() => { window.location.href = `${BASE}/verify-phone?email=${encodeURIComponent(email)}`; }}
+            onClick={() => {
+              const phoneQuery = phone ? `&phone=${encodeURIComponent(phone)}` : "";
+              window.location.href = `${BASE}/verify-phone?email=${encodeURIComponent(email)}${phoneQuery}`;
+            }}
             className="w-full h-11 bg-[#8C6246] hover:bg-[#7A5538] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
           >
             المتابعة لإعداد الحساب

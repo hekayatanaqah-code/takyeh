@@ -267,7 +267,22 @@ export default function VerifyPhone() {
               : "جاري إرسال رمز التحقق…"}
           </p>
           {maskedPhone && (
-            <p className="text-sm text-[#8C6246] font-bold" dir="ltr">{maskedPhone}</p>
+            <div className="flex items-center justify-center gap-3 mt-1" dir="rtl">
+              <span
+                className="text-sm text-[#8C6246] font-bold tabular-nums"
+                dir="ltr"
+                style={{ direction: "ltr", unicodeBidi: "isolate" }}
+              >
+                {maskedPhone}
+              </span>
+              <button
+                type="button"
+                onClick={() => navigate(`/register?phone=${encodeURIComponent(phone)}`)}
+                className="text-xs text-[#8C6246] font-semibold hover:underline underline-offset-2 transition-colors"
+              >
+                تعديل الرقم
+              </button>
+            </div>
           )}
         </div>
 
