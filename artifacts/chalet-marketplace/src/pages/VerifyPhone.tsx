@@ -269,9 +269,9 @@ export default function VerifyPhone() {
           {maskedPhone && (
             <div className="flex items-center justify-center gap-3 mt-1" dir="rtl">
               <span
-                className="text-sm text-[#8C6246] font-bold tabular-nums"
+                className="inline-block text-sm text-[#8C6246] font-bold tabular-nums mx-1"
                 dir="ltr"
-                style={{ direction: "ltr", unicodeBidi: "isolate" }}
+                style={{ direction: "ltr", unicodeBidi: "isolate", display: "inline-block" }}
               >
                 {maskedPhone}
               </span>
