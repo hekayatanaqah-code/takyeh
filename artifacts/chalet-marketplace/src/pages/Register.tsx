@@ -12,6 +12,21 @@ const normalizeLocalPhoneInput = (value: string) => {
   return digits.startsWith("0") ? digits : `0${digits}`;
 };
 
+const LICENSE_CLAUSE = "يقر المالك/مزود الخدمة، بأن المنشأة (العقار أو الخدمة) حاصلة على كافة التراخيص اللازمة من الجهات المعنية....";
+
+function prepareTermsForDisplay(terms: string) {
+  let normalized = terms.replaceAll("الشاليهات", "العقارات والخدمات");
+  normalized = normalized.replace(
+    /4\.\s*التراخيص الرسمية:[\s\S]*?(?=\r?\n\s*5\.\s*نظام الاشتراكات:)/,
+    `4. التراخيص الرسمية:\n${LICENSE_CLAUSE}\n`
+  );
+  normalized = normalized.replaceAll("الشاليه", "العقار أو الخدمة");
+  return normalized.replace(
+    /يقر المالك بأن المنشأة \(العقار أو الخدمة\)[^.]*\./,
+    LICENSE_CLAUSE
+  );
+}
+
 export default function Register() {
   const [, navigate] = useLocation();
   const { data: settings = {} } = useQuery<Record<string, string>>({
@@ -39,6 +54,7 @@ export default function Register() {
   const [platformTerms, setPlatformTerms] = useState<string>("");
   const [showModal, setShowModal]         = useState(false);
   const scrollRef                         = useRef<HTMLDivElement>(null);
+  const displayedTerms                   = prepareTermsForDisplay(platformTerms);
 
   useEffect(() => {
     fetch(`${BASE}/api/page-content`, { credentials: "include" })
@@ -172,21 +188,22 @@ export default function Register() {
 
             {/* Terms content */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 text-sm text-[#4A4A4A] leading-relaxed text-right space-y-4">
-              {platformTerms ? (
-                <pre className="whitespace-pre-wrap font-sans">{platformTerms}</pre>
+              {displayedTerms ? (
+                <pre className="whitespace-pre-wrap font-sans">{displayedTerms}</pre>
               ) : (
                 <>
                   <p className="font-bold text-[#2D2D2D]">اتفاقية تقديم خدمة (شريك نجاح - مالك)</p>
-                  <p>١. طبيعة الخدمة: تعد منصة "تكية" منصة وسيطة تقنية فقط، مهمتها عرض تفاصيل الشاليهات وتسويقها، وتحويل العميل الراغب في الحجز مباشرة إلى "واتساب" المالك.</p>
+                  <p>١. طبيعة الخدمة: تعد منصة "تكية" منصة وسيطة تقنية فقط، مهمتها عرض تفاصيل العقارات والخدمات وتسويقها، وتحويل العميل الراغب في الحجز مباشرة إلى "واتساب" المالك.</p>
                   <p>٢. مسؤولية البيانات: يقر المالك بأن جميع المعلومات والصور والأسعار المرفوعة على المنصة صحيحة وتخصه هو شخصياً.</p>
                   <p>٣. إخلاء المسؤولية القانونية: منصة "تكية" غير مسؤولة عن أي خلاف مالي أو تعاقدي يقع بين المالك والمستأجر.</p>
+                  <p>٤. التراخيص الرسمية: {LICENSE_CLAUSE}</p>
                 </>
               )}
             </div>
 
             {/* Modal footer */}
             <div className="p-6 border-t border-[#EBEBEB] bg-[#FBF9F6] rounded-b-3xl shrink-0">
-              <p className="text-xs text-[#9E9E9E] text-center mb-4 leading-relaxed">
+              <p className="text-xs text-[#4A4A4A] font-medium text-center mb-4 leading-relaxed">
                 بالنقر على «موافق، إكمال التسجيل» فإنك تُقرّ بأنك قرأت هذه الشروط وتوافق عليها بالكامل
               </p>
               <button
@@ -210,7 +227,7 @@ export default function Register() {
                 type="button"
                 onClick={() => setShowModal(false)}
                 disabled={loading}
-                className="w-full text-center text-xs text-[#9E9E9E] hover:underline mt-3 disabled:opacity-40"
+                className="register-terms-close w-full text-center text-xs text-[#4A4A4A] font-semibold mt-3 disabled:opacity-40"
               >
                 إغلاق والعودة لتعديل البيانات
               </button>
