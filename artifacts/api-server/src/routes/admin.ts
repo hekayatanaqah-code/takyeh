@@ -1090,6 +1090,8 @@ router.patch("/service-submissions/:id/status", async (req, res) => {
         galleryPhotos: submission.galleryPhotos ?? [],
         videoUrl: submission.videoUrl ?? undefined,
         yearsOfExperience: submission.yearsOfExperience ?? undefined,
+        pricingUnit: submission.pricingUnit ?? undefined,
+        dailyCapacity: submission.dailyCapacity ?? undefined,
         coverageTags: submission.coverageTags ?? [],
         customFeatureTags: submission.customFeatureTags ?? [],
         isActive: true,

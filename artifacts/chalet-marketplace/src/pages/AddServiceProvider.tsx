@@ -22,6 +22,12 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const MAX_GALLERY = 10;
 
+const pricingUnitOptions = [
+  { value: "per_day", label: "باليوم" },
+  { value: "per_hour", label: "بالساعة" },
+  { value: "per_request", label: "بالطلب / بالخدمة" },
+];
+
 
 interface UploadedPhoto {
   url: string;
@@ -69,6 +75,8 @@ export default function AddServiceProvider() {
     descriptionAr: "",
     whatsappNumber: "",
     yearsOfExperience: "",
+    pricingUnit: "",
+    dailyCapacity: "",
   });
 
   const [logo, setLogo] = useState<UploadedPhoto | null>(null);
@@ -320,6 +328,9 @@ export default function AddServiceProvider() {
     if (!form.whatsappNumber) errs.whatsappNumber = "رقم الواتساب مطلوب";
     else if (form.whatsappNumber.length < 9) errs.whatsappNumber = "رقم الواتساب يجب أن يكون 9 أرقام على الأقل";
     if (!form.yearsOfExperience) errs.yearsOfExperience = "يرجى إدخال سنوات الخبرة";
+    if (!form.pricingUnit) errs.pricingUnit = "يرجى اختيار وحدة التسعير";
+    if (!form.dailyCapacity) errs.dailyCapacity = "يرجى إدخال أقصى عدد حجوزات باليوم";
+    else if (Number(form.dailyCapacity) < 1) errs.dailyCapacity = "يجب أن يكون العدد حجزاً واحداً على الأقل";
     if (coverageTags.length === 0) errs.coverageTags = "يرجى إضافة نطاق الخدمة (المناطق التي تخدمها)";
 
     const validGallery = gallery.filter((p) => p.url && p.url !== "error").map((p) => p.url);
@@ -348,6 +359,8 @@ export default function AddServiceProvider() {
         descriptionAr: form.descriptionAr.trim() || undefined,
         whatsappNumber: form.whatsappNumber,
         yearsOfExperience: Number(form.yearsOfExperience),
+        pricingUnit: form.pricingUnit,
+        dailyCapacity: Number(form.dailyCapacity),
         logoUrl: logo?.url || undefined,
         galleryPhotos: validGallery,
         videoUrl: video?.url || undefined,
@@ -597,6 +610,52 @@ export default function AddServiceProvider() {
                   {fieldErrors.whatsappNumber && (
                     <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.whatsappNumber}</p>
                   )}
+                </div>
+              </div>
+
+              {/* Pricing unit + Daily capacity */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                <div className="space-y-1.5">
+                  <Label>وحدة التسعير <span className="text-red-500">*</span></Label>
+                  <Select
+                    value={form.pricingUnit}
+                    onValueChange={(value) => handleChange("pricingUnit", value)}
+                    required
+                  >
+                    <SelectTrigger className={fieldErrors.pricingUnit ? "border-red-500 ring-1 ring-red-500" : ""}>
+                      <SelectValue placeholder="اختر وحدة التسعير" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pricingUnitOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fieldErrors.pricingUnit && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.pricingUnit}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="dailyCapacity">أقصى عدد حجوزات باليوم <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="dailyCapacity"
+                    type="text"
+                    inputMode="numeric"
+                    value={toAr(form.dailyCapacity)}
+                    onChange={(e) => handleChange("dailyCapacity", fromAr(e.target.value).replace(/[^\d]/g, ""))}
+                    placeholder="مثال: ١"
+                    className={`h-9 w-full text-right ${fieldErrors.dailyCapacity ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                    dir="ltr"
+                    data-no-arabic=""
+                    required
+                  />
+                  {fieldErrors.dailyCapacity
+                    ? <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.dailyCapacity}</p>
+                    : <p className="text-xs text-muted-foreground">تحديد عدد الطلبات التي يمكنك استقبالها في اليوم الواحد.</p>
+                  }
                 </div>
               </div>
 

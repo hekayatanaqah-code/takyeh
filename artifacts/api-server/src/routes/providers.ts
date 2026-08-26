@@ -74,6 +74,10 @@ router.post("/submit", requireAuth, async (req: any, res) => {
       .min(3, "يجب رفع 3 صور على الأقل للمعرض"),
     videoUrl: z.string().min(1).optional().or(z.literal("")),
     yearsOfExperience: z.number().int().min(0).optional(),
+    pricingUnit: z.enum(["per_day", "per_hour", "per_request"], {
+      errorMap: () => ({ message: "يرجى اختيار وحدة التسعير" }),
+    }),
+    dailyCapacity: z.number().int().min(1, "يجب أن يكون العدد حجزاً واحداً على الأقل"),
     coverageTags: z.array(z.string()).min(1, "يرجى إضافة نطاق الخدمة").default([]),
     customFeatureTags: z.array(z.string()).default([]),
   });
@@ -120,6 +124,8 @@ router.post("/submit", requireAuth, async (req: any, res) => {
     galleryPhotos: data.galleryPhotos,
     videoUrl: data.videoUrl || null,
     yearsOfExperience: data.yearsOfExperience ?? null,
+    pricingUnit: data.pricingUnit,
+    dailyCapacity: data.dailyCapacity,
     coverageTags: data.coverageTags,
     customFeatureTags: data.customFeatureTags,
   };
