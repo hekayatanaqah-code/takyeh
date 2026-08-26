@@ -615,14 +615,14 @@ export default function AddServiceProvider() {
 
               {/* Pricing unit + Daily capacity */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-                <div className="space-y-1.5">
-                  <Label>وحدة التسعير <span className="text-red-500">*</span></Label>
+                <div className="flex min-w-0 flex-col items-stretch self-start space-y-1.5">
+                  <Label className="flex min-h-5 items-center">وحدة التسعير <span className="text-red-500">*</span></Label>
                   <Select
                     value={form.pricingUnit}
                     onValueChange={(value) => handleChange("pricingUnit", value)}
                     required
                   >
-                    <SelectTrigger className={fieldErrors.pricingUnit ? "border-red-500 ring-1 ring-red-500" : ""}>
+                    <SelectTrigger className={`h-9 ${fieldErrors.pricingUnit ? "border-red-500 ring-1 ring-red-500" : ""}`}>
                       <SelectValue placeholder="اختر وحدة التسعير" />
                     </SelectTrigger>
                     <SelectContent>
@@ -638,8 +638,8 @@ export default function AddServiceProvider() {
                   )}
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="dailyCapacity">أقصى عدد حجوزات باليوم <span className="text-red-500">*</span></Label>
+                <div className="flex min-w-0 flex-col items-stretch self-start space-y-1.5">
+                  <Label htmlFor="dailyCapacity" className="flex min-h-5 items-center">أقصى عدد حجوزات باليوم <span className="text-red-500">*</span></Label>
                   <Input
                     id="dailyCapacity"
                     type="text"
@@ -654,7 +654,7 @@ export default function AddServiceProvider() {
                   />
                   {fieldErrors.dailyCapacity
                     ? <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.dailyCapacity}</p>
-                    : <p className="text-xs text-muted-foreground">تحديد عدد الطلبات التي يمكنك استقبالها في اليوم الواحد.</p>
+                    : <p className="text-xs text-muted-foreground">تحدد عدد الحجوزات المتاحة يومياً</p>
                   }
                 </div>
               </div>
