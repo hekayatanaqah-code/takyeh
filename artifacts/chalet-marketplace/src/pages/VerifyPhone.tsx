@@ -12,13 +12,21 @@ const EN_TO_AR: Record<string, string> = { '0':'٠','1':'١','2':'٢','3':'٣','
 const arToEn = (s: string) => s.replace(/[٠-٩]/g, n => String(n.charCodeAt(0) - 0x0660));
 const DEV_DIGITS = "١٢٣٤٥٦".split("");
 
-function getEmailFromUrl(): string {
-  return new URLSearchParams(window.location.search).get("email") ?? "";
+function getAccountParams(): { email: string; phone: string } {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    email: params.get("email") ?? "",
+    phone: params.get("phone") ?? "",
+  };
 }
 
 export default function VerifyPhone() {
   const [, navigate] = useLocation();
-  const email = getEmailFromUrl();
+  const { email, phone } = getAccountParams();
+  const accountBody = email ? { email } : { phone };
+  const onboardingQuery = email
+    ? `email=${encodeURIComponent(email)}`
+    : `phone=${encodeURIComponent(phone)}`;
 
   const [digits, setDigits]       = useState<string[]>(Array(6).fill(""));
   const [loading, setLoading]     = useState(false);
@@ -39,7 +47,7 @@ export default function VerifyPhone() {
 
   /* ── Send OTP on mount ── */
   useEffect(() => {
-    if (!email) { navigate("/register"); return; }
+    if (!email && !phone) { navigate("/register"); return; }
     sendOtp();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -49,12 +57,12 @@ export default function VerifyPhone() {
       const r = await fetch(`${BASE}/api/send-phone-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(accountBody),
       });
       const data = await r.json();
       if (data.maskedPhone) setMaskedPhone(data.maskedPhone);
       if (data.alreadyVerified) {
-        window.location.href = `${BASE}/onboarding/type?email=${encodeURIComponent(email)}`;
+        window.location.href = `${BASE}/onboarding/type?${onboardingQuery}`;
         return;
       }
       setOtpSent(true);
@@ -89,7 +97,7 @@ export default function VerifyPhone() {
       const r = await fetch(`${BASE}/api/verify-phone-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code: otpEn }),
+        body: JSON.stringify({ ...accountBody, code: otpEn }),
       });
       const data = await r.json();
       if (!r.ok) {
@@ -105,7 +113,7 @@ export default function VerifyPhone() {
     } finally {
       setLoading(false);
     }
-  }, [email, loading]);
+  }, [email, phone, loading]);
 
   function setDigit(idx: number, digit: string) {
     const next = [...digits];
@@ -159,7 +167,7 @@ export default function VerifyPhone() {
       const r = await fetch(`${BASE}/api/resend-phone-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(accountBody),
       });
       const data = await r.json();
       if (data.maskedPhone) setMaskedPhone(data.maskedPhone);
@@ -191,7 +199,7 @@ export default function VerifyPhone() {
           <div className="w-full bg-[#F5EEE9] border border-[#D9C3B0] rounded-2xl p-4 mb-6 text-right">
             <ol className="space-y-2">
               {[
-                { label: "تفعيل البريد الإلكتروني", done: true },
+                ...(email ? [{ label: "تفعيل البريد الإلكتروني", done: true }] : []),
                 { label: "تفعيل رقم الجوال عبر الواتساب", done: true },
                 { label: "تحديد نوع نشاطك وإعداد حسابك", done: false },
               ].map((step, i) => (
@@ -207,7 +215,7 @@ export default function VerifyPhone() {
             </ol>
           </div>
           <button
-            onClick={() => { window.location.href = `${BASE}/onboarding/type?email=${encodeURIComponent(email)}`; }}
+            onClick={() => { window.location.href = `${BASE}/onboarding/type?${onboardingQuery}`; }}
             className="w-full h-11 bg-[#8C6246] hover:bg-[#7A5538] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
           >
             إعداد حسابك الآن
@@ -233,10 +241,13 @@ export default function VerifyPhone() {
 
       {/* Progress bar */}
       <div className="w-full max-w-md mb-5 flex items-center gap-2 px-1">
-        {["تسجيل الحساب", "تفعيل البريد", "تفعيل الجوال", "الإعداد"].map((label, i) => (
+        {(email
+          ? ["تسجيل الحساب", "تفعيل البريد", "تفعيل الجوال", "الإعداد"]
+          : ["تسجيل الحساب", "تفعيل الجوال", "الإعداد"]
+        ).map((label, i, labels) => (
           <div key={i} className="flex-1 flex flex-col items-center gap-1">
-            <div className={`h-1.5 w-full rounded-full ${i <= 2 ? "bg-[#8C6246]" : "bg-[#E0D5CB]"}`} />
-            <span className={`text-[10px] font-medium ${i === 2 ? "text-[#8C6246]" : i < 2 ? "text-[#B5956F]" : "text-[#BBBBBB]"}`}>{label}</span>
+            <div className={`h-1.5 w-full rounded-full ${i < labels.length - 1 ? "bg-[#8C6246]" : "bg-[#E0D5CB]"}`} />
+            <span className={`text-[10px] font-medium ${i === labels.length - 2 ? "text-[#8C6246]" : i < labels.length - 2 ? "text-[#B5956F]" : "text-[#BBBBBB]"}`}>{label}</span>
           </div>
         ))}
       </div>

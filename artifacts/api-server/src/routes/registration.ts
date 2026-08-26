@@ -44,6 +44,17 @@ async function isDevModeEnabled(): Promise<boolean> {
 
 const DEV_MASTER_CODE = "123456";
 
+function normalizePhone(value: unknown): string {
+  const digits = String(value ?? "").trim().replace(/[٠-٩]/g, digit =>
+    String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))
+  );
+  let phone = digits.replace(/\s+/g, "").replace(/[^\d+]/g, "");
+  if (phone.startsWith("+966")) phone = phone.slice(4);
+  else if (phone.startsWith("966")) phone = phone.slice(3);
+  if (phone && !phone.startsWith("0")) phone = `0${phone}`;
+  return phone;
+}
+
 async function verifyAndConsumeOtp(email: string, code: string): Promise<boolean> {
   /* Dev-mode bypass: accept master code without touching the OTP table */
   const devMode = await isDevModeEnabled();
@@ -85,19 +96,26 @@ async function getSettings(keys: string[]): Promise<Record<string, string>> {
    Called after the user picks their activity type in onboarding.
    ─────────────────────────────────────────────────────────── */
 router.patch("/onboarding/type", async (req, res) => {
-  const { email, businessType } = req.body ?? {};
-  if (!email || !businessType) {
-    return res.status(400).json({ error: "البريد ونوع النشاط مطلوبان" });
+  const { email, phone, businessType } = req.body ?? {};
+  if ((!email && !phone) || !businessType) {
+    return res.status(400).json({ error: "البريد أو رقم الجوال ونوع النشاط مطلوبان" });
   }
   const allowed = ["chalet", "service", "both"];
   if (!allowed.includes(String(businessType))) {
     return res.status(400).json({ error: "نوع نشاط غير صحيح" });
   }
-  const emailLower = String(email).trim().toLowerCase();
+  const emailLower = String(email ?? "").trim().toLowerCase();
+  const phoneClean = normalizePhone(phone);
   try {
-    await db.execute(
-      sql`UPDATE owner_applications SET business_type = ${String(businessType)} WHERE email = ${emailLower}`
-    );
+    if (emailLower) {
+      await db.execute(
+        sql`UPDATE owner_applications SET business_type = ${String(businessType)} WHERE LOWER(email) = LOWER(${emailLower})`
+      );
+    } else {
+      await db.execute(
+        sql`UPDATE owner_applications SET business_type = ${String(businessType)} WHERE phone = ${phoneClean}`
+      );
+    }
     return res.json({ ok: true });
   } catch (err) {
     console.error("[onboarding/type] Error:", err);
@@ -125,9 +143,8 @@ router.post("/auth/check-exists", async (req, res) => {
     }
 
     if (phone) {
-      const phoneClean = String(phone).trim().replace(/\s+/g, "");
       const phoneCheck = await db.execute(
-        sql`SELECT id FROM owner_applications WHERE phone = ${phoneClean} LIMIT 1`
+        sql`SELECT id FROM owner_applications WHERE phone = ${normalizePhone(phone)} LIMIT 1`
       );
       if (((phoneCheck as any).rows as any[]).length > 0) {
         errors.phone = "رقم الجوال هذا مسجّل مسبقاً";
@@ -170,10 +187,7 @@ router.post("/register-owner", async (req, res) => {
       }
     }
 
-    let phoneClean = String(phone).trim().replace(/\s+/g, "").replace(/[^\d+]/g, "");
-    if (phoneClean.startsWith("+966")) phoneClean = phoneClean.slice(4);
-    else if (phoneClean.startsWith("966")) phoneClean = phoneClean.slice(3);
-    if (!phoneClean.startsWith("0")) phoneClean = `0${phoneClean}`;
+    const phoneClean = normalizePhone(phone);
     const phoneCheck = await db.execute(
       sql`SELECT id FROM owner_applications WHERE phone = ${phoneClean} LIMIT 1`
     );
@@ -237,7 +251,7 @@ router.post("/verify-otp", async (req, res) => {
     return res.status(400).json({ error: "البريد الإلكتروني والرمز مطلوبان" });
   }
 
-  const emailLower = String(email).trim().toLowerCase();
+  const emailLower = String(email ?? "").trim().toLowerCase();
   const cleanCode  = String(code).trim().replace(/\s/g, "");
 
   try {
@@ -292,7 +306,7 @@ router.post("/resend-otp", async (req, res) => {
   const { email } = req.body ?? {};
   if (!email) return res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
 
-  const emailLower = String(email).trim().toLowerCase();
+  const emailLower = String(email ?? "").trim().toLowerCase();
 
   try {
     const appResult = await db.execute(
@@ -449,14 +463,20 @@ async function verifyAndConsumePhoneOtp(phone: string, code: string): Promise<bo
 
 /* ── POST /send-phone-otp ───────────────────────────────────── */
 router.post("/send-phone-otp", async (req, res) => {
-  const { email } = req.body ?? {};
-  if (!email) return res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
-  const emailLower = String(email).trim().toLowerCase();
+  const { email, phone } = req.body ?? {};
+  if (!email && !phone) return res.status(400).json({ error: "البريد الإلكتروني أو رقم الجوال مطلوب" });
+  const emailLower = String(email ?? "").trim().toLowerCase();
+  const phoneClean = normalizePhone(phone);
   try {
-    const result = await db.execute(
-      sql`SELECT id, full_name, phone, email_verified, phone_verified
-          FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
-    );
+    const result = email
+      ? await db.execute(sql`
+          SELECT id, full_name, phone, email_verified, phone_verified
+          FROM owner_applications WHERE LOWER(email) = LOWER(${emailLower}) LIMIT 1
+        `)
+      : await db.execute(sql`
+          SELECT id, full_name, phone, email_verified, phone_verified
+          FROM owner_applications WHERE phone = ${phoneClean} LIMIT 1
+        `);
     const rows = (result as any).rows as Array<{
       id: number; full_name: string; phone: string;
       email_verified: boolean; phone_verified: boolean;
@@ -487,14 +507,21 @@ function maskPhone(phone: string): string {
 
 /* ── POST /verify-phone-otp ─────────────────────────────────── */
 router.post("/verify-phone-otp", async (req, res) => {
-  const { email, code } = req.body ?? {};
-  if (!email || !code) return res.status(400).json({ error: "البريد والرمز مطلوبان" });
-  const emailLower = String(email).trim().toLowerCase();
+  const { email, phone, code } = req.body ?? {};
+  if ((!email && !phone) || !code) return res.status(400).json({ error: "البريد أو رقم الجوال والرمز مطلوبان" });
+  const emailLower = String(email ?? "").trim().toLowerCase();
+  const phoneClean = normalizePhone(phone);
   const cleanCode  = String(code).trim().replace(/\s/g, "");
   try {
-    const result = await db.execute(
-      sql`SELECT id, phone, phone_verified FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
-    );
+    const result = email
+      ? await db.execute(sql`
+          SELECT id, phone, phone_verified FROM owner_applications
+          WHERE LOWER(email) = LOWER(${emailLower}) LIMIT 1
+        `)
+      : await db.execute(sql`
+          SELECT id, phone, phone_verified FROM owner_applications
+          WHERE phone = ${phoneClean} LIMIT 1
+        `);
     const rows = (result as any).rows as Array<{ id: number; phone: string; phone_verified: boolean }>;
     const app = rows[0];
     if (!app) return res.status(404).json({ error: "الحساب غير موجود" });
@@ -504,7 +531,7 @@ router.post("/verify-phone-otp", async (req, res) => {
     if (!valid) return res.status(400).json({ error: "الرمز غير صحيح أو انتهت صلاحيته" });
 
     await db.execute(
-      sql`UPDATE owner_applications SET phone_verified = true, phone_verified_at = now() WHERE email = ${emailLower}`
+      sql`UPDATE owner_applications SET phone_verified = true, phone_verified_at = now() WHERE id = ${app.id}`
     );
     return res.json({ ok: true });
   } catch (err) {
@@ -515,13 +542,20 @@ router.post("/verify-phone-otp", async (req, res) => {
 
 /* ── POST /resend-phone-otp ─────────────────────────────────── */
 router.post("/resend-phone-otp", async (req, res) => {
-  const { email } = req.body ?? {};
-  if (!email) return res.status(400).json({ error: "البريد مطلوب" });
-  const emailLower = String(email).trim().toLowerCase();
+  const { email, phone } = req.body ?? {};
+  if (!email && !phone) return res.status(400).json({ error: "البريد أو رقم الجوال مطلوب" });
+  const emailLower = String(email ?? "").trim().toLowerCase();
+  const phoneClean = normalizePhone(phone);
   try {
-    const result = await db.execute(
-      sql`SELECT phone, phone_verified FROM owner_applications WHERE email = ${emailLower} LIMIT 1`
-    );
+    const result = email
+      ? await db.execute(sql`
+          SELECT phone, phone_verified FROM owner_applications
+          WHERE LOWER(email) = LOWER(${emailLower}) LIMIT 1
+        `)
+      : await db.execute(sql`
+          SELECT phone, phone_verified FROM owner_applications
+          WHERE phone = ${phoneClean} LIMIT 1
+        `);
     const rows = (result as any).rows as Array<{ phone: string; phone_verified: boolean }>;
     const app = rows[0];
     if (!app) return res.status(404).json({ error: "الحساب غير موجود" });

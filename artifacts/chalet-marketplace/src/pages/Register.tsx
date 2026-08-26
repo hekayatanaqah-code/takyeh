@@ -53,7 +53,7 @@ export default function Register() {
 
   function validateForm(): string | null {
     const { fullName, phone, email, password, confirmPassword } = form;
-    if (!fullName || !phone || !email || !password)
+    if (!fullName || !phone || !password)
       return "يرجى تعبئة جميع الحقول المطلوبة";
     if (password !== confirmPassword)
       return "كلمتا المرور غير متطابقتين";
@@ -77,7 +77,7 @@ export default function Register() {
       const r = await fetch(`${BASE}/api/auth/check-exists`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: form.email.trim(), phone: form.phone.trim() }),
+        body: JSON.stringify({ email: form.email.trim() || undefined, phone: form.phone.trim() }),
       });
       const data = await r.json();
 
@@ -116,7 +116,11 @@ export default function Register() {
         return;
       }
       setShowModal(false);
-      navigate(`/verify?email=${encodeURIComponent(email)}`);
+      if (data.requiresVerification && email.trim()) {
+        navigate(`/verify?email=${encodeURIComponent(email)}`);
+      } else {
+        navigate(`/verify-phone?phone=${encodeURIComponent(phone)}`);
+      }
     } catch {
       setShowModal(false);
       setError("تعذّر الاتصال بالخادم. يرجى المحاولة مرة أخرى");
@@ -266,7 +270,7 @@ export default function Register() {
 
             {/* Email */}
             <div>
-              <label className={labelCls}>البريد الإلكتروني <span className="text-red-500">*</span></label>
+              <label className={labelCls}>البريد الإلكتروني (اختياري)</label>
               <input
                 type="email"
                 placeholder="أدخل بريدك الإلكتروني"
@@ -274,11 +278,10 @@ export default function Register() {
                 onChange={(e) => update("email", e.target.value)}
                 dir="rtl"
                 className={`${inputCls} text-right ${fieldErrors.email ? "border-red-400 focus:border-red-400" : ""}`}
-                required
               />
               {fieldErrors.email
                 ? <p className="text-xs text-red-500 font-medium mt-1">{fieldErrors.email}</p>
-                : <p className="text-xs text-[#757575] font-medium mt-1">سيُستخدم للدخول وإرسال رمز التحقق</p>
+                : <p className="text-xs text-[#757575] font-medium mt-1">يُستخدم لتلقي الإشعارات والدخول (اختياري)</p>
               }
             </div>
 

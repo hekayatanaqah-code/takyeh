@@ -7,7 +7,10 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function getParams() {
   const p = new URLSearchParams(window.location.search);
-  return { email: p.get("email") ?? "" };
+  return {
+    email: p.get("email") ?? "",
+    phone: p.get("phone") ?? "",
+  };
 }
 
 type BizType = "chalet" | "service" | "both";
@@ -35,7 +38,7 @@ const options: { type: BizType; icon: React.ReactNode; label: string; desc: stri
 
 export default function OnboardingType() {
   const [, navigate] = useLocation();
-  const { email } = getParams();
+  const { email, phone } = getParams();
   const [selected, setSelected] = useState<BizType | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,11 +58,11 @@ export default function OnboardingType() {
     setSaving(true);
     setError(null);
     try {
-      if (email) {
+      if (email || phone) {
         await fetch(`${BASE}/api/onboarding/type`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, businessType: selected }),
+          body: JSON.stringify({ email: email || undefined, phone: phone || undefined, businessType: selected }),
         });
       }
       navigate(`/onboarding/welcome?type=${selected}`);
