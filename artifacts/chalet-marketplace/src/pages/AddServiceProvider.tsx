@@ -555,8 +555,8 @@ export default function AddServiceProvider() {
 
               {/* Years of Experience + WhatsApp */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-                <div className="space-y-1.5">
-                  <Label htmlFor="experience">
+                <div className="flex min-w-0 flex-col items-stretch self-start space-y-1.5">
+                  <Label htmlFor="experience" className="flex min-h-5 items-center">
                     <span className="flex items-center gap-1.5">
                       <Briefcase className="w-4 h-4 text-muted-foreground" />
                       سنوات الخبرة <span className="text-red-500">*</span>
@@ -569,7 +569,7 @@ export default function AddServiceProvider() {
                     value={toAr(form.yearsOfExperience)}
                     onChange={(e) => handleChange("yearsOfExperience", fromAr(e.target.value).replace(/[^\d]/g, ""))}
                     placeholder="مثال: ٥"
-                    className={`w-full text-right ${fieldErrors.yearsOfExperience ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                    className={`h-9 w-full text-right ${fieldErrors.yearsOfExperience ? "border-red-500 ring-1 ring-red-500" : ""}`}
                     dir="ltr"
                     required
                   />
@@ -579,8 +579,8 @@ export default function AddServiceProvider() {
                   }
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="whatsapp">رقم واتساب <span className="text-red-500">*</span></Label>
+                <div className="flex min-w-0 flex-col items-stretch self-start space-y-1.5">
+                  <Label htmlFor="whatsapp" className="flex min-h-5 items-center">رقم واتساب <span className="text-red-500">*</span></Label>
                   <div className="relative">
                     <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
@@ -588,7 +588,7 @@ export default function AddServiceProvider() {
                       value={toAr(form.whatsappNumber)}
                       onChange={(e) => handleChange("whatsappNumber", fromAr(e.target.value).replace(/[^\d]/g, ""))}
                       placeholder="٠٥XXXXXXXX"
-                      className={`pr-10 ${fieldErrors.whatsappNumber ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                      className={`h-9 pr-10 ${fieldErrors.whatsappNumber ? "border-red-500 ring-1 ring-red-500" : ""}`}
                       dir="ltr"
                       data-no-arabic=""
                       required
