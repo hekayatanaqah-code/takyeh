@@ -6,6 +6,7 @@ export const chaletsTable = pgTable("chalets", {
   id: serial("id").primaryKey(),
   /* ── Link back to originating submission (set on admin approval) ── */
   submissionId: integer("submission_id"),
+  ownerId: text("owner_id"),
   nameAr: text("name_ar").notNull(),
   descriptionAr: text("description_ar").notNull(),
   location: text("location").notNull(),
@@ -107,6 +108,8 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   seasonalDisclaimer: boolean("seasonal_disclaimer").notNull().default(true),
   maxGuests: integer("max_guests"),
   bedrooms: integer("bedrooms"),
+  checkInTime: text("check_in_time"),
+  checkOutTime: text("check_out_time"),
   /* ── Per-period check-in / check-out times ── */
   morningCheckIn: text("morning_check_in"),
   morningCheckOut: text("morning_check_out"),
@@ -173,6 +176,7 @@ export const servicesCategoryEnum = pgEnum("services_category", [
 
 export const externalServicesTable = pgTable("external_services", {
   id: serial("id").primaryKey(),
+  ownerId: text("owner_id"),
   nameAr: text("name_ar").notNull(),
   category: servicesCategoryEnum("category").notNull(),
   descriptionAr: text("description_ar").notNull(),

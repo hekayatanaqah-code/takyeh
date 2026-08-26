@@ -238,10 +238,10 @@ export default function ChaletMasterView() {
             </div>
 
             {/* Description */}
-            {chalet.description && (
+            {chalet.descriptionAr && (
               <div style={CARD}>
                 <h2 style={SEC}>عن الشاليه</h2>
-                <p style={{margin:0,color:"#4b5563",fontSize:15,lineHeight:2}}>{chalet.description}</p>
+                <p style={{margin:0,color:"#4b5563",fontSize:15,lineHeight:2}}>{chalet.descriptionAr}</p>
               </div>
             )}
 

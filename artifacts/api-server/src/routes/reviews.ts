@@ -16,10 +16,14 @@ import { requireAdmin, requireAdminOrAdminStaff, requireSuperAdmin } from "./adm
 
 const router = Router();
 
+function getRouteParam(value: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 /* ── POST /admin/chalets/:id/review-invite ─────────────────────
    Admin generates a one-time review token for a chalet */
 router.post("/admin/chalets/:id/review-invite", requireAdminOrAdminStaff, async (req, res) => {
-  const chaletId = parseInt(req.params.id, 10);
+  const chaletId = parseInt(getRouteParam(req.params.id), 10);
   if (isNaN(chaletId)) return res.status(400).json({ error: "invalid id" });
 
   const [chalet] = await db
@@ -175,7 +179,7 @@ router.post("/reviews/:token", async (req, res) => {
 /* ── GET /chalets/:id/reviews ──────────────────────────────────
    Public: return visible (non-hidden) reviews newest first */
 router.get("/chalets/:id/reviews", async (req, res) => {
-  const chaletId = parseInt(req.params.id, 10);
+  const chaletId = parseInt(getRouteParam(req.params.id), 10);
   if (isNaN(chaletId)) return res.status(400).json({ error: "invalid id" });
 
   const rows = await db
@@ -239,7 +243,7 @@ router.get("/admin/review-invitations", requireAdminOrAdminStaff, async (req, re
 /* ── PATCH /admin/reviews/:id ──────────────────────────────────
    Admin: hide or show a review */
 router.patch("/admin/reviews/:id", requireAdminOrAdminStaff, async (req, res) => {
-  const reviewId = parseInt(req.params.id, 10);
+  const reviewId = parseInt(getRouteParam(req.params.id), 10);
   if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
 
   const body = z.object({ isHidden: z.boolean() }).safeParse(req.body);
@@ -259,7 +263,7 @@ router.patch("/admin/reviews/:id", requireAdminOrAdminStaff, async (req, res) =>
    Admin: dismiss the owner's report without deleting the review.
    Also sends a "report dismissed" notification to the owner. */
 router.post("/admin/reviews/:id/dismiss-report", requireAdminOrAdminStaff, async (req, res) => {
-  const reviewId = parseInt(req.params.id, 10);
+  const reviewId = parseInt(getRouteParam(req.params.id), 10);
   if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
 
   const [review] = await db
@@ -304,7 +308,7 @@ router.post("/admin/reviews/:id/dismiss-report", requireAdminOrAdminStaff, async
 /* ── DELETE /admin/reviews/:id ─────────────────────────────────
    Admin: permanently delete a review */
 router.delete("/admin/reviews/:id", requireAdminOrAdminStaff, async (req, res) => {
-  const reviewId = parseInt(req.params.id, 10);
+  const reviewId = parseInt(getRouteParam(req.params.id), 10);
   if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
 
   const [deleted] = await db

@@ -6,7 +6,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function getParams() {
   const p = new URLSearchParams(window.location.search);
-  return { type: (p.get("type") ?? "chalet") as "chalet" | "service" };
+  return { type: (p.get("type") ?? "chalet") as "chalet" | "service" | "both" };
 }
 
 export default function OnboardingWelcome() {

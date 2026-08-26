@@ -410,6 +410,7 @@ router.patch("/:id", async (req, res) => {
     bedrooms: z.number().int().min(0).nullable().optional(),
     termsAndConditions: z.string().nullable().optional(),
     ownerRevisionNote: z.string().nullable().optional(),
+    propertyType: z.string().trim().nullable().optional(),
     suggestedCategoryName: z.string().nullable().optional(),
   }).safeParse(req.body);
 

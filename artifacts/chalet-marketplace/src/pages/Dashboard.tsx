@@ -3212,7 +3212,7 @@ function MiniCalendar({
           /* Hijri day number */
 
           /* Build per-period rows for display */
-          type PRow = { label: string; guest: string; amber: boolean; cleaning?: boolean };
+          type PRow = { label: string; guest: string; amber: boolean; cleaning?: boolean; period?: string };
           const pRows: PRow[] = [];
           if (!isManualBlock) {
             if (fullDayBlocked) {
@@ -9133,11 +9133,12 @@ function ServiceDetailsTab() {
 
   async function handleSave() {
     if (isReadOnly) return onBlockedEdit();
+    const currentForm = form!;
     setSaving(true);
     try {
       const r = await apiFetch(`/providers/my/approved/${providerId}`, {
         method: "PATCH",
-        body: JSON.stringify({ ...form, coverageTags, customFeatureTags: featureTags, yearsOfExperience: form.yearsOfExperience ? Number(form.yearsOfExperience) : null, logoUrl: logoUrl || null, galleryPhotos, photoCaptions }),
+        body: JSON.stringify({ ...currentForm, coverageTags, customFeatureTags: featureTags, yearsOfExperience: currentForm.yearsOfExperience ? Number(currentForm.yearsOfExperience) : null, logoUrl: logoUrl || null, galleryPhotos, photoCaptions }),
       });
       if (!r.ok) throw new Error();
       queryClient.invalidateQueries({ queryKey: ["service-provider-detail", providerId] });
@@ -9606,7 +9607,10 @@ function ServiceCalendarBookingsTab() {
   }
 
   async function handleSave() {
-    if (!form.clientName || !form.dateStr) return toast({ title: "الاسم والتاريخ مطلوبان", variant: "destructive" });
+    if (!form.clientName || !form.dateStr) {
+      toast({ title: "الاسم والتاريخ مطلوبان", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`, {
@@ -10059,7 +10063,10 @@ function ServiceSeasonsTab() {
   });
 
   async function handleSave() {
-    if (!form.name || !form.startDate || !form.endDate) return toast({ title: "بيانات ناقصة — اسم الموسم والتواريخ مطلوبة", variant: "destructive" });
+    if (!form.name || !form.startDate || !form.endDate) {
+      toast({ title: "بيانات ناقصة — اسم الموسم والتواريخ مطلوبة", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       const method = editId ? "PATCH" : "POST";
@@ -10208,7 +10215,8 @@ function ServiceBookingInsurancesTab() {
 
   async function handleDeduct(apptId: number) {
     if (!deductForm.insuranceDeductAmount || !deductForm.insuranceDeductNote) {
-      return toast({ title: "المبلغ والتوثيق مطلوبان", variant: "destructive" });
+      toast({ title: "المبلغ والتوثيق مطلوبان", variant: "destructive" });
+      return;
     }
     setSaving(true);
     try {
@@ -10379,7 +10387,10 @@ function ServiceInsurancesTab() {
   });
 
   async function handleSave() {
-    if (!form.policyName) return toast({ title: "اسم السياسة مطلوب", variant: "destructive" });
+    if (!form.policyName) {
+      toast({ title: "اسم السياسة مطلوب", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       const r = await apiFetch("/providers/my/insurances", { method: "POST", body: JSON.stringify({ ...form, amount: form.amount || "0" }) });
@@ -10402,7 +10413,10 @@ function ServiceInsurancesTab() {
   }
 
   async function handleRefundSave(insId: number) {
-    if (!refundForm.refundAmount || !refundForm.refundNote) return toast({ title: "المبلغ والتوثيق مطلوبان", variant: "destructive" });
+    if (!refundForm.refundAmount || !refundForm.refundNote) {
+      toast({ title: "المبلغ والتوثيق مطلوبان", variant: "destructive" });
+      return;
+    }
     setRefundSaving(true);
     try {
       const r = await apiFetch(`/providers/my/insurances/${insId}`, {
@@ -10569,6 +10583,7 @@ function ServiceInsurancesTab() {
 /* ── (AnalyticsTab removed — consolidated into RevenueTab) ── */
 function _AnalyticsTab_REMOVED() {
   const { unit } = useAdminFinance();
+  const fmtN = (value: number) => value.toLocaleString("ar-SA");
 
   const { data: allBookings = [], isLoading } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings-analytics"],
@@ -23190,11 +23205,6 @@ export default function Dashboard() {
             >
               {tab.icon}
               {tab.label}
-              {tab.id === "notifications" && unreadNotifCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 leading-none">
-                  {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
-                </span>
-              )}
             </button>
           ))}
         </div>
@@ -23944,7 +23954,7 @@ function ContractsArchiveTab() {
           <button
             type="button"
             disabled={savingSettings || !settSubId}
-            onClick={handleSaveSettings}
+            onClick={() => handleSaveSettings()}
             className="flex items-center gap-2 px-5 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}

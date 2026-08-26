@@ -40,8 +40,11 @@ export interface DiamondData {
   id?: number;
   nameAr: string;
   descriptionAr?: string | null;
+  rating?: number | null;
   location?: string | null;
   district?: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
   maxGuests?: number | null;
   bedrooms?: number | null;
   propertyType?: string | null;

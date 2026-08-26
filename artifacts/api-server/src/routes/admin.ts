@@ -83,7 +83,7 @@ async function logLongPauseAlerts(chalets: Array<{ id: number; nameAr: string; p
 
   const key = "admin_pause_alert_log";
   const [existing] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, key)).limit(1);
-  let log: typeof overdue = [];
+  let log: Array<(typeof overdue)[number] & { resolvedAt?: string | null }> = [];
   try {
     const parsed = existing?.value ? JSON.parse(existing.value) : [];
     log = Array.isArray(parsed) ? parsed : [];

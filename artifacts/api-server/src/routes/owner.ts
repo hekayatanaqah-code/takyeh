@@ -32,7 +32,7 @@ import {
   expenseCategoriesTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
-import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull, or } from "drizzle-orm";
+import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull, or, type SQL } from "drizzle-orm";
 import { randomBytes, createHash, randomInt } from "crypto";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
@@ -578,9 +578,9 @@ router.get("/profile", async (req, res) => {
          for the same owner (matching by userId in chalet_submissions) */
       let phone = "";
       const oaResult = await db.execute(
-        sql`SELECT full_name, phone, email, whatsapp_news_subscribe, business_type, bookings_cal_pref, reports_cal_pref FROM owner_applications WHERE email = ${email} LIMIT 1`
+        sql`SELECT full_name, phone, email, whatsapp_news_subscribe, business_type, bookings_cal_pref, reports_cal_pref, salary_cal_pref FROM owner_applications WHERE email = ${email} LIMIT 1`
       );
-      const oaRow = ((oaResult as any).rows as Array<{ full_name: string; phone: string; email: string; whatsapp_news_subscribe: boolean; business_type: string; bookings_cal_pref: string; reports_cal_pref: string }>)[0];
+      const oaRow = ((oaResult as any).rows as Array<{ full_name: string; phone: string; email: string; whatsapp_news_subscribe: boolean; business_type: string; bookings_cal_pref: string; reports_cal_pref: string; salary_cal_pref: string }>)[0];
       if (!oaRow) {
         return res.json({ fullName: req.user?.firstName ?? "", phone: "", email: email, noApplication: true });
       }
@@ -902,19 +902,29 @@ router.post("/support-requests/:id/mark-read", requireAuth, async (req, res) => 
 });
 
 /* ── POST /owner/profile/request-change — verify password & send OTP ── */
-router.post("/profile/request-change", async (req, res) => {
+router.post("/profile/request-change", async (req, res): Promise<void> => {
   try {
     const currentEmail = await resolveOwnerEmail(req);
-    if (!currentEmail) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
+    if (!currentEmail) {
+      res.status(404).json({ error: "لم يتم العثور على الحساب" });
+      return;
+    }
 
     const { currentPassword, newEmail, newPhone } = req.body as Record<string, string>;
-    if (!currentPassword) return res.status(400).json({ error: "كلمة المرور الحالية مطلوبة" });
-    if (!newEmail && !newPhone) return res.status(400).json({ error: "يرجى تحديد البريد الإلكتروني أو رقم الجوال الجديد" });
+    if (!currentPassword) {
+      res.status(400).json({ error: "كلمة المرور الحالية مطلوبة" });
+      return;
+    }
+    if (!newEmail && !newPhone) {
+      res.status(400).json({ error: "يرجى تحديد البريد الإلكتروني أو رقم الجوال الجديد" });
+      return;
+    }
     /* Phone format validation — Saudi 05xxxxxxxx */
     if (newPhone) {
       const cleaned = newPhone.trim().replace(/\s+/g, "");
       if (!/^05\d{8}$/.test(cleaned)) {
-        return res.status(400).json({ error: "صيغة رقم الجوال غير صحيحة — يجب أن يبدأ بـ 05 ويكون ١٠ أرقام" });
+        res.status(400).json({ error: "صيغة رقم الجوال غير صحيحة — يجب أن يبدأ بـ 05 ويكون ١٠ أرقام" });
+        return;
       }
     }
 
@@ -923,22 +933,35 @@ router.post("/profile/request-change", async (req, res) => {
       sql`SELECT password_hash, full_name FROM owner_applications WHERE email = ${currentEmail} LIMIT 1`
     );
     const pwRow = ((pwResult as any).rows as Array<{ password_hash: string; full_name: string }>)[0];
-    if (!pwRow?.password_hash) return res.status(400).json({ error: "هذا الحساب لا يملك كلمة مرور — تواصل مع الدعم" });
+    if (!pwRow?.password_hash) {
+      res.status(400).json({ error: "هذا الحساب لا يملك كلمة مرور — تواصل مع الدعم" });
+      return;
+    }
     const match = await bcrypt.compare(currentPassword, pwRow.password_hash);
-    if (!match) return res.status(400).json({ error: "كلمة المرور الحالية غير صحيحة" });
+    if (!match) {
+      res.status(400).json({ error: "كلمة المرور الحالية غير صحيحة" });
+      return;
+    }
 
     const ownerName = pwRow.full_name ?? "صاحب الحساب";
 
     /* ── Changing email ── */
     if (newEmail) {
       const emailLower = newEmail.trim().toLowerCase();
-      if (emailLower === currentEmail.toLowerCase()) return res.status(400).json({ error: "البريد الإلكتروني الجديد هو نفس الحالي" });
+      if (emailLower === currentEmail.toLowerCase()) {
+        res.status(400).json({ error: "البريد الإلكتروني الجديد هو نفس الحالي" });
+        return;
+      }
       const taken = await db.execute(sql`SELECT id FROM owner_applications WHERE lower(email) = ${emailLower} LIMIT 1`);
-      if (((taken as any).rows as any[]).length > 0) return res.status(409).json({ error: "هذا البريد الإلكتروني مسجّل لدى حساب آخر" });
+      if (((taken as any).rows as any[]).length > 0) {
+        res.status(409).json({ error: "هذا البريد الإلكتروني مسجّل لدى حساب آخر" });
+        return;
+      }
       const code = _genCode();
       await _createOtp(emailLower, code);
       await sendOtpEmail(emailLower, ownerName, code);
-      return res.json({ ok: true, otpSentTo: emailLower, isNewEmail: true });
+      res.json({ ok: true, otpSentTo: emailLower, isNewEmail: true });
+      return;
     }
 
     /* ── Changing phone ── */
@@ -946,18 +969,25 @@ router.post("/profile/request-change", async (req, res) => {
       const phoneClean = newPhone.trim();
       const curPhoneR = await db.execute(sql`SELECT phone FROM owner_applications WHERE email = ${currentEmail} LIMIT 1`);
       const curPhone  = ((curPhoneR as any).rows as Array<{ phone: string }>)[0]?.phone ?? "";
-      if (phoneClean === curPhone) return res.status(400).json({ error: "رقم الجوال الجديد هو نفس الحالي" });
+      if (phoneClean === curPhone) {
+        res.status(400).json({ error: "رقم الجوال الجديد هو نفس الحالي" });
+        return;
+      }
       const taken = await db.execute(sql`SELECT id FROM owner_applications WHERE phone = ${phoneClean} AND email != ${currentEmail} LIMIT 1`);
-      if (((taken as any).rows as any[]).length > 0) return res.status(409).json({ error: "رقم الجوال مسجّل لدى حساب آخر" });
+      if (((taken as any).rows as any[]).length > 0) {
+        res.status(409).json({ error: "رقم الجوال مسجّل لدى حساب آخر" });
+        return;
+      }
       /* No SMS service — send OTP to current email */
       const code = _genCode();
       await _createOtp(currentEmail, code);
       await sendOtpEmail(currentEmail, ownerName, code);
-      return res.json({ ok: true, otpSentTo: currentEmail, isNewEmail: false });
+      res.json({ ok: true, otpSentTo: currentEmail, isNewEmail: false });
+      return;
     }
   } catch (err) {
     console.error("[POST /owner/profile/request-change]", err);
-    return res.status(500).json({ error: "حدث خطأ أثناء إرسال رمز التحقق" });
+    res.status(500).json({ error: "حدث خطأ أثناء إرسال رمز التحقق" });
   }
 });
 
@@ -3307,12 +3337,18 @@ router.get("/financial-summary", async (req, res) => {
     .reduce((s, b) => s + (!b.insuranceRefunded && b.insuranceFee ? Number(b.insuranceFee) : 0), 0);
 
   // Expenses: for this month
-  const expenseConditions = [
+  const expenseConditions: SQL[] = [
     inArray(ownerExpensesTable.ownerId, allOwnerIds),
     gte(ownerExpensesTable.dateStr, `${selectedMonth}-01`),
     lte(ownerExpensesTable.dateStr, `${selectedMonth}-31`),
   ];
-  if (submissionId) expenseConditions.push(or(eq(ownerExpensesTable.submissionId, submissionId), isNull(ownerExpensesTable.submissionId)));
+  if (submissionId) {
+    const propertyExpenseCondition = or(
+      eq(ownerExpensesTable.submissionId, submissionId),
+      isNull(ownerExpensesTable.submissionId),
+    );
+    if (propertyExpenseCondition) expenseConditions.push(propertyExpenseCondition);
+  }
 
   const monthExpenses = await db
     .select()
