@@ -268,13 +268,13 @@ export default function VerifyPhone() {
           </p>
           {maskedPhone && (
             <div className="text-center whitespace-nowrap mt-1" dir="rtl">
-              <span
+              <bdo
                 className="verify-phone-number inline-block text-sm text-[#8C6246] font-bold tabular-nums"
                 dir="ltr"
-                style={{ direction: "ltr", display: "inline-block", unicodeBidi: "embed" }}
+                style={{ display: "inline-block" }}
               >
                 {maskedPhone}
-              </span>
+              </bdo>
               <button
                 type="button"
                 onClick={() => navigate(`/register?phone=${encodeURIComponent(phone)}`)}
