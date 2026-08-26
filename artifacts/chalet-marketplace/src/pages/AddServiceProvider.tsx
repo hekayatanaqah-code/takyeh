@@ -456,7 +456,7 @@ export default function AddServiceProvider() {
           {/* Header */}
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-2xl mb-4">
-              <Star className="w-8 h-8 text-amber-600" />
+               <Briefcase className="w-8 h-8 text-amber-600" />
             </div>
             <h1 className="text-3xl font-extrabold text-foreground mb-2">تسجيل خدمتك</h1>
             <p className="text-muted-foreground">أضف خدمتك وابدأ الوصول لعملاء جدد في منطقة القصيم</p>
