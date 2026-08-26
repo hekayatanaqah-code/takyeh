@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Gift, PartyPopper, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Gift, Building2, ArrowLeft, CheckCircle2 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -37,7 +37,7 @@ export default function OnboardingWelcome() {
       ]
     : isChalet
     ? [
-        "أضف عقارك — الصور والتفاصيل والموقع لتعميمها على جميع العقارات.",
+        "أضف عقارك — الصور والتفاصيل والموقع",
         "حدّد الأسعار والمواسم والإتاحة",
         "استقبل الحجوزات مباشرة من لوحة التحكم",
       ]
@@ -74,7 +74,7 @@ export default function OnboardingWelcome() {
         {/* Welcome header */}
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-16 h-16 bg-[#F4EFEA] rounded-2xl flex items-center justify-center mb-4">
-            <PartyPopper className="w-8 h-8 text-[#8C6246]" />
+            <Building2 className="w-8 h-8 text-[#8C6246]" />
           </div>
           <h2 className="text-xl font-bold text-[#2D2D2D] mb-1">أهلاً بك في تكيّة 🎉</h2>
           <p className="text-sm text-[#5E5E5E] font-medium">
