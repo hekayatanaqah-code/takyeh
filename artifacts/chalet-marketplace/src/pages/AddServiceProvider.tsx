@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { fromAr } from "@/lib/utils";
+import { fromAr, toAr } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -107,6 +107,21 @@ export default function AddServiceProvider() {
     },
     staleTime: 5 * 60 * 1000,
   });
+
+  const otherCategory = serviceCategories.find(
+    (category) => category.key === "other" || category.labelAr.trim() === "أخرى",
+  );
+  const orderedServiceCategories = [
+    ...serviceCategories.filter(
+      (category) => category.key !== "other" && category.labelAr.trim() !== "أخرى",
+    ),
+    {
+      ...(otherCategory ?? { id: -1, key: "other", labelAr: "أخرى", emoji: "✨" }),
+      key: "other",
+      labelAr: "أخرى",
+      emoji: "✨",
+    },
+  ];
 
   const { data: citiesCatalog = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["catalog", "cities"],
@@ -439,7 +454,7 @@ export default function AddServiceProvider() {
             {/* ── Section 1: Basic Info ────────────────────────────── */}
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
               className="bg-card border border-border rounded-2xl p-6 space-y-5">
-              <h2 className="text-lg font-bold text-foreground pb-3 border-b border-border flex items-center gap-2">
+              <h2 className="text-lg font-bold text-[#734f36] pb-3 border-b border-border flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-primary" />
                 معلومات النشاط
               </h2>
@@ -473,7 +488,7 @@ export default function AddServiceProvider() {
                       <SelectValue placeholder="اختر الفئة" />
                     </SelectTrigger>
                     <SelectContent>
-                      {serviceCategories.map((c) => (
+                      {orderedServiceCategories.map((c) => (
                         <SelectItem key={c.key} value={c.key}>{c.emoji} {c.labelAr}</SelectItem>
                       ))}
                     </SelectContent>
@@ -539,10 +554,11 @@ export default function AddServiceProvider() {
                   id="experience"
                   type="text"
                   inputMode="numeric"
-                  value={form.yearsOfExperience}
+                    value={toAr(form.yearsOfExperience)}
                   onChange={(e) => handleChange("yearsOfExperience", fromAr(e.target.value).replace(/[^\d]/g, ""))}
                   placeholder="مثال: ٥"
-                  className={`w-40 ${fieldErrors.yearsOfExperience ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                    className={`w-40 text-right ${fieldErrors.yearsOfExperience ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                    dir="ltr"
                   required
                 />
                 {fieldErrors.yearsOfExperience
@@ -558,9 +574,9 @@ export default function AddServiceProvider() {
                   <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     id="whatsapp"
-                    value={form.whatsappNumber}
-                    onChange={(e) => handleChange("whatsappNumber", e.target.value.replace(/\D/g, ""))}
-                    placeholder="05xxxxxxxx"
+                    value={toAr(form.whatsappNumber)}
+                    onChange={(e) => handleChange("whatsappNumber", fromAr(e.target.value).replace(/[^\d]/g, ""))}
+                    placeholder="٠٥XXXXXXXX"
                     className={`pr-10 ${fieldErrors.whatsappNumber ? "border-red-500 ring-1 ring-red-500" : ""}`}
                     dir="ltr"
                     data-no-arabic=""
@@ -589,9 +605,9 @@ export default function AddServiceProvider() {
             {/* ── Section 2: Coverage Tags ─────────────────────────── */}
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
               className={`bg-card border rounded-2xl p-6 space-y-4 ${fieldErrors.coverageTags ? "border-red-400 dark:border-red-700" : "border-border"}`}>
-              <h2 className="text-lg font-bold text-foreground pb-3 border-b border-border flex items-center gap-2">
+              <h2 className="text-lg font-bold text-[#734f36] pb-3 border-b border-border flex items-center gap-2">
                 <Globe className="w-5 h-5 text-primary" />
-                نطاق الخدمة — نخدمك في <span className="text-red-500 text-sm font-normal">(إلزامي)</span>
+                نطاق الخدمة — نخدمك في <span className="text-[#734f36] text-sm font-semibold">(إلزامي)</span>
               </h2>
               {fieldErrors.coverageTags && (
                 <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1.5">
@@ -682,7 +698,7 @@ export default function AddServiceProvider() {
             {/* ── Section 3: Custom Features (Other) ──────────────── */}
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
               className="bg-card border border-border rounded-2xl p-6 space-y-4">
-              <h2 className="text-lg font-bold text-foreground pb-3 border-b border-border flex items-center gap-2">
+              <h2 className="text-lg font-bold text-[#734f36] pb-3 border-b border-border flex items-center gap-2">
                 <Star className="w-5 h-5 text-primary" />
                 مميزات إضافية (اختياري)
               </h2>
@@ -741,9 +757,9 @@ export default function AddServiceProvider() {
             {/* ── Section 4: Logo ──────────────────────────────────── */}
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
               className="bg-card border border-border rounded-2xl p-6 space-y-4">
-              <h2 className="text-lg font-bold text-foreground pb-3 border-b border-border flex items-center gap-2">
+              <h2 className="text-lg font-bold text-[#734f36] pb-3 border-b border-border flex items-center gap-2">
                 <ImageIcon className="w-5 h-5 text-primary" />
-                الشعار الرئيسي <span className="text-xs text-muted-foreground font-normal">(اختياري)</span>
+                الشعار الرئيسي <span className="text-xs text-[#734f36] font-semibold">(اختياري)</span>
               </h2>
 
               <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoSelect} className="hidden" />
@@ -780,15 +796,15 @@ export default function AddServiceProvider() {
             {/* ── Section 5: Gallery + Video ───────────────────────── */}
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}
               className="bg-card border border-border rounded-2xl p-6 space-y-5">
-              <h2 className="text-lg font-bold text-foreground pb-3 border-b border-border flex items-center gap-2">
+              <h2 className="text-lg font-bold text-[#734f36] pb-3 border-b border-border flex items-center gap-2">
                 <ImageIcon className="w-5 h-5 text-primary" />
                 الصور والفيديو
               </h2>
 
               {/* Media limits info */}
-              <div className="bg-muted/50 rounded-xl p-3.5 space-y-1 text-xs text-muted-foreground">
-                <p>📸 <strong>الصور:</strong> بحد أقصى {MAX_GALLERY} صور (حتى 2MB للصورة) — تُحوَّل تلقائياً إلى WebP</p>
-                <p>🎬 <strong>الفيديو:</strong> مقطع واحد (حتى 15MB، 30 ثانية) — يُضغَط إلى MP4 تلقائياً</p>
+              <div className="bg-muted/50 rounded-xl p-3.5 space-y-1 text-xs text-[#555555]">
+                <p>📸 <strong className="text-[#734f36]">الصور:</strong> بحد أقصى {MAX_GALLERY} صور (حتى 2MB للصورة) — تُحوَّل تلقائياً إلى WebP</p>
+                <p>🎬 <strong className="text-[#734f36]">الفيديو:</strong> مقطع واحد (حتى 15MB، 30 ثانية) — يُضغَط إلى MP4 تلقائياً</p>
               </div>
 
               {/* Gallery */}
@@ -858,7 +874,7 @@ export default function AddServiceProvider() {
               <div>
                 <p className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                   <Video className="w-4 h-4 text-primary" />
-                  فيديو تعريفي <span className="text-xs text-muted-foreground font-normal">(اختياري)</span>
+                  فيديو تعريفي <span className="text-xs text-[#734f36] font-semibold">(اختياري)</span>
                 </p>
                 <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoInput} className="hidden" />
 
@@ -910,9 +926,9 @@ export default function AddServiceProvider() {
             {/* ── Section 6: Legal Declaration ─────────────────────── */}
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}
               className="bg-card border border-border rounded-2xl p-6">
-              <h2 className="text-lg font-bold text-foreground pb-3 border-b border-border flex items-center gap-2 mb-4">
+              <h2 className="text-lg font-bold text-[#734f36] pb-3 border-b border-border flex items-center gap-2 mb-4">
                 <ShieldCheck className="w-5 h-5 text-primary" />
-                الإقرار القانوني <span className="text-red-500 text-sm font-normal">(إلزامي)</span>
+                الإقرار القانوني <span className="text-[#734f36] text-sm font-semibold">(إلزامي)</span>
               </h2>
 
               <label className="flex items-start gap-3 cursor-pointer group">
@@ -922,7 +938,7 @@ export default function AddServiceProvider() {
                   className="mt-0.5 shrink-0"
                 />
                 <span className="text-sm text-muted-foreground leading-relaxed group-hover:text-foreground transition-colors">
-                  أقر بأنني المالك أو المفوض الرسمي لهذه الخدمة، وأتحمل المسؤولية القانونية الكاملة عن صحة البيانات المذكورة، وأوافق على شروط وسياسات منصة شاليهات القصيم.
+                  أقر بأنني المالك أو المفوض الرسمي لهذه الخدمة، وأتحمل المسؤولية القانونية الكاملة عن صحة البيانات المذكورة، وأوافق على شروط وسياسات منصة تكيّة.
                 </span>
               </label>
             </motion.div>
