@@ -35,14 +35,18 @@ const REGIONAL_CITIES: Record<string, string[]> = {
   نجران: ["نجران", "شرورة", "حبونا", "بدر الجنوب"],
   الباحة: ["الباحة", "بلجرشي", "المندق", "المخواة", "قلوة"],
   الجوف: ["سكاكا", "القريات", "دومة الجندل", "طبرجل"],
-  الحدود_الشمالية: ["عرعر", "رفحاء", "طريف", "العويقيلة"],
+  "الحدود الشمالية": ["عرعر", "رفحاء", "طريف", "العويقيلة"],
 };
 
-function getRegionalCoverage(city: string) {
-  const region = Object.entries(REGIONAL_CITIES).find(([, cities]) => cities.includes(city));
+const REGION_OPTIONS = Object.keys(REGIONAL_CITIES);
+
+function getRegionalCoverage(city: string, regionName?: string): { name: string; cities: string[] } {
+  const matchedRegion = Object.entries(REGIONAL_CITIES).find(([, cities]) => cities.includes(city));
+  const resolvedRegionName = regionName || matchedRegion?.[0];
+  const resolvedCities = resolvedRegionName ? REGIONAL_CITIES[resolvedRegionName] : undefined;
   return {
-    name: region?.[0]?.replace("_", " ") ?? "المنطقة المحلية",
-    cities: region?.[1] ?? (city ? [city] : []),
+    name: resolvedRegionName ?? "المنطقة المحلية",
+    cities: resolvedCities ?? (city ? [city] : []),
   };
 }
 
@@ -156,23 +160,24 @@ export default function AddServiceProvider() {
     },
   ];
 
-  const { data: citiesCatalog = [] } = useQuery<{ id: number; name: string }[]>({
-    queryKey: ["catalog", "cities"],
-    queryFn: async () => {
-      const r = await fetch(`${BASE}/api/cities`, { credentials: "include" });
-      if (!r.ok) return [];
-      return r.json();
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-
+  const [regionSelectVal, setRegionSelectVal] = useState("");
   const [citySelectVal, setCitySelectVal] = useState("");
   const [customCity, setCustomCity] = useState("");
   const selectedPrimaryCity = citySelectVal === "__other__" ? customCity.trim() : form.city;
-  const regionalCoverage = getRegionalCoverage(selectedPrimaryCity);
+  const regionalCoverage = getRegionalCoverage(selectedPrimaryCity, regionSelectVal || undefined);
 
   const handleChange = (field: string, value: string) =>
     setForm((p) => ({ ...p, [field]: value }));
+
+  const handleRegionChange = (region: string) => {
+    setRegionSelectVal(region);
+    setCitySelectVal("");
+    setCustomCity("");
+    handleChange("city", "");
+    setCoverageAll(false);
+    setCoverageRegionAll(false);
+    setCoverageTags([]);
+  };
 
   const handleCityChange = (city: string) => {
     setCitySelectVal(city);
@@ -362,12 +367,12 @@ export default function AddServiceProvider() {
         const city = await r.json();
         resolvedCity = city.name ?? trimmedCity;
         if (!coverageAll) {
-          resolvedCoverageTags = coverageRegionAll ? getRegionalCoverage(resolvedCity).cities : [resolvedCity];
+          resolvedCoverageTags = coverageRegionAll ? regionalCoverage.cities : [resolvedCity];
         }
       } catch {
         resolvedCity = trimmedCity;
         if (!coverageAll) {
-          resolvedCoverageTags = coverageRegionAll ? getRegionalCoverage(resolvedCity).cities : [resolvedCity];
+          resolvedCoverageTags = coverageRegionAll ? regionalCoverage.cities : [resolvedCity];
         }
       }
     }
@@ -377,6 +382,7 @@ export default function AddServiceProvider() {
     if (!form.businessName.trim()) errs.businessName = "اسم النشاط مطلوب";
     if (!form.category) errs.category = "يرجى اختيار فئة الخدمة";
     if (form.category === "other" && !customCategory.trim()) errs.customCategory = "يرجى كتابة اسم الفئة المخصصة";
+    if (!regionSelectVal) errs.region = "يرجى اختيار المنطقة";
     if (!resolvedCity) errs.city = "يرجى اختيار المدينة";
     if (!form.whatsappNumber) errs.whatsappNumber = "رقم الواتساب مطلوب";
     else if (form.whatsappNumber.length < 9) errs.whatsappNumber = "رقم الواتساب يجب أن يكون 9 أرقام على الأقل";
@@ -541,7 +547,7 @@ export default function AddServiceProvider() {
                 )}
               </div>
 
-              {/* Category + City */}
+              {/* Category + Region + City */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label>فئة الخدمة <span className="text-red-500">*</span></Label>
@@ -565,14 +571,31 @@ export default function AddServiceProvider() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>المدينة الرئيسية <span className="text-red-500">*</span></Label>
-                  <Select value={citySelectVal} onValueChange={handleCityChange} required>
-                    <SelectTrigger className={fieldErrors.city ? "border-red-500 ring-1 ring-red-500" : ""}>
-                      <SelectValue placeholder="اختر المدينة" />
+                  <Label>المنطقة <span className="text-red-500">*</span></Label>
+                  <Select value={regionSelectVal} onValueChange={handleRegionChange} required>
+                    <SelectTrigger className={fieldErrors.region ? "border-red-500 ring-1 ring-red-500" : ""}>
+                      <SelectValue placeholder="اختر المنطقة" />
                     </SelectTrigger>
                     <SelectContent>
-                      {citiesCatalog.map((c) => (
-                        <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                      {REGION_OPTIONS.map((region) => (
+                        <SelectItem key={region} value={region}>{region}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fieldErrors.region && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.region}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>المدينة الرئيسية <span className="text-red-500">*</span></Label>
+                  <Select value={citySelectVal} onValueChange={handleCityChange} disabled={!regionSelectVal} required>
+                    <SelectTrigger className={fieldErrors.city ? "border-red-500 ring-1 ring-red-500" : ""}>
+                      <SelectValue placeholder={regionSelectVal ? "اختر المدينة الرئيسية" : "اختر المنطقة أولاً"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {regionalCoverage.cities.map((city) => (
+                        <SelectItem key={city} value={city}>{city}</SelectItem>
                       ))}
                       <SelectItem value="__other__">مدينة أخرى...</SelectItem>
                     </SelectContent>
