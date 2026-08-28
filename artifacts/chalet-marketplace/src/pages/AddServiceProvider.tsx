@@ -21,6 +21,7 @@ import { useAuth } from "@workspace/replit-auth-web";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const MAX_GALLERY = 10;
+const ALL_KINGDOM_COVERAGE = "جميع مناطق المملكة";
 
 const pricingUnitOptions = [
   { value: "per_day", label: "باليوم" },
@@ -143,6 +144,7 @@ export default function AddServiceProvider() {
 
   const [citySelectVal, setCitySelectVal] = useState("");
   const [customCity, setCustomCity] = useState("");
+  const selectedPrimaryCity = citySelectVal === "__other__" ? customCity.trim() : form.city;
 
   const handleChange = (field: string, value: string) =>
     setForm((p) => ({ ...p, [field]: value }));
@@ -151,25 +153,32 @@ export default function AddServiceProvider() {
     setCitySelectVal(city);
     if (city === "__other__") {
       handleChange("city", "");
+      if (!coverageAll) setCoverageTags([]);
       return;
     }
     handleChange("city", city);
-    if (city && !coverageTags.includes(city)) {
-      setCoverageTags((prev) => [city, ...prev.filter((t) => t !== city)]);
+    if (!coverageAll) setCoverageTags(city ? [city] : []);
+  };
+
+  const handleCustomCityChange = (value: string) => {
+    setCustomCity(value);
+    if (!coverageAll) {
+      const city = value.trim();
+      setCoverageTags(city ? [city] : []);
     }
   };
 
   const toggleCityTag = (city: string, checked: boolean) => {
     setCoverageTags((prev) => {
-      const next = checked ? [...prev.filter((t) => t !== city), city] : prev.filter((t) => t !== city);
-      setCoverageAll(citiesCatalog.every((c) => next.includes(c.name)));
+      const next = checked ? [city] : prev.filter((t) => t !== city && t !== ALL_KINGDOM_COVERAGE);
+      setCoverageAll(false);
       return next;
     });
   };
 
   const toggleAllCities = (checked: boolean) => {
     setCoverageAll(checked);
-    setCoverageTags(checked ? citiesCatalog.map((c) => c.name) : (form.city ? [form.city] : []));
+    setCoverageTags(checked ? [ALL_KINGDOM_COVERAGE] : (selectedPrimaryCity ? [selectedPrimaryCity] : []));
   };
 
   const submitCityRequest = async () => {
@@ -295,6 +304,7 @@ export default function AddServiceProvider() {
 
     /* ── Resolve custom city if "other" selected ── */
     let resolvedCity = citySelectVal === "__other__" ? "" : form.city;
+    let resolvedCoverageTags = coverageTags;
     if (citySelectVal === "__other__") {
       const trimmedCity = customCity.trim();
       if (!trimmedCity) {
@@ -311,11 +321,10 @@ export default function AddServiceProvider() {
         });
         const city = await r.json();
         resolvedCity = city.name ?? trimmedCity;
-        if (!coverageTags.includes(resolvedCity)) {
-          setCoverageTags((prev) => [resolvedCity, ...prev]);
-        }
+        if (!coverageAll) resolvedCoverageTags = [resolvedCity];
       } catch {
         resolvedCity = trimmedCity;
+        if (!coverageAll) resolvedCoverageTags = [resolvedCity];
       }
     }
 
@@ -331,7 +340,7 @@ export default function AddServiceProvider() {
     if (!form.pricingUnit) errs.pricingUnit = "يرجى اختيار وحدة التسعير";
     if (!form.dailyCapacity) errs.dailyCapacity = "يرجى إدخال أقصى عدد حجوزات باليوم";
     else if (Number(form.dailyCapacity) < 1) errs.dailyCapacity = "يجب أن يكون العدد حجزاً واحداً على الأقل";
-    if (coverageTags.length === 0) errs.coverageTags = "يرجى إضافة نطاق الخدمة (المناطق التي تخدمها)";
+    if (resolvedCoverageTags.length === 0) errs.coverageTags = "يرجى إضافة نطاق الخدمة (المناطق التي تخدمها)";
 
     const validGallery = gallery.filter((p) => p.url && p.url !== "error").map((p) => p.url);
     if (validGallery.length < 3) errs.galleryPhotos = `يجب رفع 3 صور على الأقل (لديك ${validGallery.length} حالياً)`;
@@ -364,7 +373,7 @@ export default function AddServiceProvider() {
         logoUrl: logo?.url || undefined,
         galleryPhotos: validGallery,
         videoUrl: video?.url || undefined,
-        coverageTags,
+        coverageTags: resolvedCoverageTags,
         customFeatureTags,
       };
       const r = await fetch(`${BASE}/api/providers/submit`, {
@@ -459,7 +468,7 @@ export default function AddServiceProvider() {
                <Briefcase className="w-8 h-8 text-amber-600" />
             </div>
             <h1 className="text-3xl font-extrabold text-foreground mb-2">تسجيل خدمتك</h1>
-            <p className="text-muted-foreground">أضف خدمتك وابدأ الوصول لعملاء جدد في منطقة القصيم</p>
+            <p className="text-muted-foreground">أضف خدمتك وابدأ الوصول لعملاء جدد</p>
           </motion.div>
 
           <form onSubmit={handleSubmit} className="space-y-8">
@@ -559,7 +568,7 @@ export default function AddServiceProvider() {
                     id="customCity"
                     placeholder="اكتب اسم المدينة"
                     value={customCity}
-                    onChange={(e) => setCustomCity(e.target.value)}
+                    onChange={(e) => handleCustomCityChange(e.target.value)}
                     className={fieldErrors.city ? "border-red-500 ring-1 ring-red-500" : ""}
                     autoFocus
                   />
@@ -686,37 +695,67 @@ export default function AddServiceProvider() {
                 </p>
               )}
 
-              {/* Serve all Al-Qassim checkbox */}
-              <label className="flex items-center gap-3 cursor-pointer rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 hover:bg-primary/10 transition-colors">
-                <Checkbox
-                  checked={coverageAll}
-                  onCheckedChange={(v) => toggleAllCities(!!v)}
-                />
-                <span className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-primary" />
-                  نخدمك في <strong>جميع مدن القصيم</strong>
-                </span>
-              </label>
+              {/* Coverage scope options */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className={`flex items-start gap-3 rounded-xl border px-4 py-3 transition-colors ${
+                  selectedPrimaryCity && !coverageAll
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-card"
+                } ${selectedPrimaryCity ? "cursor-pointer hover:bg-primary/5" : "cursor-not-allowed opacity-60"}`}>
+                  <Checkbox
+                    checked={!!selectedPrimaryCity && !coverageAll && coverageTags.includes(selectedPrimaryCity)}
+                    disabled={!selectedPrimaryCity}
+                    onCheckedChange={(v) => toggleCityTag(selectedPrimaryCity, !!v)}
+                  />
+                  <span className="text-sm text-foreground flex flex-col gap-1">
+                    <span className="font-semibold flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-primary" />
+                      تغطية محلية
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {selectedPrimaryCity ? `خدمة العملاء في ${selectedPrimaryCity}` : "اختر المدينة الرئيسية أولاً"}
+                    </span>
+                  </span>
+                </label>
+                <label className={`flex items-start gap-3 cursor-pointer rounded-xl border px-4 py-3 transition-colors ${
+                  coverageAll
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-card hover:bg-primary/5"
+                }`}>
+                  <Checkbox
+                    checked={coverageAll}
+                    onCheckedChange={(v) => toggleAllCities(!!v)}
+                  />
+                  <span className="text-sm text-foreground flex flex-col gap-1">
+                    <span className="font-semibold flex items-center gap-2">
+                      <Globe className="w-4 h-4 text-primary" />
+                      تغطية جميع مناطق المملكة
+                    </span>
+                    <span className="text-xs text-muted-foreground">الوصول لعملاء من جميع أنحاء المملكة</span>
+                  </span>
+                </label>
+              </div>
 
-              {/* City checkboxes grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {citiesCatalog.map((city) => (
+              {/* Dynamic local city */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {selectedPrimaryCity ? (
                   <label
-                    key={city.id}
-                    className={`flex items-center gap-2.5 cursor-pointer rounded-xl border px-3 py-2.5 text-sm transition-all ${
-                      coverageTags.includes(city.name)
+                    className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition-all ${
+                      !coverageAll && coverageTags.includes(selectedPrimaryCity)
                         ? "border-primary bg-primary/10 text-primary font-semibold"
                         : "border-border bg-card hover:border-primary/40 hover:bg-muted text-foreground"
                     }`}
                   >
                     <Checkbox
-                      checked={coverageTags.includes(city.name)}
-                      onCheckedChange={(v) => toggleCityTag(city.name, !!v)}
+                      checked={!coverageAll && coverageTags.includes(selectedPrimaryCity)}
+                      onCheckedChange={(v) => toggleCityTag(selectedPrimaryCity, !!v)}
                     />
                     <MapPin className="w-3.5 h-3.5 shrink-0 opacity-70" />
-                    {city.name}
+                    {selectedPrimaryCity}
                   </label>
-                ))}
+                ) : (
+                  <p className="text-xs text-muted-foreground px-1">ستظهر المدينة هنا تلقائياً بعد اختيار المدينة الرئيسية.</p>
+                )}
               </div>
 
               {/* Request new city */}
@@ -984,6 +1023,7 @@ export default function AddServiceProvider() {
                     </span>
                   </button>
                 )}
+                <p className="mt-2 text-xs text-muted-foreground">يرجى رفع فيديو بدون خلفية موسيقية</p>
               </div>
 
               {uploadError && (

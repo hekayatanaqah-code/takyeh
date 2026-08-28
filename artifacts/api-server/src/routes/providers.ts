@@ -12,6 +12,7 @@ import { eq, and, ne, desc, isNull, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 const router = Router();
+const ALL_KINGDOM_COVERAGE = "جميع مناطق المملكة";
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.isAuthenticated()) {
@@ -34,7 +35,8 @@ router.get("/", async (req, res) => {
       OR EXISTS (
         SELECT 1
         FROM UNNEST(${serviceProvidersTable.coverageTags}) AS coverage(city_name)
-        WHERE LOWER(coverage.city_name) = LOWER(${city})
+         WHERE LOWER(coverage.city_name) = LOWER(${city})
+            OR LOWER(coverage.city_name) = LOWER(${ALL_KINGDOM_COVERAGE})
       )
     )`);
   }
