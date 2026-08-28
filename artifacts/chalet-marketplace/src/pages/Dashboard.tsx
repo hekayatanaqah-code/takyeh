@@ -8838,7 +8838,7 @@ function ServiceSubmissionsTab() {
         animate={{ opacity: 1 }}
         className="bg-card border border-dashed border-border rounded-2xl p-12 text-center"
       >
-        <Star className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
+        <Briefcase className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-foreground mb-2">لا توجد خدمات بعد</h3>
         <p className="text-muted-foreground mb-6">سجّل خدمتك لتظهر لعملاء في منطقة القصيم</p>
         <Link href="/add-service-provider">
