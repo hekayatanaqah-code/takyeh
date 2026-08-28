@@ -8844,7 +8844,7 @@ function ServiceSubmissionsTab() {
         <Link href="/add-service-provider">
           <Button>
             <Plus className="w-4 h-4 me-2" />
-            إضافة خدمة جديدة
+            إضافة خدمة
           </Button>
         </Link>
       </motion.div>
@@ -22871,12 +22871,6 @@ export default function Dashboard() {
                 </h2>
                 <p className="text-sm text-muted-foreground mt-0.5">إدارة وتنظيم كافة خدماتك وحجوزاتك بكل سهولة</p>
               </div>
-              <Link href="/add-service-provider">
-                <Button className="gap-2 rounded-xl" variant="outline">
-                  <Plus className="w-4 h-4" />
-                  تسجيل خدمة جديدة
-                </Button>
-              </Link>
             </div>
 
             {/* Cross-owner shortcut to admin section */}
