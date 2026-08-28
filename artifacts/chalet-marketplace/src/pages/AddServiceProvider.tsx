@@ -22,6 +22,29 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const MAX_GALLERY = 10;
 const ALL_KINGDOM_COVERAGE = "جميع مناطق المملكة";
+const REGIONAL_CITIES: Record<string, string[]> = {
+  القصيم: ["بريدة", "عنيزة", "الرس", "البكيرية", "البدائع", "المذنب", "رياض الخبراء", "الخبراء", "الأسياح", "عيون الجواء", "الشماسية", "ضرية", "عقلة الصقور", "النبهانية"],
+  الرياض: ["الرياض", "الخرج", "الدوادمي", "المجمعة", "شقراء", "وادي الدواسر", "الزلفي", "الغاط", "حوطة بني تميم", "الأفلاج", "رماح", "ثادق", "حريملاء"],
+  مكة: ["مكة المكرمة", "جدة", "الطائف", "رابغ", "الليث", "القنفذة", "الجموم", "خليص"],
+  المدينة: ["المدينة المنورة", "ينبع", "العلا", "بدر", "خيبر", "المهد", "الحناكية"],
+  الشرقية: ["الدمام", "الخبر", "الظهران", "الأحساء", "القطيف", "الجبيل", "حفر الباطن", "الخفجي", "رأس تنورة"],
+  عسير: ["أبها", "خميس مشيط", "بيشة", "النماص", "محايل عسير", "سراة عبيدة", "رجال ألمع"],
+  تبوك: ["تبوك", "الوجه", "ضباء", "أملج", "حقل", "تيماء"],
+  حائل: ["حائل", "بقعاء", "الغزالة", "الشنان"],
+  جازان: ["جازان", "صبيا", "أبو عريش", "صامطة", "بيش", "فرسان"],
+  نجران: ["نجران", "شرورة", "حبونا", "بدر الجنوب"],
+  الباحة: ["الباحة", "بلجرشي", "المندق", "المخواة", "قلوة"],
+  الجوف: ["سكاكا", "القريات", "دومة الجندل", "طبرجل"],
+  الحدود_الشمالية: ["عرعر", "رفحاء", "طريف", "العويقيلة"],
+};
+
+function getRegionalCoverage(city: string) {
+  const region = Object.entries(REGIONAL_CITIES).find(([, cities]) => cities.includes(city));
+  return {
+    name: region?.[0]?.replace("_", " ") ?? "المنطقة المحلية",
+    cities: region?.[1] ?? (city ? [city] : []),
+  };
+}
 
 const pricingUnitOptions = [
   { value: "per_day", label: "باليوم" },
@@ -93,6 +116,7 @@ export default function AddServiceProvider() {
 
   const [coverageTags, setCoverageTags] = useState<string[]>([]);
   const [coverageAll, setCoverageAll] = useState(false);
+  const [coverageRegionAll, setCoverageRegionAll] = useState(false);
   const [showCityRequest, setShowCityRequest] = useState(false);
   const [cityRequestInput, setCityRequestInput] = useState("");
   const [cityRequestSent, setCityRequestSent] = useState(false);
@@ -145,6 +169,7 @@ export default function AddServiceProvider() {
   const [citySelectVal, setCitySelectVal] = useState("");
   const [customCity, setCustomCity] = useState("");
   const selectedPrimaryCity = citySelectVal === "__other__" ? customCity.trim() : form.city;
+  const regionalCoverage = getRegionalCoverage(selectedPrimaryCity);
 
   const handleChange = (field: string, value: string) =>
     setForm((p) => ({ ...p, [field]: value }));
@@ -153,31 +178,46 @@ export default function AddServiceProvider() {
     setCitySelectVal(city);
     if (city === "__other__") {
       handleChange("city", "");
-      if (!coverageAll) setCoverageTags([]);
+      if (!coverageAll) {
+        setCoverageRegionAll(false);
+        setCoverageTags([]);
+      }
       return;
     }
     handleChange("city", city);
-    if (!coverageAll) setCoverageTags(city ? [city] : []);
+    if (!coverageAll) {
+      setCoverageTags(coverageRegionAll ? getRegionalCoverage(city).cities : (city ? [city] : []));
+    }
   };
 
   const handleCustomCityChange = (value: string) => {
     setCustomCity(value);
     if (!coverageAll) {
       const city = value.trim();
-      setCoverageTags(city ? [city] : []);
+      setCoverageTags(coverageRegionAll ? getRegionalCoverage(city).cities : (city ? [city] : []));
     }
   };
 
   const toggleCityTag = (city: string, checked: boolean) => {
+    setCoverageAll(false);
+    setCoverageRegionAll(false);
     setCoverageTags((prev) => {
-      const next = checked ? [city] : prev.filter((t) => t !== city && t !== ALL_KINGDOM_COVERAGE);
-      setCoverageAll(false);
-      return next;
+      const withoutSpecialTags = prev.filter((t) => t !== ALL_KINGDOM_COVERAGE);
+      return checked
+        ? [...new Set([...withoutSpecialTags, city])]
+        : withoutSpecialTags.filter((t) => t !== city);
     });
   };
 
-  const toggleAllCities = (checked: boolean) => {
+  const toggleRegionalCities = (checked: boolean) => {
+    setCoverageAll(false);
+    setCoverageRegionAll(checked);
+    setCoverageTags(checked ? regionalCoverage.cities : (selectedPrimaryCity ? [selectedPrimaryCity] : []));
+  };
+
+  const toggleKingdomCoverage = (checked: boolean) => {
     setCoverageAll(checked);
+    setCoverageRegionAll(false);
     setCoverageTags(checked ? [ALL_KINGDOM_COVERAGE] : (selectedPrimaryCity ? [selectedPrimaryCity] : []));
   };
 
@@ -321,10 +361,14 @@ export default function AddServiceProvider() {
         });
         const city = await r.json();
         resolvedCity = city.name ?? trimmedCity;
-        if (!coverageAll) resolvedCoverageTags = [resolvedCity];
+        if (!coverageAll) {
+          resolvedCoverageTags = coverageRegionAll ? getRegionalCoverage(resolvedCity).cities : [resolvedCity];
+        }
       } catch {
         resolvedCity = trimmedCity;
-        if (!coverageAll) resolvedCoverageTags = [resolvedCity];
+        if (!coverageAll) {
+          resolvedCoverageTags = coverageRegionAll ? getRegionalCoverage(resolvedCity).cities : [resolvedCity];
+        }
       }
     }
 
@@ -724,7 +768,7 @@ export default function AddServiceProvider() {
                 }`}>
                   <Checkbox
                     checked={coverageAll}
-                    onCheckedChange={(v) => toggleAllCities(!!v)}
+                    onCheckedChange={(v) => toggleKingdomCoverage(!!v)}
                   />
                   <span className="text-sm text-foreground flex flex-col gap-1">
                     <span className="font-semibold flex items-center gap-2">
@@ -736,27 +780,45 @@ export default function AddServiceProvider() {
                 </label>
               </div>
 
-              {/* Dynamic local city */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {selectedPrimaryCity ? (
-                  <label
-                    className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition-all ${
-                      !coverageAll && coverageTags.includes(selectedPrimaryCity)
-                        ? "border-primary bg-primary/10 text-primary font-semibold"
-                        : "border-border bg-card hover:border-primary/40 hover:bg-muted text-foreground"
-                    }`}
-                  >
+              {/* Dynamic regional cities */}
+              {selectedPrimaryCity ? (
+                <div className="space-y-3">
+                  <label className={`flex items-center gap-3 cursor-pointer rounded-xl border px-4 py-3 transition-colors ${
+                    !coverageAll && coverageRegionAll
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card hover:border-primary/40 hover:bg-muted"
+                  }`}>
                     <Checkbox
-                      checked={!coverageAll && coverageTags.includes(selectedPrimaryCity)}
-                      onCheckedChange={(v) => toggleCityTag(selectedPrimaryCity, !!v)}
+                      checked={!coverageAll && coverageRegionAll}
+                      onCheckedChange={(v) => toggleRegionalCities(!!v)}
                     />
-                    <MapPin className="w-3.5 h-3.5 shrink-0 opacity-70" />
-                    {selectedPrimaryCity}
+                    <Globe className="w-4 h-4 shrink-0 text-primary" />
+                    <span className="text-sm font-semibold">تغطية جميع مدن {regionalCoverage.name}</span>
                   </label>
-                ) : (
-                  <p className="text-xs text-muted-foreground px-1">ستظهر المدينة هنا تلقائياً بعد اختيار المدينة الرئيسية.</p>
-                )}
-              </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {regionalCoverage.cities.map((city) => (
+                      <label
+                        key={city}
+                        className={`flex items-center gap-2.5 cursor-pointer rounded-xl border px-3 py-2.5 text-sm transition-all ${
+                          !coverageAll && coverageTags.includes(city)
+                            ? "border-primary bg-primary/10 text-primary font-semibold"
+                            : "border-border bg-card hover:border-primary/40 hover:bg-muted text-foreground"
+                        }`}
+                      >
+                        <Checkbox
+                          checked={!coverageAll && coverageTags.includes(city)}
+                          onCheckedChange={(v) => toggleCityTag(city, !!v)}
+                        />
+                        <MapPin className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                        {city}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground px-1">ستظهر مدن المنطقة هنا تلقائياً بعد اختيار المدينة الرئيسية.</p>
+              )}
 
               {/* Request new city */}
               <div className="pt-1 border-t border-border">
