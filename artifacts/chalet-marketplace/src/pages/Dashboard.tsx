@@ -8840,7 +8840,7 @@ function ServiceSubmissionsTab() {
       >
         <Briefcase className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-foreground mb-2">لا توجد خدمات بعد</h3>
-        <p className="text-muted-foreground mb-6">سجّل خدمتك لتظهر لعملاء في منطقة القصيم</p>
+        <p className="text-muted-foreground mb-6">سجّل خدمتك الأولى وابدأ في استقبال الطلبات والوصول لعملائك</p>
         <Link href="/add-service-provider">
           <Button>
             <Plus className="w-4 h-4 me-2" />
@@ -22869,7 +22869,7 @@ export default function Dashboard() {
                   <Star className="w-5 h-5 text-amber-500" />
                   خدماتي المستقلة
                 </h2>
-                <p className="text-sm text-muted-foreground mt-0.5">نظام ERP لإدارة خدماتك في سوق القصيم</p>
+                <p className="text-sm text-muted-foreground mt-0.5">إدارة وتنظيم كافة خدماتك وحجوزاتك بكل سهولة</p>
               </div>
               <Link href="/add-service-provider">
                 <Button className="gap-2 rounded-xl" variant="outline">
