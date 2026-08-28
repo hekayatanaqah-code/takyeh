@@ -150,6 +150,74 @@ router.get("/my/submissions", requireAuth, async (req: any, res) => {
   return res.json(rows.reverse());
 });
 
+/* ── Owner: one pending submission ─────────────────── */
+router.get("/my/submissions/:id", requireAuth, async (req: any, res) => {
+  const id = Number(req.params.id);
+  const [submission] = await db
+    .select()
+    .from(serviceProviderSubmissionsTable)
+    .where(eq(serviceProviderSubmissionsTable.id, id))
+    .limit(1);
+
+  if (!submission || submission.ownerId !== req.user.id) {
+    return res.status(404).json({ error: "الطلب غير موجود" });
+  }
+  return res.json(submission);
+});
+
+/* ── Owner: update own pending submission ──────────── */
+router.patch("/my/submissions/:id", requireAuth, async (req: any, res) => {
+  const id = Number(req.params.id);
+  const [submission] = await db
+    .select()
+    .from(serviceProviderSubmissionsTable)
+    .where(eq(serviceProviderSubmissionsTable.id, id))
+    .limit(1);
+
+  if (!submission || submission.ownerId !== req.user.id) {
+    return res.status(404).json({ error: "الطلب غير موجود" });
+  }
+  if (submission.status === "approved") {
+    return res.status(400).json({ error: "لا يمكن تعديل طلب معتمد من هنا" });
+  }
+
+  const schema = z.object({
+    businessName: z.string().min(2, "اسم النشاط يجب أن يكون حرفين على الأقل").optional(),
+    category: z.string().min(1, "يرجى اختيار فئة الخدمة").optional(),
+    city: z.string().min(1, "يرجى اختيار المدينة").optional(),
+    descriptionAr: z.string().optional().nullable(),
+    whatsappNumber: z.string().min(9, "رقم الواتساب يجب أن يكون 9 أرقام على الأقل").optional(),
+    logoUrl: z.string().optional().nullable(),
+    galleryPhotos: z.array(z.string().min(1)).min(3, "يجب رفع 3 صور على الأقل").optional(),
+    videoUrl: z.string().optional().nullable(),
+    yearsOfExperience: z.number().int().min(0).optional().nullable(),
+    pricingUnit: z.enum(["per_day", "per_hour", "per_request"]).optional(),
+    dailyCapacity: z.number().int().min(1).optional(),
+    coverageTags: z.array(z.string()).min(1, "يرجى إضافة نطاق الخدمة").optional(),
+    customFeatureTags: z.array(z.string()).optional(),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(422).json({
+      error: "بيانات غير صحيحة",
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    });
+  }
+
+  const [updated] = await db
+    .update(serviceProviderSubmissionsTable)
+    .set({
+      ...parsed.data,
+      status: "pending",
+      adminNote: null,
+    })
+    .where(eq(serviceProviderSubmissionsTable.id, id))
+    .returning();
+
+  return res.json(updated);
+});
+
 /* ── Owner: delete own pending submission ─────────── */
 router.delete("/my/submissions/:id", requireAuth, async (req: any, res) => {
   const id = Number(req.params.id);

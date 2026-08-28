@@ -8741,7 +8741,13 @@ const SERVICE_CATEGORY_LABELS: Record<string, string> = {
   other: "✨ أخرى",
 };
 
-function ServiceSubmissionsTab({ onManageCalendar }: { onManageCalendar?: (providerId: number) => void }) {
+function ServiceSubmissionsTab({
+  onManageCalendar,
+  onEditProvider,
+}: {
+  onManageCalendar?: (providerId: number) => void;
+  onEditProvider?: (providerId: number) => void;
+}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -8888,14 +8894,25 @@ function ServiceSubmissionsTab({ onManageCalendar }: { onManageCalendar?: (provi
                     <p className="text-sm text-muted-foreground">{SERVICE_CATEGORY_LABELS[p.category] ?? p.category} · {p.city}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                    {p.isActive && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="text-xs gap-1.5 bg-amber-500 hover:bg-amber-600 text-white"
+                        onClick={() => onManageCalendar?.(p.id)}
+                      >
+                        <CalendarDays className="w-3.5 h-3.5" />
+                        إدارة التقويم
+                      </Button>
+                    )}
                     <Button
                       size="sm"
-                      variant="default"
-                      className="text-xs gap-1.5 bg-amber-500 hover:bg-amber-600 text-white"
-                      onClick={() => onManageCalendar?.(p.id)}
+                      variant="outline"
+                      className="text-xs gap-1.5"
+                      onClick={() => onEditProvider?.(p.id)}
                     >
-                      <CalendarDays className="w-3.5 h-3.5" />
-                      إدارة التقويم
+                      <Edit2 className="w-3.5 h-3.5" />
+                      تعديل البيانات
                     </Button>
                     <Link href={`/providers/${p.id}`}>
                       <Button size="sm" variant="outline" className="text-xs gap-1.5">
@@ -9003,6 +9020,14 @@ function ServiceSubmissionsTab({ onManageCalendar }: { onManageCalendar?: (provi
                         <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full ${status.className}`}>
                           {status.icon}{status.label}
                         </span>
+                        {(sub.status === "pending" || sub.status === "needs_revision") && (
+                          <Link href={`/add-service-provider?editSubmission=${sub.id}`}>
+                            <Button type="button" size="sm" variant="outline" className="text-xs gap-1.5">
+                              <Edit2 className="w-3.5 h-3.5" />
+                              تعديل البيانات
+                            </Button>
+                          </Link>
+                        )}
                         {canDelete && (
                           <button
                             type="button"
@@ -9030,6 +9055,12 @@ function ServiceSubmissionsTab({ onManageCalendar }: { onManageCalendar?: (provi
                     </div>
                     {sub.descriptionAr && (
                       <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{sub.descriptionAr}</p>
+                    )}
+                    {(sub.status === "pending" || sub.status === "needs_revision") && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-3 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 shrink-0" />
+                        يتم تفعيل التقويم والحجوزات تلقائياً بعد اعتماد الخدمة من الإدارة.
+                      </p>
                     )}
                     {sub.adminNote && (sub.status === "rejected" || sub.status === "needs_revision") && (
                       <div className={`mt-3 flex items-start gap-2.5 rounded-xl px-3.5 py-3 border ${
@@ -22885,10 +22916,16 @@ export default function Dashboard() {
 
             {/* If no approved providers: show submissions manager directly */}
              {myApprovedProviders.length === 0 ? (
-              <ServiceSubmissionsTab onManageCalendar={(providerId) => {
-                setSelectedServiceId(providerId);
-                setSelectedServiceTab("calendar");
-              }} />
+              <ServiceSubmissionsTab
+                onManageCalendar={(providerId) => {
+                  setSelectedServiceId(providerId);
+                  setSelectedServiceTab("calendar");
+                }}
+                onEditProvider={(providerId) => {
+                  setSelectedServiceId(providerId);
+                  setSelectedServiceTab("details");
+                }}
+              />
             ) : (
               <>
                 {/* ── Service Selector Tabs ─────────────────────────── */}
@@ -22921,10 +22958,16 @@ export default function Dashboard() {
 
                 {/* ── Submissions View ─────────────────────────────── */}
                  {selectedServiceId === "submissions" && (
-                   <ServiceSubmissionsTab onManageCalendar={(providerId) => {
-                     setSelectedServiceId(providerId);
-                     setSelectedServiceTab("calendar");
-                   }} />
+                   <ServiceSubmissionsTab
+                     onManageCalendar={(providerId) => {
+                       setSelectedServiceId(providerId);
+                       setSelectedServiceTab("calendar");
+                     }}
+                     onEditProvider={(providerId) => {
+                       setSelectedServiceId(providerId);
+                       setSelectedServiceTab("details");
+                     }}
+                   />
                  )}
 
                 {/* ── Service ERP Dashboard ─────────────────────────── */}

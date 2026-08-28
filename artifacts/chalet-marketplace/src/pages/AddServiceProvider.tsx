@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { fromAr, toAr } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
@@ -89,6 +89,7 @@ async function uploadCompressed(file: File, type: "image" | "video"): Promise<st
 
 export default function AddServiceProvider() {
   const { isAuthenticated, login, isLoading: authLoading } = useAuth();
+  const editSubmissionId = Number(new URLSearchParams(window.location.search).get("editSubmission") || 0) || null;
 
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -144,6 +145,14 @@ export default function AddServiceProvider() {
     },
     staleTime: 5 * 60 * 1000,
   });
+  const { data: editingSubmission, isLoading: editingSubmissionLoading } = useQuery<any | null>({
+    queryKey: ["my-service-submission", editSubmissionId],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/providers/my/submissions/${editSubmissionId}`, { credentials: "include" });
+      return r.ok ? r.json() : null;
+    },
+    enabled: !!editSubmissionId,
+  });
 
   const otherCategory = serviceCategories.find(
     (category) => category.key === "other" || category.labelAr.trim() === "أخرى",
@@ -165,6 +174,49 @@ export default function AddServiceProvider() {
   const [customCity, setCustomCity] = useState("");
   const selectedPrimaryCity = citySelectVal === "__other__" ? customCity.trim() : form.city;
   const regionalCoverage = getRegionalCoverage(selectedPrimaryCity, regionSelectVal || undefined);
+
+  useEffect(() => {
+    if (!editingSubmission || serviceCategories.length === 0) return;
+    const submissionCategory = String(editingSubmission.category ?? "");
+    const isKnownCategory = serviceCategories.some((category) => category.key === submissionCategory);
+    const submissionCity = String(editingSubmission.city ?? "");
+    const matchedRegion = Object.entries(REGIONAL_CITIES).find(([, cities]) => cities.includes(submissionCity))?.[0] ?? "";
+    const submissionTags = Array.isArray(editingSubmission.coverageTags) ? editingSubmission.coverageTags : [];
+    const matchedRegionCities = matchedRegion ? REGIONAL_CITIES[matchedRegion] : [];
+
+    setForm({
+      businessName: editingSubmission.businessName ?? "",
+      category: isKnownCategory ? submissionCategory : "other",
+      city: matchedRegion && matchedRegionCities.includes(submissionCity) ? submissionCity : "",
+      descriptionAr: editingSubmission.descriptionAr ?? "",
+      whatsappNumber: editingSubmission.whatsappNumber ?? "",
+      yearsOfExperience: editingSubmission.yearsOfExperience == null ? "" : String(editingSubmission.yearsOfExperience),
+      pricingUnit: editingSubmission.pricingUnit ?? "",
+      dailyCapacity: editingSubmission.dailyCapacity == null ? "" : String(editingSubmission.dailyCapacity),
+    });
+    if (!isKnownCategory) setCustomCategory(submissionCategory);
+    setRegionSelectVal(matchedRegion);
+    setCitySelectVal(matchedRegion && matchedRegionCities.includes(submissionCity) ? submissionCity : "__other__");
+    setCustomCity(matchedRegion && matchedRegionCities.includes(submissionCity) ? "" : submissionCity);
+    setCoverageTags(submissionTags);
+    setCoverageAll(submissionTags.includes(ALL_KINGDOM_COVERAGE));
+    setCoverageRegionAll(
+      !submissionTags.includes(ALL_KINGDOM_COVERAGE) &&
+      matchedRegionCities.length > 0 &&
+      matchedRegionCities.every((city) => submissionTags.includes(city)),
+    );
+    setCustomFeatureTags(Array.isArray(editingSubmission.customFeatureTags) ? editingSubmission.customFeatureTags : []);
+    setLogo(editingSubmission.logoUrl ? { url: editingSubmission.logoUrl, name: "الشعار الحالي", preview: editingSubmission.logoUrl } : null);
+    setGallery(
+      (Array.isArray(editingSubmission.galleryPhotos) ? editingSubmission.galleryPhotos : []).map((url: string, index: number) => ({
+        url,
+        name: `الصورة الحالية ${index + 1}`,
+        preview: url,
+      })),
+    );
+    setVideo(editingSubmission.videoUrl ? { url: editingSubmission.videoUrl, name: "الفيديو الحالي", preview: editingSubmission.videoUrl } : null);
+    setLegalAccepted(true);
+  }, [editingSubmission, serviceCategories]);
 
   const handleChange = (field: string, value: string) =>
     setForm((p) => ({ ...p, [field]: value }));
@@ -426,12 +478,17 @@ export default function AddServiceProvider() {
         coverageTags: resolvedCoverageTags,
         customFeatureTags,
       };
-      const r = await fetch(`${BASE}/api/providers/submit`, {
-        method: "POST",
+      const r = await fetch(
+        editSubmissionId
+          ? `${BASE}/api/providers/my/submissions/${editSubmissionId}`
+          : `${BASE}/api/providers/submit`,
+        {
+        method: editSubmissionId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
         credentials: "include",
-      });
+        },
+      );
       if (!r.ok) {
         const err = await r.json().catch(() => ({})) as any;
         // Display field-specific errors from the API if available
@@ -490,9 +547,11 @@ export default function AddServiceProvider() {
             <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle className="w-10 h-10 text-green-600" />
             </div>
-            <h2 className="text-3xl font-extrabold text-foreground mb-3">تم إرسال طلبك!</h2>
+             <h2 className="text-3xl font-extrabold text-foreground mb-3">{editSubmissionId ? "تم تحديث طلبك!" : "تم إرسال طلبك!"}</h2>
             <p className="text-muted-foreground text-lg mb-2 leading-relaxed">
-              سيتم مراجعة خدمتك من قِبل فريق الإدارة خلال 24–48 ساعة.
+               {editSubmissionId
+                 ? "تم حفظ التعديلات وإعادة الطلب إلى فريق الإدارة للمراجعة."
+                 : "سيتم مراجعة خدمتك من قِبل فريق الإدارة خلال 24–48 ساعة."}
             </p>
             <p className="text-muted-foreground text-sm">
               يمكنك متابعة حالة الطلب من لوحة التحكم.
@@ -517,8 +576,8 @@ export default function AddServiceProvider() {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-2xl mb-4">
                <Briefcase className="w-8 h-8 text-amber-600" />
             </div>
-            <h1 className="text-3xl font-extrabold text-foreground mb-2">تسجيل خدمتك</h1>
-            <p className="text-muted-foreground">أضف خدمتك وابدأ الوصول لعملاء جدد</p>
+             <h1 className="text-3xl font-extrabold text-foreground mb-2">{editSubmissionId ? "تعديل بيانات خدمتك" : "تسجيل خدمتك"}</h1>
+             <p className="text-muted-foreground">{editSubmissionId ? "حدّث بيانات الطلب ثم أعد إرساله للمراجعة" : "أضف خدمتك وابدأ الوصول لعملاء جدد"}</p>
           </motion.div>
 
           <form onSubmit={handleSubmit} className="space-y-8">
