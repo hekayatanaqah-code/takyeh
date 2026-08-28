@@ -22724,13 +22724,13 @@ export default function Dashboard() {
             {!actAsStaff && !isImpersonating && (
               <>
                 {canSeeChalets && (planLimits && (submissions?.length ?? 0) >= planLimits.chaletLimit ? (
-                  <Button variant={canSeeServices ? "outline" : "default"} className="rounded-xl font-semibold text-sm" onClick={() => setShowHeaderUpgrade("chalet")}>
+                  <Button variant={activeDashMode === "chalets" ? "default" : "outline"} className="rounded-xl font-semibold text-sm" onClick={() => setShowHeaderUpgrade("chalet")}>
                     <Lock className="w-4 h-4 me-1.5 text-amber-500" />
                     إضافة عقار
                   </Button>
                 ) : (
                   <Link href="/add-chalet">
-                    <Button variant={canSeeServices ? "outline" : "default"} className="rounded-xl font-semibold text-sm">
+                    <Button variant={activeDashMode === "chalets" ? "default" : "outline"} className="rounded-xl font-semibold text-sm">
                       <Plus className="w-4 h-4 me-1.5" />
                       إضافة عقار
                     </Button>
@@ -22742,7 +22742,7 @@ export default function Dashboard() {
                   </Button>
                 ) : (
                   <Link href="/add-service-provider">
-                    <Button className="rounded-xl font-semibold text-sm">
+                    <Button variant={activeDashMode === "services" ? "default" : "outline"} className="rounded-xl font-semibold text-sm">
                       <Plus className="w-4 h-4 me-1.5" />
                       إضافة خدمة
                     </Button>
