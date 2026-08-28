@@ -341,29 +341,29 @@ interface ChaletSeason {
 const TIER_PLANS = [
   {
     key: "chalet_basic",
-    name: "أساسي - شاليهات",
+    name: "أساسي - عقارات",
     price: "99 ر.س / شهر",
     chaletLimit: 1,
     serviceLimit: 0,
-    features: ["شاليه واحد", "تقارير أساسية", "دعم عبر واتساب"],
+    features: ["عقار واحد", "تقارير أساسية", "دعم عبر واتساب"],
     highlight: false,
   },
   {
     key: "chalet_pro",
-    name: "احترافي - شاليهات",
+    name: "احترافي - عقارات",
     price: "199 ر.س / شهر",
     chaletLimit: 5,
     serviceLimit: 0,
-    features: ["حتى 5 شاليهات", "تقارير تفصيلية", "أولوية في الدعم"],
+    features: ["حتى 5 عقارات", "تقارير تفصيلية", "أولوية في الدعم"],
     highlight: true,
   },
   {
     key: "chalet_unlimited",
-    name: "غير محدود - شاليهات",
+    name: "غير محدود - عقارات",
     price: "349 ر.س / شهر",
     chaletLimit: 999,
     serviceLimit: 0,
-    features: ["شاليهات غير محدودة", "تقارير شهرية واتساب", "مدير حساب خاص"],
+    features: ["عقارات غير محدودة", "تقارير شهرية واتساب", "مدير حساب خاص"],
     highlight: false,
   },
   {
@@ -372,7 +372,7 @@ const TIER_PLANS = [
     price: "499 ر.س / شهر",
     chaletLimit: 999,
     serviceLimit: 999,
-    features: ["شاليهات + خدمات غير محدودة", "تقارير متقدمة", "أولوية قصوى"],
+    features: ["عقارات + خدمات غير محدودة", "تقارير متقدمة", "أولوية قصوى"],
     highlight: false,
   },
 ];
@@ -388,7 +388,7 @@ function UpgradePlanDialog({ open, onClose, context }: { open: boolean; onClose:
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
             {context === "chalet"
-              ? "لقد وصلت إلى الحد الأقصى من الشاليهات في خطتك الحالية. اختر خطة أعلى للاستمرار."
+              ? "لقد وصلت إلى الحد الأقصى من العقارات في خطتك الحالية. اختر خطة أعلى للاستمرار."
               : "لقد وصلت إلى الحد الأقصى من الخدمات. اختر خطة أعلى للاستمرار."}
           </DialogDescription>
         </DialogHeader>
@@ -490,7 +490,7 @@ function EditChaletDialog({
         }),
       });
       if (!r.ok) { toast({ title: "حدث خطأ أثناء الحفظ", variant: "destructive" }); return; }
-      toast({ title: "تم تحديث بيانات الشاليه بنجاح" });
+      toast({ title: "تم تحديث بيانات العقار بنجاح" });
       qc.invalidateQueries({ queryKey: ["submissions"] });
       onSaved();
       onClose();
@@ -503,21 +503,21 @@ function EditChaletDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Edit2 className="w-4 h-4 text-primary" />
-            تعديل بيانات الشاليه
+            تعديل بيانات العقار
           </DialogTitle>
-          <DialogDescription>تعديل الاسم والأسعار والوصف — تظهر فوراً على صفحة الشاليه</DialogDescription>
+          <DialogDescription>تعديل الاسم والأسعار والوصف — تظهر فوراً على صفحة العقار</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold">اسم الشاليه <span className="text-destructive">*</span></label>
-            <Input value={nameAr} onChange={(e) => setNameAr(e.target.value)} placeholder="اسم الشاليه" className="text-right" />
+            <label className="text-sm font-semibold">اسم العقار <span className="text-destructive">*</span></label>
+            <Input value={nameAr} onChange={(e) => setNameAr(e.target.value)} placeholder="اسم العقار" className="text-right" />
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-semibold">الوصف</label>
             <textarea
               value={descriptionAr}
               onChange={(e) => setDescriptionAr(e.target.value)}
-              placeholder="وصف مختصر للشاليه..."
+              placeholder="وصف مختصر للعقار..."
               rows={3}
               className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
@@ -677,7 +677,7 @@ function ResubmitDialog({
 
   async function handleResubmit() {
     if (!sub) return;
-    if (!nameAr.trim())              { toast({ title: "اسم الشاليه مطلوب",          variant: "destructive" }); return; }
+    if (!nameAr.trim())              { toast({ title: "اسم العقار مطلوب",          variant: "destructive" }); return; }
     if (!descriptionAr.trim())       { toast({ title: "الوصف مطلوب",                 variant: "destructive" }); return; }
     if (!whatsappNumber.trim())      { toast({ title: "رقم الواتساب مطلوب",         variant: "destructive" }); return; }
     if (whatsappNumber.length < 9)   { toast({ title: "رقم الواتساب يجب أن يكون ٩ أرقام على الأقل", variant: "destructive" }); return; }
@@ -755,8 +755,8 @@ function ResubmitDialog({
           <div className="space-y-3">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide border-b pb-1.5">المعلومات الأساسية</p>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">اسم الشاليه *</label>
-              <Input value={nameAr} onChange={(e) => setNameAr(e.target.value)} placeholder="اسم الشاليه" className="text-right" />
+              <label className="text-xs font-semibold">اسم العقار *</label>
+              <Input value={nameAr} onChange={(e) => setNameAr(e.target.value)} placeholder="اسم العقار" className="text-right" />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
@@ -773,7 +773,7 @@ function ResubmitDialog({
               <textarea
                 value={descriptionAr}
                 onChange={(e) => setDescriptionAr(e.target.value)}
-                placeholder="وصف مختصر للشاليه..."
+                placeholder="وصف مختصر للعقار..."
                 rows={3}
                 className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-right resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
@@ -886,7 +886,7 @@ function ResubmitDialog({
           <div className="space-y-3">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide border-b pb-1.5">إعدادات العقد الرقمي</p>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold">شعار الشاليه (رابط صورة — يظهر في رأسية العقد)</label>
+              <label className="text-xs font-semibold">شعار العقار (رابط صورة — يظهر في رأسية العقد)</label>
               <Input
                 value={chaletLogoUrl}
                 onChange={(e) => setChaletLogoUrl(e.target.value)}
@@ -1188,7 +1188,7 @@ function PauseChaletDialog({
       <DialogHeader>
         <DialogTitle className="text-base">إيقاف مؤقت — {chalet.nameAr}</DialogTitle>
         <DialogDescription className="text-right">
-          خلال فترة الإيقاف لن يظهر الشاليه للزوار، ولن يُقبل عليه حجز يدوي جديد من لوحة المالك.
+          خلال فترة الإيقاف لن يظهر العقار للزوار، ولن يُقبل عليه حجز يدوي جديد من لوحة المالك.
         </DialogDescription>
       </DialogHeader>
       <div className="space-y-3">
@@ -1215,7 +1215,7 @@ function PauseChaletDialog({
         {chalet.pausedFrom ? (
           <Button type="button" onClick={() => submit(true)} disabled={saving} className="gap-1.5 bg-green-600 hover:bg-green-700 text-white">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-            إلغاء الإيقاف وتنشيط الشاليه
+            إلغاء الإيقاف وتنشيط العقار
           </Button>
         ) : (
           <Button
@@ -1360,7 +1360,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? "فشل");
       qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
-      toast({ title: d.isActive ? "تم التفعيل ✓" : "تم الإيقاف", description: d.isActive ? "الشاليه ظاهر الآن للعملاء" : "الشاليه مخفي مؤقتاً عن الزوار" });
+      toast({ title: d.isActive ? "تم التفعيل ✓" : "تم الإيقاف", description: d.isActive ? "العقار ظاهر الآن للعملاء" : "العقار مخفي مؤقتاً عن الزوار" });
     } catch (e: any) {
       toast({ title: "خطأ", description: e.message, variant: "destructive" });
     } finally { setTogglingId(null); }
@@ -1381,7 +1381,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
       }
       qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
       qc.invalidateQueries({ queryKey: ["submissions"] });
-      toast({ title: "تم الحذف", description: "تم حذف الشاليه نهائياً. تبقى السجلات المالية متاحة." });
+      toast({ title: "تم الحذف", description: "تم حذف العقار نهائياً. تبقى السجلات المالية متاحة." });
     } catch {
       toast({ title: "خطأ", description: "فشل الحذف، حاول مجدداً", variant: "destructive" });
     } finally { setDeletingId(null); setDeleteConfirmId(null); }
@@ -1397,7 +1397,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
     qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
     toast({
       title: clear ? "تم إلغاء الإيقاف ✓" : "تم ضبط الإيقاف المؤقت ✓",
-      description: clear ? "سيعود الشاليه للظهور حسب حالة النشاط" : "سيُخفى الشاليه عن الزوار خلال فترة الإيقاف",
+      description: clear ? "سيعود العقار للظهور حسب حالة النشاط" : "سيُخفى العقار عن الزوار خلال فترة الإيقاف",
     });
   }
 
@@ -1454,12 +1454,12 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
         className="bg-card border border-dashed border-border rounded-2xl p-12 text-center"
       >
         <Home className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-foreground mb-2">لا توجد شاليهات بعد</h3>
-        <p className="text-muted-foreground mb-6">ابدأ بإضافة شاليهك الأول للمراجعة والنشر</p>
+        <h3 className="text-lg font-semibold text-foreground mb-2">لا توجد عقارات بعد</h3>
+        <p className="text-muted-foreground mb-6">ابدأ بإضافة عقارك الأول للمراجعة والنشر</p>
         <Link href="/add-chalet">
           <Button>
             <Plus className="w-4 h-4 me-2" />
-            إضافة شاليه جديد
+            إضافة عقار جديد
           </Button>
         </Link>
       </motion.div>
@@ -1480,7 +1480,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
               <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
             )}
             <span className={atChaletLimit ? "text-amber-700 dark:text-amber-400 font-medium" : "text-muted-foreground"}>
-              {toAr(submissions.length)} / {planLimits.chaletLimit === 999 ? "∞" : toAr(planLimits.chaletLimit)} شاليه
+              {toAr(submissions.length)} / {planLimits.chaletLimit === 999 ? "∞" : toAr(planLimits.chaletLimit)} عقار
               {atChaletLimit ? " — وصلت الحد الأقصى" : ""}
             </span>
           </div>
@@ -1680,7 +1680,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                   <Link href={`/my-chalet/${sub.id}`}>
                     <Button size="sm" className="gap-1.5 rounded-xl text-xs h-8">
                       <Eye className="w-3.5 h-3.5" />
-                      تفاصيل الشاليه
+                      تفاصيل العقار
                     </Button>
                   </Link>
                   {sub.status === "needs_revision" && (
@@ -1719,7 +1719,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                           disabled={togglingId === approvedChalet.id}
                         >
                           <CheckCircle className="w-3.5 h-3.5" />
-                          تنشيط الشاليه
+                          تنشيط العقار
                         </Button>
                       ) : (
                         <Button
@@ -2077,7 +2077,7 @@ function AddBookingDialog({
           <div className="flex items-center gap-2">
             <span className="text-base">🏡</span>
             <span className="text-sm font-bold text-primary">
-              {selectedChalet ? selectedChalet.nameAr : <span className="text-muted-foreground font-normal">لم يُحدَّد الشاليه بعد</span>}
+              {selectedChalet ? selectedChalet.nameAr : <span className="text-muted-foreground font-normal">لم يُحدَّد العقار بعد</span>}
             </span>
           </div>
           {bookingHijri && (
@@ -2096,9 +2096,9 @@ function AddBookingDialog({
           {/* ── Chalet selector — REQUIRED, at top ── */}
           {submissions.length > 0 && (
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">اسم الشاليه <span className="text-destructive">*</span></label>
+              <label className="text-sm font-semibold">اسم العقار <span className="text-destructive">*</span></label>
               <Select value={submissionId} onValueChange={setSubmissionId}>
-                <SelectTrigger><SelectValue placeholder="اختر الشاليه..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="اختر العقار..." /></SelectTrigger>
                 <SelectContent>
                   {submissions.map((s: any) => (
                     <SelectItem key={s.id} value={String(s.id)}>{s.nameAr}</SelectItem>
@@ -4539,7 +4539,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       const link = `${window.location.origin}${base}/r/${data.token}`;
       const chaletName = ownerChalets.find((c: any) => c.submissionId === b.submissionId)?.nameAr
         ?? ownerChalets.find((c: any) => c.id === activeChaletId)?.nameAr
-        ?? "شاليهنا";
+        ?? "عقارنا";
       const msg = buildReviewMessage(b.clientName ?? "", chaletName, link);
       let rawPhone = b.clientPhone?.replace(/\D/g, "") ?? "";
       if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
@@ -5188,7 +5188,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     const lines: string[] = [
       `🏡 إيصال حجز – حكاية أناقة`,
       ``,
-      `🏠 الشاليه: ${bChaletName}`,
+      `🏠 العقار: ${bChaletName}`,
       `👤 العميل: ${b.clientName}`,
       `📅 التاريخ: ${dualDate}`,
       `⏱ المدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`,
@@ -5424,11 +5424,11 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               {ownerChalets.length > 1 && (() => {
                 const chaletStatuses = ownerChalets.map((c: any) => {
                   const isBooked = sumBkgs.some((b) => b.submissionId === c.submissionId);
-                  return { id: c.id, name: c.nameAr ?? "شاليه", booked: isBooked };
+                  return { id: c.id, name: c.nameAr ?? "عقار", booked: isBooked };
                 });
                 return (
                   <div className="mx-6 mt-3 mb-1 rounded-xl border border-border bg-muted/40 overflow-hidden">
-                    <p className="text-[10px] font-bold text-muted-foreground px-3 pt-2.5 pb-1 uppercase tracking-wide">نظرة عامة على شاليهاتك</p>
+                    <p className="text-[10px] font-bold text-muted-foreground px-3 pt-2.5 pb-1 uppercase tracking-wide">نظرة عامة على عقاراتك</p>
                     <div className="divide-y divide-border">
                       {chaletStatuses.map((cs) => (
                         <div key={cs.id} className="flex items-center justify-between px-3 py-2">
@@ -6168,7 +6168,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               onValueChange={(v) => setSelectedChaletId(v === "all" ? "all" : Number(v))}
             >
               <SelectTrigger className="w-48">
-                <SelectValue placeholder="اختر الشاليه" />
+                <SelectValue placeholder="اختر العقار" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">عرض الكل</SelectItem>
@@ -6216,7 +6216,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
         {noApprovedChalets ? (
           <div className="text-center py-8">
             <Building2 className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">لا يوجد شاليه معتمد بعد. بعد موافقة الإدارة سيظهر التقويم هنا.</p>
+            <p className="text-sm text-muted-foreground">لا يوجد عقار معتمد بعد. بعد موافقة الإدارة سيظهر التقويم هنا.</p>
           </div>
         ) : (
           <>
@@ -6289,7 +6289,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <p className="text-xs text-muted-foreground">
-                    عرض سريع للحجوزات {showAllChalets ? "لكل الشاليهات" : `لـ ${activeChalet?.nameAr ?? "الشاليه"}`}
+                    عرض سريع للحجوزات {showAllChalets ? "لكل العقارات" : `لـ ${activeChalet?.nameAr ?? "العقار"}`}
                   </p>
                   <div className="flex rounded-xl bg-muted p-1">
                     <button
@@ -6562,7 +6562,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
 
                 <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
                   <span>✏️</span>
-                  لتعديل الأوقات انتقل إلى <strong>تعديل بيانات الشاليه</strong>
+                  لتعديل الأوقات انتقل إلى <strong>تعديل بيانات العقار</strong>
                 </p>
               </div>
 
@@ -6758,7 +6758,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               const raw = e.target.value.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
               setSearchQuery(raw);
             }}
-            placeholder="بحث عن عميل أو رقم الجوال أو اسم الشاليه..."
+            placeholder="بحث عن عميل أو رقم الجوال أو اسم العقار..."
             className="pr-9 rounded-xl text-sm"
             dir="rtl"
           />
@@ -6890,7 +6890,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 const lines: string[] = [
                   `🏡 إيصال حجز – حكاية أناقة`,
                   ``,
-                  `🏠 الشاليه: ${bookingChaletName}`,
+                  `🏠 العقار: ${bookingChaletName}`,
                   `👤 العميل: ${b.clientName}`,
                   `📅 التاريخ: ${dualDate}`,
                   `⏱ المدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`,
@@ -8349,7 +8349,7 @@ function ChaletServicesTab() {
   if (chalets.length === 0) return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card border border-dashed border-border rounded-2xl p-12 text-center">
       <Building2 className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
-      <p className="text-muted-foreground">لا توجد شاليهات مرتبطة بحسابك بعد</p>
+      <p className="text-muted-foreground">لا توجد عقارات مرتبطة بحسابك بعد</p>
     </motion.div>
   );
 
@@ -8363,7 +8363,7 @@ function ChaletServicesTab() {
           </div>
           <div>
             <h2 className="font-bold text-lg text-foreground">إدارة الخدمات والمرافق</h2>
-            <p className="text-muted-foreground text-sm">أضف خدمات ومرافق إضافية لكل شاليه (مدفوعة أو مجانية)</p>
+            <p className="text-muted-foreground text-sm">أضف خدمات ومرافق إضافية لكل عقار (مدفوعة أو مجانية)</p>
           </div>
           <SectionGuideButton sectionKey="services" />
         </div>
@@ -8625,7 +8625,7 @@ function ChaletServicesTab() {
         ) : services.length === 0 ? (
           <div className="flex flex-col items-center py-12 gap-3 text-muted-foreground">
             <MessageSquare className="w-10 h-10 opacity-20" />
-            <p className="text-sm">لم تُضف أي خدمات لهذا الشاليه بعد</p>
+            <p className="text-sm">لم تُضف أي خدمات لهذا العقار بعد</p>
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -8839,12 +8839,12 @@ function ServiceSubmissionsTab() {
         className="bg-card border border-dashed border-border rounded-2xl p-12 text-center"
       >
         <Star className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-foreground mb-2">لا توجد خدمات مسجلة بعد</h3>
+        <h3 className="text-lg font-semibold text-foreground mb-2">لا توجد خدمات بعد</h3>
         <p className="text-muted-foreground mb-6">سجّل خدمتك لتظهر لعملاء في منطقة القصيم</p>
         <Link href="/add-service-provider">
           <Button>
             <Plus className="w-4 h-4 me-2" />
-            تسجيل خدمة جديدة
+            إضافة خدمة جديدة
           </Button>
         </Link>
       </motion.div>
@@ -9074,7 +9074,7 @@ function ServiceIntegrationBanner({ isCrossOwner }: { isCrossOwner: boolean }) {
     <div className="mb-4 flex items-start gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-3 text-sm">
       <Zap className="w-4 h-4 text-primary shrink-0 mt-0.5" />
       <span className="text-foreground">
-        <span className="font-bold text-primary">نظام مُدمج:</span> هذا القسم مشترك مع شاليهاتك — يُدار فريق عمل واحد وميزانية موحدة لجميع نشاطاتك.
+        <span className="font-bold text-primary">نظام مُدمج:</span> هذا القسم مشترك مع عقاراتك — يُدار فريق عمل واحد وميزانية موحدة لجميع نشاطاتك.
       </span>
     </div>
   );
@@ -13867,7 +13867,7 @@ function ExpensesTab() {
           <Receipt className="w-5 h-5 text-amber-500 shrink-0" />
           <div>
             <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">لتسجيل مصروف جديد</p>
-            <p className="text-xs text-muted-foreground">اختر شاليهاً أو خدمةً محددة من القائمة لإضافة مصروف مرتبط بها</p>
+            <p className="text-xs text-muted-foreground">اختر عقاراً أو خدمةً محددة من القائمة لإضافة مصروف مرتبط بها</p>
           </div>
         </div>
       )}
@@ -14399,7 +14399,7 @@ function buildBulkVouchersHtml(logs: any[], ownerName: string, calMode: "hijri" 
     pages.push(`
 <div class="page" style="page-break-after:always;">
   <div class="header">
-    <div class="brand"><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة الشاليهات – القصيم</div></div>
+    <div class="brand"><div class="brand-name">حكاية أناقة</div><div class="brand-sub">منصة إدارة العقارات – القصيم</div></div>
     <div class="badge"><div class="badge-title">مسيّر رواتب</div><div class="badge-no"># ${voucherNo}</div></div>
   </div>
   <div class="meta">
@@ -14976,7 +14976,7 @@ function StaffTab() {
                     <Select value={addAssignId} onValueChange={setAddAssignId}>
                       <SelectTrigger className="h-10 flex-1 min-w-[150px] text-sm"><SelectValue placeholder="اختر الوحدة" /></SelectTrigger>
                       <SelectContent>
-                        {staffChalets.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nameAr ?? `شاليه #${c.id}`}</SelectItem>)}
+                        {staffChalets.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nameAr ?? `عقار #${c.id}`}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   )}
@@ -15094,7 +15094,7 @@ function StaffTab() {
                   const isMock = (member.id as number) < 0;
                   const unitLabel = (member as any).assignedToName
                     ?? ((member as any).assignedToType === "chalet"
-                      ? (staffChalets.find((c) => c.id === (member as any).assignedToId)?.nameAr ?? "شاليه")
+                      ? (staffChalets.find((c) => c.id === (member as any).assignedToId)?.nameAr ?? "عقار")
                       : (member as any).assignedToType === "service"
                       ? (staffProviders.find((p) => p.id === (member as any).assignedToId)?.businessName ?? "خدمة")
                       : "جميع الوحدات");
@@ -15963,7 +15963,7 @@ function StaffTab() {
                               <div>
                                 <p className="text-[10px] text-muted-foreground mb-0.5">الوحدة المكلّفة</p>
                                 <p className="text-sm text-foreground">
-                                  {emp.assignedToName ?? (emp.assignedToType === "all" ? "جميع الوحدات" : emp.assignedToType === "chalet" ? "شاليه" : "خدمة")}
+                                  {emp.assignedToName ?? (emp.assignedToType === "all" ? "جميع الوحدات" : emp.assignedToType === "chalet" ? "عقار" : "خدمة")}
                                 </p>
                               </div>
                               <div>
@@ -17180,7 +17180,7 @@ function ReportsTab() {
 
   const selectedPropertyName = selectedSubmissionId === "all"
     ? "كل العقارات"
-    : mySubmissions.find((s: any) => String(s.id) === selectedSubmissionId)?.nameAr ?? `شاليه #${selectedSubmissionId}`;
+    : mySubmissions.find((s: any) => String(s.id) === selectedSubmissionId)?.nameAr ?? `عقار #${selectedSubmissionId}`;
 
   const handleShareWhatsApp = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -17460,7 +17460,7 @@ function ReportsTab() {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-semibold text-muted-foreground">نوع التقرير:</span>
           {([
-            { key: "chalets", label: "الشاليهات", icon: <Home className="w-3.5 h-3.5" /> },
+            { key: "chalets", label: "العقارات", icon: <Home className="w-3.5 h-3.5" /> },
             { key: "services", label: "الخدمات", icon: <Activity className="w-3.5 h-3.5" /> },
             { key: "unified", label: "موحّد إجمالي", icon: <Zap className="w-3.5 h-3.5" /> },
           ] as const).map(({ key, label, icon }) => (
@@ -17557,7 +17557,7 @@ function ReportsTab() {
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-card border border-primary/20 rounded-2xl p-4 space-y-1">
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <Home className="w-3.5 h-3.5 text-primary" />إيرادات الشاليهات
+                <Home className="w-3.5 h-3.5 text-primary" />إيرادات العقارات
               </div>
               <div className="text-2xl font-bold text-primary">{Math.round(financial?.totalRevenue ?? 0).toLocaleString("ar-SA")} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
             </div>
@@ -17571,7 +17571,7 @@ function ReportsTab() {
           <div className="bg-gradient-to-l from-primary/5 to-amber-500/5 border border-primary/20 rounded-2xl p-4 text-center">
             <div className="text-xs text-muted-foreground mb-1">إجمالي الإيرادات الموحّدة</div>
             <div className="text-3xl font-extrabold text-green-600">{Math.round((financial?.totalRevenue ?? 0) + (svcRepSummary?.totalRevenue ?? 0)).toLocaleString("ar-SA")} <span className="text-lg font-normal text-muted-foreground">ر.س</span></div>
-            {financial && <div className="text-xs text-muted-foreground mt-2">المصروفات: {Math.round(financial.totalExpenses).toLocaleString("ar-SA")} ر.س · صافي الشاليهات: {Math.round(financial.netProfit).toLocaleString("ar-SA")} ر.س</div>}
+            {financial && <div className="text-xs text-muted-foreground mt-2">المصروفات: {Math.round(financial.totalExpenses).toLocaleString("ar-SA")} ر.س · صافي العقارات: {Math.round(financial.netProfit).toLocaleString("ar-SA")} ر.س</div>}
           </div>
         </div>
       )}
@@ -19100,8 +19100,8 @@ function ReviewsTab() {
     const text = template
       .replace(/\[الرابط\]/g, link)
       .replace(/\{link\}/g, link)
-      .replace(/\[اسم_الشاليه\]/g, chalet.nameAr ?? "شاليهنا")
-      .replace(/\{chalet_name\}/g, chalet.nameAr ?? "شاليهنا")
+      .replace(/\[اسم_الشاليه\]/g, chalet.nameAr ?? "عقارنا")
+      .replace(/\{chalet_name\}/g, chalet.nameAr ?? "عقارنا")
       .replace(/\[اسم_الضيف\]/g, "")
       .replace(/\{guest_name\}/g, "");
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
@@ -19223,13 +19223,13 @@ function ReviewsTab() {
       ) : chalets.length === 0 ? (
         <div className="bg-card border border-border rounded-2xl p-10 text-center text-muted-foreground">
           <Building2 className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p>لا توجد شاليهات مرتبطة بحسابك بعد</p>
+          <p>لا توجد عقارات مرتبطة بحسابك بعد</p>
         </div>
       ) : (
         <>
           {/* Chalet selector */}
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-            <p className="text-sm font-semibold text-foreground mb-3">اختر الشاليه</p>
+            <p className="text-sm font-semibold text-foreground mb-3">اختر العقار</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {chalets.map((c) => {
                 const selected = selectedChaletId === c.id;
@@ -19368,7 +19368,7 @@ function ReviewsTab() {
             ) : chaletReviewsAll.length === 0 ? (
               <div className="bg-card border border-border rounded-2xl p-6 text-center text-muted-foreground text-sm">
                 <Star className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                لا توجد تقييمات مستلمة لهذا الشاليه بعد
+                لا توجد تقييمات مستلمة لهذا العقار بعد
               </div>
             ) : (
               <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
@@ -19588,7 +19588,7 @@ function ReviewsTab() {
           {!selectedChalet && (
             <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 text-sm text-amber-800 dark:text-amber-300 flex gap-3">
               <Star className="w-5 h-5 shrink-0 mt-0.5 text-amber-500" />
-              <p>اختر شاليهاً من الأعلى لإنشاء رابط التقييم وإرساله عبر واتساب للضيف مباشرة</p>
+              <p>اختر عقاراً من الأعلى لإنشاء رابط التقييم وإرساله عبر واتساب للضيف مباشرة</p>
             </div>
           )}
         </>
@@ -19770,7 +19770,7 @@ function DepositsTab() {
   const availableChalets = useMemo(() => {
     const map = new Map<string, string>();
     deposits.forEach((d) => {
-      if (d.submissionId) map.set(String(d.submissionId), d.chaletTitle ?? `شاليه #${d.submissionId}`);
+      if (d.submissionId) map.set(String(d.submissionId), d.chaletTitle ?? `عقار #${d.submissionId}`);
     });
     return Array.from(map.entries());
   }, [deposits]);
@@ -20056,7 +20056,7 @@ function DepositsTab() {
               className="text-sm rounded-lg border border-border bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 h-9 shrink-0"
               dir="rtl"
             >
-              <option value="all">🏡 كل الشاليهات</option>
+              <option value="all">🏡 كل العقارات</option>
               {availableChalets.map(([id, name]) => (
                 <option key={id} value={id}>{name}</option>
               ))}
@@ -20615,7 +20615,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
     return (
       <div className="text-center py-12">
         <Building2 className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
-        <p className="text-sm text-muted-foreground">لا يوجد شاليه معتمد بعد. بعد موافقة الإدارة يمكنك إضافة المواسم.</p>
+        <p className="text-sm text-muted-foreground">لا يوجد عقار معتمد بعد. بعد موافقة الإدارة يمكنك إضافة المواسم.</p>
       </div>
     );
   }
@@ -20641,7 +20641,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
       {ownerChalets.length > 1 && activeSubId && (
         <Select value={String(activeSubId)} onValueChange={(v) => setSelectedSubId(Number(v))}>
           <SelectTrigger className="w-56">
-            <SelectValue placeholder="اختر الشاليه" />
+            <SelectValue placeholder="اختر العقار" />
           </SelectTrigger>
           <SelectContent>
             {ownerChalets.map((c: any) => (
@@ -21124,7 +21124,7 @@ function CustomersTab() {
           <div className="flex items-center gap-1.5 flex-wrap">
             {([
               { key: "all", label: "الكل" },
-              { key: "chalet", label: "شاليهات" },
+              { key: "chalet", label: "عقارات" },
               { key: "service", label: "خدمات" },
             ] as const).map(({ key, label }) => (
               <button key={key} type="button" onClick={() => setSourceFilter(key)}
@@ -21180,7 +21180,7 @@ function CustomersTab() {
                         : src === "service" ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
                         : "bg-primary/10 text-primary"
                       }`}>
-                        {src === "both" ? "شاليه + خدمة" : src === "service" ? "خدمة" : "شاليه"}
+                        {src === "both" ? "عقار + خدمة" : src === "service" ? "خدمة" : "عقار"}
                       </span>
                     )}
                     <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">
@@ -21476,7 +21476,7 @@ function CustomersTab() {
                                     <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
                                       <th className="px-2 py-2 font-medium">رقم الحجز</th>
                                       <th className="px-2 py-2 font-medium">التاريخ والمدة</th>
-                                      <th className="px-2 py-2 font-medium">الشاليه</th>
+                                      <th className="px-2 py-2 font-medium">العقار</th>
                                       <th className="px-2 py-2 font-medium text-center">الحالة</th>
                                       <th className="px-2 py-2 font-medium text-left whitespace-nowrap">الإجمالي</th>
                                     </tr>
@@ -21569,7 +21569,7 @@ function CustomersTab() {
                                 <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
                                   <th className="px-3 py-2 font-medium">رقم الحجز</th>
                                   <th className="px-3 py-2 font-medium">التاريخ</th>
-                                  <th className="px-3 py-2 font-medium">الشاليه</th>
+                                  <th className="px-3 py-2 font-medium">العقار</th>
                                   <th className="px-3 py-2 font-medium text-center">العقد</th>
                                 </tr>
                               </thead>
@@ -22255,6 +22255,25 @@ export default function Dashboard() {
     toast({ title: "وضع القراءة فقط", description: "فعّل وضع التعديل من الشريط العلوي أولاً", variant: "destructive" });
   }
 
+  /* ── Owner profile: load account type before account-specific data ── */
+  const { data: ownerProfile, isLoading: ownerProfileLoading } = useQuery<{ businessType?: string; bookingsCalPref?: string; reportsCalPref?: string; salaryCalPref?: string }>({
+    queryKey: ["owner", "profile-btype", isImpersonating ? impersonation.ownerId : user?.id ?? "self"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/profile");
+      return r.ok ? r.json() : {};
+    },
+    enabled: (isAuthenticated || isImpersonating) && !actAsStaff,
+  });
+  /* Keep account-specific controls and requests hidden until the profile has loaded. */
+  const businessType: "chalet" | "service" | "both" | null =
+    ownerProfile?.businessType === "chalet" || ownerProfile?.businessType === "service" || ownerProfile?.businessType === "both"
+      ? ownerProfile.businessType
+      : ownerProfile
+        ? "both"
+        : null;
+  const canSeeChalets  = businessType === "chalet" || businessType === "both";
+  const canSeeServices = businessType === "service" || businessType === "both";
+
   /* ── Submissions: use apiFetch (credentials: include) + wait for auth ── */
   const { data: submissions, isLoading: submissionsLoading } = useQuery<any[]>({
     queryKey: ["/api/submissions"],
@@ -22264,7 +22283,7 @@ export default function Dashboard() {
       return r.json();
     },
     /* Don't fire until we know the auth state; prevents spurious 401 on mount */
-    enabled: isAuthenticated || isStaff || isImpersonating,
+    enabled: isStaff || ((isAuthenticated || isImpersonating) && canSeeChalets),
   });
 
   const { data: ownerChalets = [] } = useQuery<any[]>({
@@ -22273,7 +22292,7 @@ export default function Dashboard() {
       const r = await apiFetch("/owner/chalets");
       return r.ok ? r.json() : [];
     },
-    enabled: isAuthenticated || isStaff || isImpersonating,
+    enabled: isStaff || ((isAuthenticated || isImpersonating) && canSeeChalets),
   });
 
   const { data: planLimits } = useQuery<{ plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number }>({
@@ -22303,7 +22322,7 @@ export default function Dashboard() {
       const r = await apiFetch("/providers/my/submissions");
       return r.ok ? r.json() : [];
     },
-    enabled: (isAuthenticated || isImpersonating) && !actAsStaff,
+    enabled: (isAuthenticated || isImpersonating) && !actAsStaff && canSeeServices,
   });
   const { data: myApprovedProviders = [] } = useQuery<{ id: number; isActive: boolean; businessName: string; category: string; city: string }[]>({
     queryKey: ["my-approved-providers"],
@@ -22311,31 +22330,18 @@ export default function Dashboard() {
       const r = await apiFetch("/providers/my/approved");
       return r.ok ? r.json() : [];
     },
-    enabled: (isAuthenticated || isImpersonating) && !actAsStaff,
+    enabled: (isAuthenticated || isImpersonating) && !actAsStaff && canSeeServices,
   });
-
-  /* ── Owner profile: fetch business_type + calendar prefs ── */
-  const { data: ownerProfile } = useQuery<{ businessType?: string; bookingsCalPref?: string; reportsCalPref?: string; salaryCalPref?: string }>({
-    queryKey: ["owner", "profile-btype"],
-    queryFn: async () => {
-      const r = await apiFetch("/owner/profile");
-      return r.ok ? r.json() : {};
-    },
-    enabled: (isAuthenticated || isImpersonating) && !actAsStaff,
-  });
-  /* "chalet" | "service" | "both" — default to "both" until loaded */
-  const businessType = ownerProfile?.businessType ?? "both";
-  const canSeeChalets  = businessType !== "service";
-  const canSeeServices = businessType !== "chalet";
 
   /* Cross-owner logic: user has BOTH chalets AND service providers */
   const isCrossOwner = (ownerChalets?.length ?? 0) > 0 && myApprovedProviders.length > 0;
 
   /* Auto-set dashMode based on businessType when profile loads; also seed calendar prefs from DB */
   useEffect(() => {
-    if (!ownerProfile) return;
+    if (!ownerProfile || !businessType) return;
     if (businessType === "service" && dashMode === "chalets") setDashMode("services");
     if (businessType === "chalet" && dashMode === "services") setDashMode("chalets");
+    if (businessType === "service" && selectedServiceTab === "insurance") setSelectedServiceTab("details");
     /* Seed calendar prefs from DB — DB is source of truth, overrides localStorage */
     if (ownerProfile.bookingsCalPref) {
       const bPref = ownerProfile.bookingsCalPref as "hijri" | "gregorian";
@@ -22367,7 +22373,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (ownerChalets.length === 1 && myApprovedProviders.length === 0 && selectedFinanceUnit.type === "all") {
       const c = ownerChalets[0];
-      setSelectedFinanceUnit({ type: "chalet", id: c.id, submissionId: c.submissionId, name: c.nameAr ?? `شاليه ${c.id}` });
+      setSelectedFinanceUnit({ type: "chalet", id: c.id, submissionId: c.submissionId, name: c.nameAr ?? `عقار ${c.id}` });
     }
   }, [ownerChalets.length, myApprovedProviders.length]);
 
@@ -22489,7 +22495,7 @@ export default function Dashboard() {
   }, [notifSummary]);
 
   const allTabs = [
-    { id: "chalets",   label: "شاليهاتي",           icon: <Building2 className="w-4 h-4" /> },
+    { id: "chalets",   label: "عقاراتي",             icon: <Building2 className="w-4 h-4" /> },
     { id: "seasons",   label: "المواسم والأعياد",    icon: <Sun className="w-4 h-4" /> },
     { id: "reviews",   label: "التقييمات",            icon: <Star className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات",   icon: <Calendar className="w-4 h-4" /> },
@@ -22528,7 +22534,10 @@ export default function Dashboard() {
 
   const isLoadingAuth = authLoading || staffLoading;
 
-  const isFullyLoading  = isLoadingAuth || impersonationLoading || ownerSwitchLoading;
+  const isFullyLoading  = isLoadingAuth
+    || impersonationLoading
+    || ownerSwitchLoading
+    || (!actAsStaff && (isAuthenticated || isImpersonating) && ownerProfileLoading);
   const canAccess       = isAuthenticated || isStaff || isImpersonating;
 
   useEffect(() => {
@@ -22689,7 +22698,13 @@ export default function Dashboard() {
                   {isImpersonating ? `عرض حساب: ${impersonation.ownerName ?? "المالك"}` : `أهلاً، ${user?.firstName ?? "عزيزنا"} 👋`}
                 </h1>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <p className="text-muted-foreground">لوحة تحكمك الموحدة — الشاليهات والخدمات في مكان واحد</p>
+                  <p className="text-muted-foreground">
+                    {businessType === "service"
+                      ? "لوحة تحكم خدماتك في مكان واحد"
+                      : businessType === "chalet"
+                        ? "لوحة تحكم عقاراتك في مكان واحد"
+                        : "لوحة تحكمك الموحدة — العقارات والخدمات في مكان واحد"}
+                  </p>
                   <SectionGuideButton sectionKey="dashboard" />
                 </div>
               </>
@@ -22698,20 +22713,20 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             {!actAsStaff && !isImpersonating && (
               <>
-                {planLimits && (submissions?.length ?? 0) >= planLimits.chaletLimit ? (
-                  <Button variant="outline" className="rounded-xl font-semibold text-sm" onClick={() => setShowHeaderUpgrade("chalet")}>
+                {canSeeChalets && (planLimits && (submissions?.length ?? 0) >= planLimits.chaletLimit ? (
+                  <Button variant={canSeeServices ? "outline" : "default"} className="rounded-xl font-semibold text-sm" onClick={() => setShowHeaderUpgrade("chalet")}>
                     <Lock className="w-4 h-4 me-1.5 text-amber-500" />
-                    إضافة شاليه
+                    إضافة عقار
                   </Button>
                 ) : (
                   <Link href="/add-chalet">
-                    <Button variant="outline" className="rounded-xl font-semibold text-sm">
+                    <Button variant={canSeeServices ? "outline" : "default"} className="rounded-xl font-semibold text-sm">
                       <Plus className="w-4 h-4 me-1.5" />
-                      إضافة شاليه
+                      إضافة عقار
                     </Button>
                   </Link>
-                )}
-                {planLimits && (myServiceSubmissions?.length ?? 0) >= planLimits.serviceLimit ? (
+                ))}
+                {canSeeServices && (planLimits && (myServiceSubmissions?.length ?? 0) >= planLimits.serviceLimit ? (
                   <Button className="rounded-xl font-semibold text-sm opacity-60 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted" onClick={() => setShowHeaderUpgrade("service")}>
                     🔒 إضافة خدمة
                   </Button>
@@ -22722,7 +22737,7 @@ export default function Dashboard() {
                       إضافة خدمة
                     </Button>
                   </Link>
-                )}
+                ))}
               </>
             )}
             <Button
@@ -22760,7 +22775,7 @@ export default function Dashboard() {
                 }`}
               >
                 <Building2 className="w-4 h-4" />
-                إدارة شاليهاتي
+                إدارة عقاراتي
                 {(submissions?.length ?? 0) > 0 && (
                   <span className="text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5 font-semibold">
                     {toAr(submissions?.length ?? 0)}
@@ -22885,11 +22900,13 @@ export default function Dashboard() {
                 {/* ── Service ERP Dashboard ─────────────────────────── */}
                 {selectedServiceId !== "submissions" && selectedServiceId !== null && (() => {
                   const selectedProvider = myApprovedProviders.find(p => p.id === selectedServiceId);
-                  const serviceErpTabs = [
+                   const serviceErpTabs = [
                     { id: "details",   label: "تفاصيل الخدمة",    icon: <Edit2 className="w-3.5 h-3.5" /> },
                     { id: "seasons",   label: "المواسم والأعياد",  icon: <Sunrise className="w-3.5 h-3.5" /> },
                     { id: "calendar",  label: "التقويم والحجوزات", icon: <Calendar className="w-3.5 h-3.5" /> },
-                    { id: "insurance", label: "إدارة التأمينات",   icon: <Shield className="w-3.5 h-3.5" /> },
+                     ...(businessType === "service" ? [] : [
+                       { id: "insurance", label: "إدارة التأمينات", icon: <Shield className="w-3.5 h-3.5" /> },
+                     ]),
                   ];
                   return (
                     <ServiceErpCtx.Provider value={{ providerId: selectedServiceId }}>
@@ -22944,7 +22961,7 @@ export default function Dashboard() {
                         {selectedServiceTab === "details"   && <ServiceDetailsTab />}
                         {selectedServiceTab === "seasons"   && <ServiceSeasonsTab />}
                         {selectedServiceTab === "calendar"  && <ServiceCalendarBookingsTab />}
-                        {selectedServiceTab === "insurance" && <ServiceBookingInsurancesTab />}
+                        {businessType !== "service" && selectedServiceTab === "insurance" && <ServiceBookingInsurancesTab />}
                       </div>
                       {/* Shortcut to admin-finance */}
                       <div className="mt-4 pt-4 border-t border-border">
@@ -22984,13 +23001,13 @@ export default function Dashboard() {
                     الشؤون المالية والإدارية
                   </h2>
                   <p className="text-sm text-muted-foreground mt-0.5">
-                    {isCrossOwner ? "لوحة مالية وإدارية موحّدة — شاليهاتك وخدماتك في مكان واحد" : "إدارة الماليات والفريق والعملاء والإشعارات"}
+                    {isCrossOwner ? "لوحة مالية وإدارية موحّدة — عقاراتك وخدماتك في مكان واحد" : "إدارة الماليات والفريق والعملاء والإشعارات"}
                   </p>
                 </div>
                 {isCrossOwner && (
                   <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-xl px-3.5 py-2 text-xs text-primary font-semibold">
                     <Zap className="w-3.5 h-3.5" />
-                    نظام موحّد — شاليهات + خدمات
+                    نظام موحّد — عقارات + خدمات
                   </div>
                 )}
               </div>
@@ -23043,7 +23060,7 @@ export default function Dashboard() {
                       } else if (v.startsWith("chalet-")) {
                         const id = Number(v.replace("chalet-", ""));
                         const c = ownerChalets.find((c: any) => c.id === id);
-                        if (c) setSelectedFinanceUnit({ type: "chalet", id: c.id, submissionId: c.submissionId, name: c.nameAr ?? `شاليه ${c.id}` });
+                        if (c) setSelectedFinanceUnit({ type: "chalet", id: c.id, submissionId: c.submissionId, name: c.nameAr ?? `عقار ${c.id}` });
                       } else if (v.startsWith("service-")) {
                         const id = Number(v.replace("service-", ""));
                         const p = myApprovedProviders.find((p: any) => p.id === id);
@@ -23063,7 +23080,7 @@ export default function Dashboard() {
                       {ownerChalets.map((c: any) => (
                         <SelectItem key={`chalet-${c.id}`} value={`chalet-${c.id}`}>
                           <span className="flex items-center gap-2">
-                            <Home className="w-3.5 h-3.5 shrink-0" />{c.nameAr ?? `شاليه ${c.id}`}
+                            <Home className="w-3.5 h-3.5 shrink-0" />{c.nameAr ?? `عقار ${c.id}`}
                           </span>
                         </SelectItem>
                       ))}
@@ -23083,9 +23100,9 @@ export default function Dashboard() {
               {selectedFinanceUnit.type === "all" && isCrossOwner && (adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "staff" || adminFinanceTab === "reports") && (
                 <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-primary font-semibold flex items-center gap-2">
                   <Zap className="w-3.5 h-3.5" />
-                  {adminFinanceTab === "revenue"  && "الإيرادات الموحّدة — تشمل حجوزات الشاليهات وإيرادات الخدمات"}
-                  {adminFinanceTab === "expenses" && "المصروفات الموحّدة — تشمل مصروفات الشاليهات والخدمات"}
-                  {adminFinanceTab === "staff"    && "فريق العمل الموحّد — جميع الموظفين في شاليهاتك وخدماتك"}
+                  {adminFinanceTab === "revenue"  && "الإيرادات الموحّدة — تشمل حجوزات العقارات وإيرادات الخدمات"}
+                  {adminFinanceTab === "expenses" && "المصروفات الموحّدة — تشمل مصروفات العقارات والخدمات"}
+                  {adminFinanceTab === "staff"    && "فريق العمل الموحّد — جميع الموظفين في عقاراتك وخدماتك"}
                   {adminFinanceTab === "reports"  && "التقارير الإجمالية — تجمع بيانات كل نشاطاتك"}
                 </div>
               )}
@@ -23108,15 +23125,15 @@ export default function Dashboard() {
         })()}
 
         {/* ══ CHALETS MODE ═════════════════════════════════════════════ */}
-        {(dashMode === "chalets" || actAsStaff) && (
+        {(actAsStaff || (dashMode === "chalets" && canSeeChalets)) && (
           <>
 
         {/* Subscription / Account Settings — clickable banner */}
         {subscription && (() => {
           const planLabels: Record<string, string> = {
             trial: "تجريبي", monthly: "شهري", yearly: "سنوي",
-            chalet_basic: "شاليه — أساسي", chalet_pro: "شاليه — احترافي",
-            chalet_unlimited: "شاليه — غير محدود", service_basic: "خدمات — أساسي",
+            chalet_basic: "عقار — أساسي", chalet_pro: "عقار — احترافي",
+            chalet_unlimited: "عقار — غير محدود", service_basic: "خدمات — أساسي",
             service_pro: "خدمات — احترافي", bundle: "حزمة شاملة",
           };
           const statusCls: Record<string, string> = {
@@ -23359,7 +23376,7 @@ function ContractSettingsTab() {
     );
   }
 
-  const chaletName = (selected as any)?.name ?? "شاليهي";
+  const chaletName = (selected as any)?.name ?? "عقاري";
 
   return (
     <div className="max-w-2xl mx-auto py-6 px-4 space-y-6" dir="rtl">
@@ -23371,18 +23388,18 @@ function ContractSettingsTab() {
         </div>
         <div>
           <h2 className="text-xl font-bold text-foreground">إعدادات العقد الرقمي</h2>
-          <p className="text-sm text-muted-foreground">تخصيص هوية الشاليه والشروط التي تظهر في عقد الإيجار</p>
+          <p className="text-sm text-muted-foreground">تخصيص هوية العقار والشروط التي تظهر في عقد الإيجار</p>
         </div>
       </div>
 
       {/* Chalet selector */}
       {submissions.length > 1 && (
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground">الشاليه</label>
+          <label className="text-sm font-medium text-foreground">العقار</label>
           <select value={selectedId ?? ""} onChange={(e) => setSelectedId(Number(e.target.value))}
             className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
             {submissions.map((s: any) => (
-              <option key={s.id} value={s.id}>{s.name ?? `شاليه #${s.id}`}</option>
+              <option key={s.id} value={s.id}>{s.name ?? `عقار #${s.id}`}</option>
             ))}
           </select>
         </div>
@@ -23392,9 +23409,9 @@ function ContractSettingsTab() {
       <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
         <div className="flex items-center gap-2">
           <div className="w-1 h-5 rounded-full bg-primary" />
-          <h3 className="font-semibold text-foreground">شعار الشاليه في العقد</h3>
+          <h3 className="font-semibold text-foreground">شعار العقار في العقد</h3>
         </div>
-        <p className="text-xs text-muted-foreground -mt-2">يظهر شعار الشاليه في رأسية العقد الموقَّع — PNG أو JPG</p>
+        <p className="text-xs text-muted-foreground -mt-2">يظهر شعار العقار في رأسية العقد الموقَّع — PNG أو JPG</p>
 
         <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
           onChange={async (e) => { const f = e.target.files?.[0]; if (f) await handleLogoUpload(f); e.target.value = ""; }} />
@@ -23530,7 +23547,7 @@ function ContractPreviewCard({ logoUrl, chaletName, terms }: { logoUrl: string; 
       {/* Header */}
       <div style={{ background: C.primary, padding: "12px 20px", textAlign: "center" }}>
         <p style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.primaryFg, letterSpacing: "-0.5px" }}>تكية</p>
-        <p style={{ margin: "2px 0 0", fontSize: 10, color: "rgba(250,247,242,0.8)" }}>عقد إيجار شاليه رقمي موقَّع</p>
+        <p style={{ margin: "2px 0 0", fontSize: 10, color: "rgba(250,247,242,0.8)" }}>عقد إيجار عقار رقمي موقَّع</p>
       </div>
       {/* Chalet identity */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", background: C.lightBg, borderBottom: `1px solid ${C.border}` }}>
@@ -23630,7 +23647,7 @@ function buildContractWaMsg(
   tenantName?: string
 ): string {
   const chalet = chalets?.find((c: any) => c.submissionId === submissionId);
-  const cn = chalet?.nameAr ?? "الشاليه";
+  const cn = chalet?.nameAr ?? "العقار";
   const arDays = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
   const dayN = arDays[new Date(bookingDate + "T12:00:00").getDay()];
   const dual = formatDualDate(bookingDate);
@@ -23859,21 +23876,21 @@ function ContractsArchiveTab() {
           </div>
           <div>
             <h3 className="font-bold text-base text-foreground">إعدادات العقد الرقمي</h3>
-            <p className="text-xs text-muted-foreground">شعار الشاليه الظاهر في رأس العقد</p>
+            <p className="text-xs text-muted-foreground">شعار العقار الظاهر في رأس العقد</p>
           </div>
         </div>
 
         {/* Chalet selector — only when multiple chalets exist */}
         {settSubs.length > 1 && (
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">اختر الشاليه</label>
+            <label className="text-xs font-medium text-muted-foreground">اختر العقار</label>
             <select
               value={settSubId ?? ""}
               onChange={(e) => setSettSubId(Number(e.target.value))}
               className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 text-right"
             >
               {settSubs.map((s: any) => (
-                <option key={s.id} value={s.id}>{s.name ?? `شاليه #${s.id}`}</option>
+                <option key={s.id} value={s.id}>{s.name ?? `عقار #${s.id}`}</option>
               ))}
             </select>
           </div>
@@ -23881,7 +23898,7 @@ function ContractsArchiveTab() {
 
         {/* Logo upload */}
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">شعار الشاليه في رأس العقد <span className="font-normal">(اختياري)</span></label>
+          <label className="text-xs font-medium text-muted-foreground">شعار العقار في رأس العقد <span className="font-normal">(اختياري)</span></label>
           <input
             ref={logoInputRef}
             type="file"
@@ -23938,14 +23955,14 @@ function ContractsArchiveTab() {
         {/* Conditions notice */}
         <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
-            📋 <span className="font-semibold">تنويه:</span> يتم سحب شروط وأحكام العقد تلقائيًا من "إعدادات الشاليه".
+            📋 <span className="font-semibold">تنويه:</span> يتم سحب شروط وأحكام العقد تلقائيًا من "إعدادات العقار".
           </p>
           <button
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent("switch-dashboard-tab", { detail: "chalets" }))}
             className="shrink-0 text-xs font-medium text-primary border border-primary/30 bg-primary/5 rounded-lg px-3 py-1.5 hover:bg-primary/10 transition-colors whitespace-nowrap"
           >
-            ⚙️ تعديل الشروط من إعدادات الشاليه
+            ⚙️ تعديل الشروط من إعدادات العقار
           </button>
         </div>
 
@@ -25065,7 +25082,7 @@ function OwnerProfileTab() {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-foreground">إشعارات التقييمات <span className="text-xs font-normal text-muted-foreground">(من الزبائن)</span></p>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">تلقّي إشعار على الواتساب عند قيام أحد الزبائن بكتابة تقييم جديد لشاليهك.</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">تلقّي إشعار على الواتساب عند قيام أحد الزبائن بكتابة تقييم جديد لعقارك.</p>
               </div>
             </label>
 
