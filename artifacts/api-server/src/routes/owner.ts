@@ -566,6 +566,75 @@ async function getOwnerIds(req: Request): Promise<string[]> {
   return [...ownerIds];
 }
 
+type OwnerBusinessType = "chalet" | "service" | "both";
+
+function normalizeOwnerBusinessType(value: unknown): OwnerBusinessType | null {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  if ([
+    "service", "services", "service_provider", "provider",
+    "مزود_خدمة", "خدمة", "خدمات",
+  ].includes(normalized)) return "service";
+
+  if ([
+    "chalet", "property", "property_owner", "owner",
+    "مالك_عقار", "عقار", "شاليه",
+  ].includes(normalized)) return "chalet";
+
+  if ([
+    "both", "all", "chalet_service", "service_chalet",
+    "كلاهما", "الكل", "عقار_وخدمات",
+  ].includes(normalized)) return "both";
+
+  return null;
+}
+
+async function findLatestRegisteredBusinessType(
+  email: string | null,
+  phone: string | null,
+  userId: string | null,
+): Promise<OwnerBusinessType | null> {
+  const candidates: unknown[] = [];
+
+  if (email) {
+    const result = await db.execute(
+      sql`SELECT business_type
+          FROM owner_applications
+          WHERE LOWER(email) = LOWER(${email})
+          ORDER BY created_at DESC, id DESC`
+    );
+    candidates.push(...((result as any).rows as Array<{ business_type: unknown }>).map((row) => row.business_type));
+  }
+
+  if (phone) {
+    const result = await db.execute(
+      sql`SELECT business_type
+          FROM owner_applications
+          WHERE phone = ${phone}
+          ORDER BY created_at DESC, id DESC`
+    );
+    candidates.push(...((result as any).rows as Array<{ business_type: unknown }>).map((row) => row.business_type));
+  }
+
+  if (userId && /^owner_\d+$/.test(userId)) {
+    const applicationId = Number(userId.slice("owner_".length));
+    const result = await db.execute(
+      sql`SELECT business_type FROM owner_applications WHERE id = ${applicationId} LIMIT 1`
+    );
+    candidates.push(...((result as any).rows as Array<{ business_type: unknown }>).map((row) => row.business_type));
+  }
+
+  for (const candidate of candidates) {
+    const businessType = normalizeOwnerBusinessType(candidate);
+    if (businessType) return businessType;
+  }
+
+  return null;
+}
+
 /* ── GET /owner/profile — fetch owner profile ──────────────── */
 router.get("/profile", async (req, res) => {
   try {
@@ -582,7 +651,8 @@ router.get("/profile", async (req, res) => {
       );
       const oaRow = ((oaResult as any).rows as Array<{ full_name: string; phone: string; email: string; whatsapp_news_subscribe: boolean; business_type: string; bookings_cal_pref: string; reports_cal_pref: string; salary_cal_pref: string }>)[0];
       if (!oaRow) {
-        return res.json({ fullName: req.user?.firstName ?? "", phone: "", email: email, noApplication: true });
+        const businessType = await findLatestRegisteredBusinessType(email, null, userId) ?? "both";
+        return res.json({ fullName: req.user?.firstName ?? "", phone: "", email, businessType, noApplication: true });
       }
       phone = oaRow.phone ?? "";
       /* If owner_applications.phone is empty, pull from chalet_submissions */
@@ -593,7 +663,10 @@ router.get("/profile", async (req, res) => {
         phone = ((csResult as any).rows as Array<{ whatsapp_number: string }>)[0]?.whatsapp_number ?? "";
       }
       console.log(`[GET /owner/profile] owner_applications path: email=${email} phone=${phone}`);
-      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email, whatsappNewsSubscribe: oaRow.whatsapp_news_subscribe ?? false, businessType: oaRow.business_type ?? "both", bookingsCalPref: oaRow.bookings_cal_pref ?? "hijri", reportsCalPref: oaRow.reports_cal_pref ?? "gregorian", salaryCalPref: oaRow.salary_cal_pref ?? "gregorian" });
+      const businessType = normalizeOwnerBusinessType(oaRow.business_type)
+        ?? await findLatestRegisteredBusinessType(oaRow.email, phone, userId)
+        ?? "both";
+      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email, whatsappNewsSubscribe: oaRow.whatsapp_news_subscribe ?? false, businessType, bookingsCalPref: oaRow.bookings_cal_pref ?? "hijri", reportsCalPref: oaRow.reports_cal_pref ?? "gregorian", salaryCalPref: oaRow.salary_cal_pref ?? "gregorian" });
     }
 
     /* ── Path 2: Replit OIDC owner — look up via chalet_submissions ── */
@@ -614,13 +687,17 @@ router.get("/profile", async (req, res) => {
       if (csRow) {
         const fullName = [csRow.first_name, csRow.last_name].filter(Boolean).join(" ") || csRow.name_ar || "";
         console.log(`[GET /owner/profile] chalet_submissions path: userId=${userId} phone=${csRow.whatsapp_number}`);
-        return res.json({ fullName, phone: csRow.whatsapp_number ?? "", email: csRow.email ?? req.user?.email ?? "" });
+        const profileEmail = csRow.email ?? req.user?.email ?? "";
+        const businessType = await findLatestRegisteredBusinessType(profileEmail, csRow.whatsapp_number, userId) ?? "chalet";
+        return res.json({ fullName, phone: csRow.whatsapp_number ?? "", email: profileEmail, businessType });
       }
     }
 
     /* ── Path 3: last resort — return whatever the session has ── */
     console.log(`[GET /owner/profile] no data found for userId=${userId} email=${req.user?.email}`);
-    return res.json({ fullName: req.user?.firstName ?? "", phone: "", email: req.user?.email ?? "", noApplication: true });
+    const fallbackEmail = req.user?.email ?? "";
+    const businessType = await findLatestRegisteredBusinessType(fallbackEmail, null, userId) ?? "both";
+    return res.json({ fullName: req.user?.firstName ?? "", phone: "", email: fallbackEmail, businessType, noApplication: true });
   } catch (err) {
     console.error("[GET /owner/profile]", err);
     return res.status(500).json({ error: "حدث خطأ أثناء جلب بيانات الحساب" });
