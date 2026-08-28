@@ -22273,6 +22273,16 @@ export default function Dashboard() {
         : null;
   const canSeeChalets  = businessType === "chalet" || businessType === "both";
   const canSeeServices = businessType === "service" || businessType === "both";
+  /* Render the account's only valid section immediately when the profile arrives.
+     This avoids one paint of the default chalet mode before the syncing effect runs. */
+  const activeDashMode: "chalets" | "services" | "admin-finance" =
+    dashMode === "admin-finance"
+      ? "admin-finance"
+      : !actAsStaff && businessType === "service"
+      ? "services"
+      : !actAsStaff && businessType === "chalet"
+        ? "chalets"
+        : dashMode;
 
   /* ── Submissions: use apiFetch (credentials: include) + wait for auth ── */
   const { data: submissions, isLoading: submissionsLoading } = useQuery<any[]>({
@@ -22361,13 +22371,13 @@ export default function Dashboard() {
 
   /* Auto-select first service when entering services mode */
   useEffect(() => {
-    if (dashMode === "services" && myApprovedProviders.length > 0 && selectedServiceId === null) {
+    if (activeDashMode === "services" && myApprovedProviders.length > 0 && selectedServiceId === null) {
       setSelectedServiceId(myApprovedProviders[0].id);
     }
-    if (dashMode === "services" && myApprovedProviders.length === 0) {
+    if (activeDashMode === "services" && myApprovedProviders.length === 0) {
       setSelectedServiceId(null);
     }
-  }, [dashMode, myApprovedProviders.length]);
+  }, [activeDashMode, myApprovedProviders.length]);
 
   /* Auto-select the single chalet as finance unit when owner has only one property */
   useEffect(() => {
@@ -22769,7 +22779,7 @@ export default function Dashboard() {
               <button
                 onClick={() => setDashMode("chalets")}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                  dashMode === "chalets"
+                  activeDashMode === "chalets"
                     ? "bg-background text-primary shadow-sm ring-1 ring-border"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -22788,7 +22798,7 @@ export default function Dashboard() {
               <button
                 onClick={() => setDashMode("services")}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                  dashMode === "services"
+                  activeDashMode === "services"
                     ? "bg-background text-amber-600 shadow-sm ring-1 ring-border"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -22806,7 +22816,7 @@ export default function Dashboard() {
             <button
               onClick={() => setDashMode("admin-finance")}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                dashMode === "admin-finance"
+                activeDashMode === "admin-finance"
                   ? "bg-background text-slate-700 dark:text-slate-200 shadow-sm ring-1 ring-border"
                   : "text-muted-foreground hover:text-foreground"
               }`}
@@ -22823,7 +22833,7 @@ export default function Dashboard() {
         )}
 
         {/* ══ SERVICES MODE — Full ERP ═════════════════════════════════ */}
-        {dashMode === "services" && !actAsStaff && (
+        {activeDashMode === "services" && !actAsStaff && (
           <motion.div
             key="services-mode"
             initial={{ opacity: 0, y: 8 }}
@@ -22980,7 +22990,7 @@ export default function Dashboard() {
         )}
 
         {/* ══ ADMIN FINANCE MODE ══════════════════════════════════════ */}
-        {dashMode === "admin-finance" && !actAsStaff && (() => {
+        {activeDashMode === "admin-finance" && !actAsStaff && (() => {
           const afTabs = [
             { id: "revenue",       label: "الإيرادات",             icon: <TrendingUp className="w-4 h-4" />,   color: "text-green-600" },
             { id: "ledger",        label: "سجل الحساب البنكي",   icon: <span className="text-base leading-none">🏦</span>, color: "text-blue-600" },
@@ -23125,7 +23135,7 @@ export default function Dashboard() {
         })()}
 
         {/* ══ CHALETS MODE ═════════════════════════════════════════════ */}
-        {(actAsStaff || (dashMode === "chalets" && canSeeChalets)) && (
+        {(actAsStaff || (activeDashMode === "chalets" && canSeeChalets)) && (
           <>
 
         {/* Subscription / Account Settings — clickable banner */}
@@ -23176,7 +23186,7 @@ export default function Dashboard() {
         )}
 
         {/* ── My Services Summary Card (in chalets mode only, hidden for chalet-only accounts) ── */}
-        {!actAsStaff && canSeeServices && dashMode === "chalets" && (myServiceSubmissions.length > 0 || myApprovedProviders.length > 0) && (
+        {!actAsStaff && canSeeServices && activeDashMode === "chalets" && (myServiceSubmissions.length > 0 || myApprovedProviders.length > 0) && (
           <motion.button
             type="button"
             initial={{ opacity: 0, y: 6 }}

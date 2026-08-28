@@ -82,17 +82,20 @@ router.get("/", async (req, res) => {
   const isAdminDirectSession = !tempToken && PLATFORM_ADMIN_IDS_SET.has(String(resolvedOwnerId));
 
   const ownerIds = new Set<string>([resolvedOwnerId]);
+  let businessType: string | null = null;
   if (!isAdminDirectSession) try {
     /* 1. If this IS already an "owner_N" key, also find the Replit user id */
     if (/^owner_\d+$/.test(resolvedOwnerId)) {
       const n = parseInt(resolvedOwnerId.replace("owner_", ""), 10);
       const r = await db.execute(
-        sql`SELECT u.id FROM owner_applications oa
-            JOIN users u ON LOWER(u.email) = LOWER(oa.email)
+        sql`SELECT u.id AS user_id, oa.business_type
+            FROM owner_applications oa
+            LEFT JOIN users u ON LOWER(u.email) = LOWER(oa.email)
             WHERE oa.id = ${n} LIMIT 1`
       );
-      const uid = ((r as any).rows as Array<{ id: string }>)[0]?.id;
-      if (uid) ownerIds.add(String(uid));
+      const owner = ((r as any).rows as Array<{ user_id: string | null; business_type: string | null }>)[0];
+      if (owner?.user_id) ownerIds.add(String(owner.user_id));
+      businessType = owner?.business_type ?? null;
     }
     /* 2. Also find the "owner_N" alias for a Replit-ID session */
     else {
@@ -102,13 +105,24 @@ router.get("/", async (req, res) => {
       const email = ((emailR as any).rows as Array<{ email: string }>)[0]?.email;
       if (email) {
         const appR = await db.execute(
-          sql`SELECT id FROM owner_applications WHERE LOWER(email) = LOWER(${email}) LIMIT 1`
+          sql`SELECT id, business_type
+              FROM owner_applications
+              WHERE LOWER(email) = LOWER(${email})
+              LIMIT 1`
         );
-        const appId = ((appR as any).rows as Array<{ id: number }>)[0]?.id;
-        if (appId) ownerIds.add(`owner_${appId}`);
+        const owner = ((appR as any).rows as Array<{ id: number; business_type: string | null }>)[0];
+        if (owner?.id) ownerIds.add(`owner_${owner.id}`);
+        businessType = owner?.business_type ?? null;
       }
     }
   } catch { /* non-fatal — fall back to single ID */ }
+
+  /* Service-only accounts have no property submissions. Avoid querying the
+     property table entirely and return the endpoint's normal empty shape. */
+  if (!isAdminDirectSession && businessType === "service") {
+    res.json([]);
+    return;
+  }
 
   const allOwnerIds = [...ownerIds];
 
