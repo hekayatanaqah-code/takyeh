@@ -8741,7 +8741,7 @@ const SERVICE_CATEGORY_LABELS: Record<string, string> = {
   other: "✨ أخرى",
 };
 
-function ServiceSubmissionsTab() {
+function ServiceSubmissionsTab({ onManageCalendar }: { onManageCalendar?: (providerId: number) => void }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -8888,6 +8888,15 @@ function ServiceSubmissionsTab() {
                     <p className="text-sm text-muted-foreground">{SERVICE_CATEGORY_LABELS[p.category] ?? p.category} · {p.city}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="text-xs gap-1.5 bg-amber-500 hover:bg-amber-600 text-white"
+                      onClick={() => onManageCalendar?.(p.id)}
+                    >
+                      <CalendarDays className="w-3.5 h-3.5" />
+                      إدارة التقويم
+                    </Button>
                     <Link href={`/providers/${p.id}`}>
                       <Button size="sm" variant="outline" className="text-xs gap-1.5">
                         <ExternalLink className="w-3.5 h-3.5" />
@@ -9047,15 +9056,6 @@ function ServiceSubmissionsTab() {
         </div>
       )}
 
-      {/* Add new service CTA */}
-      <div className="flex justify-end">
-        <Link href="/add-service-provider">
-          <Button variant="outline" size="sm" className="gap-2">
-            <Plus className="w-4 h-4" />
-            إضافة خدمة جديدة
-          </Button>
-        </Link>
-      </div>
     </div>
   );
 }
@@ -22758,18 +22758,14 @@ export default function Dashboard() {
                     </Button>
                   </Link>
                 ))}
-                {canSeeServices && (planLimits && (myServiceSubmissions?.length ?? 0) >= planLimits.serviceLimit ? (
-                  <Button className="rounded-xl font-semibold text-sm opacity-60 cursor-not-allowed bg-muted text-muted-foreground hover:bg-muted" onClick={() => setShowHeaderUpgrade("service")}>
-                    🔒 إضافة خدمة
-                  </Button>
-                ) : (
+                {canSeeServices && (
                   <Link href="/add-service-provider">
                     <Button variant={activeDashMode === "services" ? "default" : "outline"} className="rounded-xl font-semibold text-sm">
                       <Plus className="w-4 h-4 me-1.5" />
                       إضافة خدمة
                     </Button>
                   </Link>
-                ))}
+                )}
               </>
             )}
             <Button
@@ -22888,8 +22884,11 @@ export default function Dashboard() {
             )}
 
             {/* If no approved providers: show submissions manager directly */}
-            {myApprovedProviders.length === 0 ? (
-              <ServiceSubmissionsTab />
+             {myApprovedProviders.length === 0 ? (
+              <ServiceSubmissionsTab onManageCalendar={(providerId) => {
+                setSelectedServiceId(providerId);
+                setSelectedServiceTab("calendar");
+              }} />
             ) : (
               <>
                 {/* ── Service Selector Tabs ─────────────────────────── */}
@@ -22921,7 +22920,12 @@ export default function Dashboard() {
                 </div>
 
                 {/* ── Submissions View ─────────────────────────────── */}
-                {selectedServiceId === "submissions" && <ServiceSubmissionsTab />}
+                 {selectedServiceId === "submissions" && (
+                   <ServiceSubmissionsTab onManageCalendar={(providerId) => {
+                     setSelectedServiceId(providerId);
+                     setSelectedServiceTab("calendar");
+                   }} />
+                 )}
 
                 {/* ── Service ERP Dashboard ─────────────────────────── */}
                 {selectedServiceId !== "submissions" && selectedServiceId !== null && (() => {
