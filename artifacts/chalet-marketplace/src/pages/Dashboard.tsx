@@ -22256,21 +22256,37 @@ export default function Dashboard() {
   }
 
   /* ── Owner profile: load account type before account-specific data ── */
-  const { data: ownerProfile, isLoading: ownerProfileLoading } = useQuery<{ businessType?: string; bookingsCalPref?: string; reportsCalPref?: string; salaryCalPref?: string }>({
+  type OwnerProfile = {
+    businessType?: string;
+    business_type?: string;
+    accountType?: string;
+    role?: string;
+    bookingsCalPref?: string;
+    reportsCalPref?: string;
+    salaryCalPref?: string;
+  };
+  const {
+    data: ownerProfile,
+    isLoading: ownerProfileLoading,
+    refetch: refetchOwnerProfile,
+  } = useQuery<OwnerProfile | null>({
     queryKey: ["owner", "profile-btype", isImpersonating ? impersonation.ownerId : user?.id ?? "self"],
     queryFn: async () => {
       const r = await apiFetch("/owner/profile");
-      return r.ok ? r.json() : {};
+      if (!r.ok) throw new Error("تعذر تحميل نوع الحساب");
+      return r.json();
     },
     enabled: (isAuthenticated || isImpersonating) && !actAsStaff,
   });
   /* Keep account-specific controls and requests hidden until the profile has loaded. */
+  const profileBusinessType = ownerProfile?.businessType
+    ?? ownerProfile?.business_type
+    ?? ownerProfile?.accountType
+    ?? ownerProfile?.role;
   const businessType: "chalet" | "service" | "both" | null =
-    ownerProfile?.businessType === "chalet" || ownerProfile?.businessType === "service" || ownerProfile?.businessType === "both"
-      ? ownerProfile.businessType
-      : ownerProfile
-        ? "both"
-        : null;
+    profileBusinessType === "chalet" || profileBusinessType === "service" || profileBusinessType === "both"
+      ? profileBusinessType
+      : null;
   const canSeeChalets  = businessType === "chalet" || businessType === "both";
   const canSeeServices = businessType === "service" || businessType === "both";
   /* Render the account's only valid section immediately when the profile arrives.
@@ -22548,6 +22564,10 @@ export default function Dashboard() {
     || impersonationLoading
     || ownerSwitchLoading
     || (!actAsStaff && (isAuthenticated || isImpersonating) && ownerProfileLoading);
+  const ownerProfileUnavailable = !actAsStaff
+    && (isAuthenticated || isImpersonating)
+    && !ownerProfileLoading
+    && (!ownerProfile || !businessType);
   const canAccess       = isAuthenticated || isStaff || isImpersonating;
 
   useEffect(() => {
@@ -22567,6 +22587,25 @@ export default function Dashboard() {
         <div className="container mx-auto px-4 py-12 max-w-4xl space-y-6">
           <Skeleton className="h-24 w-full rounded-2xl" />
           <Skeleton className="h-48 w-full rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (ownerProfileUnavailable) {
+    return (
+      <div className="min-h-screen bg-background" dir="rtl">
+        <Navbar />
+        <div className="container mx-auto px-4 py-20 max-w-lg text-center">
+          <div className="rounded-3xl border border-border bg-card p-8 shadow-sm">
+            <h1 className="text-xl font-bold text-foreground">تعذر تحديد نوع الحساب</h1>
+            <p className="mt-3 text-sm text-muted-foreground">
+              لم نتمكن من تحميل إعدادات الحساب، لذلك لم نعرض قسم العقارات أو الخدمات بشكل خاطئ.
+            </p>
+            <Button onClick={() => refetchOwnerProfile()} className="mt-6 rounded-xl">
+              إعادة المحاولة
+            </Button>
+          </div>
         </div>
       </div>
     );
