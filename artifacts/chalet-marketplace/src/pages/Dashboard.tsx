@@ -22808,7 +22808,8 @@ export default function Dashboard() {
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "profile" | "customers" | "digitalContracts" | "notifications">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "customers" | "digitalContracts" | "notifications">("chalets");
+  const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const [serviceFinanceMode, setServiceFinanceMode] = useState<"separate" | "consolidated">(() => (localStorage.getItem("svc_finance_mode") as any) ?? "separate");
   const [clientListMode, setClientListMode] = useState<"unified" | "separate">(() => (localStorage.getItem("svc_client_mode") as any) ?? "unified");
@@ -23181,7 +23182,6 @@ export default function Dashboard() {
     { id: "customers", label: "قاعدة العملاء",        icon: <UserCheck className="w-4 h-4" /> },
     { id: "services",  label: "إدارة الخدمات والمرافق", icon: <Plus className="w-4 h-4" /> },
     { id: "messageSettings", label: "إعدادات الرسائل الآلية", icon: <Send className="w-4 h-4" /> },
-    { id: "profile",          label: "إعدادات الحساب",        icon: <Settings className="w-4 h-4" /> },
     { id: "digitalContracts", label: "العقود الرقمية",         icon: <ScrollText className="w-4 h-4" /> },
   ] as const;
 
@@ -23414,14 +23414,57 @@ export default function Dashboard() {
                 )}
               </>
             )}
-            <Button
-              variant="ghost"
-              onClick={() => isStaff ? staffLogout() : logout()}
-              className="rounded-xl text-muted-foreground hover:text-destructive hover:border-destructive text-sm px-3"
-            >
-              <LogOut className="w-4 h-4 me-1.5" />
-              خروج
-            </Button>
+            {!actAsStaff && !isImpersonating ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="قائمة الحساب"
+                    data-testid="account-menu-trigger"
+                    className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    {!actAsStaff && user?.profileImageUrl ? (
+                      <img src={user.profileImageUrl} alt="" className="h-7 w-7 rounded-lg object-cover" />
+                    ) : (
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <User className="h-4 w-4" />
+                      </span>
+                    )}
+                    <span className="hidden sm:inline">حسابي</span>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div dir="rtl">
+                    <DropdownMenuItem
+                      data-testid="account-settings-menu-item"
+                      onSelect={() => setAccountSettingsOpen(true)}
+                      className="cursor-pointer gap-2 py-2.5"
+                    >
+                      <Settings className="h-4 w-4 text-primary" />
+                      <span>إعدادات الحساب</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      data-testid="logout-menu-item"
+                      onSelect={() => logout()}
+                      className="cursor-pointer gap-2 py-2.5 text-destructive focus:text-destructive"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>تسجيل الخروج</span>
+                    </DropdownMenuItem>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button
+                variant="ghost"
+                onClick={() => isStaff ? staffLogout() : logout()}
+                className="rounded-xl text-muted-foreground hover:text-destructive hover:border-destructive text-sm px-3"
+              >
+                <LogOut className="w-4 h-4 me-1.5" />
+                خروج
+              </Button>
+            )}
           </div>
         </motion.div>
         <UpgradePlanDialog
@@ -23429,6 +23472,15 @@ export default function Dashboard() {
           onClose={() => setShowHeaderUpgrade(null)}
           context={showHeaderUpgrade ?? "chalet"}
         />
+        <Dialog open={accountSettingsOpen} onOpenChange={setAccountSettingsOpen}>
+          <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6" dir="rtl">
+            <DialogHeader className="sr-only">
+              <DialogTitle>إعدادات الحساب</DialogTitle>
+              <DialogDescription>تعديل بيانات الحساب وكلمة المرور وتفضيلات الإشعارات</DialogDescription>
+            </DialogHeader>
+            <OwnerProfileTab />
+          </DialogContent>
+        </Dialog>
 
         {/* ── Dashboard Mode Switcher (owners only, not staff) ── */}
         {!actAsStaff && (
@@ -23916,9 +23968,6 @@ export default function Dashboard() {
         )}
         {activeTab === "messageSettings" && (
           <OwnerMessageSettingsTab />
-        )}
-        {activeTab === "profile" && (
-          <OwnerProfileTab />
         )}
         {activeTab === "customers" && (
           <AdminFinanceCtx.Provider value={{ unit: { type: "all" } }}>
