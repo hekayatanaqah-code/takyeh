@@ -9662,6 +9662,7 @@ function ServiceCalendarBookingsTab() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickYear, setPickYear] = useState(now.getFullYear());
   const [pickMonth, setPickMonth] = useState(now.getMonth());
+  const bookingFormRef = useRef<HTMLDivElement>(null);
 
   const { data: provider } = useQuery<any | null>({
     queryKey: ["service-provider-detail", providerId],
@@ -9696,6 +9697,19 @@ function ServiceCalendarBookingsTab() {
     apptDays.set(a.dateStr, (apptDays.get(a.dateStr) ?? 0) + 1);
   });
   const dailyCapacity = Math.max(1, Number(provider?.dailyCapacity) || 1);
+
+  function revealBookingForm() {
+    setShowForm(true);
+    // Wait for the form to mount before moving the viewport and keyboard focus.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const formElement = bookingFormRef.current;
+        if (!formElement) return;
+        formElement.scrollIntoView({ behavior: "smooth", block: "start" });
+        formElement.focus({ preventScroll: true });
+      });
+    });
+  }
 
   function toDateStr(y: number, m: number, d: number) {
     return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -9792,7 +9806,7 @@ function ServiceCalendarBookingsTab() {
       setPickMonth(month - 1);
     }
     setPickerOpen(false);
-    setShowForm(true);
+    revealBookingForm();
   }
 
   async function handleStatusChange(id: number, status: "confirmed" | "cancelled") {
@@ -10084,7 +10098,8 @@ function ServiceCalendarBookingsTab() {
                     } else if (full) {
                       toast({
                         title: "اليوم مكتمل الحجوزات",
-                        description: `تم تسجيل ${toArN(apptCnt)} من ${toArN(dailyCapacity)} حجوزات.`,
+                        description: `المتبقي: ٠ — تم تسجيل ${toArN(apptCnt)} من ${toArN(dailyCapacity)} حجوزات.`,
+                        variant: "destructive",
                       });
                     } else {
                       setEditingAppointmentId(null);
@@ -10092,10 +10107,13 @@ function ServiceCalendarBookingsTab() {
                       setPickYear(calendarDay.date.getFullYear());
                       setPickMonth(calendarDay.date.getMonth());
                       setPickerOpen(false);
-                      setShowForm(true);
+                      revealBookingForm();
                     }
                   }}
                   disabled={isPast || togglingDate === ds}
+                  data-testid={`service-calendar-day-${ds}`}
+                  data-capacity-state={blocked ? "blocked" : full ? "full" : "available"}
+                  aria-label={`${formatDualDate(ds).gregorian} — ${blocked ? "مغلق" : full ? "مكتمل الحجوزات" : `متبقي ${toArN(remaining)}`}`}
                   title={blocked ? "اليوم مغلق — اضغط لفتحه" : full ? "اكتملت الطاقة اليومية" : `${remaining} حجوزات متبقية`}
                   className={[
                     "flex flex-col items-center justify-start pt-1.5 pb-1 px-0.5 w-full",
@@ -10147,12 +10165,20 @@ function ServiceCalendarBookingsTab() {
 
       {/* ── BOOKING FORM ── */}
       {!showForm && (
-        <Button onClick={() => setShowForm(true)} variant="outline" className="gap-2 rounded-xl w-full md:w-auto">
+        <Button onClick={revealBookingForm} variant="outline" className="gap-2 rounded-xl w-full md:w-auto">
           <Plus className="w-4 h-4" />تسجيل حجز جديد
         </Button>
       )}
       {showForm && (
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-5 space-y-4">
+        <motion.div
+          ref={bookingFormRef}
+          tabIndex={-1}
+          data-testid="service-new-booking-form"
+          aria-label="تسجيل حجز جديد"
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-card border border-border rounded-2xl p-5 space-y-4 focus:outline-none focus:ring-2 focus:ring-primary/30"
+        >
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
               <h3 className="font-bold text-foreground">{editingAppointmentId ? "تعديل الحجز" : "تسجيل حجز جديد"}</h3>
