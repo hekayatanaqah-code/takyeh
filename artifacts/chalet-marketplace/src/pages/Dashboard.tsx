@@ -9577,20 +9577,41 @@ function ServiceCalendarBookingsTab() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const now = new Date();
-  const [viewYear, setViewYear] = useState(now.getFullYear());
-  const [viewMonth, setViewMonth] = useState(now.getMonth());
+  const todayHijri = toHijriComponents(now);
+  const [calendarType, setCalendarType] = useState<"hijri" | "gregorian">(
+    () => (localStorage.getItem("dashCalDefaultType") as "hijri" | "gregorian") ?? "hijri",
+  );
+  const [hijriYear, setHijriYear] = useState(todayHijri.year);
+  const [hijriMonth, setHijriMonth] = useState(todayHijri.month);
+  const [gregYear, setGregYear] = useState(now.getFullYear());
+  const [gregMonth, setGregMonth] = useState(now.getMonth() + 1);
+  const [calendarPickerOpen, setCalendarPickerOpen] = useState(false);
+  const [calendarPickerYear, setCalendarPickerYear] = useState(
+    calendarType === "hijri" ? todayHijri.year : now.getFullYear(),
+  );
   const [togglingDate, setTogglingDate] = useState<string | null>(null);
   const [unblockDay, setUnblockDay] = useState<string | null>(null);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [editingAppointmentId, setEditingAppointmentId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
   const emptyForm = { clientName: "", clientPhone: "", dateStr: "", duration: "", status: "confirmed", notes: "", amount: "", deposit: "", insuranceAmount: "", source: "platform" };
   const [form, setForm] = useState({ ...emptyForm });
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickYear, setPickYear] = useState(now.getFullYear());
   const [pickMonth, setPickMonth] = useState(now.getMonth());
+
+  const { data: provider } = useQuery<any | null>({
+    queryKey: ["service-provider-detail", providerId],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/${providerId}`);
+      return r.ok ? r.json() : null;
+    },
+    enabled: !!providerId,
+  });
 
   const { data: blockedDates = [] } = useQuery<{ id: number; dateStr: string }[]>({
     queryKey: ["service-blocked-dates", providerId],
@@ -9615,6 +9636,7 @@ function ServiceCalendarBookingsTab() {
   appointments.filter(a => a.status !== "cancelled").forEach(a => {
     apptDays.set(a.dateStr, (apptDays.get(a.dateStr) ?? 0) + 1);
   });
+  const dailyCapacity = Math.max(1, Number(provider?.dailyCapacity) || 1);
 
   function toDateStr(y: number, m: number, d: number) {
     return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -9642,52 +9664,176 @@ function ServiceCalendarBookingsTab() {
       toast({ title: "الاسم والتاريخ مطلوبان", variant: "destructive" });
       return;
     }
+    const activeCount = apptDays.get(form.dateStr) ?? 0;
+    const editingAppointment = editingAppointmentId
+      ? appointments.find((appointment) => appointment.id === editingAppointmentId)
+      : null;
+    const consumesNewCapacity = form.status !== "cancelled" && (
+      !editingAppointment ||
+      editingAppointment.status === "cancelled" ||
+      editingAppointment.dateStr !== form.dateStr
+    );
+    if (consumesNewCapacity && activeCount >= dailyCapacity) {
+      toast({
+        title: "اليوم مكتمل الحجوزات",
+        description: `الحد اليومي لهذه الخدمة ${toArN(dailyCapacity)} حجوزات.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     try {
-      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`, {
-        method: "POST",
+      const endpoint = editingAppointmentId
+        ? `/providers/my/approved/${providerId}/appointments/${editingAppointmentId}`
+        : `/providers/my/approved/${providerId}/appointments`;
+      const r = await apiFetch(endpoint, {
+        method: editingAppointmentId ? "PATCH" : "POST",
         body: JSON.stringify({ ...form, amount: form.amount || null, deposit: form.deposit || null, insuranceAmount: form.insuranceAmount || null }),
       });
-      if (!r.ok) throw new Error();
+      if (!r.ok) {
+        const error = await r.json().catch(() => ({})) as { error?: string };
+        throw new Error(error.error || "فشل حفظ الحجز");
+      }
       queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
-      toast({ title: "تم تسجيل الحجز ✓" });
+      toast({ title: editingAppointmentId ? "تم تحديث الحجز ✓" : "تم تسجيل الحجز ✓" });
+      setEditingAppointmentId(null);
       setForm({ ...emptyForm }); setShowForm(false); setPickerOpen(false);
-    } catch { toast({ title: "خطأ", description: "فشل التسجيل", variant: "destructive" }); }
+    } catch (error) {
+      toast({
+        title: "تعذر حفظ الحجز",
+        description: error instanceof Error ? error.message : "حاول مرة أخرى",
+        variant: "destructive",
+      });
+    }
     finally { setSaving(false); }
   }
 
-  async function handleCancel(id: number) {
+  function startEditingAppointment(appointment: any) {
+    setEditingAppointmentId(appointment.id);
+    setForm({
+      clientName: appointment.clientName ?? "",
+      clientPhone: appointment.clientPhone ?? "",
+      dateStr: appointment.dateStr ?? "",
+      duration: appointment.duration ?? "",
+      status: appointment.status === "cancelled" ? "pending" : appointment.status,
+      notes: appointment.notes ?? "",
+      amount: appointment.amount ?? "",
+      deposit: appointment.deposit ?? "",
+      insuranceAmount: appointment.insuranceAmount ?? "",
+      source: appointment.source ?? "external",
+    });
+    if (appointment.dateStr) {
+      const [year, month] = appointment.dateStr.split("-").map(Number);
+      setPickYear(year);
+      setPickMonth(month - 1);
+    }
+    setPickerOpen(false);
+    setShowForm(true);
+  }
+
+  async function handleStatusChange(id: number, status: "confirmed" | "cancelled") {
     setCancellingId(id);
     try {
-      await apiFetch(`/providers/my/approved/${providerId}/appointments/${id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) });
+      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      if (!r.ok) {
+        const error = await r.json().catch(() => ({})) as { error?: string };
+        throw new Error(error.error || "تعذر تحديث الحالة");
+      }
       queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
-      toast({ title: "تم إلغاء الحجز" });
-    } catch { toast({ title: "خطأ", variant: "destructive" }); }
+      toast({ title: status === "cancelled" ? "تم إلغاء الحجز" : "تم تأكيد الحجز" });
+    } catch (error) {
+      toast({
+        title: "خطأ",
+        description: error instanceof Error ? error.message : "تعذر تحديث الحالة",
+        variant: "destructive",
+      });
+    }
     finally { setCancellingId(null); }
   }
 
-  function prevMonth() { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); }
-  function nextMonth() { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); }
+  async function handleDeleteAppointment(id: number) {
+    if (!confirm("هل تريد حذف سجل هذا الحجز نهائياً؟")) return;
+    setDeletingAppointmentId(id);
+    try {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error();
+      queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
+      toast({ title: "تم حذف سجل الحجز" });
+    } catch {
+      toast({ title: "تعذر حذف الحجز", variant: "destructive" });
+    } finally {
+      setDeletingAppointmentId(null);
+    }
+  }
 
-  const firstDay   = new Date(viewYear, viewMonth, 1);
-  const lastDay    = new Date(viewYear, viewMonth + 1, 0);
-  const daysInMonth = lastDay.getDate();
-  const firstDow   = firstDay.getDay();
-  const dayNames   = ["أحد","اثن","ثلا","أرب","خمي","جمع","سبت"];
-  const todayStr   = toDateStr(now.getFullYear(), now.getMonth(), now.getDate());
+  function prevMonth() {
+    if (calendarType === "hijri") {
+      const prev = prevHijriMonth(hijriYear, hijriMonth);
+      setHijriYear(prev.year);
+      setHijriMonth(prev.month);
+    } else if (gregMonth === 1) {
+      setGregMonth(12);
+      setGregYear((year) => year - 1);
+    } else {
+      setGregMonth((month) => month - 1);
+    }
+  }
 
-  const hijriFirst = _svcHijriMon.format(firstDay);
-  const hijriLast  = _svcHijriMon.format(lastDay);
-  const hijriYear  = _svcHijriYear.format(lastDay);
-  const hijriLabel = hijriFirst === hijriLast ? `${hijriFirst} ${hijriYear}` : `${hijriFirst} – ${hijriLast} ${hijriYear}`;
-  const gregLabel  = firstDay.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" });
+  function nextMonth() {
+    if (calendarType === "hijri") {
+      const next = nextHijriMonth(hijriYear, hijriMonth);
+      setHijriYear(next.year);
+      setHijriMonth(next.month);
+    } else if (gregMonth === 12) {
+      setGregMonth(1);
+      setGregYear((year) => year + 1);
+    } else {
+      setGregMonth((month) => month + 1);
+    }
+  }
 
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < firstDow; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  const calendarDays = useMemo(() => {
+    if (calendarType === "hijri") return getHijriMonthDays(hijriYear, hijriMonth);
+    const daysInMonth = new Date(gregYear, gregMonth, 0).getDate();
+    return Array.from({ length: daysInMonth }, (_, index) => {
+      const date = new Date(gregYear, gregMonth - 1, index + 1);
+      return { date, hijriDay: toHijriComponents(date).day };
+    });
+  }, [calendarType, gregMonth, gregYear, hijriMonth, hijriYear]);
 
-  const monthStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
-  const monthAppts = appointments.filter(a => a.dateStr?.startsWith(monthStr) && a.status !== "cancelled");
+  const firstCalendarDate = calendarDays[0]?.date;
+  const lastCalendarDate = calendarDays[calendarDays.length - 1]?.date;
+  const firstDow = firstCalendarDate?.getDay() ?? 0;
+  const dayNames = ["أحد","اثن","ثلا","أرب","خمي","جمع","سبت"];
+  const todayStr = getLocalDateStr(now);
+  const calendarStart = firstCalendarDate ? toGregorianStr(firstCalendarDate) : "";
+  const calendarEnd = lastCalendarDate ? toGregorianStr(lastCalendarDate) : "";
+  const monthAppts = appointments.filter(
+    (appointment) =>
+      appointment.status !== "cancelled" &&
+      appointment.dateStr >= calendarStart &&
+      appointment.dateStr <= calendarEnd,
+  );
+
+  const gregorianSpanLabel = useMemo(() => {
+    if (!firstCalendarDate || !lastCalendarDate) return "";
+    const first = firstCalendarDate.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" });
+    const last = lastCalendarDate.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" });
+    return first === last ? `${first} م` : `${first} – ${last} م`;
+  }, [firstCalendarDate?.getTime(), lastCalendarDate?.getTime()]);
+
+  const hijriSpanLabel = useMemo(() => {
+    if (!firstCalendarDate || !lastCalendarDate) return "";
+    if (calendarType === "hijri") return `${HIJRI_MONTHS_AR[hijriMonth - 1]} ${toArN(hijriYear)} هـ`;
+    const first = toHijriComponents(firstCalendarDate);
+    const last = toHijriComponents(lastCalendarDate);
+    const firstLabel = `${HIJRI_MONTHS_AR[first.month - 1]} ${toArN(first.year)} هـ`;
+    const lastLabel = `${HIJRI_MONTHS_AR[last.month - 1]} ${toArN(last.year)} هـ`;
+    return firstLabel === lastLabel ? firstLabel : `${firstLabel} – ${lastLabel}`;
+  }, [calendarType, firstCalendarDate?.getTime(), hijriMonth, hijriYear, lastCalendarDate?.getTime()]);
 
   const confirmedRevenue = appointments.filter(a => a.status === "confirmed" && a.amount).reduce((s, a) => s + parseFloat(a.amount), 0);
   const totalDeposits    = appointments.filter(a => a.deposit).reduce((s, a) => s + parseFloat(a.deposit ?? "0"), 0);
@@ -9700,6 +9846,13 @@ function ServiceCalendarBookingsTab() {
   const statusLabel: Record<string, string> = { confirmed: "مؤكد", pending: "معلق", cancelled: "ملغي" };
 
   const filteredAppts = listFilter === "all" ? appointments : appointments.filter(a => a.status === listFilter);
+  const calendarCells: Array<{ date: Date; hijriDay: number } | null> = [
+    ...Array.from({ length: firstDow }, () => null),
+    ...calendarDays,
+  ];
+  const blockedDaysInView = blockedDates.filter(
+    (blockedDate) => blockedDate.dateStr >= calendarStart && blockedDate.dateStr <= calendarEnd,
+  ).length;
 
   return (
     <div className="space-y-5">
@@ -9721,20 +9874,119 @@ function ServiceCalendarBookingsTab() {
 
       {/* ── CALENDAR ── */}
       <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-foreground flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-primary" />
+              تقويم الحجوزات والإتاحة
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              الطاقة اليومية: {toArN(dailyCapacity)} حجوزات — اضغط على اليوم المتاح لتسجيل حجز
+            </p>
+          </div>
+          <div className="flex rounded-lg border border-border overflow-hidden text-xs self-start md:self-auto">
+            <button
+              type="button"
+              onClick={() => {
+                setCalendarType("hijri");
+                setCalendarPickerOpen(false);
+                localStorage.setItem("dashCalDefaultType", "hijri");
+              }}
+              className={`px-3 py-1.5 font-bold transition-colors ${calendarType === "hijri" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+            >
+              هجري
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCalendarType("gregorian");
+                setCalendarPickerOpen(false);
+                localStorage.setItem("dashCalDefaultType", "gregorian");
+              }}
+              className={`px-3 py-1.5 font-bold transition-colors ${calendarType === "gregorian" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+            >
+              ميلادي
+            </button>
+          </div>
+        </div>
+
         {/* Month nav */}
         <div className="flex items-center justify-between">
           <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><ChevronRight className="w-4 h-4" /></button>
-          <div className="text-center">
-            <p className="font-extrabold text-base text-foreground">{hijriLabel} هـ</p>
-            <p className="text-xs text-muted-foreground">{gregLabel} م</p>
+          <div className="relative text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setCalendarPickerYear(calendarType === "hijri" ? hijriYear : gregYear);
+                setCalendarPickerOpen((open) => !open);
+              }}
+              className="rounded-xl px-4 py-1 hover:bg-muted/60 transition-colors"
+            >
+              <span className="font-extrabold text-base text-foreground flex items-center justify-center gap-1">
+                {calendarType === "hijri" ? hijriSpanLabel : gregorianSpanLabel}
+                <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+              </span>
+              <span className="text-xs text-muted-foreground block mt-0.5">
+                {calendarType === "hijri" ? gregorianSpanLabel : hijriSpanLabel}
+              </span>
+            </button>
+            {calendarPickerOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-label="إغلاق اختيار الشهر"
+                  className="fixed inset-0 z-40 cursor-default"
+                  onClick={() => setCalendarPickerOpen(false)}
+                />
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-card border border-border rounded-xl shadow-lg p-3 w-64" dir="rtl">
+                  <div className="flex items-center justify-between mb-3 px-1">
+                    <button type="button" onClick={() => setCalendarPickerYear((year) => year + 1)} className="w-7 h-7 rounded-full hover:bg-muted flex items-center justify-center">
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-sm font-bold">{toArN(calendarPickerYear)} {calendarType === "hijri" ? "هـ" : "م"}</span>
+                    <button type="button" onClick={() => setCalendarPickerYear((year) => year - 1)} className="w-7 h-7 rounded-full hover:bg-muted flex items-center justify-center">
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(calendarType === "hijri" ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR).map((monthName, index) => {
+                      const monthNumber = index + 1;
+                      const selected = calendarType === "hijri"
+                        ? calendarPickerYear === hijriYear && monthNumber === hijriMonth
+                        : calendarPickerYear === gregYear && monthNumber === gregMonth;
+                      return (
+                        <button
+                          key={monthName}
+                          type="button"
+                          onClick={() => {
+                            if (calendarType === "hijri") {
+                              setHijriYear(calendarPickerYear);
+                              setHijriMonth(monthNumber);
+                            } else {
+                              setGregYear(calendarPickerYear);
+                              setGregMonth(monthNumber);
+                            }
+                            setCalendarPickerOpen(false);
+                          }}
+                          className={`rounded-lg py-1.5 px-1 text-[11px] font-medium leading-tight transition-colors ${selected ? "bg-primary text-primary-foreground" : "hover:bg-muted text-foreground"}`}
+                        >
+                          {monthName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-muted transition-colors"><ChevronLeft className="w-4 h-4" /></button>
         </div>
 
         {/* Legend */}
-        <div className="flex gap-3 flex-wrap text-xs text-muted-foreground items-center">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-400 inline-block" /> محجوب — انقر لإلغاء الحجب</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-400 inline-block" /> يوم حجز</span>
+        <div className="flex gap-3 flex-wrap text-xs text-muted-foreground items-center rounded-xl border border-border bg-muted/30 px-3 py-2.5">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300 inline-block" /> متاح</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-100 border border-amber-300 inline-block" /> محجوز جزئياً</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-100 border border-red-300 inline-block" /> مغلق أو مكتمل</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-primary/20 border border-primary inline-block" /> اليوم</span>
           <button type="button" onClick={() => setShowBlockDialog(true)}
             className="ms-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors border border-border text-muted-foreground hover:border-red-400 hover:text-red-500">
@@ -9746,52 +9998,70 @@ function ServiceCalendarBookingsTab() {
         <div className="select-none rounded-xl overflow-hidden border border-border">
           <div className="grid grid-cols-7 gap-px bg-border">
             {dayNames.map(d => <div key={d} className="bg-muted/60 text-center text-[10px] font-bold text-muted-foreground py-2">{d}</div>)}
-            {cells.map((day, i) => {
-              if (!day) return <div key={`e-${i}`} className="bg-background/60 min-h-[62px]" />;
-              const ds = toDateStr(viewYear, viewMonth, day);
+            {calendarCells.map((calendarDay, i) => {
+              if (!calendarDay) return <div key={`e-${i}`} className="bg-background/60 min-h-[76px]" />;
+              const ds = toGregorianStr(calendarDay.date);
               const blocked = blockedSet.has(ds);
-              const hasAppt = apptDays.has(ds);
               const apptCnt = apptDays.get(ds) ?? 0;
+              const remaining = Math.max(0, dailyCapacity - apptCnt);
+              const full = apptCnt >= dailyCapacity;
+              const hasAppt = apptCnt > 0;
               const isToday = ds === todayStr;
               const isPast  = ds < todayStr;
-              const hijriD  = _svcHijriDay.format(new Date(viewYear, viewMonth, day));
-              const gregAr  = day.toLocaleString("ar-SA-u-nu-arab");
+              const gregorianDay = calendarDay.date.getDate();
+              const primaryDay = calendarType === "hijri" ? calendarDay.hijriDay : gregorianDay;
+              const secondaryDay = calendarType === "hijri" ? gregorianDay : calendarDay.hijriDay;
               return (
                 <button key={ds} type="button"
                   onClick={() => {
                     if (isPast) return;
                     if (blocked) {
                       setUnblockDay(ds);
+                    } else if (full) {
+                      toast({
+                        title: "اليوم مكتمل الحجوزات",
+                        description: `تم تسجيل ${toArN(apptCnt)} من ${toArN(dailyCapacity)} حجوزات.`,
+                      });
                     } else {
-                      setForm(p => ({ ...p, dateStr: ds })); setShowForm(true);
+                      setEditingAppointmentId(null);
+                      setForm({ ...emptyForm, dateStr: ds });
+                      setPickYear(calendarDay.date.getFullYear());
+                      setPickMonth(calendarDay.date.getMonth());
+                      setPickerOpen(false);
+                      setShowForm(true);
                     }
                   }}
                   disabled={isPast || togglingDate === ds}
+                  title={blocked ? "اليوم مغلق — اضغط لفتحه" : full ? "اكتملت الطاقة اليومية" : `${remaining} حجوزات متبقية`}
                   className={[
-                    "flex flex-col items-center justify-start pt-1.5 pb-1.5 px-0.5 w-full",
+                    "flex flex-col items-center justify-start pt-1.5 pb-1 px-0.5 w-full",
                     "transition-colors focus:outline-none focus:z-10 focus:ring-2 focus:ring-inset focus:ring-primary/60",
-                    "min-h-[62px] relative",
+                    "min-h-[76px] relative",
                     isPast
                       ? "bg-background/60 text-muted-foreground/40 cursor-default"
-                      : blocked
+                      : blocked || full
                         ? "bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 hover:bg-red-200"
                         : hasAppt
                           ? "bg-amber-50 dark:bg-amber-900/20 text-foreground hover:bg-amber-100"
                           : isToday
                             ? "bg-primary/10 text-primary ring-2 ring-inset ring-primary"
-                            : "bg-background hover:bg-primary/5 text-foreground",
+                            : "bg-emerald-50/60 dark:bg-emerald-950/10 hover:bg-emerald-100/70 text-foreground",
                     togglingDate === ds ? "opacity-60" : "",
                   ].join(" ")}
                 >
-                  <span className="text-[0.82rem] font-bold leading-none">{hijriD}</span>
-                  <span className={`text-[0.52rem] leading-none mt-0.5 tabular-nums ${blocked ? "opacity-60" : "text-muted-foreground"}`}>{gregAr}</span>
-                  {hasAppt && !blocked && (
-                    <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 flex gap-px">
-                      {Array.from({ length: Math.min(apptCnt, 3) }).map((_, k) => (
-                        <span key={k} className="w-1 h-1 rounded-full bg-amber-500 block" />
-                      ))}
-                    </span>
-                  )}
+                  <span className="text-[0.82rem] font-bold leading-none">{toArN(primaryDay)}</span>
+                  <span className={`text-[0.52rem] leading-none mt-0.5 tabular-nums ${blocked ? "opacity-60" : "text-muted-foreground"}`}>
+                    {toArN(secondaryDay)} {calendarType === "hijri" ? "م" : "هـ"}
+                  </span>
+                  <span className={`mt-1 text-[9px] font-bold rounded-full px-1.5 py-0.5 ${
+                    blocked || full
+                      ? "bg-red-200/80 text-red-700 dark:bg-red-900/70 dark:text-red-200"
+                      : hasAppt
+                        ? "bg-amber-200/80 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300"
+                  }`}>
+                    {blocked ? "مغلق" : full ? "مكتمل" : `متبقي ${toArN(remaining)}`}
+                  </span>
                 </button>
               );
             })}
@@ -9801,11 +10071,11 @@ function ServiceCalendarBookingsTab() {
         {/* Month summary */}
         <div className="flex gap-3 text-xs">
           <div className="flex-1 bg-muted rounded-xl px-4 py-2.5">
-            <span className="font-semibold text-foreground">{blockedDates.length}</span>
+            <span className="font-semibold text-foreground">{toArN(blockedDaysInView)}</span>
             <span className="text-muted-foreground"> يوم محجوب هذا الشهر</span>
           </div>
           <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/40 rounded-xl px-4 py-2.5">
-            <span className="font-semibold text-amber-700 dark:text-amber-400">{monthAppts.length}</span>
+            <span className="font-semibold text-amber-700 dark:text-amber-400">{toArN(monthAppts.length)}</span>
             <span className="text-muted-foreground"> حجز</span>
           </div>
         </div>
@@ -9819,7 +10089,17 @@ function ServiceCalendarBookingsTab() {
       )}
       {showForm && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl p-5 space-y-4">
-          <h3 className="font-bold text-foreground">حجز جديد</h3>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h3 className="font-bold text-foreground">{editingAppointmentId ? "تعديل الحجز" : "تسجيل حجز جديد"}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">أدخل بيانات العميل والقيمة والتاريخ ومصدر الحجز</p>
+            </div>
+            {form.dateStr && (
+              <span className="text-xs font-semibold rounded-full bg-muted px-3 py-1">
+                المتبقي في اليوم: {toArN(Math.max(0, dailyCapacity - (apptDays.get(form.dateStr) ?? 0)))}
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">اسم العميل *</label>
@@ -9851,7 +10131,12 @@ function ServiceCalendarBookingsTab() {
                     <button type="button" onClick={() => { if (pickMonth === 0) { setPickMonth(11); setPickYear(y => y - 1); } else setPickMonth(m => m - 1); }}
                       className="p-1 rounded hover:bg-muted transition-colors"><ChevronRight className="w-3.5 h-3.5" /></button>
                     <div className="text-center">
-                      <p className="text-xs font-bold text-foreground">{_svcHijriMon.format(new Date(pickYear, pickMonth, 1))} {_svcHijriYear.format(new Date(pickYear, pickMonth, 1))} هـ</p>
+                      <p className="text-xs font-bold text-foreground">
+                        {(() => {
+                          const hijri = toHijriComponents(new Date(pickYear, pickMonth, 1));
+                          return `${HIJRI_MONTHS_AR[hijri.month - 1]} ${toArN(hijri.year)} هـ`;
+                        })()}
+                      </p>
                       <p className="text-[10px] text-muted-foreground">{new Date(pickYear, pickMonth, 1).toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" })} م</p>
                     </div>
                     <button type="button" onClick={() => { if (pickMonth === 11) { setPickMonth(0); setPickYear(y => y + 1); } else setPickMonth(m => m + 1); }}
@@ -9876,30 +10161,42 @@ function ServiceCalendarBookingsTab() {
                           const isSelected = ds === form.dateStr;
                           const isPast = ds < todayPick;
                           const isBlockedPick = blockedSet.has(ds);
-                          const hijriD = _svcHijriDay.format(new Date(pickYear, pickMonth, day));
+                           const appointmentCount = apptDays.get(ds) ?? 0;
+                           const editingOnDate = !!editingAppointmentId && appointments.some(
+                             (appointment) =>
+                               appointment.id === editingAppointmentId &&
+                               appointment.dateStr === ds &&
+                               appointment.status !== "cancelled",
+                           );
+                           const isFullPick = appointmentCount >= dailyCapacity && !editingOnDate;
+                           const hijriD = toHijriComponents(new Date(pickYear, pickMonth, day)).day;
                           const gregAr = day.toLocaleString("ar-SA-u-nu-arab");
                           return (
                             <button key={ds} type="button"
                               onClick={() => {
-                                if (isPast || isBlockedPick) return;
+                                 if (isPast || isBlockedPick || isFullPick) return;
                                 setForm(p => ({ ...p, dateStr: ds }));
                                 setPickerOpen(false);
                               }}
-                              disabled={isPast || isBlockedPick}
-                              title={isBlockedPick ? "هذا اليوم مغلق" : undefined}
+                               disabled={isPast || isBlockedPick || isFullPick}
+                               title={isBlockedPick ? "هذا اليوم مغلق" : isFullPick ? "اكتملت الطاقة اليومية" : undefined}
                               className={[
                                 "flex flex-col items-center justify-start pt-1 pb-1 px-0 w-full min-h-[48px]",
                                 "transition-colors focus:outline-none relative",
                                 isPast ? "bg-background/60 text-muted-foreground/40 cursor-default"
-                                  : isBlockedPick ? "bg-red-100 dark:bg-red-900/40 text-red-400 dark:text-red-500 cursor-not-allowed"
+                                   : isBlockedPick || isFullPick ? "bg-red-100 dark:bg-red-900/40 text-red-400 dark:text-red-500 cursor-not-allowed"
                                   : isSelected ? "bg-primary text-primary-foreground"
                                   : ds === todayPick ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary"
                                   : "bg-background hover:bg-primary/5 text-foreground",
                               ].join(" ")}
                             >
-                              <span className="text-[0.72rem] font-bold leading-none">{hijriD}</span>
+                               <span className="text-[0.72rem] font-bold leading-none">{toArN(hijriD)}</span>
                               <span className={`text-[0.48rem] leading-none mt-0.5 tabular-nums ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{gregAr}</span>
-                              {isBlockedPick && <span className="absolute inset-0 flex items-end justify-center pb-0.5"><span className="text-[0.38rem] text-red-500 font-bold">مغلق</span></span>}
+                               {(isBlockedPick || isFullPick) && (
+                                 <span className="absolute inset-0 flex items-end justify-center pb-0.5">
+                                   <span className="text-[0.38rem] text-red-500 font-bold">{isBlockedPick ? "مغلق" : "مكتمل"}</span>
+                                 </span>
+                               )}
                             </button>
                           );
                         });
@@ -9963,9 +10260,10 @@ function ServiceCalendarBookingsTab() {
             <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="تفاصيل إضافية..." />
           </div>
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" onClick={() => { setShowForm(false); setPickerOpen(false); setForm({ ...emptyForm }); }} className="rounded-xl">إلغاء</Button>
+            <Button variant="ghost" onClick={() => { setShowForm(false); setPickerOpen(false); setEditingAppointmentId(null); setForm({ ...emptyForm }); }} className="rounded-xl">إلغاء</Button>
             <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2 bg-amber-500 hover:bg-amber-600 text-white">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}حفظ الحجز
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              {editingAppointmentId ? "حفظ التعديلات" : "حفظ الحجز"}
             </Button>
           </div>
         </motion.div>
@@ -9993,41 +10291,103 @@ function ServiceCalendarBookingsTab() {
             <p className="font-medium">لا توجد حجوزات بعد</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="rounded-2xl border border-border overflow-hidden bg-card">
+            <div className="hidden md:grid md:grid-cols-[1.25fr_1fr_.9fr_.8fr_auto] gap-3 bg-muted/60 px-4 py-2.5 text-xs font-bold text-muted-foreground">
+              <span>العميل والتواصل</span>
+              <span>التاريخ</span>
+              <span>القيمة والمصدر</span>
+              <span>الحالة</span>
+              <span>الإجراءات</span>
+            </div>
             {filteredAppts.map((a: any) => {
               const dual = formatDualDate(a.dateStr);
+              const phoneDigits = String(a.clientPhone ?? "").replace(/\D/g, "");
+              const whatsappPhone = phoneDigits.startsWith("0") ? `966${phoneDigits.slice(1)}` : phoneDigits;
               return (
-                <div key={a.id} className="bg-card border border-border rounded-2xl px-4 py-3.5 flex items-start gap-3 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="font-bold text-foreground">{a.clientName}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${statusBadge[a.status] ?? ""}`}>{statusLabel[a.status] ?? a.status}</span>
-                      {a.source && a.source !== "external" && (
-                        <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{SOURCE_LABELS[a.source] ?? a.source}</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-primary font-semibold">{dual.hijri} هـ</p>
-                    <p className="text-xs text-muted-foreground">{dual.gregorian} م{a.duration ? ` · ${a.duration}` : ""}</p>
-                    <div className="flex gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-                      {a.amount && <span>المبلغ: <span className="font-semibold text-foreground">{parseFloat(a.amount).toLocaleString()} ر.س</span></span>}
-                      {a.deposit && parseFloat(a.deposit) > 0 && <span>عربون: <span className="font-semibold text-amber-600">{parseFloat(a.deposit).toLocaleString()} ر.س</span></span>}
-                      {a.insuranceAmount && parseFloat(a.insuranceAmount) > 0 && (
-                        <span>تأمين: <span className="font-semibold text-blue-600">{parseFloat(a.insuranceAmount).toLocaleString()} ر.س</span>
-                          {" "}<span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${a.insuranceStatus === "refunded" ? "bg-green-100 text-green-700" : a.insuranceStatus === "deducted" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
-                            {a.insuranceStatus === "refunded" ? "مسترد" : a.insuranceStatus === "deducted" ? "مخصوم" : "محتجز"}
-                          </span>
-                        </span>
-                      )}
-                    </div>
-                    {a.clientPhone && <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">{a.clientPhone}</p>}
-                    {a.notes && <p className="text-xs text-muted-foreground mt-0.5 truncate">{a.notes}</p>}
+                <div
+                  key={a.id}
+                  className="grid grid-cols-1 md:grid-cols-[1.25fr_1fr_.9fr_.8fr_auto] gap-3 px-4 py-3.5 border-t border-border first:border-t-0 md:first:border-t items-center"
+                >
+                  <div className="min-w-0">
+                    <p className="font-bold text-foreground truncate">{a.clientName}</p>
+                    {a.clientPhone ? (
+                      <a
+                        href={whatsappPhone ? `https://wa.me/${whatsappPhone}` : undefined}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-0.5"
+                        dir="ltr"
+                      >
+                        <Phone className="w-3 h-3" />
+                        {toAr(a.clientPhone)}
+                      </a>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-0.5">لا يوجد رقم تواصل</p>
+                    )}
+                    {a.notes && <p className="text-[11px] text-muted-foreground mt-1 truncate">{a.notes}</p>}
                   </div>
-                  {a.status !== "cancelled" && (
-                    <Button variant="ghost" size="sm" onClick={() => handleCancel(a.id)} disabled={cancellingId === a.id}
-                      className="rounded-xl text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs gap-1 h-8 shrink-0">
-                      {cancellingId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}إلغاء
+                  <div>
+                    <p className="text-xs text-primary font-semibold">{dual.hijri} هـ</p>
+                    <p className="text-xs text-muted-foreground">{dual.gregorian} م</p>
+                    {a.duration && <p className="text-[11px] text-muted-foreground mt-0.5">{a.duration}</p>}
+                  </div>
+                  <div className="text-xs">
+                    <p className="font-bold text-foreground">
+                      {a.amount ? `${toArN(Number(a.amount).toLocaleString())} ر.س` : "—"}
+                    </p>
+                    <p className="text-muted-foreground mt-0.5">{SOURCE_LABELS[a.source] ?? a.source ?? "غير محدد"}</p>
+                    {a.deposit && Number(a.deposit) > 0 && <p className="text-[11px] text-amber-600 mt-0.5">عربون: {toArN(Number(a.deposit).toLocaleString())}</p>}
+                  </div>
+                  <div>
+                    <span className={`inline-flex text-xs px-2 py-0.5 rounded-full font-semibold ${statusBadge[a.status] ?? ""}`}>
+                      {statusLabel[a.status] ?? a.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 flex-wrap md:justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => startEditingAppointment(a)}
+                      className="rounded-lg text-xs gap-1 h-8 px-2"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                      تعديل
                     </Button>
-                  )}
+                    {a.status === "pending" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleStatusChange(a.id, "confirmed")}
+                        disabled={cancellingId === a.id}
+                        className="rounded-lg text-green-600 hover:text-green-700 hover:bg-green-50 text-xs gap-1 h-8 px-2"
+                      >
+                        {cancellingId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                        تأكيد
+                      </Button>
+                    )}
+                    {a.status !== "cancelled" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleStatusChange(a.id, "cancelled")}
+                        disabled={cancellingId === a.id}
+                        className="rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs gap-1 h-8 px-2"
+                      >
+                        {cancellingId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
+                        إلغاء
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="حذف السجل"
+                      onClick={() => handleDeleteAppointment(a.id)}
+                      disabled={deletingAppointmentId === a.id}
+                      className="rounded-lg text-destructive h-8 w-8"
+                    >
+                      {deletingAppointmentId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                    </Button>
+                  </div>
                 </div>
               );
             })}

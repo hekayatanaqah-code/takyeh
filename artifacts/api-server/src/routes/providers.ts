@@ -13,6 +13,16 @@ import { z } from "zod";
 
 const router = Router();
 const ALL_KINGDOM_COVERAGE = "جميع مناطق المملكة";
+const canonicalGregorianDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "يجب أن يكون التاريخ بصيغة YYYY-MM-DD")
+  .refine((value) => {
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year
+      && date.getUTCMonth() === month - 1
+      && date.getUTCDate() === day;
+  }, "التاريخ غير صالح");
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.isAuthenticated()) {
@@ -145,7 +155,10 @@ router.get("/my/submissions", requireAuth, async (req: any, res) => {
   const rows = await db
     .select()
     .from(serviceProviderSubmissionsTable)
-    .where(eq(serviceProviderSubmissionsTable.ownerId, req.user.id))
+    .where(and(
+      eq(serviceProviderSubmissionsTable.ownerId, req.user.id),
+      ne(serviceProviderSubmissionsTable.status, "approved"),
+    ))
     .orderBy(serviceProviderSubmissionsTable.createdAt);
   return res.json(rows.reverse());
 });
@@ -461,7 +474,7 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
   const schema = z.object({
     clientName: z.string().min(1),
     clientPhone: z.string().optional().nullable(),
-    dateStr: z.string().min(1),
+    dateStr: canonicalGregorianDate,
     duration: z.string().optional().nullable(),
     status: z.enum(["confirmed", "pending", "cancelled"]).default("confirmed"),
     notes: z.string().optional().nullable(),
@@ -473,25 +486,56 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors: parsed.error.flatten().fieldErrors });
 
-  const [row] = await db.insert(serviceAppointmentsTable).values({
-    providerId, ownerId: req.user.id, ...parsed.data,
-  }).returning();
+  const result = await db.transaction(async (tx) => {
+    if (parsed.data.status !== "cancelled") {
+      // Serialize all capacity-consuming writes for this provider and date.
+      await tx.execute(sql`select pg_advisory_xact_lock(${providerId}, hashtext(${parsed.data.dateStr}))`);
+      const [capacityRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(serviceAppointmentsTable)
+        .where(and(
+          eq(serviceAppointmentsTable.providerId, providerId),
+          eq(serviceAppointmentsTable.dateStr, parsed.data.dateStr),
+          ne(serviceAppointmentsTable.status, "cancelled"),
+        ));
+      const dailyCapacity = Math.max(1, provider.dailyCapacity ?? 1);
+      if ((capacityRow?.count ?? 0) >= dailyCapacity) return { full: true as const, dailyCapacity };
+    }
+
+    const [row] = await tx.insert(serviceAppointmentsTable).values({
+      providerId, ownerId: req.user.id, ...parsed.data,
+    }).returning();
+    return { full: false as const, row };
+  });
+
+  if (result.full) {
+    return res.status(409).json({
+      error: "اكتملت الطاقة الاستيعابية لهذا اليوم",
+      code: "DAILY_CAPACITY_REACHED",
+      dailyCapacity: result.dailyCapacity,
+    });
+  }
+  const row = result.row;
   return res.status(201).json(row);
 });
 
 router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: any, res) => {
+  const providerId = Number(req.params.id);
   const apptId = Number(req.params.apptId);
   const [row] = await db.select().from(serviceAppointmentsTable).where(eq(serviceAppointmentsTable.id, apptId)).limit(1);
-  if (!row || row.ownerId !== req.user.id) return res.status(404).json({ error: "الحجز غير موجود" });
+  if (!row || row.ownerId !== req.user.id || row.providerId !== providerId) return res.status(404).json({ error: "الحجز غير موجود" });
 
   const schema = z.object({
     clientName: z.string().min(1).optional(),
     clientPhone: z.string().optional().nullable(),
-    dateStr: z.string().optional(),
+    dateStr: canonicalGregorianDate.optional(),
     duration: z.string().optional().nullable(),
     status: z.enum(["confirmed", "pending", "cancelled"]).optional(),
     notes: z.string().optional().nullable(),
     amount: z.string().optional().nullable(),
+    deposit: z.string().optional().nullable(),
+    insuranceAmount: z.string().optional().nullable(),
+    source: z.enum(["platform", "whatsapp", "phone", "walk_in", "external"]).optional(),
     cancelReason: z.string().optional().nullable(),
     insuranceStatus: z.enum(["held", "refunded", "deducted"]).optional(),
     insuranceDeductAmount: z.string().optional().nullable(),
@@ -500,19 +544,75 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة" });
 
+  const targetDate = parsed.data.dateStr ?? row.dateStr;
+  const targetStatus = parsed.data.status ?? row.status;
   const updates: Record<string, any> = { ...parsed.data };
   if (parsed.data.status === "cancelled" && !row.cancelledAt) {
     updates.cancelledAt = new Date();
   }
-  const [updated] = await db.update(serviceAppointmentsTable).set(updates).where(eq(serviceAppointmentsTable.id, apptId)).returning();
+  if (parsed.data.status && parsed.data.status !== "cancelled") updates.cancelledAt = null;
+
+  const consumesNewCapacity = targetStatus !== "cancelled" && (targetDate !== row.dateStr || row.status === "cancelled");
+  const result = await db.transaction(async (tx) => {
+    if (consumesNewCapacity) {
+      await tx.execute(sql`select pg_advisory_xact_lock(${providerId}, hashtext(${targetDate}))`);
+      const [provider] = await tx
+        .select({ dailyCapacity: serviceProvidersTable.dailyCapacity })
+        .from(serviceProvidersTable)
+        .where(and(
+          eq(serviceProvidersTable.id, providerId),
+          eq(serviceProvidersTable.ownerId, req.user.id),
+        ))
+        .limit(1);
+      if (!provider) return { missingProvider: true as const };
+
+      const [capacityRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(serviceAppointmentsTable)
+        .where(and(
+          eq(serviceAppointmentsTable.providerId, providerId),
+          eq(serviceAppointmentsTable.dateStr, targetDate),
+          ne(serviceAppointmentsTable.status, "cancelled"),
+          ne(serviceAppointmentsTable.id, apptId),
+        ));
+      const dailyCapacity = Math.max(1, provider.dailyCapacity ?? 1);
+      if ((capacityRow?.count ?? 0) >= dailyCapacity) return { full: true as const, dailyCapacity };
+    }
+
+    const [updated] = await tx
+      .update(serviceAppointmentsTable)
+      .set(updates)
+      .where(and(
+        eq(serviceAppointmentsTable.id, apptId),
+        eq(serviceAppointmentsTable.providerId, providerId),
+        eq(serviceAppointmentsTable.ownerId, req.user.id),
+      ))
+      .returning();
+    return { full: false as const, missingProvider: false as const, updated };
+  });
+
+  if ("missingProvider" in result && result.missingProvider) return res.status(404).json({ error: "المزود غير موجود" });
+  if ("full" in result && result.full) {
+    return res.status(409).json({
+      error: "اكتملت الطاقة الاستيعابية لهذا اليوم",
+      code: "DAILY_CAPACITY_REACHED",
+      dailyCapacity: result.dailyCapacity,
+    });
+  }
+  const updated = result.updated;
   return res.json(updated);
 });
 
 router.delete("/my/approved/:id/appointments/:apptId", requireAuth, async (req: any, res) => {
+  const providerId = Number(req.params.id);
   const apptId = Number(req.params.apptId);
   const [row] = await db.select().from(serviceAppointmentsTable).where(eq(serviceAppointmentsTable.id, apptId)).limit(1);
-  if (!row || row.ownerId !== req.user.id) return res.status(404).json({ error: "الحجز غير موجود" });
-  await db.delete(serviceAppointmentsTable).where(eq(serviceAppointmentsTable.id, apptId));
+  if (!row || row.ownerId !== req.user.id || row.providerId !== providerId) return res.status(404).json({ error: "الحجز غير موجود" });
+  await db.delete(serviceAppointmentsTable).where(and(
+    eq(serviceAppointmentsTable.id, apptId),
+    eq(serviceAppointmentsTable.providerId, providerId),
+    eq(serviceAppointmentsTable.ownerId, req.user.id),
+  ));
   return res.json({ ok: true });
 });
 
