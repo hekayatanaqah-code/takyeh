@@ -9686,12 +9686,25 @@ function ServiceCalendarBookingsTab() {
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
-  const emptyForm = { clientName: "", clientPhone: "", dateStr: "", duration: "", status: "confirmed", notes: "", amount: "", deposit: "", insuranceAmount: "", source: "platform" };
+  const emptyForm = {
+    clientName: "",
+    clientPhone: "",
+    dateStr: "",
+    duration: "",
+    status: "confirmed",
+    notes: "",
+    amount: "",
+    deposit: "",
+    insuranceAmount: "",
+    source: "platform",
+    paymentMethod: "cash",
+    paymentReceiptUrl: "",
+  };
   const [form, setForm] = useState({ ...emptyForm });
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickYear, setPickYear] = useState(now.getFullYear());
   const [pickMonth, setPickMonth] = useState(now.getMonth());
-  const bookingFormRef = useRef<HTMLDivElement>(null);
+  const [receiptUploading, setReceiptUploading] = useState(false);
 
   const { data: provider } = useQuery<any | null>({
     queryKey: ["service-provider-detail", providerId],
@@ -9729,15 +9742,28 @@ function ServiceCalendarBookingsTab() {
 
   function revealBookingForm() {
     setShowForm(true);
-    // Wait for the form to mount before moving the viewport and keyboard focus.
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        const formElement = bookingFormRef.current;
-        if (!formElement) return;
-        formElement.scrollIntoView({ behavior: "smooth", block: "start" });
-        formElement.focus({ preventScroll: true });
-      });
-    });
+  }
+
+  function closeBookingForm() {
+    if (saving || receiptUploading) return;
+    setShowForm(false);
+    setPickerOpen(false);
+    setEditingAppointmentId(null);
+    setForm({ ...emptyForm });
+  }
+
+  async function handleReceiptUpload(file: File) {
+    setReceiptUploading(true);
+    try {
+      const url = await uploadFile(file);
+      if (!url) {
+        toast({ title: "تعذر رفع الإيصال", description: "حاول مرة أخرى", variant: "destructive" });
+        return;
+      }
+      setForm((current) => ({ ...current, paymentReceiptUrl: url }));
+    } finally {
+      setReceiptUploading(false);
+    }
   }
 
   function toDateStr(y: number, m: number, d: number) {
@@ -9828,6 +9854,8 @@ function ServiceCalendarBookingsTab() {
       deposit: appointment.deposit ?? "",
       insuranceAmount: appointment.insuranceAmount ?? "",
       source: appointment.source ?? "external",
+      paymentMethod: appointment.paymentMethod ?? "cash",
+      paymentReceiptUrl: appointment.paymentReceiptUrl ?? "",
     });
     if (appointment.dateStr) {
       const [year, month] = appointment.dateStr.split("-").map(Number);
@@ -10192,34 +10220,62 @@ function ServiceCalendarBookingsTab() {
         </div>
       </div>
 
-      {/* ── BOOKING FORM ── */}
-      {!showForm && (
-        <Button onClick={revealBookingForm} variant="outline" className="gap-2 rounded-xl w-full md:w-auto">
-          <Plus className="w-4 h-4" />تسجيل حجز جديد
-        </Button>
-      )}
-      {showForm && (
-        <motion.div
-          ref={bookingFormRef}
-          tabIndex={-1}
+      {/* ── BOOKING DIALOG ── */}
+      <Button onClick={revealBookingForm} variant="outline" className="gap-2 rounded-xl w-full md:w-auto">
+        <Plus className="w-4 h-4" />تسجيل حجز جديد
+      </Button>
+      <Dialog
+        open={showForm}
+        onOpenChange={(open) => {
+          if (!open) closeBookingForm();
+        }}
+      >
+        <DialogContent
+          dir="rtl"
           data-testid="service-new-booking-form"
-          aria-label="تسجيل حجز جديد"
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card border border-border rounded-2xl p-5 space-y-4 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          aria-label="تسجيل حجز يدوي للخدمة"
+          className="max-w-md max-h-[92vh] overflow-y-auto"
         >
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <h3 className="font-bold text-foreground">{editingAppointmentId ? "تعديل الحجز" : "تسجيل حجز جديد"}</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">أدخل بيانات العميل والقيمة والتاريخ ومصدر الحجز</p>
-            </div>
-            {form.dateStr && (
-              <span className="text-xs font-semibold rounded-full bg-muted px-3 py-1">
-                المتبقي في اليوم: {toArN(Math.max(0, dailyCapacity - (apptDays.get(form.dateStr) ?? 0)))}
+          <DialogHeader>
+            <DialogTitle className="text-right text-base">
+              {editingAppointmentId ? "تعديل الحجز" : "إضافة حجز يدوي"}
+            </DialogTitle>
+            <DialogDescription className="text-right">
+              تسجيل حجز مباشر للخدمة المحددة مع بيانات العميل والدفع.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-xl bg-primary/8 border border-primary/20 px-4 py-3 -mt-1 space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🛎️</span>
+              <span className="text-sm font-bold text-primary">
+                {provider?.businessName ?? "الخدمة الحالية"}
               </span>
+            </div>
+            {form.dateStr ? (
+              <p className="text-xs text-muted-foreground font-medium pr-7">
+                📅 {formatDualDate(form.dateStr).hijri} هـ
+                <span className="text-muted-foreground/60 mr-2">({formatDualDate(form.dateStr).gregorian} م)</span>
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground pr-7">اختر تاريخ الخدمة أدناه</p>
             )}
           </div>
+
+          <div className="space-y-4 mt-1">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-muted-foreground">أدخل بيانات العميل والقيمة والتاريخ ومصدر الحجز</p>
+              {form.dateStr && (
+                <span className="text-xs font-semibold rounded-full bg-muted px-3 py-1">
+                  المتبقي في اليوم: {toArN(Math.max(0, dailyCapacity - (apptDays.get(form.dateStr) ?? 0)))}
+                </span>
+              )}
+            </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-xs font-semibold text-muted-foreground">اسم الخدمة</label>
+              <Input value={provider?.businessName ?? ""} readOnly className="rounded-xl bg-muted/40" />
+            </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">اسم العميل *</label>
               <Input value={form.clientName} onChange={e => setForm(p => ({ ...p, clientName: e.target.value }))} placeholder="محمد أحمد" className="rounded-xl" />
@@ -10384,19 +10440,87 @@ function ServiceCalendarBookingsTab() {
               </Select>
             </div>
           </div>
+          <div className="space-y-2">
+            <label className={`text-sm font-semibold ${Number(form.deposit) <= 0 ? "text-muted-foreground" : ""}`}>
+              طريقة الدفع
+              {Number(form.deposit) <= 0 && <span className="text-[11px] font-normal mr-1.5">(أدخل مبلغ العربون أولاً)</span>}
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: "cash", label: "كاش", emoji: "💵" },
+                { value: "transfer", label: "حوالة", emoji: "🏦" },
+                { value: "pos", label: "شبكة", emoji: "💳" },
+              ] as const).map(({ value, label, emoji }) => {
+                const depositHasValue = Number(form.deposit) > 0;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    disabled={!depositHasValue}
+                    onClick={() => setForm((current) => ({ ...current, paymentMethod: value }))}
+                    className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2.5 text-xs font-semibold transition-all ${
+                      !depositHasValue
+                        ? "border-border text-muted-foreground/40 bg-muted/30 cursor-not-allowed opacity-50"
+                        : form.paymentMethod === value
+                          ? "border-primary bg-primary/8 text-primary"
+                          : "border-border text-muted-foreground hover:border-muted-foreground"
+                    }`}
+                  >
+                    <span className="text-base">{emoji}</span>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold">
+              إرفاق صورة التحويل أو الإيصال <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
+            </label>
+            {form.paymentReceiptUrl ? (
+              <div className="flex items-center gap-3 rounded-xl border border-border p-2.5">
+                <img src={form.paymentReceiptUrl} alt="إيصال الحجز" className="h-14 w-14 rounded-lg object-cover shrink-0" />
+                <span className="flex-1 text-xs text-muted-foreground">تم إرفاق الإيصال</span>
+                <button
+                  type="button"
+                  onClick={() => setForm((current) => ({ ...current, paymentReceiptUrl: "" }))}
+                  className="text-xs text-destructive hover:underline"
+                >
+                  حذف
+                </button>
+              </div>
+            ) : (
+              <label className={`flex items-center gap-2 rounded-xl border-2 border-dashed border-border p-3 transition-colors ${receiptUploading ? "cursor-wait opacity-70" : "cursor-pointer hover:border-primary/40"}`}>
+                {receiptUploading ? <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" /> : <Camera className="w-4 h-4 text-muted-foreground shrink-0" />}
+                <span className="text-sm text-muted-foreground">{receiptUploading ? "جاري رفع الإيصال..." : "اضغط لإرفاق صورة أو ملف PDF"}</span>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="sr-only"
+                  disabled={receiptUploading}
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    if (file) await handleReceiptUpload(file);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+            )}
+          </div>
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-muted-foreground">ملاحظات</label>
             <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="تفاصيل إضافية..." />
           </div>
           <div className="flex gap-2 justify-end">
-            <Button variant="ghost" onClick={() => { setShowForm(false); setPickerOpen(false); setEditingAppointmentId(null); setForm({ ...emptyForm }); }} className="rounded-xl">إلغاء</Button>
-            <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2 bg-amber-500 hover:bg-amber-600 text-white">
+            <Button variant="ghost" onClick={closeBookingForm} disabled={saving || receiptUploading} className="rounded-xl">إلغاء</Button>
+            <Button onClick={handleSave} disabled={saving || receiptUploading} className="rounded-xl gap-2 bg-amber-500 hover:bg-amber-600 text-white">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
               {editingAppointmentId ? "حفظ التعديلات" : "حفظ الحجز"}
             </Button>
           </div>
-        </motion.div>
-      )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── APPOINTMENTS LIST ── */}
       <div className="space-y-3">

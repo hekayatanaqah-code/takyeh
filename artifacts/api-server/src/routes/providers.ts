@@ -588,6 +588,8 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
     deposit: z.string().optional().nullable(),
     insuranceAmount: z.string().optional().nullable(),
     source: z.enum(["platform", "whatsapp", "phone", "walk_in", "external"]).default("external"),
+    paymentMethod: z.enum(["cash", "transfer", "pos"]).default("cash"),
+    paymentReceiptUrl: z.string().optional().nullable(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors: parsed.error.flatten().fieldErrors });
@@ -645,6 +647,8 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
     deposit: z.string().optional().nullable(),
     insuranceAmount: z.string().optional().nullable(),
     source: z.enum(["platform", "whatsapp", "phone", "walk_in", "external"]).optional(),
+    paymentMethod: z.enum(["cash", "transfer", "pos"]).optional(),
+    paymentReceiptUrl: z.string().optional().nullable(),
     cancelReason: z.string().optional().nullable(),
     insuranceStatus: z.enum(["held", "refunded", "deducted"]).optional(),
     insuranceDeductAmount: z.string().optional().nullable(),

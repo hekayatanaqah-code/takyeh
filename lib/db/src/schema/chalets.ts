@@ -703,6 +703,8 @@ export const serviceAppointmentsTable = pgTable("service_appointments", {
   insuranceDeductAmount: numeric("insurance_deduct_amount", { precision: 10, scale: 2 }),
   insuranceDeductNote: text("insurance_deduct_note"),
   source: text("source").notNull().default("external"),
+  paymentMethod: paymentMethodEnum("payment_method").default("cash"),
+  paymentReceiptUrl: text("payment_receipt_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   cancelReason: text("cancel_reason"),
