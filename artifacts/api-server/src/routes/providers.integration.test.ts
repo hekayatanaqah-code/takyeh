@@ -161,6 +161,46 @@ after(async () => {
 });
 
 describe("service appointment capacity and isolation", () => {
+  it("persists receipt client details and clears identity when insurance is disabled", async () => {
+    await db
+      .update(serviceProvidersTable)
+      .set({ requiresInsurance: true, insuranceAmount: "500" })
+      .where(eq(serviceProvidersTable.id, providerId));
+
+    const created = await requestAppointment(
+      providerId,
+      "POST",
+      "",
+      appointmentBody(TEST_DATES.available, {
+        clientPhone: "0501234567",
+        serviceAddress: "قاعة النخيل - حي الريان",
+        clientIdNumber: "1098765432",
+      }),
+    );
+
+    assert.equal(created.response.status, 201);
+    assert.equal(created.json.clientPhone, "0501234567");
+    assert.equal(created.json.serviceAddress, "قاعة النخيل - حي الريان");
+    assert.equal(created.json.clientIdNumber, "1098765432");
+    assert.equal(created.json.insuranceAmount, "500.00");
+
+    await db
+      .update(serviceProvidersTable)
+      .set({ requiresInsurance: false, insuranceAmount: null })
+      .where(eq(serviceProvidersTable.id, providerId));
+
+    const updated = await requestAppointment(
+      providerId,
+      "PATCH",
+      `/${created.json.id}`,
+      { clientIdNumber: "1111111111" },
+    );
+
+    assert.equal(updated.response.status, 200);
+    assert.equal(updated.json.clientIdNumber, null);
+    assert.equal(updated.json.serviceAddress, "قاعة النخيل - حي الريان");
+  });
+
   it("allows only one of two concurrent requests to take the last seat", async () => {
     const results = await Promise.all([
       requestAppointment(

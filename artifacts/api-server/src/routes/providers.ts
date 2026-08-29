@@ -580,6 +580,8 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
   const schema = z.object({
     clientName: z.string().min(1),
     clientPhone: z.string().optional().nullable(),
+    serviceAddress: z.string().optional().nullable(),
+    clientIdNumber: z.string().optional().nullable(),
     dateStr: canonicalGregorianDate,
     duration: z.string().optional().nullable(),
     status: z.enum(["confirmed", "pending", "cancelled"]).default("confirmed"),
@@ -614,6 +616,7 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
       providerId,
       ownerId: req.user.id,
       ...parsed.data,
+      clientIdNumber: provider.requiresInsurance ? (parsed.data.clientIdNumber || null) : null,
       insuranceAmount: provider.requiresInsurance ? provider.insuranceAmount : null,
     }).returning();
     return { full: false as const, row };
@@ -635,10 +638,24 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
   const apptId = Number(req.params.apptId);
   const [row] = await db.select().from(serviceAppointmentsTable).where(eq(serviceAppointmentsTable.id, apptId)).limit(1);
   if (!row || row.ownerId !== req.user.id || row.providerId !== providerId) return res.status(404).json({ error: "الحجز غير موجود" });
+  const [provider] = await db
+    .select({
+      requiresInsurance: serviceProvidersTable.requiresInsurance,
+      dailyCapacity: serviceProvidersTable.dailyCapacity,
+    })
+    .from(serviceProvidersTable)
+    .where(and(
+      eq(serviceProvidersTable.id, providerId),
+      eq(serviceProvidersTable.ownerId, req.user.id),
+    ))
+    .limit(1);
+  if (!provider) return res.status(404).json({ error: "المزود غير موجود" });
 
   const schema = z.object({
     clientName: z.string().min(1).optional(),
     clientPhone: z.string().optional().nullable(),
+    serviceAddress: z.string().optional().nullable(),
+    clientIdNumber: z.string().optional().nullable(),
     dateStr: canonicalGregorianDate.optional(),
     duration: z.string().optional().nullable(),
     status: z.enum(["confirmed", "pending", "cancelled"]).optional(),
@@ -660,6 +677,7 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
   const targetDate = parsed.data.dateStr ?? row.dateStr;
   const targetStatus = parsed.data.status ?? row.status;
   const updates: Record<string, any> = { ...parsed.data };
+  if (!provider.requiresInsurance) updates.clientIdNumber = null;
   if (parsed.data.status === "cancelled" && !row.cancelledAt) {
     updates.cancelledAt = new Date();
   }
@@ -669,16 +687,6 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
   const result = await db.transaction(async (tx) => {
     if (consumesNewCapacity) {
       await tx.execute(sql`select pg_advisory_xact_lock(${providerId}, hashtext(${targetDate}))`);
-      const [provider] = await tx
-        .select({ dailyCapacity: serviceProvidersTable.dailyCapacity })
-        .from(serviceProvidersTable)
-        .where(and(
-          eq(serviceProvidersTable.id, providerId),
-          eq(serviceProvidersTable.ownerId, req.user.id),
-        ))
-        .limit(1);
-      if (!provider) return { missingProvider: true as const };
-
       const [capacityRow] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(serviceAppointmentsTable)

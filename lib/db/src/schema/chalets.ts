@@ -692,6 +692,8 @@ export const serviceAppointmentsTable = pgTable("service_appointments", {
   ownerId: text("owner_id").notNull(),
   clientName: text("client_name").notNull(),
   clientPhone: text("client_phone"),
+  serviceAddress: text("service_address"),
+  clientIdNumber: text("client_id_number"),
   dateStr: text("date_str").notNull(),
   duration: text("duration"),
   status: text("status").notNull().default("confirmed"),

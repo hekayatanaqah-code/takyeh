@@ -9685,10 +9685,14 @@ function ServiceCalendarBookingsTab() {
   const [saving, setSaving] = useState(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
+  const [receiptAppointment, setReceiptAppointment] = useState<any | null>(null);
+  const [receiptPdfLoading, setReceiptPdfLoading] = useState(false);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
   const emptyForm = {
     clientName: "",
     clientPhone: "",
+    serviceAddress: "",
+    clientIdNumber: "",
     dateStr: "",
     duration: "",
     status: "confirmed",
@@ -9788,8 +9792,8 @@ function ServiceCalendarBookingsTab() {
   }
 
   async function handleSave() {
-    if (!form.clientName || !form.dateStr) {
-      toast({ title: "الاسم والتاريخ مطلوبان", variant: "destructive" });
+    if (!form.clientName.trim() || !form.clientPhone.trim() || !form.dateStr) {
+      toast({ title: "اسم العميل ورقم الجوال والتاريخ مطلوبة", variant: "destructive" });
       return;
     }
     const activeCount = apptDays.get(form.dateStr) ?? 0;
@@ -9818,6 +9822,10 @@ function ServiceCalendarBookingsTab() {
         method: editingAppointmentId ? "PATCH" : "POST",
         body: JSON.stringify({
           ...form,
+          clientName: form.clientName.trim(),
+          clientPhone: form.clientPhone.trim(),
+          serviceAddress: form.serviceAddress.trim() || null,
+          clientIdNumber: provider?.requiresInsurance ? (form.clientIdNumber.trim() || null) : null,
           amount: form.amount || null,
           deposit: form.deposit || null,
           insuranceAmount: editingAppointmentId ? (form.insuranceAmount || null) : undefined,
@@ -9846,6 +9854,8 @@ function ServiceCalendarBookingsTab() {
     setForm({
       clientName: appointment.clientName ?? "",
       clientPhone: appointment.clientPhone ?? "",
+      serviceAddress: appointment.serviceAddress ?? "",
+      clientIdNumber: appointment.clientIdNumber ?? "",
       dateStr: appointment.dateStr ?? "",
       duration: appointment.duration ?? "",
       status: appointment.status === "cancelled" ? "pending" : appointment.status,
@@ -9902,6 +9912,188 @@ function ServiceCalendarBookingsTab() {
     } finally {
       setDeletingAppointmentId(null);
     }
+  }
+
+  function serviceReceiptNumber(appointment: any) {
+    return `SRV-${String(providerId ?? 0).padStart(3, "0")}-${String(appointment.id).padStart(6, "0")}`;
+  }
+
+  function servicePaymentMethodLabel(method?: string | null) {
+    return method === "transfer" ? "حوالة بنكية" : method === "pos" ? "شبكة / نقاط بيع" : "نقداً";
+  }
+
+  function serviceReceiptIssueDate(appointment: any) {
+    const date = appointment.createdAt ? new Date(appointment.createdAt) : new Date();
+    return date.toLocaleDateString("ar-SA-u-ca-gregory", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  }
+
+  function normalizeServiceWhatsAppPhone(phone?: string | null) {
+    const digits = String(phone ?? "")
+      .replace(/[٠-٩]/g, digit => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+      .replace(/\D/g, "")
+      .replace(/^00/, "");
+    if (!digits) return "";
+    if (digits.startsWith("0")) return `966${digits.slice(1)}`;
+    if (digits.startsWith("5")) return `966${digits}`;
+    return digits;
+  }
+
+  function escapeServiceReceiptHtml(value: unknown) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function serviceReceiptMoney(value?: string | number | null) {
+    return `${Number(value ?? 0).toLocaleString("ar-SA", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ر.س`;
+  }
+
+  async function buildServiceReceiptHtml(appointment: any) {
+    const logo = await getLogoDataUrl();
+    const total = Number(appointment.amount ?? 0);
+    const deposit = Number(appointment.deposit ?? 0);
+    const remaining = Math.max(0, total - deposit);
+    const dualDate = formatDualDate(appointment.dateStr);
+    const optionalAddress = appointment.serviceAddress
+      ? `<div class="info-row"><span>العنوان / الموقع</span><strong>${escapeServiceReceiptHtml(appointment.serviceAddress)}</strong></div>`
+      : "";
+    const optionalIdentity = appointment.clientIdNumber
+      ? `<div class="info-row"><span>رقم الهوية / الإقامة</span><strong>${escapeServiceReceiptHtml(toAr(appointment.clientIdNumber))}</strong></div>`
+      : "";
+
+    return `<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>إيصال ${escapeServiceReceiptHtml(serviceReceiptNumber(appointment))}</title>
+  <style>
+    *{box-sizing:border-box} body{margin:0;background:#f5f1e8;color:#25231f;font-family:Tahoma,Arial,sans-serif}
+    .page{width:750px;min-height:900px;margin:0 auto;background:#fff;padding:46px}
+    .receipt-header{display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:3px solid #b88930;padding-bottom:24px}
+    .logo{width:118px;height:78px;object-fit:contain}.brand-placeholder{font-size:28px;font-weight:800;color:#9a6f1d}
+    .receipt-title{text-align:left}.receipt-title h1{font-size:27px;margin:0 0 8px;color:#8d651d}.receipt-title p{margin:4px 0;color:#6f6b62;font-size:14px}
+    .section{margin-top:24px}.section-title{margin:0 0 11px;font-size:15px;color:#8d651d;background:#fbf6ea;border-right:4px solid #b88930;padding:9px 12px}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e9e4d9;border:1px solid #e9e4d9;border-radius:10px;overflow:hidden}
+    .info-row{background:#fff;padding:12px 14px;min-height:64px}.info-row span{display:block;color:#777066;font-size:12px;margin-bottom:6px}.info-row strong{display:block;font-size:14px;line-height:1.6;overflow-wrap:anywhere}
+    .finance{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.finance-card{padding:15px 10px;border:1px solid #e6dfd0;border-radius:10px;text-align:center;background:#fff}
+    .finance-card span{display:block;color:#777066;font-size:11px;margin-bottom:7px}.finance-card strong{font-size:15px}.finance-card.remaining{background:#fbf6ea;border-color:#d9bd82;color:#7d5816}
+    .footer{margin-top:34px;padding-top:18px;border-top:1px dashed #d7cdb9;text-align:center;color:#777066;font-size:12px;line-height:1.8}
+    @media print{body{background:#fff}.page{width:100%;min-height:auto;padding:20px}.receipt-header{-webkit-print-color-adjust:exact;print-color-adjust:exact}.section-title,.finance-card.remaining{-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{size:A4;margin:12mm}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="receipt-header">
+      ${logo ? `<img class="logo" src="${logo}" alt="شعار المنصة" />` : `<div class="brand-placeholder">تكية</div>`}
+      <div class="receipt-title">
+        <h1>إيصال حجز خدمة</h1>
+        <p>رقم الإيصال: <strong dir="ltr">${escapeServiceReceiptHtml(serviceReceiptNumber(appointment))}</strong></p>
+        <p>تاريخ الإصدار: ${escapeServiceReceiptHtml(serviceReceiptIssueDate(appointment))}</p>
+      </div>
+    </header>
+    <section class="section">
+      <h2 class="section-title">بيانات العميل</h2>
+      <div class="info-grid">
+        <div class="info-row"><span>اسم العميل</span><strong>${escapeServiceReceiptHtml(appointment.clientName)}</strong></div>
+        <div class="info-row"><span>رقم الجوال</span><strong dir="ltr">${escapeServiceReceiptHtml(toAr(appointment.clientPhone || "—"))}</strong></div>
+        ${optionalAddress}${optionalIdentity}
+      </div>
+    </section>
+    <section class="section">
+      <h2 class="section-title">تفاصيل الخدمة</h2>
+      <div class="info-grid">
+        <div class="info-row"><span>اسم الخدمة</span><strong>${escapeServiceReceiptHtml(provider?.businessName ?? "الخدمة")}</strong></div>
+        <div class="info-row"><span>تاريخ الخدمة</span><strong>${escapeServiceReceiptHtml(dualDate.hijri)} هـ<br><small>${escapeServiceReceiptHtml(dualDate.gregorian)} م</small></strong></div>
+      </div>
+    </section>
+    <section class="section">
+      <h2 class="section-title">الملخص المالي</h2>
+      <div class="finance">
+        <div class="finance-card"><span>المبلغ الإجمالي</span><strong>${serviceReceiptMoney(total)}</strong></div>
+        <div class="finance-card"><span>العربون المدفوع</span><strong>${serviceReceiptMoney(deposit)}</strong></div>
+        <div class="finance-card remaining"><span>المتبقي</span><strong>${serviceReceiptMoney(remaining)}</strong></div>
+        <div class="finance-card"><span>طريقة الدفع</span><strong>${escapeServiceReceiptHtml(servicePaymentMethodLabel(appointment.paymentMethod))}</strong></div>
+      </div>
+    </section>
+    <footer class="footer">شكراً لاختياركم منصة تكية — هذا الإيصال صادر إلكترونياً من سجل الحجز.</footer>
+  </main>
+</body>
+</html>`;
+  }
+
+  async function printServiceReceipt() {
+    if (!receiptAppointment) return;
+    const printWindow = window.open("", "_blank", "width=900,height=900");
+    if (!printWindow) {
+      toast({ title: "تعذر فتح نافذة الطباعة", description: "يرجى السماح بالنوافذ المنبثقة ثم المحاولة مرة أخرى.", variant: "destructive" });
+      return;
+    }
+    printWindow.document.write("<p dir='rtl' style='font-family:Tahoma;padding:32px'>جاري تجهيز الإيصال...</p>");
+    const html = await buildServiceReceiptHtml(receiptAppointment);
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => printWindow.print(), 500);
+  }
+
+  async function downloadServiceReceiptPdf() {
+    if (!receiptAppointment || receiptPdfLoading) return;
+    setReceiptPdfLoading(true);
+    try {
+      const fileName = `service-receipt-${serviceReceiptNumber(receiptAppointment)}.pdf`;
+      const html = await buildServiceReceiptHtml(receiptAppointment);
+      const { blob } = await htmlToPdfBlob(html, fileName);
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+      toast({ title: "تم تنزيل الإيصال بصيغة PDF" });
+    } catch {
+      toast({ title: "تعذر تنزيل الإيصال", description: "حاول مرة أخرى.", variant: "destructive" });
+    } finally {
+      setReceiptPdfLoading(false);
+    }
+  }
+
+  function sendServiceReceiptWhatsApp() {
+    if (!receiptAppointment) return;
+    const whatsappPhone = normalizeServiceWhatsAppPhone(receiptAppointment.clientPhone);
+    if (!whatsappPhone) {
+      toast({
+        title: "لا يوجد رقم جوال",
+        description: "أضف رقم جوال العميل إلى الحجز قبل إرسال الإيصال عبر واتساب.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const total = Number(receiptAppointment.amount ?? 0);
+    const deposit = Number(receiptAppointment.deposit ?? 0);
+    const remaining = Math.max(0, total - deposit);
+    const message = [
+      `إيصال حجز خدمة — منصة تكية`,
+      `رقم الإيصال: ${serviceReceiptNumber(receiptAppointment)}`,
+      `العميل: ${receiptAppointment.clientName}`,
+      `الخدمة: ${provider?.businessName ?? "الخدمة"}`,
+      `تاريخ الخدمة: ${formatDualDate(receiptAppointment.dateStr).hijri} هـ (${formatDualDate(receiptAppointment.dateStr).gregorian} م)`,
+      receiptAppointment.serviceAddress ? `الموقع: ${receiptAppointment.serviceAddress}` : null,
+      `المبلغ الإجمالي: ${serviceReceiptMoney(total)}`,
+      `العربون المدفوع: ${serviceReceiptMoney(deposit)}`,
+      `المتبقي: ${serviceReceiptMoney(remaining)}`,
+      `طريقة الدفع: ${servicePaymentMethodLabel(receiptAppointment.paymentMethod)}`,
+    ].filter(Boolean).join("\n");
+    window.open(`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
   }
 
   function prevMonth() {
@@ -10281,12 +10473,44 @@ function ServiceCalendarBookingsTab() {
               <Input value={form.clientName} onChange={e => setForm(p => ({ ...p, clientName: e.target.value }))} placeholder="محمد أحمد" className="rounded-xl" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">رقم الجوال</label>
+              <label className="text-xs font-semibold text-muted-foreground">رقم الجوال *</label>
               <Input type="text" inputMode="numeric" lang="ar"
                 value={toAr(form.clientPhone)}
                 onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
                 placeholder="٠٥xxxxxxxx" className="rounded-xl" dir="ltr" />
             </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-xs font-semibold text-muted-foreground">
+                عنوان / موقع تقديم الخدمة <span className="font-normal">(اختياري)</span>
+              </label>
+              <Input
+                value={form.serviceAddress}
+                onChange={e => setForm(p => ({ ...p, serviceAddress: e.target.value }))}
+                placeholder="اسم القاعة، الحي، أو رابط الموقع"
+                className="rounded-xl"
+              />
+            </div>
+            {provider?.requiresInsurance && (
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-xs font-semibold text-muted-foreground">
+                  رقم الهوية / الإقامة <span className="font-normal">(اختياري)</span>
+                </label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  lang="ar"
+                  value={toAr(form.clientIdNumber)}
+                  onChange={e => setForm(p => ({
+                    ...p,
+                    clientIdNumber: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))),
+                  }))}
+                  placeholder="رقم الهوية أو الإقامة"
+                  className="rounded-xl"
+                  dir="ltr"
+                />
+                <p className="text-[11px] text-muted-foreground">يظهر هذا الحقل لأن التأمين المسترد مفعّل لهذه الخدمة.</p>
+              </div>
+            )}
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-xs font-semibold text-muted-foreground">تاريخ الخدمة *</label>
               {/* Unified Hijri / Gregorian date picker */}
@@ -10577,6 +10801,12 @@ function ServiceCalendarBookingsTab() {
                     ) : (
                       <p className="text-xs text-muted-foreground mt-0.5">لا يوجد رقم تواصل</p>
                     )}
+                    {a.serviceAddress && (
+                      <p className="text-[11px] text-muted-foreground mt-1 truncate flex items-center gap-1">
+                        <MapPin className="w-3 h-3 shrink-0" />
+                        {a.serviceAddress}
+                      </p>
+                    )}
                     {a.notes && <p className="text-[11px] text-muted-foreground mt-1 truncate">{a.notes}</p>}
                   </div>
                   <div>
@@ -10597,6 +10827,16 @@ function ServiceCalendarBookingsTab() {
                     </span>
                   </div>
                   <div className="flex items-center gap-1 flex-wrap md:justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setReceiptAppointment(a)}
+                      className="rounded-lg text-xs gap-1 h-8 px-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                      data-testid={`service-receipt-${a.id}`}
+                    >
+                      <Receipt className="w-3 h-3" />
+                      الإيصال
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -10647,6 +10887,120 @@ function ServiceCalendarBookingsTab() {
           </div>
         )}
       </div>
+
+      {/* Service receipt preview */}
+      {receiptAppointment && (() => {
+        const total = Number(receiptAppointment.amount ?? 0);
+        const deposit = Number(receiptAppointment.deposit ?? 0);
+        const remaining = Math.max(0, total - deposit);
+        const dualDate = formatDualDate(receiptAppointment.dateStr);
+        return (
+          <Dialog open onOpenChange={(open) => { if (!open && !receiptPdfLoading) setReceiptAppointment(null); }}>
+            <DialogContent
+              dir="rtl"
+              className="max-w-2xl max-h-[94vh] overflow-y-auto p-0"
+              data-testid="service-receipt-dialog"
+            >
+              <DialogHeader className="sr-only">
+                <DialogTitle>إيصال حجز الخدمة</DialogTitle>
+                <DialogDescription>معاينة إيصال الحجز وخيارات الطباعة والتنزيل والإرسال.</DialogDescription>
+              </DialogHeader>
+              <div className="bg-[#f7f2e8] p-3 sm:p-6">
+                <div className="rounded-2xl bg-white border border-[#e8dcc4] shadow-sm overflow-hidden">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-7 border-b-[3px] border-[#b88930]">
+                    <img src={takyahLogoSrc} alt="شعار منصة تكية" className="w-24 h-16 object-contain self-start" />
+                    <div className="sm:text-left">
+                      <h2 className="text-xl sm:text-2xl font-extrabold text-[#8d651d]">إيصال حجز خدمة</h2>
+                      <p className="text-xs text-[#6f6b62] mt-2">
+                        رقم الإيصال: <strong dir="ltr">{serviceReceiptNumber(receiptAppointment)}</strong>
+                      </p>
+                      <p className="text-xs text-[#6f6b62] mt-1">تاريخ الإصدار: {serviceReceiptIssueDate(receiptAppointment)}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-5 sm:p-7 space-y-6 text-[#25231f]">
+                    <section>
+                      <h3 className="text-sm font-bold text-[#8d651d] bg-[#fbf6ea] border-r-4 border-[#b88930] px-3 py-2 mb-3">بيانات العميل</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-px rounded-xl overflow-hidden border border-[#e9e4d9] bg-[#e9e4d9]">
+                        {[
+                          ["اسم العميل", receiptAppointment.clientName],
+                          ["رقم الجوال", receiptAppointment.clientPhone ? toAr(receiptAppointment.clientPhone) : "—"],
+                          ...(receiptAppointment.serviceAddress ? [["العنوان / الموقع", receiptAppointment.serviceAddress]] : []),
+                          ...(receiptAppointment.clientIdNumber ? [["رقم الهوية / الإقامة", toAr(receiptAppointment.clientIdNumber)]] : []),
+                        ].map(([label, value]) => (
+                          <div key={label} className="bg-white p-3.5 min-h-16">
+                            <span className="block text-[11px] text-[#777066] mb-1.5">{label}</span>
+                            <strong className="block text-sm leading-relaxed break-words">{value}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section>
+                      <h3 className="text-sm font-bold text-[#8d651d] bg-[#fbf6ea] border-r-4 border-[#b88930] px-3 py-2 mb-3">تفاصيل الخدمة</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-px rounded-xl overflow-hidden border border-[#e9e4d9] bg-[#e9e4d9]">
+                        <div className="bg-white p-3.5">
+                          <span className="block text-[11px] text-[#777066] mb-1.5">اسم الخدمة</span>
+                          <strong className="text-sm">{provider?.businessName ?? "الخدمة"}</strong>
+                        </div>
+                        <div className="bg-white p-3.5">
+                          <span className="block text-[11px] text-[#777066] mb-1.5">تاريخ الخدمة</span>
+                          <strong className="block text-sm">{dualDate.hijri} هـ</strong>
+                          <span className="text-xs text-[#777066]">{dualDate.gregorian} م</span>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section>
+                      <h3 className="text-sm font-bold text-[#8d651d] bg-[#fbf6ea] border-r-4 border-[#b88930] px-3 py-2 mb-3">الملخص المالي</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {[
+                          ["المبلغ الإجمالي", serviceReceiptMoney(total), false],
+                          ["العربون المدفوع", serviceReceiptMoney(deposit), false],
+                          ["المتبقي", serviceReceiptMoney(remaining), true],
+                          ["طريقة الدفع", servicePaymentMethodLabel(receiptAppointment.paymentMethod), false],
+                        ].map(([label, value, highlighted]) => (
+                          <div
+                            key={String(label)}
+                            className={`rounded-xl border p-3 text-center ${highlighted ? "bg-[#fbf6ea] border-[#d9bd82] text-[#7d5816]" : "bg-white border-[#e6dfd0]"}`}
+                          >
+                            <span className="block text-[10px] text-[#777066] mb-1.5">{label}</span>
+                            <strong className="text-xs sm:text-sm">{value}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <p className="text-center text-[11px] text-[#777066] border-t border-dashed border-[#d7cdb9] pt-4">
+                      شكراً لاختياركم منصة تكية — هذا الإيصال صادر إلكترونياً من سجل الحجز.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-4 border-t border-border bg-card">
+                <Button variant="outline" onClick={printServiceReceipt} className="gap-2 rounded-xl">
+                  <Printer className="w-4 h-4" />
+                  طباعة
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={downloadServiceReceiptPdf}
+                  disabled={receiptPdfLoading}
+                  className="gap-2 rounded-xl"
+                  data-testid="service-receipt-download"
+                >
+                  {receiptPdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  تحميل PDF
+                </Button>
+                <Button onClick={sendServiceReceiptWhatsApp} className="gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white">
+                  <Send className="w-4 h-4" />
+                  إرسال عبر واتساب
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* Unblock Day Confirmation Dialog */}
       <Dialog open={!!unblockDay} onOpenChange={v => { if (!v) setUnblockDay(null); }}>
