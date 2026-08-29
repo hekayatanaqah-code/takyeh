@@ -7,9 +7,12 @@ import {
   serviceSeasonsTable,
   serviceAppointmentsTable,
   serviceInsurancesTable,
+  serviceReviewInvitationsTable,
+  serviceReviewsTable,
 } from "@workspace/db/schema";
 import { eq, and, ne, desc, isNull, gte, sql } from "drizzle-orm";
 import { z } from "zod";
+import { randomBytes } from "crypto";
 
 const router = Router();
 const ALL_KINGDOM_COVERAGE = "جميع مناطق المملكة";
@@ -23,6 +26,25 @@ const canonicalGregorianDate = z
       && date.getUTCMonth() === month - 1
       && date.getUTCDate() === day;
   }, "التاريخ غير صالح");
+const insuranceAmountInput = z.union([z.string(), z.number()])
+  .transform((value) => String(value))
+  .optional()
+  .nullable();
+
+function normalizeInsuranceConfig(
+  requiresInsurance: boolean,
+  insuranceAmount: string | null | undefined,
+) {
+  if (!requiresInsurance) {
+    return { requiresInsurance: false, insuranceAmount: null };
+  }
+  const normalizedAmount = insuranceAmount?.trim() ?? "";
+  const amount = Number(normalizedAmount);
+  if (!normalizedAmount || !Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+  return { requiresInsurance: true, insuranceAmount: amount.toFixed(2) };
+}
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.isAuthenticated()) {
@@ -90,6 +112,8 @@ router.post("/submit", requireAuth, async (req: any, res) => {
       errorMap: () => ({ message: "يرجى اختيار وحدة التسعير" }),
     }),
     dailyCapacity: z.number().int().min(1, "يجب أن يكون العدد حجزاً واحداً على الأقل"),
+    requiresInsurance: z.boolean().default(false),
+    insuranceAmount: insuranceAmountInput,
     coverageTags: z.array(z.string()).min(1, "يرجى إضافة نطاق الخدمة").default([]),
     customFeatureTags: z.array(z.string()).default([]),
   });
@@ -105,6 +129,13 @@ router.post("/submit", requireAuth, async (req: any, res) => {
   }
 
   const data = parsed.data;
+  const insuranceConfig = normalizeInsuranceConfig(data.requiresInsurance, data.insuranceAmount);
+  if (!insuranceConfig) {
+    return res.status(422).json({
+      error: "بيانات التأمين غير صحيحة",
+      fieldErrors: { insuranceAmount: "قيمة التأمين مطلوبة ويجب أن تكون أكبر من صفر" },
+    });
+  }
 
   /* ── Unique business name per city check ──────────────────── */
   const [dupProvider] = await db
@@ -138,6 +169,7 @@ router.post("/submit", requireAuth, async (req: any, res) => {
     yearsOfExperience: data.yearsOfExperience ?? null,
     pricingUnit: data.pricingUnit,
     dailyCapacity: data.dailyCapacity,
+    ...insuranceConfig,
     coverageTags: data.coverageTags,
     customFeatureTags: data.customFeatureTags,
   };
@@ -206,6 +238,8 @@ router.patch("/my/submissions/:id", requireAuth, async (req: any, res) => {
     yearsOfExperience: z.number().int().min(0).optional().nullable(),
     pricingUnit: z.enum(["per_day", "per_hour", "per_request"]).optional(),
     dailyCapacity: z.number().int().min(1).optional(),
+    requiresInsurance: z.boolean().optional(),
+    insuranceAmount: insuranceAmountInput,
     coverageTags: z.array(z.string()).min(1, "يرجى إضافة نطاق الخدمة").optional(),
     customFeatureTags: z.array(z.string()).optional(),
   });
@@ -217,11 +251,22 @@ router.patch("/my/submissions/:id", requireAuth, async (req: any, res) => {
       fieldErrors: parsed.error.flatten().fieldErrors,
     });
   }
+  const insuranceConfig = normalizeInsuranceConfig(
+    parsed.data.requiresInsurance ?? submission.requiresInsurance,
+    parsed.data.insuranceAmount === undefined ? submission.insuranceAmount : parsed.data.insuranceAmount,
+  );
+  if (!insuranceConfig) {
+    return res.status(422).json({
+      error: "بيانات التأمين غير صحيحة",
+      fieldErrors: { insuranceAmount: ["قيمة التأمين مطلوبة ويجب أن تكون أكبر من صفر"] },
+    });
+  }
 
   const [updated] = await db
     .update(serviceProviderSubmissionsTable)
     .set({
       ...parsed.data,
+      ...insuranceConfig,
       status: "pending",
       adminNote: null,
     })
@@ -337,14 +382,75 @@ router.patch("/my/approved/:id", requireAuth, async (req: any, res) => {
     galleryPhotos: z.array(z.string()).optional(),
     videoUrl: z.string().optional().nullable(),
     yearsOfExperience: z.number().int().min(0).optional().nullable(),
+    requiresInsurance: z.boolean().optional(),
+    insuranceAmount: insuranceAmountInput,
     coverageTags: z.array(z.string()).optional(),
     customFeatureTags: z.array(z.string()).optional(),
     photoCaptions: z.array(z.string()).optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors: parsed.error.flatten().fieldErrors });
+  const insuranceConfig = normalizeInsuranceConfig(
+    parsed.data.requiresInsurance ?? provider.requiresInsurance,
+    parsed.data.insuranceAmount === undefined ? provider.insuranceAmount : parsed.data.insuranceAmount,
+  );
+  if (!insuranceConfig) {
+    return res.status(422).json({
+      error: "بيانات التأمين غير صحيحة",
+      fieldErrors: { insuranceAmount: ["قيمة التأمين مطلوبة ويجب أن تكون أكبر من صفر"] },
+    });
+  }
 
-  const [updated] = await db.update(serviceProvidersTable).set(parsed.data).where(eq(serviceProvidersTable.id, id)).returning();
+  const [updated] = await db.update(serviceProvidersTable).set({
+    ...parsed.data,
+    ...insuranceConfig,
+  }).where(eq(serviceProvidersTable.id, id)).returning();
+  return res.json(updated);
+});
+
+/* ── Owner: provider-scoped review management ────────── */
+router.get("/my/approved/:id/reviews", requireAuth, async (req: any, res) => {
+  const providerId = Number(req.params.id);
+  const [provider] = await db.select({ id: serviceProvidersTable.id })
+    .from(serviceProvidersTable)
+    .where(and(eq(serviceProvidersTable.id, providerId), eq(serviceProvidersTable.ownerId, req.user.id)))
+    .limit(1);
+  if (!provider) return res.status(404).json({ error: "المزود غير موجود" });
+  const rows = await db.select().from(serviceReviewsTable)
+    .where(eq(serviceReviewsTable.providerId, providerId))
+    .orderBy(desc(serviceReviewsTable.createdAt));
+  return res.json(rows);
+});
+
+router.post("/my/approved/:id/review-invite", requireAuth, async (req: any, res) => {
+  const providerId = Number(req.params.id);
+  const [provider] = await db.select({ id: serviceProvidersTable.id, businessName: serviceProvidersTable.businessName })
+    .from(serviceProvidersTable)
+    .where(and(eq(serviceProvidersTable.id, providerId), eq(serviceProvidersTable.ownerId, req.user.id)))
+    .limit(1);
+  if (!provider) return res.status(404).json({ error: "المزود غير موجود" });
+  const token = randomBytes(5).toString("hex");
+  const [invitation] = await db.insert(serviceReviewInvitationsTable).values({
+    token,
+    providerId,
+    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  }).returning();
+  return res.status(201).json({ token: invitation.token, providerName: provider.businessName });
+});
+
+router.post("/my/approved/:id/reviews/:reviewId/reply", requireAuth, async (req: any, res) => {
+  const providerId = Number(req.params.id);
+  const reviewId = Number(req.params.reviewId);
+  const parsed = z.object({ reply: z.string().trim().min(1).max(2000) }).safeParse(req.body);
+  if (!parsed.success) return res.status(422).json({ error: "الرد غير صحيح" });
+  const [provider] = await db.select({ id: serviceProvidersTable.id }).from(serviceProvidersTable)
+    .where(and(eq(serviceProvidersTable.id, providerId), eq(serviceProvidersTable.ownerId, req.user.id))).limit(1);
+  if (!provider) return res.status(404).json({ error: "المزود غير موجود" });
+  const [updated] = await db.update(serviceReviewsTable)
+    .set({ ownerReply: parsed.data.reply, ownerReplyAt: new Date() })
+    .where(and(eq(serviceReviewsTable.id, reviewId), eq(serviceReviewsTable.providerId, providerId)))
+    .returning();
+  if (!updated) return res.status(404).json({ error: "التقييم غير موجود" });
   return res.json(updated);
 });
 
@@ -503,7 +609,10 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
     }
 
     const [row] = await tx.insert(serviceAppointmentsTable).values({
-      providerId, ownerId: req.user.id, ...parsed.data,
+      providerId,
+      ownerId: req.user.id,
+      ...parsed.data,
+      insuranceAmount: provider.requiresInsurance ? provider.insuranceAmount : null,
     }).returning();
     return { full: false as const, row };
   });

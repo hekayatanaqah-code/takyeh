@@ -9150,6 +9150,8 @@ function ServiceDetailsTab() {
         whatsappNumber: provider.whatsappNumber ?? "",
         city: provider.city ?? "",
         yearsOfExperience: provider.yearsOfExperience ?? "",
+        requiresInsurance: Boolean(provider.requiresInsurance),
+        insuranceAmount: provider.insuranceAmount == null ? "" : String(provider.insuranceAmount),
       });
       setCoverageTags(provider.coverageTags ?? []);
       setFeatureTags(provider.customFeatureTags ?? []);
@@ -9165,11 +9167,24 @@ function ServiceDetailsTab() {
   async function handleSave() {
     if (isReadOnly) return onBlockedEdit();
     const currentForm = form!;
+    if (currentForm.requiresInsurance && (!currentForm.insuranceAmount || Number(currentForm.insuranceAmount) <= 0)) {
+      toast({ title: "قيمة التأمين مطلوبة", description: "أدخل قيمة أكبر من صفر للتأمين المسترد", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       const r = await apiFetch(`/providers/my/approved/${providerId}`, {
         method: "PATCH",
-        body: JSON.stringify({ ...currentForm, coverageTags, customFeatureTags: featureTags, yearsOfExperience: currentForm.yearsOfExperience ? Number(currentForm.yearsOfExperience) : null, logoUrl: logoUrl || null, galleryPhotos, photoCaptions }),
+        body: JSON.stringify({
+          ...currentForm,
+          insuranceAmount: currentForm.requiresInsurance ? currentForm.insuranceAmount : null,
+          coverageTags,
+          customFeatureTags: featureTags,
+          yearsOfExperience: currentForm.yearsOfExperience ? Number(currentForm.yearsOfExperience) : null,
+          logoUrl: logoUrl || null,
+          galleryPhotos,
+          photoCaptions,
+        }),
       });
       if (!r.ok) throw new Error();
       queryClient.invalidateQueries({ queryKey: ["service-provider-detail", providerId] });
@@ -9294,6 +9309,50 @@ function ServiceDetailsTab() {
           <label className="text-sm font-semibold text-foreground">سنوات الخبرة</label>
           <Input type="number" min={0} value={form.yearsOfExperience} onChange={e => setForm({ ...form, yearsOfExperience: e.target.value })} className="rounded-xl" />
         </div>
+      </div>
+
+      {/* Refundable insurance settings */}
+      <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <label className="text-sm font-bold text-foreground">التأمين المسترد للحجوزات</label>
+            <p className="text-xs text-muted-foreground mt-1">عند تشغيله يظهر تبويب إدارة التأمينات لهذه الخدمة.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={form.requiresInsurance ? "default" : "outline"}
+              className="rounded-xl min-w-16"
+              onClick={() => setForm({ ...form, requiresInsurance: true })}
+            >
+              نعم
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={!form.requiresInsurance ? "default" : "outline"}
+              className="rounded-xl min-w-16"
+              onClick={() => setForm({ ...form, requiresInsurance: false, insuranceAmount: "" })}
+            >
+              لا
+            </Button>
+          </div>
+        </div>
+        {form.requiresInsurance && (
+          <div className="max-w-xs space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">قيمة التأمين المسترد (ر.س) *</label>
+            <Input
+              type="text"
+              inputMode="decimal"
+              value={toArN(form.insuranceAmount)}
+              onChange={e => setForm({ ...form, insuranceAmount: fromArN(e.target.value) })}
+              placeholder="٥٠٠"
+              className="rounded-xl"
+              dir="ltr"
+            />
+          </div>
+        )}
       </div>
 
       {/* Description */}
@@ -9688,7 +9747,12 @@ function ServiceCalendarBookingsTab() {
         : `/providers/my/approved/${providerId}/appointments`;
       const r = await apiFetch(endpoint, {
         method: editingAppointmentId ? "PATCH" : "POST",
-        body: JSON.stringify({ ...form, amount: form.amount || null, deposit: form.deposit || null, insuranceAmount: form.insuranceAmount || null }),
+        body: JSON.stringify({
+          ...form,
+          amount: form.amount || null,
+          deposit: form.deposit || null,
+          insuranceAmount: editingAppointmentId ? (form.insuranceAmount || null) : undefined,
+        }),
       });
       if (!r.ok) {
         const error = await r.json().catch(() => ({})) as { error?: string };
@@ -10228,13 +10292,23 @@ function ServiceCalendarBookingsTab() {
                 onChange={e => setForm(p => ({ ...p, deposit: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
                 placeholder="٠" className="rounded-xl" />
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">تأمين الحجز (ر.س)</label>
-              <Input type="text" inputMode="decimal" lang="ar"
-                value={toAr(form.insuranceAmount)}
-                onChange={e => setForm(p => ({ ...p, insuranceAmount: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
-                placeholder="٠" className="rounded-xl" />
-            </div>
+            {(provider?.requiresInsurance || (editingAppointmentId && form.insuranceAmount)) && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">
+                  التأمين المسترد المطبق (ر.س)
+                </label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  lang="ar"
+                  value={toAr(editingAppointmentId ? form.insuranceAmount : (provider?.insuranceAmount ?? ""))}
+                  onChange={e => editingAppointmentId && setForm(p => ({ ...p, insuranceAmount: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
+                  readOnly={!editingAppointmentId}
+                  className="rounded-xl bg-muted/40"
+                />
+                {!editingAppointmentId && <p className="text-[11px] text-muted-foreground">يُضاف تلقائياً حسب إعداد الخدمة.</p>}
+              </div>
+            )}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">مصدر الحجز</label>
               <Select value={form.source} onValueChange={v => setForm(p => ({ ...p, source: v }))}>
@@ -19343,6 +19417,117 @@ function InvitationsTable({ invitations, onDelete, deleteIsPending }: { invitati
   );
 }
 
+function ServiceReviewsTab() {
+  const { providerId } = useServiceErp();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [generatedLink, setGeneratedLink] = useState("");
+  const [replyDraft, setReplyDraft] = useState<Record<number, string>>({});
+  const [replyingId, setReplyingId] = useState<number | null>(null);
+
+  const { data: reviews = [], isLoading } = useQuery<any[]>({
+    queryKey: ["service-reviews", providerId],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/reviews`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: !!providerId,
+  });
+
+  const invite = useMutation({
+    mutationFn: async () => {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/review-invite`, { method: "POST" });
+      if (!r.ok) throw new Error("تعذر إنشاء الرابط");
+      return r.json() as Promise<{ token: string }>;
+    },
+    onSuccess: ({ token }) => {
+      setGeneratedLink(`${window.location.origin}${BASE}/r/${token}`);
+      toast({ title: "تم إنشاء رابط التقييم" });
+    },
+    onError: () => toast({ title: "تعذر إنشاء رابط التقييم", variant: "destructive" }),
+  });
+
+  const reply = useMutation({
+    mutationFn: async ({ reviewId, text }: { reviewId: number; text: string }) => {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/reviews/${reviewId}/reply`, {
+        method: "POST",
+        body: JSON.stringify({ reply: text }),
+      });
+      if (!r.ok) throw new Error();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["service-reviews", providerId] });
+      setReplyingId(null);
+      toast({ title: "تم حفظ الرد" });
+    },
+    onError: () => toast({ title: "تعذر حفظ الرد", variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="font-bold text-lg text-foreground flex items-center gap-2"><Star className="w-5 h-5 text-amber-500" />تقييمات الخدمة</h2>
+            <p className="text-sm text-muted-foreground mt-1">أنشئ رابطاً خاصاً ليقيّم العميل تجربته مع هذه الخدمة.</p>
+          </div>
+          <Button onClick={() => invite.mutate()} disabled={invite.isPending} className="rounded-xl gap-2">
+            {invite.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            إنشاء رابط تقييم
+          </Button>
+        </div>
+        {generatedLink && (
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input value={generatedLink} readOnly dir="ltr" className="flex-1" />
+            <Button variant="outline" className="rounded-xl" onClick={() => {
+              navigator.clipboard.writeText(generatedLink);
+              toast({ title: "تم نسخ الرابط" });
+            }}>نسخ الرابط</Button>
+          </div>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+      ) : reviews.length === 0 ? (
+        <div className="bg-card border border-border rounded-2xl p-10 text-center text-muted-foreground">
+          <Star className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p className="font-medium">لا توجد تقييمات لهذه الخدمة بعد</p>
+          <p className="text-xs mt-1">أنشئ رابطاً وأرسله للعميل بعد اكتمال الخدمة.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {reviews.map((review) => (
+            <div key={review.id} className="bg-card border border-border rounded-2xl p-5 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-bold text-amber-500" dir="ltr">{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{review.isAnonymous ? "عميل مجهول" : (review.guestName || "عميل الخدمة")}</p>
+                </div>
+                <span className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString("ar-SA")}</span>
+              </div>
+              {review.comment && <p className="text-sm text-foreground leading-relaxed">{review.comment}</p>}
+              {review.ownerReply ? (
+                <div className="rounded-xl bg-muted/50 p-3 text-sm"><span className="font-bold">رد المالك: </span>{review.ownerReply}</div>
+              ) : replyingId === review.id ? (
+                <div className="space-y-2">
+                  <Textarea value={replyDraft[review.id] ?? ""} onChange={e => setReplyDraft(p => ({ ...p, [review.id]: e.target.value }))} placeholder="اكتب ردك..." />
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="ghost" size="sm" onClick={() => setReplyingId(null)}>إلغاء</Button>
+                    <Button size="sm" disabled={!replyDraft[review.id]?.trim() || reply.isPending} onClick={() => reply.mutate({ reviewId: review.id, text: replyDraft[review.id] })}>حفظ الرد</Button>
+                  </div>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setReplyingId(review.id)}>الرد على التقييم</Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ReviewsTab() {
   const qc = useQueryClient();
   const [selectedChaletId, setSelectedChaletId] = useState<number | null>(null);
@@ -21349,6 +21534,12 @@ function CustomersTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { unit: repUnit } = useAdminFinance();
+  const serviceScope = repUnit.type === "service";
+  const scopedProviderId = serviceScope ? repUnit.id : null;
+  const customerApiPath = (phone: string, suffix = "") =>
+    serviceScope
+      ? `/owner/service-clients/${encodeURIComponent(phone)}${suffix}?providerId=${scopedProviderId}`
+      : `/owner/customers/${encodeURIComponent(phone)}${suffix}`;
   const [search, setSearch]           = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "chalet" | "service">("all");
   const [selected, setSelected]       = useState<string | null>(null);
@@ -21373,7 +21564,7 @@ function CustomersTab() {
   /* ── Edit mutation ── */
   const editMutation = useMutation({
     mutationFn: async ({ oldPhone, name, phone }: { oldPhone: string; name: string; phone: string }) => {
-      const r = await apiFetch(`/owner/customers/${encodeURIComponent(oldPhone)}`, {
+      const r = await apiFetch(customerApiPath(oldPhone), {
         method: "PUT",
         body: JSON.stringify({ name, phone }),
       });
@@ -21382,6 +21573,7 @@ function CustomersTab() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["owner", "customers"] });
+      qc.invalidateQueries({ queryKey: ["owner", "service-clients", scopedProviderId] });
       const newPhone = data.newPhone ?? selected!;
       setSelected(newPhone);
       loadProfile(newPhone);
@@ -21394,11 +21586,12 @@ function CustomersTab() {
   /* ── Delete mutation ── */
   const deleteMutation = useMutation({
     mutationFn: async (phone: string) => {
-      const r = await apiFetch(`/owner/customers/${encodeURIComponent(phone)}`, { method: "DELETE" });
+      const r = await apiFetch(customerApiPath(phone), { method: "DELETE" });
       if (!r.ok) throw new Error("فشل حذف العميل");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "customers"] });
+      qc.invalidateQueries({ queryKey: ["owner", "service-clients", scopedProviderId] });
       setSelected(null);
       setProfile(null);
       setDeleteOpen(false);
@@ -21407,22 +21600,24 @@ function CustomersTab() {
     onError: () => toast({ title: "حدث خطأ أثناء الحذف", variant: "destructive" }),
   });
 
+  const showChalets = repUnit.type !== "service";
+  const showServices = repUnit.type !== "chalet";
+
   const { data: customers = [], isLoading } = useQuery<CustomerRow[]>({
-    queryKey: ["owner", "customers"],
+    queryKey: ["owner", "customers", showChalets],
     queryFn: async () => {
       const r = await apiFetch("/owner/customers");
       if (!r.ok) return [];
       const data = await r.json();
       return Array.isArray(data) ? data : [];
     },
+    enabled: showChalets,
   });
 
-  const showServices = repUnit.type === "all";
-
   const { data: svcClients = [], isLoading: svcLoading } = useQuery<(CustomerRow & { providers: string[] })[]>({
-    queryKey: ["owner", "service-clients"],
+    queryKey: ["owner", "service-clients", scopedProviderId],
     queryFn: async () => {
-      const r = await apiFetch("/owner/service-clients");
+      const r = await apiFetch(`/owner/service-clients${scopedProviderId ? `?providerId=${scopedProviderId}` : ""}`);
       return r.ok ? r.json() : [];
     },
     enabled: showServices,
@@ -21435,10 +21630,10 @@ function CustomersTab() {
     const chaletPhones = new Set(customers.map(c => c.client_phone));
     const svcPhones = new Set(svcClients.map(c => c.client_phone));
 
-    for (const c of customers) {
+    for (const c of showChalets ? customers : []) {
       result.push({ ...c, source: svcPhones.has(c.client_phone) ? "both" : "chalet" });
     }
-    for (const c of svcClients) {
+    for (const c of showServices ? svcClients : []) {
       if (!chaletPhones.has(c.client_phone)) {
         result.push({ ...c, source: "service", providers: c.providers });
       } else {
@@ -21447,7 +21642,7 @@ function CustomersTab() {
       }
     }
     return result;
-  }, [customers, svcClients]);
+  }, [customers, svcClients, showChalets, showServices]);
 
   const filtered = mergedCustomers.filter((c) => {
     const normalizedSearch = search.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
@@ -21465,7 +21660,7 @@ function CustomersTab() {
     setProfileBookingMonth("all");
     setProfileBookingPage(1);
     try {
-      const r = await apiFetch(`/owner/customers/${encodeURIComponent(phone)}`);
+      const r = await apiFetch(customerApiPath(phone));
       if (r.ok) {
         const data: CustomerProfile = await r.json();
         setProfile(data);
@@ -21482,7 +21677,7 @@ function CustomersTab() {
   async function handleSaveNote() {
     if (!selected) return;
     setSavingNote(true);
-    await apiFetch(`/owner/customers/${encodeURIComponent(selected)}/note`, {
+    await apiFetch(customerApiPath(selected, "/note"), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notes: note }),
@@ -21541,7 +21736,7 @@ function CustomersTab() {
           />
         </div>
 
-        {isLoading || (showServices && svcLoading) ? (
+        {(showChalets && isLoading) || (showServices && svcLoading) ? (
           <div className="flex justify-center py-16"><Loader2 className="animate-spin text-primary w-6 h-6" /></div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground text-sm">
@@ -21555,12 +21750,12 @@ function CustomersTab() {
               return (
               <button
                 key={c.client_phone || c.client_name}
-                onClick={() => src !== "service" && c.client_phone ? loadProfile(c.client_phone) : null}
+                onClick={() => c.client_phone ? loadProfile(c.client_phone) : null}
                 className={`w-full text-start rounded-xl border px-4 py-3 transition-colors hover:border-primary/50 hover:bg-accent/30 ${
                   selected === c.client_phone
                     ? "border-primary bg-primary/5"
                     : "border-border bg-card"
-                } ${src === "service" ? "cursor-default" : ""}`}
+                }`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-semibold text-sm text-foreground truncate">{c.client_name}</p>
@@ -22551,6 +22746,61 @@ function fromEasternArabic(s: string): string {
   return s.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
 }
 
+type DashboardSubscription = {
+  plan: string;
+  status: string;
+  expiresAt: string | null;
+  paymentStatus: string;
+};
+
+function SubscriptionAccountBanner({
+  subscription,
+  onManage,
+}: {
+  subscription: DashboardSubscription;
+  onManage: () => void;
+}) {
+  const planLabels: Record<string, string> = {
+    trial: "تجريبي", monthly: "شهري", yearly: "سنوي",
+    chalet_basic: "عقار — أساسي", chalet_pro: "عقار — احترافي",
+    chalet_unlimited: "عقار — غير محدود", service_basic: "خدمات — أساسي",
+    service_pro: "خدمات — احترافي", bundle: "حزمة شاملة",
+  };
+  const statusCls: Record<string, string> = {
+    active: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+    trial: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+    expired: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+    suspended: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+  };
+  const days = subscription.expiresAt
+    ? Math.ceil((new Date(subscription.expiresAt).getTime() - Date.now()) / 86_400_000)
+    : null;
+
+  return (
+    <button
+      type="button"
+      onClick={onManage}
+      className="mb-5 w-full bg-card border border-border rounded-2xl px-4 sm:px-5 py-3 flex items-center gap-3 flex-wrap text-sm hover:bg-accent/40 transition-colors text-start cursor-pointer"
+    >
+      <CreditCard className="w-4 h-4 text-primary shrink-0" />
+      <span className="font-semibold text-foreground">حسابي والاشتراك</span>
+      <span className="font-medium text-muted-foreground">{planLabels[subscription.plan] ?? subscription.plan}</span>
+      <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${statusCls[subscription.status] ?? "bg-muted text-muted-foreground"}`}>
+        {{ active: "نشط ✓", trial: "تجريبي", expired: "منتهي", suspended: "موقوف" }[subscription.status] ?? subscription.status}
+      </span>
+      {days !== null && (
+        <span className={`text-xs font-medium ${days < 7 ? "text-red-600" : "text-muted-foreground"}`}>
+          {toArN(Math.max(0, days))} يوم متبقي
+        </span>
+      )}
+      <span className="sm:ms-auto flex items-center gap-1.5 text-xs font-semibold text-primary">
+        إدارة
+        <ExternalLink className="w-3.5 h-3.5" />
+      </span>
+    </button>
+  );
+}
+
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
@@ -22728,7 +22978,7 @@ export default function Dashboard() {
     enabled: isAuthenticated || isImpersonating,
   });
 
-  const { data: subscription } = useQuery<{ plan: string; status: string; expiresAt: string | null; paymentStatus: string } | null>({
+  const { data: subscription } = useQuery<DashboardSubscription | null>({
     queryKey: ["owner", "subscription-header"],
     queryFn: async () => {
       const r = await apiFetch("/owner/subscription");
@@ -22747,7 +22997,7 @@ export default function Dashboard() {
     },
     enabled: (isAuthenticated || isImpersonating) && !actAsStaff && canSeeServices,
   });
-  const { data: myApprovedProviders = [] } = useQuery<{ id: number; isActive: boolean; businessName: string; category: string; city: string }[]>({
+  const { data: myApprovedProviders = [] } = useQuery<{ id: number; isActive: boolean; businessName: string; category: string; city: string; requiresInsurance: boolean; insuranceAmount: string | null }[]>({
     queryKey: ["my-approved-providers"],
     queryFn: async () => {
       const r = await apiFetch("/providers/my/approved");
@@ -22764,7 +23014,6 @@ export default function Dashboard() {
     if (!ownerProfile || !businessType) return;
     if (businessType === "service" && dashMode === "chalets") setDashMode("services");
     if (businessType === "chalet" && dashMode === "services") setDashMode("chalets");
-    if (businessType === "service" && selectedServiceTab === "insurance") setSelectedServiceTab("details");
     /* Seed calendar prefs from DB — DB is source of truth, overrides localStorage */
     if (ownerProfile.bookingsCalPref) {
       const bPref = ownerProfile.bookingsCalPref as "hijri" | "gregorian";
@@ -22791,6 +23040,12 @@ export default function Dashboard() {
       setSelectedServiceId(null);
     }
   }, [activeDashMode, myApprovedProviders.length]);
+
+  useEffect(() => {
+    if (selectedServiceTab !== "insurance" || typeof selectedServiceId !== "number") return;
+    const provider = myApprovedProviders.find((item) => item.id === selectedServiceId);
+    if (provider && !provider.requiresInsurance) setSelectedServiceTab("details");
+  }, [selectedServiceId, selectedServiceTab, myApprovedProviders]);
 
   /* Auto-select the single chalet as finance unit when owner has only one property */
   useEffect(() => {
@@ -23249,6 +23504,10 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-5"
           >
+            {subscription && (
+              <SubscriptionAccountBanner subscription={subscription} onManage={() => navigate("/subscription")} />
+            )}
+
             {/* Header */}
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
@@ -23333,13 +23592,16 @@ export default function Dashboard() {
                 {/* ── Service ERP Dashboard ─────────────────────────── */}
                 {selectedServiceId !== "submissions" && selectedServiceId !== null && (() => {
                   const selectedProvider = myApprovedProviders.find(p => p.id === selectedServiceId);
-                   const serviceErpTabs = [
+                    const serviceErpTabs = [
                     { id: "details",   label: "تفاصيل الخدمة",    icon: <Edit2 className="w-3.5 h-3.5" /> },
                     { id: "seasons",   label: "المواسم والأعياد",  icon: <Sunrise className="w-3.5 h-3.5" /> },
                     { id: "calendar",  label: "التقويم والحجوزات", icon: <Calendar className="w-3.5 h-3.5" /> },
-                     ...(businessType === "service" ? [] : [
+                      ...(selectedProvider?.requiresInsurance ? [
                        { id: "insurance", label: "إدارة التأمينات", icon: <Shield className="w-3.5 h-3.5" /> },
-                     ]),
+                      ] : []),
+                      { id: "reviews", label: "التقييمات", icon: <Star className="w-3.5 h-3.5" /> },
+                      { id: "customers", label: "قاعدة العملاء", icon: <UserCheck className="w-3.5 h-3.5" /> },
+                      { id: "messages", label: "إعدادات الرسائل", icon: <Send className="w-3.5 h-3.5" /> },
                   ];
                   return (
                     <ServiceErpCtx.Provider value={{ providerId: selectedServiceId }}>
@@ -23394,7 +23656,14 @@ export default function Dashboard() {
                         {selectedServiceTab === "details"   && <ServiceDetailsTab />}
                         {selectedServiceTab === "seasons"   && <ServiceSeasonsTab />}
                         {selectedServiceTab === "calendar"  && <ServiceCalendarBookingsTab />}
-                        {businessType !== "service" && selectedServiceTab === "insurance" && <ServiceBookingInsurancesTab />}
+                        {selectedProvider?.requiresInsurance && selectedServiceTab === "insurance" && <ServiceBookingInsurancesTab />}
+                        {selectedServiceTab === "reviews" && <ServiceReviewsTab />}
+                        {selectedServiceTab === "customers" && (
+                          <AdminFinanceCtx.Provider value={{ unit: { type: "service", id: selectedServiceId, name: selectedProvider?.businessName ?? "الخدمة" } }}>
+                            <CustomersTab />
+                          </AdminFinanceCtx.Provider>
+                        )}
+                        {selectedServiceTab === "messages" && <OwnerMessageSettingsTab />}
                       </div>
                       {/* Shortcut to admin-finance */}
                       <div className="mt-4 pt-4 border-t border-border">
@@ -23562,46 +23831,9 @@ export default function Dashboard() {
           <>
 
         {/* Subscription / Account Settings — clickable banner */}
-        {subscription && (() => {
-          const planLabels: Record<string, string> = {
-            trial: "تجريبي", monthly: "شهري", yearly: "سنوي",
-            chalet_basic: "عقار — أساسي", chalet_pro: "عقار — احترافي",
-            chalet_unlimited: "عقار — غير محدود", service_basic: "خدمات — أساسي",
-            service_pro: "خدمات — احترافي", bundle: "حزمة شاملة",
-          };
-          const statusCls: Record<string, string> = {
-            active: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
-            trial:  "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-            expired: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-            suspended: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
-          };
-          const days = subscription.expiresAt
-            ? Math.ceil((new Date(subscription.expiresAt).getTime() - Date.now()) / 86_400_000)
-            : null;
-          return (
-            <button
-              type="button"
-              onClick={() => navigate("/subscription")}
-              className="mb-5 w-full bg-card border border-border rounded-2xl px-5 py-3 flex items-center gap-3 flex-wrap text-sm hover:bg-accent/40 transition-colors text-start cursor-pointer"
-            >
-              <CreditCard className="w-4 h-4 text-primary shrink-0" />
-              <span className="font-semibold text-foreground">حسابي والاشتراك</span>
-              <span className="font-medium text-muted-foreground">{planLabels[subscription.plan] ?? subscription.plan}</span>
-              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${statusCls[subscription.status] ?? "bg-muted text-muted-foreground"}`}>
-                {{ active: "نشط ✓", trial: "تجريبي", expired: "منتهي", suspended: "موقوف" }[subscription.status] ?? subscription.status}
-              </span>
-              {days !== null && (
-                <span className={`text-xs font-medium ${days < 7 ? "text-red-600" : "text-muted-foreground"}`}>
-                  {Math.max(0, days)} يوم متبقي
-                </span>
-              )}
-              <span className="ms-auto flex items-center gap-1.5 text-xs font-semibold text-primary">
-                إدارة
-                <ExternalLink className="w-3.5 h-3.5" />
-              </span>
-            </button>
-          );
-        })()}
+        {subscription && (
+          <SubscriptionAccountBanner subscription={subscription} onManage={() => navigate("/subscription")} />
+        )}
 
         {/* Notification Settings — owner only */}
         {!isStaff && !isImpersonating && (

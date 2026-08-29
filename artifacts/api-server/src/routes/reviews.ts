@@ -8,6 +8,9 @@ import {
   ownerNotificationsTable,
   ownerBookingsTable,
   ownerNotificationSettingsTable,
+  serviceReviewInvitationsTable,
+  serviceReviewsTable,
+  serviceProvidersTable,
 } from "@workspace/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
@@ -55,7 +58,26 @@ router.get("/reviews/:token", async (req, res) => {
     .where(eq(reviewInvitationsTable.token, token))
     .limit(1);
 
-  if (!inv) return res.status(404).json({ error: "invalid_token" });
+  if (!inv) {
+    const [serviceInv] = await db.select().from(serviceReviewInvitationsTable)
+      .where(eq(serviceReviewInvitationsTable.token, token)).limit(1);
+    if (!serviceInv) return res.status(404).json({ error: "invalid_token" });
+    if (serviceInv.used) return res.status(410).json({ error: "token_used" });
+    if (serviceInv.expiresAt && serviceInv.expiresAt < new Date()) return res.status(410).json({ error: "token_expired" });
+    const [provider] = await db.select({
+      id: serviceProvidersTable.id,
+      businessName: serviceProvidersTable.businessName,
+      logoUrl: serviceProvidersTable.logoUrl,
+    }).from(serviceProvidersTable).where(eq(serviceProvidersTable.id, serviceInv.providerId)).limit(1);
+    if (!provider) return res.status(404).json({ error: "provider_not_found" });
+    return res.json({
+      chaletId: provider.id,
+      chaletName: provider.businessName,
+      chaletPhoto: provider.logoUrl ?? null,
+      guestName: serviceInv.guestName ?? null,
+      resourceType: "service",
+    });
+  }
   if (inv.used) return res.status(410).json({ error: "token_used" });
   if (inv.expiresAt && inv.expiresAt < new Date())
     return res.status(410).json({ error: "token_expired" });
@@ -91,7 +113,47 @@ router.post("/reviews/:token", async (req, res) => {
     .where(eq(reviewInvitationsTable.token, token))
     .limit(1);
 
-  if (!inv) return res.status(404).json({ error: "invalid_token" });
+  if (!inv) {
+    const [serviceInv] = await db.select().from(serviceReviewInvitationsTable)
+      .where(eq(serviceReviewInvitationsTable.token, token)).limit(1);
+    if (!serviceInv) return res.status(404).json({ error: "invalid_token" });
+    if (serviceInv.used) return res.status(410).json({ error: "token_used" });
+    if (serviceInv.expiresAt && serviceInv.expiresAt < new Date()) return res.status(410).json({ error: "token_expired" });
+    const [provider] = await db.select().from(serviceProvidersTable)
+      .where(eq(serviceProvidersTable.id, serviceInv.providerId)).limit(1);
+    if (!provider) return res.status(404).json({ error: "provider_not_found" });
+    const submitted = await db.transaction(async (tx) => {
+      const [claimed] = await tx.update(serviceReviewInvitationsTable)
+        .set({ used: true })
+        .where(and(
+          eq(serviceReviewInvitationsTable.id, serviceInv.id),
+          eq(serviceReviewInvitationsTable.used, false),
+        ))
+        .returning({ id: serviceReviewInvitationsTable.id });
+      if (!claimed) return false;
+
+      await tx.insert(serviceReviewsTable).values({
+        providerId: serviceInv.providerId,
+        invitationId: serviceInv.id,
+        rating: body.data.rating,
+        comment: body.data.comment ?? null,
+        photoUrls: body.data.photoUrls ?? [],
+        guestName: serviceInv.guestName ?? null,
+        isAnonymous: body.data.isAnonymous ?? false,
+      });
+      if (provider.ownerId) {
+        const stars = "★".repeat(body.data.rating) + "☆".repeat(5 - body.data.rating);
+        await tx.insert(ownerNotificationsTable).values({
+          ownerId: provider.ownerId,
+          type: "new_review",
+          message: `تقييم جديد لخدمة ${provider.businessName} — ${stars}`,
+        });
+      }
+      return true;
+    });
+    if (!submitted) return res.status(410).json({ error: "token_used" });
+    return res.json({ success: true });
+  }
   if (inv.used) return res.status(410).json({ error: "token_used" });
   if (inv.expiresAt && inv.expiresAt < new Date())
     return res.status(410).json({ error: "token_expired" });

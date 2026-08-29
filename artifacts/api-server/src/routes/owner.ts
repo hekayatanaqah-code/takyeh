@@ -3965,10 +3965,19 @@ router.get("/service-revenue-summary", async (req, res) => {
 
 router.get("/service-clients", async (req, res) => {
   const ownerId = req.user!.id;
+  const requestedProviderId = req.query.providerId ? Number(req.query.providerId) : null;
+  if (req.query.providerId && (!Number.isInteger(requestedProviderId) || Number(requestedProviderId) <= 0)) {
+    return res.status(400).json({ error: "معرّف الخدمة غير صحيح" });
+  }
   const providers = await db
     .select({ id: serviceProvidersTable.id, businessName: serviceProvidersTable.businessName })
     .from(serviceProvidersTable)
-    .where(eq(serviceProvidersTable.ownerId, ownerId));
+    .where(requestedProviderId
+      ? and(
+          eq(serviceProvidersTable.ownerId, ownerId),
+          eq(serviceProvidersTable.id, requestedProviderId),
+        )
+      : eq(serviceProvidersTable.ownerId, ownerId));
 
   if (providers.length === 0) return res.json([]);
 
@@ -4026,6 +4035,135 @@ router.get("/service-clients", async (req, res) => {
       providers: Array.from(c.providers),
     }))
   );
+});
+
+async function verifyOwnerServiceProvider(ownerId: string, providerId: number) {
+  const [provider] = await db.select({ id: serviceProvidersTable.id, businessName: serviceProvidersTable.businessName })
+    .from(serviceProvidersTable)
+    .where(and(eq(serviceProvidersTable.id, providerId), eq(serviceProvidersTable.ownerId, ownerId)))
+    .limit(1);
+  return provider ?? null;
+}
+
+router.get("/service-clients/:phone", async (req, res) => {
+  const ownerId = req.user!.id;
+  const providerId = Number(req.query.providerId);
+  const phone = req.params.phone;
+  if (!Number.isInteger(providerId)) return res.status(400).json({ error: "معرّف الخدمة مطلوب" });
+  const provider = await verifyOwnerServiceProvider(ownerId, providerId);
+  if (!provider) return res.status(404).json({ error: "الخدمة غير موجودة" });
+
+  const rows = await db.select().from(serviceAppointmentsTable)
+    .where(and(
+      eq(serviceAppointmentsTable.ownerId, ownerId),
+      eq(serviceAppointmentsTable.providerId, providerId),
+      eq(serviceAppointmentsTable.clientPhone, phone),
+    ))
+    .orderBy(desc(serviceAppointmentsTable.dateStr));
+  if (rows.length === 0) return res.status(404).json({ error: "العميل غير موجود" });
+
+  const [noteRow] = await db.select({ notes: customerNotesTable.notes }).from(customerNotesTable)
+    .where(and(eq(customerNotesTable.ownerId, ownerId), eq(customerNotesTable.clientPhone, phone)))
+    .limit(1);
+  return res.json({
+    clientName: rows[0].clientName,
+    clientPhone: phone,
+    clientIdNumber: null,
+    totalBookings: rows.length,
+    totalRevenue: rows.reduce((sum, row) => sum + (row.status === "cancelled" ? 0 : Number(row.amount ?? 0)), 0),
+    lastBookingDate: rows[0].dateStr,
+    bookings: rows.map((row) => ({
+      id: row.id,
+      booking_date: row.dateStr,
+      duration_days: null,
+      period: row.duration,
+      total_price: String(row.amount ?? "0"),
+      submission_id: null,
+      cancelled_at: row.cancelledAt,
+      chalet_name: provider.businessName,
+      contract_signed: false,
+      contract_signer_id: null,
+      insurance_fee: row.insuranceAmount ? String(row.insuranceAmount) : null,
+      insurance_received: row.insuranceAmount ? true : null,
+      insurance_refunded: row.insuranceStatus === "refunded",
+      original_date: null,
+      rescheduled_at: null,
+    })),
+    note: noteRow?.notes ?? "",
+  });
+});
+
+router.put("/service-clients/:phone/note", async (req, res) => {
+  const ownerId = req.user!.id;
+  const providerId = Number(req.query.providerId);
+  if (!Number.isInteger(providerId) || !await verifyOwnerServiceProvider(ownerId, providerId)) {
+    return res.status(404).json({ error: "الخدمة غير موجودة" });
+  }
+  const phone = req.params.phone;
+  const notes = String(req.body?.notes ?? "");
+  await db.execute(sql`
+    INSERT INTO customer_notes (owner_id, client_phone, notes, updated_at)
+    VALUES (${ownerId}, ${phone}, ${notes}, now())
+    ON CONFLICT (owner_id, client_phone) DO UPDATE SET notes = ${notes}, updated_at = now()
+  `);
+  return res.json({ ok: true });
+});
+
+router.put("/service-clients/:phone", async (req, res) => {
+  const ownerId = req.user!.id;
+  const providerId = Number(req.query.providerId);
+  if (!Number.isInteger(providerId) || !await verifyOwnerServiceProvider(ownerId, providerId)) {
+    return res.status(404).json({ error: "الخدمة غير موجودة" });
+  }
+  const oldPhone = req.params.phone;
+  const newName = req.body?.name ? String(req.body.name).trim() : null;
+  const newPhone = req.body?.phone ? String(req.body.phone).trim() : null;
+  if (!newName && !newPhone) return res.status(400).json({ error: "يرجى تقديم اسم أو رقم جوال جديد" });
+  const setValues: Record<string, string> = {};
+  if (newName) setValues.clientName = newName;
+  if (newPhone) setValues.clientPhone = newPhone;
+  await db.update(serviceAppointmentsTable).set(setValues).where(and(
+    eq(serviceAppointmentsTable.ownerId, ownerId),
+    eq(serviceAppointmentsTable.providerId, providerId),
+    eq(serviceAppointmentsTable.clientPhone, oldPhone),
+  ));
+  if (newPhone && newPhone !== oldPhone) {
+    const [remainingService] = await db.select({ count: sql<number>`count(*)::int` }).from(serviceAppointmentsTable)
+      .where(and(eq(serviceAppointmentsTable.ownerId, ownerId), eq(serviceAppointmentsTable.clientPhone, oldPhone)));
+    const [remainingChalet] = await db.select({ count: sql<number>`count(*)::int` }).from(ownerBookingsTable)
+      .where(and(eq(ownerBookingsTable.ownerId, ownerId), eq(ownerBookingsTable.clientPhone, oldPhone)));
+    if ((remainingService?.count ?? 0) === 0 && (remainingChalet?.count ?? 0) === 0) {
+      await db.update(customerNotesTable).set({ clientPhone: newPhone }).where(and(
+        eq(customerNotesTable.ownerId, ownerId),
+        eq(customerNotesTable.clientPhone, oldPhone),
+      ));
+    }
+  }
+  return res.json({ ok: true, newPhone: newPhone ?? oldPhone });
+});
+
+router.delete("/service-clients/:phone", async (req, res) => {
+  const ownerId = req.user!.id;
+  const providerId = Number(req.query.providerId);
+  if (!Number.isInteger(providerId) || !await verifyOwnerServiceProvider(ownerId, providerId)) {
+    return res.status(404).json({ error: "الخدمة غير موجودة" });
+  }
+  await db.delete(serviceAppointmentsTable).where(and(
+    eq(serviceAppointmentsTable.ownerId, ownerId),
+    eq(serviceAppointmentsTable.providerId, providerId),
+    eq(serviceAppointmentsTable.clientPhone, req.params.phone),
+  ));
+  const [remainingService] = await db.select({ count: sql<number>`count(*)::int` }).from(serviceAppointmentsTable)
+    .where(and(eq(serviceAppointmentsTable.ownerId, ownerId), eq(serviceAppointmentsTable.clientPhone, req.params.phone)));
+  const [remainingChalet] = await db.select({ count: sql<number>`count(*)::int` }).from(ownerBookingsTable)
+    .where(and(eq(ownerBookingsTable.ownerId, ownerId), eq(ownerBookingsTable.clientPhone, req.params.phone)));
+  if ((remainingService?.count ?? 0) === 0 && (remainingChalet?.count ?? 0) === 0) {
+    await db.delete(customerNotesTable).where(and(
+      eq(customerNotesTable.ownerId, ownerId),
+      eq(customerNotesTable.clientPhone, req.params.phone),
+    ));
+  }
+  return res.json({ ok: true });
 });
 
 /* ── Report Years (years that have actual data) ─────────────── */

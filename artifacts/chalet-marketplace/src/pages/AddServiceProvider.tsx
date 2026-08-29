@@ -106,6 +106,8 @@ export default function AddServiceProvider() {
     yearsOfExperience: "",
     pricingUnit: "",
     dailyCapacity: "",
+    requiresInsurance: false,
+    insuranceAmount: "",
   });
 
   const [logo, setLogo] = useState<UploadedPhoto | null>(null);
@@ -193,6 +195,8 @@ export default function AddServiceProvider() {
       yearsOfExperience: editingSubmission.yearsOfExperience == null ? "" : String(editingSubmission.yearsOfExperience),
       pricingUnit: editingSubmission.pricingUnit ?? "",
       dailyCapacity: editingSubmission.dailyCapacity == null ? "" : String(editingSubmission.dailyCapacity),
+      requiresInsurance: Boolean(editingSubmission.requiresInsurance),
+      insuranceAmount: editingSubmission.insuranceAmount == null ? "" : String(editingSubmission.insuranceAmount),
     });
     if (!isKnownCategory) setCustomCategory(submissionCategory);
     setRegionSelectVal(matchedRegion);
@@ -218,7 +222,7 @@ export default function AddServiceProvider() {
     setLegalAccepted(true);
   }, [editingSubmission, serviceCategories]);
 
-  const handleChange = (field: string, value: string) =>
+  const handleChange = (field: string, value: string | boolean) =>
     setForm((p) => ({ ...p, [field]: value }));
 
   const handleRegionChange = (region: string) => {
@@ -442,6 +446,9 @@ export default function AddServiceProvider() {
     if (!form.pricingUnit) errs.pricingUnit = "يرجى اختيار وحدة التسعير";
     if (!form.dailyCapacity) errs.dailyCapacity = "يرجى إدخال أقصى عدد حجوزات باليوم";
     else if (Number(form.dailyCapacity) < 1) errs.dailyCapacity = "يجب أن يكون العدد حجزاً واحداً على الأقل";
+    if (form.requiresInsurance && (!form.insuranceAmount || Number(form.insuranceAmount) <= 0)) {
+      errs.insuranceAmount = "قيمة التأمين مطلوبة ويجب أن تكون أكبر من صفر";
+    }
     if (resolvedCoverageTags.length === 0) errs.coverageTags = "يرجى إضافة نطاق الخدمة (المناطق التي تخدمها)";
 
     const validGallery = gallery.filter((p) => p.url && p.url !== "error").map((p) => p.url);
@@ -472,6 +479,8 @@ export default function AddServiceProvider() {
         yearsOfExperience: Number(form.yearsOfExperience),
         pricingUnit: form.pricingUnit,
         dailyCapacity: Number(form.dailyCapacity),
+        requiresInsurance: form.requiresInsurance,
+        insuranceAmount: form.requiresInsurance ? form.insuranceAmount : null,
         logoUrl: logo?.url || undefined,
         galleryPhotos: validGallery,
         videoUrl: video?.url || undefined,
@@ -792,6 +801,65 @@ export default function AddServiceProvider() {
                     : <p className="text-xs text-muted-foreground">تحدد عدد الحجوزات المتاحة يومياً</p>
                   }
                 </div>
+              </div>
+
+              {/* Refundable insurance */}
+              <div className={`rounded-2xl border p-4 space-y-3 ${fieldErrors.insuranceAmount ? "border-red-400 bg-red-50/40 dark:bg-red-950/10" : "border-border bg-muted/30"}`}>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <Label className="font-bold">هل تتطلب الخدمة تأميناً مسترداً؟</Label>
+                    <p className="text-xs text-muted-foreground mt-1">يُسجّل مع الحجز ويُعاد للعميل بعد إتمام الخدمة دون أضرار.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={form.requiresInsurance ? "default" : "outline"}
+                      className="min-w-20 rounded-xl"
+                      onClick={() => handleChange("requiresInsurance", true)}
+                    >
+                      نعم
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={!form.requiresInsurance ? "default" : "outline"}
+                      className="min-w-20 rounded-xl"
+                      onClick={() => {
+                        handleChange("requiresInsurance", false);
+                        handleChange("insuranceAmount", "");
+                        setFieldErrors((prev) => {
+                          const next = { ...prev };
+                          delete next.insuranceAmount;
+                          return next;
+                        });
+                      }}
+                    >
+                      لا
+                    </Button>
+                  </div>
+                </div>
+
+                {form.requiresInsurance && (
+                  <div className="max-w-sm space-y-1.5">
+                    <Label htmlFor="insuranceAmount">قيمة التأمين المسترد (ر.س) <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="insuranceAmount"
+                      type="text"
+                      inputMode="decimal"
+                      value={toAr(form.insuranceAmount)}
+                      onChange={(e) => handleChange("insuranceAmount", fromAr(e.target.value).replace(/[^\d.]/g, ""))}
+                      placeholder="مثال: ٥٠٠"
+                      className={fieldErrors.insuranceAmount ? "border-red-500 ring-1 ring-red-500" : ""}
+                      dir="ltr"
+                      data-no-arabic=""
+                      required
+                    />
+                    {fieldErrors.insuranceAmount && (
+                      <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.insuranceAmount}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Description */}

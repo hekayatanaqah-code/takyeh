@@ -11,3 +11,4 @@
 - [Salary expenses NULL submissionId](salary-null-submissionid.md) — owner-level salary expenses have submission_id=NULL; API and frontend must always include them regardless of property filter; use OR(submissionId=X, submissionId IS NULL).
 - [Safe Drizzle schema sync](safe-drizzle-schema-sync.md) — never force a push that proposes unrelated legacy-table/column drops; apply only reviewed additive dev changes and reconcile drift separately.
 - [Service capacity atomicity](service-capacity-atomicity.md) — every capacity-consuming service booking write must lock provider+date before count-and-write.
+- [Mixed-owner data scoping](mixed-owner-data-scoping.md) — service tabs must never reuse chalet-only data sources; scope every query and action to the selected product.

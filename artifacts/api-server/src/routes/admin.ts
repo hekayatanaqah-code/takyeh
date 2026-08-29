@@ -1092,6 +1092,8 @@ router.patch("/service-submissions/:id/status", async (req, res) => {
         yearsOfExperience: submission.yearsOfExperience ?? undefined,
         pricingUnit: submission.pricingUnit ?? undefined,
         dailyCapacity: submission.dailyCapacity ?? undefined,
+        requiresInsurance: submission.requiresInsurance,
+        insuranceAmount: submission.requiresInsurance ? submission.insuranceAmount : null,
         coverageTags: submission.coverageTags ?? [],
         customFeatureTags: submission.customFeatureTags ?? [],
         isActive: true,
@@ -1845,6 +1847,8 @@ router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
     whatsappNumber: z.string().min(9, "رقم واتساب غير صحيح"),
     descriptionAr: z.string().optional().default(""),
     yearsOfExperience: z.number().int().min(0).optional(),
+    requiresInsurance: z.boolean().optional().default(false),
+    insuranceAmount: z.union([z.string(), z.number()]).transform((value) => String(value)).optional().nullable(),
     coverageTags: z.array(z.string()).optional().default([]),
     customFeatureTags: z.array(z.string()).optional().default([]),
     logoUrl: z.string().optional().nullable(),
@@ -1857,6 +1861,14 @@ router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
   }
 
   const data = body.data;
+  const normalizedInsuranceAmount = data.insuranceAmount?.trim() ?? "";
+  const insuranceAmountNumber = Number(normalizedInsuranceAmount);
+  if (data.requiresInsurance && (!normalizedInsuranceAmount || !Number.isFinite(insuranceAmountNumber) || insuranceAmountNumber <= 0)) {
+    return res.status(400).json({
+      error: "بيانات التأمين غير صحيحة",
+      details: { insuranceAmount: ["قيمة التأمين مطلوبة ويجب أن تكون أكبر من صفر"] },
+    });
+  }
 
   /* Add manually entered coverage cities to the searchable city catalog. */
   for (const coverageCity of [...new Set(data.coverageTags.map(city => city.trim()).filter(Boolean))]) {
@@ -1891,6 +1903,8 @@ router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
     whatsappNumber: data.whatsappNumber,
     descriptionAr: data.descriptionAr || null,
     yearsOfExperience: data.yearsOfExperience ?? null,
+    requiresInsurance: data.requiresInsurance,
+    insuranceAmount: data.requiresInsurance ? insuranceAmountNumber.toFixed(2) : null,
     coverageTags: data.coverageTags ?? [],
     customFeatureTags: data.customFeatureTags ?? [],
     logoUrl: data.logoUrl || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160'%3E%3Crect width='160' height='160' rx='32' fill='%231e293b'/%3E%3Ccircle cx='80' cy='80' r='48' fill='%23f59e0b' opacity='.18'/%3E%3Cpath d='M48 98V72l32-22 32 22v26l-32 18-32-18Zm32-27 22 15v-9L80 62 58 77v9l22-15Z' fill='%23fbbf24'/%3E%3C/svg%3E",

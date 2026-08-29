@@ -324,6 +324,8 @@ export const serviceProviderSubmissionsTable = pgTable("service_provider_submiss
   yearsOfExperience: integer("years_of_experience"),
   pricingUnit: text("pricing_unit"),
   dailyCapacity: integer("daily_capacity"),
+  requiresInsurance: boolean("requires_insurance").notNull().default(false),
+  insuranceAmount: numeric("insurance_amount", { precision: 10, scale: 2 }),
   coverageTags: text("coverage_tags").array().notNull().default([]),
   customFeatureTags: text("custom_feature_tags").array().notNull().default([]),
   status: submissionStatusEnum("status").notNull().default("pending"),
@@ -347,6 +349,8 @@ export const serviceProvidersTable = pgTable("service_providers", {
   yearsOfExperience: integer("years_of_experience"),
   pricingUnit: text("pricing_unit"),
   dailyCapacity: integer("daily_capacity"),
+  requiresInsurance: boolean("requires_insurance").notNull().default(false),
+  insuranceAmount: numeric("insurance_amount", { precision: 10, scale: 2 }),
   coverageTags: text("coverage_tags").array().notNull().default([]),
   customFeatureTags: text("custom_feature_tags").array().notNull().default([]),
   photoCaptions: text("photo_captions").array().notNull().default([]),
@@ -704,6 +708,39 @@ export const serviceAppointmentsTable = pgTable("service_appointments", {
   cancelReason: text("cancel_reason"),
 });
 export type ServiceAppointment = typeof serviceAppointmentsTable.$inferSelect;
+
+/* ── Service Review Invitations (one-time tokens) ───────────── */
+export const serviceReviewInvitationsTable = pgTable("service_review_invitations", {
+  id: serial("id").primaryKey(),
+  token: text("token").notNull().unique(),
+  providerId: integer("provider_id").notNull().references(() => serviceProvidersTable.id, { onDelete: "cascade" }),
+  guestName: text("guest_name"),
+  used: boolean("used").notNull().default(false),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ServiceReviewInvitation = typeof serviceReviewInvitationsTable.$inferSelect;
+
+/* ── Service Reviews ─────────────────────────────────────────── */
+export const serviceReviewsTable = pgTable("service_reviews", {
+  id: serial("id").primaryKey(),
+  providerId: integer("provider_id").notNull().references(() => serviceProvidersTable.id, { onDelete: "cascade" }),
+  invitationId: integer("invitation_id").unique().references(() => serviceReviewInvitationsTable.id, { onDelete: "set null" }),
+  rating: integer("rating").notNull(),
+  comment: text("comment"),
+  photoUrls: text("photo_urls").array().notNull().default([]),
+  guestName: text("guest_name"),
+  isAnonymous: boolean("is_anonymous").notNull().default(false),
+  isVerified: boolean("is_verified").notNull().default(true),
+  isHidden: boolean("is_hidden").notNull().default(false),
+  ownerReply: text("owner_reply"),
+  ownerReplyAt: timestamp("owner_reply_at", { withTimezone: true }),
+  reportedBy: text("reported_by"),
+  reportedAt: timestamp("reported_at", { withTimezone: true }),
+  reportReason: text("report_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ServiceReview = typeof serviceReviewsTable.$inferSelect;
 
 /* ── Service Insurances (policy tracking) ───────────────────── */
 export const serviceInsurancesTable = pgTable("service_insurances", {
