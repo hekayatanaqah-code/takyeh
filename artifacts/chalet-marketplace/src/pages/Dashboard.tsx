@@ -4304,7 +4304,17 @@ function RescheduleDialog({
 }
 
 /* ── Booking Calendar Tab ────────────────────── */
-function BookingCalendarTab({ submissions }: { submissions: any[] }) {
+function BookingCalendarTab({
+  submissions,
+  submissionsLoading = false,
+  ownerChalets,
+  chaletsLoading = false,
+}: {
+  submissions: any[];
+  submissionsLoading?: boolean;
+  ownerChalets: any[];
+  chaletsLoading?: boolean;
+}) {
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
@@ -4487,15 +4497,6 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
   }
 
-  const { data: ownerChalets = [], isLoading: chaletsLoading } = useQuery<any[]>({
-    queryKey: ["owner", "chalets"],
-    queryFn: async () => {
-      const r = await apiFetch("/owner/chalets");
-      if (!r.ok) return [];
-      return r.json();
-    },
-  });
-
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
     queryFn: async () => {
@@ -4507,8 +4508,34 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     staleTime: 5 * 60 * 1000,
   });
 
+  const approvedSubmissionIds = useMemo(() => new Set(
+    submissions
+      .filter((submission: any) => {
+        const status = String(submission.status ?? "").toLowerCase();
+        return status === "approved" || status === "active";
+      })
+      .map((submission: any) => Number(submission.id)),
+  ), [submissions]);
+
+  const approvedOwnerChalets = useMemo(() => ownerChalets.filter((chalet: any) => {
+    const chaletStatus = String(chalet.status ?? "").toLowerCase();
+    return approvedSubmissionIds.has(Number(chalet.submissionId))
+      || chaletStatus === "approved"
+      || chaletStatus === "active";
+  }), [ownerChalets, approvedSubmissionIds]);
+
+  const approvedCalendarSubmissionIds = useMemo(
+    () => new Set(approvedOwnerChalets.map((chalet: any) => Number(chalet.submissionId))),
+    [approvedOwnerChalets],
+  );
+
   const showAllChalets = selectedChaletId === "all";
-  const activeChaletId = showAllChalets ? null : selectedChaletId ?? ownerChalets[0]?.id ?? null;
+  const selectedApprovedChalet = typeof selectedChaletId === "number"
+    ? approvedOwnerChalets.find((chalet: any) => chalet.id === selectedChaletId)
+    : null;
+  const activeChaletId = showAllChalets
+    ? null
+    : selectedApprovedChalet?.id ?? approvedOwnerChalets[0]?.id ?? null;
 
   /* ── Build WhatsApp review message from template ── */
   const DEFAULT_WA_REVIEW = "أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} 🌟\nاضغط هنا لتقييمك: {link}";
@@ -4610,7 +4637,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     refetchInterval: 60_000,
   });
 
-  const activeChalet = activeChaletId ? ownerChalets.find((c: any) => c.id === activeChaletId) as any | undefined : undefined;
+  const activeChalet = activeChaletId ? approvedOwnerChalets.find((c: any) => c.id === activeChaletId) as any | undefined : undefined;
   const [morningCheckIn, setMorningCheckIn] = useState<string>("");
   const [morningCheckOut, setMorningCheckOut] = useState<string>("");
   const [eveningCheckIn, setEveningCheckIn] = useState<string>("");
@@ -4833,6 +4860,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     if (!calMonthStart || !calMonthEnd) return [];
     return bookings.filter((b) => {
       if (!b.bookingDate) return false;
+      if (showAllChalets && !approvedCalendarSubmissionIds.has(Number(b.submissionId))) return false;
       if (!showAllChalets && b.submissionId !== activeChalet?.submissionId) return false;
       const [by, bm, bd] = b.bookingDate.split("-").map(Number);
       const dur = Math.max(1, b.durationDays ?? 1);
@@ -4840,7 +4868,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       const bEnd = `${bEndDate.getFullYear()}-${String(bEndDate.getMonth() + 1).padStart(2, "0")}-${String(bEndDate.getDate()).padStart(2, "0")}`;
       return b.bookingDate <= calMonthEnd && bEnd >= calMonthStart;
     });
-  }, [bookings, activeChalet, calMonthStart, calMonthEnd, showAllChalets]);
+  }, [bookings, activeChalet, approvedCalendarSubmissionIds, calMonthStart, calMonthEnd, showAllChalets]);
 
   /* Stats computed from the currently visible calendar scope */
   const calScopeStats = useMemo(() => {
@@ -5278,14 +5306,15 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
     }
   };
 
-  const noApprovedChalets = !chaletsLoading && ownerChalets.length === 0;
+  const noApprovedChalets = !submissionsLoading && !chaletsLoading && approvedOwnerChalets.length === 0;
   const bookableSubmissions = useMemo(() => {
     return submissions.filter((s: any) => {
-      if (s.status !== "approved") return false;
-      const chalet = ownerChalets.find((c: any) => c.submissionId === s.id);
+      const status = String(s.status ?? "").toLowerCase();
+      if (status !== "approved" && status !== "active") return false;
+      const chalet = approvedOwnerChalets.find((c: any) => c.submissionId === s.id);
       return !!chalet && chalet.isActive !== false && !isCurrentPause(chalet);
     });
-  }, [submissions, ownerChalets]);
+  }, [submissions, approvedOwnerChalets]);
   const agendaRows = useMemo(() => {
     const scopeStart = (() => {
       if (agendaScope === "month") return calMonthStart;
@@ -5421,8 +5450,8 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
                 </DialogTitle>
               </DialogHeader>
               {/* Multi-chalet overview — shown only when owner has more than one chalet */}
-              {ownerChalets.length > 1 && (() => {
-                const chaletStatuses = ownerChalets.map((c: any) => {
+              {approvedOwnerChalets.length > 1 && (() => {
+                const chaletStatuses = approvedOwnerChalets.map((c: any) => {
                   const isBooked = sumBkgs.some((b) => b.submissionId === c.submissionId);
                   return { id: c.id, name: c.nameAr ?? "عقار", booked: isBooked };
                 });
@@ -6162,7 +6191,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
       <div className="bg-card border border-border rounded-2xl p-5">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
           <h3 className="font-bold text-foreground flex-1">التقويم والإتاحة</h3>
-          {ownerChalets.length > 1 && (
+          {approvedOwnerChalets.length > 1 && (
             <Select
               value={showAllChalets ? "all" : String(activeChaletId ?? "")}
               onValueChange={(v) => setSelectedChaletId(v === "all" ? "all" : Number(v))}
@@ -6172,7 +6201,7 @@ function BookingCalendarTab({ submissions }: { submissions: any[] }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">عرض الكل</SelectItem>
-                {ownerChalets.map((c: any) => (
+                {approvedOwnerChalets.map((c: any) => (
                   <SelectItem key={c.id} value={String(c.id)}>{c.nameAr}</SelectItem>
                 ))}
               </SelectContent>
@@ -22986,7 +23015,7 @@ export default function Dashboard() {
     enabled: isStaff || ((isAuthenticated || isImpersonating) && canSeeChalets),
   });
 
-  const { data: ownerChalets = [] } = useQuery<any[]>({
+  const { data: ownerChalets = [], isLoading: ownerChaletsLoading } = useQuery<any[]>({
     queryKey: ["owner", "chalets"],
     queryFn: async () => {
       const r = await apiFetch("/owner/chalets");
@@ -23987,7 +24016,12 @@ export default function Dashboard() {
           <ChaletServicesTab />
         )}
         {activeTab === "calendar" && (
-          <BookingCalendarTab submissions={submissions as any[] ?? []} />
+          <BookingCalendarTab
+            submissions={submissions as any[] ?? []}
+            submissionsLoading={submissionsLoading}
+            ownerChalets={ownerChalets}
+            chaletsLoading={ownerChaletsLoading}
+          />
         )}
         {activeTab === "deposits" && (
           <DepositsTab />
