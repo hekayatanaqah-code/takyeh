@@ -10041,25 +10041,27 @@ function ServiceCalendarBookingsTab() {
   <style>
     *{box-sizing:border-box} body{margin:0;background:#f5f1e8;color:#25231f;font-family:Tahoma,Arial,sans-serif}
     .page{width:750px;min-height:900px;margin:0 auto;background:#fff;padding:46px}
-    .receipt-header{display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:3px solid #b88930;padding-bottom:24px}
-    .brand-logos{display:flex;align-items:center;gap:14px}.brand-box{display:flex;align-items:center;gap:8px}.brand-box img{width:86px;height:62px;object-fit:contain}.provider-mark{width:52px;height:52px;border-radius:14px;object-fit:contain;border:1px solid #e6dfd0;background:#fff}.provider-fallback{width:52px;height:52px;border-radius:14px;background:#fbf6ea;border:1px solid #d9bd82;color:#8d651d;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800}.platform-mark{width:92px;height:62px;object-fit:contain}.brand-placeholder{font-size:28px;font-weight:800;color:#9a6f1d}
-    .receipt-title{text-align:left}.receipt-title h1{font-size:27px;margin:0 0 8px;color:#8d651d}.receipt-title p{margin:4px 0;color:#6f6b62;font-size:14px}
+    .receipt-header{display:grid;grid-template-columns:1fr auto 1fr;direction:ltr;align-items:center;gap:24px;border-bottom:3px solid #b88930;padding-bottom:24px}
+    .brand-box{display:flex;align-items:center;gap:8px;direction:rtl}.provider-brand{grid-column:1;justify-self:start;text-align:left}.platform-brand{grid-column:3;justify-self:end;text-align:right}.brand-box img{width:86px;height:62px;object-fit:contain}.provider-mark{width:52px;height:52px;border-radius:14px;object-fit:contain;border:1px solid #e6dfd0;background:#fff}.provider-fallback{width:52px;height:52px;border-radius:14px;background:#fbf6ea;border:1px solid #d9bd82;color:#8d651d;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800}.platform-mark{width:92px;height:62px;object-fit:contain}.brand-placeholder{font-size:28px;font-weight:800;color:#9a6f1d}
+    .receipt-title{grid-column:2;direction:rtl;text-align:center;white-space:nowrap}.receipt-title h1{font-size:27px;margin:0 0 8px;color:#8d651d}.receipt-title p{margin:4px 0;color:#6f6b62;font-size:14px}
     .section{margin-top:24px}.section-title{margin:0 0 11px;font-size:15px;color:#8d651d;background:#fbf6ea;border-right:4px solid #b88930;padding:9px 12px}
     .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e9e4d9;border:1px solid #e9e4d9;border-radius:10px;overflow:hidden}.info-row.full-row{grid-column:1 / -1}
     .info-row{display:flex;flex-direction:column;justify-content:center;text-align:right;background:#fff;padding:14px 16px;min-height:68px}.info-row span{display:block;color:#777066;font-size:12px;margin-bottom:6px}.info-row strong{display:block;font-size:14px;line-height:1.7;overflow-wrap:anywhere}.receipt-number{font-family:Tahoma,Arial,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:.02em;white-space:nowrap}
     .finance{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.finance-card{padding:15px 10px;border:1px solid #e6dfd0;border-radius:10px;text-align:center;background:#fff}
     .finance-card span{display:block;color:#777066;font-size:11px;margin-bottom:7px}.finance-card strong{font-size:15px}.finance-card.remaining{background:#fbf6ea;border-color:#d9bd82;color:#7d5816}
     .footer{margin-top:34px;padding-top:18px;border-top:1px dashed #d7cdb9;text-align:center;color:#777066;font-size:12px;line-height:1.8}
-    @media print{ @page{size:A4;margin:0} body{background:#fff}.page{width:100%;min-height:auto;margin:0;padding:18mm}.receipt-header{-webkit-print-color-adjust:exact;print-color-adjust:exact}.section-title,.finance-card.remaining{-webkit-print-color-adjust:exact;print-color-adjust:exact} }
+    @media print{ @page{size:A4;margin:0} html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact} body{font-family:Tahoma,Arial,sans-serif;font-synthesis:none;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}.page{width:100%;min-height:auto;margin:0;padding:18mm}.receipt-header,.receipt-header img,.section-title,.finance-card.remaining,.info-grid,.info-row,.finance-card,.footer{-webkit-print-color-adjust:exact;print-color-adjust:exact}.receipt-header{grid-template-columns:1fr auto 1fr}.receipt-title{white-space:nowrap}.receipt-header img{visibility:visible;opacity:1} }
   </style>
 </head>
 <body>
   <main class="page">
     <header class="receipt-header">
-      <div class="brand-logos">
-        <div class="brand-box">
+      <div class="brand-box provider-brand">
+        <div>
           ${providerLogo ? `<img class="provider-mark" src="${providerLogo}" alt="شعار ${escapeServiceReceiptHtml(providerName)}" />` : `<div class="provider-fallback">${providerInitial}</div>`}
         </div>
+      </div>
+      <div class="brand-box platform-brand">
         ${logo ? `<img class="platform-mark" src="${logo}" alt="شعار منصة تكية" />` : `<div class="brand-placeholder">تكية</div>`}
       </div>
       <div class="receipt-title">
@@ -10113,7 +10115,17 @@ function ServiceCalendarBookingsTab() {
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
-    window.setTimeout(() => printWindow.print(), 500);
+    const images = Array.from(printWindow.document.images ?? []);
+    const waitForImages = Promise.all(
+      images.map((image) => image.complete
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => {
+            image.addEventListener("load", () => resolve(), { once: true });
+            image.addEventListener("error", () => resolve(), { once: true });
+            window.setTimeout(resolve, 2500);
+          })),
+    );
+    waitForImages.then(() => window.setTimeout(() => printWindow.print(), 150));
   }
 
   async function downloadServiceReceiptPdf() {
@@ -10981,28 +10993,24 @@ function ServiceCalendarBookingsTab() {
               </DialogHeader>
               <div className="bg-[#f7f2e8] p-3 sm:p-6">
                 <div className="rounded-2xl bg-white border border-[#e8dcc4] shadow-sm overflow-hidden">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-7 border-b-[3px] border-[#b88930]">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-2">
-                        {provider?.logoUrl ? (
-                          <img
-                            src={provider.logoUrl}
-                            alt={`شعار ${provider.businessName ?? "النشاط التجاري"}`}
-                            className="w-14 h-14 rounded-2xl border border-[#e6dfd0] bg-white object-contain"
-                          />
-                        ) : (
-                          <div className="w-14 h-14 rounded-2xl border border-[#d9bd82] bg-[#fbf6ea] text-[#8d651d] flex items-center justify-center text-xl font-extrabold">
-                            {(provider?.businessName ?? "خ").slice(0, 1)}
-                          </div>
-                        )}
-                      </div>
-                      <div className="h-10 w-px bg-[#e6dfd0]" />
-                      <div className="flex flex-col items-center">
-                        <img src={takyahLogoSrc} alt="شعار منصة تكية" className="w-20 h-14 object-contain" />
-                        <span className="text-[10px] text-[#777066]">عبر منصة تكية</span>
-                      </div>
+                  <div
+                    className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4 p-4 sm:p-7 border-b-[3px] border-[#b88930]"
+                    style={{ direction: "ltr" }}
+                  >
+                    <div className="col-start-1 justify-self-start" style={{ direction: "rtl" }}>
+                      {provider?.logoUrl ? (
+                        <img
+                          src={provider.logoUrl}
+                          alt={`شعار ${provider.businessName ?? "النشاط التجاري"}`}
+                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border border-[#e6dfd0] bg-white object-contain"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border border-[#d9bd82] bg-[#fbf6ea] text-[#8d651d] flex items-center justify-center text-xl font-extrabold">
+                          {(provider?.businessName ?? "خ").slice(0, 1)}
+                        </div>
+                      )}
                     </div>
-                    <div className="sm:text-left">
+                    <div className="col-start-2 min-w-0 text-center" style={{ direction: "rtl" }}>
                       <h2 className="text-xl sm:text-2xl font-extrabold text-[#8d651d]">إيصال حجز خدمة</h2>
                       <p className="text-xs text-[#6f6b62] mt-2">
                         رقم الإيصال:{" "}
@@ -11015,6 +11023,9 @@ function ServiceCalendarBookingsTab() {
                       </p>
                       <p className="text-xs text-[#6f6b62] mt-1">تاريخ الإصدار: {issueDate.primary}</p>
                       <p className="text-xs text-[#777066] mt-1">{issueDate.secondary}</p>
+                    </div>
+                    <div className="col-start-3 justify-self-end" style={{ direction: "rtl" }}>
+                      <img src={takyahLogoSrc} alt="شعار منصة تكية" className="w-20 h-14 sm:w-24 sm:h-16 object-contain" />
                     </div>
                   </div>
 
