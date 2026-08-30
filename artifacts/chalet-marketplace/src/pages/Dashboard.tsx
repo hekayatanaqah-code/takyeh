@@ -9687,6 +9687,7 @@ function ServiceCalendarBookingsTab() {
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
   const [receiptAppointment, setReceiptAppointment] = useState<any | null>(null);
   const [receiptWhatsAppLoading, setReceiptWhatsAppLoading] = useState(false);
+  const serviceReceiptPreviewRef = useRef<HTMLDivElement | null>(null);
   const serviceReceiptHtmlCacheRef = useRef<{ key: string; html: string } | null>(null);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
   const emptyForm = {
@@ -10202,8 +10203,9 @@ function ServiceCalendarBookingsTab() {
     setReceiptWhatsAppLoading(true);
     try {
       const fileName = serviceReceiptPdfFileName(receiptAppointment);
-      const html = await getUnifiedServiceReceiptHtml(receiptAppointment);
-      const { blob } = await htmlToPdfBlob(html, fileName);
+      const receiptElement = serviceReceiptPreviewRef.current;
+      if (!receiptElement) throw new Error("Service receipt element is not available");
+      const { blob } = await receiptElementToPdfBlob(receiptElement, fileName);
       const pdfFile = new File([blob], fileName, {
         type: "application/pdf",
         lastModified: Date.now(),
@@ -11058,7 +11060,11 @@ function ServiceCalendarBookingsTab() {
                 <DialogDescription>معاينة إيصال الحجز وخيارات الطباعة والتنزيل والإرسال.</DialogDescription>
               </DialogHeader>
               <div className="bg-[#f7f2e8] p-3 sm:p-6">
-                <div className="rounded-2xl bg-white border border-[#e8dcc4] shadow-sm overflow-hidden">
+                <div
+                  ref={serviceReceiptPreviewRef}
+                  data-testid="service-receipt-print-content"
+                  className="rounded-2xl bg-white border border-[#e8dcc4] shadow-sm overflow-hidden"
+                >
                   <div
                     className="flex flex-row flex-nowrap items-center gap-2 sm:gap-4 p-4 sm:p-7 border-b-[3px] border-[#b88930]"
                     style={{ direction: "ltr" }}
@@ -17772,6 +17778,66 @@ ${chartSvg ? `<div class="section"><div style="display:flex;align-items:center;g
 
 <div class="footer" style="font-size:12px;font-weight:500;color:#666;">تم إصدار هذا التقرير عبر منصة تكية · ${hijriYearY} هـ / ${gregYearY} م</div>
 </div>${scriptTag}</body></html>`;
+}
+
+/* ── Render the already-visible service receipt DOM → PDF blob ── */
+async function receiptElementToPdfBlob(
+  receiptElement: HTMLElement,
+  fileName: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  await document.fonts?.ready;
+
+  const receiptImages = Array.from(receiptElement.querySelectorAll("img"));
+  await Promise.all(
+    receiptImages.map((image) => image.complete
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => {
+          image.addEventListener("load", () => resolve(), { once: true });
+          image.addEventListener("error", () => resolve(), { once: true });
+          window.setTimeout(resolve, 2500);
+        })),
+  );
+
+  const canvas = await html2canvas(receiptElement, {
+    scale: 2,
+    useCORS: true,
+    allowTaint: true,
+    backgroundColor: "#ffffff",
+    windowWidth: window.innerWidth,
+    scrollX: 0,
+    scrollY: -window.scrollY,
+    logging: false,
+  });
+
+  const A4_W_MM = 210;
+  const A4_H_MM = 297;
+  const MARGIN_MM = 18;
+  const availableWidthMm = A4_W_MM - MARGIN_MM * 2;
+  const availableHeightMm = A4_H_MM - MARGIN_MM * 2;
+  const naturalHeightMm = canvas.height * (availableWidthMm / canvas.width);
+  const scaleFactor = Math.min(1, availableHeightMm / naturalHeightMm);
+  const renderWidthMm = availableWidthMm * scaleFactor;
+  const renderHeightMm = naturalHeightMm * scaleFactor;
+  const offsetX = (A4_W_MM - renderWidthMm) / 2;
+  const offsetY = MARGIN_MM;
+
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  pdf.setFillColor(255, 255, 255);
+  pdf.rect(0, 0, A4_W_MM, A4_H_MM, "F");
+  pdf.addImage(
+    canvas.toDataURL("image/jpeg", 0.96),
+    "JPEG",
+    offsetX,
+    offsetY,
+    renderWidthMm,
+    renderHeightMm,
+  );
+
+  const pdfArrayBuffer = pdf.output("arraybuffer");
+  return {
+    blob: new Blob([pdfArrayBuffer], { type: "application/pdf" }),
+    fileName,
+  };
 }
 
 /* ── HTML → PDF blob (html2canvas + jsPDF) ── */

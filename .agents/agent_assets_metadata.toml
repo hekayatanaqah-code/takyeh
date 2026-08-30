@@ -6,3 +6,10 @@ id = "q-FovPlfhFUuDRdwobygV"
 uri = "file://screenshots/booking-page-redesign.jpg"
 type = "image"
 title = "صفحة الحجز الجديدة — تصميم فاخر"
+
+[[outputs]]
+id = "iOIVL28MO3aVvHfMq4uFf"
+uri = "file://attached_assets/17.pdf"
+type = "pdf"
+title = "17.pdf"
+description = "ملف إيصال واتساب الفعلي المصدّر مباشرة من عنصر الإيصال الظاهر، صفحة واحدة بصيغة PDF."
