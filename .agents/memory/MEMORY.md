@@ -12,3 +12,4 @@
 - [Safe Drizzle schema sync](safe-drizzle-schema-sync.md) — never force a push that proposes unrelated legacy-table/column drops; apply only reviewed additive dev changes and reconcile drift separately.
 - [Service capacity atomicity](service-capacity-atomicity.md) — every capacity-consuming service booking write must lock provider+date before count-and-write.
 - [Mixed-owner data scoping](mixed-owner-data-scoping.md) — service tabs must never reuse chalet-only data sources; scope every query and action to the selected product.
+- [Print-flow verification](print-flow-verification.md) — keep printable HTML generation separable from native window.print; verify captured HTML because browser automation cannot inspect system print dialogs reliably.

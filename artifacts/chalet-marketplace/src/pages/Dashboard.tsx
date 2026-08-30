@@ -9915,7 +9915,7 @@ function ServiceCalendarBookingsTab() {
   }
 
   function serviceReceiptNumber(appointment: any) {
-    return `SRV-${String(providerId ?? 0).padStart(3, "0")}-${String(appointment.id).padStart(6, "0")}`;
+    return `${String(providerId ?? 0).padStart(3, "0")}-${String(appointment.id).padStart(6, "0")}`;
   }
 
   function servicePaymentMethodLabel(method?: string | null) {
@@ -9943,6 +9943,20 @@ function ServiceCalendarBookingsTab() {
     };
   }
 
+  function serviceReceiptServiceDate(dateStr: string) {
+    const date = new Date(`${dateStr}T00:00:00`);
+    if (isNaN(date.getTime())) return { hijri: "—", gregorian: "—" };
+    const hijri = toHijriComponents(date);
+    return {
+      hijri: `${toArN(hijri.day)} ${HIJRI_MONTHS_AR[hijri.month - 1]} ${toArN(hijri.year)} هـ`,
+      gregorian: `${date.toLocaleDateString("ar-SA", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        calendar: "gregory",
+      })} م`,
+    };
+  }
   function normalizeServiceWhatsAppPhone(phone?: string | null) {
     const digits = String(phone ?? "")
       .replace(/[٠-٩]/g, digit => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
@@ -9984,16 +9998,34 @@ function ServiceCalendarBookingsTab() {
     }
   }
 
-  async function buildServiceReceiptHtml(appointment: any) {
-    const logo = await getLogoDataUrl();
-    const providerLogo = provider?.logoUrl ? await getServiceProviderLogoDataUrl(provider.logoUrl) : null;
+  async function resolveServiceReceiptAsset(
+    loader: Promise<string | null>,
+    fallback: string | null,
+    timeoutMs = 2500,
+  ) {
+    return Promise.race([
+      loader.then((value) => value ?? fallback).catch(() => fallback),
+      new Promise<string | null>((resolve) => window.setTimeout(() => resolve(fallback), timeoutMs)),
+    ]);
+  }
+
+  async function buildServiceReceiptHtml(appointment: any, embedLogos = true) {
+    const providerLogoUrl = provider?.logoUrl ?? null;
+    const [logo, providerLogo] = embedLogos
+      ? await Promise.all([
+          resolveServiceReceiptAsset(getLogoDataUrl(), takyahLogoSrc),
+          providerLogoUrl
+            ? resolveServiceReceiptAsset(getServiceProviderLogoDataUrl(providerLogoUrl), providerLogoUrl)
+            : Promise.resolve(null),
+        ])
+      : [takyahLogoSrc, providerLogoUrl];
     const total = Number(appointment.amount ?? 0);
     const deposit = Number(appointment.deposit ?? 0);
     const remaining = Math.max(0, total - deposit);
-    const dualDate = formatDualDate(appointment.dateStr);
+    const serviceDate = serviceReceiptServiceDate(appointment.dateStr);
     const issueDate = serviceReceiptIssueDate(appointment);
     const optionalAddress = appointment.serviceAddress
-      ? `<div class="info-row"><span>موقع / عنوان تقديم الخدمة</span><strong>${escapeServiceReceiptHtml(appointment.serviceAddress)}</strong></div>`
+      ? `<div class="info-row full-row"><span>موقع / عنوان تقديم الخدمة</span><strong>${escapeServiceReceiptHtml(appointment.serviceAddress)}</strong></div>`
       : "";
     const optionalIdentity = appointment.clientIdNumber
       ? `<div class="info-row"><span>رقم الهوية / الإقامة</span><strong>${escapeServiceReceiptHtml(toAr(appointment.clientIdNumber))}</strong></div>`
@@ -10010,11 +10042,11 @@ function ServiceCalendarBookingsTab() {
     *{box-sizing:border-box} body{margin:0;background:#f5f1e8;color:#25231f;font-family:Tahoma,Arial,sans-serif}
     .page{width:750px;min-height:900px;margin:0 auto;background:#fff;padding:46px}
     .receipt-header{display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:3px solid #b88930;padding-bottom:24px}
-    .brand-logos{display:flex;align-items:center;gap:14px}.brand-box{display:flex;align-items:center;gap:8px}.brand-box img{width:86px;height:62px;object-fit:contain}.provider-mark{width:52px;height:52px;border-radius:14px;object-fit:contain;border:1px solid #e6dfd0;background:#fff}.provider-fallback{width:52px;height:52px;border-radius:14px;background:#fbf6ea;border:1px solid #d9bd82;color:#8d651d;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800}.brand-name{font-size:11px;color:#777066;max-width:110px;line-height:1.5}.platform-mark{width:92px;height:62px;object-fit:contain}.brand-placeholder{font-size:28px;font-weight:800;color:#9a6f1d}
+    .brand-logos{display:flex;align-items:center;gap:14px}.brand-box{display:flex;align-items:center;gap:8px}.brand-box img{width:86px;height:62px;object-fit:contain}.provider-mark{width:52px;height:52px;border-radius:14px;object-fit:contain;border:1px solid #e6dfd0;background:#fff}.provider-fallback{width:52px;height:52px;border-radius:14px;background:#fbf6ea;border:1px solid #d9bd82;color:#8d651d;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800}.platform-mark{width:92px;height:62px;object-fit:contain}.brand-placeholder{font-size:28px;font-weight:800;color:#9a6f1d}
     .receipt-title{text-align:left}.receipt-title h1{font-size:27px;margin:0 0 8px;color:#8d651d}.receipt-title p{margin:4px 0;color:#6f6b62;font-size:14px}
     .section{margin-top:24px}.section-title{margin:0 0 11px;font-size:15px;color:#8d651d;background:#fbf6ea;border-right:4px solid #b88930;padding:9px 12px}
-    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e9e4d9;border:1px solid #e9e4d9;border-radius:10px;overflow:hidden}
-    .info-row{background:#fff;padding:12px 14px;min-height:64px}.info-row span{display:block;color:#777066;font-size:12px;margin-bottom:6px}.info-row strong{display:block;font-size:14px;line-height:1.6;overflow-wrap:anywhere}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e9e4d9;border:1px solid #e9e4d9;border-radius:10px;overflow:hidden}.info-row.full-row{grid-column:1 / -1}
+    .info-row{display:flex;flex-direction:column;justify-content:center;text-align:right;background:#fff;padding:14px 16px;min-height:68px}.info-row span{display:block;color:#777066;font-size:12px;margin-bottom:6px}.info-row strong{display:block;font-size:14px;line-height:1.7;overflow-wrap:anywhere}.receipt-number{font-family:Tahoma,Arial,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:.02em;white-space:nowrap}
     .finance{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.finance-card{padding:15px 10px;border:1px solid #e6dfd0;border-radius:10px;text-align:center;background:#fff}
     .finance-card span{display:block;color:#777066;font-size:11px;margin-bottom:7px}.finance-card strong{font-size:15px}.finance-card.remaining{background:#fbf6ea;border-color:#d9bd82;color:#7d5816}
     .footer{margin-top:34px;padding-top:18px;border-top:1px dashed #d7cdb9;text-align:center;color:#777066;font-size:12px;line-height:1.8}
@@ -10027,13 +10059,12 @@ function ServiceCalendarBookingsTab() {
       <div class="brand-logos">
         <div class="brand-box">
           ${providerLogo ? `<img class="provider-mark" src="${providerLogo}" alt="شعار ${escapeServiceReceiptHtml(providerName)}" />` : `<div class="provider-fallback">${providerInitial}</div>`}
-          <span class="brand-name">${escapeServiceReceiptHtml(providerName)}</span>
         </div>
         ${logo ? `<img class="platform-mark" src="${logo}" alt="شعار منصة تكية" />` : `<div class="brand-placeholder">تكية</div>`}
       </div>
       <div class="receipt-title">
         <h1>إيصال حجز خدمة</h1>
-        <p>رقم الإيصال: <strong dir="ltr">${escapeServiceReceiptHtml(serviceReceiptNumber(appointment))}</strong></p>
+        <p>رقم الإيصال: <strong class="receipt-number" dir="ltr">${escapeServiceReceiptHtml(serviceReceiptNumber(appointment))}</strong></p>
         <p>تاريخ الإصدار: ${escapeServiceReceiptHtml(issueDate.primary)}</p>
         <p class="secondary-date">${escapeServiceReceiptHtml(issueDate.secondary)}</p>
       </div>
@@ -10050,7 +10081,7 @@ function ServiceCalendarBookingsTab() {
       <h2 class="section-title">تفاصيل الخدمة</h2>
       <div class="info-grid">
         <div class="info-row"><span>اسم الخدمة</span><strong>${escapeServiceReceiptHtml(provider?.businessName ?? "الخدمة")}</strong></div>
-        <div class="info-row"><span>تاريخ الخدمة</span><strong>${escapeServiceReceiptHtml(dualDate.hijri)} هـ<br><small>${escapeServiceReceiptHtml(dualDate.gregorian)} م</small></strong></div>
+        <div class="info-row"><span>تاريخ الخدمة</span><strong>${escapeServiceReceiptHtml(serviceDate.hijri)}<br><small>${escapeServiceReceiptHtml(serviceDate.gregorian)}</small></strong></div>
         ${optionalAddress}
       </div>
     </section>
@@ -10063,7 +10094,7 @@ function ServiceCalendarBookingsTab() {
         <div class="finance-card"><span>طريقة الدفع</span><strong>${escapeServiceReceiptHtml(servicePaymentMethodLabel(appointment.paymentMethod))}</strong></div>
       </div>
     </section>
-    <footer class="footer">شكراً لاختياركم ${escapeServiceReceiptHtml(providerName)} عبر منصة تكية — هذا الإيصال صادر إلكترونياً من سجل الحجوزات</footer>
+    <footer class="footer">شكراً لاختياركم ${escapeServiceReceiptHtml(providerName)} - منصة تكية — هذا الإيصال صادر إلكترونياً</footer>
   </main>
 </body>
 </html>`;
@@ -10077,7 +10108,7 @@ function ServiceCalendarBookingsTab() {
       return;
     }
     printWindow.document.write("<p dir='rtl' style='font-family:Tahoma;padding:32px'>جاري تجهيز الإيصال...</p>");
-    const html = await buildServiceReceiptHtml(receiptAppointment);
+    const html = await buildServiceReceiptHtml(receiptAppointment, false);
     printWindow.document.open();
     printWindow.document.write(html);
     printWindow.document.close();
@@ -10122,12 +10153,13 @@ function ServiceCalendarBookingsTab() {
     const total = Number(receiptAppointment.amount ?? 0);
     const deposit = Number(receiptAppointment.deposit ?? 0);
     const remaining = Math.max(0, total - deposit);
+    const serviceDate = serviceReceiptServiceDate(receiptAppointment.dateStr);
     const message = [
       `إيصال حجز خدمة — منصة تكية`,
       `رقم الإيصال: ${serviceReceiptNumber(receiptAppointment)}`,
       `العميل: ${receiptAppointment.clientName}`,
       `الخدمة: ${provider?.businessName ?? "الخدمة"}`,
-      `تاريخ الخدمة: ${formatDualDate(receiptAppointment.dateStr).hijri} هـ (${formatDualDate(receiptAppointment.dateStr).gregorian} م)`,
+      `تاريخ الخدمة: ${serviceDate.hijri} (${serviceDate.gregorian})`,
       receiptAppointment.serviceAddress ? `الموقع: ${receiptAppointment.serviceAddress}` : null,
       `المبلغ الإجمالي: ${serviceReceiptMoney(total)}`,
       `العربون المدفوع: ${serviceReceiptMoney(deposit)}`,
@@ -10934,7 +10966,7 @@ function ServiceCalendarBookingsTab() {
         const total = Number(receiptAppointment.amount ?? 0);
         const deposit = Number(receiptAppointment.deposit ?? 0);
         const remaining = Math.max(0, total - deposit);
-        const dualDate = formatDualDate(receiptAppointment.dateStr);
+        const serviceDate = serviceReceiptServiceDate(receiptAppointment.dateStr);
         const issueDate = serviceReceiptIssueDate(receiptAppointment);
         return (
           <Dialog open onOpenChange={(open) => { if (!open && !receiptPdfLoading) setReceiptAppointment(null); }}>
@@ -10963,7 +10995,6 @@ function ServiceCalendarBookingsTab() {
                             {(provider?.businessName ?? "خ").slice(0, 1)}
                           </div>
                         )}
-                        <span className="max-w-24 text-[11px] leading-relaxed text-[#777066]">{provider?.businessName ?? "الخدمة"}</span>
                       </div>
                       <div className="h-10 w-px bg-[#e6dfd0]" />
                       <div className="flex flex-col items-center">
@@ -10974,7 +11005,13 @@ function ServiceCalendarBookingsTab() {
                     <div className="sm:text-left">
                       <h2 className="text-xl sm:text-2xl font-extrabold text-[#8d651d]">إيصال حجز خدمة</h2>
                       <p className="text-xs text-[#6f6b62] mt-2">
-                        رقم الإيصال: <strong dir="ltr">{serviceReceiptNumber(receiptAppointment)}</strong>
+                        رقم الإيصال:{" "}
+                        <strong
+                          dir="ltr"
+                          style={{ fontFamily: "Tahoma, Arial, sans-serif", fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }}
+                        >
+                          {serviceReceiptNumber(receiptAppointment)}
+                        </strong>
                       </p>
                       <p className="text-xs text-[#6f6b62] mt-1">تاريخ الإصدار: {issueDate.primary}</p>
                       <p className="text-xs text-[#777066] mt-1">{issueDate.secondary}</p>
@@ -10990,7 +11027,7 @@ function ServiceCalendarBookingsTab() {
                           ["رقم الجوال", receiptAppointment.clientPhone ? toAr(receiptAppointment.clientPhone) : "—"],
                           ...(receiptAppointment.clientIdNumber ? [["رقم الهوية / الإقامة", toAr(receiptAppointment.clientIdNumber)]] : []),
                         ].map(([label, value]) => (
-                          <div key={label} className="bg-white p-3.5 min-h-16">
+                          <div key={label} className="bg-white p-4 min-h-[4.25rem] flex flex-col justify-center text-right">
                             <span className="block text-[11px] text-[#777066] mb-1.5">{label}</span>
                             <strong className="block text-sm leading-relaxed break-words">{value}</strong>
                           </div>
@@ -11001,17 +11038,17 @@ function ServiceCalendarBookingsTab() {
                     <section>
                       <h3 className="text-sm font-bold text-[#8d651d] bg-[#fbf6ea] border-r-4 border-[#b88930] px-3 py-2 mb-3">تفاصيل الخدمة</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-px rounded-xl overflow-hidden border border-[#e9e4d9] bg-[#e9e4d9]">
-                        <div className="bg-white p-3.5">
+                        <div className="bg-white p-4 min-h-[4.25rem] flex flex-col justify-center text-right">
                           <span className="block text-[11px] text-[#777066] mb-1.5">اسم الخدمة</span>
                           <strong className="text-sm">{provider?.businessName ?? "الخدمة"}</strong>
                         </div>
-                        <div className="bg-white p-3.5">
+                        <div className="bg-white p-4 min-h-[4.25rem] flex flex-col justify-center text-right">
                           <span className="block text-[11px] text-[#777066] mb-1.5">تاريخ الخدمة</span>
-                          <strong className="block text-sm">{dualDate.hijri} هـ</strong>
-                          <span className="text-xs text-[#777066]">{dualDate.gregorian} م</span>
+                          <strong className="block text-sm">{serviceDate.hijri}</strong>
+                          <span className="text-xs text-[#777066]">{serviceDate.gregorian}</span>
                         </div>
                         {receiptAppointment.serviceAddress && (
-                          <div className="bg-white p-3.5 sm:col-span-2">
+                          <div className="bg-white p-4 min-h-[4.25rem] flex flex-col justify-center text-right sm:col-span-2">
                             <span className="block text-[11px] text-[#777066] mb-1.5">موقع / عنوان تقديم الخدمة</span>
                             <strong className="block text-sm leading-relaxed break-words">{receiptAppointment.serviceAddress}</strong>
                           </div>
@@ -11040,7 +11077,7 @@ function ServiceCalendarBookingsTab() {
                     </section>
 
                     <p className="text-center text-[11px] text-[#777066] border-t border-dashed border-[#d7cdb9] pt-4">
-                      شكراً لاختياركم {provider?.businessName ?? "الخدمة"} عبر منصة تكية — هذا الإيصال صادر إلكترونياً من سجل الحجوزات
+                      شكراً لاختياركم {provider?.businessName ?? "الخدمة"} - منصة تكية — هذا الإيصال صادر إلكترونياً
                     </p>
                   </div>
                 </div>
