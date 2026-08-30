@@ -9914,8 +9914,18 @@ function ServiceCalendarBookingsTab() {
     }
   }
 
+  function serviceReceiptNumberParts(appointment: any) {
+    const providerPart = String(providerId ?? 0).replace(/\D/g, "").padStart(3, "0");
+    const appointmentPart = String(appointment.id ?? 0).replace(/\D/g, "").padStart(6, "0");
+    return {
+      provider: toArN(providerPart),
+      appointment: toArN(appointmentPart),
+    };
+  }
+
   function serviceReceiptNumber(appointment: any) {
-    return `${String(providerId ?? 0).padStart(3, "0")}-${String(appointment.id).padStart(6, "0")}`;
+    const parts = serviceReceiptNumberParts(appointment);
+    return `${parts.provider}-${parts.appointment}`;
   }
 
   function servicePaymentMethodLabel(method?: string | null) {
@@ -9926,12 +9936,7 @@ function ServiceCalendarBookingsTab() {
     const date = appointment.createdAt ? new Date(appointment.createdAt) : new Date();
     const hijri = toHijriComponents(date);
     const hijriLabel = `${toArN(hijri.day)} ${HIJRI_MONTHS_AR[hijri.month - 1]} ${toArN(hijri.year)} هـ`;
-    const gregorianLabel = `${date.toLocaleDateString("ar-SA", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      calendar: "gregory",
-    })} م`;
+    const gregorianLabel = `${toArN(date.getDate())} ${GREGORIAN_MONTHS_AR[date.getMonth()]} ${toArN(date.getFullYear())} م`;
     const preferredCalendar = localStorage.getItem("dashCalDefaultType") === "gregorian"
       ? "gregorian"
       : "hijri";
@@ -9949,12 +9954,7 @@ function ServiceCalendarBookingsTab() {
     const hijri = toHijriComponents(date);
     return {
       hijri: `${toArN(hijri.day)} ${HIJRI_MONTHS_AR[hijri.month - 1]} ${toArN(hijri.year)} هـ`,
-      gregorian: `${date.toLocaleDateString("ar-SA", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        calendar: "gregory",
-      })} م`,
+      gregorian: `${toArN(date.getDate())} ${GREGORIAN_MONTHS_AR[date.getMonth()]} ${toArN(date.getFullYear())} م`,
     };
   }
   function normalizeServiceWhatsAppPhone(phone?: string | null) {
@@ -9978,7 +9978,12 @@ function ServiceCalendarBookingsTab() {
   }
 
   function serviceReceiptMoney(value?: string | number | null) {
-    return `${Number(value ?? 0).toLocaleString("ar-SA", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ر.س`;
+    const formatted = Number(value ?? 0).toLocaleString("ar-SA-u-nu-arab", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+      useGrouping: true,
+    });
+    return `${toAr(formatted)} ر.س`;
   }
 
   async function getServiceProviderLogoDataUrl(url: string) {
@@ -10024,6 +10029,7 @@ function ServiceCalendarBookingsTab() {
     const remaining = Math.max(0, total - deposit);
     const serviceDate = serviceReceiptServiceDate(appointment.dateStr);
     const issueDate = serviceReceiptIssueDate(appointment);
+    const receiptNumberParts = serviceReceiptNumberParts(appointment);
     const optionalAddress = appointment.serviceAddress
       ? `<div class="info-row full-row"><span>موقع / عنوان تقديم الخدمة</span><strong>${escapeServiceReceiptHtml(appointment.serviceAddress)}</strong></div>`
       : "";
@@ -10041,16 +10047,16 @@ function ServiceCalendarBookingsTab() {
   <style>
     *{box-sizing:border-box} body{margin:0;background:#f5f1e8;color:#25231f;font-family:Tahoma,Arial,sans-serif}
     .page{width:750px;min-height:900px;margin:0 auto;background:#fff;padding:46px}
-    .receipt-header{display:grid;grid-template-columns:1fr auto 1fr;direction:ltr;align-items:center;gap:24px;border-bottom:3px solid #b88930;padding-bottom:24px}
-    .brand-box{display:flex;align-items:center;gap:8px;direction:rtl}.provider-brand{grid-column:1;justify-self:start;text-align:left}.platform-brand{grid-column:3;justify-self:end;text-align:right}.brand-box img{width:86px;height:62px;object-fit:contain}.provider-mark{width:52px;height:52px;border-radius:14px;object-fit:contain;border:1px solid #e6dfd0;background:#fff}.provider-fallback{width:52px;height:52px;border-radius:14px;background:#fbf6ea;border:1px solid #d9bd82;color:#8d651d;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800}.platform-mark{width:92px;height:62px;object-fit:contain}.brand-placeholder{font-size:28px;font-weight:800;color:#9a6f1d}
-    .receipt-title{grid-column:2;direction:rtl;text-align:center;white-space:nowrap}.receipt-title h1{font-size:27px;margin:0 0 8px;color:#8d651d}.receipt-title p{margin:4px 0;color:#6f6b62;font-size:14px}
+    .receipt-header{display:flex;flex-direction:row;flex-wrap:nowrap;direction:ltr;align-items:center;gap:24px;border-bottom:3px solid #b88930;padding-bottom:24px;break-inside:avoid;page-break-inside:avoid}
+    .brand-box{display:flex;align-items:center;direction:rtl}.provider-brand{order:1;flex:1 1 0;justify-content:flex-start;text-align:left}.platform-brand{order:3;flex:1 1 0;justify-content:flex-end;text-align:right}.brand-box img{width:86px;height:62px;object-fit:contain}.provider-mark{width:52px;height:52px;border-radius:14px;object-fit:contain;border:1px solid #e6dfd0;background:#fff}.provider-fallback{width:52px;height:52px;border-radius:14px;background:#fbf6ea;border:1px solid #d9bd82;color:#8d651d;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800}.platform-mark{width:92px;height:62px;object-fit:contain}.brand-placeholder{font-size:28px;font-weight:800;color:#9a6f1d}
+    .receipt-title{order:2;flex:0 0 300px;direction:rtl;text-align:center;white-space:nowrap}.receipt-title h1{font-size:27px;margin:0 0 8px;color:#8d651d}.receipt-title p{margin:4px 0;color:#6f6b62;font-size:14px}
     .section{margin-top:24px}.section-title{margin:0 0 11px;font-size:15px;color:#8d651d;background:#fbf6ea;border-right:4px solid #b88930;padding:9px 12px}
     .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e9e4d9;border:1px solid #e9e4d9;border-radius:10px;overflow:hidden}.info-row.full-row{grid-column:1 / -1}
-    .info-row{display:flex;flex-direction:column;justify-content:center;text-align:right;background:#fff;padding:14px 16px;min-height:68px}.info-row span{display:block;color:#777066;font-size:12px;margin-bottom:6px}.info-row strong{display:block;font-size:14px;line-height:1.7;overflow-wrap:anywhere}.receipt-number{font-family:Tahoma,Arial,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:.02em;white-space:nowrap}
+    .info-row{display:flex;flex-direction:column;justify-content:center;text-align:right;background:#fff;padding:14px 16px;min-height:68px}.info-row span{display:block;color:#777066;font-size:12px;margin-bottom:6px}.info-row strong{display:block;font-size:14px;line-height:1.7;overflow-wrap:anywhere}.receipt-number{display:inline-flex;flex-direction:row;gap:0;direction:ltr;unicode-bidi:isolate;font-family:Tahoma,Arial,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:0;white-space:nowrap}.receipt-number span{display:inline;direction:ltr}
     .finance{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.finance-card{padding:15px 10px;border:1px solid #e6dfd0;border-radius:10px;text-align:center;background:#fff}
     .finance-card span{display:block;color:#777066;font-size:11px;margin-bottom:7px}.finance-card strong{font-size:15px}.finance-card.remaining{background:#fbf6ea;border-color:#d9bd82;color:#7d5816}
     .footer{margin-top:34px;padding-top:18px;border-top:1px dashed #d7cdb9;text-align:center;color:#777066;font-size:12px;line-height:1.8}
-    @media print{ @page{size:A4;margin:0} html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact} body{font-family:Tahoma,Arial,sans-serif;font-synthesis:none;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}.page{width:100%;min-height:auto;margin:0;padding:18mm}.receipt-header,.receipt-header img,.section-title,.finance-card.remaining,.info-grid,.info-row,.finance-card,.footer{-webkit-print-color-adjust:exact;print-color-adjust:exact}.receipt-header{grid-template-columns:1fr auto 1fr}.receipt-title{white-space:nowrap}.receipt-header img{visibility:visible;opacity:1} }
+    @media print{ @page{size:A4;margin:0} html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact} body{font-family:Tahoma,Arial,sans-serif;font-synthesis:none;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}.page{width:100%;min-height:auto;margin:0;padding:18mm}.receipt-header,.receipt-header img,.section-title,.finance-card.remaining,.info-grid,.info-row,.finance-card,.footer{-webkit-print-color-adjust:exact;print-color-adjust:exact}.receipt-header{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important}.provider-brand{order:1!important;flex:1 1 0!important}.receipt-title{order:2!important;flex:0 0 300px!important;white-space:nowrap}.platform-brand{order:3!important;flex:1 1 0!important}.receipt-header img{visibility:visible;opacity:1} }
   </style>
 </head>
 <body>
@@ -10066,7 +10072,7 @@ function ServiceCalendarBookingsTab() {
       </div>
       <div class="receipt-title">
         <h1>إيصال حجز خدمة</h1>
-        <p>رقم الإيصال: <strong class="receipt-number" dir="ltr">${escapeServiceReceiptHtml(serviceReceiptNumber(appointment))}</strong></p>
+        <p>رقم الإيصال: <bdi class="receipt-number" dir="ltr"><span>${escapeServiceReceiptHtml(receiptNumberParts.provider)}</span><span>-</span><span>${escapeServiceReceiptHtml(receiptNumberParts.appointment)}</span></bdi></p>
         <p>تاريخ الإصدار: ${escapeServiceReceiptHtml(issueDate.primary)}</p>
         <p class="secondary-date">${escapeServiceReceiptHtml(issueDate.secondary)}</p>
       </div>
@@ -10980,6 +10986,7 @@ function ServiceCalendarBookingsTab() {
         const remaining = Math.max(0, total - deposit);
         const serviceDate = serviceReceiptServiceDate(receiptAppointment.dateStr);
         const issueDate = serviceReceiptIssueDate(receiptAppointment);
+        const receiptNumberParts = serviceReceiptNumberParts(receiptAppointment);
         return (
           <Dialog open onOpenChange={(open) => { if (!open && !receiptPdfLoading) setReceiptAppointment(null); }}>
             <DialogContent
@@ -10994,38 +11001,38 @@ function ServiceCalendarBookingsTab() {
               <div className="bg-[#f7f2e8] p-3 sm:p-6">
                 <div className="rounded-2xl bg-white border border-[#e8dcc4] shadow-sm overflow-hidden">
                   <div
-                    className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4 p-4 sm:p-7 border-b-[3px] border-[#b88930]"
+                    className="flex flex-row flex-nowrap items-center gap-2 sm:gap-4 p-4 sm:p-7 border-b-[3px] border-[#b88930]"
                     style={{ direction: "ltr" }}
                   >
-                    <div className="col-start-1 justify-self-start" style={{ direction: "rtl" }}>
+                    <div className="order-1 flex flex-1 justify-start" style={{ direction: "rtl" }}>
                       {provider?.logoUrl ? (
                         <img
                           src={provider.logoUrl}
                           alt={`شعار ${provider.businessName ?? "النشاط التجاري"}`}
-                          className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border border-[#e6dfd0] bg-white object-contain"
+                          className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl border border-[#e6dfd0] bg-white object-contain"
                         />
                       ) : (
-                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border border-[#d9bd82] bg-[#fbf6ea] text-[#8d651d] flex items-center justify-center text-xl font-extrabold">
+                        <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl border border-[#d9bd82] bg-[#fbf6ea] text-[#8d651d] flex items-center justify-center text-xl font-extrabold">
                           {(provider?.businessName ?? "خ").slice(0, 1)}
                         </div>
                       )}
                     </div>
-                    <div className="col-start-2 min-w-0 text-center" style={{ direction: "rtl" }}>
-                      <h2 className="text-xl sm:text-2xl font-extrabold text-[#8d651d]">إيصال حجز خدمة</h2>
+                    <div className="order-2 w-[9.5rem] sm:w-[18.75rem] shrink-0 min-w-0 text-center" style={{ direction: "rtl" }}>
+                      <h2 className="text-lg sm:text-2xl font-extrabold text-[#8d651d]">إيصال حجز خدمة</h2>
                       <p className="text-xs text-[#6f6b62] mt-2">
                         رقم الإيصال:{" "}
-                        <strong
+                        <bdi
                           dir="ltr"
-                          style={{ fontFamily: "Tahoma, Arial, sans-serif", fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }}
+                          style={{ display: "inline-flex", flexDirection: "row", gap: 0, direction: "ltr", unicodeBidi: "isolate", fontFamily: "Tahoma, Arial, sans-serif", fontVariantNumeric: "tabular-nums", letterSpacing: 0 }}
                         >
-                          {serviceReceiptNumber(receiptAppointment)}
-                        </strong>
+                          <span>{receiptNumberParts.provider}</span><span>-</span><span>{receiptNumberParts.appointment}</span>
+                        </bdi>
                       </p>
                       <p className="text-xs text-[#6f6b62] mt-1">تاريخ الإصدار: {issueDate.primary}</p>
                       <p className="text-xs text-[#777066] mt-1">{issueDate.secondary}</p>
                     </div>
-                    <div className="col-start-3 justify-self-end" style={{ direction: "rtl" }}>
-                      <img src={takyahLogoSrc} alt="شعار منصة تكية" className="w-20 h-14 sm:w-24 sm:h-16 object-contain" />
+                    <div className="order-3 flex flex-1 justify-end" style={{ direction: "rtl" }}>
+                      <img src={takyahLogoSrc} alt="شعار منصة تكية" className="w-16 h-12 sm:w-24 sm:h-16 object-contain" />
                     </div>
                   </div>
 
