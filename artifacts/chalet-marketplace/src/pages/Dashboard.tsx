@@ -10182,21 +10182,22 @@ function ServiceCalendarBookingsTab() {
     const deposit = Number(receiptAppointment.deposit ?? 0);
     const remaining = Math.max(0, total - deposit);
     const serviceDate = serviceReceiptServiceDate(receiptAppointment.dateStr);
-    const message = [
+    const serviceHijriDate = serviceDate.hijri.replace(/\sهـ$/, "");
+    const serviceGregorianDate = serviceDate.gregorian.replace(/\sم$/, "");
+    const message = toAr([
       `أهلاً بك ${clientName} ✨`,
-      `تفاصيل حجز ${serviceName} — منصة تكية`,
+      `تفاصيل حجز ( ${serviceName} ) منصة تكية`,
       ``,
-      `رقم الإيصال: ${serviceReceiptNumber(receiptAppointment)}`,
-      `تاريخ الخدمة: ${serviceDate.hijri} (${serviceDate.gregorian})`,
-      ``,
-      `💵 الملخص المالي:`,
+      `• رقم الإيصال: ${serviceReceiptNumber(receiptAppointment)}`,
+      `• تاريخ الخدمة: ${serviceHijriDate} هـ (${serviceGregorianDate} م)`,
       `• المبلغ الإجمالي: ${serviceReceiptMoney(total)}`,
       `• العربون المدفوع: ${serviceReceiptMoney(deposit)}`,
       `• المتبقي: ${serviceReceiptMoney(remaining)}`,
       `• طريقة الدفع: ${servicePaymentMethodLabel(receiptAppointment.paymentMethod)}`,
       ``,
-      `شكرًا لاختياركم ${serviceName} عبر منصة تكية ✨`,
-    ].join("\n");
+      `مرفق لكم ملف الإيصال (PDF) 📄`,
+      `شكراً لاختياركم ${serviceName} عبر منصة تكية ✨`,
+    ].join("\n"));
 
     setReceiptWhatsAppLoading(true);
     try {
