@@ -9686,7 +9686,6 @@ function ServiceCalendarBookingsTab() {
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
   const [receiptAppointment, setReceiptAppointment] = useState<any | null>(null);
-  const [receiptPdfLoading, setReceiptPdfLoading] = useState(false);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
   const emptyForm = {
     clientName: "",
@@ -9919,6 +9918,10 @@ function ServiceCalendarBookingsTab() {
     return toArN(Number.isFinite(numericId) ? String(Math.max(0, Math.trunc(numericId))) : "0");
   }
 
+  function serviceReceiptDocumentTitle(appointment: any) {
+    return `إيصال_حجز_${serviceReceiptNumber(appointment)}`;
+  }
+
   function servicePaymentMethodLabel(method?: string | null) {
     return method === "transfer" ? "حوالة بنكية" : method === "pos" ? "شبكة / نقاط بيع" : "نقداً";
   }
@@ -10033,12 +10036,12 @@ function ServiceCalendarBookingsTab() {
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <title>إيصال ${escapeServiceReceiptHtml(serviceReceiptNumber(appointment))}</title>
+  <title>${escapeServiceReceiptHtml(serviceReceiptDocumentTitle(appointment))}</title>
   <style>
     *{box-sizing:border-box} body{margin:0;background:#f5f1e8;color:#25231f;font-family:Tahoma,Arial,sans-serif}
     .page{width:750px;min-height:900px;margin:0 auto;background:#fff;padding:46px}
-    .receipt-header{display:flex;flex-direction:row;flex-wrap:nowrap;direction:ltr;align-items:center;gap:24px;border-bottom:3px solid #b88930;padding-bottom:24px;break-inside:avoid;page-break-inside:avoid}
-    .brand-box{display:flex;align-items:center;direction:rtl}.provider-brand{order:1;flex:1 1 0;justify-content:flex-start;text-align:left}.platform-brand{order:3;flex:1 1 0;justify-content:flex-end;text-align:right}.brand-box img{width:86px;height:62px;object-fit:contain}.provider-mark{width:52px;height:52px;border-radius:14px;object-fit:contain;border:1px solid #e6dfd0;background:#fff}.provider-fallback{width:52px;height:52px;border-radius:14px;background:#fbf6ea;border:1px solid #d9bd82;color:#8d651d;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800}.platform-mark{width:92px;height:62px;object-fit:contain}.brand-placeholder{font-size:28px;font-weight:800;color:#9a6f1d}
+     .receipt-header{display:flex;flex-direction:row;flex-wrap:nowrap;direction:ltr;align-items:center;gap:24px;border-bottom:3px solid #b88930;padding-bottom:24px;break-inside:avoid;page-break-inside:avoid}
+     .brand-box{display:flex;align-items:center;direction:rtl}.provider-brand{order:1;flex:1 1 0;align-items:center;justify-content:flex-start;text-align:left}.platform-brand{order:3;flex:1 1 0;align-items:center;justify-content:flex-end;text-align:right}.brand-box img{display:block;max-width:100%;max-height:100%;object-fit:contain;object-position:center}.provider-mark{display:block;width:52px;height:52px;flex:0 0 52px;border-radius:14px;object-fit:contain;object-position:center;border:1px solid #e6dfd0;background:#fff}.provider-fallback{width:52px;height:52px;flex:0 0 52px;border-radius:14px;background:#fbf6ea;border:1px solid #d9bd82;color:#8d651d;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800}.platform-mark{width:92px;height:62px;object-fit:contain;object-position:center}.brand-placeholder{font-size:28px;font-weight:800;color:#9a6f1d}
     .receipt-title{order:2;flex:0 0 300px;direction:rtl;text-align:center;white-space:nowrap}.receipt-title h1{font-size:27px;margin:0 0 8px;color:#8d651d}.receipt-title p{margin:4px 0;color:#6f6b62;font-size:14px}
     .section{margin-top:24px}.section-title{margin:0 0 11px;font-size:15px;color:#8d651d;background:#fbf6ea;border-right:4px solid #b88930;padding:9px 12px}
     .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e9e4d9;border:1px solid #e9e4d9;border-radius:10px;overflow:hidden}.info-row.full-row{grid-column:1 / -1}
@@ -10100,16 +10103,19 @@ function ServiceCalendarBookingsTab() {
 
   async function printServiceReceipt() {
     if (!receiptAppointment) return;
+    const documentTitle = serviceReceiptDocumentTitle(receiptAppointment);
     const printWindow = window.open("", "_blank", "width=900,height=900");
     if (!printWindow) {
       toast({ title: "تعذر فتح نافذة الطباعة", description: "يرجى السماح بالنوافذ المنبثقة ثم المحاولة مرة أخرى.", variant: "destructive" });
       return;
     }
+    printWindow.document.title = documentTitle;
     printWindow.document.write("<p dir='rtl' style='font-family:Tahoma;padding:32px'>جاري تجهيز الإيصال...</p>");
     const html = await buildServiceReceiptHtml(receiptAppointment, false);
     printWindow.document.open();
     printWindow.document.write(html);
     printWindow.document.close();
+    printWindow.document.title = documentTitle;
     printWindow.focus();
     const images = Array.from(printWindow.document.images ?? []);
     const waitForImages = Promise.all(
@@ -10122,29 +10128,6 @@ function ServiceCalendarBookingsTab() {
           })),
     );
     waitForImages.then(() => window.setTimeout(() => printWindow.print(), 150));
-  }
-
-  async function downloadServiceReceiptPdf() {
-    if (!receiptAppointment || receiptPdfLoading) return;
-    setReceiptPdfLoading(true);
-    try {
-      const fileName = `service-receipt-${serviceReceiptNumber(receiptAppointment)}.pdf`;
-      const html = await buildServiceReceiptHtml(receiptAppointment);
-      const { blob } = await htmlToPdfBlob(html, fileName);
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(objectUrl);
-      toast({ title: "تم تنزيل الإيصال بصيغة PDF" });
-    } catch {
-      toast({ title: "تعذر تنزيل الإيصال", description: "حاول مرة أخرى.", variant: "destructive" });
-    } finally {
-      setReceiptPdfLoading(false);
-    }
   }
 
   function sendServiceReceiptWhatsApp() {
@@ -10977,7 +10960,7 @@ function ServiceCalendarBookingsTab() {
         const serviceDate = serviceReceiptServiceDate(receiptAppointment.dateStr);
         const issueDate = serviceReceiptIssueDate(receiptAppointment);
         return (
-          <Dialog open onOpenChange={(open) => { if (!open && !receiptPdfLoading) setReceiptAppointment(null); }}>
+          <Dialog open onOpenChange={(open) => { if (!open) setReceiptAppointment(null); }}>
             <DialogContent
               dir="rtl"
               className="max-w-2xl max-h-[94vh] overflow-y-auto p-0"
@@ -10993,12 +10976,12 @@ function ServiceCalendarBookingsTab() {
                     className="flex flex-row flex-nowrap items-center gap-2 sm:gap-4 p-4 sm:p-7 border-b-[3px] border-[#b88930]"
                     style={{ direction: "ltr" }}
                   >
-                    <div className="order-1 flex flex-1 justify-start" style={{ direction: "rtl" }}>
+                    <div className="order-1 flex flex-1 items-center justify-start" style={{ direction: "rtl" }}>
                       {provider?.logoUrl ? (
                         <img
                           src={provider.logoUrl}
                           alt={`شعار ${provider.businessName ?? "النشاط التجاري"}`}
-                          className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl border border-[#e6dfd0] bg-white object-contain"
+                          className="w-12 h-12 sm:w-16 sm:h-16 shrink-0 rounded-2xl border border-[#e6dfd0] bg-white object-contain object-center"
                         />
                       ) : (
                         <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl border border-[#d9bd82] bg-[#fbf6ea] text-[#8d651d] flex items-center justify-center text-xl font-extrabold">
@@ -11020,7 +11003,7 @@ function ServiceCalendarBookingsTab() {
                       <p className="text-xs text-[#6f6b62] mt-1">تاريخ الإصدار: {issueDate.primary}</p>
                       <p className="text-xs text-[#777066] mt-1">{issueDate.secondary}</p>
                     </div>
-                    <div className="order-3 flex flex-1 justify-end" style={{ direction: "rtl" }}>
+                    <div className="order-3 flex flex-1 items-center justify-end" style={{ direction: "rtl" }}>
                       <img src={takyahLogoSrc} alt="شعار منصة تكية" className="w-16 h-12 sm:w-24 sm:h-16 object-contain" />
                     </div>
                   </div>
@@ -11096,13 +11079,12 @@ function ServiceCalendarBookingsTab() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={downloadServiceReceiptPdf}
-                  disabled={receiptPdfLoading}
+                  onClick={printServiceReceipt}
                   className="gap-2 rounded-xl"
                   data-testid="service-receipt-download"
                 >
-                  {receiptPdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                  تحميل PDF
+                  <FileText className="w-4 h-4" />
+                  حفظ كـ PDF
                 </Button>
                 <Button onClick={sendServiceReceiptWhatsApp} className="gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white">
                   <Send className="w-4 h-4" />
