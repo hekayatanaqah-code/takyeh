@@ -9686,6 +9686,8 @@ function ServiceCalendarBookingsTab() {
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
   const [receiptAppointment, setReceiptAppointment] = useState<any | null>(null);
+  const [receiptWhatsAppLoading, setReceiptWhatsAppLoading] = useState(false);
+  const serviceReceiptHtmlCacheRef = useRef<{ key: string; html: string } | null>(null);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
   const emptyForm = {
     clientName: "",
@@ -9922,6 +9924,11 @@ function ServiceCalendarBookingsTab() {
     return `إيصال_حجز_${serviceReceiptNumber(appointment)}`;
   }
 
+  function serviceReceiptPdfFileName(appointment: any) {
+    const numericId = Number(appointment?.id);
+    return `${Number.isFinite(numericId) ? String(Math.max(0, Math.trunc(numericId))) : "0"}.pdf`;
+  }
+
   function servicePaymentMethodLabel(method?: string | null) {
     return method === "transfer" ? "حوالة بنكية" : method === "pos" ? "شبكة / نقاط بيع" : "نقداً";
   }
@@ -10101,6 +10108,34 @@ function ServiceCalendarBookingsTab() {
 </html>`;
   }
 
+  function serviceReceiptHtmlCacheKey(appointment: any) {
+    return JSON.stringify({
+      id: appointment?.id,
+      createdAt: appointment?.createdAt,
+      clientName: appointment?.clientName,
+      clientPhone: appointment?.clientPhone,
+      clientIdNumber: appointment?.clientIdNumber,
+      dateStr: appointment?.dateStr,
+      serviceAddress: appointment?.serviceAddress,
+      amount: appointment?.amount,
+      deposit: appointment?.deposit,
+      paymentMethod: appointment?.paymentMethod,
+      providerName: provider?.businessName,
+      providerLogoUrl: provider?.logoUrl,
+      preferredCalendar: localStorage.getItem("dashCalDefaultType"),
+    });
+  }
+
+  async function getUnifiedServiceReceiptHtml(appointment: any) {
+    const key = serviceReceiptHtmlCacheKey(appointment);
+    const cached = serviceReceiptHtmlCacheRef.current;
+    if (cached?.key === key) return cached.html;
+
+    const html = await buildServiceReceiptHtml(appointment);
+    serviceReceiptHtmlCacheRef.current = { key, html };
+    return html;
+  }
+
   async function printServiceReceipt() {
     if (!receiptAppointment) return;
     const documentTitle = serviceReceiptDocumentTitle(receiptAppointment);
@@ -10111,7 +10146,7 @@ function ServiceCalendarBookingsTab() {
     }
     printWindow.document.title = documentTitle;
     printWindow.document.write("<p dir='rtl' style='font-family:Tahoma;padding:32px'>جاري تجهيز الإيصال...</p>");
-    const html = await buildServiceReceiptHtml(receiptAppointment, false);
+    const html = await getUnifiedServiceReceiptHtml(receiptAppointment);
     printWindow.document.open();
     printWindow.document.write(html);
     printWindow.document.close();
@@ -10130,8 +10165,8 @@ function ServiceCalendarBookingsTab() {
     waitForImages.then(() => window.setTimeout(() => printWindow.print(), 150));
   }
 
-  function sendServiceReceiptWhatsApp() {
-    if (!receiptAppointment) return;
+  async function sendServiceReceiptWhatsApp() {
+    if (!receiptAppointment || receiptWhatsAppLoading) return;
     const whatsappPhone = normalizeServiceWhatsAppPhone(receiptAppointment.clientPhone);
     if (!whatsappPhone) {
       toast({
@@ -10141,23 +10176,74 @@ function ServiceCalendarBookingsTab() {
       });
       return;
     }
+    const clientName = toAr(receiptAppointment.clientName || "عميل");
+    const serviceName = toAr(provider?.businessName ?? "الخدمة");
     const total = Number(receiptAppointment.amount ?? 0);
     const deposit = Number(receiptAppointment.deposit ?? 0);
     const remaining = Math.max(0, total - deposit);
     const serviceDate = serviceReceiptServiceDate(receiptAppointment.dateStr);
     const message = [
-      `إيصال حجز خدمة — منصة تكية`,
+      `أهلاً بك ${clientName} ✨`,
+      `تفاصيل حجز ${serviceName} — منصة تكية`,
+      ``,
       `رقم الإيصال: ${serviceReceiptNumber(receiptAppointment)}`,
-      `العميل: ${receiptAppointment.clientName}`,
-      `الخدمة: ${provider?.businessName ?? "الخدمة"}`,
       `تاريخ الخدمة: ${serviceDate.hijri} (${serviceDate.gregorian})`,
-      receiptAppointment.serviceAddress ? `الموقع: ${receiptAppointment.serviceAddress}` : null,
-      `المبلغ الإجمالي: ${serviceReceiptMoney(total)}`,
-      `العربون المدفوع: ${serviceReceiptMoney(deposit)}`,
-      `المتبقي: ${serviceReceiptMoney(remaining)}`,
-      `طريقة الدفع: ${servicePaymentMethodLabel(receiptAppointment.paymentMethod)}`,
-    ].filter(Boolean).join("\n");
-    window.open(`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+      ``,
+      `💵 الملخص المالي:`,
+      `• المبلغ الإجمالي: ${serviceReceiptMoney(total)}`,
+      `• العربون المدفوع: ${serviceReceiptMoney(deposit)}`,
+      `• المتبقي: ${serviceReceiptMoney(remaining)}`,
+      `• طريقة الدفع: ${servicePaymentMethodLabel(receiptAppointment.paymentMethod)}`,
+      ``,
+      `شكرًا لاختياركم ${serviceName} عبر منصة تكية ✨`,
+    ].join("\n");
+
+    setReceiptWhatsAppLoading(true);
+    try {
+      const fileName = serviceReceiptPdfFileName(receiptAppointment);
+      const html = await getUnifiedServiceReceiptHtml(receiptAppointment);
+      const { blob } = await htmlToPdfBlob(html, fileName);
+      const pdfFile = new File([blob], fileName, {
+        type: "application/pdf",
+        lastModified: Date.now(),
+      });
+      const canShareFile = typeof navigator.share === "function"
+        && typeof navigator.canShare === "function"
+        && navigator.canShare({ files: [pdfFile] });
+
+      if (canShareFile) {
+        await navigator.share({
+          files: [pdfFile],
+          title: serviceReceiptDocumentTitle(receiptAppointment),
+          text: message,
+        });
+        return;
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      const downloadLink = document.createElement("a");
+      downloadLink.href = objectUrl;
+      downloadLink.download = fileName;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
+      URL.revokeObjectURL(objectUrl);
+      window.open(`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+      toast({
+        title: `تم حفظ ${fileName}`,
+        description: "لا يدعم هذا المتصفح إرفاق الملفات تلقائياً؛ أرفق الملف المحفوظ في محادثة واتساب.",
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      console.error("Service receipt WhatsApp share failed:", error);
+      toast({
+        title: "تعذر تجهيز إيصال واتساب",
+        description: "حاول مرة أخرى.",
+        variant: "destructive",
+      });
+    } finally {
+      setReceiptWhatsAppLoading(false);
+    }
   }
 
   function prevMonth() {
@@ -10960,7 +11046,7 @@ function ServiceCalendarBookingsTab() {
         const serviceDate = serviceReceiptServiceDate(receiptAppointment.dateStr);
         const issueDate = serviceReceiptIssueDate(receiptAppointment);
         return (
-          <Dialog open onOpenChange={(open) => { if (!open) setReceiptAppointment(null); }}>
+          <Dialog open onOpenChange={(open) => { if (!open && !receiptWhatsAppLoading) setReceiptAppointment(null); }}>
             <DialogContent
               dir="rtl"
               className="max-w-2xl max-h-[94vh] overflow-y-auto p-0"
@@ -11086,9 +11172,13 @@ function ServiceCalendarBookingsTab() {
                   <FileText className="w-4 h-4" />
                   حفظ كـ PDF
                 </Button>
-                <Button onClick={sendServiceReceiptWhatsApp} className="gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white">
-                  <Send className="w-4 h-4" />
-                  إرسال عبر واتساب
+                <Button
+                  onClick={sendServiceReceiptWhatsApp}
+                  disabled={receiptWhatsAppLoading}
+                  className="gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {receiptWhatsAppLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {receiptWhatsAppLoading ? "جاري تجهيز الإيصال..." : "إرسال عبر واتساب"}
                 </Button>
               </div>
             </DialogContent>
