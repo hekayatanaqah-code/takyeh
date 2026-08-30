@@ -9914,18 +9914,9 @@ function ServiceCalendarBookingsTab() {
     }
   }
 
-  function serviceReceiptNumberParts(appointment: any) {
-    const providerPart = String(providerId ?? 0).replace(/\D/g, "").padStart(3, "0");
-    const appointmentPart = String(appointment.id ?? 0).replace(/\D/g, "").padStart(6, "0");
-    return {
-      provider: toArN(providerPart),
-      appointment: toArN(appointmentPart),
-    };
-  }
-
   function serviceReceiptNumber(appointment: any) {
-    const parts = serviceReceiptNumberParts(appointment);
-    return `${parts.provider}-${parts.appointment}`;
+    const numericId = Number(appointment?.id);
+    return toArN(Number.isFinite(numericId) ? String(Math.max(0, Math.trunc(numericId))) : "0");
   }
 
   function servicePaymentMethodLabel(method?: string | null) {
@@ -10029,7 +10020,6 @@ function ServiceCalendarBookingsTab() {
     const remaining = Math.max(0, total - deposit);
     const serviceDate = serviceReceiptServiceDate(appointment.dateStr);
     const issueDate = serviceReceiptIssueDate(appointment);
-    const receiptNumberParts = serviceReceiptNumberParts(appointment);
     const optionalAddress = appointment.serviceAddress
       ? `<div class="info-row full-row"><span>موقع / عنوان تقديم الخدمة</span><strong>${escapeServiceReceiptHtml(appointment.serviceAddress)}</strong></div>`
       : "";
@@ -10052,7 +10042,7 @@ function ServiceCalendarBookingsTab() {
     .receipt-title{order:2;flex:0 0 300px;direction:rtl;text-align:center;white-space:nowrap}.receipt-title h1{font-size:27px;margin:0 0 8px;color:#8d651d}.receipt-title p{margin:4px 0;color:#6f6b62;font-size:14px}
     .section{margin-top:24px}.section-title{margin:0 0 11px;font-size:15px;color:#8d651d;background:#fbf6ea;border-right:4px solid #b88930;padding:9px 12px}
     .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e9e4d9;border:1px solid #e9e4d9;border-radius:10px;overflow:hidden}.info-row.full-row{grid-column:1 / -1}
-    .info-row{display:flex;flex-direction:column;justify-content:center;text-align:right;background:#fff;padding:14px 16px;min-height:68px}.info-row span{display:block;color:#777066;font-size:12px;margin-bottom:6px}.info-row strong{display:block;font-size:14px;line-height:1.7;overflow-wrap:anywhere}.receipt-number{display:inline-flex;flex-direction:row;gap:0;direction:ltr;unicode-bidi:isolate;font-family:Tahoma,Arial,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:0;white-space:nowrap}.receipt-number span{display:inline;direction:ltr}
+    .info-row{display:flex;flex-direction:column;justify-content:center;text-align:right;background:#fff;padding:14px 16px;min-height:68px}.info-row span{display:block;color:#777066;font-size:12px;margin-bottom:6px}.info-row strong{display:block;font-size:14px;line-height:1.7;overflow-wrap:anywhere}.receipt-number{display:inline-block;direction:ltr;unicode-bidi:isolate;font-family:Tahoma,Arial,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:0;white-space:nowrap}
     .finance{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.finance-card{padding:15px 10px;border:1px solid #e6dfd0;border-radius:10px;text-align:center;background:#fff}
     .finance-card span{display:block;color:#777066;font-size:11px;margin-bottom:7px}.finance-card strong{font-size:15px}.finance-card.remaining{background:#fbf6ea;border-color:#d9bd82;color:#7d5816}
     .footer{margin-top:34px;padding-top:18px;border-top:1px dashed #d7cdb9;text-align:center;color:#777066;font-size:12px;line-height:1.8}
@@ -10072,7 +10062,7 @@ function ServiceCalendarBookingsTab() {
       </div>
       <div class="receipt-title">
         <h1>إيصال حجز خدمة</h1>
-        <p>رقم الإيصال: <bdi class="receipt-number" dir="ltr"><span>${escapeServiceReceiptHtml(receiptNumberParts.provider)}</span><span>-</span><span>${escapeServiceReceiptHtml(receiptNumberParts.appointment)}</span></bdi></p>
+        <p>رقم الإيصال: <bdi class="receipt-number" dir="ltr">${escapeServiceReceiptHtml(serviceReceiptNumber(appointment))}</bdi></p>
         <p>تاريخ الإصدار: ${escapeServiceReceiptHtml(issueDate.primary)}</p>
         <p class="secondary-date">${escapeServiceReceiptHtml(issueDate.secondary)}</p>
       </div>
@@ -10986,7 +10976,6 @@ function ServiceCalendarBookingsTab() {
         const remaining = Math.max(0, total - deposit);
         const serviceDate = serviceReceiptServiceDate(receiptAppointment.dateStr);
         const issueDate = serviceReceiptIssueDate(receiptAppointment);
-        const receiptNumberParts = serviceReceiptNumberParts(receiptAppointment);
         return (
           <Dialog open onOpenChange={(open) => { if (!open && !receiptPdfLoading) setReceiptAppointment(null); }}>
             <DialogContent
@@ -11023,9 +11012,9 @@ function ServiceCalendarBookingsTab() {
                         رقم الإيصال:{" "}
                         <bdi
                           dir="ltr"
-                          style={{ display: "inline-flex", flexDirection: "row", gap: 0, direction: "ltr", unicodeBidi: "isolate", fontFamily: "Tahoma, Arial, sans-serif", fontVariantNumeric: "tabular-nums", letterSpacing: 0 }}
+                          style={{ display: "inline-block", direction: "ltr", unicodeBidi: "isolate", fontFamily: "Tahoma, Arial, sans-serif", fontVariantNumeric: "tabular-nums", letterSpacing: 0 }}
                         >
-                          <span>{receiptNumberParts.provider}</span><span>-</span><span>{receiptNumberParts.appointment}</span>
+                          {serviceReceiptNumber(receiptAppointment)}
                         </bdi>
                       </p>
                       <p className="text-xs text-[#6f6b62] mt-1">تاريخ الإصدار: {issueDate.primary}</p>
