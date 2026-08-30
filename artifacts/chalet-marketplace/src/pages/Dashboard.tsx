@@ -9687,7 +9687,6 @@ function ServiceCalendarBookingsTab() {
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
   const [receiptAppointment, setReceiptAppointment] = useState<any | null>(null);
   const [receiptWhatsAppLoading, setReceiptWhatsAppLoading] = useState(false);
-  const serviceReceiptPreviewRef = useRef<HTMLDivElement | null>(null);
   const serviceReceiptHtmlCacheRef = useRef<{ key: string; html: string } | null>(null);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
   const emptyForm = {
@@ -10203,8 +10202,10 @@ function ServiceCalendarBookingsTab() {
     setReceiptWhatsAppLoading(true);
     try {
       const fileName = serviceReceiptPdfFileName(receiptAppointment);
-      const receiptElement = serviceReceiptPreviewRef.current;
-      if (!receiptElement) throw new Error("Service receipt element is not available");
+      const receiptElement = document.getElementById("receipt-print-area");
+      if (!(receiptElement instanceof HTMLElement)) {
+        throw new Error("Receipt print area is not available");
+      }
       const { blob } = await receiptElementToPdfBlob(receiptElement, fileName);
       const pdfFile = new File([blob], fileName, {
         type: "application/pdf",
@@ -11061,7 +11062,7 @@ function ServiceCalendarBookingsTab() {
               </DialogHeader>
               <div className="bg-[#f7f2e8] p-3 sm:p-6">
                 <div
-                  ref={serviceReceiptPreviewRef}
+                  id="receipt-print-area"
                   data-testid="service-receipt-print-content"
                   className="rounded-2xl bg-white border border-[#e8dcc4] shadow-sm overflow-hidden"
                 >
