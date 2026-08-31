@@ -9687,6 +9687,7 @@ function ServiceCalendarBookingsTab() {
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
   const [receiptAppointment, setReceiptAppointment] = useState<any | null>(null);
   const [receiptWhatsAppLoading, setReceiptWhatsAppLoading] = useState(false);
+  const receiptPdfExportNonceRef = useRef(0);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
   const emptyForm = {
     clientName: "",
@@ -9928,6 +9929,12 @@ function ServiceCalendarBookingsTab() {
     return `${Number.isFinite(numericId) ? String(Math.max(0, Math.trunc(numericId))) : "0"}.pdf`;
   }
 
+  function freshServiceReceiptPdfFileName(appointment: any) {
+    const baseName = serviceReceiptPdfFileName(appointment).replace(/\.pdf$/, "");
+    const exportNonce = ++receiptPdfExportNonceRef.current;
+    return `${baseName}-${Date.now()}-${exportNonce}.pdf`;
+  }
+
   function servicePaymentMethodLabel(method?: string | null) {
     return method === "transfer" ? "حوالة بنكية" : method === "pos" ? "شبكة / نقاط بيع" : "نقداً";
   }
@@ -10039,7 +10046,7 @@ function ServiceCalendarBookingsTab() {
 
     setReceiptWhatsAppLoading(true);
     try {
-      const fileName = serviceReceiptPdfFileName(receiptAppointment);
+      const fileName = freshServiceReceiptPdfFileName(receiptAppointment);
       const receiptElement = getRenderedServiceReceiptElement();
       const { blob: freshPdfBlob } = await createFreshReceiptPdfBlobFromDom(receiptElement, fileName);
       const blob = new Blob([freshPdfBlob], { type: "application/pdf" });
