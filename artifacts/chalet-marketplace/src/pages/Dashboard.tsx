@@ -10041,7 +10041,8 @@ function ServiceCalendarBookingsTab() {
     try {
       const fileName = serviceReceiptPdfFileName(receiptAppointment);
       const receiptElement = getRenderedServiceReceiptElement();
-      const { blob } = await receiptElementToPdfBlob(receiptElement, fileName);
+      const { blob: freshPdfBlob } = await createFreshReceiptPdfBlobFromDom(receiptElement, fileName);
+      const blob = new Blob([freshPdfBlob], { type: "application/pdf" });
       const pdfFile = new File([blob], fileName, {
         type: "application/pdf",
         lastModified: Date.now(),
@@ -11016,9 +11017,10 @@ function ServiceCalendarBookingsTab() {
                   حفظ كـ PDF
                 </Button>
                 <Button
-                  onClick={sendServiceReceiptWhatsApp}
+                  onClick={() => { void sendServiceReceiptWhatsApp(); }}
                   disabled={receiptWhatsAppLoading}
                   className="gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white"
+                  data-testid="service-receipt-whatsapp"
                 >
                   {receiptWhatsAppLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   {receiptWhatsAppLoading ? "جاري تجهيز الإيصال..." : "إرسال عبر واتساب"}
@@ -17616,8 +17618,8 @@ ${chartSvg ? `<div class="section"><div style="display:flex;align-items:center;g
 </div>${scriptTag}</body></html>`;
 }
 
-/* ── Render the already-visible service receipt DOM → PDF blob ── */
-async function receiptElementToPdfBlob(
+/* ── Fresh PDF from the currently visible service receipt DOM ── */
+async function createFreshReceiptPdfBlobFromDom(
   receiptElement: HTMLElement,
   fileName: string,
 ): Promise<{ blob: Blob; fileName: string }> {
