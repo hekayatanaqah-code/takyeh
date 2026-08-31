@@ -1,7 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { seedCatalogIfEmpty } from "./lib/seed-catalog";
-import { runSubscriptionExpiryJob } from "./routes/admin";
+import { runSubscriptionExpiryJob, startLongPauseAlertCheck } from "./routes/admin";
 import { db } from "@workspace/db";
 import { ownerBookingsTable, ownerNotificationsTable } from "@workspace/db/schema";
 import { eq, and, isNull, like } from "drizzle-orm";
@@ -92,4 +92,7 @@ app.listen(port, async (err) => {
   // Auto-deactivate expired subscriptions on startup and every hour
   runSubscriptionExpiryJob();
   setInterval(runSubscriptionExpiryJob, 60 * 60 * 1000);
+
+  // Check for long-paused chalets on startup and every hour
+  startLongPauseAlertCheck();
 });

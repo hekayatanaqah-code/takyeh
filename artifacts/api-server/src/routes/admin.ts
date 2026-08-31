@@ -125,7 +125,7 @@ async function runLongPauseAlertCheck() {
   await logLongPauseAlerts(rows);
 }
 
-function startLongPauseAlertCheck() {
+export function startLongPauseAlertCheck() {
   const g = globalThis as PauseAlertGlobal;
   if (g.__takyaPauseAlertTimer) return;
   const run = () => {
@@ -140,8 +140,6 @@ function startLongPauseAlertCheck() {
   run();
   g.__takyaPauseAlertTimer = setInterval(run, 60 * 60 * 1000);
 }
-
-startLongPauseAlertCheck();
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.isAuthenticated()) {

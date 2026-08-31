@@ -298,13 +298,6 @@ afterEach(async () => {
 });
 
 after(async () => {
-  const pauseAlertTimer = (
-    globalThis as typeof globalThis & {
-      __takyaPauseAlertTimer?: ReturnType<typeof setInterval>;
-    }
-  ).__takyaPauseAlertTimer;
-  if (pauseAlertTimer) clearInterval(pauseAlertTimer);
-
   server.closeAllConnections();
   await new Promise<void>((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
