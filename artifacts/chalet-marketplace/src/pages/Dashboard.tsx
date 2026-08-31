@@ -9687,7 +9687,6 @@ function ServiceCalendarBookingsTab() {
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
   const [receiptAppointment, setReceiptAppointment] = useState<any | null>(null);
   const [receiptWhatsAppLoading, setReceiptWhatsAppLoading] = useState(false);
-  const serviceReceiptHtmlCacheRef = useRef<{ key: string; html: string } | null>(null);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
   const emptyForm = {
     clientName: "",
@@ -9969,15 +9968,6 @@ function ServiceCalendarBookingsTab() {
     return digits;
   }
 
-  function escapeServiceReceiptHtml(value: unknown) {
-    return String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
   function serviceReceiptMoney(value?: string | number | null) {
     const formatted = Number(value ?? 0).toLocaleString("ar-SA-u-nu-arab", {
       minimumFractionDigits: 0,
@@ -9987,182 +9977,30 @@ function ServiceCalendarBookingsTab() {
     return `${toAr(formatted)} ر.س`;
   }
 
-  async function getServiceProviderLogoDataUrl(url: string) {
-    if (url.startsWith("data:")) return url;
-    try {
-      const response = await fetch(url);
-      if (!response.ok) return null;
-      const blob = await response.blob();
-      return await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    } catch {
-      return null;
+  function getRenderedServiceReceiptElement() {
+    const receiptElement = document.getElementById("receipt-print-area");
+    if (!(receiptElement instanceof HTMLElement)) {
+      throw new Error("Receipt print area is not available");
     }
+    return receiptElement;
   }
 
-  async function resolveServiceReceiptAsset(
-    loader: Promise<string | null>,
-    fallback: string | null,
-    timeoutMs = 2500,
-  ) {
-    return Promise.race([
-      loader.then((value) => value ?? fallback).catch(() => fallback),
-      new Promise<string | null>((resolve) => window.setTimeout(() => resolve(fallback), timeoutMs)),
-    ]);
-  }
-
-  async function buildServiceReceiptHtml(appointment: any, embedLogos = true) {
-    const providerLogoUrl = provider?.logoUrl ?? null;
-    const [logo, providerLogo] = embedLogos
-      ? await Promise.all([
-          resolveServiceReceiptAsset(getLogoDataUrl(), takyahLogoSrc),
-          providerLogoUrl
-            ? resolveServiceReceiptAsset(getServiceProviderLogoDataUrl(providerLogoUrl), providerLogoUrl)
-            : Promise.resolve(null),
-        ])
-      : [takyahLogoSrc, providerLogoUrl];
-    const total = Number(appointment.amount ?? 0);
-    const deposit = Number(appointment.deposit ?? 0);
-    const remaining = Math.max(0, total - deposit);
-    const serviceDate = serviceReceiptServiceDate(appointment.dateStr);
-    const issueDate = serviceReceiptIssueDate(appointment);
-    const optionalAddress = appointment.serviceAddress
-      ? `<div class="info-row full-row"><span>موقع / عنوان تقديم الخدمة</span><strong>${escapeServiceReceiptHtml(appointment.serviceAddress)}</strong></div>`
-      : "";
-    const optionalIdentity = appointment.clientIdNumber
-      ? `<div class="info-row"><span>رقم الهوية / الإقامة</span><strong>${escapeServiceReceiptHtml(toAr(appointment.clientIdNumber))}</strong></div>`
-      : "";
-
-    const providerName = provider?.businessName ?? "الخدمة";
-    const providerInitial = escapeServiceReceiptHtml(providerName.slice(0, 1));
-    return `<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <title>${escapeServiceReceiptHtml(serviceReceiptDocumentTitle(appointment))}</title>
-  <style>
-    *{box-sizing:border-box} body{margin:0;background:#f5f1e8;color:#25231f;font-family:Tahoma,Arial,sans-serif}
-    .page{width:750px;min-height:900px;margin:0 auto;background:#fff;padding:46px}
-     .receipt-header{display:flex;flex-direction:row;flex-wrap:nowrap;direction:ltr;align-items:center;gap:24px;border-bottom:3px solid #b88930;padding-bottom:24px;break-inside:avoid;page-break-inside:avoid}
-     .brand-box{display:flex;align-items:center;direction:rtl}.provider-brand{order:1;flex:1 1 0;align-items:center;justify-content:flex-start;text-align:left}.platform-brand{order:3;flex:1 1 0;align-items:center;justify-content:flex-end;text-align:right}.brand-box img{display:block;max-width:100%;max-height:100%;object-fit:contain;object-position:center}.provider-mark{display:block;width:52px;height:52px;flex:0 0 52px;border-radius:14px;object-fit:contain;object-position:center;border:1px solid #e6dfd0;background:#fff}.provider-fallback{width:52px;height:52px;flex:0 0 52px;border-radius:14px;background:#fbf6ea;border:1px solid #d9bd82;color:#8d651d;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800}.platform-mark{width:92px;height:62px;object-fit:contain;object-position:center}.brand-placeholder{font-size:28px;font-weight:800;color:#9a6f1d}
-    .receipt-title{order:2;flex:0 0 300px;direction:rtl;text-align:center;white-space:nowrap}.receipt-title h1{font-size:27px;margin:0 0 8px;color:#8d651d}.receipt-title p{margin:4px 0;color:#6f6b62;font-size:14px}
-    .section{margin-top:24px}.section-title{margin:0 0 11px;font-size:15px;color:#8d651d;background:#fbf6ea;border-right:4px solid #b88930;padding:9px 12px}
-    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e9e4d9;border:1px solid #e9e4d9;border-radius:10px;overflow:hidden}.info-row.full-row{grid-column:1 / -1}
-    .info-row{display:flex;flex-direction:column;justify-content:center;text-align:right;background:#fff;padding:14px 16px;min-height:68px}.info-row span{display:block;color:#777066;font-size:12px;margin-bottom:6px}.info-row strong{display:block;font-size:14px;line-height:1.7;overflow-wrap:anywhere}.receipt-number{display:inline-block;direction:ltr;unicode-bidi:isolate;font-family:Tahoma,Arial,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:0;white-space:nowrap}
-    .finance{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.finance-card{padding:15px 10px;border:1px solid #e6dfd0;border-radius:10px;text-align:center;background:#fff}
-    .finance-card span{display:block;color:#777066;font-size:11px;margin-bottom:7px}.finance-card strong{font-size:15px}.finance-card.remaining{background:#fbf6ea;border-color:#d9bd82;color:#7d5816}
-    .footer{margin-top:34px;padding-top:18px;border-top:1px dashed #d7cdb9;text-align:center;color:#777066;font-size:12px;line-height:1.8}
-    @media print{ @page{size:A4;margin:0} html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact} body{font-family:Tahoma,Arial,sans-serif;font-synthesis:none;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}.page{width:100%;min-height:auto;margin:0;padding:18mm}.receipt-header,.receipt-header img,.section-title,.finance-card.remaining,.info-grid,.info-row,.finance-card,.footer{-webkit-print-color-adjust:exact;print-color-adjust:exact}.receipt-header{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important}.provider-brand{order:1!important;flex:1 1 0!important}.receipt-title{order:2!important;flex:0 0 300px!important;white-space:nowrap}.platform-brand{order:3!important;flex:1 1 0!important}.receipt-header img{visibility:visible;opacity:1} }
-  </style>
-</head>
-<body>
-  <main class="page">
-    <header class="receipt-header">
-      <div class="brand-box provider-brand">
-        <div>
-          ${providerLogo ? `<img class="provider-mark" src="${providerLogo}" alt="شعار ${escapeServiceReceiptHtml(providerName)}" />` : `<div class="provider-fallback">${providerInitial}</div>`}
-        </div>
-      </div>
-      <div class="brand-box platform-brand">
-        ${logo ? `<img class="platform-mark" src="${logo}" alt="شعار منصة تكية" />` : `<div class="brand-placeholder">تكية</div>`}
-      </div>
-      <div class="receipt-title">
-        <h1>إيصال حجز خدمة</h1>
-        <p>رقم الإيصال: <bdi class="receipt-number" dir="ltr">${escapeServiceReceiptHtml(serviceReceiptNumber(appointment))}</bdi></p>
-        <p>تاريخ الإصدار: ${escapeServiceReceiptHtml(issueDate.primary)}</p>
-        <p class="secondary-date">${escapeServiceReceiptHtml(issueDate.secondary)}</p>
-      </div>
-    </header>
-    <section class="section">
-      <h2 class="section-title">بيانات العميل</h2>
-      <div class="info-grid">
-        <div class="info-row"><span>اسم العميل</span><strong>${escapeServiceReceiptHtml(appointment.clientName)}</strong></div>
-        <div class="info-row"><span>رقم الجوال</span><strong dir="ltr">${escapeServiceReceiptHtml(toAr(appointment.clientPhone || "—"))}</strong></div>
-        ${optionalIdentity}
-      </div>
-    </section>
-    <section class="section">
-      <h2 class="section-title">تفاصيل الخدمة</h2>
-      <div class="info-grid">
-        <div class="info-row"><span>اسم الخدمة</span><strong>${escapeServiceReceiptHtml(provider?.businessName ?? "الخدمة")}</strong></div>
-        <div class="info-row"><span>تاريخ الخدمة</span><strong>${escapeServiceReceiptHtml(serviceDate.hijri)}<br><small>${escapeServiceReceiptHtml(serviceDate.gregorian)}</small></strong></div>
-        ${optionalAddress}
-      </div>
-    </section>
-    <section class="section">
-      <h2 class="section-title">الملخص المالي</h2>
-      <div class="finance">
-        <div class="finance-card"><span>المبلغ الإجمالي</span><strong>${serviceReceiptMoney(total)}</strong></div>
-        <div class="finance-card"><span>العربون المدفوع</span><strong>${serviceReceiptMoney(deposit)}</strong></div>
-        <div class="finance-card remaining"><span>المتبقي</span><strong>${serviceReceiptMoney(remaining)}</strong></div>
-        <div class="finance-card"><span>طريقة الدفع</span><strong>${escapeServiceReceiptHtml(servicePaymentMethodLabel(appointment.paymentMethod))}</strong></div>
-      </div>
-    </section>
-    <footer class="footer">شكراً لاختياركم ${escapeServiceReceiptHtml(providerName)} - منصة تكية — هذا الإيصال صادر إلكترونياً</footer>
-  </main>
-</body>
-</html>`;
-  }
-
-  function serviceReceiptHtmlCacheKey(appointment: any) {
-    return JSON.stringify({
-      id: appointment?.id,
-      createdAt: appointment?.createdAt,
-      clientName: appointment?.clientName,
-      clientPhone: appointment?.clientPhone,
-      clientIdNumber: appointment?.clientIdNumber,
-      dateStr: appointment?.dateStr,
-      serviceAddress: appointment?.serviceAddress,
-      amount: appointment?.amount,
-      deposit: appointment?.deposit,
-      paymentMethod: appointment?.paymentMethod,
-      providerName: provider?.businessName,
-      providerLogoUrl: provider?.logoUrl,
-      preferredCalendar: localStorage.getItem("dashCalDefaultType"),
-    });
-  }
-
-  async function getUnifiedServiceReceiptHtml(appointment: any) {
-    const key = serviceReceiptHtmlCacheKey(appointment);
-    const cached = serviceReceiptHtmlCacheRef.current;
-    if (cached?.key === key) return cached.html;
-
-    const html = await buildServiceReceiptHtml(appointment);
-    serviceReceiptHtmlCacheRef.current = { key, html };
-    return html;
-  }
-
-  async function printServiceReceipt() {
+  function printServiceReceipt() {
     if (!receiptAppointment) return;
-    const documentTitle = serviceReceiptDocumentTitle(receiptAppointment);
-    const printWindow = window.open("", "_blank", "width=900,height=900");
-    if (!printWindow) {
-      toast({ title: "تعذر فتح نافذة الطباعة", description: "يرجى السماح بالنوافذ المنبثقة ثم المحاولة مرة أخرى.", variant: "destructive" });
+    try {
+      getRenderedServiceReceiptElement();
+    } catch {
+      toast({ title: "تعذر العثور على الإيصال", description: "أغلق المعاينة وافتحها ثم حاول مرة أخرى.", variant: "destructive" });
       return;
     }
-    printWindow.document.title = documentTitle;
-    printWindow.document.write("<p dir='rtl' style='font-family:Tahoma;padding:32px'>جاري تجهيز الإيصال...</p>");
-    const html = await getUnifiedServiceReceiptHtml(receiptAppointment);
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.document.title = documentTitle;
-    printWindow.focus();
-    const images = Array.from(printWindow.document.images ?? []);
-    const waitForImages = Promise.all(
-      images.map((image) => image.complete
-        ? Promise.resolve()
-        : new Promise<void>((resolve) => {
-            image.addEventListener("load", () => resolve(), { once: true });
-            image.addEventListener("error", () => resolve(), { once: true });
-            window.setTimeout(resolve, 2500);
-          })),
-    );
-    waitForImages.then(() => window.setTimeout(() => printWindow.print(), 150));
+    const previousTitle = document.title;
+    document.title = serviceReceiptDocumentTitle(receiptAppointment);
+    const restoreTitle = () => {
+      document.title = previousTitle;
+      window.removeEventListener("afterprint", restoreTitle);
+    };
+    window.addEventListener("afterprint", restoreTitle, { once: true });
+    window.print();
   }
 
   async function sendServiceReceiptWhatsApp() {
@@ -10202,10 +10040,7 @@ function ServiceCalendarBookingsTab() {
     setReceiptWhatsAppLoading(true);
     try {
       const fileName = serviceReceiptPdfFileName(receiptAppointment);
-      const receiptElement = document.getElementById("receipt-print-area");
-      if (!(receiptElement instanceof HTMLElement)) {
-        throw new Error("Receipt print area is not available");
-      }
+      const receiptElement = getRenderedServiceReceiptElement();
       const { blob } = await receiptElementToPdfBlob(receiptElement, fileName);
       const pdfFile = new File([blob], fileName, {
         type: "application/pdf",

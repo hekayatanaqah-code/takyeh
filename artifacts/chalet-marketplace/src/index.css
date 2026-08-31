@@ -293,9 +293,23 @@ input, textarea, select, [contenteditable] {
   /* Hide all non-contract content */
   body * { visibility: hidden !important; }
 
-  /* Reveal only the contract letterhead and all its descendants */
+  /* Reveal only the active printable document and its descendants */
   .contract-print-area,
-  .contract-print-area * { visibility: visible !important; }
+  .contract-print-area *,
+  #receipt-print-area,
+  #receipt-print-area * { visibility: visible !important; }
+
+  #receipt-print-area {
+    position: fixed !important;
+    top: 18mm !important;
+    right: 18mm !important;
+    width: calc(100% - 36mm) !important;
+    max-width: none !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 
   .contract-print-area {
     /* Fill the A4 page exactly — @page margin:0 removes browser chrome */
