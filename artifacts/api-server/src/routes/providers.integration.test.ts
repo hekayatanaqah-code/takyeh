@@ -16,6 +16,7 @@ import {
   db,
   pool,
   serviceAppointmentsTable,
+  serviceBlockedDatesTable,
   serviceProvidersTable,
   sessionsTable,
 } from "@workspace/db";
@@ -23,6 +24,9 @@ import {
 const TEST_DATES = {
   full: "2030-06-15",
   available: "2030-06-16",
+  blocked: "2030-06-17",
+  blockedMove: "2030-06-18",
+  concurrent: "2030-06-19",
 } as const;
 
 type TestAppointment = {
@@ -94,6 +98,25 @@ async function requestAppointment(
   return { response, json };
 }
 
+async function requestBlockedDate(
+  targetProviderId: number,
+  dateStr: string,
+): Promise<{ response: Response; json: any }> {
+  const response = await fetch(
+    `${baseUrl}/api/providers/my/approved/${targetProviderId}/blocked-dates`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sessionId}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ dateStr, reason: "اختبار" }),
+    },
+  );
+  const json = await response.json();
+  return { response, json };
+}
+
 function appointmentBody(
   dateStr: string,
   overrides: Record<string, unknown> = {},
@@ -129,6 +152,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   if (testProviderIds.length > 0) {
+    await db
+      .delete(serviceBlockedDatesTable)
+      .where(inArray(serviceBlockedDatesTable.providerId, testProviderIds));
     await db
       .delete(serviceAppointmentsTable)
       .where(inArray(serviceAppointmentsTable.providerId, testProviderIds));
@@ -192,6 +218,147 @@ describe("service appointment capacity and isolation", () => {
     assert.equal(updated.response.status, 200);
     assert.equal(updated.json.clientIdNumber, null);
     assert.equal(updated.json.serviceAddress, "قاعة النخيل - حي الريان");
+  });
+
+  it("persists and updates contract and cash-deposit statuses", async () => {
+    const created = await requestAppointment(
+      providerId,
+      "POST",
+      "",
+      appointmentBody(TEST_DATES.available, {
+        paymentMethod: "cash",
+        deposit: "250",
+        cashDeposited: true,
+        contractSigned: true,
+      }),
+    );
+
+    assert.equal(created.response.status, 201);
+    assert.equal(created.json.cashDeposited, true);
+    assert.equal(created.json.contractSigned, true);
+
+    const updated = await requestAppointment(
+      providerId,
+      "PATCH",
+      `/${created.json.id}`,
+      { cashDeposited: false, contractSigned: false },
+    );
+
+    assert.equal(updated.response.status, 200);
+    assert.equal(updated.json.cashDeposited, false);
+    assert.equal(updated.json.contractSigned, false);
+  });
+
+  it("rejects blocking a day with active appointments", async () => {
+    const created = await requestAppointment(
+      providerId,
+      "POST",
+      "",
+      appointmentBody(TEST_DATES.available),
+    );
+    assert.equal(created.response.status, 201);
+
+    const response = await fetch(
+      `${baseUrl}/api/providers/my/approved/${providerId}/blocked-dates`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionId}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ dateStr: TEST_DATES.available }),
+      },
+    );
+    const json = await response.json() as { code?: string };
+
+    assert.equal(response.status, 409);
+    assert.equal(json.code, "ACTIVE_APPOINTMENTS_ON_DATE");
+  });
+
+  it("rejects creating, moving, and reactivating appointments on a blocked day", async () => {
+    const blocked = await requestBlockedDate(providerId, TEST_DATES.blocked);
+    assert.equal(blocked.response.status, 201);
+
+    const createOnBlocked = await requestAppointment(
+      providerId,
+      "POST",
+      "",
+      appointmentBody(TEST_DATES.blocked),
+    );
+    assert.equal(createOnBlocked.response.status, 409);
+    assert.equal(createOnBlocked.json.code, "SERVICE_DATE_BLOCKED");
+
+    const movable = await requestAppointment(
+      providerId,
+      "POST",
+      "",
+      appointmentBody(TEST_DATES.available),
+    );
+    assert.equal(movable.response.status, 201);
+
+    const blockedMove = await requestBlockedDate(providerId, TEST_DATES.blockedMove);
+    assert.equal(blockedMove.response.status, 201);
+
+    const moveToBlocked = await requestAppointment(
+      providerId,
+      "PATCH",
+      `/${movable.json.id}`,
+      { dateStr: TEST_DATES.blockedMove },
+    );
+    assert.equal(moveToBlocked.response.status, 409);
+    assert.equal(moveToBlocked.json.code, "SERVICE_DATE_BLOCKED");
+
+    const cancelled = await requestAppointment(
+      providerId,
+      "POST",
+      "",
+      appointmentBody(TEST_DATES.blocked, { status: "cancelled" }),
+    );
+    assert.equal(cancelled.response.status, 201);
+
+    const reactivateOnBlocked = await requestAppointment(
+      providerId,
+      "PATCH",
+      `/${cancelled.json.id}`,
+      { status: "confirmed" },
+    );
+    assert.equal(reactivateOnBlocked.response.status, 409);
+    assert.equal(reactivateOnBlocked.json.code, "SERVICE_DATE_BLOCKED");
+  });
+
+  it("never leaves an active appointment on a concurrently blocked day", async () => {
+    const [booking, blocking] = await Promise.all([
+      requestAppointment(
+        providerId,
+        "POST",
+        "",
+        appointmentBody(TEST_DATES.concurrent, { clientName: "طلب متزامن" }),
+      ),
+      requestBlockedDate(providerId, TEST_DATES.concurrent),
+    ]);
+
+    assert.deepEqual(
+      [booking.response.status, blocking.response.status].sort((a, b) => a - b),
+      [201, 409],
+    );
+
+    const [activeAppointments, blockedDates] = await Promise.all([
+      db.select({ id: serviceAppointmentsTable.id })
+        .from(serviceAppointmentsTable)
+        .where(and(
+          eq(serviceAppointmentsTable.providerId, providerId),
+          eq(serviceAppointmentsTable.dateStr, TEST_DATES.concurrent),
+          eq(serviceAppointmentsTable.status, "confirmed"),
+        )),
+      db.select({ id: serviceBlockedDatesTable.id })
+        .from(serviceBlockedDatesTable)
+        .where(and(
+          eq(serviceBlockedDatesTable.providerId, providerId),
+          eq(serviceBlockedDatesTable.dateStr, TEST_DATES.concurrent),
+        )),
+    ]);
+
+    assert.equal(activeAppointments.length + blockedDates.length, 1);
   });
 
   it("allows only one of two concurrent requests to take the last seat", async () => {

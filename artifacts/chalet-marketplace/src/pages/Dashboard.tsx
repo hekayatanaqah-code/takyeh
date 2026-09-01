@@ -9582,12 +9582,22 @@ function ServiceBlockDatesDialog({ open, providerId, onClose, onDone }: {
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("إغلاق مؤقت");
   const [loading, setLoading] = useState(false);
+  const [blockResult, setBlockResult] = useState<{
+    succeeded: number;
+    failed: Array<{ dateStr: string; error: string }>;
+  } | null>(null);
 
-  function reset() { setStartDate(""); setEndDate(""); setReason("إغلاق مؤقت"); }
+  function reset() {
+    setStartDate("");
+    setEndDate("");
+    setReason("إغلاق مؤقت");
+    setBlockResult(null);
+  }
 
   async function handleBlock() {
     if (!providerId || !startDate || !endDate || startDate > endDate) return;
     setLoading(true);
+    setBlockResult(null);
     try {
       const start = new Date(startDate);
       const end = new Date(endDate);
@@ -9595,15 +9605,45 @@ function ServiceBlockDatesDialog({ open, providerId, onClose, onDone }: {
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         dates.push(d.toISOString().slice(0, 10));
       }
-      await Promise.all(dates.map(ds =>
-        apiFetch(`/providers/my/approved/${providerId}/blocked-dates`, { method: "POST", body: JSON.stringify({ dateStr: ds }) })
-      ));
-      toast({ title: `تم إغلاق ${dates.length} يوم بنجاح`, description: reason });
-      onDone();
+      const results = await Promise.all(dates.map(async (dateStr) => {
+        const response = await apiFetch(`/providers/my/approved/${providerId}/blocked-dates`, {
+          method: "POST",
+          body: JSON.stringify({ dateStr, reason }),
+        });
+        if (response.ok) return { dateStr, ok: true, error: "" };
+        const body = await response.json().catch(() => ({})) as { error?: string };
+        return { dateStr, ok: false, error: body.error || "تعذر إغلاق اليوم" };
+      }));
+
+      const succeeded = results.filter((result) => result.ok);
+      const failed = results.filter((result) => !result.ok);
+
+      if (succeeded.length > 0) onDone();
+
+      if (failed.length > 0) {
+        setBlockResult({
+          succeeded: succeeded.length,
+          failed: failed.map(({ dateStr, error }) => ({ dateStr, error })),
+        });
+        const failedDates = failed
+          .slice(0, 4)
+          .map((result) => formatDualDate(result.dateStr).gregorian)
+          .join("، ");
+        toast({
+          title: succeeded.length > 0
+            ? `تم إغلاق ${toArN(succeeded.length)} يوم وتعذر إغلاق ${toArN(failed.length)}`
+            : "لم يتم إغلاق أي يوم",
+          description: `${failed[0]?.error ?? "تعذرت العملية"}${failedDates ? ` — الأيام المتجاوزة: ${failedDates}` : ""}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({ title: `تم إغلاق ${toArN(succeeded.length)} يوم بنجاح`, description: reason });
       onClose();
       reset();
     } catch {
-      toast({ title: "حدث خطأ", variant: "destructive" });
+      toast({ title: "تعذر إغلاق الأيام", description: "تحقق من الاتصال وحاول مرة أخرى.", variant: "destructive" });
     } finally { setLoading(false); }
   }
 
@@ -9646,6 +9686,27 @@ function ServiceBlockDatesDialog({ open, providerId, onClose, onDone }: {
               سيتم إغلاق {dayCount.toLocaleString("ar-SA-u-nu-arab")} يوم من {formatDualDate(startDate).hijri} إلى {formatDualDate(endDate).hijri} هـ
             </div>
           )}
+          {blockResult && (
+            <div
+              className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+              role="alert"
+              data-testid="service-block-range-result"
+            >
+              <p className="font-extrabold">
+                تم إغلاق {toArN(blockResult.succeeded)} يوم، وتعذر إغلاق {toArN(blockResult.failed.length)} يوم
+              </p>
+              <p className="text-xs mt-1.5">
+                بقيت الأيام التالية متاحة لوجود حجوزات نشطة أو تعذر تحديثها:
+              </p>
+              <ul className="mt-2 space-y-1 text-xs">
+                {blockResult.failed.map((item) => (
+                  <li key={item.dateStr}>
+                    {formatDualDate(item.dateStr).gregorian}: {item.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => { onClose(); reset(); }}>إلغاء</Button>
@@ -9679,12 +9740,17 @@ function ServiceCalendarBookingsTab() {
   );
   const [togglingDate, setTogglingDate] = useState<string | null>(null);
   const [unblockDay, setUnblockDay] = useState<string | null>(null);
+  const [summaryDate, setSummaryDate] = useState<string | null>(null);
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingAppointmentId, setEditingAppointmentId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
+  const [updatingAppointmentId, setUpdatingAppointmentId] = useState<number | null>(null);
+  const [reviewSendingId, setReviewSendingId] = useState<number | null>(null);
+  const [reviewSentIds, setReviewSentIds] = useState<Set<number>>(new Set());
+  const [openServiceMessageMenuId, setOpenServiceMessageMenuId] = useState<number | null>(null);
   const [receiptAppointment, setReceiptAppointment] = useState<any | null>(null);
   const [receiptWhatsAppLoading, setReceiptWhatsAppLoading] = useState(false);
   const receiptPdfExportNonceRef = useRef(0);
@@ -9738,6 +9804,15 @@ function ServiceCalendarBookingsTab() {
     enabled: !!providerId,
   });
 
+  const { data: messageSettings = DEFAULT_OWNER_MESSAGE_SETTINGS } = useQuery<OwnerMessageSettings>({
+    queryKey: ["owner", "message-settings"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/message-settings");
+      if (!r.ok) return DEFAULT_OWNER_MESSAGE_SETTINGS;
+      return r.json();
+    },
+  });
+
   const blockedSet = new Set(blockedDates.map(d => d.dateStr));
   const apptDays = new Map<string, number>();
   appointments.filter(a => a.status !== "cancelled").forEach(a => {
@@ -9747,6 +9822,17 @@ function ServiceCalendarBookingsTab() {
 
   function revealBookingForm() {
     setShowForm(true);
+  }
+
+  function createBookingForDate(dateStr: string) {
+    const [year, month] = dateStr.split("-").map(Number);
+    setEditingAppointmentId(null);
+    setForm({ ...emptyForm, dateStr });
+    setPickYear(year);
+    setPickMonth(month - 1);
+    setPickerOpen(false);
+    setSummaryDate(null);
+    revealBookingForm();
   }
 
   function closeBookingForm() {
@@ -9782,13 +9868,24 @@ function ServiceCalendarBookingsTab() {
       if (blockedSet.has(dateStr)) {
         const found = blockedDates.find(d => d.dateStr === dateStr);
         if (!found) return;
-        await apiFetch(`/providers/my/approved/${providerId}/blocked-dates/${found.id}`, { method: "DELETE" });
+        const r = await apiFetch(`/providers/my/approved/${providerId}/blocked-dates/${found.id}`, { method: "DELETE" });
+        if (!r.ok) throw new Error("تعذرت إتاحة اليوم");
       } else {
-        await apiFetch(`/providers/my/approved/${providerId}/blocked-dates`, { method: "POST", body: JSON.stringify({ dateStr }) });
+        const r = await apiFetch(`/providers/my/approved/${providerId}/blocked-dates`, { method: "POST", body: JSON.stringify({ dateStr }) });
+        if (!r.ok) {
+          const error = await r.json().catch(() => ({})) as { error?: string };
+          throw new Error(error.error || "تعذر إغلاق اليوم");
+        }
       }
       queryClient.invalidateQueries({ queryKey: ["service-blocked-dates", providerId] });
-    } catch {
-      toast({ title: "خطأ", description: "تعذرت العملية", variant: "destructive" });
+      setSummaryDate(dateStr);
+      toast({ title: blockedSet.has(dateStr) ? "تمت إتاحة اليوم ✓" : "تم إغلاق اليوم ✓" });
+    } catch (error) {
+      toast({
+        title: "تعذرت العملية",
+        description: error instanceof Error ? error.message : "تعذر تحديث إتاحة اليوم.",
+        variant: "destructive",
+      });
     } finally { setTogglingDate(null); }
   }
 
@@ -9898,6 +9995,105 @@ function ServiceCalendarBookingsTab() {
       });
     }
     finally { setCancellingId(null); }
+  }
+
+  async function updateServiceAppointmentFlags(
+    appointment: any,
+    updates: { cashDeposited?: boolean; contractSigned?: boolean },
+  ) {
+    setUpdatingAppointmentId(appointment.id);
+    try {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments/${appointment.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(updates),
+      });
+      if (!r.ok) {
+        const error = await r.json().catch(() => ({})) as { error?: string };
+        throw new Error(error.error || "تعذر تحديث الحجز");
+      }
+      await queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
+      toast({ title: "تم تحديث حالة الحجز ✓" });
+    } catch (error) {
+      toast({
+        title: "تعذر تحديث الحجز",
+        description: error instanceof Error ? error.message : "حاول مرة أخرى",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingAppointmentId(null);
+    }
+  }
+
+  function serviceMessageTemplates(appointment: any) {
+    if (!messageSettings.waEnabled) return [];
+    return [
+      {
+        id: "confirmation",
+        title: appointment.status === "pending" ? "متابعة الحجز" : "تأكيد الحجز",
+        body: messageSettings.bookingConfirmationTemplate,
+      },
+      ...(appointment.status === "cancelled"
+        ? [{ id: "cancellation", title: "إشعار إلغاء الحجز", body: messageSettings.cancellationTemplate }]
+        : []),
+      ...(messageSettings.customTemplates ?? []),
+    ].filter((template) => template.body?.trim());
+  }
+
+  function buildServiceMessage(appointment: any, templateBody: string) {
+    const dual = formatDualDate(appointment.dateStr);
+    const total = Number(appointment.amount ?? 0);
+    const deposit = Number(appointment.deposit ?? 0);
+    const remaining = Math.max(0, total - deposit);
+    const amountText = (value: number) => value > 0 ? toArN(value.toLocaleString("en-US")) : "—";
+    return templateBody
+      .replace(/\{اسم_العميل\}/g, appointment.clientName ?? "")
+      .replace(/\{اسم_العقار\}/g, provider?.businessName ?? "الخدمة")
+      .replace(/\{اسم_الخدمة\}/g, provider?.businessName ?? "الخدمة")
+      .replace(/\{اسم_اليوم_من\}/g, new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.dateStr}T12:00:00`)))
+      .replace(/\{اسم_اليوم_إلى\}/g, new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.dateStr}T12:00:00`)))
+      .replace(/\{التاريخ\}|\{من_التاريخ\}|\{إلى_التاريخ\}/g, dual.hijri.replace(/\s*هـ\s*$/, ""))
+      .replace(/\{التاريخ_م\}|\{من_التاريخ_م\}|\{إلى_التاريخ_م\}/g, dual.gregorian)
+      .replace(/\{الإيجار\}|\{قيمة_الإيجار\}|\{الإجمالي_الكلي\}/g, amountText(total))
+      .replace(/\{المدفوع\}/g, amountText(deposit))
+      .replace(/\{المتبقي\}/g, amountText(remaining))
+      .replace(/\{التأمين\}/g, amountText(Number(appointment.insuranceAmount ?? 0)))
+      .replace(/\{الفترة\}|\{الفترة_الجديدة\}|\{الفترة_القديمة\}/g, appointment.duration || "—")
+      .replace(/\{سبب_الإلغاء\}/g, appointment.cancelReason || "حسب الاتفاق")
+      .replace(/\{إجمالي_الخدمات\}|\{تفاصيل_الخدمات\}/g, "—")
+      .replace(/\{[^}]+\}/g, "—");
+  }
+
+  function sendServiceCustomMessage(appointment: any, templateBody: string) {
+    const message = buildServiceMessage(appointment, templateBody);
+    const phone = normalizeServiceWhatsAppPhone(appointment.clientPhone);
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    setOpenServiceMessageMenuId(null);
+  }
+
+  async function sendServiceReviewRequest(appointment: any) {
+    setReviewSendingId(appointment.id);
+    try {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/review-invite`, {
+        method: "POST",
+        body: JSON.stringify({ guestName: appointment.clientName }),
+      });
+      if (!r.ok) throw new Error("تعذر إنشاء رابط التقييم");
+      const data = await r.json() as { token: string };
+      const link = `${window.location.origin}${BASE}/r/${data.token}`;
+      const message = `أهلاً ${appointment.clientName}، يسعدنا تقييمك لتجربتك مع ${provider?.businessName ?? "الخدمة"} 🌟\nاضغط هنا لإرسال تقييمك: ${link}`;
+      const phone = normalizeServiceWhatsAppPhone(appointment.clientPhone);
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+      setReviewSentIds((current) => new Set([...current, appointment.id]));
+      toast({ title: "تم إنشاء رابط التقييم وفتح واتساب ✓" });
+    } catch (error) {
+      toast({
+        title: "تعذر إرسال رابط التقييم",
+        description: error instanceof Error ? error.message : "حاول مرة أخرى",
+        variant: "destructive",
+      });
+    } finally {
+      setReviewSendingId(null);
+    }
   }
 
   async function handleDeleteAppointment(id: number) {
@@ -10170,6 +10366,12 @@ function ServiceCalendarBookingsTab() {
   const statusLabel: Record<string, string> = { confirmed: "مؤكد", pending: "معلق", cancelled: "ملغي" };
 
   const filteredAppts = listFilter === "all" ? appointments : appointments.filter(a => a.status === listFilter);
+  const summaryAppointments = summaryDate
+    ? appointments.filter((appointment) => appointment.dateStr === summaryDate)
+    : [];
+  const summaryActiveAppointments = summaryAppointments.filter((appointment) => appointment.status !== "cancelled");
+  const summaryBlocked = summaryDate ? blockedSet.has(summaryDate) : false;
+  const summaryRemaining = Math.max(0, dailyCapacity - summaryActiveAppointments.length);
   const calendarCells: Array<{ date: Date; hijriDay: number } | null> = [
     ...Array.from({ length: firstDow }, () => null),
     ...calendarDays,
@@ -10205,7 +10407,7 @@ function ServiceCalendarBookingsTab() {
               تقويم الحجوزات والإتاحة
             </h3>
             <p className="text-xs text-muted-foreground mt-1">
-              الطاقة اليومية: {toArN(dailyCapacity)} حجوزات — اضغط على اليوم المتاح لتسجيل حجز
+              الطاقة اليومية: {toArN(dailyCapacity)} حجوزات — اضغط على أي يوم قادم لعرض تفاصيله وإدارته
             </p>
           </div>
           <div className="flex rounded-lg border border-border overflow-hidden text-xs self-start md:self-auto">
@@ -10310,8 +10512,12 @@ function ServiceCalendarBookingsTab() {
         <div className="flex gap-3 flex-wrap text-xs text-muted-foreground items-center rounded-xl border border-border bg-muted/30 px-3 py-2.5">
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-100 border border-emerald-300 inline-block" /> متاح</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-100 border border-amber-300 inline-block" /> محجوز جزئياً</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-100 border border-red-300 inline-block" /> مغلق أو مكتمل</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-100 border border-red-300 inline-block" /> مكتمل</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-200 border border-slate-400 inline-block" /> مغلق</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-primary/20 border border-primary inline-block" /> اليوم</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" /> مؤكد</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> معلّق</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> ملغي</span>
           <button type="button" onClick={() => setShowBlockDialog(true)}
             className="ms-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors border border-border text-muted-foreground hover:border-red-400 hover:text-red-500">
             <Lock className="w-3 h-3" />إغلاق أيام
@@ -10333,28 +10539,18 @@ function ServiceCalendarBookingsTab() {
               const isToday = ds === todayStr;
               const isPast  = ds < todayStr;
               const gregorianDay = calendarDay.date.getDate();
+              const cellAppointments = appointments.filter((appointment) => appointment.dateStr === ds);
+              const hasConfirmed = cellAppointments.some((appointment) => appointment.status === "confirmed");
+              const hasPending = cellAppointments.some((appointment) => appointment.status === "pending");
+              const hasCancelled = cellAppointments.some((appointment) => appointment.status === "cancelled");
               const primaryDay = calendarType === "hijri" ? calendarDay.hijriDay : gregorianDay;
               const secondaryDay = calendarType === "hijri" ? gregorianDay : calendarDay.hijriDay;
               return (
                 <button key={ds} type="button"
                   onClick={() => {
                     if (isPast) return;
-                    if (blocked) {
-                      setUnblockDay(ds);
-                    } else if (full) {
-                      toast({
-                        title: "اليوم مكتمل الحجوزات",
-                        description: `المتبقي: ٠ — تم تسجيل ${toArN(apptCnt)} من ${toArN(dailyCapacity)} حجوزات.`,
-                        variant: "destructive",
-                      });
-                    } else {
-                      setEditingAppointmentId(null);
-                      setForm({ ...emptyForm, dateStr: ds });
-                      setPickYear(calendarDay.date.getFullYear());
-                      setPickMonth(calendarDay.date.getMonth());
-                      setPickerOpen(false);
-                      revealBookingForm();
-                    }
+                    setOpenServiceMessageMenuId(null);
+                    setSummaryDate(ds);
                   }}
                   disabled={isPast || togglingDate === ds}
                   data-testid={`service-calendar-day-${ds}`}
@@ -10364,11 +10560,13 @@ function ServiceCalendarBookingsTab() {
                   className={[
                     "flex flex-col items-center justify-start pt-1.5 pb-1 px-0.5 w-full",
                     "transition-colors focus:outline-none focus:z-10 focus:ring-2 focus:ring-inset focus:ring-primary/60",
-                    "min-h-[76px] relative",
+                    "min-h-[88px] relative",
                     isPast
                       ? "bg-background/60 text-muted-foreground/40 cursor-default"
-                      : blocked || full
-                        ? "bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 hover:bg-red-200"
+                      : blocked
+                        ? "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-300"
+                        : full
+                          ? "bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 hover:bg-red-200"
                         : hasAppt
                           ? "bg-amber-50 dark:bg-amber-900/20 text-foreground hover:bg-amber-100"
                           : isToday
@@ -10382,7 +10580,9 @@ function ServiceCalendarBookingsTab() {
                     {toArN(secondaryDay)} {calendarType === "hijri" ? "م" : "هـ"}
                   </span>
                   <span className={`mt-1 text-[9px] font-bold rounded-full px-1.5 py-0.5 ${
-                    blocked || full
+                    blocked
+                      ? "bg-slate-300/80 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                      : full
                       ? "bg-red-200/80 text-red-700 dark:bg-red-900/70 dark:text-red-200"
                       : hasAppt
                         ? "bg-amber-200/80 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
@@ -10390,6 +10590,13 @@ function ServiceCalendarBookingsTab() {
                   }`}>
                     {blocked ? "مغلق" : full ? "مكتمل" : `متبقي ${toArN(remaining)}`}
                   </span>
+                  {cellAppointments.length > 0 && (
+                    <span className="mt-1 flex items-center justify-center gap-1" aria-hidden="true">
+                      {hasConfirmed && <span className="w-2 h-2 rounded-full bg-green-500" />}
+                      {hasPending && <span className="w-2 h-2 rounded-full bg-amber-500" />}
+                      {hasCancelled && <span className="w-2 h-2 rounded-full bg-red-500" />}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -10408,6 +10615,301 @@ function ServiceCalendarBookingsTab() {
           </div>
         </div>
       </div>
+
+      {/* ── DAY DETAILS DIALOG ── */}
+      {summaryDate && (() => {
+        const dual = formatDualDate(summaryDate);
+        const isPastSummary = summaryDate < todayStr;
+        const isFullSummary = summaryActiveAppointments.length >= dailyCapacity;
+        return (
+          <Dialog
+            open
+            onOpenChange={(open) => {
+              if (!open && !updatingAppointmentId && !reviewSendingId) {
+                setOpenServiceMessageMenuId(null);
+                setSummaryDate(null);
+              }
+            }}
+          >
+            <DialogContent
+              dir="rtl"
+              className="max-w-3xl max-h-[92vh] overflow-y-auto"
+              data-testid="service-day-details-dialog"
+            >
+              <DialogHeader>
+                <DialogTitle className="text-right flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5 text-primary" />
+                  تفاصيل يوم الخدمة
+                </DialogTitle>
+                <DialogDescription className="text-right">
+                  <span className="font-bold text-foreground">{dual.hijri} هـ</span>
+                  <span className="mx-2">—</span>
+                  <span>{dual.gregorian} م</span>
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { label: "الطاقة اليومية", value: dailyCapacity, tone: "text-foreground" },
+                  { label: "الحجوزات النشطة", value: summaryActiveAppointments.length, tone: "text-amber-700 dark:text-amber-400" },
+                  { label: "المتبقي", value: summaryBlocked ? 0 : summaryRemaining, tone: summaryRemaining > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600" },
+                  { label: "حالة اليوم", value: summaryBlocked ? "مغلق" : isFullSummary ? "مكتمل" : "متاح", tone: summaryBlocked || isFullSummary ? "text-red-600" : "text-emerald-700 dark:text-emerald-400" },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-center">
+                    <p className={`text-base font-extrabold ${item.tone}`}>
+                      {typeof item.value === "number" ? toArN(item.value) : item.value}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{item.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {summaryAppointments.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-center">
+                  <Calendar className="w-9 h-9 mx-auto text-muted-foreground/40 mb-3" />
+                  <p className="font-bold text-foreground">
+                    {summaryBlocked ? "هذا اليوم مغلق للحجوزات" : "لا توجد حجوزات في هذا اليوم"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {summaryBlocked ? "يمكنك إتاحته من زر إدارة اليوم أدناه." : `يمكن تسجيل ${toArN(summaryRemaining)} حجوزات حسب الطاقة اليومية.`}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {summaryAppointments.map((appointment) => {
+                    const total = Number(appointment.amount ?? 0);
+                    const deposit = Number(appointment.deposit ?? 0);
+                    const remaining = Math.max(0, total - deposit);
+                    const whatsappPhone = normalizeServiceWhatsAppPhone(appointment.clientPhone);
+                    const templates = serviceMessageTemplates(appointment);
+                    const isUpdating = updatingAppointmentId === appointment.id;
+                    return (
+                      <div
+                        key={appointment.id}
+                        className={`rounded-2xl border p-4 space-y-3 ${
+                          appointment.status === "cancelled"
+                            ? "border-red-200 bg-red-50/40 dark:border-red-900 dark:bg-red-950/10"
+                            : appointment.status === "pending"
+                              ? "border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/10"
+                              : "border-emerald-200 bg-emerald-50/30 dark:border-emerald-900 dark:bg-emerald-950/10"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div className="min-w-0">
+                            <p className="font-extrabold text-foreground">{appointment.clientName}</p>
+                            {appointment.clientPhone ? (
+                              <a
+                                href={`https://wa.me/${whatsappPhone}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+                                dir="ltr"
+                              >
+                                <Phone className="w-3 h-3" />
+                                {toAr(appointment.clientPhone)}
+                              </a>
+                            ) : (
+                              <p className="text-xs text-muted-foreground mt-1">لا يوجد رقم تواصل</p>
+                            )}
+                          </div>
+                          <span className={`inline-flex text-xs px-2.5 py-1 rounded-full font-bold ${statusBadge[appointment.status] ?? "bg-muted text-muted-foreground"}`}>
+                            {statusLabel[appointment.status] ?? appointment.status}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                          <div className="rounded-xl border border-border/60 bg-background/80 p-2.5">
+                            <p className="text-muted-foreground">المبلغ الإجمالي</p>
+                            <p className="font-bold mt-1">{serviceReceiptMoney(total)}</p>
+                          </div>
+                          <div className="rounded-xl border border-border/60 bg-background/80 p-2.5">
+                            <p className="text-muted-foreground">العربون</p>
+                            <p className="font-bold mt-1">{serviceReceiptMoney(deposit)}</p>
+                          </div>
+                          <div className="rounded-xl border border-border/60 bg-background/80 p-2.5">
+                            <p className="text-muted-foreground">المتبقي</p>
+                            <p className="font-bold mt-1">{serviceReceiptMoney(remaining)}</p>
+                          </div>
+                          <div className="rounded-xl border border-border/60 bg-background/80 p-2.5">
+                            <p className="text-muted-foreground">مصدر الحجز</p>
+                            <p className="font-bold mt-1">{SOURCE_LABELS[appointment.source] ?? appointment.source ?? "غير محدد"}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 text-[11px]">
+                          <span className="rounded-full border border-border bg-background px-2.5 py-1">
+                            {servicePaymentMethodLabel(appointment.paymentMethod)}
+                          </span>
+                          {appointment.paymentMethod === "cash" && deposit > 0 ? (
+                            <span className={`rounded-full border px-2.5 py-1 font-semibold ${
+                              appointment.cashDeposited
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-400"
+                                : "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-400"
+                            }`}>
+                              {appointment.cashDeposited ? "أُودع النقد في البنك" : "النقد لم يُودع بعد"}
+                            </span>
+                          ) : (
+                            <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-semibold text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-400">
+                              {deposit > 0 ? "دفعة إلكترونية" : "لا توجد دفعة مسجلة"}
+                            </span>
+                          )}
+                          <span className={`rounded-full border px-2.5 py-1 font-semibold ${
+                            appointment.contractSigned
+                              ? "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-400"
+                              : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300"
+                          }`}>
+                            {appointment.contractSigned ? "العقد موقّع" : "العقد غير موقّع"}
+                          </span>
+                        </div>
+
+                        {(appointment.serviceAddress || appointment.duration || appointment.notes) && (
+                          <div className="rounded-xl bg-background/70 border border-border/50 p-3 space-y-1.5 text-xs">
+                            {appointment.serviceAddress && <p className="flex items-start gap-1.5"><MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />{appointment.serviceAddress}</p>}
+                            {appointment.duration && <p className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />{appointment.duration}</p>}
+                            {appointment.notes && <p className="text-muted-foreground">{appointment.notes}</p>}
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-2 pt-1 border-t border-border/50">
+                          <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs gap-1" onClick={() => setReceiptAppointment(appointment)}>
+                            <Receipt className="w-3.5 h-3.5" />الإيصال
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 rounded-lg text-xs gap-1"
+                            onClick={() => {
+                              setSummaryDate(null);
+                              startEditingAppointment(appointment);
+                            }}
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />تعديل
+                          </Button>
+                          {appointment.status === "pending" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={cancellingId === appointment.id}
+                              className="h-8 rounded-lg text-xs gap-1 text-green-700"
+                              onClick={() => handleStatusChange(appointment.id, "confirmed")}
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />تأكيد
+                            </Button>
+                          )}
+                          {appointment.status !== "cancelled" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={isUpdating}
+                                className="h-8 rounded-lg text-xs gap-1 text-violet-700"
+                                onClick={() => updateServiceAppointmentFlags(appointment, { contractSigned: !appointment.contractSigned })}
+                              >
+                                <ScrollText className="w-3.5 h-3.5" />
+                                {appointment.contractSigned ? "إلغاء اعتماد التوقيع" : "تحديد كموقّع"}
+                              </Button>
+                              {appointment.paymentMethod === "cash" && deposit > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isUpdating}
+                                  className="h-8 rounded-lg text-xs gap-1 text-orange-700"
+                                  onClick={() => updateServiceAppointmentFlags(appointment, { cashDeposited: !appointment.cashDeposited })}
+                                >
+                                  <Banknote className="w-3.5 h-3.5" />
+                                  {appointment.cashDeposited ? "إرجاعه كغير مودع" : "تأكيد الإيداع"}
+                                </Button>
+                              )}
+                            </>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={reviewSendingId === appointment.id || reviewSentIds.has(appointment.id)}
+                            className="h-8 rounded-lg text-xs gap-1 text-teal-700"
+                            onClick={() => sendServiceReviewRequest(appointment)}
+                          >
+                            {reviewSendingId === appointment.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Star className="w-3.5 h-3.5" />}
+                            {reviewSentIds.has(appointment.id) ? "تم فتح رابط التقييم" : "إرسال رابط التقييم"}
+                          </Button>
+                          <div className="relative">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 rounded-lg text-xs gap-1 text-green-700"
+                              onClick={() => setOpenServiceMessageMenuId(openServiceMessageMenuId === appointment.id ? null : appointment.id)}
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />رسالة مخصصة
+                              <ChevronDown className="w-3 h-3" />
+                            </Button>
+                            {openServiceMessageMenuId === appointment.id && (
+                              <div className="absolute right-0 top-full mt-1 z-50 min-w-60 rounded-xl border border-border bg-card shadow-xl p-1.5">
+                                {templates.length > 0 ? templates.map((template) => (
+                                  <button
+                                    key={template.id}
+                                    type="button"
+                                    onClick={() => sendServiceCustomMessage(appointment, template.body)}
+                                    className="w-full text-right rounded-lg px-3 py-2 text-xs font-medium hover:bg-muted transition-colors"
+                                  >
+                                    {template.title}
+                                  </button>
+                                )) : (
+                                  <p className="px-3 py-2 text-xs text-muted-foreground">فعّل واتساب أو أضف قالباً من إعدادات الرسائل.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          {appointment.status !== "cancelled" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={cancellingId === appointment.id}
+                              className="h-8 rounded-lg text-xs gap-1 text-red-600"
+                              onClick={() => handleStatusChange(appointment.id, "cancelled")}
+                            >
+                              <XCircle className="w-3.5 h-3.5" />إلغاء الحجز
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {!isPastSummary && (
+                <div className="rounded-2xl border border-border bg-muted/20 p-3 space-y-2">
+                  <p className="text-xs font-bold text-foreground">إدارة اليوم</p>
+                  <div className="flex flex-wrap gap-2">
+                    {!summaryBlocked && !isFullSummary && (
+                      <Button
+                        size="sm"
+                        className="rounded-xl gap-1.5"
+                        onClick={() => createBookingForDate(summaryDate)}
+                      >
+                        <Plus className="w-4 h-4" />إضافة حجز
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={togglingDate === summaryDate || (!summaryBlocked && summaryActiveAppointments.length > 0)}
+                      className={`rounded-xl gap-1.5 ${summaryBlocked ? "text-green-700" : "text-red-600"}`}
+                      onClick={() => toggleDate(summaryDate)}
+                    >
+                      {togglingDate === summaryDate ? <Loader2 className="w-4 h-4 animate-spin" /> : summaryBlocked ? <CheckCircle className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                      {summaryBlocked ? "إتاحة اليوم" : "إغلاق اليوم"}
+                    </Button>
+                  </div>
+                  {!summaryBlocked && summaryActiveAppointments.length > 0 && (
+                    <p className="text-[11px] text-muted-foreground">لا يمكن إغلاق اليوم قبل إلغاء أو نقل جميع حجوزاته النشطة.</p>
+                  )}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* ── BOOKING DIALOG ── */}
       <Button onClick={revealBookingForm} variant="outline" className="gap-2 rounded-xl w-full md:w-auto">

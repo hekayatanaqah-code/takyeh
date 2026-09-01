@@ -707,6 +707,8 @@ export const serviceAppointmentsTable = pgTable("service_appointments", {
   source: text("source").notNull().default("external"),
   paymentMethod: paymentMethodEnum("payment_method").default("cash"),
   paymentReceiptUrl: text("payment_receipt_url"),
+  cashDeposited: boolean("cash_deposited").notNull().default(false),
+  contractSigned: boolean("contract_signed").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   cancelReason: text("cancel_reason"),

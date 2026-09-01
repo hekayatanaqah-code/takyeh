@@ -429,10 +429,13 @@ router.post("/my/approved/:id/review-invite", requireAuth, async (req: any, res)
     .where(and(eq(serviceProvidersTable.id, providerId), eq(serviceProvidersTable.ownerId, req.user.id)))
     .limit(1);
   if (!provider) return res.status(404).json({ error: "المزود غير موجود" });
+  const parsed = z.object({ guestName: z.string().trim().max(255).optional().nullable() }).safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة" });
   const token = randomBytes(5).toString("hex");
   const [invitation] = await db.insert(serviceReviewInvitationsTable).values({
     token,
     providerId,
+    guestName: parsed.data.guestName || null,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
   }).returning();
   return res.status(201).json({ token: invitation.token, providerName: provider.businessName });
@@ -477,16 +480,45 @@ router.post("/my/approved/:id/blocked-dates", requireAuth, async (req: any, res)
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "تاريخ غير صحيح" });
 
-  // upsert — ignore if date already blocked
-  const existing = await db.select().from(serviceBlockedDatesTable)
-    .where(and(eq(serviceBlockedDatesTable.providerId, providerId), eq(serviceBlockedDatesTable.dateStr, parsed.data.dateStr)))
-    .limit(1);
-  if (existing.length > 0) return res.json(existing[0]);
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(${providerId}, hashtext(${parsed.data.dateStr}))`);
 
-  const [row] = await db.insert(serviceBlockedDatesTable).values({
-    providerId, ownerId: req.user.id, dateStr: parsed.data.dateStr, reason: parsed.data.reason ?? null,
-  }).returning();
-  return res.status(201).json(row);
+    const [activeAppointment] = await tx.select({ id: serviceAppointmentsTable.id })
+      .from(serviceAppointmentsTable)
+      .where(and(
+        eq(serviceAppointmentsTable.providerId, providerId),
+        eq(serviceAppointmentsTable.ownerId, req.user.id),
+        eq(serviceAppointmentsTable.dateStr, parsed.data.dateStr),
+        ne(serviceAppointmentsTable.status, "cancelled"),
+      ))
+      .limit(1);
+    if (activeAppointment) return { activeAppointment: true as const };
+
+    const [existing] = await tx.select().from(serviceBlockedDatesTable)
+      .where(and(
+        eq(serviceBlockedDatesTable.providerId, providerId),
+        eq(serviceBlockedDatesTable.dateStr, parsed.data.dateStr),
+      ))
+      .limit(1);
+    if (existing) return { activeAppointment: false as const, created: false as const, row: existing };
+
+    const [row] = await tx.insert(serviceBlockedDatesTable).values({
+      providerId,
+      ownerId: req.user.id,
+      dateStr: parsed.data.dateStr,
+      reason: parsed.data.reason ?? null,
+    }).returning();
+    return { activeAppointment: false as const, created: true as const, row };
+  });
+
+  if (result.activeAppointment) {
+    res.status(409).json({
+      error: "لا يمكن إغلاق يوم يحتوي على حجوزات نشطة",
+      code: "ACTIVE_APPOINTMENTS_ON_DATE",
+    });
+    return;
+  }
+  return res.status(result.created ? 201 : 200).json(result.row);
 });
 
 /* DELETE /my/approved/:id/blocked-dates/:dateId */
@@ -592,6 +624,8 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
     source: z.enum(["platform", "whatsapp", "phone", "walk_in", "external"]).default("external"),
     paymentMethod: z.enum(["cash", "transfer", "pos"]).default("cash"),
     paymentReceiptUrl: z.string().optional().nullable(),
+    cashDeposited: z.boolean().optional().default(false),
+    contractSigned: z.boolean().optional().default(false),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors: parsed.error.flatten().fieldErrors });
@@ -600,6 +634,16 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
     if (parsed.data.status !== "cancelled") {
       // Serialize all capacity-consuming writes for this provider and date.
       await tx.execute(sql`select pg_advisory_xact_lock(${providerId}, hashtext(${parsed.data.dateStr}))`);
+      const [blockedDate] = await tx
+        .select({ id: serviceBlockedDatesTable.id })
+        .from(serviceBlockedDatesTable)
+        .where(and(
+          eq(serviceBlockedDatesTable.providerId, providerId),
+          eq(serviceBlockedDatesTable.dateStr, parsed.data.dateStr),
+        ))
+        .limit(1);
+      if (blockedDate) return { blocked: true as const };
+
       const [capacityRow] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(serviceAppointmentsTable)
@@ -609,7 +653,7 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
           ne(serviceAppointmentsTable.status, "cancelled"),
         ));
       const dailyCapacity = Math.max(1, provider.dailyCapacity ?? 1);
-      if ((capacityRow?.count ?? 0) >= dailyCapacity) return { full: true as const, dailyCapacity };
+      if ((capacityRow?.count ?? 0) >= dailyCapacity) return { blocked: false as const, full: true as const, dailyCapacity };
     }
 
     const [row] = await tx.insert(serviceAppointmentsTable).values({
@@ -619,9 +663,15 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
       clientIdNumber: provider.requiresInsurance ? (parsed.data.clientIdNumber || null) : null,
       insuranceAmount: provider.requiresInsurance ? provider.insuranceAmount : null,
     }).returning();
-    return { full: false as const, row };
+    return { blocked: false as const, full: false as const, row };
   });
 
+  if (result.blocked) {
+    return res.status(409).json({
+      error: "هذا اليوم مغلق وغير متاح للحجز",
+      code: "SERVICE_DATE_BLOCKED",
+    });
+  }
   if (result.full) {
     return res.status(409).json({
       error: "اكتملت الطاقة الاستيعابية لهذا اليوم",
@@ -666,6 +716,8 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
     source: z.enum(["platform", "whatsapp", "phone", "walk_in", "external"]).optional(),
     paymentMethod: z.enum(["cash", "transfer", "pos"]).optional(),
     paymentReceiptUrl: z.string().optional().nullable(),
+    cashDeposited: z.boolean().optional(),
+    contractSigned: z.boolean().optional(),
     cancelReason: z.string().optional().nullable(),
     insuranceStatus: z.enum(["held", "refunded", "deducted"]).optional(),
     insuranceDeductAmount: z.string().optional().nullable(),
@@ -687,6 +739,16 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
   const result = await db.transaction(async (tx) => {
     if (consumesNewCapacity) {
       await tx.execute(sql`select pg_advisory_xact_lock(${providerId}, hashtext(${targetDate}))`);
+      const [blockedDate] = await tx
+        .select({ id: serviceBlockedDatesTable.id })
+        .from(serviceBlockedDatesTable)
+        .where(and(
+          eq(serviceBlockedDatesTable.providerId, providerId),
+          eq(serviceBlockedDatesTable.dateStr, targetDate),
+        ))
+        .limit(1);
+      if (blockedDate) return { blocked: true as const };
+
       const [capacityRow] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(serviceAppointmentsTable)
@@ -697,7 +759,7 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
           ne(serviceAppointmentsTable.id, apptId),
         ));
       const dailyCapacity = Math.max(1, provider.dailyCapacity ?? 1);
-      if ((capacityRow?.count ?? 0) >= dailyCapacity) return { full: true as const, dailyCapacity };
+      if ((capacityRow?.count ?? 0) >= dailyCapacity) return { blocked: false as const, full: true as const, dailyCapacity };
     }
 
     const [updated] = await tx
@@ -709,10 +771,16 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
         eq(serviceAppointmentsTable.ownerId, req.user.id),
       ))
       .returning();
-    return { full: false as const, missingProvider: false as const, updated };
+    return { blocked: false as const, full: false as const, missingProvider: false as const, updated };
   });
 
   if ("missingProvider" in result && result.missingProvider) return res.status(404).json({ error: "المزود غير موجود" });
+  if ("blocked" in result && result.blocked) {
+    return res.status(409).json({
+      error: "هذا اليوم مغلق وغير متاح للحجز",
+      code: "SERVICE_DATE_BLOCKED",
+    });
+  }
   if ("full" in result && result.full) {
     return res.status(409).json({
       error: "اكتملت الطاقة الاستيعابية لهذا اليوم",
