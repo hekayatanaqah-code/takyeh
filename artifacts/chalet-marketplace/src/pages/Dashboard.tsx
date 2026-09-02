@@ -52,7 +52,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const toArN = (v: string | number) => String(v).replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[+d]);
 const fromArN = (v: string) => v.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[^0-9.]/g, '');
 
-function serviceDurationLabel(value: string | null | undefined) {
+function serviceDurationLabel(value: string | null | undefined, durationUnit?: string | null) {
   const raw = String(value ?? "").trim();
   if (!raw) return null;
   const normalized = raw.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(",", ".");
@@ -60,7 +60,10 @@ function serviceDurationLabel(value: string | null | undefined) {
 
   const amount = Number(normalized);
   const amountLabel = toArN(Number.isInteger(amount) ? amount : normalized);
-  const unit = amount === 1 ? "ساعة" : amount === 2 ? "ساعتان" : amount >= 3 && amount <= 10 ? "ساعات" : "ساعة";
+  const isDays = durationUnit === "days";
+  const unit = isDays
+    ? amount === 1 ? "يوم" : amount === 2 ? "يومان" : amount >= 3 && amount <= 10 ? "أيام" : "يوماً"
+    : amount === 1 ? "ساعة" : amount === 2 ? "ساعتان" : amount >= 3 && amount <= 10 ? "ساعات" : "ساعة";
   return `المدة: ${amountLabel} ${unit}`;
 }
 
@@ -9192,6 +9195,7 @@ function ServiceDetailsTab() {
         city: provider.city ?? "",
         yearsOfExperience: provider.yearsOfExperience ?? "",
         requiresInsurance: Boolean(provider.requiresInsurance),
+        requiresContract: Boolean(provider.requiresContract),
         insuranceAmount: provider.insuranceAmount == null ? "" : String(provider.insuranceAmount),
       });
       setCoverageTags(provider.coverageTags ?? []);
@@ -9394,6 +9398,16 @@ function ServiceDetailsTab() {
             />
           </div>
         )}
+      </div>
+
+      <div className="rounded-2xl border border-border bg-muted/30 p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <label className="text-sm font-bold text-foreground">عقد الخدمة</label>
+            <p className="text-xs text-muted-foreground mt-1">عند تشغيله تظهر متابعة توقيع العقد داخل بطاقات الحجوزات.</p>
+          </div>
+          <Switch checked={Boolean(form.requiresContract)} onCheckedChange={checked => setForm({ ...form, requiresContract: checked })} />
+        </div>
       </div>
 
       {/* Description */}
@@ -9758,6 +9772,9 @@ function ServiceCalendarBookingsTab() {
   const [editingAppointmentId, setEditingAppointmentId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [cancelAppointment, setCancelAppointment] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelRefundAmount, setCancelRefundAmount] = useState("");
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
   const [updatingAppointmentId, setUpdatingAppointmentId] = useState<number | null>(null);
   const [reviewSendingId, setReviewSendingId] = useState<number | null>(null);
@@ -9774,6 +9791,7 @@ function ServiceCalendarBookingsTab() {
     clientIdNumber: "",
     dateStr: "",
     duration: "",
+    durationUnit: "hours",
     status: "confirmed",
     notes: "",
     amount: "",
@@ -9782,6 +9800,7 @@ function ServiceCalendarBookingsTab() {
     source: "platform",
     paymentMethod: "cash",
     paymentReceiptUrl: "",
+    editReason: "",
   };
   const [form, setForm] = useState({ ...emptyForm });
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -9906,6 +9925,10 @@ function ServiceCalendarBookingsTab() {
       toast({ title: "اسم العميل ورقم الجوال والتاريخ مطلوبة", variant: "destructive" });
       return;
     }
+    if (editingAppointmentId && !form.editReason.trim()) {
+      toast({ title: "سبب التعديل مطلوب", description: "اكتب سبب تعديل أو إعادة جدولة الحجز.", variant: "destructive" });
+      return;
+    }
     const activeCount = apptDays.get(form.dateStr) ?? 0;
     const editingAppointment = editingAppointmentId
       ? appointments.find((appointment) => appointment.id === editingAppointmentId)
@@ -9968,6 +9991,7 @@ function ServiceCalendarBookingsTab() {
       clientIdNumber: appointment.clientIdNumber ?? "",
       dateStr: appointment.dateStr ?? "",
       duration: appointment.duration ?? "",
+      durationUnit: appointment.durationUnit ?? "hours",
       status: appointment.status === "cancelled" ? "pending" : appointment.status,
       notes: appointment.notes ?? "",
       amount: appointment.amount ?? "",
@@ -9976,6 +10000,7 @@ function ServiceCalendarBookingsTab() {
       source: appointment.source ?? "external",
       paymentMethod: appointment.paymentMethod ?? "cash",
       paymentReceiptUrl: appointment.paymentReceiptUrl ?? "",
+      editReason: "",
     });
     if (appointment.dateStr) {
       const [year, month] = appointment.dateStr.split("-").map(Number);
@@ -9991,7 +10016,9 @@ function ServiceCalendarBookingsTab() {
     try {
       const r = await apiFetch(`/providers/my/approved/${providerId}/appointments/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(status === "cancelled"
+          ? { status, cancelReason: cancelReason.trim(), cancelRefundAmount: cancelRefundAmount || "0" }
+          : { status }),
       });
       if (!r.ok) {
         const error = await r.json().catch(() => ({})) as { error?: string };
@@ -9999,6 +10026,11 @@ function ServiceCalendarBookingsTab() {
       }
       queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
       toast({ title: status === "cancelled" ? "تم إلغاء الحجز" : "تم تأكيد الحجز" });
+      if (status === "cancelled") {
+        setCancelAppointment(null);
+        setCancelReason("");
+        setCancelRefundAmount("");
+      }
     } catch (error) {
       toast({
         title: "خطأ",
@@ -10687,7 +10719,7 @@ function ServiceCalendarBookingsTab() {
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {summaryAppointments.map((appointment) => {
                     const total = Number(appointment.amount ?? 0);
                     const deposit = Number(appointment.deposit ?? 0);
@@ -10695,7 +10727,7 @@ function ServiceCalendarBookingsTab() {
                     const whatsappPhone = normalizeServiceWhatsAppPhone(appointment.clientPhone);
                     const templates = serviceMessageTemplates(appointment);
                     const isUpdating = updatingAppointmentId === appointment.id;
-                    const durationLabel = serviceDurationLabel(appointment.duration);
+                    const durationLabel = serviceDurationLabel(appointment.duration, appointment.durationUnit);
                     return (
                       <div
                         key={appointment.id}
@@ -10766,13 +10798,13 @@ function ServiceCalendarBookingsTab() {
                               {deposit > 0 ? "دفعة إلكترونية" : "لا توجد دفعة مسجلة"}
                             </span>
                           )}
-                          <span className={`rounded-full border px-2.5 py-1 font-semibold ${
+                          {provider?.requiresContract && <span className={`rounded-full border px-2.5 py-1 font-semibold ${
                             appointment.contractSigned
                               ? "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-400"
                               : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300"
                           }`}>
                             {appointment.contractSigned ? "العقد موقّع" : "العقد غير موقّع"}
-                          </span>
+                          </span>}
                         </div>
 
                         {(appointment.serviceAddress || durationLabel || appointment.notes) && (
@@ -10809,7 +10841,7 @@ function ServiceCalendarBookingsTab() {
                               <CheckCircle className="w-3.5 h-3.5" />تأكيد
                             </Button>
                           )}
-                          {appointment.status !== "cancelled" && (
+                          {provider?.requiresContract && appointment.status !== "cancelled" && (
                             <>
                               <Button
                                 size="sm"
@@ -10878,7 +10910,7 @@ function ServiceCalendarBookingsTab() {
                               variant="ghost"
                               disabled={cancellingId === appointment.id}
                               className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-red-600"
-                              onClick={() => handleStatusChange(appointment.id, "cancelled")}
+                              onClick={() => setCancelAppointment(appointment)}
                             >
                               <XCircle className="w-3.5 h-3.5" />إلغاء الحجز
                             </Button>
@@ -11119,11 +11151,15 @@ function ServiceCalendarBookingsTab() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">المدة</label>
-              <Input
-                type="text" inputMode="decimal" lang="ar"
-                value={toAr(form.duration)}
-                onChange={e => setForm(p => ({ ...p, duration: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
-                placeholder="١ يوم / أسبوع / شهر..." className="rounded-xl" />
+              <div className="grid grid-cols-[1fr_7rem] gap-2">
+                <Input type="text" inputMode="decimal" lang="ar" value={toAr(form.duration)}
+                  onChange={e => setForm(p => ({ ...p, duration: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[^\d.]/g, "") }))}
+                  placeholder="العدد" className="rounded-xl" />
+                <Select value={form.durationUnit} onValueChange={v => setForm(p => ({ ...p, durationUnit: v }))}>
+                  <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="hours">ساعات</SelectItem><SelectItem value="days">أيام</SelectItem></SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">المبلغ الإجمالي (ر.س)</label>
@@ -11244,9 +11280,13 @@ function ServiceCalendarBookingsTab() {
             )}
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">ملاحظات</label>
-            <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="تفاصيل إضافية..." />
+            <label className="text-xs font-semibold text-muted-foreground">تفاصيل / ملاحظات الخدمة</label>
+            <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="اكتب تفاصيل تنفيذ الخدمة أو أي ملاحظات مهمة..." />
           </div>
+          {editingAppointmentId && <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">سبب التعديل / إعادة الجدولة *</label>
+            <Textarea value={form.editReason} onChange={e => setForm(p => ({ ...p, editReason: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="مثال: طلب العميل تغيير الموعد" />
+          </div>}
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={closeBookingForm} disabled={saving || receiptUploading} className="rounded-xl">إلغاء</Button>
             <Button onClick={handleSave} disabled={saving || receiptUploading} className="rounded-xl gap-2 bg-amber-500 hover:bg-amber-600 text-white">
@@ -11257,6 +11297,39 @@ function ServiceCalendarBookingsTab() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!cancelAppointment} onOpenChange={open => { if (!open && !cancellingId) setCancelAppointment(null); }}>
+        <AlertDialogContent dir="rtl" className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد إلغاء الحجز</AlertDialogTitle>
+            <AlertDialogDescription>لن يُلغى الحجز قبل تحديد السبب ومراجعة المبلغ المسترد.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">سبب الإلغاء *</label>
+              <Select value={cancelReason} onValueChange={setCancelReason}>
+                <SelectTrigger><SelectValue placeholder="اختر سبب الإلغاء" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="طلب العميل">طلب العميل</SelectItem>
+                  <SelectItem value="صيانة">صيانة</SelectItem>
+                  <SelectItem value="تعارض">تعارض</SelectItem>
+                  <SelectItem value="أخرى">أخرى</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold">المبلغ المسترد (ر.س)</label>
+              <Input inputMode="decimal" value={toAr(cancelRefundAmount)} onChange={e => setCancelRefundAmount(fromAr(e.target.value).replace(/[^\d.]/g, ""))} placeholder="٠" />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!cancellingId}>رجوع</AlertDialogCancel>
+            <AlertDialogAction disabled={!cancelReason || !!cancellingId} onClick={e => { e.preventDefault(); if (cancelAppointment) void handleStatusChange(cancelAppointment.id, "cancelled"); }} className="bg-red-600 hover:bg-red-700">
+              {cancellingId ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} تأكيد الإلغاء
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── APPOINTMENTS LIST ── */}
       <div className="space-y-3">
@@ -11324,7 +11397,7 @@ function ServiceCalendarBookingsTab() {
                   <div>
                     <p className="text-xs text-primary font-semibold">{dual.hijri} هـ</p>
                     <p className="text-xs text-muted-foreground">{dual.gregorian} م</p>
-                    {a.duration && <p className="text-[11px] text-muted-foreground mt-0.5">{a.duration}</p>}
+                    {a.duration && <p className="text-[11px] text-muted-foreground mt-0.5">{serviceDurationLabel(a.duration, a.durationUnit)}</p>}
                   </div>
                   <div className="text-xs">
                     <p className="font-bold text-foreground">
@@ -11374,7 +11447,7 @@ function ServiceCalendarBookingsTab() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleStatusChange(a.id, "cancelled")}
+                        onClick={() => setCancelAppointment(a)}
                         disabled={cancellingId === a.id}
                         className="rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs gap-1 h-8 px-2"
                       >

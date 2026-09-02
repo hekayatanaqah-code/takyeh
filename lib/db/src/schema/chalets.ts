@@ -325,6 +325,7 @@ export const serviceProviderSubmissionsTable = pgTable("service_provider_submiss
   pricingUnit: text("pricing_unit"),
   dailyCapacity: integer("daily_capacity"),
   requiresInsurance: boolean("requires_insurance").notNull().default(false),
+  requiresContract: boolean("requires_contract").notNull().default(false),
   insuranceAmount: numeric("insurance_amount", { precision: 10, scale: 2 }),
   coverageTags: text("coverage_tags").array().notNull().default([]),
   customFeatureTags: text("custom_feature_tags").array().notNull().default([]),
@@ -350,6 +351,7 @@ export const serviceProvidersTable = pgTable("service_providers", {
   pricingUnit: text("pricing_unit"),
   dailyCapacity: integer("daily_capacity"),
   requiresInsurance: boolean("requires_insurance").notNull().default(false),
+  requiresContract: boolean("requires_contract").notNull().default(false),
   insuranceAmount: numeric("insurance_amount", { precision: 10, scale: 2 }),
   coverageTags: text("coverage_tags").array().notNull().default([]),
   customFeatureTags: text("custom_feature_tags").array().notNull().default([]),
@@ -696,6 +698,7 @@ export const serviceAppointmentsTable = pgTable("service_appointments", {
   clientIdNumber: text("client_id_number"),
   dateStr: text("date_str").notNull(),
   duration: text("duration"),
+  durationUnit: text("duration_unit").notNull().default("hours"),
   status: text("status").notNull().default("confirmed"),
   notes: text("notes"),
   amount: numeric("amount", { precision: 10, scale: 2 }),
@@ -712,6 +715,8 @@ export const serviceAppointmentsTable = pgTable("service_appointments", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   cancelReason: text("cancel_reason"),
+  cancelRefundAmount: numeric("cancel_refund_amount", { precision: 10, scale: 2 }).default("0"),
+  editReason: text("edit_reason"),
 });
 export type ServiceAppointment = typeof serviceAppointmentsTable.$inferSelect;
 
