@@ -617,7 +617,7 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
 
   const schema = z.object({
     clientName: z.string().min(1),
-    clientPhone: z.string().optional().nullable(),
+    clientPhone: z.string().trim().min(1, "رقم الجوال مطلوب"),
     serviceAddress: z.string().optional().nullable(),
     clientIdNumber: z.string().optional().nullable(),
     dateStr: canonicalGregorianDate,
@@ -713,7 +713,7 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
 
   const schema = z.object({
     clientName: z.string().min(1).optional(),
-    clientPhone: z.string().optional().nullable(),
+    clientPhone: z.string().trim().min(1, "رقم الجوال مطلوب").optional(),
     serviceAddress: z.string().optional().nullable(),
     clientIdNumber: z.string().optional().nullable(),
     dateStr: canonicalGregorianDate.optional(),

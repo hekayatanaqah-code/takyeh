@@ -79,7 +79,7 @@ async function createProvider(dailyCapacity = 1): Promise<number> {
 
 async function requestAppointment(
   targetProviderId: number,
-  method: "POST" | "PATCH" | "DELETE",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   pathSuffix = "",
   body?: Record<string, unknown>,
 ): Promise<{ response: Response; json: any }> {
@@ -123,6 +123,7 @@ function appointmentBody(
 ) {
   return {
     clientName: "عميل الاختبار",
+    clientPhone: "0500000001",
     dateStr,
     ...overrides,
   };
@@ -186,6 +187,15 @@ describe("service appointment capacity and isolation", () => {
       .set({ requiresInsurance: true, insuranceAmount: "500" })
       .where(eq(serviceProvidersTable.id, providerId));
 
+    const missingPhone = await requestAppointment(
+      providerId,
+      "POST",
+      "",
+      appointmentBody(TEST_DATES.available, { clientPhone: " " }),
+    );
+    assert.equal(missingPhone.response.status, 422);
+    assert.equal(missingPhone.json.fieldErrors?.clientPhone?.[0], "رقم الجوال مطلوب");
+
     const created = await requestAppointment(
       providerId,
       "POST",
@@ -202,6 +212,37 @@ describe("service appointment capacity and isolation", () => {
     assert.equal(created.json.serviceAddress, "قاعة النخيل - حي الريان");
     assert.equal(created.json.clientIdNumber, "1098765432");
     assert.equal(created.json.insuranceAmount, "500.00");
+
+    for (const invalidPhone of [" ", null]) {
+      const rejectedUpdate = await requestAppointment(
+        providerId,
+        "PATCH",
+        `/${created.json.id}`,
+        { clientPhone: invalidPhone },
+      );
+      assert.equal(rejectedUpdate.response.status, 422);
+    }
+
+    const unrelatedUpdate = await requestAppointment(
+      providerId,
+      "PATCH",
+      `/${created.json.id}`,
+      { notes: "ملاحظة لا تغيّر بيانات الإيصال" },
+    );
+    assert.equal(unrelatedUpdate.response.status, 200);
+    assert.equal(unrelatedUpdate.json.clientPhone, "0501234567");
+    assert.equal(unrelatedUpdate.json.serviceAddress, "قاعة النخيل - حي الريان");
+    assert.equal(unrelatedUpdate.json.clientIdNumber, "1098765432");
+
+    const listed = await requestAppointment(providerId, "GET");
+    assert.equal(listed.response.status, 200);
+    const listedAppointment = listed.json.find(
+      (appointment: { id: number }) => appointment.id === created.json.id,
+    );
+    assert.equal(listedAppointment.clientPhone, "0501234567");
+    assert.equal(listedAppointment.serviceAddress, "قاعة النخيل - حي الريان");
+    assert.equal(listedAppointment.clientIdNumber, "1098765432");
+    assert.equal(listedAppointment.notes, "ملاحظة لا تغيّر بيانات الإيصال");
 
     await db
       .update(serviceProvidersTable)

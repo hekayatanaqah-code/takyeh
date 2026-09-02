@@ -27,6 +27,14 @@ import { HijriDatePicker } from "@/components/HijriDatePicker";
 import { formatDualDate, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents, getHijriMonthGregorianRange } from "@/lib/hijri";
 import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
 import {
+  getServiceClientIdField,
+  getServiceReceiptFinancialSummary,
+  servicePaymentMethodLabel,
+  serviceReceiptMoney,
+  serviceReceiptNumber,
+  shouldShowServiceClientId,
+} from "@/lib/serviceReceipt";
+import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -10198,11 +10206,6 @@ function ServiceCalendarBookingsTab() {
     }
   }
 
-  function serviceReceiptNumber(appointment: any) {
-    const numericId = Number(appointment?.id);
-    return toArN(Number.isFinite(numericId) ? String(Math.max(0, Math.trunc(numericId))) : "0");
-  }
-
   function serviceReceiptDocumentTitle(appointment: any) {
     return `إيصال_حجز_${serviceReceiptNumber(appointment)}`;
   }
@@ -10216,10 +10219,6 @@ function ServiceCalendarBookingsTab() {
     const baseName = serviceReceiptPdfFileName(appointment).replace(/\.pdf$/, "");
     const exportNonce = ++receiptPdfExportNonceRef.current;
     return `${baseName}-${Date.now()}-${exportNonce}.pdf`;
-  }
-
-  function servicePaymentMethodLabel(method?: string | null) {
-    return method === "transfer" ? "حوالة بنكية" : method === "pos" ? "شبكة / نقاط بيع" : "نقداً";
   }
 
   function serviceReceiptIssueDate(appointment: any) {
@@ -10256,15 +10255,6 @@ function ServiceCalendarBookingsTab() {
     if (digits.startsWith("0")) return `966${digits.slice(1)}`;
     if (digits.startsWith("5")) return `966${digits}`;
     return digits;
-  }
-
-  function serviceReceiptMoney(value?: string | number | null) {
-    const formatted = Number(value ?? 0).toLocaleString("ar-SA-u-nu-arab", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-      useGrouping: true,
-    });
-    return `${toAr(formatted)} ر.س`;
   }
 
   function getRenderedServiceReceiptElement() {
@@ -10306,9 +10296,7 @@ function ServiceCalendarBookingsTab() {
     }
     const clientName = toAr(receiptAppointment.clientName || "عميل");
     const serviceName = toAr(provider?.businessName ?? "الخدمة");
-    const total = Number(receiptAppointment.amount ?? 0);
-    const deposit = Number(receiptAppointment.deposit ?? 0);
-    const remaining = Math.max(0, total - deposit);
+    const { total, deposit, remaining } = getServiceReceiptFinancialSummary(receiptAppointment);
     const serviceDate = serviceReceiptServiceDate(receiptAppointment.dateStr);
     const serviceHijriDate = serviceDate.hijri.replace(/\sهـ$/, "");
     const serviceGregorianDate = serviceDate.gregorian.replace(/\sم$/, "");
@@ -11080,7 +11068,7 @@ function ServiceCalendarBookingsTab() {
                 className="rounded-xl"
               />
             </div>
-            {provider?.requiresInsurance && (
+            {shouldShowServiceClientId(provider?.requiresInsurance === true) && (
               <div className="space-y-1.5 md:col-span-2">
                 <label className="text-xs font-semibold text-muted-foreground">
                   رقم الهوية / الإقامة <span className="font-normal">(اختياري)</span>
@@ -11543,11 +11531,13 @@ function ServiceCalendarBookingsTab() {
 
       {/* Service receipt preview */}
       {receiptAppointment && (() => {
-        const total = Number(receiptAppointment.amount ?? 0);
-        const deposit = Number(receiptAppointment.deposit ?? 0);
-        const remaining = Math.max(0, total - deposit);
+        const { total, deposit, remaining, paymentMethodLabel } = getServiceReceiptFinancialSummary(receiptAppointment);
         const serviceDate = serviceReceiptServiceDate(receiptAppointment.dateStr);
         const issueDate = serviceReceiptIssueDate(receiptAppointment);
+        const identityField = getServiceClientIdField(
+          provider?.requiresInsurance === true,
+          receiptAppointment.clientIdNumber,
+        );
         return (
           <Dialog open onOpenChange={(open) => { if (!open && !receiptWhatsAppLoading) setReceiptAppointment(null); }}>
             <DialogContent
@@ -11608,7 +11598,7 @@ function ServiceCalendarBookingsTab() {
                         {[
                           ["اسم العميل", receiptAppointment.clientName],
                           ["رقم الجوال", receiptAppointment.clientPhone ? toAr(receiptAppointment.clientPhone) : "—"],
-                          ...(receiptAppointment.clientIdNumber ? [["رقم الهوية / الإقامة", toAr(receiptAppointment.clientIdNumber)]] : []),
+                          ...(identityField ? [[identityField.label, toAr(identityField.value)]] : []),
                         ].map(([label, value]) => (
                           <div key={label} className="bg-white p-4 min-h-[4.25rem] flex flex-col justify-center text-right">
                             <span className="block text-[11px] text-[#777066] mb-1.5">{label}</span>
@@ -11646,7 +11636,7 @@ function ServiceCalendarBookingsTab() {
                           ["المبلغ الإجمالي", serviceReceiptMoney(total), false],
                           ["العربون المدفوع", serviceReceiptMoney(deposit), false],
                           ["المتبقي", serviceReceiptMoney(remaining), true],
-                          ["طريقة الدفع", servicePaymentMethodLabel(receiptAppointment.paymentMethod), false],
+                          ["طريقة الدفع", paymentMethodLabel, false],
                         ].map(([label, value, highlighted]) => (
                           <div
                             key={String(label)}
