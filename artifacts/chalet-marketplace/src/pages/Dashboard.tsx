@@ -9174,6 +9174,7 @@ function ServiceDetailsTab() {
   const [photoCaptions, setPhotoCaptions] = useState<string[]>([]);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
 
   const { data: provider, isLoading } = useQuery({
     queryKey: ["service-provider-detail", providerId],
@@ -9196,6 +9197,8 @@ function ServiceDetailsTab() {
         yearsOfExperience: provider.yearsOfExperience ?? "",
         requiresInsurance: Boolean(provider.requiresInsurance),
         requiresContract: Boolean(provider.requiresContract),
+        contractText: provider.contractText ?? "",
+        includeElectronicSignature: provider.includeElectronicSignature !== false,
         insuranceAmount: provider.insuranceAmount == null ? "" : String(provider.insuranceAmount),
       });
       setCoverageTags(provider.coverageTags ?? []);
@@ -9409,6 +9412,43 @@ function ServiceDetailsTab() {
           <Switch checked={Boolean(form.requiresContract)} onCheckedChange={checked => setForm({ ...form, requiresContract: checked })} />
         </div>
       </div>
+      {form.requiresContract && (
+        <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4 space-y-4">
+          <div>
+            <label className="text-sm font-bold text-foreground">نص العقد والشروط والأحكام</label>
+            <p className="text-xs text-muted-foreground mt-1">سيظهر هذا النص في نموذج العقد المرتبط بحجوزات هذه الخدمة.</p>
+          </div>
+          <Textarea
+            value={form.contractText}
+            onChange={e => setForm({ ...form, contractText: e.target.value })}
+            rows={8}
+            className="rounded-xl resize-y bg-background"
+            placeholder="اكتب الشروط والالتزامات وحقوق الطرفين..."
+          />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <label className="text-sm font-semibold">تضمين التوقيع الإلكتروني</label>
+              <p className="text-xs text-muted-foreground mt-1">يسمح للعميل بتوقيع العقد إلكترونياً.</p>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant={form.includeElectronicSignature ? "default" : "outline"} className="rounded-xl min-w-16" onClick={() => setForm({ ...form, includeElectronicSignature: true })}>نعم</Button>
+              <Button type="button" size="sm" variant={!form.includeElectronicSignature ? "default" : "outline"} className="rounded-xl min-w-16" onClick={() => setForm({ ...form, includeElectronicSignature: false })}>لا</Button>
+            </div>
+          </div>
+          <Button type="button" variant="outline" className="rounded-xl gap-2" onClick={() => setContractPreviewOpen(true)}>
+            <Eye className="w-4 h-4" /> معاينة العقد
+          </Button>
+        </div>
+      )}
+      <Dialog open={contractPreviewOpen} onOpenChange={setContractPreviewOpen}>
+        <DialogContent dir="rtl" className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>معاينة العقد والشروط والأحكام</DialogTitle></DialogHeader>
+          <div className="rounded-xl border border-border bg-background p-5 whitespace-pre-wrap leading-8 text-sm min-h-40">
+            {form.contractText?.trim() || "لم تتم كتابة نص العقد بعد."}
+          </div>
+          {form.includeElectronicSignature && <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 text-sm text-primary">يتضمن هذا النموذج مساحة للتوقيع الإلكتروني.</div>}
+        </DialogContent>
+      </Dialog>
 
       {/* Description */}
       <div className="space-y-1.5">
@@ -9774,7 +9814,9 @@ function ServiceCalendarBookingsTab() {
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [cancelAppointment, setCancelAppointment] = useState<any | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [cancelReasonDetails, setCancelReasonDetails] = useState("");
   const [cancelRefundAmount, setCancelRefundAmount] = useState("");
+  const [contractPreviewAppointment, setContractPreviewAppointment] = useState<any | null>(null);
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
   const [updatingAppointmentId, setUpdatingAppointmentId] = useState<number | null>(null);
   const [reviewSendingId, setReviewSendingId] = useState<number | null>(null);
@@ -10017,7 +10059,7 @@ function ServiceCalendarBookingsTab() {
       const r = await apiFetch(`/providers/my/approved/${providerId}/appointments/${id}`, {
         method: "PATCH",
         body: JSON.stringify(status === "cancelled"
-          ? { status, cancelReason: cancelReason.trim(), cancelRefundAmount: cancelRefundAmount || "0" }
+          ? { status, cancelReason: cancelReason === "أخرى" ? `أخرى: ${cancelReasonDetails.trim()}` : cancelReason.trim(), cancelRefundAmount: cancelRefundAmount || "0" }
           : { status }),
       });
       if (!r.ok) {
@@ -10029,6 +10071,7 @@ function ServiceCalendarBookingsTab() {
       if (status === "cancelled") {
         setCancelAppointment(null);
         setCancelReason("");
+        setCancelReasonDetails("");
         setCancelRefundAmount("");
       }
     } catch (error) {
@@ -10843,6 +10886,9 @@ function ServiceCalendarBookingsTab() {
                           )}
                           {provider?.requiresContract && appointment.status !== "cancelled" && (
                             <>
+                              <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs" onClick={() => setContractPreviewAppointment(appointment)}>
+                                <Eye className="w-3.5 h-3.5" />معاينة العقد
+                              </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -11201,6 +11247,10 @@ function ServiceCalendarBookingsTab() {
                 </SelectContent>
               </Select>
             </div>
+            {cancelReason === "أخرى" && <div className="space-y-1.5">
+              <label className="text-sm font-semibold">وضح سبب الإلغاء بالتفصيل *</label>
+              <Textarea value={cancelReasonDetails} onChange={e => setCancelReasonDetails(e.target.value)} rows={3} className="rounded-xl resize-none" placeholder="اكتب سبب الإلغاء بالتفصيل..." />
+            </div>}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">الحالة</label>
               <Select value={form.status} onValueChange={v => setForm(p => ({ ...p, status: v }))}>
@@ -11324,12 +11374,30 @@ function ServiceCalendarBookingsTab() {
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={!!cancellingId}>رجوع</AlertDialogCancel>
-            <AlertDialogAction disabled={!cancelReason || !!cancellingId} onClick={e => { e.preventDefault(); if (cancelAppointment) void handleStatusChange(cancelAppointment.id, "cancelled"); }} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction disabled={!cancelReason || (cancelReason === "أخرى" && !cancelReasonDetails.trim()) || !!cancellingId} onClick={e => { e.preventDefault(); if (cancelAppointment) void handleStatusChange(cancelAppointment.id, "cancelled"); }} className="bg-red-600 hover:bg-red-700">
               {cancellingId ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} تأكيد الإلغاء
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!contractPreviewAppointment} onOpenChange={open => { if (!open) setContractPreviewAppointment(null); }}>
+        <DialogContent dir="rtl" className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>عقد خدمة — {contractPreviewAppointment?.clientName}</DialogTitle>
+            <DialogDescription>الحجز رقم {toAr(contractPreviewAppointment?.id ?? "")} بتاريخ {contractPreviewAppointment?.dateStr ?? "—"}</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl border border-border bg-background p-5 whitespace-pre-wrap leading-8 text-sm min-h-40">
+            {provider?.contractText?.trim() || "لم تتم كتابة نص العقد والشروط والأحكام بعد."}
+          </div>
+          {provider?.includeElectronicSignature !== false && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+              <p className="text-sm font-semibold text-primary">التوقيع الإلكتروني مضمن</p>
+              <p className="text-xs text-muted-foreground mt-1">حالة توقيع هذا الحجز: {contractPreviewAppointment?.contractSigned ? "تم التوقيع" : "بانتظار التوقيع"}</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ── APPOINTMENTS LIST ── */}
       <div className="space-y-3">

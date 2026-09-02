@@ -240,6 +240,8 @@ router.patch("/my/submissions/:id", requireAuth, async (req: any, res) => {
     dailyCapacity: z.number().int().min(1).optional(),
     requiresInsurance: z.boolean().optional(),
     requiresContract: z.boolean().optional(),
+    contractText: z.string().optional().nullable(),
+    includeElectronicSignature: z.boolean().optional(),
     insuranceAmount: insuranceAmountInput,
     coverageTags: z.array(z.string()).min(1, "يرجى إضافة نطاق الخدمة").optional(),
     customFeatureTags: z.array(z.string()).optional(),
@@ -385,6 +387,8 @@ router.patch("/my/approved/:id", requireAuth, async (req: any, res) => {
     yearsOfExperience: z.number().int().min(0).optional().nullable(),
     requiresInsurance: z.boolean().optional(),
     requiresContract: z.boolean().optional(),
+    contractText: z.string().optional().nullable(),
+    includeElectronicSignature: z.boolean().optional(),
     insuranceAmount: insuranceAmountInput,
     coverageTags: z.array(z.string()).optional(),
     customFeatureTags: z.array(z.string()).optional(),
@@ -694,6 +698,9 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
   const [provider] = await db
     .select({
       requiresInsurance: serviceProvidersTable.requiresInsurance,
+      requiresContract: serviceProvidersTable.requiresContract,
+      contractText: serviceProvidersTable.contractText,
+      includeElectronicSignature: serviceProvidersTable.includeElectronicSignature,
       dailyCapacity: serviceProvidersTable.dailyCapacity,
     })
     .from(serviceProvidersTable)

@@ -13,3 +13,4 @@
 - [Service capacity atomicity](service-capacity-atomicity.md) — every capacity-consuming service booking write must lock provider+date before count-and-write.
 - [Mixed-owner data scoping](mixed-owner-data-scoping.md) — service tabs must never reuse chalet-only data sources; scope every query and action to the selected product.
 - [Print-flow verification](print-flow-verification.md) — service receipts must print and export from the same visible DOM; never retain a parallel receipt template or report-renderer fallback.
+- [Database declaration refresh](database-declaration-refresh.md) — after shared DB schema edits, regenerate its declarations before API typechecking or stale table types can report false errors.
