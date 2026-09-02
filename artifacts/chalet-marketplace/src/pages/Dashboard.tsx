@@ -10061,13 +10061,13 @@ function ServiceCalendarBookingsTab() {
     revealBookingForm();
   }
 
-  async function handleStatusChange(id: number, status: "confirmed" | "cancelled") {
+  async function handleStatusChange(id: number, status: "confirmed" | "cancelled", cancellation?: { reason: string; refundAmount?: number }) {
     setCancellingId(id);
     try {
       const r = await apiFetch(`/providers/my/approved/${providerId}/appointments/${id}`, {
         method: "PATCH",
         body: JSON.stringify(status === "cancelled"
-          ? { status, cancelReason: cancelReason === "أخرى" ? `أخرى: ${cancelReasonDetails.trim()}` : cancelReason.trim(), cancelRefundAmount: cancelRefundAmount || "0" }
+          ? { status, cancelReason: cancellation?.reason ?? cancelReason.trim(), cancelRefundAmount: cancellation?.refundAmount ? String(cancellation.refundAmount) : "0" }
           : { status }),
       });
       if (!r.ok) {
@@ -11336,38 +11336,21 @@ function ServiceCalendarBookingsTab() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!cancelAppointment} onOpenChange={open => { if (!open && !cancellingId) setCancelAppointment(null); }}>
-        <AlertDialogContent dir="rtl" className="max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد إلغاء الحجز</AlertDialogTitle>
-            <AlertDialogDescription>لن يُلغى الحجز قبل تحديد السبب ومراجعة المبلغ المسترد.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold">سبب الإلغاء *</label>
-              <Select value={cancelReason} onValueChange={setCancelReason}>
-                <SelectTrigger><SelectValue placeholder="اختر سبب الإلغاء" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="طلب العميل">طلب العميل</SelectItem>
-                  <SelectItem value="صيانة">صيانة</SelectItem>
-                  <SelectItem value="تعارض">تعارض</SelectItem>
-                  <SelectItem value="أخرى">أخرى</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold">المبلغ المسترد (ر.س)</label>
-              <Input inputMode="decimal" value={toAr(cancelRefundAmount)} onChange={e => setCancelRefundAmount(fromAr(e.target.value).replace(/[^\d.]/g, ""))} placeholder="٠" />
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={!!cancellingId}>رجوع</AlertDialogCancel>
-            <AlertDialogAction disabled={!cancelReason || (cancelReason === "أخرى" && !cancelReasonDetails.trim()) || !!cancellingId} onClick={e => { e.preventDefault(); if (cancelAppointment) void handleStatusChange(cancelAppointment.id, "cancelled"); }} className="bg-red-600 hover:bg-red-700">
-              {cancellingId ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} تأكيد الإلغاء
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={!!cancelAppointment}
+        booking={cancelAppointment ? {
+          ...cancelAppointment,
+          bookingDate: cancelAppointment.dateStr,
+          depositPaid: Number(cancelAppointment.amount ?? cancelAppointment.deposit ?? 0),
+          totalPrice: Number(cancelAppointment.amount ?? 0),
+          revenueAmount: Number(cancelAppointment.amount ?? cancelAppointment.deposit ?? 0),
+          insuranceFee: Number(cancelAppointment.insuranceAmount ?? 0),
+        } : null}
+        onClose={() => setCancelAppointment(null)}
+        onConfirm={(id, reason, _reasonCode, refundAmount) => {
+          void handleStatusChange(id, "cancelled", { reason, refundAmount });
+        }}
+      />
 
       <Dialog open={!!contractPreviewAppointment} onOpenChange={open => { if (!open) setContractPreviewAppointment(null); }}>
         <DialogContent dir="rtl" className="max-w-2xl max-h-[85vh] overflow-y-auto">
