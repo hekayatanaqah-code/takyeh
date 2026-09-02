@@ -15,3 +15,4 @@
 - [Print-flow verification](print-flow-verification.md) — service receipts must print and export from the same visible DOM; never retain a parallel receipt template or report-renderer fallback.
 - [Database declaration refresh](database-declaration-refresh.md) — after shared DB schema edits, regenerate its declarations before API typechecking or stale table types can report false errors.
 - [Shared cancellation dialog](shared-cancellation-dialog.md) — reuse the approved property-cancellation flow for service bookings so refund validation and “other reason” details stay consistent.
+- [Dashboard preview verification](dashboard-preview-verification.md) — authenticated dashboard screenshots may hit an external proxy block; verify app health with the dev-domain response, workflow logs, and public route preview.

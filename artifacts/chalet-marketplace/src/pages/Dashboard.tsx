@@ -47,7 +47,7 @@ import {
   Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
   X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays, PieChart, Save, ScrollText, Check, Printer, ArrowRight,
-  Paperclip, Upload, Play,
+  Paperclip, Upload, Play, MoreVertical,
 } from "lucide-react";
 import { Link } from "wouter";
 import takyahLogoSrc from "@assets/image_1783707669452.png";
@@ -10615,6 +10615,7 @@ function ServiceCalendarBookingsTab() {
               const isPast  = ds < todayStr;
               const gregorianDay = calendarDay.date.getDate();
               const cellAppointments = appointments.filter((appointment) => appointment.dateStr === ds);
+              const bookingCount = cellAppointments.length;
               const hasConfirmed = cellAppointments.some((appointment) => appointment.status === "confirmed");
               const hasPending = cellAppointments.some((appointment) => appointment.status === "pending");
               const hasCancelled = cellAppointments.some((appointment) => appointment.status === "cancelled");
@@ -10665,11 +10666,14 @@ function ServiceCalendarBookingsTab() {
                   }`}>
                     {blocked ? "مغلق" : full ? "مكتمل" : `متبقي ${toArN(remaining)}`}
                   </span>
-                  {cellAppointments.length > 0 && (
-                    <span className="mt-1 flex items-center justify-center gap-1" aria-hidden="true">
+                  {bookingCount > 0 && (
+                    <span className="mt-1 flex items-center justify-center gap-1.5" aria-label={`${toArN(bookingCount)} حجوزات في هذا اليوم`}>
                       {hasConfirmed && <span className="w-2 h-2 rounded-full bg-green-500" />}
                       {hasPending && <span className="w-2 h-2 rounded-full bg-amber-500" />}
                       {hasCancelled && <span className="w-2 h-2 rounded-full bg-red-500" />}
+                      <span className="text-[10px] font-extrabold leading-none tabular-nums text-foreground">
+                        {toArN(bookingCount)}
+                      </span>
                     </span>
                   )}
                 </button>
@@ -11450,60 +11454,59 @@ function ServiceCalendarBookingsTab() {
                       {statusLabel[a.status] ?? a.status}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 flex-wrap md:justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setReceiptAppointment(a)}
-                      className="rounded-lg text-xs gap-1 h-8 px-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
-                      data-testid={`service-receipt-${a.id}`}
-                    >
-                      <Receipt className="w-3 h-3" />
-                      الإيصال
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => startEditingAppointment(a)}
-                      className="rounded-lg text-xs gap-1 h-8 px-2"
-                    >
-                      <Edit2 className="w-3 h-3" />
-                      تعديل
-                    </Button>
-                    {a.status === "pending" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleStatusChange(a.id, "confirmed")}
-                        disabled={cancellingId === a.id}
-                        className="rounded-lg text-green-600 hover:text-green-700 hover:bg-green-50 text-xs gap-1 h-8 px-2"
-                      >
-                        {cancellingId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
-                        تأكيد
-                      </Button>
-                    )}
-                    {a.status !== "cancelled" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setCancelAppointment(a)}
-                        disabled={cancellingId === a.id}
-                        className="rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs gap-1 h-8 px-2"
-                      >
-                        {cancellingId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}
-                        إلغاء
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="حذف السجل"
-                      onClick={() => handleDeleteAppointment(a.id)}
-                      disabled={deletingAppointmentId === a.id}
-                      className="rounded-lg text-destructive h-8 w-8"
-                    >
-                      {deletingAppointmentId === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                    </Button>
+                  <div className="flex items-center md:justify-end">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 rounded-lg"
+                          aria-label={`خيارات الحجز ${a.id}`}
+                          title="خيارات الحجز"
+                          data-testid={`service-booking-actions-${a.id}`}
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48" style={{ direction: "rtl" }}>
+                        <DropdownMenuItem onSelect={() => setReceiptAppointment(a)} data-testid={`service-receipt-${a.id}`}>
+                          <Receipt className="w-4 h-4 text-amber-600" />
+                          الإيصال
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => startEditingAppointment(a)}>
+                          <Edit2 className="w-4 h-4" />
+                          تعديل الحجز
+                        </DropdownMenuItem>
+                        {a.status === "pending" && (
+                          <DropdownMenuItem
+                            onSelect={() => handleStatusChange(a.id, "confirmed")}
+                            disabled={cancellingId === a.id}
+                            className="text-green-700 focus:text-green-700"
+                          >
+                            {cancellingId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                            تأكيد الحجز
+                          </DropdownMenuItem>
+                        )}
+                        {a.status !== "cancelled" && (
+                          <DropdownMenuItem
+                            onSelect={() => setCancelAppointment(a)}
+                            disabled={cancellingId === a.id}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            {cancellingId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                            إلغاء الحجز
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          onSelect={() => handleDeleteAppointment(a.id)}
+                          disabled={deletingAppointmentId === a.id}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          {deletingAppointmentId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          حذف السجل
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               );
