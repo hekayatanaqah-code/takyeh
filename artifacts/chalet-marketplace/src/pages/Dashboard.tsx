@@ -52,6 +52,18 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const toArN = (v: string | number) => String(v).replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'[+d]);
 const fromArN = (v: string) => v.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[^0-9.]/g, '');
 
+function serviceDurationLabel(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const normalized = raw.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(",", ".");
+  if (!/^\d+(?:\.\d+)?$/.test(normalized)) return `التوقيت: ${toAr(raw)}`;
+
+  const amount = Number(normalized);
+  const amountLabel = toArN(Number.isInteger(amount) ? amount : normalized);
+  const unit = amount === 1 ? "ساعة" : amount === 2 ? "ساعتان" : amount >= 3 && amount <= 10 ? "ساعات" : "ساعة";
+  return `المدة: ${amountLabel} ${unit}`;
+}
+
 function apiFetch(path: string, opts?: RequestInit) {
   return fetch(`${BASE}/api${path}`, {
     credentials: "include",
@@ -10633,7 +10645,7 @@ function ServiceCalendarBookingsTab() {
           >
             <DialogContent
               dir="rtl"
-              className="max-w-3xl max-h-[92vh] overflow-y-auto"
+              className="max-w-5xl max-h-[calc(100vh-1.5rem)] overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-4 sm:p-5 gap-3"
               data-testid="service-day-details-dialog"
             >
               <DialogHeader>
@@ -10675,7 +10687,7 @@ function ServiceCalendarBookingsTab() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-2">
                   {summaryAppointments.map((appointment) => {
                     const total = Number(appointment.amount ?? 0);
                     const deposit = Number(appointment.deposit ?? 0);
@@ -10683,10 +10695,11 @@ function ServiceCalendarBookingsTab() {
                     const whatsappPhone = normalizeServiceWhatsAppPhone(appointment.clientPhone);
                     const templates = serviceMessageTemplates(appointment);
                     const isUpdating = updatingAppointmentId === appointment.id;
+                    const durationLabel = serviceDurationLabel(appointment.duration);
                     return (
                       <div
                         key={appointment.id}
-                        className={`rounded-2xl border p-4 space-y-3 ${
+                        className={`rounded-2xl border p-3 space-y-2 ${
                           appointment.status === "cancelled"
                             ? "border-red-200 bg-red-50/40 dark:border-red-900 dark:bg-red-950/10"
                             : appointment.status === "pending"
@@ -10762,22 +10775,22 @@ function ServiceCalendarBookingsTab() {
                           </span>
                         </div>
 
-                        {(appointment.serviceAddress || appointment.duration || appointment.notes) && (
-                          <div className="rounded-xl bg-background/70 border border-border/50 p-3 space-y-1.5 text-xs">
+                        {(appointment.serviceAddress || durationLabel || appointment.notes) && (
+                          <div className="rounded-xl bg-background/70 border border-border/50 p-2.5 space-y-1 text-xs">
                             {appointment.serviceAddress && <p className="flex items-start gap-1.5"><MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />{appointment.serviceAddress}</p>}
-                            {appointment.duration && <p className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />{appointment.duration}</p>}
+                            {durationLabel && <p className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />{durationLabel}</p>}
                             {appointment.notes && <p className="text-muted-foreground">{appointment.notes}</p>}
                           </div>
                         )}
 
-                        <div className="flex flex-wrap gap-2 pt-1 border-t border-border/50">
-                          <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs gap-1" onClick={() => setReceiptAppointment(appointment)}>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-2 border-t border-border/50">
+                          <Button size="sm" variant="outline" className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap" onClick={() => setReceiptAppointment(appointment)}>
                             <Receipt className="w-3.5 h-3.5" />الإيصال
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-8 rounded-lg text-xs gap-1"
+                            className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap"
                             onClick={() => {
                               setSummaryDate(null);
                               startEditingAppointment(appointment);
@@ -10790,7 +10803,7 @@ function ServiceCalendarBookingsTab() {
                               size="sm"
                               variant="outline"
                               disabled={cancellingId === appointment.id}
-                              className="h-8 rounded-lg text-xs gap-1 text-green-700"
+                              className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-green-700"
                               onClick={() => handleStatusChange(appointment.id, "confirmed")}
                             >
                               <CheckCircle className="w-3.5 h-3.5" />تأكيد
@@ -10802,7 +10815,7 @@ function ServiceCalendarBookingsTab() {
                                 size="sm"
                                 variant="outline"
                                 disabled={isUpdating}
-                                className="h-8 rounded-lg text-xs gap-1 text-violet-700"
+                                className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-violet-700"
                                 onClick={() => updateServiceAppointmentFlags(appointment, { contractSigned: !appointment.contractSigned })}
                               >
                                 <ScrollText className="w-3.5 h-3.5" />
@@ -10813,7 +10826,7 @@ function ServiceCalendarBookingsTab() {
                                   size="sm"
                                   variant="outline"
                                   disabled={isUpdating}
-                                  className="h-8 rounded-lg text-xs gap-1 text-orange-700"
+                                  className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-orange-700"
                                   onClick={() => updateServiceAppointmentFlags(appointment, { cashDeposited: !appointment.cashDeposited })}
                                 >
                                   <Banknote className="w-3.5 h-3.5" />
@@ -10826,7 +10839,7 @@ function ServiceCalendarBookingsTab() {
                             size="sm"
                             variant="outline"
                             disabled={reviewSendingId === appointment.id || reviewSentIds.has(appointment.id)}
-                            className="h-8 rounded-lg text-xs gap-1 text-teal-700"
+                            className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-teal-700"
                             onClick={() => sendServiceReviewRequest(appointment)}
                           >
                             {reviewSendingId === appointment.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Star className="w-3.5 h-3.5" />}
@@ -10836,7 +10849,7 @@ function ServiceCalendarBookingsTab() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-8 rounded-lg text-xs gap-1 text-green-700"
+                              className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-green-700"
                               onClick={() => setOpenServiceMessageMenuId(openServiceMessageMenuId === appointment.id ? null : appointment.id)}
                             >
                               <MessageSquare className="w-3.5 h-3.5" />رسالة مخصصة
@@ -10864,7 +10877,7 @@ function ServiceCalendarBookingsTab() {
                               size="sm"
                               variant="ghost"
                               disabled={cancellingId === appointment.id}
-                              className="h-8 rounded-lg text-xs gap-1 text-red-600"
+                              className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-red-600"
                               onClick={() => handleStatusChange(appointment.id, "cancelled")}
                             >
                               <XCircle className="w-3.5 h-3.5" />إلغاء الحجز
