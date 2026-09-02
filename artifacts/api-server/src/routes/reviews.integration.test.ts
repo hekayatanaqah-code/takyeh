@@ -8,7 +8,7 @@ import {
   describe,
   it,
 } from "node:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import app from "../app";
 import { createSession } from "../lib/auth";
 import {
@@ -112,28 +112,19 @@ async function createChalet(ownerId: string): Promise<number> {
   assert(submission);
   submissionIds.push(submission.id);
 
-  const inserted = await db.execute<{ id: number }>(sql`
-    INSERT INTO chalets (
-      submission_id,
-      name_ar,
-      description_ar,
-      location,
-      price_per_night,
-      whatsapp_number,
-      is_active
-    )
-    VALUES (
-      ${submission.id},
-      ${nameAr},
-      ${"وصف اختبار"},
-      ${"القصيم"},
-      ${"100"},
-      ${"0500000000"},
-      ${true}
-    )
-    RETURNING id
-  `);
-  const chalet = inserted.rows[0];
+  const [chalet] = await db
+    .insert(chaletsTable)
+    .values({
+      submissionId: submission.id,
+      ownerId,
+      nameAr,
+      descriptionAr: "وصف اختبار",
+      location: "القصيم",
+      pricePerNight: "100",
+      whatsappNumber: "0500000000",
+      isActive: true,
+    })
+    .returning({ id: chaletsTable.id });
   assert(chalet);
   chaletIds.push(chalet.id);
   return chalet.id;

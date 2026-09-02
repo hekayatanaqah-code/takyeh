@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean, jsonb, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean, jsonb, varchar, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -63,8 +63,8 @@ export const chaletsTable = pgTable("chalets", {
   bufferExceptionWeekdays: text("buffer_exception_weekdays").default("[]"),
   bufferExceptionDates: text("buffer_exception_dates").default("[]"),
   /* ── Map coordinates ── */
-  latitude: numeric("latitude", { precision: 10, scale: 6 }),
-  longitude: numeric("longitude", { precision: 10, scale: 6 }),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
   isVerified: boolean("is_verified").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   pausedFrom: text("paused_from"),

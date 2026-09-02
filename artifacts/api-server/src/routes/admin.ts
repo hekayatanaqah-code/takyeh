@@ -376,6 +376,7 @@ router.patch("/submissions/:id/status", async (req, res) => {
 
       await db.insert(chaletsTable).values({
         submissionId: submission.id,
+        ownerId: submission.ownerId,
         nameAr: submission.nameAr,
         descriptionAr: submission.descriptionAr,
         location: submission.location,
@@ -411,8 +412,8 @@ router.patch("/submissions/:id/status", async (req, res) => {
         socialLink: submission.socialLink ?? null,
         termsAndConditions: submission.termsAndConditions ?? null,
         isVerified: false,
-        latitude: coords ? String(coords[0]) : null,
-        longitude: coords ? String(coords[1]) : null,
+        latitude: coords?.[0] ?? null,
+        longitude: coords?.[1] ?? null,
       }).onConflictDoNothing();
     }
   }
@@ -1798,6 +1799,7 @@ router.post("/direct-add-chalet", requireSuperAdmin, async (req, res) => {
   /* Auto-create active chalet record */
   await db.insert(chaletsTable).values({
     submissionId: submission.id,
+    ownerId: effectiveOwnerId,
     nameAr: vals.nameAr,
     descriptionAr: vals.descriptionAr,
     location: vals.location,
