@@ -53,6 +53,41 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   return next();
 }
 
+/* Public service contract view — customers can open the shared contract link. */
+router.get("/service-contract/:appointmentId", async (req, res) => {
+  const appointmentId = Number(req.params.appointmentId);
+  if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
+    return res.status(400).json({ error: "معرّف العقد غير صالح" });
+  }
+  const [row] = await db
+    .select({
+      id: serviceAppointmentsTable.id,
+      clientName: serviceAppointmentsTable.clientName,
+      clientPhone: serviceAppointmentsTable.clientPhone,
+      serviceAddress: serviceAppointmentsTable.serviceAddress,
+      dateStr: serviceAppointmentsTable.dateStr,
+      duration: serviceAppointmentsTable.duration,
+      durationUnit: serviceAppointmentsTable.durationUnit,
+      amount: serviceAppointmentsTable.amount,
+      status: serviceAppointmentsTable.status,
+      cancelledAt: serviceAppointmentsTable.cancelledAt,
+      contractSigned: serviceAppointmentsTable.contractSigned,
+      businessName: serviceProvidersTable.businessName,
+      city: serviceProvidersTable.city,
+      whatsappNumber: serviceProvidersTable.whatsappNumber,
+      logoUrl: serviceProvidersTable.logoUrl,
+      contractText: serviceProvidersTable.contractText,
+      includeElectronicSignature: serviceProvidersTable.includeElectronicSignature,
+      requiresContract: serviceProvidersTable.requiresContract,
+    })
+    .from(serviceAppointmentsTable)
+    .innerJoin(serviceProvidersTable, eq(serviceProvidersTable.id, serviceAppointmentsTable.providerId))
+    .where(eq(serviceAppointmentsTable.id, appointmentId))
+    .limit(1);
+  if (!row || !row.requiresContract) return res.status(404).json({ error: "العقد غير موجود" });
+  return res.json(row);
+});
+
 /* ── Public: list approved providers ─────────────── */
 router.get("/", async (req, res) => {
   const category = typeof req.query.category === "string" ? req.query.category : undefined;

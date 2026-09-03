@@ -9182,7 +9182,6 @@ function ServiceDetailsTab() {
   const [photoCaptions, setPhotoCaptions] = useState<string[]>([]);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
-  const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
 
   const { data: provider, isLoading } = useQuery({
     queryKey: ["service-provider-detail", providerId],
@@ -9414,49 +9413,12 @@ function ServiceDetailsTab() {
       <div className="rounded-2xl border border-border bg-muted/30 p-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <label className="text-sm font-bold text-foreground">عقد الخدمة</label>
-            <p className="text-xs text-muted-foreground mt-1">عند تشغيله تظهر متابعة توقيع العقد داخل بطاقات الحجوزات.</p>
+            <label className="text-sm font-bold text-foreground">تفعيل عقد الخدمة</label>
+            <p className="text-xs text-muted-foreground mt-1">عند تشغيله يظهر تبويب مستقل لإعداد العقود الرقمية ومتابعتها.</p>
           </div>
           <Switch checked={Boolean(form.requiresContract)} onCheckedChange={checked => setForm({ ...form, requiresContract: checked })} />
         </div>
       </div>
-      {form.requiresContract && (
-        <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4 space-y-4">
-          <div>
-            <label className="text-sm font-bold text-foreground">نص العقد والشروط والأحكام</label>
-            <p className="text-xs text-muted-foreground mt-1">سيظهر هذا النص في نموذج العقد المرتبط بحجوزات هذه الخدمة.</p>
-          </div>
-          <Textarea
-            value={form.contractText}
-            onChange={e => setForm({ ...form, contractText: e.target.value })}
-            rows={8}
-            className="rounded-xl resize-y bg-background"
-            placeholder="اكتب الشروط والالتزامات وحقوق الطرفين..."
-          />
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <label className="text-sm font-semibold">تضمين التوقيع الإلكتروني</label>
-              <p className="text-xs text-muted-foreground mt-1">يسمح للعميل بتوقيع العقد إلكترونياً.</p>
-            </div>
-            <div className="flex gap-2">
-              <Button type="button" size="sm" variant={form.includeElectronicSignature ? "default" : "outline"} className="rounded-xl min-w-16" onClick={() => setForm({ ...form, includeElectronicSignature: true })}>نعم</Button>
-              <Button type="button" size="sm" variant={!form.includeElectronicSignature ? "default" : "outline"} className="rounded-xl min-w-16" onClick={() => setForm({ ...form, includeElectronicSignature: false })}>لا</Button>
-            </div>
-          </div>
-          <Button type="button" variant="outline" className="rounded-xl gap-2" onClick={() => setContractPreviewOpen(true)}>
-            <Eye className="w-4 h-4" /> معاينة العقد
-          </Button>
-        </div>
-      )}
-      <Dialog open={contractPreviewOpen} onOpenChange={setContractPreviewOpen}>
-        <DialogContent dir="rtl" className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>معاينة العقد والشروط والأحكام</DialogTitle></DialogHeader>
-          <div className="rounded-xl border border-border bg-background p-5 whitespace-pre-wrap leading-8 text-sm min-h-40">
-            {form.contractText?.trim() || "لم تتم كتابة نص العقد بعد."}
-          </div>
-          {form.includeElectronicSignature && <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 text-sm text-primary">يتضمن هذا النموذج مساحة للتوقيع الإلكتروني.</div>}
-        </DialogContent>
-      </Dialog>
 
       {/* Description */}
       <div className="space-y-1.5">
@@ -9630,6 +9592,239 @@ function ServiceDetailsTab() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── Service Digital Contracts Tab ─────────────────────────── */
+function ServiceDigitalContractsTab() {
+  const { providerId } = useServiceErp();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { isReadOnly, onBlockedEdit } = useReadOnly();
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [logoUrl, setLogoUrl] = useState("");
+  const [contractText, setContractText] = useState("");
+  const [includeSignature, setIncludeSignature] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [previewBooking, setPreviewBooking] = useState<any | null>(null);
+  const [showSettingsPreview, setShowSettingsPreview] = useState(false);
+  const [search, setSearch] = useState("");
+  const [year, setYear] = useState("all");
+  const [status, setStatus] = useState<"all" | "signed" | "pending" | "cancelled">("all");
+
+  const { data: provider, isLoading: providerLoading } = useQuery<any>({
+    queryKey: ["service-provider-detail", providerId],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/${providerId}`);
+      if (!r.ok) throw new Error("provider");
+      return r.json();
+    },
+    enabled: !!providerId,
+  });
+  const { data: appointments = [], isLoading: appointmentsLoading } = useQuery<any[]>({
+    queryKey: ["service-appointments", providerId],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`);
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!providerId,
+  });
+
+  useEffect(() => {
+    if (!provider) return;
+    setLogoUrl(provider.logoUrl ?? "");
+    setContractText(provider.contractText ?? "");
+    setIncludeSignature(provider.includeElectronicSignature !== false);
+  }, [provider]);
+
+  const years = useMemo(() => Array.from(new Set(
+    appointments.map((a: any) => String(a.dateStr ?? "").slice(0, 4)).filter(Boolean),
+  )).sort().reverse(), [appointments]);
+
+  function contractStatus(a: any) {
+    if (a.status === "cancelled" || a.cancelledAt) return "cancelled" as const;
+    if (a.contractSigned) return "signed" as const;
+    return "pending" as const;
+  }
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase().replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+    return appointments.filter((a: any) => {
+      if (year !== "all" && !String(a.dateStr ?? "").startsWith(year)) return false;
+      if (status !== "all" && contractStatus(a) !== status) return false;
+      if (!q) return true;
+      return String(a.clientName ?? "").toLowerCase().includes(q)
+        || String(a.clientPhone ?? "").replace(/\D/g, "").includes(q);
+    });
+  }, [appointments, search, year, status]);
+
+  const stats = useMemo(() => ({
+    signed: appointments.filter((a: any) => contractStatus(a) === "signed").length,
+    pending: appointments.filter((a: any) => contractStatus(a) === "pending").length,
+    cancelled: appointments.filter((a: any) => contractStatus(a) === "cancelled").length,
+  }), [appointments]);
+
+  function serviceContractUrl(id: number) {
+    return `${window.location.origin}${BASE}/service-contract/${id}`;
+  }
+
+  async function saveSettings() {
+    if (isReadOnly) return onBlockedEdit();
+    setSaving(true);
+    try {
+      const r = await apiFetch(`/providers/my/approved/${providerId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          logoUrl: logoUrl.trim() || null,
+          contractText: contractText.trim() || null,
+          includeElectronicSignature: includeSignature,
+        }),
+      });
+      if (!r.ok) throw new Error();
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["service-provider-detail", providerId] }),
+        qc.invalidateQueries({ queryKey: ["my-approved-providers"] }),
+      ]);
+      toast({ title: "تم الحفظ ✓", description: "تم تحديث إعدادات عقد الخدمة" });
+    } catch {
+      toast({ title: "خطأ", description: "تعذّر حفظ إعدادات العقد", variant: "destructive" });
+    } finally { setSaving(false); }
+  }
+
+  async function uploadLogo(file: File) {
+    if (isReadOnly) return onBlockedEdit();
+    setUploading(true);
+    try {
+      const url = await uploadFile(file);
+      if (url) setLogoUrl(url);
+      else toast({ title: "خطأ", description: "تعذّر رفع الشعار", variant: "destructive" });
+    } finally { setUploading(false); }
+  }
+
+  async function copyContractLink(a: any) {
+    await navigator.clipboard.writeText(serviceContractUrl(a.id));
+    toast({ title: "تم النسخ ✓", description: "رابط العقد في الحافظة" });
+  }
+
+  function sendWhatsApp(a: any) {
+    const phone = String(a.clientPhone ?? "").replace(/\D/g, "").replace(/^0/, "966");
+    const dual = formatDualDate(a.dateStr);
+    const msg = encodeURIComponent(
+      `السلام عليكم ${a.clientName ?? ""}،\nنرفق لكم عقد الخدمة الخاص بـ ${provider?.businessName ?? "الخدمة"}.\n`
+      + `تاريخ الحجز: ${dual.gregorian} (${dual.hijri})\n${serviceContractUrl(a.id)}`,
+    );
+    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank", "noopener,noreferrer");
+  }
+
+  function printContract(a: any) {
+    const w = window.open("", "_blank", "noopener,noreferrer");
+    if (!w) return;
+    const safe = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]!));
+    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>عقد خدمة #${a.id}</title><style>body{font-family:Arial,sans-serif;color:#292018;max-width:760px;margin:32px auto;padding:24px;line-height:1.9}.head{text-align:center;background:#8b5e2b;color:#fff;padding:18px;border-radius:14px}.identity{display:flex;align-items:center;gap:16px;padding:20px 0;border-bottom:1px solid #ddd}.identity img{width:72px;height:72px;object-fit:contain;border:1px solid #ddd;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}.box{background:#faf7f2;padding:12px;border-radius:10px}.terms{white-space:pre-wrap;border-top:1px solid #ddd;padding-top:18px}@media print{body{margin:0}}</style></head><body><div class="head"><b>تكية</b><br>عقد تقديم خدمة رقمي</div><div class="identity">${logoUrl ? `<img src="${safe(logoUrl)}">` : ""}<div><h2>${safe(provider?.businessName)}</h2><div>رقم العقد: #${toArN(a.id)}</div></div></div><div class="grid"><div class="box">مقدم الخدمة<br><b>${safe(provider?.businessName)}</b></div><div class="box">العميل<br><b>${safe(a.clientName)}</b><br>${safe(a.clientPhone)}</div><div class="box">تاريخ الحجز<br><b>${safe(formatDualDate(a.dateStr).gregorian)}</b></div><div class="box">مدة الخدمة<br><b>${safe(serviceDurationLabel(a.duration, a.durationUnit) ?? "—")}</b></div></div><h3>الشروط والأحكام</h3><div class="terms">${safe(contractText || "لا توجد شروط مضافة.")}</div>${includeSignature ? `<div class="box" style="margin-top:24px">التوقيع الإلكتروني: ${a.contractSigned ? "موقّع" : "بانتظار التوقيع"}</div>` : ""}<script>window.onload=()=>window.print()</script></body></html>`);
+    w.document.close();
+  }
+
+  function statusBadge(a: any) {
+    const key = contractStatus(a);
+    if (key === "signed") return <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">موقّع ✓</span>;
+    if (key === "cancelled") return <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">ملغى</span>;
+    return <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">قيد الانتظار</span>;
+  }
+
+  if (providerLoading || appointmentsLoading) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+
+  return (
+    <div className="space-y-6 py-5" dir="rtl">
+      <div className="rounded-2xl border border-border bg-card p-5 space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center"><Settings className="w-5 h-5 text-amber-600" /></div>
+          <div><h2 className="font-extrabold">إعدادات عقد الخدمة</h2><p className="text-xs text-muted-foreground">الشعار والشروط والتوقيع الإلكتروني الظاهرة في العقد</p></div>
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-semibold">شعار العقد</label>
+          <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = ""; }} />
+          <div className="flex items-center gap-3">
+            {logoUrl && <img src={logoUrl} alt="شعار العقد" className="w-16 h-16 rounded-xl object-contain border border-border bg-muted/20 p-1" />}
+            <Button type="button" variant="outline" className="rounded-xl gap-2" disabled={uploading} onClick={() => logoInputRef.current?.click()}>
+              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}{logoUrl ? "تغيير الشعار" : "رفع شعار العقد"}
+            </Button>
+            {logoUrl && <Button type="button" variant="ghost" size="sm" className="text-red-500" onClick={() => setLogoUrl("")}>إزالة</Button>}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-semibold">الشروط والأحكام</label>
+          <Textarea value={contractText} onChange={e => setContractText(e.target.value)} rows={8} className="rounded-xl resize-y" placeholder="اكتب شروط وأحكام تقديم الخدمة..." />
+        </div>
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-muted/20 p-4">
+          <div><p className="text-sm font-bold">التوقيع الإلكتروني</p><p className="text-xs text-muted-foreground mt-1">إظهار مساحة التوقيع الإلكتروني للعميل في العقد.</p></div>
+          <Switch checked={includeSignature} onCheckedChange={setIncludeSignature} />
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="outline" className="rounded-xl gap-2" onClick={() => setShowSettingsPreview(true)}><Eye className="w-4 h-4" />معاينة العقد</Button>
+          <Button type="button" className="rounded-xl gap-2 bg-amber-500 hover:bg-amber-600 text-white" disabled={saving} onClick={saveSettings}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}حفظ الإعدادات</Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          ["موقّعة", stats.signed, "border-emerald-200 bg-emerald-50 text-emerald-700"],
+          ["معلقة", stats.pending, "border-amber-200 bg-amber-50 text-amber-700"],
+          ["ملغاة", stats.cancelled, "border-red-200 bg-red-50 text-red-600"],
+        ].map(([label, value, cls]) => <div key={String(label)} className={`rounded-xl border p-4 text-center ${cls}`}><p className="text-2xl font-extrabold">{toArN(String(value))}</p><p className="text-xs mt-1">عقود {label}</p></div>)}
+      </div>
+
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="p-4 border-b border-border space-y-3">
+          <div><h3 className="font-extrabold">قائمة العقود الرقمية</h3><p className="text-xs text-muted-foreground mt-1">إدارة عقود حجوزات الخدمة ومشاركتها مع العملاء</p></div>
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_150px_170px] gap-2">
+            <div className="relative"><Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input value={search} onChange={e => setSearch(e.target.value)} className="rounded-xl pr-9" placeholder="بحث بالاسم أو رقم الجوال" /></div>
+            <Select value={year} onValueChange={setYear}><SelectTrigger className="rounded-xl"><SelectValue placeholder="السنة" /></SelectTrigger><SelectContent><SelectItem value="all">كل السنوات</SelectItem>{years.map(y => <SelectItem key={y} value={y}>{toArN(y)}</SelectItem>)}</SelectContent></Select>
+            <Select value={status} onValueChange={v => setStatus(v as typeof status)}><SelectTrigger className="rounded-xl"><SelectValue placeholder="حالة العقد" /></SelectTrigger><SelectContent><SelectItem value="all">كل الحالات</SelectItem><SelectItem value="signed">موقّع</SelectItem><SelectItem value="pending">قيد الانتظار</SelectItem><SelectItem value="cancelled">ملغى</SelectItem></SelectContent></Select>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-muted-foreground"><tr><th className="text-right p-3">اسم العميل</th><th className="text-right p-3">الجوال</th><th className="text-right p-3">الحالة</th><th className="text-right p-3">تاريخ الحجز</th><th className="text-center p-3">الإجراءات</th></tr></thead>
+            <tbody className="divide-y divide-border">
+              {filtered.map((a: any) => (
+                <tr key={a.id} className="hover:bg-muted/20">
+                  <td className="p-3 font-semibold">{a.clientName}</td>
+                  <td className="p-3" dir="ltr">{toArN(a.clientPhone ?? "—")}</td>
+                  <td className="p-3">{statusBadge(a)}</td>
+                  <td className="p-3 whitespace-nowrap">{formatDualDate(a.dateStr).gregorian}</td>
+                  <td className="p-3"><div className="flex justify-center gap-1">
+                    <Button size="icon" variant="ghost" title="عرض العقد" onClick={() => setPreviewBooking(a)}><Eye className="w-4 h-4" /></Button>
+                    <Button size="icon" variant="ghost" title="إرسال عبر واتساب" disabled={!a.clientPhone} onClick={() => sendWhatsApp(a)}><Send className="w-4 h-4 text-green-600" /></Button>
+                    <Button size="icon" variant="ghost" title="طباعة العقد" onClick={() => printContract(a)}><Printer className="w-4 h-4" /></Button>
+                    <Button size="icon" variant="ghost" title="نسخ رابط العقد" onClick={() => copyContractLink(a)}><Paperclip className="w-4 h-4" /></Button>
+                  </div></td>
+                </tr>
+              ))}
+              {filtered.length === 0 && <tr><td colSpan={5} className="p-10 text-center text-muted-foreground">لا توجد عقود مطابقة للفلاتر الحالية</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <Dialog open={showSettingsPreview || !!previewBooking} onOpenChange={open => { if (!open) { setShowSettingsPreview(false); setPreviewBooking(null); } }}>
+        <DialogContent dir="rtl" className="max-w-2xl max-h-[88vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>معاينة عقد الخدمة</DialogTitle><DialogDescription>معاينة شكل العقد قبل الإرسال أو الطباعة.</DialogDescription></DialogHeader>
+          <div className="rounded-2xl border border-[#e3d9cf] overflow-hidden bg-white text-[#2a2018]">
+            <div className="bg-[#8b5e2b] text-white text-center p-4"><p className="text-xl font-black">تكية</p><p className="text-xs mt-1">عقد تقديم خدمة رقمي</p></div>
+            <div className="flex items-center gap-4 p-5 bg-[#fdf9f6] border-b border-[#e3d9cf]">
+              {logoUrl ? <img src={logoUrl} alt="" className="w-16 h-16 rounded-xl object-contain border border-[#e3d9cf] bg-white p-1" /> : <div className="w-16 h-16 rounded-xl bg-[#8b5e2b]/10 flex items-center justify-center"><FileText className="w-7 h-7 text-[#8b5e2b]/60" /></div>}
+              <div className="flex-1"><p className="font-bold text-lg">{provider?.businessName}</p><p className="text-xs text-[#75604a] mt-1">عقد خدمة رقم #{toArN(previewBooking?.id ?? "١٢٣")}</p></div>
+            </div>
+            <div className="grid grid-cols-2 border-b border-[#e3d9cf]"><div className="p-4"><p className="text-[10px] text-[#8b5e2b] font-bold">مقدم الخدمة</p><p className="font-semibold mt-1">{provider?.businessName}</p></div><div className="p-4 border-r border-[#e3d9cf]"><p className="text-[10px] text-emerald-700 font-bold">العميل</p><p className="font-semibold mt-1">{previewBooking?.clientName ?? "عميل نموذجي"}</p><p className="text-xs text-[#75604a]" dir="ltr">{previewBooking?.clientPhone ?? ""}</p></div></div>
+            {previewBooking && <div className="grid grid-cols-2 gap-3 p-5 border-b border-[#e3d9cf] text-sm"><div><span className="text-[#75604a]">تاريخ الحجز: </span><b>{formatDualDate(previewBooking.dateStr).gregorian}</b></div><div><span className="text-[#75604a]">المدة: </span><b>{serviceDurationLabel(previewBooking.duration, previewBooking.durationUnit) ?? "—"}</b></div></div>}
+            <div className="p-5"><p className="text-xs font-bold text-[#75604a] mb-3">الشروط والأحكام</p><div className="whitespace-pre-wrap leading-8 text-sm">{contractText.trim() || "لم تتم إضافة شروط وأحكام بعد."}</div></div>
+            {includeSignature && <div className="m-5 mt-0 rounded-xl border border-[#e3d9cf] bg-[#fdf9f6] p-4 text-sm"><b>التوقيع الإلكتروني:</b> {previewBooking?.contractSigned ? "تم توقيع العقد إلكترونياً ✓" : "مساحة توقيع العميل تظهر في العقد المرسل"}</div>}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -24259,7 +24454,7 @@ export default function Dashboard() {
     },
     enabled: (isAuthenticated || isImpersonating) && !actAsStaff && canSeeServices,
   });
-  const { data: myApprovedProviders = [] } = useQuery<{ id: number; isActive: boolean; businessName: string; category: string; city: string; requiresInsurance: boolean; insuranceAmount: string | null }[]>({
+  const { data: myApprovedProviders = [] } = useQuery<{ id: number; isActive: boolean; businessName: string; category: string; city: string; requiresInsurance: boolean; requiresContract: boolean; insuranceAmount: string | null }[]>({
     queryKey: ["my-approved-providers"],
     queryFn: async () => {
       const r = await apiFetch("/providers/my/approved");
@@ -24304,9 +24499,11 @@ export default function Dashboard() {
   }, [activeDashMode, myApprovedProviders.length]);
 
   useEffect(() => {
-    if (selectedServiceTab !== "insurance" || typeof selectedServiceId !== "number") return;
+    if (typeof selectedServiceId !== "number") return;
     const provider = myApprovedProviders.find((item) => item.id === selectedServiceId);
-    if (provider && !provider.requiresInsurance) setSelectedServiceTab("details");
+    if (!provider) return;
+    if (selectedServiceTab === "insurance" && !provider.requiresInsurance) setSelectedServiceTab("details");
+    if (selectedServiceTab === "digitalContracts" && !provider.requiresContract) setSelectedServiceTab("details");
   }, [selectedServiceId, selectedServiceTab, myApprovedProviders]);
 
   /* Auto-select the single chalet as finance unit when owner has only one property */
@@ -24912,6 +25109,9 @@ export default function Dashboard() {
                       ...(selectedProvider?.requiresInsurance ? [
                        { id: "insurance", label: "إدارة التأمينات", icon: <Shield className="w-3.5 h-3.5" /> },
                       ] : []),
+                      ...(selectedProvider?.requiresContract ? [
+                        { id: "digitalContracts", label: "العقود الرقمية", icon: <ScrollText className="w-3.5 h-3.5" /> },
+                      ] : []),
                       { id: "reviews", label: "التقييمات", icon: <Star className="w-3.5 h-3.5" /> },
                       { id: "customers", label: "قاعدة العملاء", icon: <UserCheck className="w-3.5 h-3.5" /> },
                       { id: "messages", label: "إعدادات الرسائل", icon: <Send className="w-3.5 h-3.5" /> },
@@ -24970,6 +25170,7 @@ export default function Dashboard() {
                         {selectedServiceTab === "seasons"   && <ServiceSeasonsTab />}
                         {selectedServiceTab === "calendar"  && <ServiceCalendarBookingsTab />}
                         {selectedProvider?.requiresInsurance && selectedServiceTab === "insurance" && <ServiceBookingInsurancesTab />}
+                        {selectedProvider?.requiresContract && selectedServiceTab === "digitalContracts" && <ServiceDigitalContractsTab />}
                         {selectedServiceTab === "reviews" && <ServiceReviewsTab />}
                         {selectedServiceTab === "customers" && (
                           <AdminFinanceCtx.Provider value={{ unit: { type: "service", id: selectedServiceId, name: selectedProvider?.businessName ?? "الخدمة" } }}>

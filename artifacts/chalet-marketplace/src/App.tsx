@@ -25,6 +25,7 @@ import ContactUs from "./pages/ContactUs";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import RatePage from "./pages/RatePage";
 import ContractPage from "./pages/ContractPage";
+import ServiceContractPage from "./pages/ServiceContractPage";
 import OwnerChaletDetail from "./pages/OwnerChaletDetail";
 import Login from "./pages/Login";
 import AdminPortal from "./pages/AdminPortal";
@@ -97,6 +98,7 @@ function Router() {
       <Route path="/admin-login" component={AdminPortal} />
       <Route path="/r/:token" component={RatePage} />
       <Route path="/contract/:bookingId" component={ContractPage} />
+      <Route path="/service-contract/:appointmentId" component={ServiceContractPage} />
       <Route path="/about" component={About} />
       <Route path="/faq" component={FAQ} />
       <Route path="/terms" component={Terms} />
