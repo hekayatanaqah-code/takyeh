@@ -9671,6 +9671,12 @@ function ServiceDigitalContractsTab() {
     return `${window.location.origin}${BASE}/service-contract/${id}`;
   }
 
+  function serviceDeliveryMethodLabel(value: string | null | undefined) {
+    if (value === "delivery_installation") return "توصيل وتركيب بموقع العميل";
+    if (value === "customer_pickup") return "استلام العميل من المقر";
+    return "—";
+  }
+
   async function saveSettings() {
     if (isReadOnly) return onBlockedEdit();
     setSaving(true);
@@ -9723,7 +9729,7 @@ function ServiceDigitalContractsTab() {
     const w = window.open("", "_blank", "noopener,noreferrer");
     if (!w) return;
     const safe = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]!));
-    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>عقد خدمة #${a.id}</title><style>body{font-family:Arial,sans-serif;color:#292018;max-width:760px;margin:32px auto;padding:24px;line-height:1.9}.head{text-align:center;background:#8b5e2b;color:#fff;padding:18px;border-radius:14px}.identity{display:flex;align-items:center;gap:16px;padding:20px 0;border-bottom:1px solid #ddd}.identity img{width:72px;height:72px;object-fit:contain;border:1px solid #ddd;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}.box{background:#faf7f2;padding:12px;border-radius:10px}.terms{white-space:pre-wrap;border-top:1px solid #ddd;padding-top:18px}@media print{body{margin:0}}</style></head><body><div class="head"><b>تكية</b><br>عقد تقديم خدمة رقمي</div><div class="identity">${logoUrl ? `<img src="${safe(logoUrl)}">` : ""}<div><h2>${safe(provider?.businessName)}</h2><div>رقم العقد: #${toArN(a.id)}</div></div></div><div class="grid"><div class="box">مقدم الخدمة<br><b>${safe(provider?.businessName)}</b></div><div class="box">العميل<br><b>${safe(a.clientName)}</b><br>${safe(a.clientPhone)}</div><div class="box">تاريخ الحجز<br><b>${safe(formatDualDate(a.dateStr).gregorian)}</b></div><div class="box">مدة الخدمة<br><b>${safe(serviceDurationLabel(a.duration, a.durationUnit) ?? "—")}</b></div></div><h3>الشروط والأحكام</h3><div class="terms">${safe(contractText || "لا توجد شروط مضافة.")}</div>${includeSignature ? `<div class="box" style="margin-top:24px">التوقيع الإلكتروني: ${a.contractSigned ? "موقّع" : "بانتظار التوقيع"}</div>` : ""}<script>window.onload=()=>window.print()</script></body></html>`);
+    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>عقد خدمة #${a.id}</title><style>body{font-family:Arial,sans-serif;color:#292018;max-width:760px;margin:32px auto;padding:24px;line-height:1.9}.head{text-align:center;background:#8b5e2b;color:#fff;padding:18px;border-radius:14px}.identity{display:flex;align-items:center;gap:16px;padding:20px 0;border-bottom:1px solid #ddd}.identity img{width:72px;height:72px;object-fit:contain;border:1px solid #ddd;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}.box{background:#faf7f2;padding:12px;border-radius:10px}.wide{grid-column:1/-1}.terms{white-space:pre-wrap;border-top:1px solid #ddd;padding-top:18px}@media print{body{margin:0}}</style></head><body><div class="head"><b>تكية</b><br>عقد تقديم خدمة رقمي</div><div class="identity">${logoUrl ? `<img src="${safe(logoUrl)}">` : ""}<div><h2>${safe(provider?.businessName)}</h2><div>رقم العقد: #${toArN(a.id)}</div></div></div><div class="grid"><div class="box">مقدم الخدمة<br><b>${safe(provider?.businessName)}</b></div><div class="box">العميل<br><b>${safe(a.clientName)}</b><br>${safe(a.clientPhone)}</div><div class="box">تاريخ الحجز<br><b>${safe(formatDualDate(a.dateStr).gregorian)}</b></div><div class="box">مدة الخدمة<br><b>${safe(serviceDurationLabel(a.duration, a.durationUnit) ?? "—")}</b></div><div class="box wide">طريقة تقديم الخدمة<br><b>${safe(serviceDeliveryMethodLabel(a.serviceDeliveryMethod))}</b></div><div class="box wide">عنوان وموقع تقديم الخدمة<br><b>${safe(a.serviceAddress || "—")}</b></div><div class="box wide">تفاصيل وملاحظات الخدمة<br><b>${safe(a.notes || "—")}</b></div></div><h3>الشروط والأحكام</h3><div class="terms">${safe(contractText || "لا توجد شروط مضافة.")}</div>${includeSignature ? `<div class="box" style="margin-top:24px">التوقيع الإلكتروني: ${a.contractSigned ? "موقّع" : "بانتظار التوقيع"}</div>` : ""}<script>window.onload=()=>window.print()</script></body></html>`);
     w.document.close();
   }
 
@@ -9819,7 +9825,7 @@ function ServiceDigitalContractsTab() {
               <div className="flex-1"><p className="font-bold text-lg">{provider?.businessName}</p><p className="text-xs text-[#75604a] mt-1">عقد خدمة رقم #{toArN(previewBooking?.id ?? "١٢٣")}</p></div>
             </div>
             <div className="grid grid-cols-2 border-b border-[#e3d9cf]"><div className="p-4"><p className="text-[10px] text-[#8b5e2b] font-bold">مقدم الخدمة</p><p className="font-semibold mt-1">{provider?.businessName}</p></div><div className="p-4 border-r border-[#e3d9cf]"><p className="text-[10px] text-emerald-700 font-bold">العميل</p><p className="font-semibold mt-1">{previewBooking?.clientName ?? "عميل نموذجي"}</p><p className="text-xs text-[#75604a]" dir="ltr">{previewBooking?.clientPhone ?? ""}</p></div></div>
-            {previewBooking && <div className="grid grid-cols-2 gap-3 p-5 border-b border-[#e3d9cf] text-sm"><div><span className="text-[#75604a]">تاريخ الحجز: </span><b>{formatDualDate(previewBooking.dateStr).gregorian}</b></div><div><span className="text-[#75604a]">المدة: </span><b>{serviceDurationLabel(previewBooking.duration, previewBooking.durationUnit) ?? "—"}</b></div></div>}
+            {previewBooking && <div className="grid grid-cols-2 gap-3 p-5 border-b border-[#e3d9cf] text-sm"><div><span className="text-[#75604a]">تاريخ الحجز: </span><b>{formatDualDate(previewBooking.dateStr).gregorian}</b></div><div><span className="text-[#75604a]">المدة: </span><b>{serviceDurationLabel(previewBooking.duration, previewBooking.durationUnit) ?? "—"}</b></div><div className="col-span-2"><span className="text-[#75604a]">طريقة تقديم الخدمة: </span><b>{serviceDeliveryMethodLabel(previewBooking.serviceDeliveryMethod)}</b></div><div className="col-span-2"><span className="text-[#75604a]">العنوان والموقع: </span><b>{previewBooking.serviceAddress || "—"}</b></div><div className="col-span-2"><span className="text-[#75604a]">التفاصيل والملاحظات: </span><b className="whitespace-pre-wrap">{previewBooking.notes || "—"}</b></div></div>}
             <div className="p-5"><p className="text-xs font-bold text-[#75604a] mb-3">الشروط والأحكام</p><div className="whitespace-pre-wrap leading-8 text-sm">{contractText.trim() || "لم تتم إضافة شروط وأحكام بعد."}</div></div>
             {includeSignature && <div className="m-5 mt-0 rounded-xl border border-[#e3d9cf] bg-[#fdf9f6] p-4 text-sm"><b>التوقيع الإلكتروني:</b> {previewBooking?.contractSigned ? "تم توقيع العقد إلكترونياً ✓" : "مساحة توقيع العميل تظهر في العقد المرسل"}</div>}
           </div>
@@ -10033,6 +10039,7 @@ function ServiceCalendarBookingsTab() {
     clientName: "",
     clientPhone: "",
     serviceAddress: "",
+    serviceDeliveryMethod: "",
     clientIdNumber: "",
     dateStr: "",
     duration: "",
@@ -10166,8 +10173,8 @@ function ServiceCalendarBookingsTab() {
   }
 
   async function handleSave() {
-    if (!form.clientName.trim() || !form.clientPhone.trim() || !form.dateStr) {
-      toast({ title: "اسم العميل ورقم الجوال والتاريخ مطلوبة", variant: "destructive" });
+    if (!form.clientName.trim() || !form.clientPhone.trim() || !form.dateStr || !form.serviceDeliveryMethod || !form.notes.trim()) {
+      toast({ title: "أكمل الحقول الإجبارية", description: "اسم العميل والجوال والتاريخ وطريقة تقديم الخدمة وتفاصيلها مطلوبة.", variant: "destructive" });
       return;
     }
     if (editingAppointmentId && !form.editReason.trim()) {
@@ -10203,6 +10210,8 @@ function ServiceCalendarBookingsTab() {
           clientName: form.clientName.trim(),
           clientPhone: form.clientPhone.trim(),
           serviceAddress: form.serviceAddress.trim() || null,
+          serviceDeliveryMethod: form.serviceDeliveryMethod,
+          notes: form.notes.trim(),
           clientIdNumber: provider?.requiresInsurance ? (form.clientIdNumber.trim() || null) : null,
           amount: form.amount || null,
           deposit: form.deposit || null,
@@ -10233,6 +10242,7 @@ function ServiceCalendarBookingsTab() {
       clientName: appointment.clientName ?? "",
       clientPhone: appointment.clientPhone ?? "",
       serviceAddress: appointment.serviceAddress ?? "",
+      serviceDeliveryMethod: appointment.serviceDeliveryMethod ?? "",
       clientIdNumber: appointment.clientIdNumber ?? "",
       dateStr: appointment.dateStr ?? "",
       duration: appointment.duration ?? "",
@@ -11267,6 +11277,20 @@ function ServiceCalendarBookingsTab() {
                 className="rounded-xl"
               />
             </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-xs font-semibold text-muted-foreground">تفاصيل / ملاحظات الخدمة *</label>
+              <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={3} className="rounded-xl resize-none" placeholder="اكتب تفاصيل تنفيذ الخدمة أو أي ملاحظات مهمة..." />
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-xs font-semibold text-muted-foreground">طريقة تقديم الخدمة *</label>
+              <Select value={form.serviceDeliveryMethod} onValueChange={v => setForm(p => ({ ...p, serviceDeliveryMethod: v }))}>
+                <SelectTrigger className="rounded-xl"><SelectValue placeholder="اختر طريقة تقديم الخدمة" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="delivery_installation">توصيل وتركيب بموقع العميل</SelectItem>
+                  <SelectItem value="customer_pickup">استلام العميل من المقر</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {shouldShowServiceClientId(provider?.requiresInsurance === true) && (
               <div className="space-y-1.5 md:col-span-2">
                 <label className="text-xs font-semibold text-muted-foreground">
@@ -11516,10 +11540,6 @@ function ServiceCalendarBookingsTab() {
               </label>
             )}
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">تفاصيل / ملاحظات الخدمة</label>
-            <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="اكتب تفاصيل تنفيذ الخدمة أو أي ملاحظات مهمة..." />
-          </div>
           {editingAppointmentId && <div className="space-y-1.5">
             <label className="text-xs font-semibold text-muted-foreground">سبب التعديل / إعادة الجدولة *</label>
             <Textarea value={form.editReason} onChange={e => setForm(p => ({ ...p, editReason: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="مثال: طلب العميل تغيير الموعد" />
@@ -11560,6 +11580,13 @@ function ServiceCalendarBookingsTab() {
           <div className="rounded-xl border border-border bg-background p-5 whitespace-pre-wrap leading-8 text-sm min-h-40">
             {provider?.contractText?.trim() || "لم تتم كتابة نص العقد والشروط والأحكام بعد."}
           </div>
+          {contractPreviewAppointment && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div className="rounded-xl bg-muted/40 p-3"><span className="text-muted-foreground">طريقة تقديم الخدمة: </span><b>{contractPreviewAppointment.serviceDeliveryMethod === "customer_pickup" ? "استلام العميل من المقر" : contractPreviewAppointment.serviceDeliveryMethod === "delivery_installation" ? "توصيل وتركيب بموقع العميل" : "—"}</b></div>
+              <div className="rounded-xl bg-muted/40 p-3"><span className="text-muted-foreground">العنوان والموقع: </span><b>{contractPreviewAppointment.serviceAddress || "—"}</b></div>
+              <div className="rounded-xl bg-muted/40 p-3 sm:col-span-2"><span className="text-muted-foreground">التفاصيل والملاحظات: </span><b className="whitespace-pre-wrap">{contractPreviewAppointment.notes || "—"}</b></div>
+            </div>
+          )}
           {provider?.includeElectronicSignature !== false && (
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
               <p className="text-sm font-semibold text-primary">التوقيع الإلكتروني مضمن</p>

@@ -12,6 +12,8 @@ type ServiceContract = {
   clientName: string;
   clientPhone: string | null;
   serviceAddress: string | null;
+  serviceDeliveryMethod: string | null;
+  notes: string | null;
   dateStr: string;
   duration: string | null;
   durationUnit: string;
@@ -82,6 +84,8 @@ export default function ServiceContractPage() {
               <div className="rounded-xl bg-[#fdf9f6] p-3"><span className="text-[#75604a]">التاريخ: </span><b>{dual.gregorian}</b><p className="text-xs text-[#75604a] mt-1">{dual.hijri}</p></div>
               <div className="rounded-xl bg-[#fdf9f6] p-3"><span className="text-[#75604a]">المدة: </span><b>{durationLabel(contract)}</b></div>
               {contract.serviceAddress && <div className="rounded-xl bg-[#fdf9f6] p-3 sm:col-span-2"><span className="text-[#75604a]">موقع تقديم الخدمة: </span><b>{contract.serviceAddress}</b></div>}
+              <div className="rounded-xl bg-[#fdf9f6] p-3 sm:col-span-2"><span className="text-[#75604a]">طريقة تقديم الخدمة: </span><b>{contract.serviceDeliveryMethod === "customer_pickup" ? "استلام العميل من المقر" : contract.serviceDeliveryMethod === "delivery_installation" ? "توصيل وتركيب بموقع العميل" : "—"}</b></div>
+              <div className="rounded-xl bg-[#fdf9f6] p-3 sm:col-span-2"><span className="text-[#75604a]">تفاصيل وملاحظات الخدمة: </span><b>{contract.notes || "—"}</b></div>
               {contract.amount && Number(contract.amount) > 0 && <div className="rounded-xl bg-[#fdf9f6] p-3 sm:col-span-2"><span className="text-[#75604a]">قيمة الخدمة: </span><b className="text-[#8b5e2b]">{toAr(Number(contract.amount).toLocaleString("en"))} ر.س</b></div>}
             </div>
           </section>

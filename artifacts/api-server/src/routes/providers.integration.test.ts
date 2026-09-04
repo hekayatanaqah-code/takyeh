@@ -124,6 +124,8 @@ function appointmentBody(
   return {
     clientName: "عميل الاختبار",
     clientPhone: "0500000001",
+    serviceDeliveryMethod: "delivery_installation",
+    notes: "تفاصيل خدمة اختبارية",
     dateStr,
     ...overrides,
   };
