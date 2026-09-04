@@ -44,7 +44,7 @@ import {
   RotateCcw, Star, ChevronLeft, ChevronRight, BarChart2, CreditCard,
   TrendingUp, Sunrise, Moon, Sun, Lock, Zap, DollarSign, Users,
   Wallet, Receipt, TrendingDown, Edit2, UserCheck, ChevronDown, ChevronUp,
-  Camera, Loader2, FileText, Archive, Mail, MessageSquare, Settings, ExternalLink,
+  Camera, Loader2, FileText, Archive, Mail, MessageCircle, MessageSquare, Settings, ExternalLink,
   Search, Activity, Banknote, Eye, EyeOff, Bell, Image as ImageIcon, Pencil,
   X, Shield, Briefcase, Scissors, RefreshCw, Send, PauseCircle, ListChecks, Ban, CalendarDays, PieChart, Save, ScrollText, Check, Printer, ArrowRight,
   Paperclip, Upload, Play, MoreVertical,
@@ -10968,6 +10968,18 @@ function ServiceCalendarBookingsTab() {
                     const templates = serviceMessageTemplates(appointment);
                     const isUpdating = updatingAppointmentId === appointment.id;
                     const durationLabel = serviceDurationLabel(appointment.duration, appointment.durationUnit);
+                    const sendContractWhatsApp = () => {
+                      if (!whatsappPhone) return;
+                      const dual = formatDualDate(appointment.dateStr);
+                      const contractUrl = `${window.location.origin}${BASE}/service-contract/${appointment.id}`;
+                      const message = [
+                        `مرحباً ${appointment.clientName}،`,
+                        `نرفق لك عقد تقديم الخدمة للحجز بتاريخ ${dual.gregorian}.`,
+                        "يرجى مراجعة بيانات العقد وتوقيعه إلكترونياً من خلال الرابط التالي:",
+                        contractUrl,
+                      ].join("\n\n");
+                      window.open(`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+                    };
                     return (
                       <div
                         key={appointment.id}
@@ -11085,6 +11097,16 @@ function ServiceCalendarBookingsTab() {
                             <>
                               <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs" onClick={() => setContractPreviewAppointment(appointment)}>
                                 <Eye className="w-3.5 h-3.5" />معاينة العقد
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={!whatsappPhone}
+                                title={whatsappPhone ? "إرسال رابط العقد للعميل عبر واتساب" : "لا يوجد رقم واتساب للعميل"}
+                                className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-green-700 border-green-200 hover:bg-green-50"
+                                onClick={sendContractWhatsApp}
+                              >
+                                <MessageCircle className="w-3.5 h-3.5 fill-green-100" />إرسال العقد
                               </Button>
                               <Button
                                 size="sm"

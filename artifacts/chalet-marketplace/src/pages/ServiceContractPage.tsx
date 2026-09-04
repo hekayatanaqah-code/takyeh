@@ -136,12 +136,67 @@ export default function ServiceContractPage() {
   }
 
   return (
-    <main dir="rtl" className="min-h-screen bg-[#f7f3ee] py-8 px-4 text-[#2a2018]">
-      <div className="max-w-2xl mx-auto">
+    <main dir="rtl" className="service-contract-print-page min-h-screen bg-[#f7f3ee] py-8 px-4 text-[#2a2018]">
+      <style>{`
+        @page {
+          size: A4;
+          margin: 12mm;
+        }
+        @media print {
+          html, body, #root {
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            background: #fff !important;
+          }
+          .service-contract-print-page {
+            display: block !important;
+            width: 100% !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            color: #2a2018 !important;
+            background: #fff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .service-contract-print-wrap {
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            overflow: visible !important;
+          }
+          .service-contract-print-article {
+            display: block !important;
+            width: 100% !important;
+            overflow: visible !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+          }
+          .service-contract-print-article header,
+          .service-contract-print-block {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          .service-contract-signature-image {
+            display: block !important;
+            max-height: 42mm !important;
+            object-fit: contain !important;
+          }
+          .print\\:hidden {
+            display: none !important;
+          }
+        }
+      `}</style>
+      <div className="service-contract-print-wrap max-w-2xl mx-auto">
         <div className="flex justify-end mb-3 print:hidden">
           <Button variant="outline" className="rounded-xl gap-2 bg-white" onClick={() => window.print()}><Printer className="w-4 h-4" />طباعة العقد</Button>
         </div>
-        <article className="bg-white rounded-2xl border border-[#e3d9cf] overflow-hidden shadow-sm print:shadow-none">
+        <article className="service-contract-print-article bg-white rounded-2xl border border-[#e3d9cf] overflow-hidden shadow-sm print:shadow-none">
           <header className="bg-[#8b5e2b] text-white text-center p-5">
             <p className="text-2xl font-black">تكية</p>
             <p className="text-sm mt-1">عقد تقديم خدمة رقمي</p>
@@ -174,7 +229,7 @@ export default function ServiceContractPage() {
               {contract.contractSigned ? (
                 <div className="space-y-3">
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex items-center gap-3 text-emerald-700"><CheckCircle className="w-5 h-5" /><b>تم توقيع العقد إلكترونياً</b></div>
-                  {contract.contractSignatureDataUrl && <img src={contract.contractSignatureDataUrl} alt="توقيع العميل" className="w-full h-40 object-contain rounded-xl border border-[#e3d9cf] bg-[#fdf9f6]" />}
+                  {contract.contractSignatureDataUrl && <img src={contract.contractSignatureDataUrl} alt="توقيع العميل" className="service-contract-signature-image w-full h-40 object-contain rounded-xl border border-[#e3d9cf] bg-[#fdf9f6]" />}
                   {contract.contractSignedAt && <p className="text-xs text-[#75604a] text-center">تاريخ التوقيع: {new Date(contract.contractSignedAt).toLocaleString("ar-SA")}</p>}
                 </div>
               ) : cancelled ? (
