@@ -305,6 +305,13 @@ function encodeWhatsAppText(text: string): string {
   return encodeURIComponent(utf8SafeText);
 }
 
+function removePeriodLines(template: string): string {
+  return template
+    .replace(/^.*\{(?:الفترة|الفترة_الجديدة|الفترة_القديمة)\}.*(?:\r?\n|$)/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 const PREVIEW_SAMPLE_DATA: Record<string, string> = {
   "{اسم_العميل}": "محمد بن أحمد",
   "{رقم_الحجز}": "١٢٤٥",
@@ -10379,25 +10386,25 @@ function ServiceCalendarBookingsTab() {
     const deposit = Number(appointment.deposit ?? 0);
     const remaining = Math.max(0, total - deposit);
     const amountText = (value: number) => value > 0 ? toArN(value.toLocaleString("en-US")) : "—";
-    return templateBody
-      .replace(/\{اسم_العميل\}/g, appointment.clientName ?? "")
-      .replace(/\{اسم_العقار\}/g, provider?.businessName ?? "الخدمة")
-      .replace(/\{اسم_الخدمة\}/g, provider?.businessName ?? "الخدمة")
+    const ar = (value: unknown) => toArN(String(value ?? ""));
+    return removePeriodLines(templateBody)
+      .replace(/\{اسم_العميل\}/g, ar(appointment.clientName))
+      .replace(/\{اسم_العقار\}/g, ar(provider?.businessName ?? "الخدمة"))
+      .replace(/\{اسم_الخدمة\}/g, ar(provider?.businessName ?? "الخدمة"))
       .replace(/\{رقم_الحجز\}/g, toArN(appointment.id ?? ""))
-      .replace(/\{اسم_اليوم_من\}/g, new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.dateStr}T12:00:00`)))
-      .replace(/\{اسم_اليوم_إلى\}/g, new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.dateStr}T12:00:00`)))
-      .replace(/\{التاريخ\}|\{من_التاريخ\}|\{إلى_التاريخ\}/g, dual.hijri.replace(/\s*هـ\s*$/, ""))
-      .replace(/\{التاريخ_م\}|\{من_التاريخ_م\}|\{إلى_التاريخ_م\}/g, dual.gregorian)
-      .replace(/\{تاريخ_الخدمة\}/g, dual.gregorian)
+      .replace(/\{اسم_اليوم_من\}/g, ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.dateStr}T12:00:00`))))
+      .replace(/\{اسم_اليوم_إلى\}/g, ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.dateStr}T12:00:00`))))
+      .replace(/\{التاريخ\}|\{من_التاريخ\}|\{إلى_التاريخ\}/g, ar(dual.hijri.replace(/\s*هـ\s*$/, "")))
+      .replace(/\{التاريخ_م\}|\{من_التاريخ_م\}|\{إلى_التاريخ_م\}/g, ar(dual.gregorian))
+      .replace(/\{تاريخ_الخدمة\}/g, ar(dual.gregorian))
       .replace(/\{الإيجار\}|\{قيمة_الإيجار\}|\{الإجمالي_الكلي\}/g, amountText(total))
       .replace(/\{المدفوع\}/g, amountText(deposit))
       .replace(/\{المتبقي\}/g, amountText(remaining))
       .replace(/\{التأمين\}/g, amountText(Number(appointment.insuranceAmount ?? 0)))
-      .replace(/\{الفترة\}|\{الفترة_الجديدة\}|\{الفترة_القديمة\}/g, appointment.duration || "—")
-      .replace(/\{سبب_الإلغاء\}/g, appointment.cancelReason || "حسب الاتفاق")
+      .replace(/\{سبب_الإلغاء\}/g, ar(appointment.cancelReason || "حسب الاتفاق"))
       .replace(/\{طريقة_تقديم_الخدمة\}/g, appointment.serviceDeliveryMethod === "customer_pickup" ? "استلام العميل من المقر" : appointment.serviceDeliveryMethod === "delivery_installation" ? "توصيل وتركيب بموقع العميل" : "—")
-      .replace(/\{عنوان_الخدمة\}/g, appointment.serviceAddress || "—")
-      .replace(/\{تفاصيل_الخدمة\}/g, appointment.notes || "—")
+      .replace(/\{عنوان_الخدمة\}/g, ar(appointment.serviceAddress || "—"))
+      .replace(/\{تفاصيل_الخدمة\}/g, ar(appointment.notes || "—"))
       .replace(/\{رابط_العقد_الرقمي\}/g, `${window.location.origin}${BASE}/service-contract/${appointment.id}`)
       .replace(/\{إجمالي_الخدمات\}|\{تفاصيل_الخدمات\}/g, "—")
       .replace(/\{[^}]+\}/g, "—");
@@ -23912,14 +23919,16 @@ function WhatsAppPreview({
   text,
   establishmentName,
   bookingData,
+  hidePeriodLines = false,
 }: {
   text: string;
   establishmentName?: string;
   bookingData?: Record<string, string>;
+  hidePeriodLines?: boolean;
 }) {
   const preview = useMemo(() => {
     if (!text.trim()) return "";
-    let result = text;
+    let result = hidePeriodLines ? removePeriodLines(text) : text;
     const actualEstablishmentName = establishmentName?.trim() || "اسم المنشأة";
     const replacements = { ...PREVIEW_SAMPLE_DATA, ...bookingData };
     result = result
@@ -23929,7 +23938,7 @@ function WhatsAppPreview({
       result = result.split(key).join(val);
     });
     return result;
-  }, [text, establishmentName, bookingData]);
+  }, [text, establishmentName, bookingData, hidePeriodLines]);
 
   if (!preview.trim()) return null;
 
@@ -24222,7 +24231,7 @@ function OwnerMessageSettingsTab({
               ↺ استعادة الافتراضي
             </button>
           </div>
-          <WhatsAppPreview text={form.bookingConfirmationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} />
+          <WhatsAppPreview text={form.bookingConfirmationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} hidePeriodLines={!!providerId} />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
@@ -24247,7 +24256,7 @@ function OwnerMessageSettingsTab({
               ↺ استعادة الافتراضي
             </button>
           </div>
-          <WhatsAppPreview text={form.cancellationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} />
+          <WhatsAppPreview text={form.cancellationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} hidePeriodLines={!!providerId} />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
@@ -24271,7 +24280,7 @@ function OwnerMessageSettingsTab({
               ↺ استعادة الافتراضي
             </button>
           </div>
-          <WhatsAppPreview text={form.modificationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} />
+          <WhatsAppPreview text={form.modificationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} hidePeriodLines={!!providerId} />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4">
@@ -24315,7 +24324,7 @@ function OwnerMessageSettingsTab({
                     className="resize-none"
                   />
                   <MessageVariableSelect disabled={isReadOnly} onInsert={v => updateCustomTemplate(tpl.id, { body: `${tpl.body} ${v}`.trim() })} />
-                  <WhatsAppPreview text={tpl.body} establishmentName={previewEstablishmentName} bookingData={previewBookingData} />
+                  <WhatsAppPreview text={tpl.body} establishmentName={previewEstablishmentName} bookingData={previewBookingData} hidePeriodLines={!!providerId} />
                 </div>
               ))}
             </div>
