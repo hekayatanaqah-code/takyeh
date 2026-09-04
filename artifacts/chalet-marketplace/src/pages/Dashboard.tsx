@@ -10113,6 +10113,7 @@ function ServiceCalendarBookingsTab() {
     source: "platform",
     paymentMethod: "cash",
     paymentReceiptUrl: "",
+    editReasonType: "",
     editReason: "",
   };
   const [form, setForm] = useState({ ...emptyForm });
@@ -10238,8 +10239,14 @@ function ServiceCalendarBookingsTab() {
       toast({ title: "أكمل الحقول الإجبارية", description: "اسم العميل والجوال والتاريخ وطريقة تقديم الخدمة وتفاصيلها مطلوبة.", variant: "destructive" });
       return;
     }
-    if (editingAppointmentId && !form.editReason.trim()) {
-      toast({ title: "سبب التعديل مطلوب", description: "اكتب سبب تعديل أو إعادة جدولة الحجز.", variant: "destructive" });
+    if (editingAppointmentId && (!form.editReasonType || !form.editReason.trim())) {
+      toast({
+        title: "سبب التعديل مطلوب",
+        description: form.editReasonType === "أخرى"
+          ? "اكتب تفاصيل سبب تعديل أو إعادة جدولة الحجز."
+          : "اختر سبب تعديل أو إعادة جدولة الحجز.",
+        variant: "destructive",
+      });
       return;
     }
     const activeCount = apptDays.get(form.dateStr) ?? 0;
@@ -10264,10 +10271,11 @@ function ServiceCalendarBookingsTab() {
       const endpoint = editingAppointmentId
         ? `/providers/my/approved/${providerId}/appointments/${editingAppointmentId}`
         : `/providers/my/approved/${providerId}/appointments`;
+      const { editReasonType: _editReasonType, ...formPayload } = form;
       const r = await apiFetch(endpoint, {
         method: editingAppointmentId ? "PATCH" : "POST",
         body: JSON.stringify({
-          ...form,
+          ...formPayload,
           clientName: form.clientName.trim(),
           clientPhone: form.clientPhone.trim(),
           serviceAddress: form.serviceAddress.trim() || null,
@@ -10316,6 +10324,7 @@ function ServiceCalendarBookingsTab() {
       source: appointment.source ?? "external",
       paymentMethod: appointment.paymentMethod ?? "cash",
       paymentReceiptUrl: appointment.paymentReceiptUrl ?? "",
+      editReasonType: "",
       editReason: "",
     });
     if (appointment.dateStr) {
@@ -11525,6 +11534,21 @@ function ServiceCalendarBookingsTab() {
                 onChange={e => setForm(p => ({ ...p, deposit: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
                 placeholder="٠" className="rounded-xl" />
             </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">المتبقي (ر.س)</label>
+              <Input
+                type="text"
+                readOnly
+                aria-live="polite"
+                value={toAr(String((Number(form.amount) || 0) - (Number(form.deposit) || 0)))}
+                className={`rounded-xl font-bold ${
+                  (Number(form.amount) || 0) - (Number(form.deposit) || 0) < 0
+                    ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+                }`}
+              />
+              <p className="text-[11px] text-muted-foreground">يُحسب تلقائياً: المبلغ الإجمالي ناقص العربون المدفوع.</p>
+            </div>
             {(provider?.requiresInsurance || (editingAppointmentId && form.insuranceAmount)) && (
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground">
@@ -11633,10 +11657,44 @@ function ServiceCalendarBookingsTab() {
               </label>
             )}
           </div>
-          {editingAppointmentId && <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground">سبب التعديل / إعادة الجدولة *</label>
-            <Textarea value={form.editReason} onChange={e => setForm(p => ({ ...p, editReason: e.target.value }))} rows={2} className="rounded-xl resize-none" placeholder="مثال: طلب العميل تغيير الموعد" />
-          </div>}
+          {editingAppointmentId && (
+            <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">سبب التعديل / إعادة الجدولة *</label>
+                <Select
+                  value={form.editReasonType}
+                  onValueChange={(value) => setForm((current) => ({
+                    ...current,
+                    editReasonType: value,
+                    editReason: value === "أخرى" ? "" : value,
+                  }))}
+                >
+                  <SelectTrigger className="rounded-xl bg-background">
+                    <SelectValue placeholder="اختر سبب التعديل" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="طلب العميل">طلب العميل</SelectItem>
+                    <SelectItem value="تعديل مدة/تاريخ الحجز">تعديل مدة/تاريخ الحجز</SelectItem>
+                    <SelectItem value="ظروف طارئة / صيانة">ظروف طارئة / صيانة</SelectItem>
+                    <SelectItem value="أخرى">أخرى</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.editReasonType === "أخرى" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground">اكتب سبب التعديل *</label>
+                  <Textarea
+                    value={form.editReason}
+                    onChange={(event) => setForm((current) => ({ ...current, editReason: event.target.value }))}
+                    rows={2}
+                    className="rounded-xl resize-none bg-background"
+                    placeholder="اكتب سبب التعديل أو إعادة الجدولة..."
+                    autoFocus
+                  />
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={closeBookingForm} disabled={saving || receiptUploading} className="rounded-xl">إلغاء</Button>
             <Button onClick={handleSave} disabled={saving || receiptUploading} className="rounded-xl gap-2 bg-amber-500 hover:bg-amber-600 text-white">
