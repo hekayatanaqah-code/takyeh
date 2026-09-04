@@ -58,6 +58,24 @@ export default function ServiceContractPage() {
       .catch(e => setError(e.message));
   }, [appointmentId]);
 
+  useEffect(() => {
+    if (!contract || new URLSearchParams(window.location.search).get("print") !== "1") return;
+    let disposed = false;
+    const printAfterAssetsLoad = async () => {
+      if (document.fonts?.ready) await document.fonts.ready;
+      const images = Array.from(document.images);
+      await Promise.all(images.map(image => image.complete
+        ? Promise.resolve()
+        : new Promise<void>(resolve => {
+            image.addEventListener("load", () => resolve(), { once: true });
+            image.addEventListener("error", () => resolve(), { once: true });
+          })));
+      if (!disposed) window.setTimeout(() => window.print(), 100);
+    };
+    void printAfterAssetsLoad();
+    return () => { disposed = true; };
+  }, [contract]);
+
   if (error) return <main dir="rtl" className="min-h-screen bg-muted/30 flex items-center justify-center p-5"><div className="max-w-md w-full bg-card border border-border rounded-2xl p-8 text-center"><AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" /><h1 className="font-bold text-lg">تعذّر فتح العقد</h1><p className="text-sm text-muted-foreground mt-2">{error}</p></div></main>;
   if (!contract) return <main className="min-h-screen flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin text-primary" /></main>;
 
@@ -144,6 +162,8 @@ export default function ServiceContractPage() {
         }
         @media print {
           html, body, #root {
+            display: block !important;
+            position: static !important;
             width: 100% !important;
             height: auto !important;
             min-height: 0 !important;
@@ -176,6 +196,10 @@ export default function ServiceContractPage() {
             overflow: visible !important;
             border-radius: 0 !important;
             box-shadow: none !important;
+          }
+          .service-contract-print-article,
+          .service-contract-print-article * {
+            visibility: visible !important;
           }
           .service-contract-print-article header,
           .service-contract-print-block {

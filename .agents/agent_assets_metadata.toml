@@ -6,6 +6,7 @@ id = "q-FovPlfhFUuDRdwobygV"
 uri = "file://screenshots/booking-page-redesign.jpg"
 type = "image"
 title = "صفحة الحجز الجديدة — تصميم فاخر"
+logical_id = "747f73e6-f004-48e2-844b-f3fdae616bcc"
 
 [[outputs]]
 id = "iOIVL28MO3aVvHfMq4uFf"
@@ -13,3 +14,18 @@ uri = "file://attached_assets/17.pdf"
 type = "pdf"
 title = "معاينة محتوى الإيصال الجديد"
 description = "عينة الملف الناتج بعد اختبار التصدير الديناميكي من #receipt-print-area. اسم المشاركة الفعلي يتغير عند كل ضغطة لكسر الكاش."
+logical_id = "6bebf108-b649-445e-85e5-6be8dcfd17ee"
+
+[[outputs]]
+id = "JOI66mlDDiT3pqVDscHUH"
+uri = "file://screenshots/unified-service-contract-preview.jpg"
+type = "image"
+title = "المعاينة الموحدة للعقد الرقمي"
+description = "القالب الرسمي الكامل الذي يُفتح الآن من أزرار معاينة العقد ويُستخدم نفسه للطباعة."
+logical_id = "22c4f602-c692-4c38-a71d-f0d789d5152c"
+content_hash = "sha256:2e0fe1020b1831fb2536dff8597dbd80fc6f6b21421c5ed1fa0eb1287ab3acc8"
+size = 48247
+mtime_ms = 1788554245676
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/22c4f602-c692-4c38-a71d-f0d789d5152c/e77d5466-21c6-4e09-8269-3d64d1b04cb8"
+storage_version_token = "1788554267158802"
+content_type = "image/jpeg"

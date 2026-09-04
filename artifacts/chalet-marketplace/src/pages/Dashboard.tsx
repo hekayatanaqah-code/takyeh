@@ -9726,11 +9726,7 @@ function ServiceDigitalContractsTab() {
   }
 
   function printContract(a: any) {
-    const w = window.open("", "_blank", "noopener,noreferrer");
-    if (!w) return;
-    const safe = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]!));
-    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>عقد خدمة #${a.id}</title><style>body{font-family:Arial,sans-serif;color:#292018;max-width:760px;margin:32px auto;padding:24px;line-height:1.9}.head{text-align:center;background:#8b5e2b;color:#fff;padding:18px;border-radius:14px}.identity{display:flex;align-items:center;gap:16px;padding:20px 0;border-bottom:1px solid #ddd}.identity img{width:72px;height:72px;object-fit:contain;border:1px solid #ddd;border-radius:12px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}.box{background:#faf7f2;padding:12px;border-radius:10px}.wide{grid-column:1/-1}.terms{white-space:pre-wrap;border-top:1px solid #ddd;padding-top:18px}@media print{body{margin:0}}</style></head><body><div class="head"><b>تكية</b><br>عقد تقديم خدمة رقمي</div><div class="identity">${logoUrl ? `<img src="${safe(logoUrl)}">` : ""}<div><h2>${safe(provider?.businessName)}</h2><div>رقم العقد: #${toArN(a.id)}</div></div></div><div class="grid"><div class="box">مقدم الخدمة<br><b>${safe(provider?.businessName)}</b></div><div class="box">العميل<br><b>${safe(a.clientName)}</b><br>${safe(a.clientPhone)}</div><div class="box">تاريخ الحجز<br><b>${safe(formatDualDate(a.dateStr).gregorian)}</b></div><div class="box">مدة الخدمة<br><b>${safe(serviceDurationLabel(a.duration, a.durationUnit) ?? "—")}</b></div><div class="box wide">طريقة تقديم الخدمة<br><b>${safe(serviceDeliveryMethodLabel(a.serviceDeliveryMethod))}</b></div><div class="box wide">عنوان وموقع تقديم الخدمة<br><b>${safe(a.serviceAddress || "—")}</b></div><div class="box wide">تفاصيل وملاحظات الخدمة<br><b>${safe(a.notes || "—")}</b></div></div><h3>الشروط والأحكام</h3><div class="terms">${safe(contractText || "لا توجد شروط مضافة.")}</div>${includeSignature ? `<div class="box" style="margin-top:24px">التوقيع الإلكتروني: ${a.contractSigned ? "موقّع" : "بانتظار التوقيع"}</div>` : ""}<script>window.onload=()=>window.print()</script></body></html>`);
-    w.document.close();
+    window.open(`${serviceContractUrl(a.id)}?print=1`, "_blank", "noopener,noreferrer");
   }
 
   function statusBadge(a: any) {
@@ -9802,7 +9798,7 @@ function ServiceDigitalContractsTab() {
                   <td className="p-3">{statusBadge(a)}</td>
                   <td className="p-3 whitespace-nowrap">{formatDualDate(a.dateStr).gregorian}</td>
                   <td className="p-3"><div className="flex justify-center gap-1">
-                    <Button size="icon" variant="ghost" title="عرض العقد" onClick={() => setPreviewBooking(a)}><Eye className="w-4 h-4" /></Button>
+                    <Button size="icon" variant="ghost" title="عرض العقد" onClick={() => window.open(serviceContractUrl(a.id), "_blank", "noopener,noreferrer")}><Eye className="w-4 h-4" /></Button>
                     <Button size="icon" variant="ghost" title="إرسال عبر واتساب" disabled={!a.clientPhone} onClick={() => sendWhatsApp(a)}><Send className="w-4 h-4 text-green-600" /></Button>
                     <Button size="icon" variant="ghost" title="طباعة العقد" onClick={() => printContract(a)}><Printer className="w-4 h-4" /></Button>
                     <Button size="icon" variant="ghost" title="نسخ رابط العقد" onClick={() => copyContractLink(a)}><Paperclip className="w-4 h-4" /></Button>
@@ -10025,7 +10021,6 @@ function ServiceCalendarBookingsTab() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonDetails, setCancelReasonDetails] = useState("");
   const [cancelRefundAmount, setCancelRefundAmount] = useState("");
-  const [contractPreviewAppointment, setContractPreviewAppointment] = useState<any | null>(null);
   const [deletingAppointmentId, setDeletingAppointmentId] = useState<number | null>(null);
   const [updatingAppointmentId, setUpdatingAppointmentId] = useState<number | null>(null);
   const [reviewSendingId, setReviewSendingId] = useState<number | null>(null);
@@ -11095,7 +11090,7 @@ function ServiceCalendarBookingsTab() {
                           )}
                           {provider?.requiresContract && appointment.status !== "cancelled" && (
                             <>
-                              <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs" onClick={() => setContractPreviewAppointment(appointment)}>
+                              <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs" onClick={() => window.open(`${window.location.origin}${BASE}/service-contract/${appointment.id}`, "_blank", "noopener,noreferrer")}>
                                 <Eye className="w-3.5 h-3.5" />معاينة العقد
                               </Button>
                               <Button
@@ -11594,31 +11589,6 @@ function ServiceCalendarBookingsTab() {
           void handleStatusChange(id, "cancelled", { reason, refundAmount });
         }}
       />
-
-      <Dialog open={!!contractPreviewAppointment} onOpenChange={open => { if (!open) setContractPreviewAppointment(null); }}>
-        <DialogContent dir="rtl" className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>عقد خدمة — {contractPreviewAppointment?.clientName}</DialogTitle>
-            <DialogDescription>الحجز رقم {toAr(contractPreviewAppointment?.id ?? "")} بتاريخ {contractPreviewAppointment?.dateStr ?? "—"}</DialogDescription>
-          </DialogHeader>
-          <div className="rounded-xl border border-border bg-background p-5 whitespace-pre-wrap leading-8 text-sm min-h-40">
-            {provider?.contractText?.trim() || "لم تتم كتابة نص العقد والشروط والأحكام بعد."}
-          </div>
-          {contractPreviewAppointment && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-              <div className="rounded-xl bg-muted/40 p-3"><span className="text-muted-foreground">طريقة تقديم الخدمة: </span><b>{contractPreviewAppointment.serviceDeliveryMethod === "customer_pickup" ? "استلام العميل من المقر" : contractPreviewAppointment.serviceDeliveryMethod === "delivery_installation" ? "توصيل وتركيب بموقع العميل" : "—"}</b></div>
-              <div className="rounded-xl bg-muted/40 p-3"><span className="text-muted-foreground">العنوان والموقع: </span><b>{contractPreviewAppointment.serviceAddress || "—"}</b></div>
-              <div className="rounded-xl bg-muted/40 p-3 sm:col-span-2"><span className="text-muted-foreground">التفاصيل والملاحظات: </span><b className="whitespace-pre-wrap">{contractPreviewAppointment.notes || "—"}</b></div>
-            </div>
-          )}
-          {provider?.includeElectronicSignature !== false && (
-            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-              <p className="text-sm font-semibold text-primary">التوقيع الإلكتروني مضمن</p>
-              <p className="text-xs text-muted-foreground mt-1">حالة توقيع هذا الحجز: {contractPreviewAppointment?.contractSigned ? "تم التوقيع" : "بانتظار التوقيع"}</p>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       {/* ── APPOINTMENTS LIST ── */}
       <div className="space-y-3">
