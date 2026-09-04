@@ -10405,27 +10405,44 @@ function ServiceCalendarBookingsTab() {
       ...(appointment.status === "cancelled"
         ? [{ id: "cancellation", title: "إشعار إلغاء الحجز", body: messageSettings.cancellationTemplate }]
         : []),
+      ...(appointment.editReason
+        ? [{
+            id: "modification",
+            title: "تعديل الحجز / إعادة الجدولة",
+            body: messageSettings.modificationTemplate || DEFAULT_MODIFICATION_TEMPLATE_BODY,
+          }]
+        : []),
       ...(messageSettings.customTemplates ?? []),
     ].filter((template) => template.body?.trim());
   }
 
   function buildServiceMessage(appointment: any, templateBody: string) {
     const dual = formatDualDate(appointment.dateStr);
+    const previousDual = appointment.previousDateStr
+      ? formatDualDate(appointment.previousDateStr)
+      : dual;
     const total = Number(appointment.amount ?? 0);
     const deposit = Number(appointment.deposit ?? 0);
     const remaining = Math.max(0, total - deposit);
     const amountText = (value: number) => value > 0 ? toArN(value.toLocaleString("en-US")) : "—";
     const ar = (value: unknown) => toArN(String(value ?? ""));
     const durationText = serviceDurationLabel(appointment.duration, appointment.durationUnit)?.replace(/^المدة:\s*/, "") ?? "—";
-    return prepareServiceMessageTemplate(templateBody)
+    const preparedTemplate = templateBody.includes("{سبب_التعديل}")
+      ? templateBody
+          .replace(/\{الفترة_القديمة\}|\{الفترة_الجديدة\}|\{الفترة\}/g, durationText)
+          .replace(/(?:أمنياتنا|نتمنى) لكم بإقامة (?:ممتعة|مانعة)\.?/g, "سعداء بخدمتكم")
+      : prepareServiceMessageTemplate(templateBody);
+    return preparedTemplate
       .replace(/\{اسم_العميل\}/g, ar(appointment.clientName))
       .replace(/\{اسم_العقار\}/g, ar(provider?.businessName ?? "الخدمة"))
       .replace(/\{اسم_الخدمة\}/g, ar(provider?.businessName ?? "الخدمة"))
       .replace(/\{رقم_الحجز\}/g, toArN(appointment.id ?? ""))
-      .replace(/\{اسم_اليوم_من\}/g, ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.dateStr}T12:00:00`))))
+      .replace(/\{اسم_اليوم_من\}/g, ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.previousDateStr || appointment.dateStr}T12:00:00`))))
       .replace(/\{اسم_اليوم_إلى\}/g, ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.dateStr}T12:00:00`))))
-      .replace(/\{التاريخ\}|\{من_التاريخ\}|\{إلى_التاريخ\}/g, ar(dual.hijri.replace(/\s*هـ\s*$/, "")))
-      .replace(/\{التاريخ_م\}|\{من_التاريخ_م\}|\{إلى_التاريخ_م\}/g, ar(dual.gregorian))
+      .replace(/\{من_التاريخ\}/g, ar(previousDual.hijri.replace(/\s*هـ\s*$/, "")))
+      .replace(/\{من_التاريخ_م\}/g, ar(previousDual.gregorian))
+      .replace(/\{التاريخ\}|\{إلى_التاريخ\}/g, ar(dual.hijri.replace(/\s*هـ\s*$/, "")))
+      .replace(/\{التاريخ_م\}|\{إلى_التاريخ_م\}/g, ar(dual.gregorian))
       .replace(/\{تاريخ_الخدمة\}/g, ar(dual.gregorian))
       .replace(/\{الإيجار\}|\{قيمة_الإيجار\}|\{الإجمالي_الكلي\}/g, amountText(total))
       .replace(/\{المدفوع\}/g, amountText(deposit))
@@ -10433,6 +10450,7 @@ function ServiceCalendarBookingsTab() {
       .replace(/\{التأمين\}/g, amountText(Number(appointment.insuranceAmount ?? 0)))
       .replace(/\{المدة\}/g, durationText)
       .replace(/\{سبب_الإلغاء\}/g, ar(appointment.cancelReason || "حسب الاتفاق"))
+      .replace(/\{سبب_التعديل\}/g, ar(appointment.editReason || "حسب الاتفاق"))
       .replace(/\{طريقة_تقديم_الخدمة\}/g, appointment.serviceDeliveryMethod === "customer_pickup" ? "استلام العميل من المقر" : appointment.serviceDeliveryMethod === "delivery_installation" ? "توصيل وتركيب بموقع العميل" : "—")
       .replace(/\{عنوان_الخدمة\}/g, ar(appointment.serviceAddress || "—"))
       .replace(/\{تفاصيل_الخدمة\}/g, ar(appointment.notes || "—"))
@@ -11087,10 +11105,32 @@ function ServiceCalendarBookingsTab() {
                               <p className="text-xs text-muted-foreground mt-1">لا يوجد رقم تواصل</p>
                             )}
                           </div>
-                          <span className={`inline-flex text-xs px-2.5 py-1 rounded-full font-bold ${statusBadge[appointment.status] ?? "bg-muted text-muted-foreground"}`}>
-                            {statusLabel[appointment.status] ?? appointment.status}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`inline-flex text-xs px-2.5 py-1 rounded-full font-bold ${statusBadge[appointment.status] ?? "bg-muted text-muted-foreground"}`}>
+                              {statusLabel[appointment.status] ?? appointment.status}
+                            </span>
+                            {appointment.lastEditedAt && (
+                              <span className="inline-flex text-[10px] px-2 py-1 rounded-full font-bold border border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-300">
+                                {appointment.previousDateStr ? "مُعاد جدولته" : "مُعدَّل"}
+                              </span>
+                            )}
+                          </div>
                         </div>
+
+                        {appointment.lastEditedAt && (
+                          <div className="rounded-xl border border-violet-200 bg-violet-50/70 px-3 py-2 text-xs text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/20 dark:text-violet-200">
+                            {appointment.previousDateStr ? (
+                              <p className="font-semibold">
+                                تم تعديل الموعد من {formatDualDate(appointment.previousDateStr).hijri} هـ إلى {formatDualDate(appointment.dateStr).hijri} هـ
+                              </p>
+                            ) : (
+                              <p className="font-semibold">تم تعديل بيانات الحجز</p>
+                            )}
+                            {appointment.editReason && (
+                              <p className="mt-1 text-[11px] opacity-80">السبب: {appointment.editReason}</p>
+                            )}
+                          </div>
+                        )}
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                           <div className="rounded-xl border border-border/60 bg-background/80 p-2.5">

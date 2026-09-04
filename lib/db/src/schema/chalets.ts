@@ -724,6 +724,8 @@ export const serviceAppointmentsTable = pgTable("service_appointments", {
   cancelReason: text("cancel_reason"),
   cancelRefundAmount: numeric("cancel_refund_amount", { precision: 10, scale: 2 }).default("0"),
   editReason: text("edit_reason"),
+  previousDateStr: text("previous_date_str"),
+  lastEditedAt: timestamp("last_edited_at", { withTimezone: true }),
 });
 export type ServiceAppointment = typeof serviceAppointmentsTable.$inferSelect;
 
