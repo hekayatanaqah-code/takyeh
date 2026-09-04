@@ -313,9 +313,17 @@ function encodeWhatsAppText(text: string): string {
   return encodeURIComponent(utf8SafeText);
 }
 
-function removePeriodLines(template: string): string {
+function prepareServiceMessageTemplate(template: string): string {
+  let durationLineAdded = template.includes("{المدة}");
   return template
-    .replace(/^.*\{(?:الفترة|الفترة_الجديدة|الفترة_القديمة)\}.*(?:\r?\n|$)/gm, "")
+    .split(/\r?\n/)
+    .flatMap((line) => {
+      if (!/\{(?:الفترة|الفترة_الجديدة|الفترة_القديمة)\}/.test(line)) return [line];
+      if (durationLineAdded) return [];
+      durationLineAdded = true;
+      return ["المدة: {المدة}"];
+    })
+    .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -10399,7 +10407,7 @@ function ServiceCalendarBookingsTab() {
     const amountText = (value: number) => value > 0 ? toArN(value.toLocaleString("en-US")) : "—";
     const ar = (value: unknown) => toArN(String(value ?? ""));
     const durationText = serviceDurationLabel(appointment.duration, appointment.durationUnit)?.replace(/^المدة:\s*/, "") ?? "—";
-    return removePeriodLines(templateBody)
+    return prepareServiceMessageTemplate(templateBody)
       .replace(/\{اسم_العميل\}/g, ar(appointment.clientName))
       .replace(/\{اسم_العقار\}/g, ar(provider?.businessName ?? "الخدمة"))
       .replace(/\{اسم_الخدمة\}/g, ar(provider?.businessName ?? "الخدمة"))
@@ -23941,7 +23949,7 @@ function WhatsAppPreview({
 }) {
   const preview = useMemo(() => {
     if (!text.trim()) return "";
-    let result = stripEmoji(hidePeriodLines ? removePeriodLines(text) : text);
+    let result = stripEmoji(hidePeriodLines ? prepareServiceMessageTemplate(text) : text);
     const actualEstablishmentName = establishmentName?.trim() || "اسم المنشأة";
     const replacements = { ...PREVIEW_SAMPLE_DATA, ...bookingData };
     result = result
@@ -24120,6 +24128,9 @@ function OwnerMessageSettingsTab({
       if (!data.modificationTemplate?.includes("الحجز السابق: يوم")) {
         base.modificationTemplate = DEFAULT_MODIFICATION_TEMPLATE_BODY;
       }
+      if (providerId) {
+        base.bookingConfirmationTemplate = prepareServiceMessageTemplate(base.bookingConfirmationTemplate);
+      }
       base.bookingConfirmationTemplate = stripEmoji(base.bookingConfirmationTemplate);
       base.cancellationTemplate = stripEmoji(base.cancellationTemplate);
       base.modificationTemplate = stripEmoji(base.modificationTemplate);
@@ -24129,7 +24140,7 @@ function OwnerMessageSettingsTab({
       }));
       setForm(base);
     }
-  }, [data]);
+  }, [data, providerId]);
 
   const save = useMutation({
     mutationFn: async () => {
