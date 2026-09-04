@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "wouter";
-import { AlertCircle, CheckCircle, FileText, Loader2, Printer } from "lucide-react";
+import { AlertCircle, CheckCircle, Eraser, FileText, Loader2, PenLine, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDualDate } from "@/lib/hijri";
 
@@ -21,6 +21,8 @@ type ServiceContract = {
   status: string;
   cancelledAt: string | null;
   contractSigned: boolean;
+  contractSignatureDataUrl: string | null;
+  contractSignedAt: string | null;
   businessName: string;
   city: string;
   whatsappNumber: string;
@@ -40,6 +42,11 @@ export default function ServiceContractPage() {
   const { appointmentId } = useParams<{ appointmentId: string }>();
   const [contract, setContract] = useState<ServiceContract | null>(null);
   const [error, setError] = useState("");
+  const [hasSignature, setHasSignature] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const [signError, setSignError] = useState("");
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingRef = useRef(false);
 
   useEffect(() => {
     fetch(`${BASE}/api/providers/service-contract/${appointmentId}`)
@@ -56,6 +63,77 @@ export default function ServiceContractPage() {
 
   const dual = formatDualDate(contract.dateStr);
   const cancelled = contract.status === "cancelled" || !!contract.cancelledAt;
+
+  function canvasPoint(event: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = event.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (event.clientX - rect.left) * (canvas.width / rect.width),
+      y: (event.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }
+
+  function startDrawing(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!contract || contract.contractSigned || cancelled) return;
+    const canvas = event.currentTarget;
+    canvas.setPointerCapture(event.pointerId);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const point = canvasPoint(event);
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#2a2018";
+    drawingRef.current = true;
+  }
+
+  function draw(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) return;
+    const ctx = event.currentTarget.getContext("2d");
+    if (!ctx) return;
+    const point = canvasPoint(event);
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+    setHasSignature(true);
+  }
+
+  function stopDrawing(event: React.PointerEvent<HTMLCanvasElement>) {
+    drawingRef.current = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
+  function clearSignature() {
+    const canvas = canvasRef.current;
+    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    setHasSignature(false);
+    setSignError("");
+  }
+
+  async function confirmSignature() {
+    const canvas = canvasRef.current;
+    if (!canvas || !hasSignature) {
+      setSignError("يرجى رسم توقيعك أولاً.");
+      return;
+    }
+    setSigning(true);
+    setSignError("");
+    try {
+      const response = await fetch(`${BASE}/api/providers/service-contract/${appointmentId}/sign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signatureDataUrl: canvas.toDataURL("image/png") }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "تعذّر حفظ التوقيع");
+      setContract(current => current ? { ...current, ...data } : current);
+    } catch (e) {
+      setSignError(e instanceof Error ? e.message : "تعذّر حفظ التوقيع");
+    } finally {
+      setSigning(false);
+    }
+  }
 
   return (
     <main dir="rtl" className="min-h-screen bg-[#f7f3ee] py-8 px-4 text-[#2a2018]">
@@ -90,7 +168,39 @@ export default function ServiceContractPage() {
             </div>
           </section>
           <section className="p-5 border-b border-[#e3d9cf]"><h2 className="text-xs font-bold text-[#75604a] mb-3">الشروط والأحكام</h2><div className="text-sm leading-8 whitespace-pre-wrap">{contract.contractText?.trim() || "لا توجد شروط وأحكام مضافة."}</div></section>
-          {contract.includeElectronicSignature && <section className="p-5"><h2 className="text-xs font-bold text-[#75604a] mb-3">التوقيع الإلكتروني</h2><div className={`rounded-xl border p-4 flex items-center gap-3 ${contract.contractSigned ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{contract.contractSigned ? <CheckCircle className="w-5 h-5" /> : <FileText className="w-5 h-5" />}<b>{contract.contractSigned ? "تم توقيع العقد إلكترونياً" : "العقد بانتظار التوقيع الإلكتروني"}</b></div></section>}
+          {contract.includeElectronicSignature && (
+            <section className="p-5">
+              <h2 className="text-xs font-bold text-[#75604a] mb-3">التوقيع الإلكتروني</h2>
+              {contract.contractSigned ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex items-center gap-3 text-emerald-700"><CheckCircle className="w-5 h-5" /><b>تم توقيع العقد إلكترونياً</b></div>
+                  {contract.contractSignatureDataUrl && <img src={contract.contractSignatureDataUrl} alt="توقيع العميل" className="w-full h-40 object-contain rounded-xl border border-[#e3d9cf] bg-[#fdf9f6]" />}
+                  {contract.contractSignedAt && <p className="text-xs text-[#75604a] text-center">تاريخ التوقيع: {new Date(contract.contractSignedAt).toLocaleString("ar-SA")}</p>}
+                </div>
+              ) : cancelled ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-600 font-bold">لا يمكن توقيع عقد حجز ملغى.</div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold"><PenLine className="w-4 h-4 text-[#8b5e2b]" />ارسم توقيعك داخل المربع</div>
+                  <canvas
+                    ref={canvasRef}
+                    width={900}
+                    height={280}
+                    className="w-full h-44 rounded-xl border-2 border-dashed border-[#cdbca9] bg-[#fdf9f6] touch-none cursor-crosshair"
+                    onPointerDown={startDrawing}
+                    onPointerMove={draw}
+                    onPointerUp={stopDrawing}
+                    onPointerCancel={stopDrawing}
+                  />
+                  {signError && <p className="text-sm text-red-600">{signError}</p>}
+                  <div className="flex flex-col-reverse sm:flex-row gap-2">
+                    <Button type="button" variant="outline" className="rounded-xl gap-2" disabled={signing} onClick={clearSignature}><Eraser className="w-4 h-4" />مسح</Button>
+                    <Button type="button" className="rounded-xl gap-2 flex-1 bg-[#8b5e2b] hover:bg-[#754d23] text-white" disabled={signing || !hasSignature} onClick={confirmSignature}>{signing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}تأكيد التوقيع</Button>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
         </article>
       </div>
     </main>

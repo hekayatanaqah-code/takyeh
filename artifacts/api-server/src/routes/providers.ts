@@ -74,6 +74,8 @@ router.get("/service-contract/:appointmentId", async (req, res) => {
       status: serviceAppointmentsTable.status,
       cancelledAt: serviceAppointmentsTable.cancelledAt,
       contractSigned: serviceAppointmentsTable.contractSigned,
+      contractSignatureDataUrl: serviceAppointmentsTable.contractSignatureDataUrl,
+      contractSignedAt: serviceAppointmentsTable.contractSignedAt,
       businessName: serviceProvidersTable.businessName,
       city: serviceProvidersTable.city,
       whatsappNumber: serviceProvidersTable.whatsappNumber,
@@ -88,6 +90,49 @@ router.get("/service-contract/:appointmentId", async (req, res) => {
     .limit(1);
   if (!row || !row.requiresContract) return res.status(404).json({ error: "العقد غير موجود" });
   return res.json(row);
+});
+
+router.post("/service-contract/:appointmentId/sign", async (req, res) => {
+  const appointmentId = Number(req.params.appointmentId);
+  if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
+    return res.status(400).json({ error: "معرّف العقد غير صالح" });
+  }
+  const signatureDataUrl = typeof req.body?.signatureDataUrl === "string" ? req.body.signatureDataUrl : "";
+  if (!signatureDataUrl.startsWith("data:image/png;base64,") || signatureDataUrl.length > 2_000_000) {
+    return res.status(400).json({ error: "بيانات التوقيع غير صالحة" });
+  }
+  const [contract] = await db
+    .select({
+      id: serviceAppointmentsTable.id,
+      status: serviceAppointmentsTable.status,
+      cancelledAt: serviceAppointmentsTable.cancelledAt,
+      contractSigned: serviceAppointmentsTable.contractSigned,
+      requiresContract: serviceProvidersTable.requiresContract,
+      includeElectronicSignature: serviceProvidersTable.includeElectronicSignature,
+    })
+    .from(serviceAppointmentsTable)
+    .innerJoin(serviceProvidersTable, eq(serviceProvidersTable.id, serviceAppointmentsTable.providerId))
+    .where(eq(serviceAppointmentsTable.id, appointmentId))
+    .limit(1);
+  if (!contract || !contract.requiresContract) return res.status(404).json({ error: "العقد غير موجود" });
+  if (!contract.includeElectronicSignature) return res.status(409).json({ error: "التوقيع الإلكتروني غير مفعّل لهذا العقد" });
+  if (contract.status === "cancelled" || contract.cancelledAt) return res.status(410).json({ error: "لا يمكن توقيع عقد حجز ملغى" });
+  if (contract.contractSigned) return res.status(409).json({ error: "تم توقيع هذا العقد مسبقاً" });
+
+  const [updated] = await db
+    .update(serviceAppointmentsTable)
+    .set({
+      contractSigned: true,
+      contractSignatureDataUrl: signatureDataUrl,
+      contractSignedAt: new Date(),
+    })
+    .where(eq(serviceAppointmentsTable.id, appointmentId))
+    .returning({
+      contractSigned: serviceAppointmentsTable.contractSigned,
+      contractSignatureDataUrl: serviceAppointmentsTable.contractSignatureDataUrl,
+      contractSignedAt: serviceAppointmentsTable.contractSignedAt,
+    });
+  return res.json(updated);
 });
 
 /* ── Public: list approved providers ─────────────── */

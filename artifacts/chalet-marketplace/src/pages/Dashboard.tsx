@@ -11267,29 +11267,31 @@ function ServiceCalendarBookingsTab() {
                 placeholder="٠٥xxxxxxxx" className="rounded-xl" dir="ltr" />
             </div>
             <div className="space-y-1.5 md:col-span-2">
-              <label className="text-xs font-semibold text-muted-foreground">
-                عنوان / موقع تقديم الخدمة <span className="font-normal">(اختياري)</span>
-              </label>
-              <Input
-                value={form.serviceAddress}
-                onChange={e => setForm(p => ({ ...p, serviceAddress: e.target.value }))}
-                placeholder="اسم القاعة، الحي، أو رابط الموقع"
-                className="rounded-xl"
-              />
-            </div>
-            <div className="space-y-1.5 md:col-span-2">
-              <label className="text-xs font-semibold text-muted-foreground">تفاصيل / ملاحظات الخدمة *</label>
-              <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={3} className="rounded-xl resize-none" placeholder="اكتب تفاصيل تنفيذ الخدمة أو أي ملاحظات مهمة..." />
-            </div>
-            <div className="space-y-1.5 md:col-span-2">
               <label className="text-xs font-semibold text-muted-foreground">طريقة تقديم الخدمة *</label>
-              <Select value={form.serviceDeliveryMethod} onValueChange={v => setForm(p => ({ ...p, serviceDeliveryMethod: v }))}>
+              <Select value={form.serviceDeliveryMethod} onValueChange={v => setForm(p => ({ ...p, serviceDeliveryMethod: v, serviceAddress: v === "customer_pickup" ? "" : p.serviceAddress }))}>
                 <SelectTrigger className="rounded-xl"><SelectValue placeholder="اختر طريقة تقديم الخدمة" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="delivery_installation">توصيل وتركيب بموقع العميل</SelectItem>
                   <SelectItem value="customer_pickup">استلام العميل من المقر</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            {form.serviceDeliveryMethod === "delivery_installation" && (
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-xs font-semibold text-muted-foreground">
+                  عنوان / موقع تقديم الخدمة <span className="font-normal">(اختياري)</span>
+                </label>
+                <Input
+                  value={form.serviceAddress}
+                  onChange={e => setForm(p => ({ ...p, serviceAddress: e.target.value }))}
+                  placeholder="اسم القاعة، الحي، أو رابط الموقع"
+                  className="rounded-xl"
+                />
+              </div>
+            )}
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-xs font-semibold text-muted-foreground">تفاصيل / ملاحظات الخدمة *</label>
+              <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={3} className="rounded-xl resize-none" placeholder="اكتب تفاصيل تنفيذ الخدمة أو أي ملاحظات مهمة..." />
             </div>
             {shouldShowServiceClientId(provider?.requiresInsurance === true) && (
               <div className="space-y-1.5 md:col-span-2">
