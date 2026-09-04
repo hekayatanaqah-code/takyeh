@@ -10421,34 +10421,45 @@ function ServiceCalendarBookingsTab() {
     const dual = formatDualDate(effectiveDateStr);
     const previousDual = appointment.previousDateStr
       ? formatDualDate(appointment.previousDateStr)
-      : dual;
+      : null;
     const total = Number(appointment.amount ?? 0);
     const deposit = Number(appointment.deposit ?? 0);
+    const insurance = Number(appointment.insuranceAmount ?? 0);
     const remaining = Math.max(0, total - deposit);
     const amountText = (value: number) => value > 0 ? toArN(value.toLocaleString("en-US")) : "—";
     const ar = (value: unknown) => toArN(String(value ?? ""));
     const durationText = serviceDurationLabel(appointment.duration, appointment.durationUnit)?.replace(/^المدة:\s*/, "") ?? "—";
-    const preparedTemplate = templateBody.includes("{سبب_التعديل}")
+    let preparedTemplate = templateBody.includes("{سبب_التعديل}")
       ? templateBody
           .replace(/\{الفترة_القديمة\}|\{الفترة_الجديدة\}|\{الفترة\}/g, durationText)
           .replace(/(?:أمنياتنا|نتمنى) لكم بإقامة (?:ممتعة|مانعة)\.?/g, "سعداء بخدمتكم")
       : prepareServiceMessageTemplate(templateBody);
+    preparedTemplate = preparedTemplate.replace(/فتره/g, "فترة");
+    if (insurance <= 0) {
+      preparedTemplate = preparedTemplate
+        .split(/\r?\n/)
+        .filter((line) => !line.includes("{التأمين}"))
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n");
+    }
     return preparedTemplate
       .replace(/\{اسم_العميل\}/g, ar(appointment.clientName))
       .replace(/\{اسم_العقار\}/g, ar(provider?.businessName ?? "الخدمة"))
       .replace(/\{اسم_الخدمة\}/g, ar(provider?.businessName ?? "الخدمة"))
       .replace(/\{رقم_الحجز\}/g, toArN(appointment.id ?? ""))
-      .replace(/\{اسم_اليوم_من\}/g, ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.previousDateStr || appointment.dateStr}T12:00:00`))))
+      .replace(/\{اسم_اليوم_من\}/g, appointment.previousDateStr
+        ? ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.previousDateStr}T12:00:00`)))
+        : "غير متوفر")
       .replace(/\{اسم_اليوم_إلى\}/g, ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${effectiveDateStr}T12:00:00`))))
-      .replace(/\{من_التاريخ\}/g, ar(previousDual.hijri.replace(/\s*هـ\s*$/, "")))
-      .replace(/\{من_التاريخ_م\}/g, ar(previousDual.gregorian))
+      .replace(/\{من_التاريخ\}/g, previousDual ? ar(previousDual.hijri.replace(/\s*هـ\s*$/, "")) : "غير متوفر في السجل السابق")
+      .replace(/\{من_التاريخ_م\}/g, previousDual ? ar(previousDual.gregorian) : "غير متوفر")
       .replace(/\{التاريخ\}|\{إلى_التاريخ\}/g, ar(dual.hijri.replace(/\s*هـ\s*$/, "")))
       .replace(/\{التاريخ_م\}|\{إلى_التاريخ_م\}/g, ar(dual.gregorian))
       .replace(/\{تاريخ_الخدمة\}/g, ar(dual.gregorian))
       .replace(/\{الإيجار\}|\{قيمة_الإيجار\}|\{الإجمالي_الكلي\}/g, amountText(total))
       .replace(/\{المدفوع\}/g, amountText(deposit))
       .replace(/\{المتبقي\}/g, amountText(remaining))
-      .replace(/\{التأمين\}/g, amountText(Number(appointment.insuranceAmount ?? 0)))
+      .replace(/\{التأمين\}/g, amountText(insurance))
       .replace(/\{المدة\}/g, durationText)
       .replace(/\{سبب_الإلغاء\}/g, ar(appointment.cancelReason || "حسب الاتفاق"))
       .replace(/\{سبب_التعديل\}/g, ar(appointment.editReason || "حسب الاتفاق"))
@@ -11110,7 +11121,7 @@ function ServiceCalendarBookingsTab() {
                             <span className={`inline-flex text-xs px-2.5 py-1 rounded-full font-bold ${statusBadge[appointment.status] ?? "bg-muted text-muted-foreground"}`}>
                               {statusLabel[appointment.status] ?? appointment.status}
                             </span>
-                            {appointment.lastEditedAt && (
+                            {(appointment.editReason || appointment.lastEditedAt) && (
                               <span className="inline-flex text-[10px] px-2 py-1 rounded-full font-bold border border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-300">
                                 {appointment.previousDateStr && appointment.editedDateStr ? "مُعاد جدولته" : "مُعدَّل"}
                               </span>
@@ -11118,14 +11129,16 @@ function ServiceCalendarBookingsTab() {
                           </div>
                         </div>
 
-                        {appointment.lastEditedAt && (
+                        {(appointment.editReason || appointment.lastEditedAt) && (
                           <div className="rounded-xl border border-violet-200 bg-violet-50/70 px-3 py-2 text-xs text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/20 dark:text-violet-200">
                             {appointment.previousDateStr && appointment.editedDateStr ? (
                               <p className="font-semibold">
                                 تم إعادة جدولة الموعد من {formatDualDate(appointment.previousDateStr).hijri} هـ إلى {formatDualDate(appointment.editedDateStr).hijri} هـ
                               </p>
                             ) : (
-                              <p className="font-semibold">تفاصيل آخر تعديل</p>
+                              <p className="font-semibold">
+                                تم إعادة جدولة الموعد من تاريخ غير متوفر في السجل السابق إلى {formatDualDate(appointment.editedDateStr || appointment.dateStr).hijri} هـ
+                              </p>
                             )}
                             {appointment.editReason && (
                               <p className="mt-1 text-[11px] opacity-80">السبب: {appointment.editReason}</p>
