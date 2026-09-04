@@ -292,6 +292,54 @@ describe("service appointment capacity and isolation", () => {
     assert.equal(updated.json.contractSigned, false);
   });
 
+  it("persists the real previous and new values when an appointment is rescheduled", async () => {
+    const created = await requestAppointment(
+      providerId,
+      "POST",
+      "",
+      appointmentBody(TEST_DATES.available, {
+        amount: "800",
+        duration: "4",
+        durationUnit: "hours",
+      }),
+    );
+    assert.equal(created.response.status, 201);
+
+    const rescheduled = await requestAppointment(
+      providerId,
+      "PATCH",
+      `/${created.json.id}`,
+      {
+        dateStr: TEST_DATES.full,
+        amount: "950",
+        duration: "6",
+        durationUnit: "hours",
+        editReason: "طلب العميل",
+      },
+    );
+
+    assert.equal(rescheduled.response.status, 200);
+    assert.equal(rescheduled.json.previousDateStr, TEST_DATES.available);
+    assert.equal(rescheduled.json.editedDateStr, TEST_DATES.full);
+    assert.equal(rescheduled.json.dateStr, TEST_DATES.full);
+    assert.equal(rescheduled.json.previousAmount, "800.00");
+    assert.equal(rescheduled.json.amount, "950.00");
+    assert.equal(rescheduled.json.previousDuration, "4");
+    assert.equal(rescheduled.json.duration, "6");
+    assert.equal(rescheduled.json.editReason, "طلب العميل");
+    assert.ok(rescheduled.json.lastEditedAt);
+
+    const listed = await requestAppointment(providerId, "GET");
+    assert.equal(listed.response.status, 200);
+    const persisted = listed.json.find(
+      (appointment: { id: number }) => appointment.id === created.json.id,
+    );
+    assert.equal(persisted.previousDateStr, TEST_DATES.available);
+    assert.equal(persisted.editedDateStr, TEST_DATES.full);
+    assert.equal(persisted.dateStr, TEST_DATES.full);
+    assert.equal(persisted.editReason, "طلب العميل");
+  });
+
   it("rejects blocking a day with active appointments", async () => {
     const created = await requestAppointment(
       providerId,

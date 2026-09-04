@@ -10417,7 +10417,8 @@ function ServiceCalendarBookingsTab() {
   }
 
   function buildServiceMessage(appointment: any, templateBody: string) {
-    const dual = formatDualDate(appointment.dateStr);
+    const effectiveDateStr = appointment.editedDateStr || appointment.dateStr;
+    const dual = formatDualDate(effectiveDateStr);
     const previousDual = appointment.previousDateStr
       ? formatDualDate(appointment.previousDateStr)
       : dual;
@@ -10438,7 +10439,7 @@ function ServiceCalendarBookingsTab() {
       .replace(/\{اسم_الخدمة\}/g, ar(provider?.businessName ?? "الخدمة"))
       .replace(/\{رقم_الحجز\}/g, toArN(appointment.id ?? ""))
       .replace(/\{اسم_اليوم_من\}/g, ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.previousDateStr || appointment.dateStr}T12:00:00`))))
-      .replace(/\{اسم_اليوم_إلى\}/g, ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.dateStr}T12:00:00`))))
+      .replace(/\{اسم_اليوم_إلى\}/g, ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${effectiveDateStr}T12:00:00`))))
       .replace(/\{من_التاريخ\}/g, ar(previousDual.hijri.replace(/\s*هـ\s*$/, "")))
       .replace(/\{من_التاريخ_م\}/g, ar(previousDual.gregorian))
       .replace(/\{التاريخ\}|\{إلى_التاريخ\}/g, ar(dual.hijri.replace(/\s*هـ\s*$/, "")))
@@ -11111,7 +11112,7 @@ function ServiceCalendarBookingsTab() {
                             </span>
                             {appointment.lastEditedAt && (
                               <span className="inline-flex text-[10px] px-2 py-1 rounded-full font-bold border border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-300">
-                                {appointment.previousDateStr ? "مُعاد جدولته" : "مُعدَّل"}
+                                {appointment.previousDateStr && appointment.editedDateStr ? "مُعاد جدولته" : "مُعدَّل"}
                               </span>
                             )}
                           </div>
@@ -11119,9 +11120,9 @@ function ServiceCalendarBookingsTab() {
 
                         {appointment.lastEditedAt && (
                           <div className="rounded-xl border border-violet-200 bg-violet-50/70 px-3 py-2 text-xs text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/20 dark:text-violet-200">
-                            {appointment.previousDateStr ? (
+                            {appointment.previousDateStr && appointment.editedDateStr ? (
                               <p className="font-semibold">
-                                تم إعادة جدولة الموعد من {formatDualDate(appointment.previousDateStr).hijri} هـ إلى {formatDualDate(appointment.dateStr).hijri} هـ
+                                تم إعادة جدولة الموعد من {formatDualDate(appointment.previousDateStr).hijri} هـ إلى {formatDualDate(appointment.editedDateStr).hijri} هـ
                               </p>
                             ) : (
                               <p className="font-semibold">تفاصيل آخر تعديل</p>

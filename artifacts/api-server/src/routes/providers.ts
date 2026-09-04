@@ -828,7 +828,9 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
   const updates: Record<string, any> = { ...parsed.data };
   if (parsed.data.editReason?.trim()) {
     updates.lastEditedAt = new Date();
-    updates.previousDateStr = targetDate !== row.dateStr ? row.dateStr : null;
+    const dateChanged = targetDate !== row.dateStr;
+    updates.previousDateStr = dateChanged ? row.dateStr : null;
+    updates.editedDateStr = dateChanged ? targetDate : null;
 
     const targetAmount = parsed.data.amount ?? row.amount;
     const amountChanged = Number(targetAmount ?? 0) !== Number(row.amount ?? 0);

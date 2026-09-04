@@ -725,6 +725,7 @@ export const serviceAppointmentsTable = pgTable("service_appointments", {
   cancelRefundAmount: numeric("cancel_refund_amount", { precision: 10, scale: 2 }).default("0"),
   editReason: text("edit_reason"),
   previousDateStr: text("previous_date_str"),
+  editedDateStr: text("edited_date_str"),
   previousAmount: numeric("previous_amount", { precision: 10, scale: 2 }),
   previousDuration: text("previous_duration"),
   previousDurationUnit: text("previous_duration_unit"),
