@@ -296,11 +296,13 @@ interface OwnerMessageSettings {
   attachmentNote: string;
 }
 
-const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{اسم_اليوم_من}", "{التاريخ}", "{التاريخ_م}", "{من_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ}", "{إلى_التاريخ_م}", "{اسم_اليوم_إلى}", "{الفترة}", "{الفترة_الجديدة}", "{الفترة_القديمة}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{الإيجار}", "{إجمالي_الخدمات}", "{تفاصيل_الخدمات}", "{الإجمالي_الكلي}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
+const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{اسم_الخدمة}", "{رقم_الحجز}", "{اسم_اليوم_من}", "{التاريخ}", "{التاريخ_م}", "{تاريخ_الخدمة}", "{من_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ}", "{إلى_التاريخ_م}", "{اسم_اليوم_إلى}", "{الفترة}", "{الفترة_الجديدة}", "{الفترة_القديمة}", "{طريقة_تقديم_الخدمة}", "{عنوان_الخدمة}", "{تفاصيل_الخدمة}", "{رابط_العقد_الرقمي}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{الإيجار}", "{إجمالي_الخدمات}", "{تفاصيل_الخدمات}", "{الإجمالي_الكلي}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
 
 const PREVIEW_SAMPLE_DATA: Record<string, string> = {
   "{اسم_العميل}": "محمد بن أحمد",
   "{اسم_العقار}": "شاليه الياسمين",
+  "{اسم_الخدمة}": "تنسيق وتجهيز مناسبة",
+  "{رقم_الحجز}": "١٢٤٥",
   "{التاريخ}": "٦ صفر ١٤٤٧",
   "{التاريخ_م}": "١ أغسطس ٢٠٢٥",
   "{من_التاريخ}": "٦ صفر ١٤٤٧",
@@ -308,6 +310,7 @@ const PREVIEW_SAMPLE_DATA: Record<string, string> = {
   "{إلى_التاريخ}": "٨ صفر ١٤٤٧",
   "{إلى_التاريخ_م}": "٣ أغسطس ٢٠٢٥",
   "{الفترة}": "مسائية",
+  "{تاريخ_الخدمة}": "١ أغسطس ٢٠٢٥",
   "{اسم_اليوم_من}": "الجمعة",
   "{اسم_اليوم_إلى}": "الأحد",
   "{الفترة_القديمة}": "مسائية",
@@ -315,6 +318,10 @@ const PREVIEW_SAMPLE_DATA: Record<string, string> = {
   "{سبب_الإلغاء}": "ظروف طارئة",
   "{المبلغ_المسترد}": "٥٠٠",
   "{سبب_التعديل}": "طلب العميل",
+  "{طريقة_تقديم_الخدمة}": "توصيل وتركيب بموقع العميل",
+  "{عنوان_الخدمة}": "حي الملقا، شارع الأمير محمد",
+  "{تفاصيل_الخدمة}": "تجهيز وتركيب كامل قبل موعد المناسبة",
+  "{رابط_العقد_الرقمي}": "https://takyah.sa/service-contract/1245",
   "{الإيجار}": "٨٠٠",
   "{قيمة_الإيجار}": "٨٠٠",
   "{إجمالي_الخدمات}": "١٥٠",
@@ -10371,16 +10378,22 @@ function ServiceCalendarBookingsTab() {
       .replace(/\{اسم_العميل\}/g, appointment.clientName ?? "")
       .replace(/\{اسم_العقار\}/g, provider?.businessName ?? "الخدمة")
       .replace(/\{اسم_الخدمة\}/g, provider?.businessName ?? "الخدمة")
+      .replace(/\{رقم_الحجز\}/g, toArN(appointment.id ?? ""))
       .replace(/\{اسم_اليوم_من\}/g, new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.dateStr}T12:00:00`)))
       .replace(/\{اسم_اليوم_إلى\}/g, new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.dateStr}T12:00:00`)))
       .replace(/\{التاريخ\}|\{من_التاريخ\}|\{إلى_التاريخ\}/g, dual.hijri.replace(/\s*هـ\s*$/, ""))
       .replace(/\{التاريخ_م\}|\{من_التاريخ_م\}|\{إلى_التاريخ_م\}/g, dual.gregorian)
+      .replace(/\{تاريخ_الخدمة\}/g, dual.gregorian)
       .replace(/\{الإيجار\}|\{قيمة_الإيجار\}|\{الإجمالي_الكلي\}/g, amountText(total))
       .replace(/\{المدفوع\}/g, amountText(deposit))
       .replace(/\{المتبقي\}/g, amountText(remaining))
       .replace(/\{التأمين\}/g, amountText(Number(appointment.insuranceAmount ?? 0)))
       .replace(/\{الفترة\}|\{الفترة_الجديدة\}|\{الفترة_القديمة\}/g, appointment.duration || "—")
       .replace(/\{سبب_الإلغاء\}/g, appointment.cancelReason || "حسب الاتفاق")
+      .replace(/\{طريقة_تقديم_الخدمة\}/g, appointment.serviceDeliveryMethod === "customer_pickup" ? "استلام العميل من المقر" : appointment.serviceDeliveryMethod === "delivery_installation" ? "توصيل وتركيب بموقع العميل" : "—")
+      .replace(/\{عنوان_الخدمة\}/g, appointment.serviceAddress || "—")
+      .replace(/\{تفاصيل_الخدمة\}/g, appointment.notes || "—")
+      .replace(/\{رابط_العقد_الرقمي\}/g, `${window.location.origin}${BASE}/service-contract/${appointment.id}`)
       .replace(/\{إجمالي_الخدمات\}|\{تفاصيل_الخدمات\}/g, "—")
       .replace(/\{[^}]+\}/g, "—");
   }
@@ -23903,17 +23916,20 @@ function WhatsAppPreview({ text }: { text: string }) {
   if (!preview.trim()) return null;
 
   return (
-    <div className="mt-3 rounded-2xl bg-[#e5ddd5] dark:bg-zinc-800 p-3 pb-4">
+    <div
+      className="mt-3 rounded-2xl p-3 pb-4 overflow-hidden"
+      style={{ backgroundColor: "#efeae2", backgroundImage: "radial-gradient(rgba(17,27,33,.045) 1px, transparent 1px)", backgroundSize: "12px 12px" }}
+    >
       <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2.5 flex items-center gap-1.5">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
         معاينة الرسالة في واتساب
       </p>
       <div className="flex justify-end">
         <div
-          className="relative max-w-[88%] rounded-2xl rounded-tr-sm px-3.5 py-2.5 shadow-sm text-sm leading-relaxed whitespace-pre-wrap"
+          className="relative max-w-[88%] rounded-xl rounded-tr-sm px-3.5 py-2.5 shadow-sm text-sm leading-relaxed whitespace-pre-wrap before:absolute before:-right-2 before:top-0 before:border-t-[10px] before:border-t-[#d9fdd3] before:border-l-[10px] before:border-l-transparent"
           dir="rtl"
           style={{
-            background: "#dcf8c6",
+            background: "#d9fdd3",
             color: "#111b21",
             fontFamily: "'Segoe UI', Tahoma, sans-serif",
             wordBreak: "break-word",
@@ -23926,6 +23942,23 @@ function WhatsAppPreview({ text }: { text: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function MessageVariableSelect({ onInsert, disabled = false }: { onInsert: (variable: string) => void; disabled?: boolean }) {
+  return (
+    <Select value="" onValueChange={onInsert} disabled={disabled}>
+      <SelectTrigger className="w-44 h-9 rounded-xl bg-background">
+        <SelectValue placeholder="إدراج متغير" />
+      </SelectTrigger>
+      <SelectContent className="max-h-72">
+        {MESSAGE_VARIABLES.map(variable => (
+          <SelectItem key={variable} value={variable}>
+            <span className="font-mono text-xs" dir="ltr">{variable}</span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -24061,15 +24094,6 @@ function OwnerMessageSettingsTab() {
       </div>
 
       <div className="rounded-3xl border border-border bg-card p-6 shadow-sm space-y-6">
-        <div>
-          <h3 className="text-base font-bold text-foreground">المتغيرات المدعومة داخل الرسائل</h3>
-          <div className="flex flex-wrap gap-2 mt-3">
-            {MESSAGE_VARIABLES.map((v) => (
-              <span key={v} className="px-3 py-1.5 rounded-full bg-muted text-xs font-mono text-foreground" dir="ltr">{v}</span>
-            ))}
-          </div>
-        </div>
-
         <div className="space-y-3 rounded-2xl border border-border p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -24087,11 +24111,7 @@ function OwnerMessageSettingsTab() {
             className="resize-none"
           />
           <div className="flex flex-wrap gap-3 items-center">
-            {MESSAGE_VARIABLES.map((v) => (
-              <button key={v} type="button" onClick={() => insertVariable("bookingConfirmationTemplate", v)} className="px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-xs font-mono hover:bg-secondary/80 transition-colors" dir="ltr">
-                {v}
-              </button>
-            ))}
+            <MessageVariableSelect disabled={isReadOnly} onInsert={v => insertVariable("bookingConfirmationTemplate", v)} />
             <button type="button" onClick={() => resetToDefault("bookingConfirmationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1.5 rounded-full border border-dashed border-muted-foreground/40 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
               ↺ استعادة الافتراضي
             </button>
@@ -24116,11 +24136,7 @@ function OwnerMessageSettingsTab() {
             className="resize-none"
           />
           <div className="flex flex-wrap gap-3 items-center">
-            {MESSAGE_VARIABLES.map((v) => (
-              <button key={v} type="button" onClick={() => insertVariable("cancellationTemplate", v)} className="px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-xs font-mono hover:bg-secondary/80 transition-colors" dir="ltr">
-                {v}
-              </button>
-            ))}
+            <MessageVariableSelect disabled={isReadOnly} onInsert={v => insertVariable("cancellationTemplate", v)} />
             <button type="button" onClick={() => resetToDefault("cancellationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1.5 rounded-full border border-dashed border-muted-foreground/40 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
               ↺ استعادة الافتراضي
             </button>
@@ -24144,11 +24160,7 @@ function OwnerMessageSettingsTab() {
             className="resize-none"
           />
           <div className="flex flex-wrap gap-3 items-center">
-            {MESSAGE_VARIABLES.map((v) => (
-              <button key={v} type="button" onClick={() => insertVariable("modificationTemplate", v)} className="px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-xs font-mono hover:bg-secondary/80 transition-colors" dir="ltr">
-                {v}
-              </button>
-            ))}
+            <MessageVariableSelect disabled={isReadOnly} onInsert={v => insertVariable("modificationTemplate", v)} />
             <button type="button" onClick={() => resetToDefault("modificationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1.5 rounded-full border border-dashed border-muted-foreground/40 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
               ↺ استعادة الافتراضي
             </button>
@@ -24196,19 +24208,7 @@ function OwnerMessageSettingsTab() {
                     disabled={isReadOnly}
                     className="resize-none"
                   />
-                  <div className="flex flex-wrap gap-2 items-center">
-                    {MESSAGE_VARIABLES.map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => !isReadOnly && updateCustomTemplate(tpl.id, { body: `${tpl.body} ${v}`.trim() })}
-                        className="px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground text-xs font-mono hover:bg-secondary/80 transition-colors"
-                        dir="ltr"
-                      >
-                        {v}
-                      </button>
-                    ))}
-                  </div>
+                  <MessageVariableSelect disabled={isReadOnly} onInsert={v => updateCustomTemplate(tpl.id, { body: `${tpl.body} ${v}`.trim() })} />
                   <WhatsAppPreview text={tpl.body} />
                 </div>
               ))}
