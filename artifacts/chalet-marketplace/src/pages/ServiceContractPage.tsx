@@ -47,6 +47,7 @@ export default function ServiceContractPage() {
   const [signError, setSignError] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
+  const embedded = new URLSearchParams(window.location.search).get("embedded") === "1";
 
   useEffect(() => {
     fetch(`${BASE}/api/providers/service-contract/${appointmentId}`)
@@ -157,8 +158,8 @@ export default function ServiceContractPage() {
     <main dir="rtl" className="service-contract-print-page min-h-screen bg-[#f7f3ee] py-8 px-4 text-[#2a2018]">
       <style>{`
         @page {
-          size: A4;
-          margin: 12mm;
+          size: A4 portrait;
+          margin: 0;
         }
         @media print {
           html, body, #root {
@@ -177,7 +178,8 @@ export default function ServiceContractPage() {
             width: 100% !important;
             min-height: 0 !important;
             margin: 0 !important;
-            padding: 0 !important;
+            box-sizing: border-box !important;
+            padding: 7mm !important;
             overflow: visible !important;
             color: #2a2018 !important;
             background: #fff !important;
@@ -196,6 +198,8 @@ export default function ServiceContractPage() {
             overflow: visible !important;
             border-radius: 0 !important;
             box-shadow: none !important;
+            font-size: 10px !important;
+            line-height: 1.35 !important;
           }
           .service-contract-print-article,
           .service-contract-print-article * {
@@ -208,8 +212,41 @@ export default function ServiceContractPage() {
           }
           .service-contract-signature-image {
             display: block !important;
-            max-height: 42mm !important;
+            height: 24mm !important;
+            max-height: 24mm !important;
             object-fit: contain !important;
+          }
+          .service-contract-print-article header {
+            padding: 3mm !important;
+          }
+          .service-contract-print-article > section {
+            padding: 3mm !important;
+          }
+          .service-contract-print-article .p-5 {
+            padding: 3mm !important;
+          }
+          .service-contract-print-article .p-4,
+          .service-contract-print-article .p-3 {
+            padding: 2mm !important;
+          }
+          .service-contract-print-article .gap-4,
+          .service-contract-print-article .gap-3 {
+            gap: 2mm !important;
+          }
+          .service-contract-print-article .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+            margin-top: 2mm !important;
+          }
+          .service-contract-print-article .leading-8 {
+            line-height: 1.45 !important;
+          }
+          .service-contract-print-article .w-20,
+          .service-contract-print-article .h-20 {
+            width: 15mm !important;
+            height: 15mm !important;
+          }
+          .service-contract-print-article canvas,
+          .service-contract-print-article button {
+            display: none !important;
           }
           .print\\:hidden {
             display: none !important;
@@ -217,9 +254,9 @@ export default function ServiceContractPage() {
         }
       `}</style>
       <div className="service-contract-print-wrap max-w-2xl mx-auto">
-        <div className="flex justify-end mb-3 print:hidden">
+        {!embedded && <div className="flex justify-end mb-3 print:hidden">
           <Button variant="outline" className="rounded-xl gap-2 bg-white" onClick={() => window.print()}><Printer className="w-4 h-4" />طباعة العقد</Button>
-        </div>
+        </div>}
         <article className="service-contract-print-article bg-white rounded-2xl border border-[#e3d9cf] overflow-hidden shadow-sm print:shadow-none">
           <header className="bg-[#8b5e2b] text-white text-center p-5">
             <p className="text-2xl font-black">تكية</p>

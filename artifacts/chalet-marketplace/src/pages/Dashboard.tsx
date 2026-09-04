@@ -83,6 +83,31 @@ function apiFetch(path: string, opts?: RequestInit) {
   });
 }
 
+function ServiceContractPreviewDialog({ appointment, onClose }: { appointment: any | null; onClose: () => void }) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  if (!appointment) return null;
+  const contractUrl = `${BASE}/service-contract/${appointment.id}?embedded=1`;
+  return (
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent dir="rtl" className="w-[96vw] max-w-4xl h-[92vh] p-0 overflow-hidden flex flex-col">
+        <DialogHeader className="px-5 pt-5 pb-3 border-b border-border shrink-0">
+          <DialogTitle>معاينة العقد الرقمي — {appointment.clientName}</DialogTitle>
+          <DialogDescription>القالب الرسمي نفسه الذي يظهر للعميل في رابط العقد.</DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 min-h-0 bg-[#f7f3ee]">
+          <iframe ref={frameRef} src={contractUrl} title={`عقد خدمة ${appointment.id}`} className="w-full h-full border-0" />
+        </div>
+        <DialogFooter className="px-5 py-3 border-t border-border shrink-0 flex-row gap-2">
+          <Button variant="outline" className="rounded-xl" onClick={onClose}>إغلاق</Button>
+          <Button className="rounded-xl gap-2 bg-[#8b5e2b] hover:bg-[#754d23] text-white" onClick={() => frameRef.current?.contentWindow?.print()}>
+            <Printer className="w-4 h-4" />طباعة العقد
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── Read-Only mode context (admin impersonation) ──────── */
 const ImpersonationCtx = createContext<{
   isReadOnly: boolean;
@@ -9798,7 +9823,7 @@ function ServiceDigitalContractsTab() {
                   <td className="p-3">{statusBadge(a)}</td>
                   <td className="p-3 whitespace-nowrap">{formatDualDate(a.dateStr).gregorian}</td>
                   <td className="p-3"><div className="flex justify-center gap-1">
-                    <Button size="icon" variant="ghost" title="عرض العقد" onClick={() => window.open(serviceContractUrl(a.id), "_blank", "noopener,noreferrer")}><Eye className="w-4 h-4" /></Button>
+                    <Button size="icon" variant="ghost" title="عرض العقد" onClick={() => setPreviewBooking(a)}><Eye className="w-4 h-4" /></Button>
                     <Button size="icon" variant="ghost" title="إرسال عبر واتساب" disabled={!a.clientPhone} onClick={() => sendWhatsApp(a)}><Send className="w-4 h-4 text-green-600" /></Button>
                     <Button size="icon" variant="ghost" title="طباعة العقد" onClick={() => printContract(a)}><Printer className="w-4 h-4" /></Button>
                     <Button size="icon" variant="ghost" title="نسخ رابط العقد" onClick={() => copyContractLink(a)}><Paperclip className="w-4 h-4" /></Button>
@@ -9811,7 +9836,7 @@ function ServiceDigitalContractsTab() {
         </div>
       </div>
 
-      <Dialog open={showSettingsPreview || !!previewBooking} onOpenChange={open => { if (!open) { setShowSettingsPreview(false); setPreviewBooking(null); } }}>
+      <Dialog open={showSettingsPreview} onOpenChange={open => { if (!open) setShowSettingsPreview(false); }}>
         <DialogContent dir="rtl" className="max-w-2xl max-h-[88vh] overflow-y-auto">
           <DialogHeader><DialogTitle>معاينة عقد الخدمة</DialogTitle><DialogDescription>معاينة شكل العقد قبل الإرسال أو الطباعة.</DialogDescription></DialogHeader>
           <div className="rounded-2xl border border-[#e3d9cf] overflow-hidden bg-white text-[#2a2018]">
@@ -9827,6 +9852,7 @@ function ServiceDigitalContractsTab() {
           </div>
         </DialogContent>
       </Dialog>
+      <ServiceContractPreviewDialog appointment={previewBooking} onClose={() => setPreviewBooking(null)} />
     </div>
   );
 }
@@ -10028,6 +10054,7 @@ function ServiceCalendarBookingsTab() {
   const [openServiceMessageMenuId, setOpenServiceMessageMenuId] = useState<number | null>(null);
   const [receiptAppointment, setReceiptAppointment] = useState<any | null>(null);
   const [receiptWhatsAppLoading, setReceiptWhatsAppLoading] = useState(false);
+  const [contractPreviewAppointment, setContractPreviewAppointment] = useState<any | null>(null);
   const receiptPdfExportNonceRef = useRef(0);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
   const emptyForm = {
@@ -11090,7 +11117,7 @@ function ServiceCalendarBookingsTab() {
                           )}
                           {provider?.requiresContract && appointment.status !== "cancelled" && (
                             <>
-                              <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs" onClick={() => window.open(`${window.location.origin}${BASE}/service-contract/${appointment.id}`, "_blank", "noopener,noreferrer")}>
+                              <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs" onClick={() => setContractPreviewAppointment(appointment)}>
                                 <Eye className="w-3.5 h-3.5" />معاينة العقد
                               </Button>
                               <Button
@@ -11589,6 +11616,8 @@ function ServiceCalendarBookingsTab() {
           void handleStatusChange(id, "cancelled", { reason, refundAmount });
         }}
       />
+
+      <ServiceContractPreviewDialog appointment={contractPreviewAppointment} onClose={() => setContractPreviewAppointment(null)} />
 
       {/* ── APPOINTMENTS LIST ── */}
       <div className="space-y-3">
