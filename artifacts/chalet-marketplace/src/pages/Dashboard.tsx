@@ -296,10 +296,18 @@ interface OwnerMessageSettings {
   attachmentNote: string;
 }
 
-const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{اسم_الخدمة}", "{رقم_الحجز}", "{اسم_اليوم_من}", "{التاريخ}", "{التاريخ_م}", "{تاريخ_الخدمة}", "{من_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ}", "{إلى_التاريخ_م}", "{اسم_اليوم_إلى}", "{الفترة}", "{الفترة_الجديدة}", "{الفترة_القديمة}", "{طريقة_تقديم_الخدمة}", "{عنوان_الخدمة}", "{تفاصيل_الخدمة}", "{رابط_العقد_الرقمي}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{الإيجار}", "{إجمالي_الخدمات}", "{تفاصيل_الخدمات}", "{الإجمالي_الكلي}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
+const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{اسم_الخدمة}", "{رقم_الحجز}", "{اسم_اليوم_من}", "{التاريخ}", "{التاريخ_م}", "{تاريخ_الخدمة}", "{من_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ}", "{إلى_التاريخ_م}", "{اسم_اليوم_إلى}", "{المدة}", "{الفترة}", "{الفترة_الجديدة}", "{الفترة_القديمة}", "{طريقة_تقديم_الخدمة}", "{عنوان_الخدمة}", "{تفاصيل_الخدمة}", "{رابط_العقد_الرقمي}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{الإيجار}", "{إجمالي_الخدمات}", "{تفاصيل_الخدمات}", "{الإجمالي_الكلي}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
+
+function stripEmoji(text: string): string {
+  return text
+    .replace(/\p{Extended_Pictographic}/gu, "")
+    .replace(/[\u{1F1E6}-\u{1F1FF}\uFE0F\u200D]/gu, "")
+    .replace(/[ \t]+(\r?\n)/g, "$1")
+    .replace(/[ \t]{2,}/g, " ");
+}
 
 function encodeWhatsAppText(text: string): string {
-  const utf8SafeText = text
+  const utf8SafeText = stripEmoji(text)
     .normalize("NFC")
     .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "\uFFFD");
   return encodeURIComponent(utf8SafeText);
@@ -322,6 +330,7 @@ const PREVIEW_SAMPLE_DATA: Record<string, string> = {
   "{إلى_التاريخ}": "٨ صفر ١٤٤٧",
   "{إلى_التاريخ_م}": "٣ أغسطس ٢٠٢٥",
   "{الفترة}": "مسائية",
+  "{المدة}": "٤ ساعات",
   "{تاريخ_الخدمة}": "١ أغسطس ٢٠٢٥",
   "{اسم_اليوم_من}": "الجمعة",
   "{اسم_اليوم_إلى}": "الأحد",
@@ -348,7 +357,7 @@ const PREVIEW_SAMPLE_DATA: Record<string, string> = {
 };
 
 /* ── Canonical default template bodies (shared by settings defaults + RescheduleDialog fallback) ── */
-const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}\n\nتم تأكيد حجزك في {اسم_العقار}\nفي يوم {اسم_اليوم_من} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\nالفترة: {الفترة_الجديدة}\n\n• الإيجار: {الإيجار} ريال\n• الإضافات: {إجمالي_الخدمات} ريال\n• الإجمالي: {الإجمالي_الكلي} ريال\n• التأمين: {التأمين} ريال\n• المدفوع: {المدفوع} ريال\n• المتبقي للدفع عند الوصول: {المتبقي} ريال\n\nشكراً لاختياركم 🎉\nأمنياتنا لكم بإقامة مانعة 🙏";
+const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}\n\nتم تأكيد حجزك في {اسم_العقار}\nفي يوم {اسم_اليوم_من} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\nالمدة: {المدة}\n\n• الإيجار: {الإيجار} ريال\n• الإضافات: {إجمالي_الخدمات} ريال\n• الإجمالي: {الإجمالي_الكلي} ريال\n• التأمين: {التأمين} ريال\n• المدفوع: {المدفوع} ريال\n• المتبقي للدفع عند الوصول: {المتبقي} ريال\n\nشكراً لاختياركم.\nنتمنى لكم إقامة ممتعة.";
 const DEFAULT_MODIFICATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}،\nتم تعديل حجزك في {اسم_العقار}\nبناءً على ({سبب_التعديل}).\n\nالحجز السابق: يوم {اسم_اليوم_من} ({من_التاريخ}) | ({من_التاريخ_م}) - فترة {الفترة_القديمة}.\n\nالحجز الجديد: يوم {اسم_اليوم_إلى} ({إلى_التاريخ}) | ({إلى_التاريخ_م}) - فترة {الفترة_الجديدة}.\n\nالإيجار: {الإيجار} ريال.\nالتأمين: {التأمين} ريال.\nالمدفوع: {المدفوع} ريال.\nالمتبقي: {المتبقي} ريال.";
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
@@ -357,7 +366,7 @@ const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   bookingConfirmationEnabled: true,
   bookingConfirmationTemplate: DEFAULT_CONFIRMATION_TEMPLATE_BODY,
   changeNoticeEnabled: true,
-  cancellationTemplate: "مرحباً {اسم_العميل} 👋\nنود إشعارك بأنه تم إلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\n\nالسبب : {سبب_الإلغاء}\n\nالمبلغ المُسترد : {المبلغ_المسترد} ريال\n\nنعتذر عن الإزعاج، ونتمنى أن نراكم في أيام قادمة",
+  cancellationTemplate: "مرحباً {اسم_العميل}\nنود إشعارك بأنه تم إلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\n\nالسبب : {سبب_الإلغاء}\n\nالمبلغ المُسترد : {المبلغ_المسترد} ريال\n\nنعتذر عن الإزعاج، ونتمنى أن نراكم في أيام قادمة",
   modificationTemplate: DEFAULT_MODIFICATION_TEMPLATE_BODY,
   customTemplates: [],
   attachmentNote: "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
@@ -5130,6 +5139,7 @@ function BookingCalendarTab({
       .replace(/\{المدفوع\}/g, _fmt(_bPaid))
       .replace(/\{المتبقي\}/g, _fmt(_bRemaining))
       .replace(/\{سبب_التعديل\}/g, reason || "—")
+      .replace(/\{المدة\}/g, `${toArN(dur)} ${dur === 1 ? "يوم" : "أيام"}`)
       .replace(/\{الفترة\}/g, _periodAr())
       .replace(/\{الفترة_القديمة\}/g, "—")
       .replace(/\{الفترة_الجديدة\}/g, _periodAr())
@@ -5193,6 +5203,7 @@ function BookingCalendarTab({
       .replace(/\{المدفوع\}/g, _fmt(_bPaid))
       .replace(/\{المتبقي\}/g, _fmt(_bRemaining))
       .replace(/\{سبب_التعديل\}/g, reason || "—")
+      .replace(/\{المدة\}/g, `${toArN(dur)} ${dur === 1 ? "يوم" : "أيام"}`)
       .replace(/\{الفترة\}/g, _periodAr())
       .replace(/\{الفترة_القديمة\}/g, "—")
       .replace(/\{الفترة_الجديدة\}/g, _periodAr())
@@ -10387,6 +10398,7 @@ function ServiceCalendarBookingsTab() {
     const remaining = Math.max(0, total - deposit);
     const amountText = (value: number) => value > 0 ? toArN(value.toLocaleString("en-US")) : "—";
     const ar = (value: unknown) => toArN(String(value ?? ""));
+    const durationText = serviceDurationLabel(appointment.duration, appointment.durationUnit)?.replace(/^المدة:\s*/, "") ?? "—";
     return removePeriodLines(templateBody)
       .replace(/\{اسم_العميل\}/g, ar(appointment.clientName))
       .replace(/\{اسم_العقار\}/g, ar(provider?.businessName ?? "الخدمة"))
@@ -10401,6 +10413,7 @@ function ServiceCalendarBookingsTab() {
       .replace(/\{المدفوع\}/g, amountText(deposit))
       .replace(/\{المتبقي\}/g, amountText(remaining))
       .replace(/\{التأمين\}/g, amountText(Number(appointment.insuranceAmount ?? 0)))
+      .replace(/\{المدة\}/g, durationText)
       .replace(/\{سبب_الإلغاء\}/g, ar(appointment.cancelReason || "حسب الاتفاق"))
       .replace(/\{طريقة_تقديم_الخدمة\}/g, appointment.serviceDeliveryMethod === "customer_pickup" ? "استلام العميل من المقر" : appointment.serviceDeliveryMethod === "delivery_installation" ? "توصيل وتركيب بموقع العميل" : "—")
       .replace(/\{عنوان_الخدمة\}/g, ar(appointment.serviceAddress || "—"))
@@ -10427,7 +10440,7 @@ function ServiceCalendarBookingsTab() {
       if (!r.ok) throw new Error("تعذر إنشاء رابط التقييم");
       const data = await r.json() as { token: string };
       const link = `${window.location.origin}${BASE}/r/${data.token}`;
-      const message = `أهلاً ${appointment.clientName}، يسعدنا تقييمك لتجربتك مع ${provider?.businessName ?? "الخدمة"} 🌟\nاضغط هنا لإرسال تقييمك: ${link}`;
+      const message = `أهلاً ${appointment.clientName}، يسعدنا تقييمك لتجربتك مع ${provider?.businessName ?? "الخدمة"}.\nاضغط هنا لإرسال تقييمك: ${link}`;
       const phone = normalizeServiceWhatsAppPhone(appointment.clientPhone);
       window.open(`https://wa.me/${phone}?text=${encodeWhatsAppText(message)}`, "_blank", "noopener,noreferrer");
       setReviewSentIds((current) => new Set([...current, appointment.id]));
@@ -20828,7 +20841,7 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
 /* ── Reviews Tab ─────────────────────────────── */
 interface OwnerChalet { id: number; nameAr: string; photos: string[]; waReviewTemplate: string | null }
 
-const DEFAULT_REVIEW_TEMPLATE = "أهلاً [اسم_الضيف]، يسعدنا تقييمك لتجربتك في [اسم_الشاليه] 🌟\nاضغط هنا لتقييمك: [الرابط]";
+const DEFAULT_REVIEW_TEMPLATE = "أهلاً [اسم_الضيف]، يسعدنا تقييمك لتجربتك في [اسم_الشاليه].\nاضغط هنا لتقييمك: [الرابط]";
 
 function fmtDT(iso: string): string {
   try {
@@ -23928,7 +23941,7 @@ function WhatsAppPreview({
 }) {
   const preview = useMemo(() => {
     if (!text.trim()) return "";
-    let result = hidePeriodLines ? removePeriodLines(text) : text;
+    let result = stripEmoji(hidePeriodLines ? removePeriodLines(text) : text);
     const actualEstablishmentName = establishmentName?.trim() || "اسم المنشأة";
     const replacements = { ...PREVIEW_SAMPLE_DATA, ...bookingData };
     result = result
@@ -24060,6 +24073,9 @@ function OwnerMessageSettingsTab({
       "{إلى_التاريخ_م}": dual.gregorian,
       "{تاريخ_الخدمة}": dual.gregorian,
       "{الفترة}": period,
+      "{المدة}": providerId
+        ? (serviceDurationLabel(latestBooking.duration, latestBooking.durationUnit)?.replace(/^المدة:\s*/, "") ?? "—")
+        : `${toArN(Math.max(1, Number(latestBooking.durationDays ?? 1)))} ${Number(latestBooking.durationDays ?? 1) === 1 ? "يوم" : "أيام"}`,
       "{الفترة_الجديدة}": period,
       "{الفترة_القديمة}": period,
       "{طريقة_تقديم_الخدمة}": latestBooking.serviceDeliveryMethod === "customer_pickup"
@@ -24104,6 +24120,13 @@ function OwnerMessageSettingsTab({
       if (!data.modificationTemplate?.includes("الحجز السابق: يوم")) {
         base.modificationTemplate = DEFAULT_MODIFICATION_TEMPLATE_BODY;
       }
+      base.bookingConfirmationTemplate = stripEmoji(base.bookingConfirmationTemplate);
+      base.cancellationTemplate = stripEmoji(base.cancellationTemplate);
+      base.modificationTemplate = stripEmoji(base.modificationTemplate);
+      base.customTemplates = (base.customTemplates ?? []).map((template) => ({
+        ...template,
+        body: stripEmoji(template.body),
+      }));
       setForm(base);
     }
   }, [data]);
