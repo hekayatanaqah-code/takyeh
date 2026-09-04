@@ -366,7 +366,7 @@ const PREVIEW_SAMPLE_DATA: Record<string, string> = {
 };
 
 /* ── Canonical default template bodies (shared by settings defaults + RescheduleDialog fallback) ── */
-const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}\n\nتم تأكيد حجزك في {اسم_العقار}\nفي يوم {اسم_اليوم_من} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\nالمدة: {المدة}\n\n• الإيجار: {الإيجار} ريال\n• الإضافات: {إجمالي_الخدمات} ريال\n• الإجمالي: {الإجمالي_الكلي} ريال\n• التأمين: {التأمين} ريال\n• المدفوع: {المدفوع} ريال\n• المتبقي للدفع عند الوصول: {المتبقي} ريال\n\nشكراً لاختياركم.\nأمنياتنا لكم بإقامة ممتعة.";
+const DEFAULT_CONFIRMATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}\n\nتم تأكيد حجزك في {اسم_العقار}\nفي يوم {اسم_اليوم_من} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\nالمدة: {المدة}\n\n• الإيجار: {الإيجار} ريال\n• الإضافات: {إجمالي_الخدمات} ريال\n• الإجمالي: {الإجمالي_الكلي} ريال\n• التأمين: {التأمين} ريال\n• المدفوع: {المدفوع} ريال\n• المتبقي: {المتبقي} ريال\n\nشكراً لاختياركم.\nأمنياتنا لكم بإقامة ممتعة.";
 const DEFAULT_MODIFICATION_TEMPLATE_BODY = "مرحباً {اسم_العميل}،\nتم تعديل حجزك في {اسم_العقار}\nبناءً على ({سبب_التعديل}).\n\nالحجز السابق: يوم {اسم_اليوم_من} ({من_التاريخ}) | ({من_التاريخ_م}) - فترة {الفترة_القديمة}.\n\nالحجز الجديد: يوم {اسم_اليوم_إلى} ({إلى_التاريخ}) | ({إلى_التاريخ_م}) - فترة {الفترة_الجديدة}.\n\nالإيجار: {الإيجار} ريال.\nالتأمين: {التأمين} ريال.\nالمدفوع: {المدفوع} ريال.\nالمتبقي: {المتبقي} ريال.";
 
 const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
@@ -24132,6 +24132,10 @@ function OwnerMessageSettingsTab({
       if (providerId) {
         base.bookingConfirmationTemplate = prepareServiceMessageTemplate(base.bookingConfirmationTemplate);
       }
+      base.bookingConfirmationTemplate = base.bookingConfirmationTemplate.replace(
+        /المتبقي للدفع عند الوصول:/g,
+        "المتبقي:",
+      );
       base.bookingConfirmationTemplate = stripEmoji(base.bookingConfirmationTemplate);
       base.cancellationTemplate = stripEmoji(base.cancellationTemplate);
       base.modificationTemplate = stripEmoji(base.modificationTemplate);
