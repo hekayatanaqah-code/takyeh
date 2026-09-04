@@ -11674,8 +11674,10 @@ function ServiceCalendarBookingsTab() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="طلب العميل">طلب العميل</SelectItem>
-                    <SelectItem value="تعديل مدة/تاريخ الحجز">تعديل مدة/تاريخ الحجز</SelectItem>
-                    <SelectItem value="ظروف طارئة / صيانة">ظروف طارئة / صيانة</SelectItem>
+                    <SelectItem value="تعديل تاريخ الحجز">تعديل تاريخ الحجز</SelectItem>
+                    <SelectItem value="تعديل مدة الحجز">تعديل مدة الحجز</SelectItem>
+                    <SelectItem value="ظروف طارئة">ظروف طارئة</SelectItem>
+                    <SelectItem value="صيانة">صيانة</SelectItem>
                     <SelectItem value="أخرى">أخرى</SelectItem>
                   </SelectContent>
                 </Select>
