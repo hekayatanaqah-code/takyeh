@@ -300,8 +300,6 @@ const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{�
 
 const PREVIEW_SAMPLE_DATA: Record<string, string> = {
   "{اسم_العميل}": "محمد بن أحمد",
-  "{اسم_العقار}": "شاليه الياسمين",
-  "{اسم_الخدمة}": "تنسيق وتجهيز مناسبة",
   "{رقم_الحجز}": "١٢٤٥",
   "{التاريخ}": "٦ صفر ١٤٤٧",
   "{التاريخ_م}": "١ أغسطس ٢٠٢٥",
@@ -23903,15 +23901,19 @@ function NotificationSettingsSection() {
   return null;
 }
 
-function WhatsAppPreview({ text }: { text: string }) {
+function WhatsAppPreview({ text, establishmentName }: { text: string; establishmentName?: string }) {
   const preview = useMemo(() => {
     if (!text.trim()) return "";
     let result = text;
+    const actualEstablishmentName = establishmentName?.trim() || "اسم المنشأة";
+    result = result
+      .split("{اسم_العقار}").join(actualEstablishmentName)
+      .split("{اسم_الخدمة}").join(actualEstablishmentName);
     Object.entries(PREVIEW_SAMPLE_DATA).forEach(([key, val]) => {
       result = result.split(key).join(val);
     });
     return result;
-  }, [text]);
+  }, [text, establishmentName]);
 
   if (!preview.trim()) return null;
 
@@ -23962,7 +23964,7 @@ function MessageVariableSelect({ onInsert, disabled = false }: { onInsert: (vari
   );
 }
 
-function OwnerMessageSettingsTab() {
+function OwnerMessageSettingsTab({ establishmentName }: { establishmentName?: string }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
@@ -24116,7 +24118,7 @@ function OwnerMessageSettingsTab() {
               ↺ استعادة الافتراضي
             </button>
           </div>
-          <WhatsAppPreview text={form.bookingConfirmationTemplate} />
+          <WhatsAppPreview text={form.bookingConfirmationTemplate} establishmentName={establishmentName} />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
@@ -24141,7 +24143,7 @@ function OwnerMessageSettingsTab() {
               ↺ استعادة الافتراضي
             </button>
           </div>
-          <WhatsAppPreview text={form.cancellationTemplate} />
+          <WhatsAppPreview text={form.cancellationTemplate} establishmentName={establishmentName} />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
@@ -24165,7 +24167,7 @@ function OwnerMessageSettingsTab() {
               ↺ استعادة الافتراضي
             </button>
           </div>
-          <WhatsAppPreview text={form.modificationTemplate} />
+          <WhatsAppPreview text={form.modificationTemplate} establishmentName={establishmentName} />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4">
@@ -24209,7 +24211,7 @@ function OwnerMessageSettingsTab() {
                     className="resize-none"
                   />
                   <MessageVariableSelect disabled={isReadOnly} onInsert={v => updateCustomTemplate(tpl.id, { body: `${tpl.body} ${v}`.trim() })} />
-                  <WhatsAppPreview text={tpl.body} />
+                  <WhatsAppPreview text={tpl.body} establishmentName={establishmentName} />
                 </div>
               ))}
             </div>
@@ -25227,7 +25229,7 @@ export default function Dashboard() {
                             <CustomersTab />
                           </AdminFinanceCtx.Provider>
                         )}
-                        {selectedServiceTab === "messages" && <OwnerMessageSettingsTab />}
+                        {selectedServiceTab === "messages" && <OwnerMessageSettingsTab establishmentName={selectedProvider?.businessName} />}
                       </div>
                       {/* Shortcut to admin-finance */}
                       <div className="mt-4 pt-4 border-t border-border">
@@ -25484,7 +25486,7 @@ export default function Dashboard() {
           <DepositsTab />
         )}
         {activeTab === "messageSettings" && (
-          <OwnerMessageSettingsTab />
+          <OwnerMessageSettingsTab establishmentName={ownerChalets[0]?.nameAr} />
         )}
         {activeTab === "customers" && (
           <AdminFinanceCtx.Provider value={{ unit: { type: "all" } }}>
