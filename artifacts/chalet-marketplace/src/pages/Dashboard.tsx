@@ -298,6 +298,13 @@ interface OwnerMessageSettings {
 
 const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{اسم_الخدمة}", "{رقم_الحجز}", "{اسم_اليوم_من}", "{التاريخ}", "{التاريخ_م}", "{تاريخ_الخدمة}", "{من_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ}", "{إلى_التاريخ_م}", "{اسم_اليوم_إلى}", "{الفترة}", "{الفترة_الجديدة}", "{الفترة_القديمة}", "{طريقة_تقديم_الخدمة}", "{عنوان_الخدمة}", "{تفاصيل_الخدمة}", "{رابط_العقد_الرقمي}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{الإيجار}", "{إجمالي_الخدمات}", "{تفاصيل_الخدمات}", "{الإجمالي_الكلي}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
 
+function encodeWhatsAppText(text: string): string {
+  const utf8SafeText = text
+    .normalize("NFC")
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "\uFFFD");
+  return encodeURIComponent(utf8SafeText);
+}
+
 const PREVIEW_SAMPLE_DATA: Record<string, string> = {
   "{اسم_العميل}": "محمد بن أحمد",
   "{رقم_الحجز}": "١٢٤٥",
@@ -476,7 +483,7 @@ function UpgradePlanDialog({ open, onClose, context }: { open: boolean; onClose:
                 className="mt-auto w-full rounded-xl"
                 onClick={() => {
                   const msg = `أريد الترقية إلى خطة: ${plan.name} (${plan.price})`;
-                  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+                  window.open(`https://wa.me/?text=${encodeWhatsAppText(msg)}`, "_blank");
                 }}
               >
                 اختر هذه الخطة
@@ -3645,7 +3652,7 @@ function WaCancelPreviewDialog({
   const wasEdited = msg.trim() !== initialMessage.trim();
 
   const handleSend = () => {
-    const encoded = encodeURIComponent(msg);
+    const encoded = encodeWhatsAppText(msg);
     const url = phone
       ? `https://wa.me/${phone}?text=${encoded}`
       : `https://wa.me/?text=${encoded}`;
@@ -4129,8 +4136,8 @@ function RescheduleDialog({
     if (rawPhone.startsWith("0"))  rawPhone = "966" + rawPhone.slice(1);
     if (rawPhone.length === 9 && rawPhone.startsWith("5")) rawPhone = "966" + rawPhone;
     const url = rawPhone
-      ? `https://wa.me/${rawPhone}?text=${encodeURIComponent(waConfirmMsg)}`
-      : `https://wa.me/?text=${encodeURIComponent(waConfirmMsg)}`;
+      ? `https://wa.me/${rawPhone}?text=${encodeWhatsAppText(waConfirmMsg)}`
+      : `https://wa.me/?text=${encodeWhatsAppText(waConfirmMsg)}`;
     const a = document.createElement("a");
     a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer";
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -4625,7 +4632,7 @@ function BookingCalendarTab({
       if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
       if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
       const a = document.createElement("a");
-      a.href = `https://wa.me/${rawPhone || ""}?text=${encodeURIComponent(msg)}`;
+      a.href = `https://wa.me/${rawPhone || ""}?text=${encodeWhatsAppText(msg)}`;
       a.target = "_blank"; a.rel = "noopener noreferrer";
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setReviewSentIds((prev) => new Set([...prev, b.id]));
@@ -5199,7 +5206,7 @@ function BookingCalendarTab({
       })())
       .replace(/\{[^}]+\}/g, "—");
     if (returnOnly) return msg;
-    const encoded = encodeURIComponent(msg);
+    const encoded = encodeWhatsAppText(msg);
     const phone = normalizeGuestPhone(b);
     const waUrl = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
     const a = document.createElement("a");
@@ -5247,8 +5254,8 @@ function BookingCalendarTab({
 
     const a = document.createElement("a");
     a.href = rawPhone
-      ? `https://wa.me/${rawPhone}?text=${encodeURIComponent(msg)}`
-      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+      ? `https://wa.me/${rawPhone}?text=${encodeWhatsAppText(msg)}`
+      : `https://wa.me/?text=${encodeWhatsAppText(msg)}`;
     a.target = "_blank"; a.rel = "noopener noreferrer";
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
@@ -5312,7 +5319,7 @@ function BookingCalendarTab({
           lines.push(``, `📸 صور التوثيق الإضافية:`, firstUrl);
           const msgP = lines.join("\n");
           const a2 = document.createElement("a");
-          a2.href = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msgP)}` : `https://wa.me/?text=${encodeURIComponent(msgP)}`;
+          a2.href = phone ? `https://wa.me/${phone}?text=${encodeWhatsAppText(msgP)}` : `https://wa.me/?text=${encodeWhatsAppText(msgP)}`;
           a2.target = "_blank"; a2.rel = "noopener noreferrer";
           document.body.appendChild(a2); a2.click(); document.body.removeChild(a2);
           setOpenMessageMenuId(null);
@@ -5334,7 +5341,7 @@ function BookingCalendarTab({
     lines.push(``, `✨ منصة حكاية أناقة – شاليهات القصيم`);
     const msgFull = lines.join("\n");
     const a3 = document.createElement("a");
-    a3.href = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msgFull)}` : `https://wa.me/?text=${encodeURIComponent(msgFull)}`;
+    a3.href = phone ? `https://wa.me/${phone}?text=${encodeWhatsAppText(msgFull)}` : `https://wa.me/?text=${encodeWhatsAppText(msgFull)}`;
     a3.target = "_blank"; a3.rel = "noopener noreferrer";
     document.body.appendChild(a3); a3.click(); document.body.removeChild(a3);
     setOpenMessageMenuId(null);
@@ -7020,7 +7027,7 @@ function BookingCalendarTab({
                       lines.push(``, `📸 صور التوثيق الإضافية:`, firstUrl);
                       // Skip the shared footer below since we already pushed it
                       const msg = lines.join("\n");
-                      const encoded = encodeURIComponent(msg);
+                      const encoded = encodeWhatsAppText(msg);
                       const waUrl = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
                       const a = document.createElement("a");
                       a.href = waUrl; a.target = "_blank"; a.rel = "noopener noreferrer";
@@ -7047,7 +7054,7 @@ function BookingCalendarTab({
                 const msg = lines.join("\n");
 
                 // Use <a> click — works reliably inside iframes unlike window.open
-                const encoded = encodeURIComponent(msg);
+                const encoded = encodeWhatsAppText(msg);
                 const waUrl = phone
                   ? `https://wa.me/${phone}?text=${encoded}`
                   : `https://wa.me/?text=${encoded}`;
@@ -9748,7 +9755,7 @@ function ServiceDigitalContractsTab() {
   function sendWhatsApp(a: any) {
     const phone = String(a.clientPhone ?? "").replace(/\D/g, "").replace(/^0/, "966");
     const dual = formatDualDate(a.dateStr);
-    const msg = encodeURIComponent(
+    const msg = encodeWhatsAppText(
       `السلام عليكم ${a.clientName ?? ""}،\nنرفق لكم عقد الخدمة الخاص بـ ${provider?.businessName ?? "الخدمة"}.\n`
       + `تاريخ الحجز: ${dual.gregorian} (${dual.hijri})\n${serviceContractUrl(a.id)}`,
     );
@@ -10399,7 +10406,7 @@ function ServiceCalendarBookingsTab() {
   function sendServiceCustomMessage(appointment: any, templateBody: string) {
     const message = buildServiceMessage(appointment, templateBody);
     const phone = normalizeServiceWhatsAppPhone(appointment.clientPhone);
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    window.open(`https://wa.me/${phone}?text=${encodeWhatsAppText(message)}`, "_blank", "noopener,noreferrer");
     setOpenServiceMessageMenuId(null);
   }
 
@@ -10415,7 +10422,7 @@ function ServiceCalendarBookingsTab() {
       const link = `${window.location.origin}${BASE}/r/${data.token}`;
       const message = `أهلاً ${appointment.clientName}، يسعدنا تقييمك لتجربتك مع ${provider?.businessName ?? "الخدمة"} 🌟\nاضغط هنا لإرسال تقييمك: ${link}`;
       const phone = normalizeServiceWhatsAppPhone(appointment.clientPhone);
-      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+      window.open(`https://wa.me/${phone}?text=${encodeWhatsAppText(message)}`, "_blank", "noopener,noreferrer");
       setReviewSentIds((current) => new Set([...current, appointment.id]));
       toast({ title: "تم إنشاء رابط التقييم وفتح واتساب ✓" });
     } catch (error) {
@@ -10584,7 +10591,7 @@ function ServiceCalendarBookingsTab() {
       downloadLink.click();
       downloadLink.remove();
       URL.revokeObjectURL(objectUrl);
-      window.open(`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+      window.open(`https://wa.me/${whatsappPhone}?text=${encodeWhatsAppText(message)}`, "_blank", "noopener,noreferrer");
       toast({
         title: `تم حفظ ${fileName}`,
         description: "لا يدعم هذا المتصفح إرفاق الملفات تلقائياً؛ أرفق الملف المحفوظ في محادثة واتساب.",
@@ -11011,7 +11018,7 @@ function ServiceCalendarBookingsTab() {
                         "يرجى مراجعة بيانات العقد وتوقيعه إلكترونياً من خلال الرابط التالي:",
                         contractUrl,
                       ].join("\n\n");
-                      window.open(`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+                      window.open(`https://wa.me/${whatsappPhone}?text=${encodeWhatsAppText(message)}`, "_blank", "noopener,noreferrer");
                     };
                     return (
                       <div
@@ -19276,8 +19283,8 @@ function ReportsTab() {
 
       // ── إذا لم تدعم البيئة مشاركة الملفات: رابط واتساب نصي ──────────────
       const waLink = phone
-        ? `https://wa.me/${phone}?text=${encodeURIComponent(bodyText)}`
-        : `https://wa.me/?text=${encodeURIComponent(bodyText)}`;
+        ? `https://wa.me/${phone}?text=${encodeWhatsAppText(bodyText)}`
+        : `https://wa.me/?text=${encodeWhatsAppText(bodyText)}`;
       window.open(waLink, "_blank");
     } catch (err) {
       console.error("WhatsApp share failed:", err);
@@ -21197,7 +21204,7 @@ function ReviewsTab() {
       .replace(/\{chalet_name\}/g, chalet.nameAr ?? "عقارنا")
       .replace(/\[اسم_الضيف\]/g, "")
       .replace(/\{guest_name\}/g, "");
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://wa.me/?text=${encodeWhatsAppText(text)}`, "_blank");
   }
 
   function inviteStats(chaletId: number) {
@@ -23901,19 +23908,28 @@ function NotificationSettingsSection() {
   return null;
 }
 
-function WhatsAppPreview({ text, establishmentName }: { text: string; establishmentName?: string }) {
+function WhatsAppPreview({
+  text,
+  establishmentName,
+  bookingData,
+}: {
+  text: string;
+  establishmentName?: string;
+  bookingData?: Record<string, string>;
+}) {
   const preview = useMemo(() => {
     if (!text.trim()) return "";
     let result = text;
     const actualEstablishmentName = establishmentName?.trim() || "اسم المنشأة";
+    const replacements = { ...PREVIEW_SAMPLE_DATA, ...bookingData };
     result = result
       .split("{اسم_العقار}").join(actualEstablishmentName)
       .split("{اسم_الخدمة}").join(actualEstablishmentName);
-    Object.entries(PREVIEW_SAMPLE_DATA).forEach(([key, val]) => {
+    Object.entries(replacements).forEach(([key, val]) => {
       result = result.split(key).join(val);
     });
     return result;
-  }, [text, establishmentName]);
+  }, [text, establishmentName, bookingData]);
 
   if (!preview.trim()) return null;
 
@@ -23964,11 +23980,99 @@ function MessageVariableSelect({ onInsert, disabled = false }: { onInsert: (vari
   );
 }
 
-function OwnerMessageSettingsTab({ establishmentName }: { establishmentName?: string }) {
+function OwnerMessageSettingsTab({
+  establishmentName,
+  providerId,
+  chaletNamesBySubmissionId = {},
+}: {
+  establishmentName?: string;
+  providerId?: number | null;
+  chaletNamesBySubmissionId?: Record<number, string>;
+}) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const [form, setForm] = useState<OwnerMessageSettings>(DEFAULT_OWNER_MESSAGE_SETTINGS);
+
+  const { data: propertyBookings = [] } = useQuery<OwnerBooking[]>({
+    queryKey: ["owner", "bookings"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/bookings");
+      return r.ok ? r.json() : [];
+    },
+    enabled: !providerId,
+  });
+
+  const { data: serviceAppointments = [] } = useQuery<any[]>({
+    queryKey: ["service-appointments", providerId],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: !!providerId,
+  });
+
+  const latestBooking = useMemo(() => {
+    const rows = providerId ? serviceAppointments : propertyBookings;
+    return [...rows].sort((a: any, b: any) => {
+      const aTime = new Date(a.createdAt ?? a.dateStr ?? a.bookingDate ?? 0).getTime();
+      const bTime = new Date(b.createdAt ?? b.dateStr ?? b.bookingDate ?? 0).getTime();
+      return bTime - aTime || Number(b.id ?? 0) - Number(a.id ?? 0);
+    })[0] as any | undefined;
+  }, [providerId, propertyBookings, serviceAppointments]);
+
+  const previewEstablishmentName = providerId
+    ? establishmentName
+    : chaletNamesBySubmissionId[Number(latestBooking?.submissionId)] || establishmentName;
+
+  const previewBookingData = useMemo<Record<string, string> | undefined>(() => {
+    if (!latestBooking) return undefined;
+    const dateStr = String(latestBooking.dateStr ?? latestBooking.bookingDate ?? "");
+    const dual = dateStr ? formatDualDate(dateStr) : { hijri: "—", gregorian: "—" };
+    const total = Number(latestBooking.amount ?? latestBooking.totalPrice ?? 0);
+    const paid = Number(latestBooking.deposit ?? latestBooking.depositPaid ?? 0);
+    const insurance = Number(latestBooking.insuranceAmount ?? latestBooking.insuranceFee ?? 0);
+    const amountText = (value: number) => value > 0 ? toArN(value.toLocaleString("en-US")) : "—";
+    const period = latestBooking.duration
+      ?? (latestBooking.period === "morning" ? "صباحية" : latestBooking.period === "evening" ? "مسائية" : latestBooking.period === "full_day" ? "يوم كامل" : "—");
+    const dayName = dateStr
+      ? new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${dateStr}T12:00:00`))
+      : "—";
+    return {
+      "{اسم_العميل}": latestBooking.clientName || "—",
+      "{رقم_الحجز}": toArN(latestBooking.id ?? ""),
+      "{اسم_اليوم_من}": dayName,
+      "{اسم_اليوم_إلى}": dayName,
+      "{التاريخ}": dual.hijri.replace(/\s*هـ\s*$/, ""),
+      "{التاريخ_م}": dual.gregorian,
+      "{من_التاريخ}": dual.hijri.replace(/\s*هـ\s*$/, ""),
+      "{من_التاريخ_م}": dual.gregorian,
+      "{إلى_التاريخ}": dual.hijri.replace(/\s*هـ\s*$/, ""),
+      "{إلى_التاريخ_م}": dual.gregorian,
+      "{تاريخ_الخدمة}": dual.gregorian,
+      "{الفترة}": period,
+      "{الفترة_الجديدة}": period,
+      "{الفترة_القديمة}": period,
+      "{طريقة_تقديم_الخدمة}": latestBooking.serviceDeliveryMethod === "customer_pickup"
+        ? "استلام العميل من المقر"
+        : latestBooking.serviceDeliveryMethod === "delivery_installation" ? "توصيل وتركيب بموقع العميل" : "—",
+      "{عنوان_الخدمة}": latestBooking.serviceAddress || "—",
+      "{تفاصيل_الخدمة}": latestBooking.notes || "—",
+      "{رابط_العقد_الرقمي}": providerId
+        ? `${window.location.origin}${BASE}/service-contract/${latestBooking.id}`
+        : `${window.location.origin}${BASE}/contract/${latestBooking.id}`,
+      "{سبب_الإلغاء}": latestBooking.cancelReason || "حسب الاتفاق",
+      "{سبب_التعديل}": latestBooking.rescheduleReason || "—",
+      "{الإيجار}": amountText(total),
+      "{الإجمالي_الكلي}": amountText(total),
+      "{التأمين}": amountText(insurance),
+      "{المدفوع}": amountText(paid),
+      "{المتبقي}": amountText(Math.max(0, total + insurance - paid)),
+      "{المبلغ_المسترد}": amountText(Number(latestBooking.cancelRefundAmount ?? 0)),
+      "{إجمالي_الخدمات}": amountText((latestBooking.bookedAddons ?? []).reduce((sum: number, addon: any) => sum + Number(addon.price ?? 0), 0)),
+      "{تفاصيل_الخدمات}": (latestBooking.bookedAddons ?? []).map((addon: any) => `${addon.name}: ${amountText(Number(addon.price ?? 0))} ريال`).join("\n") || "—",
+    };
+  }, [latestBooking, providerId]);
 
   const { data, isLoading } = useQuery<OwnerMessageSettings>({
     queryKey: ["owner", "message-settings"],
@@ -24118,7 +24222,7 @@ function OwnerMessageSettingsTab({ establishmentName }: { establishmentName?: st
               ↺ استعادة الافتراضي
             </button>
           </div>
-          <WhatsAppPreview text={form.bookingConfirmationTemplate} establishmentName={establishmentName} />
+          <WhatsAppPreview text={form.bookingConfirmationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
@@ -24143,7 +24247,7 @@ function OwnerMessageSettingsTab({ establishmentName }: { establishmentName?: st
               ↺ استعادة الافتراضي
             </button>
           </div>
-          <WhatsAppPreview text={form.cancellationTemplate} establishmentName={establishmentName} />
+          <WhatsAppPreview text={form.cancellationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
@@ -24167,7 +24271,7 @@ function OwnerMessageSettingsTab({ establishmentName }: { establishmentName?: st
               ↺ استعادة الافتراضي
             </button>
           </div>
-          <WhatsAppPreview text={form.modificationTemplate} establishmentName={establishmentName} />
+          <WhatsAppPreview text={form.modificationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} />
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4">
@@ -24211,7 +24315,7 @@ function OwnerMessageSettingsTab({ establishmentName }: { establishmentName?: st
                     className="resize-none"
                   />
                   <MessageVariableSelect disabled={isReadOnly} onInsert={v => updateCustomTemplate(tpl.id, { body: `${tpl.body} ${v}`.trim() })} />
-                  <WhatsAppPreview text={tpl.body} establishmentName={establishmentName} />
+                  <WhatsAppPreview text={tpl.body} establishmentName={previewEstablishmentName} bookingData={previewBookingData} />
                 </div>
               ))}
             </div>
@@ -25229,7 +25333,7 @@ export default function Dashboard() {
                             <CustomersTab />
                           </AdminFinanceCtx.Provider>
                         )}
-                        {selectedServiceTab === "messages" && <OwnerMessageSettingsTab establishmentName={selectedProvider?.businessName} />}
+                        {selectedServiceTab === "messages" && <OwnerMessageSettingsTab establishmentName={selectedProvider?.businessName} providerId={selectedServiceId} />}
                       </div>
                       {/* Shortcut to admin-finance */}
                       <div className="mt-4 pt-4 border-t border-border">
@@ -25486,7 +25590,10 @@ export default function Dashboard() {
           <DepositsTab />
         )}
         {activeTab === "messageSettings" && (
-          <OwnerMessageSettingsTab establishmentName={ownerChalets[0]?.nameAr} />
+          <OwnerMessageSettingsTab
+            establishmentName={ownerChalets[0]?.nameAr}
+            chaletNamesBySubmissionId={Object.fromEntries(ownerChalets.map((chalet: any) => [Number(chalet.submissionId), chalet.nameAr]))}
+          />
         )}
         {activeTab === "customers" && (
           <AdminFinanceCtx.Provider value={{ unit: { type: "all" } }}>
@@ -25909,7 +26016,7 @@ function buildContractWaMsg(
   const inviteText = isReturning
     ? "ولإتمام التأكيد النهائي والموثق لحجزكم، يرجى التكرم بالدخول على رابط العقد الرقمي أدناه لتحديث بياناتكم والتوقيع إلكترونياً:\n"
     : "ولإتمام التأكيد النهائي والموثق لحجزكم، يرجى التكرم بالدخول على رابط العقد الرقمي أدناه لتعبئة بياناتكم الرسمية والتوقيع إلكترونياً:\n";
-  return encodeURIComponent(
+  return encodeWhatsAppText(
     header +
     "تفاصيل الحجز:\n" +
     "- اليوم: " + dayN + "\n" +
