@@ -828,7 +828,19 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
   const updates: Record<string, any> = { ...parsed.data };
   if (parsed.data.editReason?.trim()) {
     updates.lastEditedAt = new Date();
-    if (targetDate !== row.dateStr) updates.previousDateStr = row.dateStr;
+    updates.previousDateStr = targetDate !== row.dateStr ? row.dateStr : null;
+
+    const targetAmount = parsed.data.amount ?? row.amount;
+    const amountChanged = Number(targetAmount ?? 0) !== Number(row.amount ?? 0);
+    updates.previousAmount = amountChanged ? row.amount : null;
+
+    const targetDuration = parsed.data.duration ?? row.duration;
+    const targetDurationUnit = parsed.data.durationUnit ?? row.durationUnit;
+    const durationChanged =
+      String(targetDuration ?? "") !== String(row.duration ?? "") ||
+      targetDurationUnit !== row.durationUnit;
+    updates.previousDuration = durationChanged ? row.duration : null;
+    updates.previousDurationUnit = durationChanged ? row.durationUnit : null;
   }
   if (!provider.requiresInsurance) updates.clientIdNumber = null;
   if (parsed.data.status === "cancelled" && !row.cancelledAt) {

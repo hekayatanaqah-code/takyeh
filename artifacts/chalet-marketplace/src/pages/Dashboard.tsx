@@ -11121,13 +11121,23 @@ function ServiceCalendarBookingsTab() {
                           <div className="rounded-xl border border-violet-200 bg-violet-50/70 px-3 py-2 text-xs text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/20 dark:text-violet-200">
                             {appointment.previousDateStr ? (
                               <p className="font-semibold">
-                                تم تعديل الموعد من {formatDualDate(appointment.previousDateStr).hijri} هـ إلى {formatDualDate(appointment.dateStr).hijri} هـ
+                                تم إعادة جدولة الموعد من {formatDualDate(appointment.previousDateStr).hijri} هـ إلى {formatDualDate(appointment.dateStr).hijri} هـ
                               </p>
                             ) : (
-                              <p className="font-semibold">تم تعديل بيانات الحجز</p>
+                              <p className="font-semibold">تفاصيل آخر تعديل</p>
                             )}
                             {appointment.editReason && (
                               <p className="mt-1 text-[11px] opacity-80">السبب: {appointment.editReason}</p>
+                            )}
+                            {appointment.previousAmount !== null && appointment.previousAmount !== undefined && (
+                              <p className="mt-1 text-[11px] opacity-80">
+                                تم تعديل السعر من {serviceReceiptMoney(Number(appointment.previousAmount))} إلى {serviceReceiptMoney(Number(appointment.amount ?? 0))}
+                              </p>
+                            )}
+                            {appointment.previousDurationUnit !== null && appointment.previousDurationUnit !== undefined && (
+                              <p className="mt-1 text-[11px] opacity-80">
+                                تم تعديل المدة من {serviceDurationLabel(appointment.previousDuration, appointment.previousDurationUnit) ?? "—"} إلى {serviceDurationLabel(appointment.duration, appointment.durationUnit) ?? "—"}
+                              </p>
                             )}
                           </div>
                         )}
