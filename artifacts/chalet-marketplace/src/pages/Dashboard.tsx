@@ -24388,12 +24388,9 @@ function OwnerMessageSettingsTab({
 
       <div className="rounded-3xl border border-border bg-card p-6 shadow-sm space-y-6">
         <div className="space-y-3 rounded-2xl border border-border p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h4 className="font-bold text-foreground">تأكيد الحجز الفوري</h4>
-              <p className="text-xs text-muted-foreground mt-0.5">قالب يدوي لتأكيد الحجز من بطاقة الحجز.</p>
-            </div>
-            <Switch checked={form.bookingConfirmationEnabled} onCheckedChange={(v) => setField("bookingConfirmationEnabled", v)} disabled={isReadOnly} />
+          <div>
+            <h4 className="font-bold text-foreground">تأكيد الحجز الفوري</h4>
+            <p className="text-xs text-muted-foreground mt-0.5">قالب يدوي لتأكيد الحجز من بطاقة الحجز.</p>
           </div>
           <Textarea
             value={form.bookingConfirmationTemplate}
@@ -24413,12 +24410,9 @@ function OwnerMessageSettingsTab({
         </div>
 
         <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h4 className="font-bold text-foreground">إلغاء الحجز</h4>
-              <p className="text-xs text-muted-foreground mt-0.5">قالب يدوي لإشعار العميل بالإلغاء وسبب الإلغاء.</p>
-            </div>
-            <Switch checked={form.changeNoticeEnabled} onCheckedChange={(v) => setField("changeNoticeEnabled", v)} disabled={isReadOnly} />
+          <div>
+            <h4 className="font-bold text-foreground">إلغاء الحجز</h4>
+            <p className="text-xs text-muted-foreground mt-0.5">قالب يدوي لإشعار العميل بالإلغاء وسبب الإلغاء.</p>
           </div>
           <Textarea
             value={form.cancellationTemplate}
