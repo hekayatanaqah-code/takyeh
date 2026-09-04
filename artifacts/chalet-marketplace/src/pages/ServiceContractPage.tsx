@@ -239,6 +239,16 @@ export default function ServiceContractPage() {
           .service-contract-print-article .leading-8 {
             line-height: 1.45 !important;
           }
+          .service-contract-party-name {
+            font-size: 18px !important;
+            line-height: 1.35 !important;
+            font-weight: 700 !important;
+          }
+          .service-contract-party-phone {
+            font-size: 13px !important;
+            line-height: 1.45 !important;
+            font-weight: 500 !important;
+          }
           .service-contract-print-article .w-20,
           .service-contract-print-article .h-20 {
             width: 15mm !important;
@@ -269,8 +279,8 @@ export default function ServiceContractPage() {
           </section>
           {cancelled && <div className="m-5 rounded-xl border border-red-200 bg-red-50 p-3 text-center font-bold text-red-600">هذا العقد مرتبط بحجز ملغى</div>}
           <section className="grid grid-cols-2 border-b border-[#e3d9cf]">
-            <div className="p-5"><p className="text-xs font-bold text-[#8b5e2b]">الطرف الأول — مقدم الخدمة</p><p className="font-bold mt-2">{contract.businessName}</p><p className="text-sm text-[#75604a]" dir="ltr">{contract.whatsappNumber}</p></div>
-            <div className="p-5 border-r border-[#e3d9cf]"><p className="text-xs font-bold text-emerald-700">الطرف الثاني — العميل</p><p className="font-bold mt-2">{contract.clientName}</p><p className="text-sm text-[#75604a]" dir="ltr">{contract.clientPhone ?? "—"}</p></div>
+            <div className="p-5"><p className="text-xs font-bold text-[#8b5e2b]">الطرف الأول — مقدم الخدمة</p><p className="service-contract-party-name text-lg font-bold mt-2">{contract.businessName}</p><p className="service-contract-party-phone text-sm font-medium text-[#75604a] mt-1" dir="ltr">{contract.whatsappNumber}</p></div>
+            <div className="p-5 border-r border-[#e3d9cf]"><p className="text-xs font-bold text-emerald-700">الطرف الثاني — العميل</p><p className="service-contract-party-name text-lg font-bold mt-2">{contract.clientName}</p><p className="service-contract-party-phone text-sm font-medium text-[#75604a] mt-1" dir="ltr">{contract.clientPhone ?? "—"}</p></div>
           </section>
           <section className="p-5 border-b border-[#e3d9cf]">
             <h2 className="text-xs font-bold text-[#75604a] mb-3">تفاصيل الحجز</h2>

@@ -29,3 +29,17 @@ mtime_ms = 1788554245676
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/22c4f602-c692-4c38-a71d-f0d789d5152c/e77d5466-21c6-4e09-8269-3d64d1b04cb8"
 storage_version_token = "1788554267158802"
 content_type = "image/jpeg"
+
+[[outputs]]
+id = "-jIZRCD-OJ_ZSl8_Y5Oir"
+uri = "file://screenshots/service-contract-parties-emphasized.jpg"
+type = "image"
+title = "العقد بعد إبراز أسماء الأطراف"
+description = "المعاينة الرسمية بعد تكبير اسمي مقدم الخدمة والعميل وتحسين وضوح أرقام التواصل."
+logical_id = "023ec75a-f637-42de-b61a-e6a4ba443abc"
+content_hash = "sha256:fa3072efab538641a44d103829d76f5d5d7756e95fe085062ed60b9807b1cd26"
+size = 55524
+mtime_ms = 1788555119260
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/023ec75a-f637-42de-b61a-e6a4ba443abc/66237263-bb9f-4189-9dd6-6c1dd106d9bc"
+storage_version_token = "1788555130134056"
+content_type = "image/jpeg"
