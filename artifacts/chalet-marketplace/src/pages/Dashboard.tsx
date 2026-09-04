@@ -10429,9 +10429,24 @@ function ServiceCalendarBookingsTab() {
     const amountText = (value: number) => value > 0 ? toArN(value.toLocaleString("en-US")) : "—";
     const ar = (value: unknown) => toArN(String(value ?? ""));
     const durationText = serviceDurationLabel(appointment.duration, appointment.durationUnit)?.replace(/^المدة:\s*/, "") ?? "—";
+    const messageDurationText =
+      appointment.durationUnit === "days" && Number(appointment.duration) === 1
+        ? "يوم واحد"
+        : durationText;
     let preparedTemplate = templateBody.includes("{سبب_التعديل}")
       ? templateBody
-          .replace(/\{الفترة_القديمة\}|\{الفترة_الجديدة\}|\{الفترة\}/g, durationText)
+          .split(/\r?\n/)
+          .map((line) => {
+            if (line.trim().startsWith("الحجز السابق:")) {
+              return `الحجز السابق: {اسم_اليوم_من}، {من_التاريخ} هـ ({من_التاريخ_م}) - فترة ${messageDurationText}.`;
+            }
+            if (line.trim().startsWith("الحجز الجديد:")) {
+              return `الحجز الجديد: {اسم_اليوم_إلى}، {إلى_التاريخ} هـ ({إلى_التاريخ_م}) - فترة ${messageDurationText}.`;
+            }
+            return line;
+          })
+          .join("\n")
+          .replace(/\{الفترة_القديمة\}|\{الفترة_الجديدة\}|\{الفترة\}/g, messageDurationText)
           .replace(/(?:أمنياتنا|نتمنى) لكم بإقامة (?:ممتعة|مانعة)\.?/g, "سعداء بخدمتكم")
       : prepareServiceMessageTemplate(templateBody);
     preparedTemplate = preparedTemplate.replace(/فتره/g, "فترة");
@@ -11133,11 +11148,11 @@ function ServiceCalendarBookingsTab() {
                           <div className="rounded-xl border border-violet-200 bg-violet-50/70 px-3 py-2 text-xs text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/20 dark:text-violet-200">
                             {appointment.previousDateStr && appointment.editedDateStr ? (
                               <p className="font-semibold">
-                                تم إعادة جدولة الموعد من {formatDualDate(appointment.previousDateStr).hijri} هـ إلى {formatDualDate(appointment.editedDateStr).hijri} هـ
+                                تم إعادة جدولة الموعد من {formatDualDate(appointment.previousDateStr).hijri} إلى {formatDualDate(appointment.editedDateStr).hijri}
                               </p>
                             ) : (
                               <p className="font-semibold">
-                                تم إعادة جدولة الموعد من تاريخ غير متوفر في السجل السابق إلى {formatDualDate(appointment.editedDateStr || appointment.dateStr).hijri} هـ
+                                تم إعادة جدولة الموعد من تاريخ غير متوفر في السجل السابق إلى {formatDualDate(appointment.editedDateStr || appointment.dateStr).hijri}
                               </p>
                             )}
                             {appointment.editReason && (
