@@ -346,7 +346,7 @@ export default function ContractPage() {
     } else {
       document.title = "العقد الرقمي الموثق - منصة تكية";
     }
-    return () => { document.title = "شاليهات القصيم - احجز شاليهك المفضل"; };
+    return () => { document.title = "منصة تكية - لحجز الشاليهات والخدمات"; };
   }, [booking]);
 
   const getPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
