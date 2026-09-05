@@ -193,13 +193,14 @@ export default function Services() {
     setCityFilter(p.get("city") ?? "all");
   }, [search]);
 
-  /* ── Service categories (active only, sorted by admin) ── */
+  /* ── Service categories with active owner-provider inventory only ── */
   const { data: apiCategories = [], isLoading: catsLoading } = useQuery<ServiceCatItem[]>({
-    queryKey: ["catalog", "service-categories"],
+    queryKey: ["providers", "search-options", "categories"],
     queryFn: async () => {
-      const r = await fetch(`${BASE}/api/service-categories`, { credentials: "include" });
+      const r = await fetch(`${BASE}/api/providers/search-options`, { credentials: "include" });
       if (!r.ok) return [];
-      return r.json();
+      const data = await r.json() as { categories?: ServiceCatItem[] };
+      return data.categories ?? [];
     },
     staleTime: 30 * 1000,
     refetchOnWindowFocus: true,

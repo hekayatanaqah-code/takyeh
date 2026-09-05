@@ -10,8 +10,10 @@ import {
   serviceReviewInvitationsTable,
   serviceReviewsTable,
   ownerCustomersTable,
+  serviceCategoriesTable,
+  citiesCatalogTable,
 } from "@workspace/db/schema";
-import { eq, and, ne, desc, isNull, gte, sql } from "drizzle-orm";
+import { eq, and, ne, desc, isNull, gte, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { randomBytes } from "crypto";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
@@ -162,6 +164,61 @@ router.get("/", async (req, res) => {
     .where(and(...conditions))
     .orderBy(sql`RANDOM()`);
   return res.json(rows);
+});
+
+/* ── Public: service-only search options with active owner inventory ── */
+router.get("/search-options", async (_req, res) => {
+  const providers = await db
+    .select({
+      category: serviceProvidersTable.category,
+      city: serviceProvidersTable.city,
+      coverageTags: serviceProvidersTable.coverageTags,
+    })
+    .from(serviceProvidersTable)
+    .where(eq(serviceProvidersTable.isActive, true));
+
+  const categoryKeys = [...new Set(
+    providers.map((provider) => provider.category).filter((key): key is string => !!key),
+  )];
+  const categories = categoryKeys.length > 0
+    ? await db
+      .select({
+        id: serviceCategoriesTable.id,
+        key: serviceCategoriesTable.key,
+        labelAr: serviceCategoriesTable.labelAr,
+        emoji: serviceCategoriesTable.emoji,
+      })
+      .from(serviceCategoriesTable)
+      .where(and(
+        eq(serviceCategoriesTable.isActive, true),
+        inArray(serviceCategoriesTable.key, categoryKeys),
+      ))
+      .orderBy(serviceCategoriesTable.sortOrder)
+    : [];
+
+  const coversAllKingdom = providers.some((provider) =>
+    (provider.coverageTags ?? []).some((tag) => tag.trim() === ALL_KINGDOM_COVERAGE),
+  );
+  let cities: Array<{ id: number; name: string }>;
+  if (coversAllKingdom) {
+    cities = await db
+      .select({ id: citiesCatalogTable.id, name: citiesCatalogTable.name })
+      .from(citiesCatalogTable)
+      .where(eq(citiesCatalogTable.isActive, true))
+      .orderBy(citiesCatalogTable.name);
+  } else {
+    const availableCityNames = [...new Set(
+      providers.flatMap((provider) => [
+        provider.city,
+        ...(provider.coverageTags ?? []),
+      ])
+        .map((city) => city?.trim())
+        .filter((city): city is string => !!city && city !== ALL_KINGDOM_COVERAGE),
+    )];
+    cities = availableCityNames.map((name, index) => ({ id: -(index + 1), name }));
+  }
+
+  return res.json({ categories, cities });
 });
 
 /* ── Public: single provider ──────────────────────── */

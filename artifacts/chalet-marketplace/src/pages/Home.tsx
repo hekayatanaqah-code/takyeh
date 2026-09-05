@@ -104,6 +104,7 @@ export default function Home() {
   const [svcCategory, setSvcCategory]       = useState<string>("");
   const [svcCity, setSvcCity]               = useState<string>("");
   const [svcDate, setSvcDate]               = useState<string>(_initDate);
+  const [svcSearchError, setSvcSearchError] = useState<string>("");
 
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
@@ -150,18 +151,34 @@ export default function Home() {
   /* Whether the currently selected category has section filter enabled */
   const showSectionsField = !!categories.find((c) => c.nameAr === searchCategory)?.showSectionFilter;
 
-  /* ── Service categories for the services search bar ── */
-  const { data: serviceCategories = [] } = useQuery<{ id: number; key: string; labelAr: string; emoji: string }[]>({
-    queryKey: ["catalog", "service-categories"],
+  /* ── Service-only options backed by active owner providers ── */
+  const { data: serviceSearchOptions = { categories: [], cities: [] } } = useQuery<{
+    categories: Array<{ id: number; key: string; labelAr: string; emoji: string }>;
+    cities: Array<{ id: number; name: string }>;
+  }>({
+    queryKey: ["providers", "search-options"],
     queryFn: async () => {
-      const r = await fetch(`${BASE}/api/service-categories`, { credentials: "include" });
-      if (!r.ok) return [];
+      const r = await fetch(`${BASE}/api/providers/search-options`, { credentials: "include" });
+      if (!r.ok) return { categories: [], cities: [] };
       return r.json();
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
   });
+  const serviceCategories = serviceSearchOptions.categories;
+  const serviceCities = serviceSearchOptions.cities;
 
   const handleServiceSearch = () => {
+    const missingFields = [
+      !svcCategory ? "نوع الخدمة" : "",
+      !svcCity ? "المدينة" : "",
+      !svcDate ? "تاريخ الخدمة" : "",
+    ].filter(Boolean);
+    if (missingFields.length > 0) {
+      setSvcSearchError(`يرجى تحديد ${missingFields.join(" و")} للمتابعة`);
+      return;
+    }
+    setSvcSearchError("");
     const params = new URLSearchParams();
     if (svcCategory && svcCategory !== "all") params.append("category", svcCategory);
     if (svcCity && svcCity !== "all")         params.append("city", svcCity);
@@ -506,20 +523,15 @@ export default function Home() {
                       <span className="text-xl shrink-0">🛎️</span>
                       <div className="w-full">
                         <p className="text-xs font-semibold text-muted-foreground text-right mb-1">نوع الخدمة</p>
-                        <Select value={svcCategory} onValueChange={setSvcCategory}>
+                        <Select value={svcCategory} onValueChange={(value) => {
+                          setSvcCategory(value);
+                          setSvcSearchError("");
+                        }}>
                           <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
-                            <SelectValue placeholder="جميع الخدمات" />
+                            <SelectValue placeholder="اختر نوع الخدمة" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">جميع الخدمات</SelectItem>
-                            {serviceCategories.length === 0 && (
-                              <>
-                                <SelectItem value="catering">🥩 مطابخ وضيافة</SelectItem>
-                                <SelectItem value="events">🎈 فعاليات وحفلات</SelectItem>
-                                <SelectItem value="hospitality">☕ خدمات استضافة</SelectItem>
-                                <SelectItem value="occasions">🎭 مناسبات خاصة</SelectItem>
-                              </>
-                            )}
                             {serviceCategories.map((cat) => (
                               <SelectItem key={cat.id} value={cat.key}>
                                 {cat.emoji} {cat.labelAr}
@@ -535,13 +547,16 @@ export default function Home() {
                       <MapPin className="w-5 h-5 text-muted-foreground shrink-0" />
                       <div className="w-full">
                         <p className="text-xs font-semibold text-muted-foreground text-right mb-1">المدينة</p>
-                        <Select value={svcCity} onValueChange={setSvcCity}>
+                        <Select value={svcCity} onValueChange={(value) => {
+                          setSvcCity(value);
+                          setSvcSearchError("");
+                        }}>
                           <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
-                            <SelectValue placeholder="جميع المدن" />
+                            <SelectValue placeholder="اختر المدينة" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">جميع المدن</SelectItem>
-                            {cities.map((city) => (
+                            {serviceCities.map((city) => (
                               <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
                             ))}
                           </SelectContent>
@@ -555,7 +570,10 @@ export default function Home() {
                       <div className="flex-1 min-w-0">
                         <DualCalendarPicker
                           value={svcDate}
-                          onChange={setSvcDate}
+                          onChange={(value) => {
+                            setSvcDate(value);
+                            setSvcSearchError("");
+                          }}
                           placeholder="تاريخ الخدمة"
                           label="التاريخ"
                           minDate={todayStr}
@@ -572,6 +590,11 @@ export default function Home() {
                       ابحث عن خدمة
                     </Button>
                   </div>
+                  {svcSearchError && (
+                    <p className="mt-2 text-sm font-semibold text-red-100 text-center md:text-left" role="alert">
+                      {svcSearchError}
+                    </p>
+                  )}
                 </motion.div>
               )}
 
