@@ -341,8 +341,8 @@ export default function ContractPage() {
   }, [bookingId]);
 
   useEffect(() => {
-    document.title = "منصة تكية - لحجز الشاليهات والخدمات";
-    return () => { document.title = "منصة تكية - لحجز الشاليهات والخدمات"; };
+    document.title = "منصة تكية - لحجز الوجهات والخدمات";
+    return () => { document.title = "منصة تكية - لحجز الوجهات والخدمات"; };
   }, [booking]);
 
   const getPos = (e: React.MouseEvent | React.TouchEvent, canvas: HTMLCanvasElement) => {
