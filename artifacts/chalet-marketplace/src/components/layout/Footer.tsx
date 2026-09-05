@@ -84,6 +84,7 @@ export function Footer() {
                 { href: "/terms",   label: "شروط الاستخدام" },
                 { href: "/privacy", label: "سياسة الخصوصية" },
                 { href: "/contact", label: "اتصل بنا" },
+                { href: "/login",   label: "دخول الملاك ومزودي الخدمات" },
               ].map(({ href, label }) => (
                 <li key={href}>
                   <Link

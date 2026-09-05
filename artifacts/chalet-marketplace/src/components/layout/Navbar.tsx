@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, LogIn, LayoutDashboard, Settings } from "lucide-react";
+import { MapPin, Menu, LayoutDashboard, Settings } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { useState } from "react";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -10,7 +10,7 @@ import { useStaffAuth } from "@/lib/useStaffAuth";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export function Navbar() {
-  const [location, navigate] = useLocation();
+  const [location] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
   const { isStaff } = useStaffAuth();
@@ -28,11 +28,6 @@ export function Navbar() {
   const siteTitle = settings.site_display_name || settings.site_title || "تكية";
   const logoUrl   = settings.site_logo_url || "";
   const logoSize  = settings.logo_size === "lg" ? "w-16 h-16" : settings.logo_size === "sm" ? "w-9 h-9" : "w-12 h-12";
-
-  const goToLogin = () => {
-    setIsOpen(false);
-    navigate("/login");
-  };
 
   return (
     <>
@@ -83,14 +78,6 @@ export function Navbar() {
                     </Link>
                   )}
                 </div>
-              ) : location === "/" ? (
-                <button
-                  onClick={goToLogin}
-                  className="flex items-center gap-2 bg-[#8C6246] hover:bg-[#734f36] text-white px-6 py-2.5 rounded-full font-semibold transition-all duration-300 text-[15px] shadow-sm"
-                >
-                  <LogIn className="w-5 h-5" />
-                  <span>تسجيل الدخول</span>
-                </button>
               ) : null
             )}
           </div>
@@ -121,14 +108,6 @@ export function Navbar() {
                         <LayoutDashboard className="w-4 h-4 me-2" />
                         لوحة التحكم
                       </Link>
-                    ) : location === "/" ? (
-                      <button
-                        onClick={goToLogin}
-                        className="flex items-center gap-2 justify-center px-4 py-3 rounded-full text-base font-semibold bg-[#8C6246] hover:bg-[#734f36] text-white transition-colors shadow-sm"
-                      >
-                        <LogIn className="w-5 h-5" />
-                        تسجيل الدخول
-                      </button>
                     ) : null
                   )}
                 </nav>
