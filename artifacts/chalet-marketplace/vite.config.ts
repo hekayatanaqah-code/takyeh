@@ -30,16 +30,20 @@ const OG_HTML = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
+  <meta name="description" content="منصة تكية لحجز الشاليهات والخدمات في القصيم بسهولة، مع خيارات متنوعة وتجربة حجز موثوقة." />
+  <link rel="canonical" href="https://takyah.replit.app/" />
   <meta property="og:type"        content="website" />
-  <meta property="og:title"       content="تقييم تجربة الإقامة | شاليهات القصيم" />
-  <meta property="og:description" content="شاركنا رأيك وساعدنا في تقديم أفضل تجربة لضيوفنا" />
+  <meta property="og:site_name"   content="منصة تكية" />
+  <meta property="og:title"       content="منصة تكية - لحجز الشاليهات والخدمات" />
+  <meta property="og:description" content="منصة تكية لحجز الشاليهات والخدمات في القصيم بسهولة، مع خيارات متنوعة وتجربة حجز موثوقة." />
+  <meta property="og:url"         content="https://takyah.replit.app/" />
   <meta property="og:locale"      content="ar_SA" />
   <meta name="twitter:card"        content="summary" />
-  <meta name="twitter:title"       content="تقييم تجربة الإقامة | شاليهات القصيم" />
-  <meta name="twitter:description" content="شاركنا رأيك وساعدنا في تقديم أفضل تجربة لضيوفنا" />
-  <title>تقييم تجربة الإقامة | شاليهات القصيم</title>
+  <meta name="twitter:title"       content="منصة تكية - لحجز الشاليهات والخدمات" />
+  <meta name="twitter:description" content="منصة تكية لحجز الشاليهات والخدمات في القصيم بسهولة، مع خيارات متنوعة وتجربة حجز موثوقة." />
+  <title>منصة تكية - لحجز الشاليهات والخدمات</title>
 </head>
-<body><p>تقييم تجربة الإقامة</p></body>
+<body><p>منصة تكية - لحجز الشاليهات والخدمات</p></body>
 </html>`;
 
 const BOT_AGENTS = ["facebookexternalhit", "facebot", "twitterbot", "whatsapp", "linkedinbot", "slackbot", "telegrambot", "discordbot"];

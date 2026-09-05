@@ -341,11 +341,7 @@ export default function ContractPage() {
   }, [bookingId]);
 
   useEffect(() => {
-    if (booking) {
-      document.title = `${booking.chaletName} - العقد الرقمي للإيجار`;
-    } else {
-      document.title = "العقد الرقمي الموثق - منصة تكية";
-    }
+    document.title = "منصة تكية - لحجز الشاليهات والخدمات";
     return () => { document.title = "منصة تكية - لحجز الشاليهات والخدمات"; };
   }, [booking]);
 
