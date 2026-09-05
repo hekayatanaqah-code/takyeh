@@ -2032,17 +2032,21 @@ function AddBookingDialog({
   const grandTotal = tp !== null ? tp + addonsTotalPrice : null;
   const remainingBalance = grandTotal !== null && dp !== null ? Math.max(0, grandTotal - dp) : null;
 
+  const customerLookupRequestRef = useRef(0);
+
   // Auto-fill client name + detect new/returning customer
-  const handlePhoneBlur = async () => {
-    const phone = clientPhone.trim();
+  const lookupCustomerByPhone = async (phoneValue = clientPhone) => {
+    const phone = phoneValue.trim();
     if (phone.length < 9) { setIsReturningCustomer(null); return; }
+    const requestId = ++customerLookupRequestRef.current;
     setPhoneLoading(true);
     try {
-      const r = await apiFetch(`/owner/bookings/lookup?phone=${encodeURIComponent(phone)}`);
+      const r = await apiFetch(`/owner/customers/lookup?phone=${encodeURIComponent(phone)}`);
       if (r.ok) {
         const data = await r.json();
+        if (requestId !== customerLookupRequestRef.current) return;
         if (data?.clientName) {
-          if (!clientName) setClientName(data.clientName);
+          setClientName(data.clientName);
           setIsReturningCustomer(true);
         } else {
           setIsReturningCustomer(false);
@@ -2052,6 +2056,20 @@ function AddBookingDialog({
       setPhoneLoading(false);
     }
   };
+
+  useEffect(() => {
+    const phone = clientPhone.trim();
+    if (phone.length < 9) {
+      customerLookupRequestRef.current += 1;
+      setIsReturningCustomer(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void lookupCustomerByPhone(phone);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientPhone]);
 
   const reset = () => {
     setClientName(""); setClientPhone(""); setBookingDate(""); setDurationDays(1);
@@ -2222,7 +2240,7 @@ function AddBookingDialog({
                   setClientPhone(raw);
                   setIsReturningCustomer(null);
                 }}
-                onBlur={handlePhoneBlur}
+                onBlur={() => void lookupCustomerByPhone()}
                 placeholder="٠٥xxxxxxxx"
                 className="text-right"
               />
@@ -10119,6 +10137,9 @@ function ServiceCalendarBookingsTab() {
   const [pickYear, setPickYear] = useState(now.getFullYear());
   const [pickMonth, setPickMonth] = useState(now.getMonth());
   const [receiptUploading, setReceiptUploading] = useState(false);
+  const [serviceCustomerLoading, setServiceCustomerLoading] = useState(false);
+  const [serviceCustomerFound, setServiceCustomerFound] = useState<boolean | null>(null);
+  const serviceCustomerLookupRequestRef = useRef(0);
 
   const { data: provider } = useQuery<any | null>({
     queryKey: ["service-provider-detail", providerId],
@@ -10156,6 +10177,43 @@ function ServiceCalendarBookingsTab() {
     },
   });
 
+  useEffect(() => {
+    if (editingAppointmentId) return;
+    const phone = form.clientPhone.trim();
+    if (phone.replace(/\D/g, "").length < 9) {
+      serviceCustomerLookupRequestRef.current += 1;
+      setServiceCustomerFound(null);
+      return;
+    }
+    const requestId = ++serviceCustomerLookupRequestRef.current;
+    const timer = window.setTimeout(async () => {
+      setServiceCustomerLoading(true);
+      try {
+        const response = await apiFetch(`/owner/customers/lookup?phone=${encodeURIComponent(phone)}`);
+        if (!response.ok) return;
+        const customer = await response.json();
+        if (requestId !== serviceCustomerLookupRequestRef.current) return;
+        if (customer?.clientName) {
+          setForm((current) => ({
+            ...current,
+            clientName: customer.clientName,
+            serviceAddress: current.serviceAddress || customer.serviceAddress || "",
+            serviceDeliveryMethod: current.serviceDeliveryMethod || customer.serviceDeliveryMethod || "",
+            clientIdNumber: current.clientIdNumber || customer.clientIdNumber || "",
+          }));
+          setServiceCustomerFound(true);
+        } else {
+          setServiceCustomerFound(false);
+        }
+      } finally {
+        if (requestId === serviceCustomerLookupRequestRef.current) {
+          setServiceCustomerLoading(false);
+        }
+      }
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [form.clientPhone, editingAppointmentId]);
+
   const blockedSet = new Set(blockedDates.map(d => d.dateStr));
   const apptDays = new Map<string, number>();
   appointments.filter(a => a.status !== "cancelled").forEach(a => {
@@ -10171,6 +10229,7 @@ function ServiceCalendarBookingsTab() {
     const [year, month] = dateStr.split("-").map(Number);
     setEditingAppointmentId(null);
     setForm({ ...emptyForm, dateStr });
+    setServiceCustomerFound(null);
     setPickYear(year);
     setPickMonth(month - 1);
     setPickerOpen(false);
@@ -10184,6 +10243,7 @@ function ServiceCalendarBookingsTab() {
     setPickerOpen(false);
     setEditingAppointmentId(null);
     setForm({ ...emptyForm });
+    setServiceCustomerFound(null);
   }
 
   async function handleReceiptUpload(file: File) {
@@ -11439,11 +11499,19 @@ function ServiceCalendarBookingsTab() {
               <Input value={form.clientName} onChange={e => setForm(p => ({ ...p, clientName: e.target.value }))} placeholder="محمد أحمد" className="rounded-xl" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">رقم الجوال *</label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-semibold text-muted-foreground">رقم الجوال *</label>
+                {serviceCustomerFound === true && <span className="text-[11px] font-bold text-blue-700">عميل مسجل</span>}
+                {serviceCustomerFound === false && <span className="text-[11px] font-bold text-green-700">عميل جديد</span>}
+              </div>
               <Input type="text" inputMode="numeric" lang="ar"
                 value={toAr(form.clientPhone)}
-                onChange={e => setForm(p => ({ ...p, clientPhone: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
+                onChange={e => {
+                  setServiceCustomerFound(null);
+                  setForm(p => ({ ...p, clientPhone: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }));
+                }}
                 placeholder="٠٥xxxxxxxx" className="rounded-xl" dir="ltr" />
+              {serviceCustomerLoading && <p className="text-[11px] text-muted-foreground">جاري البحث في قاعدة العملاء…</p>}
             </div>
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-xs font-semibold text-muted-foreground">طريقة تقديم الخدمة *</label>

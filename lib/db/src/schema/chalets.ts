@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean, jsonb, varchar, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean, jsonb, varchar, doublePrecision, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -690,6 +690,23 @@ export const serviceSeasonsTable = pgTable("service_seasons", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ServiceSeason = typeof serviceSeasonsTable.$inferSelect;
+
+/* ── Owner customers (shared across properties and services) ── */
+export const ownerCustomersTable = pgTable("owner_customers", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  phoneNormalized: text("phone_normalized").notNull(),
+  phone: text("phone").notNull(),
+  name: text("name").notNull(),
+  serviceAddress: text("service_address"),
+  serviceDeliveryMethod: text("service_delivery_method"),
+  clientIdNumber: text("client_id_number"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  ownerPhoneUnique: uniqueIndex("owner_customers_owner_phone_unique").on(table.ownerId, table.phoneNormalized),
+}));
+export type OwnerCustomer = typeof ownerCustomersTable.$inferSelect;
 
 /* ── Service Appointments (booking records) ─────────────────── */
 export const serviceAppointmentsTable = pgTable("service_appointments", {

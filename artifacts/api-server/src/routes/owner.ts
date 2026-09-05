@@ -30,6 +30,7 @@ import {
   bookingPaymentsTable,
   cashDepositLogsTable,
   expenseCategoriesTable,
+  ownerCustomersTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull, or, type SQL } from "drizzle-orm";
@@ -37,6 +38,7 @@ import { randomBytes, createHash, randomInt } from "crypto";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { sendOtpEmail, sendReportEmail } from "../lib/email";
+import { normalizeCustomerPhone } from "../lib/customerPhone";
 
 const router = Router();
 
@@ -1426,19 +1428,39 @@ router.post("/bookings", async (req, res) => {
   }
 
   const { revenueAmount, totalPrice, depositPaid, insuranceFee, addonIds: _addonIds, ...restBooking } = body.data;
-  const [booking] = await db
-    .insert(ownerBookingsTable)
-    .values({
-      ...restBooking,
-      clientName: restBooking.clientName?.trim() || "عميل مؤقت",
+  const customerName = restBooking.clientName?.trim() || "عميل مؤقت";
+  const phoneNormalized = normalizeCustomerPhone(restBooking.clientPhone);
+  const booking = await db.transaction(async (tx) => {
+    await tx.insert(ownerCustomersTable).values({
       ownerId,
-      revenueAmount: revenueAmount !== undefined ? String(Math.round(revenueAmount)) : null,
-      totalPrice: totalPrice !== undefined ? String(Math.round(totalPrice)) : null,
-      depositPaid: depositPaid !== undefined ? String(Math.round(depositPaid)) : null,
-      insuranceFee: insuranceFee !== undefined ? String(Math.round(insuranceFee)) : null,
-      bookedAddons: resolvedAddons,
-    })
-    .returning();
+      phoneNormalized,
+      phone: phoneNormalized,
+      name: customerName,
+    }).onConflictDoUpdate({
+      target: [ownerCustomersTable.ownerId, ownerCustomersTable.phoneNormalized],
+      set: {
+        phone: phoneNormalized,
+        name: customerName,
+        updatedAt: new Date(),
+      },
+    });
+
+    const [createdBooking] = await tx
+      .insert(ownerBookingsTable)
+      .values({
+        ...restBooking,
+        clientName: customerName,
+        clientPhone: phoneNormalized,
+        ownerId,
+        revenueAmount: revenueAmount !== undefined ? String(Math.round(revenueAmount)) : null,
+        totalPrice: totalPrice !== undefined ? String(Math.round(totalPrice)) : null,
+        depositPaid: depositPaid !== undefined ? String(Math.round(depositPaid)) : null,
+        insuranceFee: insuranceFee !== undefined ? String(Math.round(insuranceFee)) : null,
+        bookedAddons: resolvedAddons,
+      })
+      .returning();
+    return createdBooking;
+  });
 
   // Auto-sync public calendar availability
   if (booking.submissionId) {
@@ -1658,17 +1680,87 @@ router.get("/bookings/reschedule-log", async (req, res) => {
   return res.json(rows);
 });
 
-/* Phone lookup — auto-fill client name from previous bookings */
-router.get("/bookings/lookup", async (req, res) => {
+/* Customer lookup shared by property and service booking forms. */
+router.get(["/customers/lookup", "/bookings/lookup"], async (req, res) => {
   const ownerId = req.user!.id;
   const phone = typeof req.query.phone === "string" ? req.query.phone.trim() : "";
-  if (phone.length < 3) return res.json(null);
-  const rows = await db
-    .select({ clientName: ownerBookingsTable.clientName, clientPhone: ownerBookingsTable.clientPhone })
-    .from(ownerBookingsTable)
-    .where(and(eq(ownerBookingsTable.ownerId, ownerId), eq(ownerBookingsTable.clientPhone, phone)))
+  const phoneNormalized = normalizeCustomerPhone(phone);
+  if (phoneNormalized.length < 9) return res.json(null);
+
+  const [customer] = await db
+    .select()
+    .from(ownerCustomersTable)
+    .where(and(
+      eq(ownerCustomersTable.ownerId, ownerId),
+      eq(ownerCustomersTable.phoneNormalized, phoneNormalized),
+    ))
     .limit(1);
-  return res.json(rows[0] ?? null);
+  if (customer) {
+    return res.json({
+      clientName: customer.name,
+      clientPhone: customer.phone,
+      serviceAddress: customer.serviceAddress,
+      serviceDeliveryMethod: customer.serviceDeliveryMethod,
+      clientIdNumber: customer.clientIdNumber,
+    });
+  }
+
+  const [propertyHistory, serviceHistory] = await Promise.all([
+    db
+      .select({
+        clientName: ownerBookingsTable.clientName,
+        clientPhone: ownerBookingsTable.clientPhone,
+        createdAt: ownerBookingsTable.createdAt,
+      })
+      .from(ownerBookingsTable)
+      .where(eq(ownerBookingsTable.ownerId, ownerId))
+      .orderBy(desc(ownerBookingsTable.createdAt))
+      .limit(500),
+    db
+      .select({
+        clientName: serviceAppointmentsTable.clientName,
+        clientPhone: serviceAppointmentsTable.clientPhone,
+        serviceAddress: serviceAppointmentsTable.serviceAddress,
+        serviceDeliveryMethod: serviceAppointmentsTable.serviceDeliveryMethod,
+        clientIdNumber: serviceAppointmentsTable.clientIdNumber,
+        createdAt: serviceAppointmentsTable.createdAt,
+      })
+      .from(serviceAppointmentsTable)
+      .where(eq(serviceAppointmentsTable.ownerId, ownerId))
+      .orderBy(desc(serviceAppointmentsTable.createdAt))
+      .limit(500),
+  ]);
+  const historical = [...serviceHistory, ...propertyHistory]
+    .filter((row) => normalizeCustomerPhone(row.clientPhone ?? "") === phoneNormalized)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  if (!historical?.clientName) return res.json(null);
+
+  const serviceAddress: string | null = "serviceAddress" in historical
+    ? (String(historical.serviceAddress ?? "").trim() || null)
+    : null;
+  const serviceDeliveryMethod: string | null = "serviceDeliveryMethod" in historical
+    ? (String(historical.serviceDeliveryMethod ?? "").trim() || null)
+    : null;
+  const clientIdNumber: string | null = "clientIdNumber" in historical
+    ? (String(historical.clientIdNumber ?? "").trim() || null)
+    : null;
+  await db.insert(ownerCustomersTable).values({
+    ownerId,
+    phoneNormalized,
+    phone,
+    name: historical.clientName,
+    serviceAddress,
+    serviceDeliveryMethod,
+    clientIdNumber,
+  }).onConflictDoNothing();
+
+  return res.json({
+    clientName: historical.clientName,
+    clientPhone: phone,
+    serviceAddress,
+    serviceDeliveryMethod,
+    clientIdNumber,
+  });
 });
 
 router.delete("/bookings/:id", async (req, res) => {

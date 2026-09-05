@@ -9,10 +9,12 @@ import {
   serviceInsurancesTable,
   serviceReviewInvitationsTable,
   serviceReviewsTable,
+  ownerCustomersTable,
 } from "@workspace/db/schema";
 import { eq, and, ne, desc, isNull, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { randomBytes } from "crypto";
+import { normalizeCustomerPhone } from "../lib/customerPhone";
 
 const router = Router();
 const ALL_KINGDOM_COVERAGE = "جميع مناطق المملكة";
@@ -719,6 +721,7 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors: parsed.error.flatten().fieldErrors });
+  const phoneNormalized = normalizeCustomerPhone(parsed.data.clientPhone);
 
   const result = await db.transaction(async (tx) => {
     if (parsed.data.status !== "cancelled") {
@@ -746,10 +749,33 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
       if ((capacityRow?.count ?? 0) >= dailyCapacity) return { blocked: false as const, full: true as const, dailyCapacity };
     }
 
+    await tx.insert(ownerCustomersTable).values({
+      ownerId: req.user.id,
+      phoneNormalized,
+      phone: phoneNormalized,
+      name: parsed.data.clientName.trim(),
+      serviceAddress: parsed.data.serviceAddress?.trim() || null,
+      serviceDeliveryMethod: parsed.data.serviceDeliveryMethod,
+      clientIdNumber: provider.requiresInsurance ? (parsed.data.clientIdNumber?.trim() || null) : null,
+    }).onConflictDoUpdate({
+      target: [ownerCustomersTable.ownerId, ownerCustomersTable.phoneNormalized],
+      set: {
+        phone: phoneNormalized,
+        name: parsed.data.clientName.trim(),
+        serviceAddress: sql`coalesce(nullif(excluded.service_address, ''), ${ownerCustomersTable.serviceAddress})`,
+        serviceDeliveryMethod: parsed.data.serviceDeliveryMethod,
+        clientIdNumber: provider.requiresInsurance
+          ? sql`coalesce(nullif(excluded.client_id_number, ''), ${ownerCustomersTable.clientIdNumber})`
+          : ownerCustomersTable.clientIdNumber,
+        updatedAt: new Date(),
+      },
+    });
+
     const [row] = await tx.insert(serviceAppointmentsTable).values({
       providerId,
       ownerId: req.user.id,
       ...parsed.data,
+      clientPhone: phoneNormalized,
       clientIdNumber: provider.requiresInsurance ? (parsed.data.clientIdNumber || null) : null,
       insuranceAmount: provider.requiresInsurance ? provider.insuranceAmount : null,
     }).returning();

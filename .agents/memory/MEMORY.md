@@ -17,3 +17,4 @@
 - [Shared cancellation dialog](shared-cancellation-dialog.md) — reuse the approved property-cancellation flow for service bookings so refund validation and “other reason” details stay consistent.
 - [Dashboard preview verification](dashboard-preview-verification.md) — authenticated dashboard screenshots may hit an external proxy block; verify app health with the dev-domain response, workflow logs, and public route preview.
 - [Booking edit audit snapshots](booking-edit-audit-snapshots.md) — never infer edits from created_at; badges and messages require an actual persisted before/after snapshot.
+- [Shared owner customer identity](shared-owner-customer-identity.md) — property and service bookings share one owner-scoped customer identity while retaining booking snapshots.
