@@ -2,10 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Phone, MapPin, Loader2, Plus, Star } from "lucide-react";
+import { Phone, MapPin, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { Button } from "@/components/ui/button";
 import { useAuth } from "@workspace/replit-auth-web";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -283,26 +282,19 @@ export default function Services() {
       <Navbar />
       <main className="flex-1">
         {/* Hero */}
-        <section className="bg-gradient-to-bl from-amber-50 via-background to-background dark:from-amber-950/20 pt-28 pb-14 px-4">
+        <section className="bg-gradient-to-bl from-amber-50 via-background to-background dark:from-amber-950/20 pt-24 pb-8 px-4">
           <div className="container mx-auto text-center">
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
               <p className="text-primary font-semibold mb-3 tracking-wide">خدمات المناسبات</p>
               <h1 className="text-4xl md:text-5xl font-extrabold text-foreground mb-4 leading-tight">
                 أجمل الخدمات لمناسباتك
               </h1>
-              <p className="text-muted-foreground text-lg max-w-xl mx-auto mb-8">
+              <p className="text-muted-foreground text-lg max-w-xl mx-auto">
                 {catsLoading
                   ? "..."
                   : apiCategories.slice(0, 3).map((c) => `${c.emoji} ${c.labelAr}`).join("، ") || "خدمات متنوعة لمناسبتك"
                 } — كل ما تحتاجه لمناسبة لا تُنسى
               </p>
-              <button
-                onClick={() => setLocation("/add-service-provider")}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-sm font-semibold border border-amber-200 dark:border-amber-700/40 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                سجّل خدمتك معنا
-              </button>
             </motion.div>
           </div>
         </section>
@@ -373,18 +365,11 @@ export default function Services() {
           <div className="text-center py-20 px-4">
             <div className="text-6xl mb-4">🎉</div>
             <h3 className="text-xl font-bold text-foreground mb-2">لا توجد خدمات متاحة حالياً</h3>
-            <p className="text-muted-foreground mb-6">
+            <p className="text-muted-foreground">
               {activeCategory !== "all"
                 ? `لا توجد خدمات في فئة "${tabs.find((t) => t.id === activeCategory)?.label ?? activeCategory}" حالياً`
                 : "سيتم إضافة خدمات قريباً"}
             </p>
-            <button
-              onClick={() => setLocation("/add-service-provider")}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold"
-            >
-              <Plus className="w-4 h-4" />
-              سجّل أول خدمة
-            </button>
           </div>
         ) : (
           <>
@@ -423,22 +408,6 @@ export default function Services() {
           </>
         )}
 
-        {/* CTA: join as provider */}
-        <section className="py-12 px-4 border-t border-border">
-          <div className="container mx-auto max-w-xl text-center">
-            <div className="inline-flex items-center justify-center w-14 h-14 bg-amber-100 dark:bg-amber-900/30 rounded-2xl mb-4">
-              <Star className="w-7 h-7 text-amber-600" />
-            </div>
-            <h3 className="text-xl font-extrabold text-foreground mb-2">هل لديك خدمة مناسبات؟</h3>
-            <p className="text-muted-foreground text-sm mb-5 leading-relaxed">
-              سجّل خدمتك مجاناً وابدأ الوصول لآلاف العملاء في منطقة القصيم
-            </p>
-            <Button size="lg" onClick={() => setLocation("/add-service-provider")} className="px-8 font-bold">
-              <Plus className="w-4 h-4 me-2" />
-              سجّل خدمتك الآن
-            </Button>
-          </div>
-        </section>
       </main>
       <Footer />
     </div>
