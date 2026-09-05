@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { MapPin, Phone, Mail, Instagram, Twitter } from "lucide-react";
+import { MapPin, Phone, Mail, Instagram, Twitter, Building2, LogIn } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { toHijriComponents } from "@/lib/hijri";
 
@@ -84,7 +84,6 @@ export function Footer() {
                 { href: "/terms",   label: "شروط الاستخدام" },
                 { href: "/privacy", label: "سياسة الخصوصية" },
                 { href: "/contact", label: "اتصل بنا" },
-                { href: "/login",   label: "دخول الملاك ومزودي الخدمات" },
               ].map(({ href, label }) => (
                 <li key={href}>
                   <Link
@@ -148,6 +147,31 @@ export function Footer() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Dedicated owner and provider portal */}
+        <div className="mt-10 rounded-2xl border border-primary/40 bg-background/10 px-5 py-6 sm:px-8">
+          <div className="flex flex-col gap-5 text-center sm:flex-row sm:items-center sm:justify-between sm:text-right">
+            <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+                <Building2 className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-background">بوابة الملاك والمزودين</h3>
+                <p className="mt-1 text-sm leading-relaxed text-background/65">
+                  دخول أصحاب الشاليهات ومزودي الخدمات لإدارة الحجوزات والخدمات.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/login"
+              className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-7 py-3 font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl"
+              data-testid="link-owner-provider-login"
+            >
+              <LogIn className="h-5 w-5" />
+              دخول الملاك ومزودي الخدمات
+            </Link>
           </div>
         </div>
 
