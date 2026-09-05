@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
+import { motion } from "framer-motion";
 import { SlidersHorizontal, FilterX, CheckSquare, Square, CalendarDays, LayoutGrid, Map as MapIcon, MapPin } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { hijriAndGregorian } from "@/lib/utils";
@@ -419,12 +420,26 @@ export default function Chalets() {
     <div className="min-h-screen flex flex-col bg-secondary/20">
       <Navbar />
 
-      <main className="flex-1 container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">الشاليهات المتاحة</h1>
-          <p className="text-muted-foreground">استعرض أجمل الشاليهات واحجز ما يناسبك</p>
+      <section
+        className="relative isolate min-h-[320px] bg-cover bg-center px-4 pt-24 pb-12 flex items-center overflow-hidden"
+        style={{ backgroundImage: `url(${import.meta.env.BASE_URL}images/hero-bg.png)` }}
+        data-testid="banner-chalets-hero"
+      >
+        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/55 via-black/45 to-black/70" />
+        <div className="container mx-auto text-center">
+          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
+            <p className="text-amber-200 font-semibold mb-3 tracking-wide drop-shadow-md">أماكن مختارة بعناية</p>
+            <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 leading-tight drop-shadow-lg">
+              الشاليهات المتاحة
+            </h1>
+            <p className="text-white/90 text-lg max-w-xl mx-auto leading-relaxed drop-shadow-md">
+              استعرض أجمل الشاليهات واحجز ما يناسبك
+            </p>
+          </motion.div>
         </div>
+      </section>
 
+      <main className="flex-1 container mx-auto px-4 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Mobile Filter Button */}
           <div className="lg:hidden">

@@ -2,10 +2,12 @@ import { useState, useMemo, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Phone, MapPin, Loader2 } from "lucide-react";
+import { Phone, MapPin, Loader2, SlidersHorizontal, Search, FilterX, CheckSquare, Square } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { useAuth } from "@workspace/replit-auth-web";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import servicesHeroBanner from "@assets/services-hero-banner.jpg";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -183,8 +185,10 @@ export default function Services() {
 
   const [activeCategory, setActiveCategory] = useState<string>(initCategory);
   const [cityFilter, setCityFilter]         = useState<string>(initCity);
+  const [searchTerm, setSearchTerm]         = useState("");
+  const [resultType, setResultType]         = useState<"all" | "services" | "providers">("all");
+  const [photosOnly, setPhotosOnly]         = useState(false);
   const [, setLocation] = useLocation();
-  const { isAuthenticated } = useAuth();
 
   /* Sync state if URL changes (e.g. user navigates back) */
   useEffect(() => {
@@ -194,17 +198,21 @@ export default function Services() {
   }, [search]);
 
   /* ── Service categories with active owner-provider inventory only ── */
-  const { data: apiCategories = [], isLoading: catsLoading } = useQuery<ServiceCatItem[]>({
-    queryKey: ["providers", "search-options", "categories"],
+  const { data: serviceOptions = { categories: [], cities: [] }, isLoading: catsLoading } = useQuery<{
+    categories: ServiceCatItem[];
+    cities: Array<{ id: number; name: string }>;
+  }>({
+    queryKey: ["providers", "search-options"],
     queryFn: async () => {
       const r = await fetch(`${BASE}/api/providers/search-options`, { credentials: "include" });
-      if (!r.ok) return [];
-      const data = await r.json() as { categories?: ServiceCatItem[] };
-      return data.categories ?? [];
+      if (!r.ok) return { categories: [], cities: [] };
+      return r.json();
     },
     staleTime: 30 * 1000,
     refetchOnWindowFocus: true,
   });
+  const apiCategories = serviceOptions.categories;
+  const serviceCities = serviceOptions.cities;
 
   /* ── Build category lookup map keyed by category.key ── */
   const catMeta = useMemo<Record<string, CatMeta>>(() => {
@@ -256,27 +264,131 @@ export default function Services() {
     refetchOnWindowFocus: true,
   });
 
-  /* ── Client-side city filter ── */
-  const filteredServices = useMemo(() =>
-    cityFilter && cityFilter !== "all"
-      ? services.filter((s) => s.city === cityFilter)
-      : services,
-    [services, cityFilter]);
+  /* ── Client-side service filters ── */
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredServices = useMemo(() => {
+    if (resultType === "providers") return [];
+    return services.filter((service) => {
+      const matchesCity = !cityFilter || cityFilter === "all" || service.city === cityFilter;
+      const matchesText = !normalizedSearch ||
+        service.nameAr.toLowerCase().includes(normalizedSearch) ||
+        service.descriptionAr.toLowerCase().includes(normalizedSearch);
+      const matchesPhotos = !photosOnly || service.photos.length > 0;
+      return matchesCity && matchesText && matchesPhotos;
+    });
+  }, [services, cityFilter, normalizedSearch, photosOnly, resultType]);
 
-  const filteredProviders = useMemo(() =>
-    cityFilter && cityFilter !== "all"
-      ? providers.filter((p) =>
-          p.city === cityFilter ||
-          (p.coverageTags ?? []).some((city) => city.trim().toLowerCase() === cityFilter.trim().toLowerCase())
-        )
-      : providers,
-    [providers, cityFilter]);
+  const filteredProviders = useMemo(() => {
+    if (resultType === "services") return [];
+    return providers.filter((provider) => {
+      const matchesCity = !cityFilter || cityFilter === "all" ||
+        provider.city === cityFilter ||
+        (provider.coverageTags ?? []).some((city) => city.trim().toLowerCase() === cityFilter.trim().toLowerCase());
+      const matchesText = !normalizedSearch ||
+        provider.businessName.toLowerCase().includes(normalizedSearch) ||
+        (provider.descriptionAr ?? "").toLowerCase().includes(normalizedSearch);
+      const matchesPhotos = !photosOnly || provider.galleryPhotos.length > 0 || !!provider.logoUrl;
+      return matchesCity && matchesText && matchesPhotos;
+    });
+  }, [providers, cityFilter, normalizedSearch, photosOnly, resultType]);
 
   const isLoading = servicesLoading || providersLoading || catsLoading;
   const isEmpty = filteredServices.length === 0 && filteredProviders.length === 0;
 
   /* Search context chips — shown when URL params were passed */
   const hasSearchCtx = initCategory !== "all" || initCity !== "all" || !!initDate;
+
+  const resetServiceFilters = () => {
+    setActiveCategory("all");
+    setCityFilter("all");
+    setSearchTerm("");
+    setResultType("all");
+    setPhotosOnly(false);
+  };
+
+  const FilterControls = ({ scope }: { scope: "desktop" | "mobile" }) => (
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <label className="text-sm font-semibold text-foreground" htmlFor={`service-search-filter-${scope}`}>ابحث عن خدمة</label>
+        <div className="relative">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <input
+            id={`service-search-filter-${scope}`}
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="اسم الخدمة أو المزود"
+            className="w-full h-10 rounded-md border border-input bg-background pr-9 pl-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            data-testid={`input-service-filter-search-${scope}`}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <label className="text-sm font-semibold text-foreground">الفئة</label>
+        <Select value={activeCategory} onValueChange={setActiveCategory}>
+          <SelectTrigger className="bg-background" data-testid={`select-service-filter-category-${scope}`}>
+            <SelectValue placeholder="جميع الفئات" />
+          </SelectTrigger>
+          <SelectContent>
+            {tabs.map((tab) => (
+              <SelectItem key={tab.id} value={tab.id}>{tab.emoji} {tab.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-3">
+        <label className="text-sm font-semibold text-foreground">المدينة ونطاق التغطية</label>
+        <Select value={cityFilter} onValueChange={setCityFilter}>
+          <SelectTrigger className="bg-background" data-testid={`select-service-filter-city-${scope}`}>
+            <SelectValue placeholder="جميع المدن" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">جميع المدن</SelectItem>
+            {serviceCities.map((city) => (
+              <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-3">
+        <label className="text-sm font-semibold text-foreground">نوع النتيجة</label>
+        <Select value={resultType} onValueChange={(value) => setResultType(value as typeof resultType)}>
+          <SelectTrigger className="bg-background" data-testid={`select-service-filter-result-type-${scope}`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">جميع النتائج</SelectItem>
+            <SelectItem value="providers">مزودو الخدمات الموثقون</SelectItem>
+            <SelectItem value="services">الخدمات المباشرة</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setPhotosOnly((current) => !current)}
+        className="flex items-center gap-2 w-full text-sm text-right hover:text-primary transition-colors"
+        data-testid={`button-service-filter-photos-${scope}`}
+      >
+        {photosOnly
+          ? <CheckSquare className="w-4 h-4 text-primary shrink-0" />
+          : <Square className="w-4 h-4 text-muted-foreground shrink-0" />}
+        <span>عرض النتائج التي تحتوي صوراً فقط</span>
+      </button>
+
+      <Button
+        variant="outline"
+        className="w-full text-destructive border-destructive/20 hover:bg-destructive/10"
+        onClick={resetServiceFilters}
+        data-testid={`button-reset-service-filters-${scope}`}
+      >
+        <FilterX className="w-4 h-4 me-2" />
+        مسح الفلاتر
+      </Button>
+    </div>
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-background" dir="rtl">
@@ -363,57 +475,86 @@ export default function Services() {
           </div>
         </section>
 
-        {/* ── Content ──────────────────────────────────── */}
-        {isLoading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="animate-spin text-primary w-8 h-8" />
-          </div>
-        ) : isEmpty ? (
-          <div className="text-center py-20 px-4">
-            <div className="text-6xl mb-4">🎉</div>
-            <h3 className="text-xl font-bold text-foreground mb-2">لا توجد خدمات متاحة حالياً</h3>
-            <p className="text-muted-foreground">
-              {activeCategory !== "all"
-                ? `لا توجد خدمات في فئة "${tabs.find((t) => t.id === activeCategory)?.label ?? activeCategory}" حالياً`
-                : "سيتم إضافة خدمات قريباً"}
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* ── Admin-managed services ── */}
-            {filteredServices.length > 0 && (
-              <section className="py-10 px-4">
-                <div className="container mx-auto">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                    {filteredServices.map((svc) => (
-                      <ServiceCard key={svc.id} service={svc} meta={getMeta(svc.category)} />
-                    ))}
-                  </div>
-                </div>
-              </section>
-            )}
+        {/* ── Filters + results ─────────────────────────── */}
+        <section className="container mx-auto px-4 py-8">
+          <div className="flex flex-col lg:flex-row gap-8">
+            <div className="lg:hidden">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" className="w-full flex items-center justify-center gap-2" data-testid="button-open-service-filters">
+                    <SlidersHorizontal className="w-4 h-4" />
+                    تصفية النتائج
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl pt-8 overflow-y-auto">
+                  <SheetTitle className="mb-6 font-bold text-xl">تصفية النتائج</SheetTitle>
+                  <FilterControls scope="mobile" />
+                </SheetContent>
+              </Sheet>
+            </div>
 
-            {/* ── Owner-submitted service providers ── */}
-            {filteredProviders.length > 0 && (
-              <section className={`py-10 px-4 border-t border-border/40 ${filteredServices.length > 0 ? "bg-amber-50/40 dark:bg-amber-900/5" : ""}`}>
-                <div className="container mx-auto">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-1 h-6 bg-amber-500 rounded-full" />
-                    <h2 className="text-xl font-bold text-foreground">مزودو الخدمات الموثقون</h2>
-                    <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700/40 px-2 py-0.5 rounded-full font-semibold">
-                      {filteredProviders.length} مزود
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                    {filteredProviders.map((p) => (
-                      <ProviderCard key={p.id} provider={p} meta={getMeta(p.category)} />
-                    ))}
-                  </div>
+            <aside className="hidden lg:block w-72 shrink-0">
+              <div className="bg-card border border-border/50 rounded-2xl shadow-sm sticky top-20 max-h-[calc(100vh-6rem)] flex flex-col overflow-hidden">
+                <div className="flex items-center gap-2 px-6 pt-6 pb-4 border-b border-border/50 shrink-0">
+                  <SlidersHorizontal className="w-5 h-5 text-primary" />
+                  <h2 className="text-lg font-bold">تصفية النتائج</h2>
                 </div>
-              </section>
-            )}
-          </>
-        )}
+                <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin">
+                  <FilterControls scope="desktop" />
+                </div>
+              </div>
+            </aside>
+
+            <div className="flex-1 min-w-0">
+              {isLoading ? (
+                <div className="flex justify-center py-20">
+                  <Loader2 className="animate-spin text-primary w-8 h-8" />
+                </div>
+              ) : isEmpty ? (
+                <div className="text-center py-20 px-4 bg-card border border-border/50 rounded-2xl">
+                  <div className="text-6xl mb-4">🎉</div>
+                  <h3 className="text-xl font-bold text-foreground mb-2">لا توجد نتائج مطابقة</h3>
+                  <p className="text-muted-foreground mb-5">
+                    جرّب تغيير خيارات التصفية للوصول إلى خدمات أكثر
+                  </p>
+                  <Button variant="outline" onClick={resetServiceFilters}>
+                    <FilterX className="w-4 h-4 me-2" />
+                    مسح الفلاتر
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-10">
+                  {filteredServices.length > 0 && (
+                    <section>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                        {filteredServices.map((service) => (
+                          <ServiceCard key={service.id} service={service} meta={getMeta(service.category)} />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {filteredProviders.length > 0 && (
+                    <section className={filteredServices.length > 0 ? "pt-8 border-t border-border/50" : ""}>
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="w-1 h-6 bg-amber-500 rounded-full" />
+                        <h2 className="text-xl font-bold text-foreground">مزودو الخدمات الموثقون</h2>
+                        <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700/40 px-2 py-0.5 rounded-full font-semibold">
+                          {filteredProviders.length} مزود
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                        {filteredProviders.map((provider) => (
+                          <ProviderCard key={provider.id} provider={provider} meta={getMeta(provider.category)} />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
 
       </main>
       <Footer />
