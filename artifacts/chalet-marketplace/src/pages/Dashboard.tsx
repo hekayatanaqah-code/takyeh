@@ -13250,6 +13250,9 @@ function RevenueTab() {
   const [selectedMonth, setSelectedMonth]     = useState(currentMonth);
   const [calType, setCalType]                 = useState<"gregorian" | "hijri">(() => (localStorage.getItem("revCalType") as "gregorian" | "hijri") ?? "gregorian");
   const [selectedHijriMonth, setSelectedHijriMonth] = useState<string>("");
+  const [serviceSelectedMonth, setServiceSelectedMonth] = useState(currentMonth);
+  const [serviceSelectedHijriMonth, setServiceSelectedHijriMonth] = useState("");
+  const [serviceRevenueYear, setServiceRevenueYear] = useState(() => String(new Date().getFullYear()));
   const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage" | "cancellation" | "refund" | "insurance">("all");
   const [svcFilter, setSvcFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
@@ -13648,6 +13651,68 @@ function RevenueTab() {
     enabled: !!serviceProviderId,
   });
 
+  const serviceGregorianMonths = useMemo(() => {
+    const months = new Set<string>();
+    serviceAppts.forEach((appointment) => {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(appointment.dateStr ?? "")) {
+        months.add(appointment.dateStr.slice(0, 7));
+      }
+    });
+    return Array.from(months).sort().reverse();
+  }, [serviceAppts]);
+
+  const serviceHijriMonths = useMemo(() => {
+    const months = new Map<string, { key: string; year: number; month: number; sampleDate: Date }>();
+    serviceAppts.forEach((appointment) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(appointment.dateStr ?? "")) return;
+      const sampleDate = new Date(`${appointment.dateStr}T12:00:00`);
+      const hijri = toHijriComponents(sampleDate);
+      const key = `${hijri.year}-${String(hijri.month).padStart(2, "0")}`;
+      if (!months.has(key)) months.set(key, { key, year: hijri.year, month: hijri.month, sampleDate });
+    });
+    return Array.from(months.values()).sort((a, b) => b.sampleDate.getTime() - a.sampleDate.getTime());
+  }, [serviceAppts]);
+
+  const serviceYearOptions = useMemo(() => {
+    if (calType === "gregorian") {
+      return Array.from(new Set(serviceGregorianMonths.map((month) => month.slice(0, 4)))).sort().reverse();
+    }
+    return Array.from(new Set(serviceHijriMonths.map((month) => String(month.year)))).sort().reverse();
+  }, [calType, serviceGregorianMonths, serviceHijriMonths]);
+
+  const serviceMonthsForYear = useMemo(() => {
+    if (calType === "gregorian") {
+      return serviceGregorianMonths.filter((month) => month.startsWith(`${serviceRevenueYear}-`));
+    }
+    return serviceHijriMonths.filter((month) => String(month.year) === serviceRevenueYear).map((month) => month.key);
+  }, [calType, serviceGregorianMonths, serviceHijriMonths, serviceRevenueYear]);
+
+  useEffect(() => {
+    if (unit.type !== "service" || serviceYearOptions.length === 0) return;
+    if (!serviceYearOptions.includes(serviceRevenueYear)) {
+      setServiceRevenueYear(serviceYearOptions[0]);
+      return;
+    }
+    if (calType === "gregorian") {
+      if (!serviceGregorianMonths.includes(serviceSelectedMonth)) {
+        const firstMonth = serviceGregorianMonths.find((month) => month.startsWith(`${serviceRevenueYear}-`));
+        if (firstMonth) setServiceSelectedMonth(firstMonth);
+      }
+    } else if (!serviceHijriMonths.some((month) => month.key === serviceSelectedHijriMonth)) {
+      const firstMonth = serviceHijriMonths.find((month) => String(month.year) === serviceRevenueYear);
+      if (firstMonth) setServiceSelectedHijriMonth(firstMonth.key);
+    }
+  }, [
+    unit.type,
+    calType,
+    serviceYearOptions,
+    serviceRevenueYear,
+    serviceGregorianMonths,
+    serviceHijriMonths,
+    serviceSelectedMonth,
+    serviceSelectedHijriMonth,
+  ]);
+
   // Combined service revenue for "all" unit mode
   const { data: svcRevSummary } = useQuery<{ totalRevenue: number; totalDeposits: number; totalInsurance: number; totalPending: number; byProvider: { id: number; name: string; revenue: number; deposits: number; insurance: number; pending: number }[] }>({
     queryKey: ["owner", "service-revenue-summary", selectedMonth],
@@ -13706,10 +13771,15 @@ function RevenueTab() {
     return result;
   }, [allBookings, selectedMonth, selectedHijriMonth, calType, unit]);
 
-  // Service-unit: filter service appointments to selected month
+  // Service-unit: use the exact selected Gregorian or Hijri period.
   const monthSvcAppts = useMemo(() =>
-    serviceAppts.filter(a => a.dateStr?.startsWith(selectedMonth) && a.status !== "cancelled")
-  , [serviceAppts, selectedMonth]);
+    serviceAppts.filter((appointment) => {
+      if (appointment.status === "cancelled" || !appointment.dateStr) return false;
+      if (calType === "gregorian") return appointment.dateStr.startsWith(serviceSelectedMonth);
+      const hijri = toHijriComponents(new Date(`${appointment.dateStr}T12:00:00`));
+      return `${hijri.year}-${String(hijri.month).padStart(2, "0")}` === serviceSelectedHijriMonth;
+    })
+  , [serviceAppts, calType, serviceSelectedMonth, serviceSelectedHijriMonth]);
 
   // Build revenue rows: each booking can generate 1-3 rows
   interface RevenueRow {
@@ -13932,12 +14002,48 @@ function RevenueTab() {
     }
     const filteredSvcRows = svcFilter === "all" ? svcRows : svcRows.filter(r => r.type === svcFilter);
 
+    const svcSales = monthSvcAppts.reduce((s, a) => s + Math.round(Number(a.amount ?? 0)), 0);
     const svcCollected = monthSvcAppts.reduce((s, a) => s + Math.round(Number(a.deposit ?? 0)), 0);
-    const svcInsurance = monthSvcAppts.reduce((s, a) => s + Math.round(Number(a.insuranceAmount ?? 0)), 0);
     const svcPending   = monthSvcAppts.reduce((s, a) => {
       const amt = Math.round(Number(a.amount ?? 0)); const dep = Math.round(Number(a.deposit ?? 0));
       return s + Math.max(0, amt - dep);
     }, 0);
+
+    const serviceMonthLabel = (monthKey: string, mode: "gregorian" | "hijri") => {
+      const [year, month] = monthKey.split("-").map(Number);
+      if (mode === "hijri") {
+        const range = getHijriMonthGregorianRange(year, month);
+        let secondary = "";
+        if (range.start && range.end) {
+          const start = new Date(`${range.start}T12:00:00`);
+          const end = new Date(`${range.end}T12:00:00`);
+          const startName = start.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
+          const endName = end.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
+          secondary = start.getMonth() === end.getMonth()
+            ? `${startName} ${toArN(start.getFullYear())}`
+            : `${startName} / ${endName} ${toArN(end.getFullYear())}`;
+        }
+        return {
+          primary: `${HIJRI_MONTHS_AR[month - 1]} ${toArN(year)} هـ`,
+          secondary,
+        };
+      }
+      const sample = new Date(year, month - 1, 15);
+      const firstHijri = toHijriComponents(new Date(year, month - 1, 1));
+      const lastHijri = toHijriComponents(new Date(year, month, 0));
+      const secondary = firstHijri.year === lastHijri.year && firstHijri.month === lastHijri.month
+        ? `${HIJRI_MONTHS_AR[firstHijri.month - 1]} ${toArN(firstHijri.year)} هـ`
+        : firstHijri.year === lastHijri.year
+          ? `${HIJRI_MONTHS_AR[firstHijri.month - 1]} / ${HIJRI_MONTHS_AR[lastHijri.month - 1]} ${toArN(firstHijri.year)} هـ`
+          : `${HIJRI_MONTHS_AR[firstHijri.month - 1]} ${toArN(firstHijri.year)} / ${HIJRI_MONTHS_AR[lastHijri.month - 1]} ${toArN(lastHijri.year)} هـ`;
+      return {
+        primary: sample.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" }),
+        secondary,
+      };
+    };
+    const activeServiceMonth = calType === "gregorian"
+      ? (serviceMonthsForYear.includes(serviceSelectedMonth) ? serviceSelectedMonth : serviceMonthsForYear[0] ?? "")
+      : (serviceMonthsForYear.includes(serviceSelectedHijriMonth) ? serviceSelectedHijriMonth : serviceMonthsForYear[0] ?? "");
 
     return (
       <div className="space-y-5" dir="rtl">
@@ -13945,47 +14051,105 @@ function RevenueTab() {
         <div className="flex items-center gap-3 flex-wrap">
           <Activity className="w-5 h-5 text-amber-500 shrink-0" />
           <h2 className="text-lg font-bold text-foreground">إيرادات: {(unit as any).name}</h2>
-          <div className="ms-auto w-48">
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {monthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          <div className="ms-auto flex items-center gap-2 flex-nowrap">
+            <div className="flex rounded-lg border border-border overflow-hidden text-xs shrink-0">
+              {(["gregorian", "hijri"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    const years = mode === "gregorian"
+                      ? Array.from(new Set(serviceGregorianMonths.map((month) => month.slice(0, 4)))).sort().reverse()
+                      : Array.from(new Set(serviceHijriMonths.map((month) => String(month.year)))).sort().reverse();
+                    setCalType(mode);
+                    if (years[0]) setServiceRevenueYear(years[0]);
+                    localStorage.setItem("revCalType", mode);
+                  }}
+                  className={`px-3 py-1.5 font-medium transition-colors ${calType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                >
+                  {mode === "gregorian" ? "ميلادي" : "هجري"}
+                </button>
+              ))}
+            </div>
+            {serviceYearOptions.length > 0 && (
+              <Select value={serviceRevenueYear} onValueChange={setServiceRevenueYear}>
+                <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[6.5rem] shrink-0" dir="rtl">
+                  <SelectValue placeholder="السنة" />
+                </SelectTrigger>
+                <SelectContent dir="rtl" align="end">
+                  {serviceYearOptions.map((year) => (
+                    <SelectItem key={year} value={year}>
+                      {calType === "hijri" ? `${toArN(Number(year))} هـ` : `${toArN(Number(year))} م`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {serviceMonthsForYear.length > 0 && (
+              <Select
+                value={activeServiceMonth}
+                onValueChange={calType === "gregorian" ? setServiceSelectedMonth : setServiceSelectedHijriMonth}
+              >
+                <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[8rem] shrink-0" dir="rtl">
+                  <span className="text-sm font-medium">
+                    {serviceMonthLabel(
+                      activeServiceMonth,
+                      calType,
+                    ).primary}
+                  </span>
+                </SelectTrigger>
+                <SelectContent dir="rtl" align="end">
+                  {serviceMonthsForYear.map((month) => {
+                    const label = serviceMonthLabel(month, calType);
+                    return (
+                      <SelectItem key={month} value={month}>
+                        <div className="flex flex-col items-end gap-0.5 py-0.5">
+                          <span className="font-semibold text-sm leading-tight">{label.primary}</span>
+                          {label.secondary && <span className="text-xs text-muted-foreground leading-tight">{label.secondary}</span>}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            )}
+            {serviceYearOptions.length === 0 && !svcLoading && (
+              <span className="text-xs text-muted-foreground">لا توجد أشهر بها حجوزات</span>
+            )}
           </div>
         </div>
 
-        {/* KPI cards — same structure as chalets */}
+        {/* KPI cards — same financial definitions used for properties */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="bg-card border border-border rounded-2xl p-4 space-y-1">
+          <div className="bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-              <RiyalIcon className="w-3.5 h-3.5 text-green-500" />
-              إيرادات الخدمة المحصّلة
+              <Receipt className="w-3.5 h-3.5 text-blue-600" />
+              إجمالي مبيعات الشهر
             </div>
             {svcLoading ? <Skeleton className="h-7 w-24" /> : (
-              <div className="text-2xl font-bold text-green-600">{fmtN(svcCollected)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+              <div className="text-2xl font-bold text-blue-700">{fmtN(svcSales)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
             )}
-            <div className="text-[11px] text-muted-foreground">عربون + متبقي محصّل + تلفيات</div>
+            <div className="text-[11px] text-muted-foreground">إجمالي قيمة حجوزات الخدمات في الشهر المحدد</div>
           </div>
-          <div className="bg-card border border-orange-200 rounded-2xl p-4 space-y-1">
+          <div className="bg-green-50/60 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
-              <Lock className="w-3.5 h-3.5 text-orange-500" />
-              تأمينات محتجزة حالياً
+              <RiyalIcon className="w-3.5 h-3.5 text-green-600" />
+              المبالغ المحصّلة
             </div>
             {svcLoading ? <Skeleton className="h-7 w-24" /> : (
-              <div className="text-2xl font-bold text-orange-600">{fmtN(svcInsurance)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+              <div className="text-2xl font-bold text-green-700">{fmtN(svcCollected)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
             )}
-            <div className="text-[11px] text-muted-foreground">غير محتسبة في الأرباح</div>
+            <div className="text-[11px] text-muted-foreground">إجمالي العربون أو المبلغ المدفوع المسجل</div>
           </div>
           <div className="bg-card border border-amber-200 rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
               <Clock className="w-3.5 h-3.5 text-amber-500" />
-              مبالغ متبقية لم تُحصَّل
+              مستحقات معلقة
             </div>
             {svcLoading ? <Skeleton className="h-7 w-24" /> : (
               <div className="text-2xl font-bold text-amber-600">{fmtN(svcPending)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
             )}
-            <div className="text-[11px] text-muted-foreground">مبالغ مستحقة من عملاء الخدمات</div>
+            <div className="text-[11px] text-muted-foreground">متبقي لم يُحصّل من ضيوف الخدمات حتى الآن</div>
           </div>
         </div>
 
@@ -14008,7 +14172,7 @@ function RevenueTab() {
           ) : filteredSvcRows.length === 0 ? (
             <div className="text-center text-muted-foreground text-sm py-8">لا توجد إيرادات لهذا الشهر</div>
           ) : (
-            <PaginatedItems items={filteredSvcRows} resetKey={`${selectedMonth}|${svcFilter}`}>
+            <PaginatedItems items={filteredSvcRows} resetKey={`${calType}|${serviceSelectedMonth}|${serviceSelectedHijriMonth}|${svcFilter}`}>
               {(pagination) => (
                 <div ref={pagination.tableRef} className="scroll-mt-4">
                   <div className="overflow-x-auto">
