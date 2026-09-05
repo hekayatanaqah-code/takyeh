@@ -5129,7 +5129,7 @@ function BookingCalendarTab({
     const _bPaid      = b.depositPaid ? Number(b.depositPaid) : 0;
     const _bRemaining = Math.max(0, _bTotal + insuranceFee - _bPaid);
     const _fmt = (n: number) => n > 0 ? n.toLocaleString("ar-SA") : "—";
-    const totalRefund = depositRefund + insuranceFee;
+    const refundText = depositRefund > 0 ? depositRefund.toLocaleString("ar-SA") : "٠";
     const _periodAr = (() => { const p = b.period; return p === "morning" ? "صباحية" : p === "evening" ? "مسائية" : p === "full_day" ? "يوم كامل" : "—"; });
     return templateBody
       .replace(/\{اسم_العميل\}/g, b.clientName ?? "")
@@ -5154,8 +5154,8 @@ function BookingCalendarTab({
       .replace(/\{الفترة_الجديدة\}/g, _periodAr())
       .replace(/\{استرداد_العربون\}/g, _fmt(depositRefund))
       .replace(/\{استرداد_التأمين\}/g, _fmt(insuranceFee))
-      .replace(/\{إجمالي_المسترد\}/g, _fmt(totalRefund))
-      .replace(/\{المبلغ_المسترد\}/g, _fmt(totalRefund))
+      .replace(/\{إجمالي_المسترد\}/g, refundText)
+      .replace(/\{المبلغ_المسترد\}/g, refundText)
       .replace(/\{[^}]+\}/g, "—");
   };
 
@@ -5223,13 +5223,11 @@ function BookingCalendarTab({
       .replace(/\{استرداد_التأمين\}/g, _bInsurance > 0 ? _bInsurance.toLocaleString("ar-SA") : "—")
       .replace(/\{إجمالي_المسترد\}/g, (() => {
         const dep = refundAmount != null ? refundAmount : (b.cancelRefundAmount ? Number(b.cancelRefundAmount) : 0);
-        const total = dep + _bInsurance;
-        return total > 0 ? total.toLocaleString("ar-SA") : "—";
+        return dep > 0 ? dep.toLocaleString("ar-SA") : "٠";
       })())
       .replace(/\{المبلغ_المسترد\}/g, (() => {
         const dep = refundAmount != null ? refundAmount : (b.cancelRefundAmount ? Number(b.cancelRefundAmount) : 0);
-        const total = dep + _bInsurance;
-        return total > 0 ? total.toLocaleString("ar-SA") : "—";
+        return dep > 0 ? dep.toLocaleString("ar-SA") : "٠";
       })())
       .replace(/\{[^}]+\}/g, "—");
     if (returnOnly) return msg;
@@ -10425,6 +10423,7 @@ function ServiceCalendarBookingsTab() {
     const total = Number(appointment.amount ?? 0);
     const deposit = Number(appointment.deposit ?? 0);
     const insurance = Number(appointment.insuranceAmount ?? 0);
+    const refund = Number(appointment.cancelRefundAmount ?? 0);
     const remaining = Math.max(0, total - deposit);
     const amountText = (value: number) => value > 0 ? toArN(value.toLocaleString("en-US")) : "—";
     const ar = (value: unknown) => toArN(String(value ?? ""));
@@ -10477,6 +10476,7 @@ function ServiceCalendarBookingsTab() {
       .replace(/\{التأمين\}/g, amountText(insurance))
       .replace(/\{المدة\}/g, durationText)
       .replace(/\{سبب_الإلغاء\}/g, ar(appointment.cancelReason || "حسب الاتفاق"))
+      .replace(/\{المبلغ_المسترد\}/g, refund > 0 ? amountText(refund) : "٠")
       .replace(/\{سبب_التعديل\}/g, ar(appointment.editReason || "حسب الاتفاق"))
       .replace(/\{طريقة_تقديم_الخدمة\}/g, appointment.serviceDeliveryMethod === "customer_pickup" ? "استلام العميل من المقر" : appointment.serviceDeliveryMethod === "delivery_installation" ? "توصيل وتركيب بموقع العميل" : "—")
       .replace(/\{عنوان_الخدمة\}/g, ar(appointment.serviceAddress || "—"))
