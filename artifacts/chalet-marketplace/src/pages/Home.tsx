@@ -215,6 +215,10 @@ export default function Home() {
 
   const hijriBookingDate = getHijriDate(bookingDate);
   const dualBookingDate  = getDualDate(bookingDate);
+  const dualServiceDate  = getDualDate(svcDate);
+  const selectedServiceCategoryLabel = svcCategory === "all"
+    ? "جميع الخدمات"
+    : serviceCategories.find((category) => category.key === svcCategory)?.labelAr ?? "";
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -594,6 +598,43 @@ export default function Home() {
                     <p className="mt-2 text-sm font-semibold text-red-100 text-center md:text-left" role="alert">
                       {svcSearchError}
                     </p>
+                  )}
+                  {(svcCategory || svcCity || svcDate) && (
+                    <motion.p
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-3 text-sm text-white/90 font-medium"
+                    >
+                      {svcCategory && (
+                        <>
+                          نوع الخدمة{" "}
+                          <span className="font-bold text-[#D4A96A]">
+                            {selectedServiceCategoryLabel}
+                          </span>
+                        </>
+                      )}
+                      {svcCity && (
+                        <>
+                          {svcCategory && " · "}
+                          المدينة{" "}
+                          <span className="font-bold text-[#D4A96A]">
+                            {svcCity === "all" ? "جميع المدن" : svcCity}
+                          </span>
+                        </>
+                      )}
+                      {svcDate && (
+                        <>
+                          {(svcCategory || svcCity) && " · "}
+                          تاريخ الخدمة{" "}
+                          <span className="font-bold">{dualServiceDate.hijri}</span>
+                          {dualServiceDate.gregorian && (
+                            <span className="font-normal opacity-80">
+                              {" "}| الموافق {dualServiceDate.gregorian} م
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </motion.p>
                   )}
                 </motion.div>
               )}
