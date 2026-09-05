@@ -6,6 +6,7 @@ import { Phone, MapPin, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@workspace/replit-auth-web";
+import servicesHeroBanner from "@assets/services-hero-banner.jpg";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -282,14 +283,20 @@ export default function Services() {
       <Navbar />
       <main className="flex-1">
         {/* Hero */}
-        <section className="bg-gradient-to-bl from-amber-50 via-background to-background dark:from-amber-950/20 pt-24 pb-8 px-4">
+        <section
+          className="relative isolate min-h-[330px] bg-cover bg-center px-4 pt-24 pb-14 flex items-center overflow-hidden"
+          style={{ backgroundImage: `url(${servicesHeroBanner})` }}
+          data-testid="banner-services-hero"
+        >
+          <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/65 via-black/55 to-black/70" />
+          <div className="absolute inset-0 -z-10 bg-gradient-to-l from-amber-950/20 via-transparent to-black/15" />
           <div className="container mx-auto text-center">
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-              <p className="text-primary font-semibold mb-3 tracking-wide">خدمات المناسبات</p>
-              <h1 className="text-4xl md:text-5xl font-extrabold text-foreground mb-4 leading-tight">
+              <p className="text-amber-200 font-semibold mb-3 tracking-wide drop-shadow-md">خدمات المناسبات</p>
+              <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 leading-tight drop-shadow-lg" data-testid="text-services-heading">
                 أجمل الخدمات لمناسباتك
               </h1>
-              <p className="text-muted-foreground text-lg max-w-xl mx-auto">
+              <p className="text-white/90 text-lg max-w-xl mx-auto leading-relaxed drop-shadow-md">
                 {catsLoading
                   ? "..."
                   : apiCategories.slice(0, 3).map((c) => `${c.emoji} ${c.labelAr}`).join("، ") || "خدمات متنوعة لمناسبتك"
