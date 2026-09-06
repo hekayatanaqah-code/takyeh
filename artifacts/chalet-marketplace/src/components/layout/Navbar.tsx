@@ -31,21 +31,32 @@ export function Navbar() {
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
 
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 group">
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt={siteTitle}
-                className={`${logoSize} object-contain rounded-xl group-hover:scale-105 transition-transform duration-300`}
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform duration-300">
-                <MapPin className="w-6 h-6" />
-              </div>
+          <div className="flex items-center gap-3">
+            {/* Logo */}
+            <Link href="/" className="flex items-center gap-2 group">
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt={siteTitle}
+                  className={`${logoSize} object-contain rounded-xl group-hover:scale-105 transition-transform duration-300`}
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform duration-300">
+                  <MapPin className="w-6 h-6" />
+                </div>
+              )}
+              <span className="text-xl font-bold text-foreground tracking-tight">{siteTitle}</span>
+            </Link>
+
+            {location !== "/" && (
+              <Link
+                href="/"
+                className="md:hidden rounded-full border border-border bg-background px-3 py-1.5 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-accent"
+              >
+                الرئيسية
+              </Link>
             )}
-            <span className="text-xl font-bold text-foreground tracking-tight">{siteTitle}</span>
-          </Link>
+          </div>
 
           {/* Desktop actions */}
           <div className="hidden md:flex items-center gap-3">
