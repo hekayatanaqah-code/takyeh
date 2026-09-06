@@ -61,7 +61,11 @@ export function Footer() {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               {logoUrl ? (
-                <img src={logoUrl} alt={settings.site_display_name || settings.site_title || "تكية"} className="w-10 h-10 object-contain rounded-lg" />
+                <img
+                  src={logoUrl}
+                  alt={settings.site_display_name || settings.site_title || "تكية"}
+                  className="w-12 h-12 object-contain brightness-0 invert opacity-100 drop-shadow-sm"
+                />
               ) : (
                 <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
                   <MapPin className="w-5 h-5" />
