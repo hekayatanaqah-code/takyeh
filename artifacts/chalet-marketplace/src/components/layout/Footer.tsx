@@ -158,7 +158,7 @@ export function Footer() {
                 <Building2 className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-background">بوابة الملاك والمزودين</h3>
+                <h3 className="text-xl font-bold text-background">بوابة الشركاء</h3>
                 <p className="mt-1 text-sm leading-relaxed text-background/65">
                   دخول أصحاب الشاليهات ومزودي الخدمات لإدارة الحجوزات والخدمات.
                 </p>
@@ -167,10 +167,10 @@ export function Footer() {
             <Link
               href="/login"
               className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-7 py-3 font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl"
-              data-testid="link-owner-provider-login"
+              data-testid="link-partner-login"
             >
               <LogIn className="h-5 w-5" />
-              دخول الملاك ومزودي الخدمات
+              دخول الشركاء
             </Link>
           </div>
         </div>
