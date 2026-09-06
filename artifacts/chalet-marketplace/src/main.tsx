@@ -2,6 +2,30 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
+const MOBILE_UI_CACHE_RELEASE = "partners-mobile-ui-2026-09";
+
+async function clearLegacyFrontendCaches() {
+  try {
+    if (localStorage.getItem("takyah-frontend-cache-release") === MOBILE_UI_CACHE_RELEASE) return;
+
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+
+    if ("caches" in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+    }
+
+    localStorage.setItem("takyah-frontend-cache-release", MOBILE_UI_CACHE_RELEASE);
+  } catch {
+    // Cache cleanup must never prevent the application from starting.
+  }
+}
+
+void clearLegacyFrontendCaches();
+
 /* ═══════════════════════════════════════════════════════════════════════════
    GLOBAL ARABIC-INDIC NUMERAL ENFORCER
    ═══════════════════════════════════════════════════════════════════════════
