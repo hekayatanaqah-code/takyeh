@@ -51,7 +51,7 @@ export function Navbar() {
             {location !== "/" && (
               <Link
                 href="/"
-                className="md:hidden rounded-full border border-border bg-background px-3 py-1.5 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-accent"
+                className="rounded-full border border-border bg-background px-3 py-1.5 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-accent"
               >
                 الرئيسية
               </Link>
