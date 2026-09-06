@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
-import { MapPin, Search, Calendar, Plus, Minus, Tag, Shield, Clock, Zap, Globe, Heart, CreditCard, Star, Users, Home as HomeIcon, Phone, CheckCircle, Eye, Building2, Wrench } from "lucide-react";
+import { MapPin, Search, Calendar, Plus, Minus, Tag, Shield, Clock, Zap, Globe, Heart, CreditCard, Star, Users, Home as HomeIcon, Phone, CheckCircle, Eye, Building2, Wrench, ChevronDown } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { toGregorianStr } from "@/lib/hijri";
 import { useQuery } from "@tanstack/react-query";
@@ -9,6 +9,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -88,7 +90,7 @@ export default function Home() {
   const _initDate  = _urlParams.get("date") ?? "";
 
   const [searchCity, setSearchCity]         = useState<string>("");
-  const [searchDistrict, setSearchDistrict] = useState<string>("");
+  const [searchDistricts, setSearchDistricts] = useState<string[]>([]);
   const [searchCategory, setSearchCategory] = useState<string>("");
   const [searchSections, setSearchSections] = useState<string>("");
   const [searchPeriod, setSearchPeriod]     = useState<string>("");
@@ -202,7 +204,7 @@ export default function Home() {
     setSearchError("");
     const params = new URLSearchParams();
     if (searchCity && searchCity !== "all") params.append("location", searchCity);
-    if (searchDistrict && searchDistrict !== "all") params.append("district", searchDistrict);
+    searchDistricts.forEach((district) => params.append("district", district));
     if (searchCategory && searchCategory !== "all") params.append("category", searchCategory);
     if (showSectionsField && searchSections && searchSections !== "all") params.append("sections", searchSections);
     if (searchPeriod && searchPeriod !== "all") params.append("period", searchPeriod);
@@ -327,7 +329,7 @@ export default function Home() {
                     <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-muted-foreground text-right mb-1">المدينة</p>
-                      <Select value={searchCity} onValueChange={(v) => { setSearchCity(v); setSearchDistrict(""); }}>
+                      <Select value={searchCity} onValueChange={(v) => { setSearchCity(v); setSearchDistricts([]); }}>
                         <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm">
                           <SelectValue placeholder="اختر المدينة" />
                         </SelectTrigger>
@@ -346,17 +348,57 @@ export default function Home() {
                     <MapPin className="w-4 h-4 text-primary/70 shrink-0" />
                     <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الحي</p>
-                      <Select value={searchDistrict} onValueChange={setSearchDistrict} disabled={!selectedCityId}>
-                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm">
-                          <SelectValue placeholder="الكل" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">الكل</SelectItem>
-                          {districts.map((d) => (
-                            <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={!selectedCityId}
+                            className="flex w-full items-center justify-between gap-2 text-right text-sm font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <span className="min-w-0 truncate">
+                              {searchDistricts.length === 0
+                                ? "كافة الأحياء"
+                                : searchDistricts.length === 1
+                                  ? searchDistricts[0]
+                                  : `${toArabicNum(searchDistricts.length)} أحياء محددة`}
+                            </span>
+                            <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-64 p-2" dir="rtl">
+                          <button
+                            type="button"
+                            onClick={() => setSearchDistricts([])}
+                            className="w-full rounded-md px-2 py-2 text-right text-sm hover:bg-accent"
+                          >
+                            كافة الأحياء
+                          </button>
+                          <div className="my-1 border-t" />
+                          <div className="max-h-56 space-y-1 overflow-y-auto">
+                            {districts.map((district) => {
+                              const checked = searchDistricts.includes(district.name);
+                              return (
+                                <label
+                                  key={district.id}
+                                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent"
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={() =>
+                                      setSearchDistricts((current) =>
+                                        checked
+                                          ? current.filter((name) => name !== district.name)
+                                          : [...current, district.name],
+                                      )
+                                    }
+                                  />
+                                  <span>{district.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { SlidersHorizontal, FilterX, CheckSquare, Square, CalendarDays, LayoutGrid, Map as MapIcon, MapPin } from "lucide-react";
+import { SlidersHorizontal, FilterX, CheckSquare, Square, CalendarDays, LayoutGrid, Map as MapIcon, MapPin, ChevronDown } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { hijriAndGregorian } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
@@ -47,7 +49,7 @@ export default function Chalets() {
   const searchParams = new URLSearchParams(window.location.search);
 
   const [filterCity, setFilterCity]         = useState<string>(searchParams.get("location") || "all");
-  const [filterDistrict, setFilterDistrict] = useState<string>(searchParams.get("district") || "all");
+  const [filterDistricts, setFilterDistricts] = useState<string[]>(searchParams.getAll("district"));
   const [filterCategory, setFilterCategory] = useState<string>(searchParams.get("category") || "all");
   const [filterSections, setFilterSections] = useState<string>(searchParams.get("sections") || "all");
   const [filterPeriod, setFilterPeriod]     = useState<string>(searchParams.get("period") || "all");
@@ -120,7 +122,7 @@ export default function Chalets() {
   /* Reset visible count whenever any filter changes */
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [filterCity, filterDistrict, filterCategory, filterSections, filterPeriod, filterDate, filterMaxPrice, filterAmenities]);
+  }, [filterCity, filterDistricts, filterCategory, filterSections, filterPeriod, filterDate, filterMaxPrice, filterAmenities]);
 
   /* ── Next Available: city + date but no results ──────────────────
      Calls /api/chalets/next-available which returns:
@@ -192,9 +194,9 @@ export default function Chalets() {
 
   const filteredChalets = (chalets ?? []).filter((c) => {
     if (filterCity && filterCity !== "all" && (c as any).location !== filterCity) return false;
-    if (filterDistrict && filterDistrict !== "all") {
+    if (filterDistricts.length > 0) {
       const chaletDistrict = ((c as any).district ?? "").trim();
-      if (!chaletDistrict || chaletDistrict !== filterDistrict.trim()) return false;
+      if (!chaletDistrict || !filterDistricts.includes(chaletDistrict)) return false;
     }
     if (filterCategory && filterCategory !== "all") {
       /* Properties with no category are unclassified — include them in every category search */
@@ -233,7 +235,7 @@ export default function Chalets() {
 
   const resetFilters = () => {
     setFilterCity("all");
-    setFilterDistrict("all");
+    setFilterDistricts([]);
     setFilterCategory("all");
     setFilterSections("all");
     setFilterPeriod("all");
@@ -316,17 +318,55 @@ export default function Chalets() {
       {/* 4. الحي */}
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">الحي</label>
-        <Select value={filterDistrict} onValueChange={setFilterDistrict} disabled={!selectedCityId}>
-          <SelectTrigger className="bg-background">
-            <SelectValue placeholder="الكل" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">الكل</SelectItem>
-            {districts.map((d) => (
-              <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!selectedCityId}
+              className="w-full justify-between bg-background font-normal"
+            >
+              <span className="truncate">
+                {filterDistricts.length === 0
+                  ? "كافة الأحياء"
+                  : filterDistricts.length === 1
+                    ? filterDistricts[0]
+                    : `${filterDistricts.length} أحياء محددة`}
+              </span>
+              <ChevronDown className="h-4 w-4 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-64 p-2" dir="rtl">
+            <button
+              type="button"
+              onClick={() => setFilterDistricts([])}
+              className="w-full rounded-md px-2 py-2 text-right text-sm hover:bg-accent"
+            >
+              كافة الأحياء
+            </button>
+            <div className="my-1 border-t" />
+            <div className="max-h-56 space-y-1 overflow-y-auto">
+              {districts.map((district) => {
+                const checked = filterDistricts.includes(district.name);
+                return (
+                  <label key={district.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={() =>
+                        setFilterDistricts((current) =>
+                          checked
+                            ? current.filter((name) => name !== district.name)
+                            : [...current, district.name],
+                        )
+                      }
+                    />
+                    <span>{district.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* الميزانية */}
@@ -395,7 +435,7 @@ export default function Chalets() {
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">المدينة</label>
-          <Select value={filterCity} onValueChange={(v) => { setFilterCity(v); setFilterDistrict("all"); }}>
+          <Select value={filterCity} onValueChange={(v) => { setFilterCity(v); setFilterDistricts([]); }}>
             <SelectTrigger className="bg-background h-8 text-xs">
               <SelectValue placeholder="اختر المدينة" />
             </SelectTrigger>
