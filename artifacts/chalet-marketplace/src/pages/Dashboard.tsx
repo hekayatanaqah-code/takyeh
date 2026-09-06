@@ -1393,12 +1393,21 @@ function SectionGuideButton({ sectionKey }: { sectionKey: string }) {
 
             {activeVideo ? (
               <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
-                <iframe
-                  src={getYouTubeEmbedUrl(activeVideo.video_url) ?? ""}
-                  className="absolute inset-0 w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+                {getYouTubeEmbedUrl(activeVideo.video_url) ? (
+                  <iframe
+                    src={getYouTubeEmbedUrl(activeVideo.video_url) ?? ""}
+                    className="absolute inset-0 w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <video
+                    src={activeVideo.video_url}
+                    className="absolute inset-0 h-full w-full bg-black"
+                    controls
+                    playsInline
+                  />
+                )}
               </div>
             ) : (
               <div className="divide-y divide-border max-h-96 overflow-y-auto">

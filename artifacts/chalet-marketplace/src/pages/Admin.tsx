@@ -7225,17 +7225,28 @@ const GUIDE_SECTIONS = [
 ] as const;
 
 function getYouTubeEmbedUrl(url: string): string | null {
-  try {
-    const u = new URL(url);
-    let id: string | null = null;
-    if (u.hostname === "youtu.be") id = u.pathname.slice(1);
-    else if (u.hostname.includes("youtube.com")) id = u.searchParams.get("v");
-    return id ? `https://www.youtube.com/embed/${id}` : null;
-  } catch { return null; }
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([A-Za-z0-9_-]{11})/);
+  return match ? `https://www.youtube.com/embed/${match[1]}` : null;
 }
 
 type GuideRow = { id: number; sectionKey: string; title: string; videoUrl: string };
-type NewEntry = { title: string; url: string; saving: boolean };
+type NewEntry = {
+  title: string;
+  url: string;
+  source: "youtube" | "upload";
+  fileName: string;
+  uploading: boolean;
+  saving: boolean;
+};
+
+const EMPTY_GUIDE_ENTRY: NewEntry = {
+  title: "",
+  url: "",
+  source: "youtube",
+  fileName: "",
+  uploading: false,
+  saving: false,
+};
 
 function SectionGuidesAdminTab() {
   const qc = useQueryClient();
@@ -7254,12 +7265,16 @@ function SectionGuidesAdminTab() {
 
   function toggleAdd(key: string) {
     setShowAdd(s => ({ ...s, [key]: !s[key] }));
-    if (!newEntries[key]) setNewEntries(e => ({ ...e, [key]: { title: "", url: "", saving: false } }));
+    if (!newEntries[key]) setNewEntries(e => ({ ...e, [key]: { ...EMPTY_GUIDE_ENTRY } }));
   }
 
   async function addGuide(key: string) {
     const e = newEntries[key];
     if (!e?.title.trim() || !e?.url.trim()) return;
+    if (e.source === "youtube" && !getYouTubeEmbedUrl(e.url)) {
+      toast({ title: "رابط غير صالح", description: "يرجى إدخال رابط يوتيوب صحيح", variant: "destructive" });
+      return;
+    }
     setNewEntries(n => ({ ...n, [key]: { ...n[key], saving: true } }));
     try {
       const r = await apiFetch("/admin/section-guides", {
@@ -7268,12 +7283,61 @@ function SectionGuidesAdminTab() {
       });
       if (!r.ok) throw new Error();
       await qc.invalidateQueries({ queryKey: ["admin", "section-guides"] });
-      setNewEntries(n => ({ ...n, [key]: { title: "", url: "", saving: false } }));
+      setNewEntries(n => ({ ...n, [key]: { ...EMPTY_GUIDE_ENTRY } }));
       setShowAdd(s => ({ ...s, [key]: false }));
       toast({ title: "تمت الإضافة ✓", description: `تمت إضافة "${e.title.trim()}" بنجاح` });
     } catch {
       toast({ title: "خطأ", description: "تعذّر الحفظ", variant: "destructive" });
       setNewEntries(n => ({ ...n, [key]: { ...n[key], saving: false } }));
+    }
+  }
+
+  async function uploadGuideVideo(key: string, file: File) {
+    if (!file.type.startsWith("video/")) {
+      toast({ title: "ملف غير صالح", description: "يرجى اختيار ملف فيديو", variant: "destructive" });
+      return;
+    }
+    if (file.size > 200 * 1024 * 1024) {
+      toast({ title: "حجم الفيديو كبير", description: "الحد الأقصى المسموح 200MB", variant: "destructive" });
+      return;
+    }
+    setNewEntries(n => ({
+      ...n,
+      [key]: { ...n[key], uploading: true, fileName: file.name, url: "" },
+    }));
+    try {
+      const request = await fetch(`${BASE}/api/storage/uploads/request-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type || "video/mp4",
+        }),
+        credentials: "include",
+      });
+      const uploadData = await request.json();
+      if (!request.ok || !uploadData.uploadURL || !uploadData.objectPath) {
+        throw new Error(uploadData.error || "تعذّر تجهيز رفع الفيديو");
+      }
+      const upload = await fetch(uploadData.uploadURL, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "video/mp4" },
+        body: file,
+      });
+      if (!upload.ok) throw new Error("تعذّر رفع الفيديو إلى التخزين");
+      const videoUrl = `${BASE}/api/storage${uploadData.objectPath}`;
+      setNewEntries(n => ({
+        ...n,
+        [key]: { ...n[key], uploading: false, url: videoUrl, fileName: file.name },
+      }));
+      toast({ title: "تم رفع الفيديو ✓", description: "يمكنك الآن حفظ الشرح" });
+    } catch (error: any) {
+      setNewEntries(n => ({
+        ...n,
+        [key]: { ...n[key], uploading: false, url: "", fileName: "" },
+      }));
+      toast({ title: "تعذّر رفع الفيديو", description: error.message, variant: "destructive" });
     }
   }
 
@@ -7301,7 +7365,7 @@ function SectionGuidesAdminTab() {
         <div>
           <h2 className="text-base font-bold text-foreground">إدارة شروحات الأقسام</h2>
           <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-            أضف فيديوهات يوتيوب لكل قسم — يمكن إضافة أكثر من فيديو للقسم الواحد.
+            أضف فيديوهات الشرح برفع ملف مباشر أو باستخدام رابط يوتيوب — ويمكن إضافة أكثر من فيديو للقسم الواحد.
             سيظهر للمالك زر <span className="font-semibold text-primary">شروحات القسم</span> تلقائياً.
           </p>
         </div>
@@ -7311,7 +7375,7 @@ function SectionGuidesAdminTab() {
       <div className="space-y-3">
         {GUIDE_SECTIONS.map(({ key, label }) => {
           const sectionGuides = guides.filter(g => g.sectionKey === key);
-          const entry = newEntries[key] ?? { title: "", url: "", saving: false };
+          const entry = newEntries[key] ?? EMPTY_GUIDE_ENTRY;
           const isOpen = !!showAdd[key];
 
           return (
@@ -7393,25 +7457,70 @@ function SectionGuidesAdminTab() {
                         className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                       />
                     </div>
-                    {/* URL field */}
+                    {/* Video source */}
                     <div>
                       <label className="block text-[11px] font-semibold text-foreground mb-1">
-                        رابط يوتيوب (YouTube URL)
+                        طريقة إضافة الفيديو
                       </label>
-                      <input
-                        type="url"
-                        dir="ltr"
-                        placeholder="https://www.youtube.com/watch?v=..."
-                        value={entry.url}
-                        onChange={e => setNewEntries(n => ({ ...n, [key]: { ...n[key], url: e.target.value } }))}
-                        className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 font-mono text-xs"
-                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setNewEntries(n => ({ ...n, [key]: { ...n[key], source: "youtube", url: "", fileName: "" } }))}
+                          className={`h-10 rounded-lg border text-xs font-bold transition-colors ${entry.source === "youtube" ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-muted"}`}
+                        >
+                          رابط يوتيوب
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewEntries(n => ({ ...n, [key]: { ...n[key], source: "upload", url: "", fileName: "" } }))}
+                          className={`h-10 rounded-lg border text-xs font-bold transition-colors ${entry.source === "upload" ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-muted"}`}
+                        >
+                          رفع ملف فيديو
+                        </button>
+                      </div>
                     </div>
+
+                    {entry.source === "youtube" ? (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-foreground mb-1">
+                          رابط يوتيوب (YouTube URL)
+                        </label>
+                        <input
+                          type="url"
+                          dir="ltr"
+                          placeholder="https://www.youtube.com/watch?v=..."
+                          value={entry.url}
+                          onChange={e => setNewEntries(n => ({ ...n, [key]: { ...n[key], url: e.target.value } }))}
+                          className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 font-mono text-xs"
+                        />
+                      </div>
+                    ) : (
+                      <label className={`flex min-h-20 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-3 text-center transition-colors ${entry.url ? "border-green-500/50 bg-green-500/5 text-green-700 dark:text-green-400" : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:bg-primary/5"}`}>
+                        <input
+                          type="file"
+                          accept="video/*"
+                          className="hidden"
+                          disabled={entry.uploading}
+                          onChange={event => {
+                            const file = event.target.files?.[0];
+                            if (file) void uploadGuideVideo(key, file);
+                            event.target.value = "";
+                          }}
+                        />
+                        {entry.uploading ? (
+                          <><Loader2 className="h-4 w-4 animate-spin" /><span className="text-xs font-semibold">جاري رفع ومعالجة الفيديو...</span></>
+                        ) : entry.url ? (
+                          <><CheckCircle className="h-4 w-4" /><span className="min-w-0 truncate text-xs font-semibold">{entry.fileName} — تم الرفع، اضغط للتغيير</span></>
+                        ) : (
+                          <><Upload className="h-4 w-4" /><span className="text-xs font-semibold">اختر فيديو كاملاً للرفع (حتى 200MB)</span></>
+                        )}
+                      </label>
+                    )}
                     {/* Save button */}
                     <div className="flex justify-end pt-1">
                       <button
                         onClick={() => addGuide(key)}
-                        disabled={entry.saving || !entry.title.trim() || !entry.url.trim()}
+                        disabled={entry.saving || entry.uploading || !entry.title.trim() || !entry.url.trim()}
                         className="h-9 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 disabled:opacity-50 transition-colors"
                       >
                         {entry.saving ? "جاري الحفظ..." : "حفظ الفيديو"}
