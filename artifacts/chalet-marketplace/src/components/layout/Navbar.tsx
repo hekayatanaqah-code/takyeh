@@ -1,8 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { MapPin, Menu, LayoutDashboard, Settings } from "lucide-react";
-import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
-import { useState } from "react";
+import { MapPin, LayoutDashboard, Settings } from "lucide-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useQuery } from "@tanstack/react-query";
 import { useStaffAuth } from "@/lib/useStaffAuth";
@@ -11,7 +9,6 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export function Navbar() {
   const [location] = useLocation();
-  const [isOpen, setIsOpen] = useState(false);
   const { isAuthenticated, isLoading } = useAuth();
   const { isStaff } = useStaffAuth();
 
@@ -81,41 +78,6 @@ export function Navbar() {
               ) : null
             )}
           </div>
-
-          {/* Mobile Nav — internal pages only */}
-          {location !== "/" && (
-            <div className="md:hidden">
-              <Sheet open={isOpen} onOpenChange={setIsOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <Menu className="w-6 h-6" />
-                    <span className="sr-only">فتح القائمة</span>
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-[80vw] sm:w-[350px]">
-                  <SheetTitle className="text-right mt-4 mb-6 text-xl font-bold">القائمة الرئيسية</SheetTitle>
-                  <nav className="flex flex-col gap-4">
-                    {!isLoading && (
-                      isAuthenticated ? (
-                        <Link
-                          href="/dashboard"
-                          onClick={() => setIsOpen(false)}
-                          className={`flex items-center px-4 py-3 rounded-xl text-base font-semibold transition-colors ${
-                            location === "/dashboard"
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-primary/10 text-primary hover:bg-primary/20"
-                          }`}
-                        >
-                          <LayoutDashboard className="w-4 h-4 me-2" />
-                          لوحة التحكم
-                        </Link>
-                      ) : null
-                    )}
-                  </nav>
-                </SheetContent>
-              </Sheet>
-            </div>
-          )}
 
         </div>
       </header>
