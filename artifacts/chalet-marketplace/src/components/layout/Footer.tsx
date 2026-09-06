@@ -53,7 +53,7 @@ export function Footer() {
   const hasSocial = showInstagram || showTwitter || showSnapchat || showTikTok;
 
   return (
-    <footer className="bg-foreground text-background py-12 mt-auto">
+    <footer className="bg-foreground text-background pt-12 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-12 mt-auto">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
 
@@ -160,7 +160,7 @@ export function Footer() {
               <div>
                 <h3 className="text-xl font-bold text-background">بوابة الشركاء</h3>
                 <p className="mt-1 text-sm leading-relaxed text-background/65">
-                  دخول أصحاب الشاليهات ومزودي الخدمات لإدارة الحجوزات والخدمات.
+                  بوابة الشركاء - دخول أصحاب الوجهات ومزودي الخدمات لإدارة الحجوزات والخدمات
                 </p>
               </div>
             </div>
@@ -175,7 +175,7 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-background/20 mt-12 pt-6 text-center text-sm text-background/50">
+        <div className="border-t border-background/20 mt-12 pt-6 px-2 text-center text-sm leading-7 text-background/50">
           {(() => {
             const now = new Date();
             const hijriYear = toHijriComponents(now).year.toLocaleString("ar-SA");
