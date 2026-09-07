@@ -10,6 +10,9 @@ router.post("/", async (req, res) => {
     const { name, phone, email, message } = req.body as Record<string, string>;
     if (!name?.trim()) return res.status(400).json({ error: "الاسم مطلوب" });
     if (!message?.trim()) return res.status(400).json({ error: "نص الرسالة مطلوب" });
+    if (!phone?.trim() && !email?.trim()) {
+      return res.status(400).json({ error: "يرجى إدخال رقم الجوال أو البريد الإلكتروني" });
+    }
 
     await db.execute(
       sql`INSERT INTO contact_inquiries (name, phone, email, message, status, created_at)

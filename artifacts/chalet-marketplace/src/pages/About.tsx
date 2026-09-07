@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, Info } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { InformationalContent } from "@/components/layout/InformationalContent";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -35,9 +36,7 @@ export default function About() {
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : content ? (
-            <div className="bg-card border border-border rounded-2xl p-8">
-              <p className="text-foreground leading-loose whitespace-pre-wrap text-[15px]">{content}</p>
-            </div>
+            <InformationalContent content={content} />
           ) : (
             <div className="bg-card border border-dashed border-border rounded-2xl p-12 text-center">
               <p className="text-muted-foreground">سيتم إضافة محتوى هذه الصفحة قريباً.</p>

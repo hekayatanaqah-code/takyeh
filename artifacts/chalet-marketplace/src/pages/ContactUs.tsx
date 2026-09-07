@@ -28,6 +28,10 @@ export default function ContactUs() {
       setError("الاسم والرسالة مطلوبان");
       return;
     }
+    if (!phone.trim() && !email.trim()) {
+      setError("يرجى إدخال رقم الجوال أو البريد الإلكتروني حتى نتمكن من الرد عليك");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(`${BASE}/api/contact`, {
@@ -83,10 +87,15 @@ export default function ContactUs() {
                 />
               </div>
 
-              <div className="space-y-1.5">
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-4">
+                <p id="contact-method-hint" className="text-xs font-semibold leading-6 text-muted-foreground">
+                  أدخل وسيلة تواصل واحدة على الأقل لنتمكن من الرد عليك
+                  <span className="text-destructive"> *</span>
+                </p>
+                <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5" />
-                  رقم الجوال (اختياري)
+                  رقم الجوال
                 </label>
                 <Input
                   value={phone}
@@ -94,13 +103,20 @@ export default function ContactUs() {
                   placeholder="05XXXXXXXX"
                   dir="rtl"
                   inputMode="tel"
+                  aria-describedby="contact-method-hint"
                 />
-              </div>
+                </div>
 
-              <div className="space-y-1.5">
+                <div className="flex items-center gap-3" aria-hidden="true">
+                  <span className="h-px flex-1 bg-border" />
+                  <span className="text-[11px] font-semibold text-muted-foreground">أو</span>
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+
+                <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                   <Mail className="w-3.5 h-3.5" />
-                  البريد الإلكتروني (اختياري)
+                  البريد الإلكتروني
                 </label>
                 <Input
                   type="email"
@@ -109,6 +125,7 @@ export default function ContactUs() {
                   placeholder="example@email.com"
                   dir="ltr"
                 />
+                </div>
               </div>
 
               <div className="space-y-1.5">
