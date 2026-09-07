@@ -39,6 +39,7 @@ import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { sendOtpEmail, sendReportEmail } from "../lib/email";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
+import { ensureOwnerProfile } from "../lib/ownerProfile";
 
 const router = Router();
 
@@ -487,61 +488,63 @@ router.post("/exit-session", async (req, res) => {
    Strategy 3 – look up via chalet_submissions.owner_id → users.email.
    Returns null only if no matching owner_application can be found.
    ──────────────────────────────────────────────────────────────────────── */
-async function resolveOwnerEmail(req: Request): Promise<string | null> {
-  const sessionEmail = req.user?.email ?? null;
+type ResolvedOwnerApplication = { id: number; email: string };
+
+async function resolveOwnerApplication(req: Request): Promise<ResolvedOwnerApplication | null> {
   const userId       = req.user?.id ?? null;
 
-  /* Strategy 1 — session email matches an owner_application */
-  if (sessionEmail) {
-    const r = await db.execute(
-      sql`SELECT email FROM owner_applications WHERE email = ${sessionEmail} LIMIT 1`
-    );
-    const hit = ((r as any).rows as Array<{ email: string }>)[0];
-    if (hit) return hit.email;
-  }
-
-  /* Strategy 2 — Replit user ID → users.email → owner_applications */
+  /* Strategy 1 — durable account-to-profile mapping */
   if (userId) {
     const r = await db.execute(
-      sql`SELECT oa.email
-          FROM owner_applications oa
-          JOIN users u ON lower(u.email) = lower(oa.email)
-          WHERE u.id = ${userId}
+      sql`SELECT oa.id, oa.email
+          FROM owner_account_links link
+          JOIN owner_applications oa ON oa.id = link.owner_application_id
+          WHERE link.user_id = ${userId}
           LIMIT 1`
     );
-    const hit = ((r as any).rows as Array<{ email: string }>)[0];
-    if (hit) return hit.email;
+    const hit = ((r as any).rows as ResolvedOwnerApplication[])[0];
+    if (hit) return hit;
   }
 
-  /* Strategy 3 — Replit user ID used as ownerId in chalet_submissions → email via users */
-  if (userId) {
-    const r = await db.execute(
-      sql`SELECT oa.email
-          FROM chalet_submissions cs
-          JOIN users u ON u.id = cs.owner_id
-          JOIN owner_applications oa ON lower(oa.email) = lower(u.email)
-          WHERE cs.owner_id = ${userId}
-          LIMIT 1`
-    );
-    const hit = ((r as any).rows as Array<{ email: string }>)[0];
-    if (hit) return hit.email;
-  }
-
-  /* Strategy 4 — admin-assigned "owner_N" key → owner_applications by numeric id
+  /* Strategy 2 — password/admin owner_N session → owner_applications by numeric id
    * When admin adds a property for an owner, chalet_submissions.owner_id = "owner_N"
    * (where N = owner_applications.id). We parse N and look up directly. */
   if (userId && /^owner_\d+$/.test(String(userId))) {
     const n = parseInt(String(userId).replace("owner_", ""), 10);
     if (!isNaN(n)) {
       const r = await db.execute(
-        sql`SELECT email FROM owner_applications WHERE id = ${n} LIMIT 1`
+        sql`SELECT id, email FROM owner_applications WHERE id = ${n} LIMIT 1`
       );
-      const hit = ((r as any).rows as Array<{ email: string }>)[0];
-      if (hit?.email) return hit.email;
+      const hit = ((r as any).rows as ResolvedOwnerApplication[])[0];
+      if (hit?.email) return hit;
+    }
+  }
+
+  /* Strategy 3 — first verified link or profile creation for an external account */
+  if (userId && !(isPlatformAdmin(req) && !(req.user as any)?.isImpersonated)) {
+    const linkedEmail = await ensureOwnerProfile({
+      userId,
+      email: req.user?.email,
+      firstName: req.user?.firstName,
+      lastName: req.user?.lastName,
+    });
+    if (linkedEmail) {
+      const r = await db.execute(
+        sql`SELECT oa.id, oa.email
+            FROM owner_account_links link
+            JOIN owner_applications oa ON oa.id = link.owner_application_id
+            WHERE link.user_id = ${userId}
+            LIMIT 1`
+      );
+      return ((r as any).rows as ResolvedOwnerApplication[])[0] ?? null;
     }
   }
 
   return null;
+}
+
+async function resolveOwnerEmail(req: Request): Promise<string | null> {
+  return (await resolveOwnerApplication(req))?.email ?? null;
 }
 
 /* ── Helper: build all valid ownerIds for the current session ──────────
@@ -559,15 +562,18 @@ async function getOwnerIds(req: Request): Promise<string[]> {
     return [primary];
   }
   const ownerIds = new Set<string>([primary]);
+  if (/^owner_\d+$/.test(primary)) return [...ownerIds];
+
   try {
-    const email = await resolveOwnerEmail(req);
-    if (email) {
-      const r = await db.execute(
-        sql`SELECT id FROM owner_applications WHERE LOWER(email) = LOWER(${email}) LIMIT 1`
-      );
-      const appId = ((r as any).rows as Array<{ id: number }>)[0]?.id;
-      if (appId) ownerIds.add(`owner_${appId}`);
-    }
+    await resolveOwnerEmail(req);
+    const r = await db.execute(
+      sql`SELECT owner_application_id
+          FROM owner_account_links
+          WHERE user_id = ${primary}
+          LIMIT 1`
+    );
+    const appId = ((r as any).rows as Array<{ owner_application_id: number }>)[0]?.owner_application_id;
+    if (appId) ownerIds.add(`owner_${appId}`);
   } catch { /* non-fatal */ }
   return [...ownerIds];
 }
@@ -647,15 +653,16 @@ router.get("/profile", async (req, res) => {
     const userId = req.user?.id ?? null;
 
     /* ── Path 1: owner has an owner_applications record ── */
-    const email = await resolveOwnerEmail(req);
-    if (email) {
+    const ownerAccount = await resolveOwnerApplication(req);
+    if (ownerAccount) {
+      const email = ownerAccount.email;
       /* Phone: prefer owner_applications.phone, fall back to chalet_submissions.whatsapp_number
          for the same owner (matching by userId in chalet_submissions) */
       let phone = "";
       const oaResult = await db.execute(
-        sql`SELECT full_name, phone, email, whatsapp_news_subscribe, business_type, bookings_cal_pref, reports_cal_pref, salary_cal_pref FROM owner_applications WHERE email = ${email} LIMIT 1`
+        sql`SELECT full_name, phone, email, password_hash, whatsapp_news_subscribe, business_type, bookings_cal_pref, reports_cal_pref, salary_cal_pref FROM owner_applications WHERE id = ${ownerAccount.id} LIMIT 1`
       );
-      const oaRow = ((oaResult as any).rows as Array<{ full_name: string; phone: string; email: string; whatsapp_news_subscribe: boolean; business_type: string; bookings_cal_pref: string; reports_cal_pref: string; salary_cal_pref: string }>)[0];
+      const oaRow = ((oaResult as any).rows as Array<{ full_name: string; phone: string; email: string; password_hash: string; whatsapp_news_subscribe: boolean; business_type: string; bookings_cal_pref: string; reports_cal_pref: string; salary_cal_pref: string }>)[0];
       if (!oaRow) {
         const businessType = await findLatestRegisteredBusinessType(email, null, userId) ?? "both";
         return res.json({ fullName: req.user?.firstName ?? "", phone: "", email, businessType, noApplication: true });
@@ -664,7 +671,16 @@ router.get("/profile", async (req, res) => {
       /* If owner_applications.phone is empty, pull from chalet_submissions */
       if (!phone && userId) {
         const csResult = await db.execute(
-          sql`SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = ${userId} AND whatsapp_number IS NOT NULL AND whatsapp_number != '' ORDER BY created_at DESC LIMIT 1`
+          sql`SELECT whatsapp_number
+              FROM (
+                SELECT whatsapp_number, created_at FROM chalet_submissions WHERE owner_id = ${userId}
+                UNION ALL
+                SELECT whatsapp_number, created_at FROM service_provider_submissions WHERE owner_id = ${userId}
+                UNION ALL
+                SELECT whatsapp_number, created_at FROM service_providers WHERE owner_id = ${userId}
+              ) owner_phones
+              WHERE whatsapp_number IS NOT NULL AND whatsapp_number != ''
+              ORDER BY created_at DESC LIMIT 1`
         );
         phone = ((csResult as any).rows as Array<{ whatsapp_number: string }>)[0]?.whatsapp_number ?? "";
       }
@@ -672,7 +688,7 @@ router.get("/profile", async (req, res) => {
       const businessType = normalizeOwnerBusinessType(oaRow.business_type)
         ?? await findLatestRegisteredBusinessType(oaRow.email, phone, userId)
         ?? "both";
-      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email, whatsappNewsSubscribe: oaRow.whatsapp_news_subscribe ?? false, businessType, bookingsCalPref: oaRow.bookings_cal_pref ?? "hijri", reportsCalPref: oaRow.reports_cal_pref ?? "gregorian", salaryCalPref: oaRow.salary_cal_pref ?? "gregorian" });
+      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email, hasPassword: Boolean(oaRow.password_hash), whatsappNewsSubscribe: oaRow.whatsapp_news_subscribe ?? false, businessType, bookingsCalPref: oaRow.bookings_cal_pref ?? "hijri", reportsCalPref: oaRow.reports_cal_pref ?? "gregorian", salaryCalPref: oaRow.salary_cal_pref ?? "gregorian" });
     }
 
     /* ── Path 2: Replit OIDC owner — look up via chalet_submissions ── */
@@ -713,18 +729,23 @@ router.get("/profile", async (req, res) => {
 /* ── PUT /owner/profile — update owner profile ─────────────── */
 router.put("/profile", async (req, res) => {
   try {
-    const currentEmail = await resolveOwnerEmail(req);
+    const userId = req.user?.id;
+    const ownerAccount = await resolveOwnerApplication(req);
+    const currentEmail = ownerAccount?.email ?? null;
+    const ownerIds = userId ? await getOwnerIds(req) : [];
 
     /* ── Path C: Replit OIDC owner (no owner_applications) — direct update via chalet_submissions ── */
     if (!currentEmail) {
-      const userId = req.user?.id;
       if (!userId) return res.status(404).json({ error: "لم يتم العثور على حساب مرتبط بهذا المستخدم" });
 
-      /* Verify this user actually has a chalet_submission */
-      const csCheck = await db.execute(
-        sql`SELECT id FROM chalet_submissions WHERE owner_id = ${userId} LIMIT 1`
+      /* Verify this user has at least one property or service record */
+      const accountCheck = await db.execute(
+        sql`SELECT
+              EXISTS(SELECT 1 FROM chalet_submissions WHERE owner_id = ${userId})
+              OR EXISTS(SELECT 1 FROM service_provider_submissions WHERE owner_id = ${userId})
+              OR EXISTS(SELECT 1 FROM service_providers WHERE owner_id = ${userId}) AS found`
       );
-      if (!((csCheck as any).rows as Array<unknown>)[0]) {
+      if (!((accountCheck as any).rows as Array<{ found: boolean }>)[0]?.found) {
         return res.status(404).json({ error: "لم يتم العثور على حساب مرتبط بهذا المستخدم" });
       }
 
@@ -743,6 +764,12 @@ router.put("/profile", async (req, res) => {
         await db.execute(
           sql`UPDATE chalet_submissions SET whatsapp_number = ${phone.trim()} WHERE owner_id = ${userId}`
         );
+        await db.execute(
+          sql`UPDATE service_provider_submissions SET whatsapp_number = ${phone.trim()} WHERE owner_id = ${userId}`
+        );
+        await db.execute(
+          sql`UPDATE service_providers SET whatsapp_number = ${phone.trim()} WHERE owner_id = ${userId}`
+        );
       }
       console.log(`[PUT /owner/profile] Path C (OIDC direct): userId=${userId} phone=${phone}`);
       return res.json({ ok: true });
@@ -760,24 +787,85 @@ router.put("/profile", async (req, res) => {
 
       const newPhoneClean = phone !== undefined ? (phone ?? "").trim() : null;
       const newEmailClean = newEmail ? newEmail.trim().toLowerCase() : null;
+      const otpTargetClean = otpTarget.trim().toLowerCase();
+      if (!ownerAccount) return res.status(404).json({ error: "لم يتم العثور على حساب مرتبط بهذا المستخدم" });
 
-      const updates: string[] = [`full_name = '${fullName.trim().replace(/'/g, "''")}'`];
-      if (newPhoneClean !== null) updates.push(`phone = '${newPhoneClean.replace(/'/g, "''")}'`);
       if (newEmailClean && newEmailClean !== currentEmail.toLowerCase()) {
-        updates.push(`email = '${newEmailClean.replace(/'/g, "''")}'`);
+        if (otpTargetClean !== newEmailClean) {
+          return res.status(400).json({ error: "رمز التحقق غير مرتبط بالبريد الإلكتروني الجديد" });
+        }
+      } else if (newPhoneClean !== null && otpTargetClean !== currentEmail.toLowerCase()) {
+        return res.status(400).json({ error: "رمز التحقق غير مرتبط بهذا الحساب" });
       }
-      await db.execute(sql.raw(`UPDATE owner_applications SET ${updates.join(", ")} WHERE email = '${currentEmail.replace(/'/g, "''")}'`));
 
-      /* Keep chalet_submissions.whatsapp_number in sync with the admin panel */
-      if (newPhoneClean) {
-        const ownerIdRow = await db.execute(
-          sql`SELECT u.id FROM users u WHERE lower(u.email) = lower(${currentEmail}) LIMIT 1`
-        );
-        const ownerId = ((ownerIdRow as any).rows as Array<{ id: string }>)[0]?.id;
-        if (ownerId) {
-          await db.execute(
-            sql`UPDATE chalet_submissions SET whatsapp_number = ${newPhoneClean} WHERE owner_id = ${ownerId}`
-          );
+      try {
+        await db.transaction(async (tx) => {
+          if (newEmailClean && newEmailClean !== currentEmail.toLowerCase()) {
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(LOWER(${newEmailClean})))`);
+            const duplicateEmail = await tx.execute(
+              sql`SELECT id
+                  FROM owner_applications
+                  WHERE LOWER(email) = LOWER(${newEmailClean})
+                    AND id != ${ownerAccount.id}
+                  LIMIT 1`
+            );
+            if (((duplicateEmail as any).rows as Array<{ id: number }>)[0]) {
+              throw new Error("DUPLICATE_OWNER_EMAIL");
+            }
+            if (newPhoneClean !== null) {
+              await tx.execute(
+                sql`UPDATE owner_applications
+                    SET full_name = ${fullName.trim()},
+                        phone = ${newPhoneClean},
+                        email = ${newEmailClean}
+                    WHERE id = ${ownerAccount.id}`
+              );
+            } else {
+              await tx.execute(
+                sql`UPDATE owner_applications
+                    SET full_name = ${fullName.trim()},
+                        email = ${newEmailClean}
+                    WHERE id = ${ownerAccount.id}`
+              );
+            }
+          } else {
+            if (newPhoneClean !== null) {
+              await tx.execute(
+                sql`UPDATE owner_applications
+                    SET full_name = ${fullName.trim()},
+                        phone = ${newPhoneClean}
+                    WHERE id = ${ownerAccount.id}`
+              );
+            } else {
+              await tx.execute(
+                sql`UPDATE owner_applications
+                    SET full_name = ${fullName.trim()}
+                    WHERE id = ${ownerAccount.id}`
+              );
+            }
+          }
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === "DUPLICATE_OWNER_EMAIL") {
+          return res.status(409).json({ error: "هذا البريد الإلكتروني مسجّل لدى حساب آخر" });
+        }
+        throw error;
+      }
+
+      /* Keep every owner product's WhatsApp number in sync */
+      if (newPhoneClean !== null) {
+        for (const linkedOwnerId of ownerIds) {
+          await Promise.all([
+            db.execute(
+              sql`UPDATE chalet_submissions SET whatsapp_number = ${newPhoneClean} WHERE owner_id = ${linkedOwnerId}`
+            ),
+            db.execute(
+              sql`UPDATE service_provider_submissions SET whatsapp_number = ${newPhoneClean} WHERE owner_id = ${linkedOwnerId}`
+            ),
+            db.execute(
+              sql`UPDATE service_providers SET whatsapp_number = ${newPhoneClean} WHERE owner_id = ${linkedOwnerId}`
+            ),
+          ]);
         }
       }
       return res.json({ ok: true });
@@ -787,16 +875,16 @@ router.put("/profile", async (req, res) => {
     if (currentPassword && newPassword) {
       if (newPassword.length < 6) return res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تكون ٦ أحرف على الأقل" });
       const pwResult = await db.execute(
-        sql`SELECT password_hash FROM owner_applications WHERE email = ${currentEmail} LIMIT 1`
+        sql`SELECT password_hash FROM owner_applications WHERE id = ${ownerAccount!.id} LIMIT 1`
       );
       const pwRow = ((pwResult as any).rows as Array<{ password_hash: string }>)[0];
       if (!pwRow?.password_hash) return res.status(400).json({ error: "هذا الحساب لا يملك كلمة مرور — تواصل مع الدعم" });
       const match = await bcrypt.compare(currentPassword, pwRow.password_hash);
       if (!match) return res.status(400).json({ error: "كلمة المرور الحالية غير صحيحة" });
       const newHash = await bcrypt.hash(newPassword, 10);
-      await db.execute(sql.raw(`UPDATE owner_applications SET full_name = '${fullName.trim().replace(/'/g, "''")}', password_hash = '${newHash}' WHERE email = '${currentEmail.replace(/'/g, "''")}'`));
+      await db.execute(sql`UPDATE owner_applications SET full_name = ${fullName.trim()}, password_hash = ${newHash} WHERE id = ${ownerAccount!.id}`);
     } else {
-      await db.execute(sql.raw(`UPDATE owner_applications SET full_name = '${fullName.trim().replace(/'/g, "''")}' WHERE email = '${currentEmail.replace(/'/g, "''")}'`));
+      await db.execute(sql`UPDATE owner_applications SET full_name = ${fullName.trim()} WHERE id = ${ownerAccount!.id}`);
     }
     return res.json({ ok: true });
   } catch (err) {
@@ -808,16 +896,16 @@ router.put("/profile", async (req, res) => {
 /* ── PATCH /owner/profile/whatsapp-subscribe — toggle WA news opt-in ── */
 router.patch("/profile/whatsapp-subscribe", requireAuth, async (req, res) => {
   try {
-    const currentEmail = await resolveOwnerEmail(req);
-    if (!currentEmail) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
+    const ownerAccount = await resolveOwnerApplication(req);
+    if (!ownerAccount) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
     const { subscribe } = req.body as { subscribe: boolean };
     if (!!subscribe) {
       await db.execute(
-        sql`UPDATE owner_applications SET whatsapp_news_subscribe = true, whatsapp_subscribed_at = COALESCE(whatsapp_subscribed_at, NOW()) WHERE email = ${currentEmail}`
+        sql`UPDATE owner_applications SET whatsapp_news_subscribe = true, whatsapp_subscribed_at = COALESCE(whatsapp_subscribed_at, NOW()) WHERE id = ${ownerAccount.id}`
       );
     } else {
       await db.execute(
-        sql`UPDATE owner_applications SET whatsapp_news_subscribe = false WHERE email = ${currentEmail}`
+        sql`UPDATE owner_applications SET whatsapp_news_subscribe = false WHERE id = ${ownerAccount.id}`
       );
     }
     return res.json({ ok: true, subscribe: !!subscribe });
@@ -830,21 +918,21 @@ router.patch("/profile/whatsapp-subscribe", requireAuth, async (req, res) => {
 /* ── PATCH /owner/profile/calendar-prefs — save calendar preferences ── */
 router.patch("/profile/calendar-prefs", requireAuth, async (req, res) => {
   try {
-    const currentEmail = await resolveOwnerEmail(req);
-    if (!currentEmail) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
+    const ownerAccount = await resolveOwnerApplication(req);
+    if (!ownerAccount) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
     const { bookingsCalPref, reportsCalPref, salaryCalPref } = req.body as { bookingsCalPref?: string; reportsCalPref?: string; salaryCalPref?: string };
     const valid = ["hijri", "gregorian"];
     if (bookingsCalPref && !valid.includes(bookingsCalPref)) return res.status(400).json({ error: "قيمة غير صالحة" });
     if (reportsCalPref  && !valid.includes(reportsCalPref))  return res.status(400).json({ error: "قيمة غير صالحة" });
     if (salaryCalPref   && !valid.includes(salaryCalPref))   return res.status(400).json({ error: "قيمة غير صالحة" });
     if (bookingsCalPref !== undefined) {
-      await db.execute(sql`UPDATE owner_applications SET bookings_cal_pref = ${bookingsCalPref} WHERE email = ${currentEmail}`);
+      await db.execute(sql`UPDATE owner_applications SET bookings_cal_pref = ${bookingsCalPref} WHERE id = ${ownerAccount.id}`);
     }
     if (reportsCalPref !== undefined) {
-      await db.execute(sql`UPDATE owner_applications SET reports_cal_pref = ${reportsCalPref} WHERE email = ${currentEmail}`);
+      await db.execute(sql`UPDATE owner_applications SET reports_cal_pref = ${reportsCalPref} WHERE id = ${ownerAccount.id}`);
     }
     if (salaryCalPref !== undefined) {
-      await db.execute(sql`UPDATE owner_applications SET salary_cal_pref = ${salaryCalPref} WHERE email = ${currentEmail}`);
+      await db.execute(sql`UPDATE owner_applications SET salary_cal_pref = ${salaryCalPref} WHERE id = ${ownerAccount.id}`);
     }
     return res.json({ ok: true });
   } catch (err) {
@@ -987,11 +1075,12 @@ router.post("/support-requests/:id/mark-read", requireAuth, async (req, res) => 
 /* ── POST /owner/profile/request-change — verify password & send OTP ── */
 router.post("/profile/request-change", async (req, res): Promise<void> => {
   try {
-    const currentEmail = await resolveOwnerEmail(req);
-    if (!currentEmail) {
+    const ownerAccount = await resolveOwnerApplication(req);
+    if (!ownerAccount) {
       res.status(404).json({ error: "لم يتم العثور على الحساب" });
       return;
     }
+    const currentEmail = ownerAccount.email;
 
     const { currentPassword, newEmail, newPhone } = req.body as Record<string, string>;
     if (!currentPassword) {
@@ -1013,7 +1102,7 @@ router.post("/profile/request-change", async (req, res): Promise<void> => {
 
     /* Verify current password */
     const pwResult = await db.execute(
-      sql`SELECT password_hash, full_name FROM owner_applications WHERE email = ${currentEmail} LIMIT 1`
+      sql`SELECT password_hash, full_name FROM owner_applications WHERE id = ${ownerAccount.id} LIMIT 1`
     );
     const pwRow = ((pwResult as any).rows as Array<{ password_hash: string; full_name: string }>)[0];
     if (!pwRow?.password_hash) {
@@ -1035,7 +1124,7 @@ router.post("/profile/request-change", async (req, res): Promise<void> => {
         res.status(400).json({ error: "البريد الإلكتروني الجديد هو نفس الحالي" });
         return;
       }
-      const taken = await db.execute(sql`SELECT id FROM owner_applications WHERE lower(email) = ${emailLower} LIMIT 1`);
+      const taken = await db.execute(sql`SELECT id FROM owner_applications WHERE lower(email) = ${emailLower} AND id != ${ownerAccount.id} LIMIT 1`);
       if (((taken as any).rows as any[]).length > 0) {
         res.status(409).json({ error: "هذا البريد الإلكتروني مسجّل لدى حساب آخر" });
         return;
@@ -1050,13 +1139,13 @@ router.post("/profile/request-change", async (req, res): Promise<void> => {
     /* ── Changing phone ── */
     if (newPhone) {
       const phoneClean = newPhone.trim();
-      const curPhoneR = await db.execute(sql`SELECT phone FROM owner_applications WHERE email = ${currentEmail} LIMIT 1`);
+      const curPhoneR = await db.execute(sql`SELECT phone FROM owner_applications WHERE id = ${ownerAccount.id} LIMIT 1`);
       const curPhone  = ((curPhoneR as any).rows as Array<{ phone: string }>)[0]?.phone ?? "";
       if (phoneClean === curPhone) {
         res.status(400).json({ error: "رقم الجوال الجديد هو نفس الحالي" });
         return;
       }
-      const taken = await db.execute(sql`SELECT id FROM owner_applications WHERE phone = ${phoneClean} AND email != ${currentEmail} LIMIT 1`);
+      const taken = await db.execute(sql`SELECT id FROM owner_applications WHERE phone = ${phoneClean} AND id != ${ownerAccount.id} LIMIT 1`);
       if (((taken as any).rows as any[]).length > 0) {
         res.status(409).json({ error: "رقم الجوال مسجّل لدى حساب آخر" });
         return;

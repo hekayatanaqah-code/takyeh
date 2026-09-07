@@ -17,6 +17,7 @@ import { eq, and, ne, desc, isNull, gte, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { randomBytes } from "crypto";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
+import { ensureOwnerProfile } from "../lib/ownerProfile";
 
 const router = Router();
 const ALL_KINGDOM_COVERAGE = "جميع مناطق المملكة";
@@ -314,6 +315,22 @@ router.post("/submit", requireAuth, async (req: any, res) => {
     coverageTags: data.coverageTags,
     customFeatureTags: data.customFeatureTags,
   };
+
+  if (!/^owner_\d+$/.test(req.user.id)) {
+    await ensureOwnerProfile(
+      {
+        userId: req.user.id,
+        email: req.user.email,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+      },
+      {
+        businessName: data.businessName,
+        phone: data.whatsappNumber,
+        businessType: "service",
+      },
+    );
+  }
 
   const [row] = await db
     .insert(serviceProviderSubmissionsTable)

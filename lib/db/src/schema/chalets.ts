@@ -365,6 +365,14 @@ export const serviceProvidersTable = pgTable("service_providers", {
 });
 export type ServiceProvider = typeof serviceProvidersTable.$inferSelect;
 
+/* ── Stable link between an authenticated account and its legacy owner profile ── */
+export const ownerAccountLinksTable = pgTable("owner_account_links", {
+  userId: text("user_id").primaryKey(),
+  ownerApplicationId: integer("owner_application_id").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type OwnerAccountLink = typeof ownerAccountLinksTable.$inferSelect;
+
 /* ── Chalet Availability (date-slot blocking by owner) ─────── */
 export const chaletAvailabilityTable = pgTable("chalet_availability", {
   id: serial("id").primaryKey(),
