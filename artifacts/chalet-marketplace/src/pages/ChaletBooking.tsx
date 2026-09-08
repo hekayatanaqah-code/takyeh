@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
+import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -168,19 +169,23 @@ export default function ChaletBooking() {
               <label style={{ display: "block", marginBottom: 10, fontSize: 15, fontWeight: 700, color: "#111827" }}>
                 📅 تاريخ الحجز <span style={{ color: "#ef4444" }}>*</span>
               </label>
-              <input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                min={new Date().toISOString().split("T")[0]}
+              <div
                 style={{
-                  width: "100%", height: 50, borderRadius: 10,
+                  width: "100%", minHeight: 50, borderRadius: 10,
                   border: date ? "2px solid #16a34a" : "2px solid #d1d5db",
-                  background: "#fff", color: "#111827", fontSize: 15,
-                  padding: "0 16px", outline: "none", cursor: "pointer",
-                  boxSizing: "border-box",
+                  background: "#fff", color: "#111827",
+                  padding: "0 16px", boxSizing: "border-box",
+                  display: "flex", alignItems: "center",
                 }}
-              />
+              >
+                <DualCalendarPicker
+                value={date}
+                  onChange={setDate}
+                  minDate={new Date().toISOString().split("T")[0]}
+                  placeholder="اختر تاريخ الحجز"
+                  mode="gregorian"
+                />
+              </div>
               {date && (
                 <p style={{ margin: "8px 0 0", fontSize: 12, color: "#16a34a", fontWeight: 600 }}>
                   📅 {(() => { try { return toHijri(new Date(date)); } catch { return ""; } })()}

@@ -1,5 +1,4 @@
 import * as React from "react";
-import { flushSync } from "react-dom";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import {
@@ -155,15 +154,15 @@ export function DualCalendarPicker({
   const nowH = React.useMemo(() => toHijriComponents(new Date()), []);
   const nowG = React.useMemo(() => ({ year: new Date().getFullYear(), month: new Date().getMonth() }), []);
 
-  /* Derived max bounds (fall back to today) */
+  /* Derived max bounds (without maxDate, allow normal future booking/navigation). */
   const maxH = React.useMemo(() => {
     if (maxDate) { try { return toHijriComponents(new Date(maxDate + "T12:00:00")); } catch { /* */ } }
-    return nowH;
+    return { year: nowH.year + 10, month: 12, day: 30 };
   }, [maxDate, nowH]);
 
   const maxG = React.useMemo(() => {
     if (maxDate) { try { const d = new Date(maxDate + "T12:00:00"); return { year: d.getFullYear(), month: d.getMonth(), day: d.getDate() }; } catch { /* */ } }
-    return { year: nowG.year, month: nowG.month, day: new Date().getDate() };
+    return { year: nowG.year + 10, month: 11, day: 31 };
   }, [maxDate, nowG]);
 
   const minHY = React.useMemo(() => {
@@ -252,11 +251,14 @@ export function DualCalendarPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
+          aria-label={label ?? placeholder}
+          aria-expanded={open}
           className={cn(
-            "w-full text-right bg-transparent border-0 p-0 cursor-pointer outline-none",
+            "w-full text-right bg-transparent border-0 p-0 cursor-pointer outline-none touch-manipulation focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 rounded-md",
             compact && "h-full flex items-center",
             className,
           )}
+          style={{ WebkitTapHighlightColor: "transparent" }}
         >
           {label && !compact && (
             <p className="text-xs font-semibold text-muted-foreground mb-1">{label}</p>
@@ -277,9 +279,13 @@ export function DualCalendarPicker({
       </PopoverTrigger>
 
       <PopoverContent
-        className="w-auto min-w-[22rem] p-4 shadow-xl rounded-2xl border border-border overflow-hidden"
+        className="w-[calc(100vw-1rem)] max-w-[22rem] min-w-0 sm:min-w-[22rem] p-4 shadow-xl rounded-2xl border border-border [max-height:min(calc(100dvh-1rem),var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
         align="start"
         side="bottom"
+        sideOffset={8}
+        collisionPadding={8}
+        avoidCollisions
+        sticky="always"
         dir="rtl"
       >
         {/* ══ YEARS VIEW ══ */}
@@ -464,9 +470,9 @@ export function DualCalendarPicker({
                       key={gregStr}
                       type="button"
                       disabled={isDisabled}
-                      onClick={() => { onChange(gregStr); flushSync(() => setOpen(false)); }}
+                       onClick={() => { onChange(gregStr); setOpen(false); }}
                       className={cn(
-                        "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors",
+                         "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors touch-manipulation",
                         isDisabled && "opacity-30 pointer-events-none",
                         isSelected ? "bg-primary text-primary-foreground"
                           : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
@@ -496,9 +502,9 @@ export function DualCalendarPicker({
                       key={gregStr}
                       type="button"
                       disabled={isDisabled}
-                      onClick={() => { onChange(gregStr); flushSync(() => setOpen(false)); }}
+                       onClick={() => { onChange(gregStr); setOpen(false); }}
                       className={cn(
-                        "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors",
+                         "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors touch-manipulation",
                         isDisabled && "opacity-30 pointer-events-none",
                         isSelected ? "bg-primary text-primary-foreground"
                           : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
@@ -527,14 +533,14 @@ export function DualCalendarPicker({
                   setPickerHY(h.year); setPickerHM(h.month);
                   setPickerGY(today.getFullYear()); setPickerGM(today.getMonth());
                   onChange(todayStr);
-                  flushSync(() => setOpen(false));
+                   setOpen(false);
                 }}
                 className="text-[0.7rem] text-primary hover:text-primary/80 font-medium transition-colors"
               >اليوم</button>
               {value && (
                 <button
                   type="button"
-                  onClick={() => { onChange(""); flushSync(() => setOpen(false)); }}
+                 onClick={() => { onChange(""); setOpen(false); }}
                   className="text-[0.7rem] text-muted-foreground hover:text-destructive transition-colors"
                 >مسح</button>
               )}

@@ -20,3 +20,4 @@
 - [Shared owner customer identity](shared-owner-customer-identity.md) — property and service bookings share one owner-scoped customer identity while retaining booking snapshots.
 - [Long-form video uploads](long-form-video-uploads.md) — section guides must use direct object uploads; the media processor intentionally truncates videos to 30 seconds.
 - [Owner account identity links](owner-account-identity-links.md) — resolve profiles by durable user→application mapping; email is bootstrap data, never the authorization key.
+- [iOS calendar popovers](ios-calendar-popovers.md) — calendar portals must size to Radix available height and the app’s #root scroll model, not window/body scrolling.

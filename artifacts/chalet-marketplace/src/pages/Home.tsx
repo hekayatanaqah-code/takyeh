@@ -43,7 +43,8 @@ function getDualDate(dateStr: string): { hijri: string; gregorian: string } {
       year: "numeric",
       month: "long",
       day: "numeric",
-    }).format(d);
+      calendar: "gregory",
+    } as Intl.DateTimeFormatOptions).format(d);
     return { hijri, gregorian };
   } catch { return { hijri: "", gregorian: "" }; }
 }
