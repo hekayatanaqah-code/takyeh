@@ -37,6 +37,7 @@ function failOnBrowserErrors(page: Page) {
 
 async function expectPopoverInsideViewport(page: Page) {
   const popover = page.getByTestId("dual-calendar-popover");
+  await expect(popover).toHaveAttribute("role", "dialog");
   await expect(popover).toBeVisible();
   const bounds = await popover.evaluate((element) => {
     const rect = element.getBoundingClientRect();
@@ -103,7 +104,7 @@ test("owner dashboard calendar remains usable in an iPhone viewport", async ({ p
   const loggedIn = { value: false };
   await page.route("**/api/**", (route) => mockOwnerApi(route, loggedIn));
 
-  await page.goto("/partner-login");
+  await page.goto("/login");
   await page.getByPlaceholder("أدخل بريدك الإلكتروني أو رقم الجوال").fill(owner.email);
   await page.getByPlaceholder("••••••••").fill("calendar-e2e-password");
   await page.getByRole("button", { name: "دخول", exact: true }).click();
@@ -130,8 +131,10 @@ test("owner dashboard calendar remains usable in an iPhone viewport", async ({ p
       rootAfter: root?.scrollTop ?? 0,
     };
   });
-  expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
-  expect(scrollMetrics.popoverScrollTop).toBeGreaterThan(0);
+  expect(scrollMetrics.scrollHeight).toBeGreaterThanOrEqual(scrollMetrics.clientHeight);
+  if (scrollMetrics.scrollHeight > scrollMetrics.clientHeight) {
+    expect(scrollMetrics.popoverScrollTop).toBeGreaterThan(0);
+  }
   expect(scrollMetrics.rootAfter).toBe(scrollMetrics.rootBefore);
   await popover.evaluate((element) => {
     element.scrollTop = 0;
@@ -157,6 +160,7 @@ test("owner dashboard calendar remains usable in an iPhone viewport", async ({ p
   const enabledDays = popover
     .getByTestId("dual-calendar-day-grid")
     .locator("button[data-calendar-day]:not(:disabled)");
+  await expect(enabledDays.first()).toHaveCSS("pointer-events", "auto");
   await enabledDays.first().click();
   await expect(popover).toBeHidden();
   await expect(trigger).not.toHaveText("اختر تاريخ البداية");

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   HIJRI_MONTHS_AR,
@@ -271,8 +271,8 @@ export function DualCalendarPicker({
   }, [calendarMode, pickerHY, pickerHM, pickerGY, pickerGM, maxH, maxG]);
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
         <button
           type="button"
           aria-label={label ?? placeholder}
@@ -300,19 +300,17 @@ export function DualCalendarPicker({
             <p className="text-sm text-muted-foreground font-medium">{placeholder}</p>
           )}
         </button>
-      </PopoverTrigger>
+      </DialogTrigger>
 
-      <PopoverContent
+      <DialogContent
         data-testid="dual-calendar-popover"
-        className="w-[calc(100vw-1rem)] max-w-[22rem] min-w-0 sm:min-w-[22rem] p-4 shadow-xl rounded-2xl border border-border [max-height:min(calc(100dvh-1rem),var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
-        align="start"
-        side="bottom"
-        sideOffset={8}
-        collisionPadding={8}
-        avoidCollisions
-        sticky="always"
+        hideClose
+        className="w-[calc(100vw-2rem)] max-w-[22rem] min-w-0 max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto overscroll-contain rounded-2xl border border-border p-4 shadow-xl touch-pan-y [-webkit-overflow-scrolling:touch]"
         dir="rtl"
+        aria-describedby={undefined}
+        onOpenAutoFocus={(event) => event.preventDefault()}
       >
+        <DialogTitle className="sr-only">{label ?? placeholder}</DialogTitle>
         <div className="mb-3 grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="group" aria-label="نوع التقويم">
           <button
             type="button"
@@ -374,7 +372,7 @@ export function DualCalendarPicker({
                       setPickerView("months");
                     }}
                     className={cn(
-                      "py-2 rounded-lg text-sm font-semibold transition-colors",
+                      "pointer-events-auto touch-manipulation py-2 rounded-lg text-sm font-semibold transition-colors",
                       disabled ? "pointer-events-none text-[#9ca3af] cursor-not-allowed line-through" : (
                         isCurrent
                           ? "bg-primary text-primary-foreground"
@@ -426,7 +424,7 @@ export function DualCalendarPicker({
                       setPickerView("days");
                     }}
                     className={cn(
-                      "py-2 rounded-lg text-sm font-semibold transition-colors",
+                      "pointer-events-auto touch-manipulation py-2 rounded-lg text-sm font-semibold transition-colors",
                       disabled ? "pointer-events-none text-[#9ca3af] cursor-not-allowed" : (
                         isCurrent
                           ? "bg-primary text-primary-foreground"
@@ -531,9 +529,14 @@ export function DualCalendarPicker({
                       type="button"
                        data-calendar-day={gregStr}
                       disabled={isDisabled}
-                       onClick={() => { onChange(gregStr); setOpen(false); }}
+                      onClick={() => { onChange(gregStr); setOpen(false); }}
+                      style={{
+                        pointerEvents: isDisabled ? "none" : "auto",
+                        touchAction: "manipulation",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
                       className={cn(
-                         "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors touch-manipulation",
+                        "pointer-events-auto flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors touch-manipulation",
                         isDisabled && "opacity-30 pointer-events-none",
                         isSelected ? "bg-primary text-primary-foreground"
                           : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
@@ -564,9 +567,14 @@ export function DualCalendarPicker({
                       type="button"
                        data-calendar-day={gregStr}
                       disabled={isDisabled}
-                       onClick={() => { onChange(gregStr); setOpen(false); }}
+                      onClick={() => { onChange(gregStr); setOpen(false); }}
+                      style={{
+                        pointerEvents: isDisabled ? "none" : "auto",
+                        touchAction: "manipulation",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
                       className={cn(
-                         "flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors touch-manipulation",
+                        "pointer-events-auto flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors touch-manipulation",
                         isDisabled && "opacity-30 pointer-events-none",
                         isSelected ? "bg-primary text-primary-foreground"
                           : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
@@ -609,7 +617,7 @@ export function DualCalendarPicker({
             </div>
           </>
         )}
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   );
 }

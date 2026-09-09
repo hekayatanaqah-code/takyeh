@@ -1,10 +1,10 @@
 ---
-name: iOS calendar popovers
-description: WebKit-safe positioning, scrolling, and date-format rules for the shared calendar UI.
+name: iOS calendar overlays
+description: WebKit-safe modal, touch, scrolling, and date-format rules for the shared calendar UI.
 ---
 
-All user-visible date inputs must use the shared portal-based picker; do not use `input[type="date"]` anywhere in the web interface. On first open, an empty picker must select today (or the nearest allowed bound), synchronize both calendar views, and keep the Gregorian `YYYY-MM-DD` value while switching Hijri/Gregorian. Bound the popover to Radix’s available-height variable and the dynamic viewport, with internal momentum scrolling and permanent collision sticking.
+All user-visible date inputs must use the shared modal-overlay picker; do not use `input[type="date"]` anywhere in the web interface. The calendar must be centered independently of its trigger, suppress automatic focus on open, and explicitly keep enabled day buttons at `pointer-events: auto` with touch manipulation. On first open, an empty picker selects today (or the nearest allowed bound), synchronizes both calendar views, and keeps the Gregorian `YYYY-MM-DD` value while switching Hijri/Gregorian.
 
-**Why:** On iPhone WebKit, a reopened calendar can flip above its trigger and extend beyond the viewport even when the first opening fits. The application also scrolls through `#root`, so `body` overflow and `window.scrollY` do not describe actual page lock.
+**Why:** On iPhone WebKit, an anchored popover can conflict with focus, touch dispatch, nested dialogs, and viewport repositioning. A fixed modal overlay isolates calendar interaction and lets only the calendar close after a nested selection.
 
-**How to apply:** Search the frontend for native date inputs before shipping. Test against `#root.scrollTop`, switch calendars, reopen after selecting a future month, and verify internal scrolling when vertical space is constrained. Always specify `calendar: "gregory"` for Arabic Gregorian labels because `ar-SA` may default to Hijri.
+**How to apply:** Search the frontend for native date inputs before shipping. Test a public picker and a picker nested inside an owner dialog at iPhone size; verify enabled-day computed pointer events, switching, Escape, parent-dialog survival, and constrained-height scrolling. Always specify `calendar: "gregory"` for Arabic Gregorian labels because `ar-SA` may default to Hijri.

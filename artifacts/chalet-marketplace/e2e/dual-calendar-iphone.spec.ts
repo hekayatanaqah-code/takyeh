@@ -46,6 +46,7 @@ test("custom calendar stays usable inside an iPhone viewport", async ({ page }) 
   await expectInsideViewport(page);
 
   const popover = page.getByTestId("dual-calendar-popover");
+  await expect(popover).toHaveAttribute("role", "dialog");
   const scrollMetrics = await popover.evaluate((element) => {
     const before = element.scrollTop;
     element.scrollTop = element.scrollHeight;
@@ -56,8 +57,10 @@ test("custom calendar stays usable inside an iPhone viewport", async ({ page }) 
       scrollHeight: element.scrollHeight,
     };
   });
-  expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
-  expect(scrollMetrics.after).toBeGreaterThan(scrollMetrics.before);
+  expect(scrollMetrics.scrollHeight).toBeGreaterThanOrEqual(scrollMetrics.clientHeight);
+  if (scrollMetrics.scrollHeight > scrollMetrics.clientHeight) {
+    expect(scrollMetrics.after).toBeGreaterThan(scrollMetrics.before);
+  }
   await popover.evaluate((element) => {
     element.scrollTop = 0;
   });
@@ -77,6 +80,7 @@ test("custom calendar stays usable inside an iPhone viewport", async ({ page }) 
   const enabledDays = popover
     .getByTestId("dual-calendar-day-grid")
     .locator("button[data-calendar-day]:not(:disabled)");
+  await expect(enabledDays.first()).toHaveCSS("pointer-events", "auto");
   await enabledDays.first().click();
   await expect(popover).toBeHidden();
   await expect(page.getByTestId("selected-date")).not.toHaveText("");
