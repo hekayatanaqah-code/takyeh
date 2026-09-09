@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
+import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { resolveAmenity } from "@/lib/amenityUtils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -372,18 +373,17 @@ export default function ChaletMasterView() {
                   <label style={{display:"block",marginBottom:8,fontSize:13,fontWeight:700,color:"#374151"}}>
                     📅 تاريخ الحجز
                   </label>
-                  <input
-                    type="date"
+                  <DualCalendarPicker
                     value={bookDate}
-                    onChange={e=>setBookDate(e.target.value)}
-                    min={new Date().toISOString().split("T")[0]}
-                    style={{
-                      width:"100%", height:46, borderRadius:12,
-                      border:bookDate?"2px solid #16a34a":"2px solid #e5e7eb",
-                      background:"#fff", color:"#111827", fontSize:14,
-                      padding:"0 14px", outline:"none", cursor:"pointer",
-                      boxSizing:"border-box", transition:"border-color 0.2s",
-                    }}
+                    onChange={setBookDate}
+                    placeholder="اختر تاريخ الحجز"
+                    minDate={new Date().toISOString().slice(0, 10)}
+                    mode="gregorian"
+                    className={`min-h-[46px] rounded-xl px-3.5 text-sm transition-colors ${
+                      bookDate
+                        ? "border-2 border-green-600 bg-white text-gray-900"
+                        : "border-2 border-gray-200 bg-white text-gray-900"
+                    }`}
                   />
                   {bookDate && (
                     <p style={{margin:"6px 0 0",fontSize:11,color:"#16a34a",fontWeight:600}}>

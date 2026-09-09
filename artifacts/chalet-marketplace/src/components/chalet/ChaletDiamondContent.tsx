@@ -14,6 +14,7 @@ import {
   DollarSign, Sofa, LogIn, LogOut, Home, Tag, Clock,
 } from "lucide-react";
 import { resolveAmenity } from "@/lib/amenityUtils";
+import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -255,8 +256,14 @@ function BookingPanel({ data }: { data: DiamondData }) {
             <Calendar className="w-3.5 h-3.5 text-amber-400" />
             تاريخ الحجز <span className="text-red-400">*</span>
           </label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)}
-            className="w-full h-10 rounded-xl border border-stone-700 bg-stone-800 px-3 text-sm text-stone-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40" />
+          <DualCalendarPicker
+            value={date}
+            onChange={setDate}
+            placeholder="اختر تاريخ الحجز"
+            minDate={new Date().toISOString().slice(0, 10)}
+            mode="gregorian"
+            className="w-full min-h-10 rounded-xl border border-stone-700 bg-stone-800 px-3 text-sm text-stone-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+          />
           {date && (
             <p className="text-[11px] text-amber-400/80 pr-1">
               {(() => { try { return toHijri(new Date(date)); } catch { return ""; } })()}

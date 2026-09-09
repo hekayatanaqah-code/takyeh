@@ -5973,7 +5973,13 @@ function BookingCalendarTab({
                                     <p className="text-[11px] font-bold text-blue-700 dark:text-blue-400">إضافة دفعة — المتبقي {toArN(Math.round(remDyn2))} ر.س</p>
                                     <div className="flex gap-2">
                                       <input type="text" inputMode="decimal" value={toArN(calPayAmt)} onChange={e => setCalPayAmt(fromArN(e.target.value))} placeholder="المبلغ" className="flex-1 text-[11px] rounded-lg border border-border bg-background px-2 py-1.5 text-foreground min-w-0 text-center" />
-                                      <input type="date" value={calPayDate} onChange={e => setCalPayDate(e.target.value)} className="flex-1 text-[11px] rounded-lg border border-border bg-background px-2 py-1.5 text-foreground min-w-0" />
+                                      <DualCalendarPicker
+                                        value={calPayDate}
+                                        onChange={setCalPayDate}
+                                        mode="gregorian"
+                                        compact
+                                        className="flex-1 min-w-0 rounded-lg border border-border bg-background px-2 py-1.5 text-[11px] text-foreground"
+                                      />
                                     </div>
                                     <div className="flex gap-1.5">
                                       <button type="button" onClick={() => { setCalPayMethod("cash"); setCalPayDeposited(false); }} className={`flex-1 text-[11px] font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "cash" ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 كاش</button>
@@ -7605,7 +7611,13 @@ function BookingCalendarTab({
                                 <p className="text-xs font-bold text-blue-700 dark:text-blue-400">إضافة دفعة — المتبقي {toArN(Math.round(remDynL))} ر.س</p>
                                 <div className="flex gap-2">
                                   <input type="text" inputMode="decimal" value={toArN(calPayAmt)} onChange={e => setCalPayAmt(fromArN(e.target.value))} placeholder="المبلغ" className="flex-1 text-xs rounded-lg border border-border bg-background px-2.5 py-2 text-foreground min-w-0 text-center" />
-                                  <input type="date" value={calPayDate} onChange={e => setCalPayDate(e.target.value)} className="flex-1 text-xs rounded-lg border border-border bg-background px-2.5 py-2 text-foreground min-w-0" />
+                                  <DualCalendarPicker
+                                    value={calPayDate}
+                                    onChange={setCalPayDate}
+                                    mode="gregorian"
+                                    compact
+                                    className="flex-1 min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-xs text-foreground"
+                                  />
                                 </div>
                                 <div className="flex gap-1.5">
                                   <button type="button" onClick={() => { setCalPayMethod("cash"); setCalPayDeposited(false); }} className={`flex-1 text-xs font-bold rounded-lg py-1.5 border-2 transition-colors ${calPayMethod === "cash" ? "border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300" : "border-border text-muted-foreground"}`}>💵 كاش</button>
@@ -12655,7 +12667,13 @@ function ServiceInsurancesTab() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">تاريخ التجديد</label>
-              <Input type="date" value={form.renewalDate} onChange={e => setForm(p => ({ ...p, renewalDate: e.target.value }))} className="rounded-xl" />
+              <DualCalendarPicker
+                value={form.renewalDate}
+                onChange={value => setForm(p => ({ ...p, renewalDate: value }))}
+                placeholder="اختر تاريخ التجديد"
+                mode="gregorian"
+                className="min-h-10 rounded-xl border border-input bg-background px-3"
+              />
               {form.renewalDate && <p className="text-xs text-primary">{toHijri(form.renewalDate)} هـ</p>}
             </div>
           </div>
@@ -17286,11 +17304,23 @@ function StaffTab() {
                 <Input placeholder="رقم الجوال (05xxxxxxxx)" value={addForm.phoneNum} onChange={(e) => setAddForm((f) => ({ ...f, phoneNum: e.target.value }))} className="h-10 text-sm" inputMode="tel" dir="ltr" />
                 <div>
                   <label className="text-[10px] text-muted-foreground mb-1 block">تاريخ الميلاد</label>
-                  <Input type="date" value={addForm.birthDate} onChange={(e) => setAddForm((f) => ({ ...f, birthDate: e.target.value }))} className="h-10 text-sm" dir="ltr" />
+                  <DualCalendarPicker
+                    value={addForm.birthDate}
+                    onChange={(value) => setAddForm((f) => ({ ...f, birthDate: value }))}
+                    placeholder="اختر تاريخ الميلاد"
+                    mode="gregorian"
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] text-muted-foreground mb-1 block">تاريخ التعيين</label>
-                  <Input type="date" value={addForm.hireDate} onChange={(e) => setAddForm((f) => ({ ...f, hireDate: e.target.value }))} className="h-10 text-sm" dir="ltr" />
+                  <DualCalendarPicker
+                    value={addForm.hireDate}
+                    onChange={(value) => setAddForm((f) => ({ ...f, hireDate: value }))}
+                    placeholder="اختر تاريخ التعيين"
+                    mode="gregorian"
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  />
                 </div>
               </div>
             </div>
@@ -18409,11 +18439,23 @@ function StaffTab() {
                               </div>
                               <div>
                                 <label className="text-xs text-muted-foreground mb-1 block">تاريخ الميلاد</label>
-                                <Input type="date" value={editForm.birthDate} onChange={(e) => setEditForm((f) => ({ ...f, birthDate: e.target.value }))} className="h-9 text-sm" dir="ltr" />
+                                <DualCalendarPicker
+                                  value={editForm.birthDate}
+                                  onChange={(value) => setEditForm((f) => ({ ...f, birthDate: value }))}
+                                  placeholder="اختر تاريخ الميلاد"
+                                  mode="gregorian"
+                                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                                />
                               </div>
                               <div>
                                 <label className="text-xs text-muted-foreground mb-1 block">تاريخ التعيين</label>
-                                <Input type="date" value={editForm.hireDate} onChange={(e) => setEditForm((f) => ({ ...f, hireDate: e.target.value }))} className="h-9 text-sm" dir="ltr" />
+                                <DualCalendarPicker
+                                  value={editForm.hireDate}
+                                  onChange={(value) => setEditForm((f) => ({ ...f, hireDate: value }))}
+                                  placeholder="اختر تاريخ التعيين"
+                                  mode="gregorian"
+                                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                                />
                               </div>
                             </div>
                           </div>
