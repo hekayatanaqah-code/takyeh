@@ -36,6 +36,7 @@ import OnboardingType from "./pages/OnboardingType";
 import OnboardingWelcome from "./pages/OnboardingWelcome";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import DualCalendarPickerTestPage from "./pages/DualCalendarPickerTestPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,6 +67,9 @@ function ProtectedRoute({ component: Component, returnTo }: { component: React.C
 function Router() {
   return (
     <Switch>
+      {import.meta.env.DEV && (
+        <Route path="/__test/dual-calendar" component={DualCalendarPickerTestPage} />
+      )}
       <Route path="/" component={Home} />
       <Route path="/chalets" component={Chalets} />
       <Route path="/chalets/:id/book" component={ChaletBooking} />

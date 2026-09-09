@@ -303,6 +303,7 @@ export function DualCalendarPicker({
       </PopoverTrigger>
 
       <PopoverContent
+        data-testid="dual-calendar-popover"
         className="w-[calc(100vw-1rem)] max-w-[22rem] min-w-0 sm:min-w-[22rem] p-4 shadow-xl rounded-2xl border border-border [max-height:min(calc(100dvh-1rem),var(--radix-popover-content-available-height))] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
         align="start"
         side="bottom"
@@ -517,7 +518,7 @@ export function DualCalendarPicker({
 
             {/* ── Day cells ── */}
             {calendarMode === "hijri" ? (
-              <div className="grid grid-cols-7 gap-[2px]">
+              <div className="grid grid-cols-7 gap-[2px]" data-testid="dual-calendar-day-grid">
                 {Array.from({ length: hijriFirstDOW }).map((_, i) => <div key={`pad-${i}`} />)}
                 {hijriMonthDays.map(({ date, hijriDay }) => {
                   const gregStr = toGregorianStr(date);
@@ -528,6 +529,7 @@ export function DualCalendarPicker({
                     <button
                       key={gregStr}
                       type="button"
+                       data-calendar-day={gregStr}
                       disabled={isDisabled}
                        onClick={() => { onChange(gregStr); setOpen(false); }}
                       className={cn(
@@ -547,7 +549,7 @@ export function DualCalendarPicker({
                 })}
               </div>
             ) : (
-              <div className="grid grid-cols-7 gap-[2px]">
+              <div className="grid grid-cols-7 gap-[2px]" data-testid="dual-calendar-day-grid">
                 {Array.from({ length: gregFirst }).map((_, i) => <div key={`pad-${i}`} />)}
                 {Array.from({ length: gregDayCount }, (_, i) => i + 1).map((day) => {
                   const gregStr = gregDateStr(pickerGY, pickerGM, day);
@@ -560,6 +562,7 @@ export function DualCalendarPicker({
                     <button
                       key={gregStr}
                       type="button"
+                       data-calendar-day={gregStr}
                       disabled={isDisabled}
                        onClick={() => { onChange(gregStr); setOpen(false); }}
                       className={cn(
