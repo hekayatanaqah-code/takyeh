@@ -87,6 +87,11 @@ export function DualCalendarPicker({
 }: DualCalendarPickerProps) {
   const [open, setOpen] = React.useState(false);
   const [pickerView, setPickerView] = React.useState<PickerView>("days");
+  const [calendarMode, setCalendarMode] = React.useState<"hijri" | "gregorian">(mode);
+
+  React.useEffect(() => {
+    setCalendarMode(mode);
+  }, [mode]);
 
   /* ── Hijri navigation state — init on value, then current month (NOT minDate) ── */
   const _initH = React.useMemo(() => {
@@ -210,8 +215,8 @@ export function DualCalendarPicker({
     else setPickerGM(m => m + 1);
   };
 
-  const goPrev = mode === "gregorian" ? goPrevGreg : goPrevHijri;
-  const goNext = mode === "gregorian" ? goNextGreg : goNextHijri;
+  const goPrev = calendarMode === "gregorian" ? goPrevGreg : goPrevHijri;
+  const goNext = calendarMode === "gregorian" ? goNextGreg : goNextHijri;
 
   const { hijri, gregorian } = formatSelected(value);
 
@@ -221,11 +226,11 @@ export function DualCalendarPicker({
 
   /* ── Helpers: disable year/month/day in picker ── */
   const isYearDisabled = (y: number) => {
-    if (mode === "hijri") return y > maxH.year;
+    if (calendarMode === "hijri") return y > maxH.year;
     return y > maxG.year;
   };
   const isMonthDisabledInYear = (m: number /* 1-based for hijri, 0-based for greg */) => {
-    if (mode === "hijri") {
+    if (calendarMode === "hijri") {
       if (pickerHY === minHY && m < minHM) return true;
       if (pickerHY === maxH.year && m > maxH.month) return true;
       if (pickerHY > maxH.year) return true;
@@ -240,11 +245,11 @@ export function DualCalendarPicker({
 
   /* ── Disable the "next month" navigation arrow when already at maxDate's month ── */
   const isNextMonthDisabled = React.useMemo(() => {
-    if (mode === "hijri") {
+    if (calendarMode === "hijri") {
       return pickerHY > maxH.year || (pickerHY === maxH.year && pickerHM >= maxH.month);
     }
     return pickerGY > maxG.year || (pickerGY === maxG.year && pickerGM >= maxG.month);
-  }, [mode, pickerHY, pickerHM, pickerGY, pickerGM, maxH, maxG]);
+  }, [calendarMode, pickerHY, pickerHM, pickerGY, pickerGM, maxH, maxG]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -288,6 +293,41 @@ export function DualCalendarPicker({
         sticky="always"
         dir="rtl"
       >
+        <div className="mb-3 grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="group" aria-label="نوع التقويم">
+          <button
+            type="button"
+            aria-pressed={calendarMode === "hijri"}
+            onClick={() => {
+              setCalendarMode("hijri");
+              setPickerView("days");
+            }}
+            className={cn(
+              "min-h-9 rounded-lg px-3 text-sm font-semibold transition-colors touch-manipulation",
+              calendarMode === "hijri"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            هجري
+          </button>
+          <button
+            type="button"
+            aria-pressed={calendarMode === "gregorian"}
+            onClick={() => {
+              setCalendarMode("gregorian");
+              setPickerView("days");
+            }}
+            className={cn(
+              "min-h-9 rounded-lg px-3 text-sm font-semibold transition-colors touch-manipulation",
+              calendarMode === "gregorian"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            ميلادي
+          </button>
+        </div>
+
         {/* ══ YEARS VIEW ══ */}
         {pickerView === "years" && (
           <div>
@@ -300,16 +340,16 @@ export function DualCalendarPicker({
               >✕</button>
             </div>
             <div className="grid grid-cols-3 gap-1.5 max-h-60 overflow-y-auto">
-              {(mode === "hijri" ? hijriYears : gregYears).map((y) => {
+              {(calendarMode === "hijri" ? hijriYears : gregYears).map((y) => {
                 const disabled = isYearDisabled(y);
-                const isCurrent = mode === "hijri" ? y === pickerHY : y === pickerGY;
+                const isCurrent = calendarMode === "hijri" ? y === pickerHY : y === pickerGY;
                 return (
                   <button
                     key={y}
                     type="button"
                     disabled={disabled}
                     onClick={() => {
-                      if (mode === "hijri") setPickerHY(y);
+                      if (calendarMode === "hijri") setPickerHY(y);
                       else setPickerGY(y);
                       setPickerView("months");
                     }}
@@ -322,7 +362,7 @@ export function DualCalendarPicker({
                       ),
                     )}
                   >
-                    {mode === "hijri"
+                    {calendarMode === "hijri"
                       ? `${y} هـ`
                       : `${y} م`}
                   </button>
@@ -341,7 +381,7 @@ export function DualCalendarPicker({
                 onClick={() => setPickerView("years")}
                 className="text-xs text-primary hover:text-primary/80 transition-colors font-semibold"
               >
-                {mode === "hijri" ? `${pickerHY} هـ` : `${pickerGY} م`}
+                {calendarMode === "hijri" ? `${pickerHY} هـ` : `${pickerGY} م`}
               </button>
               <span className="text-sm font-bold text-foreground">اختر الشهر</span>
               <button
@@ -351,17 +391,17 @@ export function DualCalendarPicker({
               >✕</button>
             </div>
             <div className="grid grid-cols-3 gap-1.5">
-              {(mode === "hijri" ? HIJRI_MONTHS_AR : GREG_MONTHS_AR).map((name, idx) => {
-                const mNum = mode === "hijri" ? idx + 1 : idx; // hijri: 1-based, greg: 0-based
+              {(calendarMode === "hijri" ? HIJRI_MONTHS_AR : GREG_MONTHS_AR).map((name, idx) => {
+                const mNum = calendarMode === "hijri" ? idx + 1 : idx; // hijri: 1-based, greg: 0-based
                 const disabled = isMonthDisabledInYear(mNum);
-                const isCurrent = mode === "hijri" ? pickerHM === mNum : pickerGM === mNum;
+                const isCurrent = calendarMode === "hijri" ? pickerHM === mNum : pickerGM === mNum;
                 return (
                   <button
                     key={name}
                     type="button"
                     disabled={disabled}
                     onClick={() => {
-                      if (mode === "hijri") setPickerHM(mNum);
+                      if (calendarMode === "hijri") setPickerHM(mNum);
                       else setPickerGM(mNum);
                       setPickerView("days");
                     }}
@@ -408,7 +448,7 @@ export function DualCalendarPicker({
                 className="flex-1 text-center rounded-lg py-1 hover:bg-accent transition-colors group"
                 title="اختر السنة والشهر مباشرة"
               >
-                {mode === "hijri" ? (
+                {calendarMode === "hijri" ? (
                   <>
                     <p className="text-[1rem] font-bold text-foreground leading-tight group-hover:text-primary transition-colors">
                       {HIJRI_MONTHS_AR[pickerHM - 1]} {pickerHY} هـ
@@ -457,7 +497,7 @@ export function DualCalendarPicker({
             </div>
 
             {/* ── Day cells ── */}
-            {mode === "hijri" ? (
+            {calendarMode === "hijri" ? (
               <div className="grid grid-cols-7 gap-[2px]">
                 {Array.from({ length: hijriFirstDOW }).map((_, i) => <div key={`pad-${i}`} />)}
                 {hijriMonthDays.map(({ date, hijriDay }) => {
