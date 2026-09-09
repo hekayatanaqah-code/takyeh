@@ -41,8 +41,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run iPhone calendar release gate
+      - name: Run isolated iPhone calendar release gate
         run: pnpm --filter @workspace/chalet-marketplace test:e2e:iphone-calendar
+
+      - name: Run owner dashboard calendar integration check
+        run: >-
+          pnpm --filter @workspace/chalet-marketplace exec playwright test
+          e2e/dashboard-calendar-iphone.spec.ts
+          --project=webkit-iphone
+          --trace=retain-on-failure
 
       - name: Upload Playwright failure artifacts
         if: failure()
