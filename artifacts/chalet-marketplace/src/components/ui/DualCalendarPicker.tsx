@@ -155,6 +155,25 @@ export function DualCalendarPicker({
   const maxDateStr = maxDate ?? "";
   const todayStr = toGregorianStr(new Date());
 
+  const handleOpenChange = React.useCallback((nextOpen: boolean) => {
+    if (nextOpen && !value) {
+      const initialValue =
+        minDateStr && todayStr < minDateStr
+          ? minDateStr
+          : maxDateStr && todayStr > maxDateStr
+            ? maxDateStr
+            : todayStr;
+      const initial = new Date(initialValue + "T12:00:00");
+      const h = toHijriComponents(initial);
+      setPickerHY(h.year);
+      setPickerHM(h.month);
+      setPickerGY(initial.getFullYear());
+      setPickerGM(initial.getMonth());
+      onChange(initialValue);
+    }
+    setOpen(nextOpen);
+  }, [maxDateStr, minDateStr, onChange, todayStr, value]);
+
   /* ── Year/month ranges for picker ── */
   const nowH = React.useMemo(() => toHijriComponents(new Date()), []);
   const nowG = React.useMemo(() => ({ year: new Date().getFullYear(), month: new Date().getMonth() }), []);
@@ -252,7 +271,7 @@ export function DualCalendarPicker({
   }, [calendarMode, pickerHY, pickerHM, pickerGY, pickerGM, maxH, maxG]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <button
           type="button"

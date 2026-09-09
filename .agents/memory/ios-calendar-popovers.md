@@ -3,7 +3,7 @@ name: iOS calendar popovers
 description: WebKit-safe positioning, scrolling, and date-format rules for the shared calendar UI.
 ---
 
-All user-visible date inputs must use the shared portal-based picker; do not use `input[type="date"]` anywhere in the web interface. Keep Hijri/Gregorian switching inside the picker while preserving the selected Gregorian `YYYY-MM-DD` value. Bound the popover to Radix’s available-height variable and the dynamic viewport, with internal momentum scrolling and permanent collision sticking.
+All user-visible date inputs must use the shared portal-based picker; do not use `input[type="date"]` anywhere in the web interface. On first open, an empty picker must select today (or the nearest allowed bound), synchronize both calendar views, and keep the Gregorian `YYYY-MM-DD` value while switching Hijri/Gregorian. Bound the popover to Radix’s available-height variable and the dynamic viewport, with internal momentum scrolling and permanent collision sticking.
 
 **Why:** On iPhone WebKit, a reopened calendar can flip above its trigger and extend beyond the viewport even when the first opening fits. The application also scrolls through `#root`, so `body` overflow and `window.scrollY` do not describe actual page lock.
 
