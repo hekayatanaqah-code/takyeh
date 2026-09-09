@@ -9,7 +9,8 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "NODE_ENV=production tsx --test src/lib/serviceReceipt.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:iphone-calendar": "playwright test e2e/dual-calendar-iphone.spec.ts --project=webkit-iphone"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
