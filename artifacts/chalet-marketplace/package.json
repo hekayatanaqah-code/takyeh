@@ -9,11 +9,12 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "NODE_ENV=production tsx --test src/lib/serviceReceipt.test.ts",
+    "check:playwright-image-version": "node scripts/check-playwright-image-version.mjs",
     "test:e2e": "playwright test",
     "test:e2e:iphone-calendar": "playwright test e2e/dual-calendar-iphone.spec.ts --project=webkit-iphone"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
+    "@playwright/test": "1.55.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
