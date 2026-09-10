@@ -156,23 +156,28 @@ export function DualCalendarPicker({
   const todayStr = toGregorianStr(new Date());
 
   const handleOpenChange = React.useCallback((nextOpen: boolean) => {
-    if (nextOpen && !value) {
-      const initialValue =
-        minDateStr && todayStr < minDateStr
-          ? minDateStr
-          : maxDateStr && todayStr > maxDateStr
-            ? maxDateStr
-            : todayStr;
-      const initial = new Date(initialValue + "T12:00:00");
-      const h = toHijriComponents(initial);
-      setPickerHY(h.year);
-      setPickerHM(h.month);
-      setPickerGY(initial.getFullYear());
-      setPickerGM(initial.getMonth());
-      onChange(initialValue);
+    if (nextOpen) {
+      setCalendarMode(mode);
+      setPickerView("days");
+
+      if (!value) {
+        const initialValue =
+          minDateStr && todayStr < minDateStr
+            ? minDateStr
+            : maxDateStr && todayStr > maxDateStr
+              ? maxDateStr
+              : todayStr;
+        const initial = new Date(initialValue + "T12:00:00");
+        const h = toHijriComponents(initial);
+        setPickerHY(h.year);
+        setPickerHM(h.month);
+        setPickerGY(initial.getFullYear());
+        setPickerGM(initial.getMonth());
+        onChange(initialValue);
+      }
     }
     setOpen(nextOpen);
-  }, [maxDateStr, minDateStr, onChange, todayStr, value]);
+  }, [maxDateStr, minDateStr, mode, onChange, todayStr, value]);
 
   /* ── Year/month ranges for picker ── */
   const nowH = React.useMemo(() => toHijriComponents(new Date()), []);

@@ -5,31 +5,47 @@ export const HIJRI_MONTHS_AR = [
   "رمضان", "شوال", "ذو القعدة", "ذو الحجة",
 ] as const;
 
-/* Intl formatter — uses ar-SA locale with Umm al-Qura calendar */
+/*
+ * Use Latin digits for machine-readable parts. WebKit can return an Arabic
+ * month name even when `month: "numeric"` is requested with the ar-SA locale,
+ * which previously converted to 0 and emptied the Hijri day grid.
+ */
 const _hijriComponentsFmt = new Intl.DateTimeFormat(
-  "ar-SA-u-ca-islamic-umalqura",
+  "en-US-u-ca-islamic-umalqura-nu-latn",
   { year: "numeric", month: "numeric", day: "numeric" },
 );
 
 /** Convert Arabic-Indic digit string (e.g. "١٤٤٦") to a plain integer. */
 function _arToInt(s: string): number {
-  const ascii = s.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+  const ascii = s
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0));
   return parseInt(ascii, 10) || 0;
+}
+
+function _readHijriParts(date: Date): { year: number; month: number; day: number } {
+  const parts = _hijriComponentsFmt.formatToParts(date);
+  const get = (type: string) =>
+    _arToInt(parts.find((part) => part.type === type)?.value ?? "0");
+  const result = { year: get("year"), month: get("month"), day: get("day") };
+
+  if (
+    result.year < 1 ||
+    result.month < 1 ||
+    result.month > 12 ||
+    result.day < 1 ||
+    result.day > 30
+  ) {
+    throw new RangeError("Intl returned invalid Umm al-Qura date parts");
+  }
+
+  return result;
 }
 
 /** Extract Hijri year / month / day from a Gregorian Date (Umm al-Qura). */
 export function toHijriComponents(date: Date): { year: number; month: number; day: number } {
-  if (!date || isNaN(date.getTime())) {
-    const today = new Date();
-    const fallbackParts = _hijriComponentsFmt.formatToParts(today);
-    const getFallback = (type: string) =>
-      _arToInt(fallbackParts.find((p) => p.type === type)?.value ?? "0");
-    return { year: getFallback("year"), month: getFallback("month"), day: getFallback("day") };
-  }
-  const parts = _hijriComponentsFmt.formatToParts(date);
-  const get = (type: string) =>
-    _arToInt(parts.find((p) => p.type === type)?.value ?? "0");
-  return { year: get("year"), month: get("month"), day: get("day") };
+  const safeDate = date && !isNaN(date.getTime()) ? date : new Date();
+  return _readHijriParts(safeDate);
 }
 
 /** Approximate Gregorian Date for the start of a Hijri month (scanning seed, ±5 days). */

@@ -47,6 +47,20 @@ test("custom calendar stays usable inside an iPhone viewport", async ({ page }) 
 
   const popover = page.getByTestId("dual-calendar-popover");
   await expect(popover).toHaveAttribute("role", "dialog");
+  const monthHeading = popover.locator('button[title="اختر السنة والشهر مباشرة"]');
+  await expect(monthHeading).not.toContainText("undefined");
+
+  const today = await page.evaluate(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  });
+  const hijriDays = popover
+    .getByTestId("dual-calendar-day-grid")
+    .locator("button[data-calendar-day]");
+  await expect(hijriDays).not.toHaveCount(0);
+  await expect(popover.locator(`button[data-calendar-day="${today}"]`)).toBeEnabled();
+  await expect(page.getByTestId("selected-date")).toHaveText(today);
+
   const scrollMetrics = await popover.evaluate((element) => {
     const before = element.scrollTop;
     element.scrollTop = element.scrollHeight;
@@ -71,7 +85,6 @@ test("custom calendar stays usable inside an iPhone viewport", async ({ page }) 
     "true",
   );
 
-  const monthHeading = popover.locator('button[title="اختر السنة والشهر مباشرة"]');
   const initialHeading = await monthHeading.innerText();
   await page.getByRole("button", { name: "الشهر السابق" }).click();
   await expect(monthHeading).not.toHaveText(initialHeading);
