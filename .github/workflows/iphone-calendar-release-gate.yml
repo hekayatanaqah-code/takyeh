@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   webkit-iphone-calendar:
+    # Branch protection depends on this exact job name. If it changes, update
+    # the required status check documented in .github/README.md at the same time.
     name: WebKit iPhone calendar
     runs-on: ubuntu-latest
     timeout-minutes: 15
