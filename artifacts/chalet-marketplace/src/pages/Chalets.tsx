@@ -62,6 +62,16 @@ function matchesCategory(chalet: any, selectedCategory: string): boolean {
   return chaletCategory !== "" && chaletCategory === selected;
 }
 
+function matchesAmenities(chalet: any, selectedAmenities: Set<string>): boolean {
+  if (selectedAmenities.size === 0) return true;
+  const chaletAmenities = new Set(
+    Array.isArray(chalet.amenities)
+      ? chalet.amenities.map((amenity: unknown) => String(amenity).trim())
+      : [],
+  );
+  return Array.from(selectedAmenities).every((key) => chaletAmenities.has(key));
+}
+
 export default function Chalets() {
   const [location] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
@@ -222,12 +232,7 @@ export default function Chalets() {
       const chaletSections = (c as any).sections || "قسم واحد";
       if (chaletSections !== filterSections) return false;
     }
-    if (filterAmenities.size > 0) {
-      const chaletAmenities: string[] = (c as any).amenities ?? [];
-      for (const key of filterAmenities) {
-        if (!chaletAmenities.includes(key)) return false;
-      }
-    }
+    if (!matchesAmenities(c, filterAmenities)) return false;
     if (filterMaxPrice) {
       const max = Number(filterMaxPrice);
       const weekday = Number((c as any).priceWeekday ?? 0);
@@ -237,8 +242,12 @@ export default function Chalets() {
     }
     return true;
   });
-  const filteredNearbyChalets = nearbyChalets.filter((c) => matchesCategory(c, filterCategory));
-  const filteredNextAvailChalets = nextAvailChalets.filter((c) => matchesCategory(c, filterCategory));
+  const filteredNearbyChalets = nearbyChalets.filter(
+    (c) => matchesCategory(c, filterCategory) && matchesAmenities(c, filterAmenities),
+  );
+  const filteredNextAvailChalets = nextAvailChalets.filter(
+    (c) => matchesCategory(c, filterCategory) && matchesAmenities(c, filterAmenities),
+  );
 
   const toggleAmenity = (key: string) => {
     setFilterAmenities((prev) => {
@@ -416,6 +425,8 @@ export default function Chalets() {
                   key={amenity.id}
                   type="button"
                   onClick={() => toggleAmenity(amenity.key)}
+                  aria-pressed={checked}
+                  data-testid={`filter-amenity-${amenity.key}`}
                   className="flex items-center gap-2 w-full text-sm text-right hover:text-primary transition-colors py-0.5"
                 >
                   {checked
