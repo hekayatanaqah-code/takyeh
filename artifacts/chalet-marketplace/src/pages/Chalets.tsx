@@ -401,8 +401,9 @@ export default function Chalets() {
           <input
             type="number"
             min="0"
-            step="50"
-            placeholder="مثال: 1000"
+            step="1"
+            inputMode="numeric"
+            placeholder="مثال: ١٠٠٠"
             value={filterMaxPrice}
             onChange={(e) => setFilterMaxPrice(e.target.value)}
             className="w-full h-10 rounded-md border border-input bg-background px-3 pl-12 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
