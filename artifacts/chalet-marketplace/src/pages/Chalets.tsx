@@ -283,7 +283,7 @@ export default function Chalets() {
       .map((date) => ({ date, chalets: acc[date] }));
   })();
 
-  const FilterControls = () => (
+  const renderFilterControls = () => (
     <div className="space-y-6">
 
       {/* 1. الفئة */}
@@ -400,6 +400,7 @@ export default function Chalets() {
         <div className="relative">
           <input
             type="number"
+            step="50"
             aria-label="الميزانية القصوى بالريال"
             placeholder="مثال: ١٠٠٠"
             value={filterMaxPrice}
@@ -519,7 +520,7 @@ export default function Chalets() {
               </SheetTrigger>
               <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl pt-8">
                 <SheetTitle className="mb-6 font-bold text-xl">تصفية النتائج</SheetTitle>
-                <FilterControls />
+                {renderFilterControls()}
               </SheetContent>
             </Sheet>
           </div>
@@ -532,7 +533,7 @@ export default function Chalets() {
                 <h2 className="text-lg font-bold">تصفية النتائج</h2>
               </div>
               <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin">
-                <FilterControls />
+                {renderFilterControls()}
               </div>
             </div>
           </aside>
