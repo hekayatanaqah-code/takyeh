@@ -24,3 +24,4 @@
 - [Customer calendar bounds](customer-calendar-bounds.md) — customer booking calendars start at local today; owner calendars remain unbounded for historical review.
 - [Playwright WebKit on Nix](playwright-webkit-nix.md) — downloaded Ubuntu WebKit binaries may not launch locally because their exact shared-library versions differ from Replit’s Nix channel.
 - [Filter input focus stability](filter-input-focus-stability.md) — never render the chalet filter panel as a locally declared React component; controlled inputs lose focus on every keystroke.
+- [Results search context](results-search-context.md) — city and date remain editable in the sticky results bar and stay synchronized with the URL.

@@ -161,6 +161,16 @@ export default function Chalets() {
     refetch();
   }, [filterCity, filterDate, filterPeriod, refetch]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (filterCity && filterCity !== "all") params.set("location", filterCity);
+    else params.delete("location");
+    if (filterDate) params.set("checkIn", filterDate);
+    else params.delete("checkIn");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  }, [filterCity, filterDate]);
+
   /* Reset visible count whenever any filter changes */
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -586,15 +596,46 @@ export default function Chalets() {
 
           {/* Results Grid */}
           <div className="flex-1">
-            {/* ── View mode toggle + date label ── */}
-            <div className="flex items-center justify-between gap-3 mb-4">
-              {filterDate ? (
-                <div className="flex items-center gap-2 text-sm bg-primary/5 border border-primary/15 rounded-xl px-3 py-2 flex-1 min-w-0">
-                  <CalendarDays className="w-4 h-4 text-primary shrink-0" />
-                  <span className="text-foreground font-medium truncate">{hijriAndGregorian(filterDate)}</span>
+            {/* ── Editable city/date search bar + view mode toggle ── */}
+            <div className="sticky top-2 z-30 mb-4 flex flex-col gap-2 rounded-2xl border border-border/60 bg-background/95 p-2 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+              <div className="grid w-full min-w-0 flex-1 grid-cols-2 gap-2">
+                <div className="flex min-w-0 items-center gap-2 rounded-lg border border-input bg-background px-2">
+                  <MapPin className="h-4 w-4 shrink-0 text-primary" />
+                  <Select
+                    value={filterCity === "all" ? undefined : filterCity}
+                    onValueChange={(value) => {
+                      setFilterCity(value);
+                      setFilterDistricts([]);
+                    }}
+                  >
+                    <SelectTrigger
+                      aria-label="تغيير مدينة البحث"
+                      className="h-10 min-w-0 flex-1 border-0 bg-transparent p-0 text-right font-medium shadow-none focus:ring-0"
+                      dir="rtl"
+                    >
+                      <SelectValue placeholder="اختر المدينة" />
+                    </SelectTrigger>
+                    <SelectContent dir="rtl" className="text-right">
+                      {cities.map((city) => (
+                        <SelectItem key={city.id} value={city.name} className="justify-start text-right">
+                          {city.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              ) : <div />}
-              <div className="flex items-center gap-1 bg-muted rounded-lg p-1 shrink-0">
+                <div className="flex min-w-0 items-center gap-2 rounded-lg border border-input bg-background px-2">
+                  <CalendarDays className="h-4 w-4 shrink-0 text-primary" />
+                  <DualCalendarPicker
+                    value={filterDate}
+                    onChange={setFilterDate}
+                    placeholder="اختر تاريخ الحجز"
+                    minDate={toGregorianStr(new Date())}
+                    className="h-10 min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-sm font-medium shadow-none hover:bg-accent/30"
+                  />
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1 self-end rounded-lg bg-muted p-1 sm:self-auto">
                 <button
                   onClick={() => setViewMode("grid")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${viewMode === "grid" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
