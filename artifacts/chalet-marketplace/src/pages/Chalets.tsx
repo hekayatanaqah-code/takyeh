@@ -72,6 +72,18 @@ function matchesAmenities(chalet: any, selectedAmenities: Set<string>): boolean 
   return Array.from(selectedAmenities).every((key) => chaletAmenities.has(key));
 }
 
+function toWesternDigits(value: string): string {
+  return value.replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)));
+}
+
+function toArabicDigits(value: string): string {
+  return value.replace(/\d/g, (digit) => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]);
+}
+
+function normalizeBudgetInput(value: string): string {
+  return toArabicDigits(toWesternDigits(value).replace(/\D/g, ""));
+}
+
 export default function Chalets() {
   const [location] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
@@ -82,7 +94,9 @@ export default function Chalets() {
   const [filterSections, setFilterSections] = useState<string>(searchParams.get("sections") || "all");
   const [filterPeriod, setFilterPeriod]     = useState<string>(searchParams.get("period") || "all");
   const [filterAmenities, setFilterAmenities] = useState<Set<string>>(new Set());
-  const [filterMaxPrice, setFilterMaxPrice] = useState<string>(searchParams.get("maxPrice") || "");
+  const [filterMaxPrice, setFilterMaxPrice] = useState<string>(
+    normalizeBudgetInput(searchParams.get("maxPrice") || ""),
+  );
   const [filterDate, setFilterDate]         = useState<string>(searchParams.get("checkIn") || "");
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
   const PAGE_SIZE = 12;
@@ -234,7 +248,7 @@ export default function Chalets() {
     }
     if (!matchesAmenities(c, filterAmenities)) return false;
     if (filterMaxPrice) {
-      const max = Number(filterMaxPrice);
+      const max = Number(toWesternDigits(filterMaxPrice));
       const weekday = Number((c as any).priceWeekday ?? 0);
       const weekend = Number((c as any).priceWeekend ?? 0);
       const minPrice = Math.min(weekday || Infinity, weekend || Infinity);
@@ -248,6 +262,11 @@ export default function Chalets() {
   const filteredNextAvailChalets = nextAvailChalets.filter(
     (c) => matchesCategory(c, filterCategory) && matchesAmenities(c, filterAmenities),
   );
+
+  const adjustMaxPrice = (amount: number) => {
+    const current = Number(toWesternDigits(filterMaxPrice)) || 0;
+    setFilterMaxPrice(toArabicDigits(String(Math.max(0, current + amount))));
+  };
 
   const toggleAmenity = (key: string) => {
     setFilterAmenities((prev) => {
@@ -399,16 +418,43 @@ export default function Chalets() {
         <label className="text-sm font-semibold text-foreground">الميزانية القصوى (ريال)</label>
         <div className="relative">
           <input
-            type="number"
-            step="50"
+            type="text"
+            inputMode="numeric"
             aria-label="الميزانية القصوى بالريال"
             placeholder="مثال: ١٠٠٠"
             value={filterMaxPrice}
-            onChange={(e) => setFilterMaxPrice(e.target.value)}
-            className="w-full h-10 rounded-md border border-input bg-background px-3 pl-12 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            onChange={(e) => setFilterMaxPrice(normalizeBudgetInput(e.target.value))}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                adjustMaxPrice(50);
+              } else if (e.key === "ArrowDown") {
+                e.preventDefault();
+                adjustMaxPrice(-50);
+              }
+            }}
+            className="w-full h-10 rounded-md border border-input bg-background px-3 pl-20 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             dir="rtl"
           />
-          <span className="absolute left-3 top-2.5 text-xs text-muted-foreground">ر.س</span>
+          <span className="absolute left-10 top-2.5 text-xs text-muted-foreground">ر.س</span>
+          <div className="absolute inset-y-px left-px flex w-8 flex-col overflow-hidden rounded-l-md border-r border-input">
+            <button
+              type="button"
+              aria-label="زيادة الميزانية بمقدار ٥٠"
+              onClick={() => adjustMaxPrice(50)}
+              className="flex flex-1 items-center justify-center text-[9px] text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              ▲
+            </button>
+            <button
+              type="button"
+              aria-label="خفض الميزانية بمقدار ٥٠"
+              onClick={() => adjustMaxPrice(-50)}
+              className="flex flex-1 items-center justify-center border-t border-input text-[9px] text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              ▼
+            </button>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground">يُقارن بسعر وسط الأسبوع</p>
       </div>
