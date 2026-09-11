@@ -6,6 +6,7 @@ import { Footer } from "@/components/layout/Footer";
 import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { resolveAmenity } from "@/lib/amenityUtils";
+import { toGregorianStr } from "@/lib/hijri";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -377,7 +378,7 @@ export default function ChaletMasterView() {
                     value={bookDate}
                     onChange={setBookDate}
                     placeholder="اختر تاريخ الحجز"
-                    minDate={new Date().toISOString().slice(0, 10)}
+                    minDate={toGregorianStr(new Date())}
                     mode="gregorian"
                     className={`min-h-[46px] rounded-xl px-3.5 text-sm transition-colors ${
                       bookDate

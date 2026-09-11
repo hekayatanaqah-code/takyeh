@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { resolveAmenity } from "@/lib/amenityUtils";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
+import { toGregorianStr } from "@/lib/hijri";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -260,7 +261,7 @@ function BookingPanel({ data }: { data: DiamondData }) {
             value={date}
             onChange={setDate}
             placeholder="اختر تاريخ الحجز"
-            minDate={new Date().toISOString().slice(0, 10)}
+            minDate={toGregorianStr(new Date())}
             mode="gregorian"
             className="w-full min-h-10 rounded-xl border border-stone-700 bg-stone-800 px-3 text-sm text-stone-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
           />

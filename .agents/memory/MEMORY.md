@@ -21,4 +21,5 @@
 - [Long-form video uploads](long-form-video-uploads.md) — section guides must use direct object uploads; the media processor intentionally truncates videos to 30 seconds.
 - [Owner account identity links](owner-account-identity-links.md) — resolve profiles by durable user→application mapping; email is bootstrap data, never the authorization key.
 - [iOS calendar overlays](ios-calendar-popovers.md) — date pickers use an independent modal overlay; enabled days must explicitly accept touch events.
+- [Customer calendar bounds](customer-calendar-bounds.md) — customer booking calendars start at local today; owner calendars remain unbounded for historical review.
 - [Playwright WebKit on Nix](playwright-webkit-nix.md) — downloaded Ubuntu WebKit binaries may not launch locally because their exact shared-library versions differ from Replit’s Nix channel.

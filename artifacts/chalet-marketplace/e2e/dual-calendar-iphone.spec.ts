@@ -106,3 +106,30 @@ test("custom calendar stays usable inside an iPhone viewport", async ({ page }) 
 
   expectNoBrowserErrors();
 });
+
+test("customer calendar cannot navigate before today while an unbounded calendar can", async ({ page }) => {
+  await page.goto("/__test/dual-calendar?minToday=1");
+  await page.getByRole("button", { name: "اختر تاريخ الاختبار" }).click();
+
+  const popover = page.getByTestId("dual-calendar-popover");
+  const previousMonth = page.getByRole("button", { name: "الشهر السابق" });
+  await expect(previousMonth).toBeDisabled();
+
+  const today = await page.evaluate(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  });
+  const days = popover.locator("button[data-calendar-day]");
+  const dayStates = await days.evaluateAll((buttons, minimum) =>
+    buttons.map((button) => ({
+      date: button.getAttribute("data-calendar-day") ?? "",
+      disabled: (button as HTMLButtonElement).disabled,
+    })).filter(({ date }) => date < minimum),
+  today);
+  expect(dayStates.every(({ disabled }) => disabled)).toBe(true);
+
+  await page.keyboard.press("Escape");
+  await page.goto("/__test/dual-calendar");
+  await page.getByRole("button", { name: "اختر تاريخ الاختبار" }).click();
+  await expect(page.getByRole("button", { name: "الشهر السابق" })).toBeEnabled();
+});

@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { SlidersHorizontal, FilterX, CheckSquare, Square, CalendarDays, LayoutGrid, Map as MapIcon, MapPin, ChevronDown } from "lucide-react";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
+import { toGregorianStr } from "@/lib/hijri";
 import { hijriAndGregorian } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -422,6 +423,7 @@ export default function Chalets() {
               value={filterDate}
               onChange={setFilterDate}
               placeholder="اختر تاريخ الحجز"
+              minDate={toGregorianStr(new Date())}
               className="rounded-md border border-input bg-background px-3 pr-8 py-2 text-xs hover:bg-accent/30 transition-colors"
             />
             <CalendarDays className="absolute top-1/2 -translate-y-1/2 right-2.5 w-3.5 h-3.5 text-primary pointer-events-none" />

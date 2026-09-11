@@ -267,7 +267,15 @@ export function DualCalendarPicker({
     }
   };
 
-  /* ── Disable the "next month" navigation arrow when already at maxDate's month ── */
+  /* Keep bounded customer calendars inside their allowed month range. */
+  const isPrevMonthDisabled = React.useMemo(() => {
+    if (!minDateStr) return false;
+    if (calendarMode === "hijri") {
+      return pickerHY < minHY || (pickerHY === minHY && pickerHM <= minHM);
+    }
+    return pickerGY < minGY || (pickerGY === minGY && pickerGM <= minGM);
+  }, [calendarMode, minDateStr, minHY, minHM, minGY, minGM, pickerHY, pickerHM, pickerGY, pickerGM]);
+
   const isNextMonthDisabled = React.useMemo(() => {
     if (calendarMode === "hijri") {
       return pickerHY > maxH.year || (pickerHY === maxH.year && pickerHM >= maxH.month);
@@ -507,7 +515,13 @@ export function DualCalendarPicker({
               <button
                 type="button"
                 onClick={goPrev}
-                className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent transition-colors text-base font-bold text-muted-foreground"
+                disabled={isPrevMonthDisabled}
+                className={cn(
+                  "h-8 w-8 flex items-center justify-center rounded-lg transition-colors text-base font-bold",
+                  isPrevMonthDisabled
+                    ? "opacity-25 cursor-not-allowed text-muted-foreground"
+                    : "hover:bg-accent text-muted-foreground",
+                )}
                 aria-label="الشهر السابق"
               >‹</button>
             </div>

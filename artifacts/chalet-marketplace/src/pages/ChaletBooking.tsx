@@ -5,6 +5,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
+import { toGregorianStr } from "@/lib/hijri";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -181,7 +182,7 @@ export default function ChaletBooking() {
                 <DualCalendarPicker
                 value={date}
                   onChange={setDate}
-                  minDate={new Date().toISOString().split("T")[0]}
+                  minDate={toGregorianStr(new Date())}
                   placeholder="اختر تاريخ الحجز"
                   mode="gregorian"
                 />
