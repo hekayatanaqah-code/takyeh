@@ -400,9 +400,7 @@ export default function Chalets() {
         <div className="relative">
           <input
             type="number"
-            min="0"
-            step="1"
-            inputMode="numeric"
+            aria-label="الميزانية القصوى بالريال"
             placeholder="مثال: ١٠٠٠"
             value={filterMaxPrice}
             onChange={(e) => setFilterMaxPrice(e.target.value)}
