@@ -331,13 +331,14 @@ export default function Home() {
                     <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-muted-foreground text-right mb-1">المدينة</p>
                       <Select value={searchCity} onValueChange={(v) => { setSearchCity(v); setSearchDistricts([]); }}>
-                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm">
+                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-right text-foreground font-medium text-sm" dir="rtl">
                           <SelectValue placeholder="اختر المدينة" />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">جميع المدن</SelectItem>
+                        <SelectContent dir="rtl" className="text-right">
                           {cities.map((city) => (
-                            <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
+                            <SelectItem key={city.id} value={city.name} className="justify-start text-right">
+                              {city.name}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
