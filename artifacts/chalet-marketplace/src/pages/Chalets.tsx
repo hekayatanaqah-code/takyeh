@@ -45,6 +45,23 @@ const CITY_COORDS: Record<string, [number, number]> = {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+function normalizeCategory(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .trim()
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/\s+/g, " ");
+}
+
+function matchesCategory(chalet: any, selectedCategory: string): boolean {
+  if (!selectedCategory || selectedCategory === "all") return true;
+  const selected = normalizeCategory(selectedCategory);
+  const chaletCategory = normalizeCategory(chalet.category || chalet.propertyType);
+  return chaletCategory !== "" && chaletCategory === selected;
+}
+
 export default function Chalets() {
   const [location] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
@@ -199,11 +216,7 @@ export default function Chalets() {
       const chaletDistrict = ((c as any).district ?? "").trim();
       if (!chaletDistrict || !filterDistricts.includes(chaletDistrict)) return false;
     }
-    if (filterCategory && filterCategory !== "all") {
-      /* Properties with no category are unclassified — include them in every category search */
-      const chaletCat = (c as any).category;
-      if (chaletCat && chaletCat !== filterCategory) return false;
-    }
+    if (!matchesCategory(c, filterCategory)) return false;
     if (filterSections && filterSections !== "all") {
       /* Treat null/empty sections as "قسم واحد" — properties added before the field existed */
       const chaletSections = (c as any).sections || "قسم واحد";
@@ -224,6 +237,8 @@ export default function Chalets() {
     }
     return true;
   });
+  const filteredNearbyChalets = nearbyChalets.filter((c) => matchesCategory(c, filterCategory));
+  const filteredNextAvailChalets = nextAvailChalets.filter((c) => matchesCategory(c, filterCategory));
 
   const toggleAmenity = (key: string) => {
     setFilterAmenities((prev) => {
@@ -247,9 +262,9 @@ export default function Chalets() {
 
   /* ── Pre-compute next-available grouped by date (outside JSX to avoid Map shadowing) ── */
   const nextAvailGroups: Array<{ date: string; chalets: any[] }> = (() => {
-    if (!nextAvailChalets.length) return [];
+    if (!filteredNextAvailChalets.length) return [];
     const acc: Record<string, any[]> = {};
-    for (const c of nextAvailChalets) {
+    for (const c of filteredNextAvailChalets) {
       const d = String(c.nextAvailableDate);
       if (!acc[d]) acc[d] = [];
       acc[d].push(c);
@@ -661,18 +676,18 @@ export default function Chalets() {
                       </div>
 
                       {/* Nearby cities suggestion */}
-                      {nearbyChalets.length > 0 && (
+                      {filteredNearbyChalets.length > 0 && (
                         <div>
                           <div className="flex items-center gap-3 mb-5">
                             <div className="flex-1 h-px bg-border" />
                             <span className="flex items-center gap-2 text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/40 px-4 py-2 rounded-full whitespace-nowrap">
                               <MapPin className="w-4 h-4" />
-                              شاليهات في أقرب مدينة متاحة — {nearestCities.filter((_, i) => nearbyChalets.some((c: any) => c.location === nearestCities[i])).slice(0,2).join(" · ")}
+                              شاليهات في أقرب مدينة متاحة — {nearestCities.filter((_, i) => filteredNearbyChalets.some((c: any) => c.location === nearestCities[i])).slice(0,2).join(" · ")}
                             </span>
                             <div className="flex-1 h-px bg-border" />
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            {nearbyChalets.slice(0, 6).map((chalet: any) => (
+                            {filteredNearbyChalets.slice(0, 6).map((chalet: any) => (
                               <ChaletCard
                                 key={chalet.id}
                                 chalet={chalet}
