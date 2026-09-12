@@ -23,7 +23,7 @@ export function DualDatePicker({
         placeholder={placeholder}
         minDate={minDate}
         mode="hijri"
-        className="min-h-9 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 hover:border-amber-500/60"
+        className="min-h-9 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 hover:border-amber-500/60 [&_p]:!text-slate-100"
       />
     </div>
   );
