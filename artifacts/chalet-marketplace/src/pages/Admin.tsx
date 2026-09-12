@@ -7874,6 +7874,8 @@ function WaSubscribersTab() {
 /* ── Centrally managed seasons ───────────────────── */
 function GlobalSeasonsTab() {
   const qc = useQueryClient();
+  const startDateRef = useRef<HTMLInputElement>(null);
+  const endDateRef = useRef<HTMLInputElement>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [nameAr, setNameAr] = useState("");
@@ -7995,6 +7997,17 @@ function GlobalSeasonsTab() {
     });
   }
 
+  function openDatePicker(ref: React.RefObject<HTMLInputElement | null>) {
+    const input = ref.current;
+    if (!input) return;
+    input.focus();
+    try {
+      (input as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
+    } catch {
+      input.click();
+    }
+  }
+
   return (
     <div className="space-y-6" dir="rtl">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -8021,12 +8034,49 @@ function GlobalSeasonsTab() {
               <Input value={nameAr} onChange={(event) => setNameAr(event.target.value)} placeholder="مثال: إجازة الصيف" className="bg-slate-900 border-slate-600 text-white" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm text-slate-300">تاريخ البداية</label>
-              <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+              <label htmlFor="global-season-start-date" className="text-sm text-slate-300 cursor-pointer">تاريخ البداية</label>
+              <div className="relative">
+                <Input
+                  ref={startDateRef}
+                  id="global-season-start-date"
+                  type="date"
+                  value={startDate}
+                  onClick={() => openDatePicker(startDateRef)}
+                  onChange={(event) => setStartDate(event.target.value)}
+                  className="bg-slate-900 border-slate-600 text-white pl-11 cursor-pointer"
+                />
+                <button
+                  type="button"
+                  aria-label="فتح تقويم تاريخ البداية"
+                  onClick={() => openDatePicker(startDateRef)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-400"
+                >
+                  <Calendar className="w-5 h-5" />
+                </button>
+              </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm text-slate-300">تاريخ النهاية</label>
-              <Input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+              <label htmlFor="global-season-end-date" className="text-sm text-slate-300 cursor-pointer">تاريخ النهاية</label>
+              <div className="relative">
+                <Input
+                  ref={endDateRef}
+                  id="global-season-end-date"
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onClick={() => openDatePicker(endDateRef)}
+                  onChange={(event) => setEndDate(event.target.value)}
+                  className="bg-slate-900 border-slate-600 text-white pl-11 cursor-pointer"
+                />
+                <button
+                  type="button"
+                  aria-label="فتح تقويم تاريخ النهاية"
+                  onClick={() => openDatePicker(endDateRef)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-amber-400"
+                >
+                  <Calendar className="w-5 h-5" />
+                </button>
+              </div>
             </div>
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-sm text-slate-300">لون الموسم</label>
