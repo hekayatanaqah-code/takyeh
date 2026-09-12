@@ -430,6 +430,10 @@ interface GlobalSeason {
   color: string;
   isActive: boolean;
   enabled: boolean;
+  priceMorning: string | null;
+  priceEvening: string | null;
+  priceFullDay: string | null;
+  dailyPrices: Record<string, DayPrice> | null;
 }
 
 /* ── Upgrade Popup + Chalets Tab ─────────────── */
@@ -1907,13 +1911,26 @@ function AddBookingDialog({
     },
     enabled: !!activeSubNum,
   });
-  const activeSeason = useMemo<ChaletSeason | null>(() => {
-    if (!bookingDate || !dialogSeasons.length) return null;
-    return dialogSeasons.find((s) =>
+  const { data: dialogGlobalSeasons = [] } = useQuery<GlobalSeason[]>({
+    queryKey: ["owner", "global-seasons", activeSubNum, "booking-dialog"],
+    queryFn: async () => {
+      if (!activeSubNum) return [];
+      const r = await apiFetch(`/owner/global-seasons?submissionId=${activeSubNum}`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: !!activeSubNum,
+  });
+  const activeSeason = useMemo<ChaletSeason | GlobalSeason | null>(() => {
+    if (!bookingDate) return null;
+    const privateSeason = dialogSeasons.find((s) =>
       bookingDate >= s.startDate && bookingDate <= s.endDate &&
       (!s.period || !period || s.period === "all" || s.period === period)
+    );
+    if (privateSeason) return privateSeason;
+    return dialogGlobalSeasons.find((s) =>
+      s.enabled && bookingDate >= s.startDate && bookingDate <= s.endDate
     ) ?? null;
-  }, [bookingDate, period, dialogSeasons]);
+  }, [bookingDate, period, dialogSeasons, dialogGlobalSeasons]);
 
   /* ── Add-on services for selected chalet ── */
   const { data: dialogAddons = [], isLoading: addonsLoading } = useQuery<ChaletServiceRow[]>({
@@ -1970,9 +1987,10 @@ function AddBookingDialog({
   }, [bookingDate, durationDays, existingBookings, submissionId]);
 
   /* ── Unpriced slot detection — disable period if no default price set ── */
-  const morningUnpriced  = !selectedChalet?.priceMorning && !selectedChalet?.priceFullDay;
-  const eveningUnpriced  = !selectedChalet?.priceEvening && !selectedChalet?.priceFullDay;
-  const fullDayUnpriced  = !selectedChalet?.priceFullDay && !selectedChalet?.priceMorning && !selectedChalet?.priceEvening;
+  const activeDayPrice = activeSeason?.dailyPrices?.[bookingDate] ?? null;
+  const morningUnpriced  = !activeDayPrice?.morning && !activeSeason?.priceMorning && !selectedChalet?.priceMorning && !selectedChalet?.priceFullDay;
+  const eveningUnpriced  = !activeDayPrice?.evening && !activeSeason?.priceEvening && !selectedChalet?.priceEvening && !selectedChalet?.priceFullDay;
+  const fullDayUnpriced  = !activeDayPrice?.fullDay && !activeSeason?.priceFullDay && !selectedChalet?.priceFullDay && !selectedChalet?.priceMorning && !selectedChalet?.priceEvening;
   // Only apply unpriced lock when a chalet is actually selected
   const hasChalet        = !!(submissionId && submissionId !== "none");
 
@@ -2044,7 +2062,7 @@ function AddBookingDialog({
       if (dp) setTotalPrice(String(Math.round(Number(dp))));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period, bookingDate, submissionId]);
+  }, [period, bookingDate, submissionId, activeSeason, selectedChalet]);
 
   const tp = totalPrice ? Math.round(Number(totalPrice)) : null;
   const dp = depositPaid ? Math.round(Number(depositPaid)) : null;
@@ -3989,6 +4007,15 @@ function RescheduleDialog({
     },
     enabled: open && !!subId,
   });
+  const { data: dialogGlobalSeasons = [] } = useQuery<GlobalSeason[]>({
+    queryKey: ["owner", "global-seasons", subId, "reschedule-dialog"],
+    queryFn: async () => {
+      if (!subId) return [];
+      const r = await apiFetch(`/owner/global-seasons?submissionId=${subId}`);
+      return r.ok ? r.json() : [];
+    },
+    enabled: open && !!subId,
+  });
 
   /* ── Compute price for a given date + period using seasons then base rates ── */
   const _getPriceForDate = (date: string, period: string): number | null => {
@@ -3997,6 +4024,8 @@ function RescheduleDialog({
     const season = dialogSeasons.find(
       (s) => date >= s.startDate && date <= s.endDate &&
         (!s.period || s.period === "all" || s.period === effPeriod)
+    ) ?? dialogGlobalSeasons.find(
+      (s) => s.enabled && date >= s.startDate && date <= s.endDate
     );
     if (season) {
       const dayDP = (season.dailyPrices as Record<string, { morning?: number; evening?: number; fullDay?: number }> | null)?.[date] ?? null;
@@ -4022,7 +4051,7 @@ function RescheduleDialog({
   const newComputedPrice = useMemo(
     () => (newDate && newPeriod && newPeriod !== "none" ? _getPriceForDate(newDate, newPeriod) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [newDate, newPeriod, dialogSeasons, chaletPrices]
+    [newDate, newPeriod, dialogSeasons, dialogGlobalSeasons, chaletPrices]
   );
   /* Auto-fill editable price input whenever computed price changes */
   useEffect(() => {
@@ -23035,6 +23064,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
   const [selectedSubId, setSelectedSubId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [editSeasonId, setEditSeasonId] = useState<number | null>(null);
+  const [editGlobalSeasonId, setEditGlobalSeasonId] = useState<number | null>(null);
   const [nameAr, setNameAr] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -23049,9 +23079,11 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
     setPriceMorning(""); setPriceEvening(""); setPriceFullDay("");
     setDailyPricesState({});
     setEditSeasonId(null);
+    setEditGlobalSeasonId(null);
   }
 
   function openEdit(s: any) {
+    setEditGlobalSeasonId(null);
     setNameAr(s.nameAr ?? "");
     setStartDate(s.startDate ?? "");
     setEndDate(s.endDate ?? "");
@@ -23074,6 +23106,28 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
       setDailyPricesState({});
     }
     setEditSeasonId(s.id);
+    setAddOpen(true);
+  }
+
+  function openGlobalPricing(season: GlobalSeason) {
+    setNameAr(season.nameAr);
+    setStartDate(season.startDate.split("T")[0]);
+    setEndDate(season.endDate.split("T")[0]);
+    const toInt = (value: string | null) => value != null ? String(Math.round(Number(value))) : "";
+    setPriceMorning(toInt(season.priceMorning));
+    setPriceEvening(toInt(season.priceEvening));
+    setPriceFullDay(toInt(season.priceFullDay));
+    const filled: Record<string, { morning: string; evening: string; fullDay: string }> = {};
+    Object.entries(season.dailyPrices ?? {}).forEach(([date, entry]) => {
+      filled[date] = {
+        morning: entry.morning != null ? String(Math.round(entry.morning)) : "",
+        evening: entry.evening != null ? String(Math.round(entry.evening)) : "",
+        fullDay: entry.fullDay != null ? String(Math.round(entry.fullDay)) : "",
+      };
+    });
+    setDailyPricesState(filled);
+    setEditSeasonId(null);
+    setEditGlobalSeasonId(season.id);
     setAddOpen(true);
   }
 
@@ -23137,11 +23191,24 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
   });
 
   const globalSeasonMutation = useMutation({
-    mutationFn: async ({ id, enabled }: { id: number; enabled: boolean }) => {
+    mutationFn: async ({
+      id,
+      enabled,
+      pricing,
+    }: {
+      id: number;
+      enabled: boolean;
+      pricing?: {
+        priceMorning?: number | null;
+        priceEvening?: number | null;
+        priceFullDay?: number | null;
+        dailyPrices?: Record<string, DayPrice> | null;
+      };
+    }) => {
       if (!activeSubId) throw new Error("لم يتم اختيار العقار");
       const r = await apiFetch(`/owner/global-seasons/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ submissionId: activeSubId, enabled }),
+        body: JSON.stringify({ submissionId: activeSubId, enabled, ...pricing }),
       });
       if (!r.ok) {
         const body = await r.json().catch(() => ({}));
@@ -23186,6 +23253,21 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
         if (dp.fullDay) entry.fullDay = Number(dp.fullDay);
         if (Object.keys(entry).length > 0) dpPayload[ds] = entry;
       });
+      if (editGlobalSeasonId) {
+        await globalSeasonMutation.mutateAsync({
+          id: editGlobalSeasonId,
+          enabled: true,
+          pricing: {
+            priceMorning: normPrice(priceMorning) ?? null,
+            priceEvening: normPrice(priceEvening) ?? null,
+            priceFullDay: normPrice(priceFullDay) ?? null,
+            dailyPrices: Object.keys(dpPayload).length > 0 ? dpPayload : null,
+          },
+        });
+        setAddOpen(false);
+        resetForm();
+        return;
+      }
       const url = editSeasonId ? `/owner/seasons/${editSeasonId}` : "/owner/seasons";
       const method = editSeasonId ? "PUT" : "POST";
       const body: Record<string, unknown> = {
@@ -23292,10 +23374,24 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {season.enabled && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs gap-1.5"
+                      onClick={() => openGlobalPricing(season)}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      تخصيص الأسعار
+                    </Button>
+                  )}
                   <span className="text-xs text-muted-foreground">{season.enabled ? "مفعّل" : "غير مفعّل"}</span>
                   <Switch
                     checked={season.enabled}
-                    onCheckedChange={(enabled) => globalSeasonMutation.mutate({ id: season.id, enabled })}
+                    onCheckedChange={(enabled) => {
+                      if (enabled) openGlobalPricing(season);
+                      else globalSeasonMutation.mutate({ id: season.id, enabled: false });
+                    }}
                     disabled={globalSeasonMutation.isPending || !season.isActive}
                     aria-label={`تفعيل ${season.nameAr}`}
                   />
@@ -23411,39 +23507,47 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Sun className="w-4 h-4 text-amber-500" />
-              {editSeasonId ? "تعديل الموسم" : "إضافة موسم جديد"}
+              {editGlobalSeasonId ? `أسعار موسم ${nameAr}` : editSeasonId ? "تعديل الموسم" : "إضافة موسم جديد"}
             </DialogTitle>
-            <DialogDescription>حدد اسم الموسم ونطاق التواريخ وأسعار كل يوم</DialogDescription>
+            <DialogDescription>
+              {editGlobalSeasonId
+                ? "حدد أسعار هذا الموسم للعقار المختار. اسم الموسم وتواريخه تُدار من الإدارة."
+                : "حدد اسم الموسم ونطاق التواريخ وأسعار كل يوم"}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="overflow-y-auto flex-1 space-y-4 py-2 pl-1">
             {/* Name */}
             <div className="space-y-2">
               <label className="text-sm font-medium">اسم الموسم</label>
-              <Input placeholder="اسم الموسم..." value={nameAr} onChange={(e) => setNameAr(e.target.value)} />
-              <div className="flex gap-2 flex-wrap pt-1">
+              <Input placeholder="اسم الموسم..." value={nameAr} onChange={(e) => setNameAr(e.target.value)} disabled={!!editGlobalSeasonId} />
+              {!editGlobalSeasonId && <div className="flex gap-2 flex-wrap pt-1">
                 {["عيد الأضحى", "عيد الفطر", "رمضان", "الإجازة الصيفية", "نهاية السنة", "الإجازة الشتوية"].map((n) => (
                   <button key={n} onClick={() => setNameAr(n)}
                     className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${nameAr === n ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-foreground"}`}>
                     {n}
                   </button>
                 ))}
-              </div>
+              </div>}
             </div>
 
             {/* Date range */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">من تاريخ</label>
-                <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
-                  <DualCalendarPicker value={startDate} onChange={setStartDate} placeholder="يوم / شهر / سنة" />
-                </div>
+                {editGlobalSeasonId
+                  ? <div className="rounded-xl border border-border bg-muted/40 px-3 py-3 text-sm">{formatDualDate(startDate).hijri} · {formatDualDate(startDate).gregorian}</div>
+                  : <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
+                      <DualCalendarPicker value={startDate} onChange={setStartDate} placeholder="يوم / شهر / سنة" />
+                    </div>}
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">إلى تاريخ</label>
-                <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
-                  <DualCalendarPicker value={endDate} onChange={setEndDate} placeholder="يوم / شهر / سنة" minDate={startDate || undefined} />
-                </div>
+                {editGlobalSeasonId
+                  ? <div className="rounded-xl border border-border bg-muted/40 px-3 py-3 text-sm">{formatDualDate(endDate).hijri} · {formatDualDate(endDate).gregorian}</div>
+                  : <div className="rounded-xl border border-border bg-background px-3 py-2.5 min-h-[3rem]">
+                      <DualCalendarPicker value={endDate} onChange={setEndDate} placeholder="يوم / شهر / سنة" minDate={startDate || undefined} />
+                    </div>}
               </div>
             </div>
 
@@ -23553,7 +23657,7 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
               className="gap-1.5"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : editSeasonId ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              {editSeasonId ? "حفظ التغييرات" : "حفظ الموسم"}
+              {editGlobalSeasonId ? "حفظ الأسعار وتفعيل الموسم" : editSeasonId ? "حفظ التغييرات" : "حفظ الموسم"}
             </Button>
           </DialogFooter>
         </DialogContent>

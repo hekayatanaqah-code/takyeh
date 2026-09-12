@@ -608,6 +608,10 @@ export const chaletGlobalSeasonsTable = pgTable("chalet_global_seasons", {
   submissionId: integer("submission_id").references(() => chaletSubmissionsTable.id, { onDelete: "cascade" }).notNull(),
   globalSeasonId: integer("global_season_id").references(() => globalSeasonsTable.id, { onDelete: "cascade" }).notNull(),
   enabled: boolean("enabled").notNull().default(true),
+  priceMorning: numeric("price_morning", { precision: 10, scale: 2 }),
+  priceEvening: numeric("price_evening", { precision: 10, scale: 2 }),
+  priceFullDay: numeric("price_full_day", { precision: 10, scale: 2 }),
+  dailyPrices: jsonb("daily_prices"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => ({
   submissionGlobalSeasonUnique: uniqueIndex("chalet_global_seasons_submission_global_season_unique")

@@ -474,14 +474,26 @@ router.get("/global-seasons", async (req, res) => {
     .where(eq(globalSeasonsTable.isActive, true))
     .orderBy(globalSeasonsTable.startDate, globalSeasonsTable.id);
   if (submissionId !== undefined) {
-    const disabled = await db.select({ globalSeasonId: chaletGlobalSeasonsTable.globalSeasonId })
+    const associations = await db.select({
+      globalSeasonId: chaletGlobalSeasonsTable.globalSeasonId,
+      enabled: chaletGlobalSeasonsTable.enabled,
+      priceMorning: chaletGlobalSeasonsTable.priceMorning,
+      priceEvening: chaletGlobalSeasonsTable.priceEvening,
+      priceFullDay: chaletGlobalSeasonsTable.priceFullDay,
+      dailyPrices: chaletGlobalSeasonsTable.dailyPrices,
+    })
       .from(chaletGlobalSeasonsTable)
-      .where(and(
-        eq(chaletGlobalSeasonsTable.submissionId, submissionId),
-        eq(chaletGlobalSeasonsTable.enabled, false),
-      ));
-    const disabledIds = new Set(disabled.map((association) => association.globalSeasonId));
-    rows = rows.filter((season) => !disabledIds.has(season.id));
+      .where(eq(chaletGlobalSeasonsTable.submissionId, submissionId));
+    const associationById = new Map(associations.map((association) => [association.globalSeasonId, association]));
+    rows = rows
+      .filter((season) => associationById.get(season.id)?.enabled !== false)
+      .map((season) => ({
+        ...season,
+        priceMorning: associationById.get(season.id)?.priceMorning ?? null,
+        priceEvening: associationById.get(season.id)?.priceEvening ?? null,
+        priceFullDay: associationById.get(season.id)?.priceFullDay ?? null,
+        dailyPrices: associationById.get(season.id)?.dailyPrices ?? null,
+      }));
   }
   return res.json(rows);
 });

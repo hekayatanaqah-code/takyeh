@@ -3,8 +3,8 @@ name: Global versus private seasons
 description: Product and data boundary between centrally managed calendar seasons and owner-specific pricing seasons.
 ---
 
-Keep centrally managed seasons separate from owner-created seasonal pricing. Global seasons are active calendar annotations enabled for every property by default; owners may explicitly disable each one per property.
+Keep centrally managed seasons separate from owner-created seasons. Administration controls each global season's shared name and date range. Each property controls whether it is enabled and stores its own morning, evening, full-day, and optional per-date prices on the property-season association.
 
-**Why:** Copying global definitions into private pricing rows would couple public awareness labels to owner pricing and make later admin edits inconsistent across properties.
+**Why:** Copying global definitions into private season rows would make later admin edits inconsistent across properties. Storing prices on the association lets properties share the managed date range without sharing prices.
 
-**How to apply:** Customer search calendars use all active global seasons. Property booking calendars additionally honor explicit per-submission opt-outs. Owner private season CRUD and pricing precedence remain unchanged.
+**How to apply:** Customer calendars use active global seasons and honor per-property opt-outs. Booking pricing checks owner-created seasons first, then enabled priced global seasons, then the property's base prices.

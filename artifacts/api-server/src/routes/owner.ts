@@ -2494,13 +2494,21 @@ router.get("/global-seasons", async (req, res) => {
   const associations = await db.select({
     globalSeasonId: chaletGlobalSeasonsTable.globalSeasonId,
     enabled: chaletGlobalSeasonsTable.enabled,
+    priceMorning: chaletGlobalSeasonsTable.priceMorning,
+    priceEvening: chaletGlobalSeasonsTable.priceEvening,
+    priceFullDay: chaletGlobalSeasonsTable.priceFullDay,
+    dailyPrices: chaletGlobalSeasonsTable.dailyPrices,
   }).from(chaletGlobalSeasonsTable)
     .where(eq(chaletGlobalSeasonsTable.submissionId, submissionId));
-  const enabledBySeasonId = new Map(associations.map((association) => [association.globalSeasonId, association.enabled]));
+  const associationBySeasonId = new Map(associations.map((association) => [association.globalSeasonId, association]));
 
   return res.json(seasons.map((season) => ({
     ...season,
-    enabled: enabledBySeasonId.get(season.id) ?? true,
+    enabled: associationBySeasonId.get(season.id)?.enabled ?? true,
+    priceMorning: associationBySeasonId.get(season.id)?.priceMorning ?? null,
+    priceEvening: associationBySeasonId.get(season.id)?.priceEvening ?? null,
+    priceFullDay: associationBySeasonId.get(season.id)?.priceFullDay ?? null,
+    dailyPrices: associationBySeasonId.get(season.id)?.dailyPrices ?? null,
   })));
 });
 
@@ -2513,6 +2521,14 @@ router.patch("/global-seasons/:globalSeasonId", async (req, res) => {
   const parsed = z.object({
     submissionId: z.number().int().positive(),
     enabled: z.boolean(),
+    priceMorning: z.number().nonnegative().nullable().optional(),
+    priceEvening: z.number().nonnegative().nullable().optional(),
+    priceFullDay: z.number().nonnegative().nullable().optional(),
+    dailyPrices: z.record(z.string(), z.object({
+      morning: z.number().nonnegative().optional(),
+      evening: z.number().nonnegative().optional(),
+      fullDay: z.number().nonnegative().optional(),
+    })).nullable().optional(),
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
 
@@ -2533,14 +2549,40 @@ router.patch("/global-seasons/:globalSeasonId", async (req, res) => {
       submissionId: parsed.data.submissionId,
       globalSeasonId,
       enabled: parsed.data.enabled,
+      priceMorning: parsed.data.priceMorning != null ? String(parsed.data.priceMorning) : null,
+      priceEvening: parsed.data.priceEvening != null ? String(parsed.data.priceEvening) : null,
+      priceFullDay: parsed.data.priceFullDay != null ? String(parsed.data.priceFullDay) : null,
+      dailyPrices: parsed.data.dailyPrices ?? null,
     })
     .onConflictDoUpdate({
       target: [chaletGlobalSeasonsTable.submissionId, chaletGlobalSeasonsTable.globalSeasonId],
-      set: { enabled: parsed.data.enabled, updatedAt: new Date() },
+      set: {
+        enabled: parsed.data.enabled,
+        ...(parsed.data.priceMorning !== undefined
+          ? { priceMorning: parsed.data.priceMorning != null ? String(parsed.data.priceMorning) : null }
+          : {}),
+        ...(parsed.data.priceEvening !== undefined
+          ? { priceEvening: parsed.data.priceEvening != null ? String(parsed.data.priceEvening) : null }
+          : {}),
+        ...(parsed.data.priceFullDay !== undefined
+          ? { priceFullDay: parsed.data.priceFullDay != null ? String(parsed.data.priceFullDay) : null }
+          : {}),
+        ...(parsed.data.dailyPrices !== undefined ? { dailyPrices: parsed.data.dailyPrices } : {}),
+        updatedAt: new Date(),
+      },
     })
     .returning();
 
-  return res.json({ ...season, submissionId: parsed.data.submissionId, enabled: association.enabled, updatedAt: association.updatedAt });
+  return res.json({
+    ...season,
+    submissionId: parsed.data.submissionId,
+    enabled: association.enabled,
+    priceMorning: association.priceMorning,
+    priceEvening: association.priceEvening,
+    priceFullDay: association.priceFullDay,
+    dailyPrices: association.dailyPrices,
+    updatedAt: association.updatedAt,
+  });
 });
 
 router.get("/seasons", async (req, res) => {

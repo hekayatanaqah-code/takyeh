@@ -25,4 +25,4 @@
 - [Playwright WebKit on Nix](playwright-webkit-nix.md) — downloaded Ubuntu WebKit binaries may not launch locally because their exact shared-library versions differ from Replit’s Nix channel.
 - [Filter input focus stability](filter-input-focus-stability.md) — never render the chalet filter panel as a locally declared React component; controlled inputs lose focus on every keystroke.
 - [Results search context](results-search-context.md) — city and date remain editable in the sticky results bar and stay synchronized with the URL.
-- [Global versus private seasons](global-private-seasons.md) — admin seasons are shared calendar annotations; owner seasons remain private pricing rules, with per-property global opt-outs.
+- [Global versus private seasons](global-private-seasons.md) — admin controls shared dates; each property controls activation and pricing, while owner-created seasons remain separate.
