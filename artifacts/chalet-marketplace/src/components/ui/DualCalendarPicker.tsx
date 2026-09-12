@@ -9,6 +9,7 @@ import {
   prevHijriMonth,
   nextHijriMonth,
 } from "@/lib/hijri";
+import type { GlobalSeason } from "@/hooks/useGlobalSeasons";
 
 /* ── Formatters ── */
 const hijriFullFmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", {
@@ -20,6 +21,7 @@ const gregFullFmt = new Intl.DateTimeFormat("ar-SA", {
 
 const DAYS_SHORT = ["أح", "إث", "ثل", "أر", "خم", "جم", "سب"];
 const GREG_MONTHS_AR = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+const EMPTY_SEASONS: GlobalSeason[] = [];
 
 /* ── Helpers ── */
 function formatSelected(dateStr: string): { hijri: string; gregorian: string } {
@@ -68,6 +70,10 @@ interface DualCalendarPickerProps {
   className?: string;
   compact?: boolean;
   mode?: "hijri" | "gregorian";
+  /** Active global seasons used to highlight dates in the customer calendar. */
+  seasons?: GlobalSeason[];
+  /** Alias for seasons for callers that refer to these as calendar highlights. */
+  highlights?: GlobalSeason[];
 }
 
 type PickerView = "days" | "months" | "years";
@@ -84,6 +90,8 @@ export function DualCalendarPicker({
   className,
   compact = false,
   mode = "hijri",
+  seasons,
+  highlights,
 }: DualCalendarPickerProps) {
   const [open, setOpen] = React.useState(false);
   const [pickerView, setPickerView] = React.useState<PickerView>("days");
@@ -154,6 +162,51 @@ export function DualCalendarPicker({
   const minDateStr = minDate ?? "";
   const maxDateStr = maxDate ?? "";
   const todayStr = toGregorianStr(new Date());
+
+  const seasonInput = seasons ?? highlights ?? EMPTY_SEASONS;
+  const normalizedSeasons = React.useMemo(
+    () => seasonInput
+      .filter((season) => season.isActive !== false && season.startDate && season.endDate)
+      .map((season) => ({
+        ...season,
+        startDate: season.startDate.slice(0, 10),
+        endDate: season.endDate.slice(0, 10),
+      })),
+    [seasonInput],
+  );
+
+  const getSeasonHighlights = React.useCallback((gregStr: string) => (
+    normalizedSeasons.filter(
+      (season) => gregStr >= season.startDate && gregStr <= season.endDate,
+    )
+  ), [normalizedSeasons]);
+
+  const visibleGregorianDates = React.useMemo(() => {
+    if (calendarMode === "hijri") {
+      return hijriMonthDays.map(({ date }) => toGregorianStr(date));
+    }
+    return Array.from({ length: gregDayCount }, (_, i) => gregDateStr(pickerGY, pickerGM, i + 1));
+  }, [calendarMode, gregDayCount, hijriMonthDays, pickerGM, pickerGY]);
+
+  const visibleSeasons = React.useMemo(() => {
+    const ids = new Set<number>();
+    visibleGregorianDates.forEach((gregStr) => {
+      getSeasonHighlights(gregStr).forEach((season) => ids.add(season.id));
+    });
+    return normalizedSeasons.filter((season) => ids.has(season.id));
+  }, [getSeasonHighlights, normalizedSeasons, visibleGregorianDates]);
+
+  const seasonNames = (highlights: GlobalSeason[]) => highlights.map((season) => season.nameAr).join("، ");
+  const dayAriaLabel = (gregStr: string, highlights: GlobalSeason[]) => {
+    const date = new Date(`${gregStr}T12:00:00`);
+    const gregLabel = gregFullFmt.format(date);
+    const hijriLabel = hijriFullFmt.format(date);
+    const dateLabel = calendarMode === "hijri"
+      ? `${hijriLabel}، الموافق ${gregLabel}`
+      : `${gregLabel}، الموافق ${hijriLabel}`;
+    const names = seasonNames(highlights);
+    return names ? `${dateLabel} — ${names}` : dateLabel;
+  };
 
   const handleOpenChange = React.useCallback((nextOpen: boolean) => {
     if (nextOpen) {
@@ -542,20 +595,27 @@ export function DualCalendarPicker({
                   const isSelected = value === gregStr;
                   const isToday = todayStr === gregStr;
                   const isDisabled = (!!minDateStr && gregStr < minDateStr) || (!!maxDateStr && gregStr > maxDateStr);
+                   const highlights = getSeasonHighlights(gregStr);
+                   const seasonLabel = seasonNames(highlights);
                   return (
                     <button
                       key={gregStr}
                       type="button"
                        data-calendar-day={gregStr}
+                       aria-label={dayAriaLabel(gregStr, highlights)}
+                       title={seasonLabel || undefined}
                       disabled={isDisabled}
                       onClick={() => { onChange(gregStr); setOpen(false); }}
                       style={{
                         pointerEvents: isDisabled ? "none" : "auto",
                         touchAction: "manipulation",
                         WebkitTapHighlightColor: "transparent",
+                        backgroundColor: !isSelected && !isToday && !isDisabled && highlights[0]
+                          ? `color-mix(in srgb, ${highlights[0].color} 16%, transparent)`
+                          : undefined,
                       }}
                       className={cn(
-                        "pointer-events-auto flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors touch-manipulation",
+                        "pointer-events-auto relative flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors touch-manipulation",
                         isDisabled && "opacity-30 pointer-events-none",
                         isSelected ? "bg-primary text-primary-foreground"
                           : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
@@ -566,6 +626,13 @@ export function DualCalendarPicker({
                       <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#a1a1aa" }}>
                         {date.getDate()}
                       </span>
+                      {highlights.length > 0 && (
+                        <span className="absolute inset-x-1 bottom-0.5 flex h-1 gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
+                          {highlights.map((season) => (
+                            <span key={season.id} className="min-w-0 flex-1 rounded-full" style={{ backgroundColor: season.color }} />
+                          ))}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -578,6 +645,8 @@ export function DualCalendarPicker({
                   const isSelected = value === gregStr;
                   const isToday = todayStr === gregStr;
                   const isDisabled = (!!minDateStr && gregStr < minDateStr) || (!!maxDateStr && gregStr > maxDateStr);
+                   const highlights = getSeasonHighlights(gregStr);
+                   const seasonLabel = seasonNames(highlights);
                   let hijriDay = 0;
                   try { hijriDay = toHijriComponents(new Date(gregStr + "T12:00:00")).day; } catch { /* */ }
                   return (
@@ -585,15 +654,20 @@ export function DualCalendarPicker({
                       key={gregStr}
                       type="button"
                        data-calendar-day={gregStr}
+                       aria-label={dayAriaLabel(gregStr, highlights)}
+                       title={seasonLabel || undefined}
                       disabled={isDisabled}
                       onClick={() => { onChange(gregStr); setOpen(false); }}
                       style={{
                         pointerEvents: isDisabled ? "none" : "auto",
                         touchAction: "manipulation",
                         WebkitTapHighlightColor: "transparent",
+                        backgroundColor: !isSelected && !isToday && !isDisabled && highlights[0]
+                          ? `color-mix(in srgb, ${highlights[0].color} 16%, transparent)`
+                          : undefined,
                       }}
                       className={cn(
-                        "pointer-events-auto flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors touch-manipulation",
+                        "pointer-events-auto relative flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors touch-manipulation",
                         isDisabled && "opacity-30 pointer-events-none",
                         isSelected ? "bg-primary text-primary-foreground"
                           : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
@@ -606,9 +680,27 @@ export function DualCalendarPicker({
                       <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#a1a1aa" }}>
                         {hijriDay > 0 ? hijriDay.toLocaleString("ar-SA") : ""}
                       </span>
+                      {highlights.length > 0 && (
+                        <span className="absolute inset-x-1 bottom-0.5 flex h-1 gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
+                          {highlights.map((season) => (
+                            <span key={season.id} className="min-w-0 flex-1 rounded-full" style={{ backgroundColor: season.color }} />
+                          ))}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
+              </div>
+            )}
+
+            {visibleSeasons.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[0.68rem] text-muted-foreground" aria-label="مواسم الفترة" role="list">
+                {visibleSeasons.map((season) => (
+                  <span key={season.id} className="inline-flex items-center gap-1 whitespace-nowrap" role="listitem">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: season.color }} aria-hidden="true" />
+                    {season.nameAr}
+                  </span>
+                ))}
               </div>
             )}
 

@@ -27,6 +27,7 @@ import {
   contactInquiriesTable,
   ownerTempSessionsTable,
   sectionGuidesTable,
+  globalSeasonsTable,
 } from "@workspace/db/schema";
 import { eq, inArray, and, gt, lt, ne, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
@@ -164,6 +165,11 @@ export function requireSuperAdmin(req: Request, res: Response, next: NextFunctio
   res.status(403).json({ error: "المشرف العام فقط يملك هذه الصلاحية" });
 }
 
+export function requirePlatformSettingsAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.isSuperAdmin || req.adminStaff?.permissions?.platformSettings) return next();
+  res.status(403).json({ error: "لا تملك صلاحية إعدادات المنصة" });
+}
+
 export async function requireAdminOrAdminStaff(req: Request, res: Response, next: NextFunction) {
   /* ── 1. OIDC super admin (legacy / Replit-hosted) ── */
   const adminId = process.env.ADMIN_USER_ID;
@@ -221,6 +227,74 @@ router.get("/impersonation-status", async (req, res) => {
 });
 
 router.use(requireAdminOrAdminStaff);
+
+/* ── Centrally managed chalet seasons ──────────────────────── */
+const globalSeasonDateSchema = z.string().trim().regex(
+  /^\d{4}-\d{2}-\d{2}$/,
+  "يجب أن يكون التاريخ بصيغة ISO (YYYY-MM-DD)",
+).refine((value) => {
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}, "التاريخ غير صحيح");
+const globalSeasonColorSchema = z.string().trim().regex(
+  /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/,
+  "اللون يجب أن يكون بصيغة HEX",
+);
+const globalSeasonSchema = z.object({
+  nameAr: z.string().trim().min(1, "اسم الموسم مطلوب"),
+  startDate: globalSeasonDateSchema,
+  endDate: globalSeasonDateSchema,
+  color: globalSeasonColorSchema.default("#D97706"),
+  isActive: z.boolean().default(true),
+});
+
+router.get("/global-seasons", requirePlatformSettingsAdmin, async (_req, res) => {
+  const rows = await db.select().from(globalSeasonsTable).orderBy(globalSeasonsTable.startDate, globalSeasonsTable.id);
+  return res.json(rows);
+});
+
+router.post("/global-seasons", requirePlatformSettingsAdmin, async (req, res) => {
+  const parsed = globalSeasonSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
+  if (parsed.data.endDate < parsed.data.startDate) {
+    return res.status(400).json({ error: "تاريخ النهاية قبل البداية" });
+  }
+
+  const [row] = await db.insert(globalSeasonsTable).values(parsed.data).returning();
+  return res.status(201).json(row);
+});
+
+router.put("/global-seasons/:id", requirePlatformSettingsAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "معرّف غير صحيح" });
+
+  const parsed = globalSeasonSchema.partial().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
+
+  const [current] = await db.select().from(globalSeasonsTable).where(eq(globalSeasonsTable.id, id)).limit(1);
+  if (!current) return res.status(404).json({ error: "الموسم غير موجود" });
+  const nextStartDate = parsed.data.startDate ?? current.startDate;
+  const nextEndDate = parsed.data.endDate ?? current.endDate;
+  if (nextEndDate < nextStartDate) {
+    return res.status(400).json({ error: "تاريخ النهاية قبل البداية" });
+  }
+
+  const [row] = await db.update(globalSeasonsTable)
+    .set(parsed.data)
+    .where(eq(globalSeasonsTable.id, id))
+    .returning();
+  return res.json(row);
+});
+
+router.delete("/global-seasons/:id", requirePlatformSettingsAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "معرّف غير صحيح" });
+  const deleted = await db.delete(globalSeasonsTable)
+    .where(eq(globalSeasonsTable.id, id))
+    .returning({ id: globalSeasonsTable.id });
+  if (deleted.length === 0) return res.status(404).json({ error: "الموسم غير موجود" });
+  return res.json({ ok: true });
+});
 
 /* ── Access Check ─────────────────────────────────────────── */
 router.get("/access-check", (req, res) => {

@@ -22,6 +22,7 @@ export const ADMIN_TAB_PERMISSION: Record<string, AdminPermKey | "__superadmin__
   chalets:               "chaletApprovals",
   submissions:           "chaletApprovals",
   services:              "chaletApprovals",
+  globalSeasons:         "platformSettings",
   platformRevenue:       "__superadmin__",
   serviceCategories:     "platformSettings",
   expenseCategories:     "platformSettings",

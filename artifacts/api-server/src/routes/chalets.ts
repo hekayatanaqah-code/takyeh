@@ -1,6 +1,12 @@
 import { Router, type IRouter } from "express";
 import { db, chaletsTable } from "@workspace/db";
-import { chaletAvailabilityTable, ownerBookingsTable, chaletServicesTable } from "@workspace/db/schema";
+import {
+  chaletAvailabilityTable,
+  ownerBookingsTable,
+  chaletServicesTable,
+  globalSeasonsTable,
+  chaletGlobalSeasonsTable,
+} from "@workspace/db/schema";
 import { eq, lte, gte, and, sql, inArray, isNull, type SQL } from "drizzle-orm";
 import {
   GetChaletsQueryParams,
@@ -449,6 +455,37 @@ router.get("/next-available", async (req, res) => {
   res.json({ cityEmpty: false, chalets });
 });
 
+/* GET /chalets/global-seasons — active centrally managed seasons */
+router.get("/global-seasons", async (req, res) => {
+  const rawSubmissionId = req.query.submissionId;
+  let submissionId: number | undefined;
+  if (rawSubmissionId !== undefined) {
+    if (typeof rawSubmissionId !== "string" || !/^\d+$/.test(rawSubmissionId)) {
+      return res.status(400).json({ error: "submissionId غير صحيح" });
+    }
+    submissionId = Number(rawSubmissionId);
+    if (!Number.isSafeInteger(submissionId) || submissionId <= 0) {
+      return res.status(400).json({ error: "submissionId غير صحيح" });
+    }
+  }
+
+  let rows = await db.select()
+    .from(globalSeasonsTable)
+    .where(eq(globalSeasonsTable.isActive, true))
+    .orderBy(globalSeasonsTable.startDate, globalSeasonsTable.id);
+  if (submissionId !== undefined) {
+    const disabled = await db.select({ globalSeasonId: chaletGlobalSeasonsTable.globalSeasonId })
+      .from(chaletGlobalSeasonsTable)
+      .where(and(
+        eq(chaletGlobalSeasonsTable.submissionId, submissionId),
+        eq(chaletGlobalSeasonsTable.enabled, false),
+      ));
+    const disabledIds = new Set(disabled.map((association) => association.globalSeasonId));
+    rows = rows.filter((season) => !disabledIds.has(season.id));
+  }
+  return res.json(rows);
+});
+
 router.get("/:id", async (req, res) => {
   const parseResult = GetChaletByIdParams.safeParse({ id: req.params.id });
   if (!parseResult.success) {
@@ -519,6 +556,7 @@ router.get("/:id", async (req, res) => {
     fullDayCheckOut: row.fullDayCheckOut ?? null,
     latitude: row.latitude != null ? Number(row.latitude) : null,
     longitude: row.longitude != null ? Number(row.longitude) : null,
+    submissionId: row.submissionId ?? null,
   };
 
   res.json(data);

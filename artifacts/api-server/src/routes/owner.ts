@@ -20,6 +20,8 @@ import {
   ownerNotificationsTable,
   ownerRescheduleLogsTable,
   chaletSeasonsTable,
+  globalSeasonsTable,
+  chaletGlobalSeasonsTable,
   customerNotesTable,
   chaletServicesTable,
   ownerNotificationSettingsTable,
@@ -2467,6 +2469,79 @@ router.post("/availability/bulk", async (req, res) => {
 });
 
 /* ── Chalet Seasons ─────────────────────────────────────────── */
+
+router.get("/global-seasons", async (req, res) => {
+  const ownerIds = await getOwnerIds(req);
+  const rawSubmissionId = req.query.submissionId;
+  if (typeof rawSubmissionId !== "string" || !/^\d+$/.test(rawSubmissionId)) {
+    return res.status(400).json({ error: "submissionId مطلوب" });
+  }
+  const submissionId = Number(rawSubmissionId);
+  if (!Number.isSafeInteger(submissionId) || submissionId <= 0) {
+    return res.status(400).json({ error: "معرّف العقار غير صحيح" });
+  }
+
+  const [submission] = await db.select({ ownerId: chaletSubmissionsTable.ownerId })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.id, submissionId))
+    .limit(1);
+  if (!submission?.ownerId || !ownerIds.includes(submission.ownerId)) return res.status(403).json({ error: "غير مصرح" });
+
+  const seasons = await db.select()
+    .from(globalSeasonsTable)
+    .where(eq(globalSeasonsTable.isActive, true))
+    .orderBy(globalSeasonsTable.startDate, globalSeasonsTable.id);
+  const associations = await db.select({
+    globalSeasonId: chaletGlobalSeasonsTable.globalSeasonId,
+    enabled: chaletGlobalSeasonsTable.enabled,
+  }).from(chaletGlobalSeasonsTable)
+    .where(eq(chaletGlobalSeasonsTable.submissionId, submissionId));
+  const enabledBySeasonId = new Map(associations.map((association) => [association.globalSeasonId, association.enabled]));
+
+  return res.json(seasons.map((season) => ({
+    ...season,
+    enabled: enabledBySeasonId.get(season.id) ?? true,
+  })));
+});
+
+router.patch("/global-seasons/:globalSeasonId", async (req, res) => {
+  const ownerIds = await getOwnerIds(req);
+  const globalSeasonId = Number(req.params.globalSeasonId);
+  if (!Number.isSafeInteger(globalSeasonId) || globalSeasonId <= 0) {
+    return res.status(400).json({ error: "معرّف الموسم غير صحيح" });
+  }
+  const parsed = z.object({
+    submissionId: z.number().int().positive(),
+    enabled: z.boolean(),
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.flatten() });
+
+  const [submission] = await db.select({ ownerId: chaletSubmissionsTable.ownerId })
+    .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.id, parsed.data.submissionId))
+    .limit(1);
+  if (!submission?.ownerId || !ownerIds.includes(submission.ownerId)) return res.status(403).json({ error: "غير مصرح" });
+
+  const [season] = await db.select({ id: globalSeasonsTable.id })
+    .from(globalSeasonsTable)
+    .where(eq(globalSeasonsTable.id, globalSeasonId))
+    .limit(1);
+  if (!season) return res.status(404).json({ error: "الموسم غير موجود" });
+
+  const [association] = await db.insert(chaletGlobalSeasonsTable)
+    .values({
+      submissionId: parsed.data.submissionId,
+      globalSeasonId,
+      enabled: parsed.data.enabled,
+    })
+    .onConflictDoUpdate({
+      target: [chaletGlobalSeasonsTable.submissionId, chaletGlobalSeasonsTable.globalSeasonId],
+      set: { enabled: parsed.data.enabled, updatedAt: new Date() },
+    })
+    .returning();
+
+  return res.json({ ...season, submissionId: parsed.data.submissionId, enabled: association.enabled, updatedAt: association.updatedAt });
+});
 
 router.get("/seasons", async (req, res) => {
   const ownerId = req.user!.id;

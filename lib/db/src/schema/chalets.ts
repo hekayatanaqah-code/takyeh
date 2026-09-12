@@ -589,6 +589,33 @@ export const chaletSeasonsTable = pgTable("chalet_seasons", {
 });
 export type ChaletSeason = typeof chaletSeasonsTable.$inferSelect;
 
+/* ── Centrally managed global seasons ───────────────────────── */
+export const globalSeasonsTable = pgTable("global_seasons", {
+  id: serial("id").primaryKey(),
+  nameAr: text("name_ar").notNull(),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  color: text("color").notNull().default("#D97706"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type GlobalSeason = typeof globalSeasonsTable.$inferSelect;
+export type InsertGlobalSeason = typeof globalSeasonsTable.$inferInsert;
+
+export const chaletGlobalSeasonsTable = pgTable("chalet_global_seasons", {
+  id: serial("id").primaryKey(),
+  submissionId: integer("submission_id").references(() => chaletSubmissionsTable.id, { onDelete: "cascade" }).notNull(),
+  globalSeasonId: integer("global_season_id").references(() => globalSeasonsTable.id, { onDelete: "cascade" }).notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => ({
+  submissionGlobalSeasonUnique: uniqueIndex("chalet_global_seasons_submission_global_season_unique")
+    .on(table.submissionId, table.globalSeasonId),
+}));
+export type ChaletGlobalSeason = typeof chaletGlobalSeasonsTable.$inferSelect;
+export type InsertChaletGlobalSeason = typeof chaletGlobalSeasonsTable.$inferInsert;
+
 /* ── Admin Staff (Platform Admins) ──────────────────────────── */
 
 export type AdminPermKey =

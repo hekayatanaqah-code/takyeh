@@ -6,6 +6,7 @@ import { Footer } from "@/components/layout/Footer";
 import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { toGregorianStr } from "@/lib/hijri";
+import { useGlobalSeasons } from "@/hooks/useGlobalSeasons";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -40,7 +41,6 @@ export default function ChaletBooking() {
   const [date, setDate]         = useState("");
   const [period, setPeriod]     = useState<string | null>(null);
   const [termsOpen, setTermsOpen] = useState(false);
-
   const { data: chalet, isLoading, error } = useQuery<DiamondData>({
     queryKey: ["chalet-master", id],
     queryFn: async () => {
@@ -51,6 +51,7 @@ export default function ChaletBooking() {
     staleTime: 0,
     refetchOnMount: true,
   });
+  const { data: globalSeasons = [] } = useGlobalSeasons(chalet?.submissionId ?? undefined);
 
   if (isLoading) {
     return (
@@ -185,6 +186,7 @@ export default function ChaletBooking() {
                   minDate={toGregorianStr(new Date())}
                   placeholder="اختر تاريخ الحجز"
                   mode="gregorian"
+                   seasons={globalSeasons}
                 />
               </div>
               {date && (

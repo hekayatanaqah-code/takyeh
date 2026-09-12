@@ -422,6 +422,16 @@ interface ChaletSeason {
   createdAt: string;
 }
 
+interface GlobalSeason {
+  id: number;
+  nameAr: string;
+  startDate: string;
+  endDate: string;
+  color: string;
+  isActive: boolean;
+  enabled: boolean;
+}
+
 /* ── Upgrade Popup + Chalets Tab ─────────────── */
 const TIER_PLANS = [
   {
@@ -23110,6 +23120,41 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
     enabled: !!activeSubId,
   });
 
+  const {
+    data: globalSeasons = [],
+    isLoading: globalSeasonsLoading,
+    isError: globalSeasonsError,
+    refetch: refetchGlobalSeasons,
+  } = useQuery<GlobalSeason[]>({
+    queryKey: ["owner", "global-seasons", activeSubId],
+    queryFn: async () => {
+      if (!activeSubId) return [];
+      const r = await apiFetch(`/owner/global-seasons?submissionId=${activeSubId}`);
+      if (!r.ok) throw new Error("تعذّر تحميل المواسم المركزية");
+      return r.json();
+    },
+    enabled: !!activeSubId,
+  });
+
+  const globalSeasonMutation = useMutation({
+    mutationFn: async ({ id, enabled }: { id: number; enabled: boolean }) => {
+      if (!activeSubId) throw new Error("لم يتم اختيار العقار");
+      const r = await apiFetch(`/owner/global-seasons/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ submissionId: activeSubId, enabled }),
+      });
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        throw new Error(body.error ?? "تعذّر تحديث الموسم");
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["owner", "global-seasons", activeSubId] });
+      toast({ title: "تم تحديث الموسم للعقار" });
+    },
+    onError: (error: Error) => toast({ title: error.message, variant: "destructive" }),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiFetch(`/owner/seasons/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["owner", "seasons"] }); toast({ title: "تم حذف الموسم" }); },
@@ -23201,6 +23246,65 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
           </SelectContent>
         </Select>
       )}
+
+      {/* Centrally managed seasons — enabled separately for each property */}
+      <section className="rounded-2xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/60 dark:bg-amber-950/20 p-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+            <Globe className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div>
+            <h4 className="font-bold text-foreground">المواسم المركزية من الإدارة</h4>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              فعّل الموسم لهذا العقار ليُطبّق في تقويم الحجوزات. هذه المواسم تُدار مركزياً ولا يمكن تعديل بياناتها من هنا.
+            </p>
+          </div>
+        </div>
+        {globalSeasonsLoading ? (
+          <div className="flex items-center justify-center py-5 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin ml-2" /> جارٍ تحميل المواسم المركزية...
+          </div>
+        ) : globalSeasonsError ? (
+          <div className="rounded-xl border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-950/20 px-3 py-3 flex items-center justify-between gap-3">
+            <p className="text-xs text-red-700 dark:text-red-300">تعذّر تحميل المواسم المركزية.</p>
+            <Button size="sm" variant="outline" onClick={() => refetchGlobalSeasons()} className="h-8 text-xs">إعادة المحاولة</Button>
+          </div>
+        ) : globalSeasons.length === 0 ? (
+          <p className="text-xs text-muted-foreground bg-background/50 rounded-xl px-3 py-4 text-center">
+            لا توجد مواسم مركزية متاحة حالياً.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {globalSeasons.map((season) => (
+              <div key={season.id} className="flex items-center gap-3 rounded-xl border border-border bg-background/70 px-3 py-3">
+                <span
+                  className="w-3 h-10 rounded-full shrink-0"
+                  style={{ backgroundColor: season.color || "#f59e0b" }}
+                  aria-hidden="true"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-foreground">{season.nameAr}</p>
+                    {!season.isActive && <span className="text-[10px] text-muted-foreground border border-border rounded-full px-2 py-0.5">غير نشط</span>}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {season.startDate.split("T")[0].split("-").reverse().join("/")} → {season.endDate.split("T")[0].split("-").reverse().join("/")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-muted-foreground">{season.enabled ? "مفعّل" : "غير مفعّل"}</span>
+                  <Switch
+                    checked={season.enabled}
+                    onCheckedChange={(enabled) => globalSeasonMutation.mutate({ id: season.id, enabled })}
+                    disabled={globalSeasonMutation.isPending || !season.isActive}
+                    aria-label={`تفعيل ${season.nameAr}`}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Seasons list */}
       {isLoading ? (

@@ -7,6 +7,7 @@ import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { resolveAmenity } from "@/lib/amenityUtils";
 import { toGregorianStr } from "@/lib/hijri";
+import { useGlobalSeasons } from "@/hooks/useGlobalSeasons";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -55,7 +56,6 @@ export default function ChaletMasterView() {
   const [termsOpen, setTermsOpen]   = useState(false);
   const [bookDate,  setBookDate]    = useState("");
   const [period,    setPeriod]      = useState<string | null>(null);
-
   const { data: chalet, isLoading, error } = useQuery<DiamondData>({
     queryKey: ["chalet-master", id],
     queryFn: async () => {
@@ -66,6 +66,7 @@ export default function ChaletMasterView() {
     staleTime: 0,
     refetchOnMount: true,
   });
+  const { data: globalSeasons = [] } = useGlobalSeasons(chalet?.submissionId ?? undefined);
 
   const { data: amenitiesCatalog = [] } = useQuery<Array<{ key: string; labelAr: string }>>({
     queryKey: ["catalog", "amenities"],
@@ -380,6 +381,7 @@ export default function ChaletMasterView() {
                     placeholder="اختر تاريخ الحجز"
                     minDate={toGregorianStr(new Date())}
                     mode="gregorian"
+                    seasons={globalSeasons}
                     className={`min-h-[46px] rounded-xl px-3.5 text-sm transition-colors ${
                       bookDate
                         ? "border-2 border-green-600 bg-white text-gray-900"

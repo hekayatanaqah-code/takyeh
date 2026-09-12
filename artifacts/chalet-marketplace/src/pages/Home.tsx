@@ -5,6 +5,7 @@ import { MapPin, Search, Calendar, Plus, Minus, Tag, Shield, Clock, Zap, Globe, 
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { toGregorianStr } from "@/lib/hijri";
 import { useQuery } from "@tanstack/react-query";
+import { useGlobalSeasons } from "@/hooks/useGlobalSeasons";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
@@ -108,6 +109,7 @@ export default function Home() {
   const [svcCity, setSvcCity]               = useState<string>("");
   const [svcDate, setSvcDate]               = useState<string>(_initDate);
   const [svcSearchError, setSvcSearchError] = useState<string>("");
+  const { data: globalSeasons = [] } = useGlobalSeasons();
 
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
@@ -483,6 +485,7 @@ export default function Home() {
                         placeholder="يوم الحجز"
                         label="يوم الحجز"
                         minDate={todayStr}
+                        seasons={globalSeasons}
                       />
                     </div>
                   </div>

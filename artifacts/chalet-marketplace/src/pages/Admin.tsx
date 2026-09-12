@@ -21,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -196,6 +197,15 @@ function apiFetch(path: string, opts?: RequestInit) {
     headers: { "Content-Type": "application/json", ...(opts?.headers ?? {}) },
     ...opts,
   });
+}
+
+interface GlobalSeason {
+  id: number;
+  nameAr: string;
+  startDate: string;
+  endDate: string;
+  color: string;
+  isActive: boolean;
 }
 
 /* ── Arabic number formatter ──────────────────── */
@@ -7861,6 +7871,223 @@ function WaSubscribersTab() {
   );
 }
 
+/* ── Centrally managed seasons ───────────────────── */
+function GlobalSeasonsTab() {
+  const qc = useQueryClient();
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [nameAr, setNameAr] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [color, setColor] = useState("#f59e0b");
+  const [formError, setFormError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+
+  const seasonsQuery = useQuery<GlobalSeason[]>({
+    queryKey: ["admin", "global-seasons"],
+    queryFn: async () => {
+      const response = await apiFetch("/admin/global-seasons");
+      if (!response.ok) throw new Error("تعذّر تحميل المواسم المركزية");
+      return response.json();
+    },
+  });
+  const seasons = seasonsQuery.data ?? [];
+
+  function resetForm() {
+    setFormOpen(false);
+    setEditingId(null);
+    setNameAr("");
+    setStartDate("");
+    setEndDate("");
+    setColor("#f59e0b");
+    setFormError("");
+  }
+
+  function openEdit(season: GlobalSeason) {
+    setEditingId(season.id);
+    setNameAr(season.nameAr);
+    setStartDate(season.startDate.split("T")[0]);
+    setEndDate(season.endDate.split("T")[0]);
+    setColor(season.color || "#f59e0b");
+    setFormError("");
+    setFormOpen(true);
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async (payload: { id: number | null; nameAr: string; startDate: string; endDate: string; color: string; isActive: boolean }) => {
+      const response = await apiFetch(payload.id ? `/admin/global-seasons/${payload.id}` : "/admin/global-seasons", {
+        method: payload.id ? "PUT" : "POST",
+        body: JSON.stringify({
+          nameAr: payload.nameAr,
+          startDate: payload.startDate,
+          endDate: payload.endDate,
+          color: payload.color,
+          isActive: payload.isActive,
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "تعذّر حفظ الموسم");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "global-seasons"] });
+      resetForm();
+    },
+    onError: (error: Error) => setFormError(error.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await apiFetch(`/admin/global-seasons/${id}`, { method: "DELETE" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "تعذّر حذف الموسم");
+      }
+    },
+    onSuccess: () => {
+      setDeleteError("");
+      qc.invalidateQueries({ queryKey: ["admin", "global-seasons"] });
+    },
+    onError: (error: Error) => setDeleteError(error.message),
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ season, isActive }: { season: GlobalSeason; isActive: boolean }) => {
+      const response = await apiFetch(`/admin/global-seasons/${season.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          nameAr: season.nameAr,
+          startDate: season.startDate,
+          endDate: season.endDate,
+          color: season.color,
+          isActive,
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "تعذّر تحديث حالة الموسم");
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "global-seasons"] }),
+    onError: (error: Error) => setDeleteError(error.message),
+  });
+
+  function submitForm() {
+    setFormError("");
+    if (!nameAr.trim() || !startDate || !endDate) {
+      setFormError("يرجى إدخال اسم الموسم وتاريخ البداية والنهاية");
+      return;
+    }
+    if (endDate < startDate) {
+      setFormError("يجب أن يكون تاريخ النهاية بعد تاريخ البداية");
+      return;
+    }
+    const existing = editingId == null ? undefined : seasons.find((season) => season.id === editingId);
+    saveMutation.mutate({
+      id: editingId,
+      nameAr: nameAr.trim(),
+      startDate,
+      endDate,
+      color: color || "#f59e0b",
+      isActive: existing?.isActive ?? true,
+    });
+  }
+
+  return (
+    <div className="space-y-6" dir="rtl">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-amber-400" />
+            المواسم والأعياد
+          </h2>
+          <p className="text-sm text-slate-400 mt-1">أنشئ مواسم مركزية تظهر للمالكين ويمكن لكل عقار تفعيلها أو تعطيلها.</p>
+        </div>
+        {!formOpen && (
+          <Button onClick={() => { resetForm(); setFormOpen(true); }} className="bg-amber-600 hover:bg-amber-500 text-white gap-2">
+            <Plus className="w-4 h-4" /> إضافة موسم
+          </Button>
+        )}
+      </div>
+
+      {formOpen && (
+        <div className="rounded-2xl border border-slate-700 bg-slate-800/70 p-5">
+          <h3 className="font-semibold text-white mb-4">{editingId ? "تعديل الموسم" : "إضافة موسم مركزي"}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-sm text-slate-300">اسم الموسم</label>
+              <Input value={nameAr} onChange={(event) => setNameAr(event.target.value)} placeholder="مثال: إجازة الصيف" className="bg-slate-900 border-slate-600 text-white" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-300">تاريخ البداية</label>
+              <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-300">تاريخ النهاية</label>
+              <Input type="date" value={endDate} min={startDate || undefined} onChange={(event) => setEndDate(event.target.value)} className="bg-slate-900 border-slate-600 text-white" />
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-sm text-slate-300">لون الموسم</label>
+              <div className="flex items-center gap-3">
+                <input type="color" value={color} onChange={(event) => setColor(event.target.value)} className="h-10 w-14 rounded-lg border border-slate-600 bg-slate-900 p-1 cursor-pointer" />
+                <Input value={color} onChange={(event) => setColor(event.target.value)} placeholder="#f59e0b" className="max-w-40 bg-slate-900 border-slate-600 text-white" />
+              </div>
+            </div>
+          </div>
+          {formError && <p className="text-sm text-red-400 mt-3">{formError}</p>}
+          <div className="flex gap-2 justify-end mt-5">
+            <Button variant="ghost" onClick={resetForm} className="text-slate-300">إلغاء</Button>
+            <Button onClick={submitForm} disabled={saveMutation.isPending} className="bg-amber-600 hover:bg-amber-500 text-white">
+              {saveMutation.isPending && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+              حفظ الموسم
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {deleteError && <div className="rounded-xl border border-red-800/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">{deleteError}</div>}
+      {seasonsQuery.isLoading ? (
+        <div className="rounded-2xl border border-slate-700 bg-slate-800/50 py-14 text-center text-slate-400">
+          <Loader2 className="w-7 h-7 animate-spin mx-auto mb-2 text-amber-400" /> جارٍ تحميل المواسم...
+        </div>
+      ) : seasonsQuery.isError ? (
+        <div className="rounded-2xl border border-red-800/60 bg-red-950/20 py-12 text-center">
+          <p className="text-red-300 mb-3">{seasonsQuery.error instanceof Error ? seasonsQuery.error.message : "تعذّر تحميل المواسم"}</p>
+          <Button variant="outline" onClick={() => seasonsQuery.refetch()} className="border-slate-600 text-slate-200">إعادة المحاولة</Button>
+        </div>
+      ) : seasons.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-800/30 py-14 text-center">
+          <Calendar className="w-9 h-9 mx-auto mb-3 text-slate-600" />
+          <p className="text-slate-300">لا توجد مواسم مركزية بعد</p>
+          <p className="text-sm text-slate-500 mt-1">أضف موسمًا ليظهر للمالكين في لوحة التحكم.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {seasons.map((season) => (
+            <div key={season.id} className="rounded-2xl border border-slate-700 bg-slate-800/60 p-4 flex items-center gap-4">
+              <span className="w-11 h-11 rounded-xl shrink-0 border border-white/10" style={{ backgroundColor: season.color || "#f59e0b" }} />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-white">{season.nameAr}</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {season.startDate.split("T")[0].split("-").reverse().join("/")} ← {season.endDate.split("T")[0].split("-").reverse().join("/")}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`text-xs ${season.isActive ? "text-emerald-400" : "text-slate-500"}`}>{season.isActive ? "نشط" : "متوقف"}</span>
+                <Switch checked={season.isActive} onCheckedChange={(isActive) => toggleMutation.mutate({ season, isActive })} disabled={toggleMutation.isPending} />
+                <Button variant="ghost" size="icon" onClick={() => openEdit(season)} className="text-slate-300 hover:text-white"><Edit2 className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" onClick={() => { if (window.confirm("هل تريد حذف هذا الموسم؟")) deleteMutation.mutate(season.id); }} disabled={deleteMutation.isPending} className="text-red-400 hover:text-red-300"><Trash2 className="w-4 h-4" /></Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const ALL_TABS = [
   { id: "overview",                label: "الإحصائيات",            icon: BarChart3 },
   { id: "chalets",                 label: "قائمة العقارات",        icon: Home },
@@ -7868,6 +8095,7 @@ const ALL_TABS = [
   { id: "partnerApplications",     label: "طلبات الملاك",          icon: Users },
   { id: "platformRevenue",         label: "ميزانية المنصة",        icon: TrendingUp },
   { id: "services",                label: "خدمات المناسبات",       icon: Wrench },
+  { id: "globalSeasons",           label: "المواسم والأعياد",       icon: Calendar },
   { id: "serviceCategories",       label: "فئات الخدمات",          icon: Tag },
   { id: "expenseCategories",       label: "فئات المصروفات",        icon: Tag },
   { id: "locations",               label: "المدن والأحياء",        icon: Building2 },
@@ -7898,7 +8126,7 @@ const ADMIN_NAV_GROUPS: Array<{
   { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
   { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "serviceCategories", "amenities", "locations"] },
   { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "ownerInbox", "adminStaff"] },
-  { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "reviews", "waSubscribers", "services"] },
+  { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "reviews", "waSubscribers", "services", "globalSeasons"] },
   { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
   { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "communicationSettings", "contactInquiries", "termsManagement", "sectionGuides"] },
 ];
@@ -9096,6 +9324,7 @@ export default function Admin() {
         {activeTab === "partnerApplications" && <PartnerApplicationsTab />}
         {activeTab === "platformRevenue"      && <PlatformRevenueTab />}
         {activeTab === "services"             && <ServicesTab />}
+        {activeTab === "globalSeasons"        && <GlobalSeasonsTab />}
         {activeTab === "serviceCategories"   && <ServiceCategoriesTab />}
         {activeTab === "expenseCategories"   && <ExpenseCategoriesTab />}
         {activeTab === "locations"           && <LocationsTab />}

@@ -16,6 +16,7 @@ import {
 import { resolveAmenity } from "@/lib/amenityUtils";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { toGregorianStr } from "@/lib/hijri";
+import { useGlobalSeasons } from "@/hooks/useGlobalSeasons";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -39,6 +40,7 @@ function extractCoords(url?: string | null) {
 
 /* ─── shared data type ─── */
 export interface DiamondData {
+  submissionId?: number | null;
   id?: number;
   nameAr: string;
   descriptionAr?: string | null;
@@ -149,6 +151,7 @@ function BookingPanel({ data }: { data: DiamondData }) {
   const [period, setPeriod] = useState<string | null>(null);
   const [open, setOpen]     = useState(false);
   const [, setLocation]     = useLocation();
+  const { data: globalSeasons = [] } = useGlobalSeasons(data.submissionId ?? undefined);
 
   const terms = (data.termsAndConditions ?? "").split("\n").map(t => t.trim()).filter(Boolean);
 
@@ -263,6 +266,7 @@ function BookingPanel({ data }: { data: DiamondData }) {
             placeholder="اختر تاريخ الحجز"
             minDate={toGregorianStr(new Date())}
             mode="gregorian"
+            seasons={globalSeasons}
             className="w-full min-h-10 rounded-xl border border-stone-700 bg-stone-800 px-3 text-sm text-stone-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
           />
           {date && (
