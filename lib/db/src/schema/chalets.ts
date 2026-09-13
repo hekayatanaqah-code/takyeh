@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean, jsonb, varchar, doublePrecision, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean, jsonb, varchar, doublePrecision, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -244,7 +244,10 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   contractSignerId: text("contract_signer_id"),
   contractSignatureDataUrl: text("contract_signature_data_url"),
   contractSignedAt: timestamp("contract_signed_at", { withTimezone: true }),
-});
+}, (table) => ({
+  bookingDateIdx: index("owner_bookings_booking_date_idx").on(table.bookingDate),
+  cancelledAtIdx: index("owner_bookings_cancelled_at_idx").on(table.cancelledAt),
+}));
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;
 
 /* ── Owner Refunds (manual refunds issued by owner on any booking) ── */
@@ -396,7 +399,9 @@ export const ownerSubscriptionsTable = pgTable("owner_subscriptions", {
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   paymentStatus: text("payment_status").notNull().default("paid"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  expiresStatusIdx: index("owner_subscriptions_expires_status_idx").on(table.expiresAt, table.status),
+}));
 export type OwnerSubscription = typeof ownerSubscriptionsTable.$inferSelect;
 
 /* ── Subscription Plans (admin-managed) ─────────────────── */
@@ -861,7 +866,10 @@ export const ownerSupportRequestsTable = pgTable("owner_support_requests", {
   adminReplyAt: timestamp("admin_reply_at", { withTimezone: true }),
   isReadByOwner: boolean("is_read_by_owner").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  statusCreatedIdx: index("owner_support_requests_status_created_idx").on(table.status, table.createdAt),
+  ownerCreatedIdx: index("owner_support_requests_owner_created_idx").on(table.ownerId, table.createdAt),
+}));
 export type OwnerSupportRequest = typeof ownerSupportRequestsTable.$inferSelect;
 
 /* ── Contact Inquiries (submitted via Contact Us page) ───────── */
@@ -872,9 +880,39 @@ export const contactInquiriesTable = pgTable("contact_inquiries", {
   email: text("email"),
   message: text("message").notNull(),
   status: text("status").notNull().default("new"),
+  adminNotes: text("admin_notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => ({
+  statusUpdatedIdx: index("contact_inquiries_status_updated_idx").on(table.status, table.updatedAt),
+  createdAtIdx: index("contact_inquiries_created_at_idx").on(table.createdAt),
+}));
 export type ContactInquiry = typeof contactInquiriesTable.$inferSelect;
+
+/* ── Admin Audit Log ──────────────────────────────────────────
+ * The first four columns intentionally retain the names used by the
+ * pre-existing admin_audit_logs table. The remaining columns are additive,
+ * allowing older installations to migrate without losing existing entries.
+ */
+export const adminAuditLogsTable = pgTable("admin_audit_logs", {
+  id: serial("id").primaryKey(),
+  actorId: text("admin_id"),
+  actorName: text("admin_name"),
+  action: text("action").notNull(),
+  method: text("method"),
+  path: text("path"),
+  entity: text("entity"),
+  entityId: text("entity_id"),
+  targetOwnerId: text("target_owner_id"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  createdAtIdx: index("admin_audit_logs_created_at_idx").on(table.createdAt),
+  actorIdx: index("admin_audit_logs_actor_idx").on(table.actorId),
+  actionIdx: index("admin_audit_logs_action_idx").on(table.action),
+  entityIdx: index("admin_audit_logs_entity_idx").on(table.entity, table.entityId),
+}));
+export type AdminAuditLog = typeof adminAuditLogsTable.$inferSelect;
 
 /* ── Booking Payments / Installments ────────────────────────── */
 export const bookingPaymentsTable = pgTable("booking_payments", {

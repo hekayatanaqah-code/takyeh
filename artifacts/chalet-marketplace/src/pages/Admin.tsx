@@ -62,6 +62,10 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { ChaletDiamondContent } from "@/components/chalet/ChaletDiamondContent";
+import { OverviewTab } from "./admin/OverviewTab";
+import { CentralSettingsTab } from "./admin/CentralSettingsTab";
+import { ContactInquiriesTab } from "./admin/ContactInquiriesTab";
+import { AuditLogsTab } from "./admin/AuditLogsTab";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const API = `${BASE}/api`;
@@ -287,13 +291,13 @@ function AdminPricingGrid({ s }: { s: Submission }) {
                   اليوم
                 </th>
                 <th style={{ padding: "10px 10px", textAlign: "center", fontSize: 12, color: "#92400e", fontWeight: 700, borderBottom: "1px solid #334155" }}>
-                  🌅 صباحي
+                   صباحي
                 </th>
                 <th style={{ padding: "10px 10px", textAlign: "center", fontSize: 12, color: "#3730a3", fontWeight: 700, borderBottom: "1px solid #334155" }}>
-                  🌙 مسائي
+                   مسائي
                 </th>
                 <th style={{ padding: "10px 10px", textAlign: "center", fontSize: 12, color: "#065f46", fontWeight: 700, borderBottom: "1px solid #334155" }}>
-                  ☀️ يوم كامل
+                  ️ يوم كامل
                 </th>
               </tr>
             </thead>
@@ -311,7 +315,7 @@ function AdminPricingGrid({ s }: { s: Submission }) {
                     }}
                   >
                     <td style={{ padding: "10px 16px", fontSize: 13, fontWeight: isWeekend ? 700 : 500, color: isWeekend ? "#fcd34d" : "#cbd5e1", whiteSpace: "nowrap" }}>
-                      {label}{isWeekend ? " 🎉" : ""}
+                      {label}{isWeekend ? " " : ""}
                     </td>
                     {([morning, evening, fullday] as const).map((val, pIdx) => (
                       <td key={pIdx} style={{ padding: "10px 10px", textAlign: "center" }}>
@@ -337,13 +341,13 @@ function AdminPricingGrid({ s }: { s: Submission }) {
       {(s.morningCheckIn || s.morningCheckOut || s.eveningCheckIn || s.eveningCheckOut || s.fullDayCheckIn || s.fullDayCheckOut) && (
         <div className="border-t border-slate-700/60 px-5 py-3 flex flex-wrap gap-3 text-xs text-slate-400">
           {(s.morningCheckIn || s.morningCheckOut) && (
-            <span>🌅 صباحي: {[s.morningCheckIn && `دخول ${s.morningCheckIn}`, s.morningCheckOut && `خروج ${s.morningCheckOut}`].filter(Boolean).join(" — ")}</span>
+            <span> صباحي: {[s.morningCheckIn && `دخول ${s.morningCheckIn}`, s.morningCheckOut && `خروج ${s.morningCheckOut}`].filter(Boolean).join(" — ")}</span>
           )}
           {(s.eveningCheckIn || s.eveningCheckOut) && (
-            <span>🌙 مسائي: {[s.eveningCheckIn && `دخول ${s.eveningCheckIn}`, s.eveningCheckOut && `خروج ${s.eveningCheckOut}`].filter(Boolean).join(" — ")}</span>
+            <span> مسائي: {[s.eveningCheckIn && `دخول ${s.eveningCheckIn}`, s.eveningCheckOut && `خروج ${s.eveningCheckOut}`].filter(Boolean).join(" — ")}</span>
           )}
           {(s.fullDayCheckIn || s.fullDayCheckOut) && (
-            <span>☀️ يوم كامل: {[s.fullDayCheckIn && `دخول ${s.fullDayCheckIn}`, s.fullDayCheckOut && `خروج ${s.fullDayCheckOut}`].filter(Boolean).join(" — ")}</span>
+            <span>️ يوم كامل: {[s.fullDayCheckIn && `دخول ${s.fullDayCheckIn}`, s.fullDayCheckOut && `خروج ${s.fullDayCheckOut}`].filter(Boolean).join(" — ")}</span>
           )}
         </div>
       )}
@@ -384,7 +388,7 @@ function SubmissionReviewModal({
   /* ── Category approval state ── */
   const [showCatApprove, setShowCatApprove] = useState(false);
   const [catNameOverride, setCatNameOverride] = useState("");
-  const [catEmoji, setCatEmoji] = useState("🏠");
+  const [catEmoji, setCatEmoji] = useState("");
   const [showCatReassign, setShowCatReassign] = useState(false);
   const [reassignCat, setReassignCat] = useState("");
   const [reassignNote, setReassignNote] = useState("");
@@ -630,11 +634,11 @@ function SubmissionReviewModal({
                   <div className="flex gap-2">
                     <Button size="sm" onClick={() => { setCatNameOverride(s.suggestedCategoryName ?? ""); setShowCatApprove(true); }}
                       className="bg-green-700 hover:bg-green-600 text-white text-xs font-bold flex-1">
-                      ✅ إضافة الفئة وقبولها
+                       إضافة الفئة وقبولها
                     </Button>
                     <Button size="sm" onClick={() => setShowCatReassign(true)}
                       className="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold flex-1">
-                      🔄 إعادة التعيين لفئة موجودة
+                       إعادة التعيين لفئة موجودة
                     </Button>
                   </div>
                 </div>
@@ -674,7 +678,7 @@ function SubmissionReviewModal({
                   title={s.status === "approved" ? "الطلب مقبول بالفعل" : undefined}
                 >
                   <CheckCircle className="w-4 h-4 ml-2" />
-                  {s.status === "approved" ? "مقبول بالفعل ✓" : "قبول الطلب"}
+                  {s.status === "approved" ? "مقبول بالفعل " : "قبول الطلب"}
                 </Button>
                 {/* Revision */}
                 <Button
@@ -743,7 +747,7 @@ function SubmissionReviewModal({
                 value={catEmoji}
                 onChange={(e) => setCatEmoji(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                placeholder="🏠"
+                placeholder=""
               />
             </div>
             <div className="flex gap-2 pt-2">
@@ -1382,7 +1386,7 @@ function DeleteSafeModal({
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div className="bg-red-950/30 border border-red-800/50 rounded-xl p-3 text-sm text-red-200">
-            ⚠️ سيتم حذف <span className="font-bold text-white">{target.name}</span> بشكل ناعم — يُخفى من كل الواجهات مع الاحتفاظ بالبيانات للتقارير والعقود.
+            ️ سيتم حذف <span className="font-bold text-white">{target.name}</span> بشكل ناعم — يُخفى من كل الواجهات مع الاحتفاظ بالبيانات للتقارير والعقود.
           </div>
           <div className="space-y-1.5">
             <label className="text-sm text-slate-300 font-medium block">سبب الحذف <span className="text-red-400">*</span></label>
@@ -1650,7 +1654,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
             onClick={() => { setSearch(""); setCityFilter(""); setDistrictFilter(""); setTypeFilter("all"); }}
             className="mr-auto text-slate-500 hover:text-white transition-colors"
           >
-            مسح الكل ✕
+            مسح الكل
           </button>
         </div>
       )}
@@ -1745,7 +1749,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                       const expiryStr = daysLeft !== null
                         ? (daysLeft < 0 ? `انتهى منذ ${toAr(Math.abs(daysLeft))} يوم` : `يتبقى ${toAr(daysLeft)} يوم`)
                         : "غير محدّد";
-                      const msg = `السلام عليكم ${owner.ownerName}،\nنُذكّركم من فريق تكية أن اشتراككم في المنصة ${expiryStr}. يُرجى التواصل معنا لتجديد الاشتراك والاستمرار في الاستفادة من كافة المميزات.\nشكراً لثقتكم 🌟`;
+                      const msg = `السلام عليكم ${owner.ownerName}،\nنُذكّركم من فريق تكية أن اشتراككم في المنصة ${expiryStr}. يُرجى التواصل معنا لتجديد الاشتراك والاستمرار في الاستفادة من كافة المميزات.\nشكراً لثقتكم `;
                       const waLink = `https://wa.me/${intlNum}?text=${encodeURIComponent(msg)}`;
                       return (
                         <a
@@ -1839,9 +1843,9 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
 
 /* ── Services Tab ─────────────────────────────── */
 const SERVICE_CATEGORIES = [
-  { value: "bounce_houses",       label: "نطيطات",      emoji: "🎪" },
-  { value: "ice_cream",           label: "آيس كريم",    emoji: "🍦" },
-  { value: "productive_families", label: "أسر منتجة",  emoji: "🎀" },
+  { value: "bounce_houses",       label: "نطيطات",      emoji: "" },
+  { value: "ice_cream",           label: "آيس كريم",    emoji: "" },
+  { value: "productive_families", label: "أسر منتجة",  emoji: "" },
 ] as const;
 
 interface ServiceFormData {
@@ -2152,7 +2156,7 @@ function ServicesTab() {
 function CategoriesTab() {
   const qc = useQueryClient();
   const [newName, setNewName] = useState("");
-  const [newEmoji, setNewEmoji] = useState("🏠");
+  const [newEmoji, setNewEmoji] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   interface Category { id: number; nameAr: string; emoji: string; isActive: boolean; showSectionFilter: boolean }
@@ -2171,7 +2175,7 @@ function CategoriesTab() {
       const r = await apiFetch("/admin/categories", { method: "POST", body: JSON.stringify({ nameAr, emoji }) });
       if (!r.ok) throw new Error("فشل الإضافة");
     },
-    onSuccess: () => { setNewName(""); setNewEmoji("🏠"); qc.invalidateQueries({ queryKey: ["admin", "categories"] }); },
+    onSuccess: () => { setNewName(""); setNewEmoji(""); qc.invalidateQueries({ queryKey: ["admin", "categories"] }); },
   });
 
   const updateEmoji = useMutation({
@@ -2214,7 +2218,7 @@ function CategoriesTab() {
           <Input
             value={newEmoji}
             onChange={(e) => setNewEmoji(e.target.value)}
-            placeholder="🏠"
+            placeholder=""
             className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 w-16 text-center text-xl shrink-0"
           />
           <Input
@@ -2256,7 +2260,7 @@ function CategoriesTab() {
                 <TableRow key={cat.id} className="border-slate-700 hover:bg-slate-800/50">
                   <TableCell>
                     <input
-                      defaultValue={cat.emoji || "🏠"}
+                      defaultValue={cat.emoji || ""}
                       onBlur={(e) => {
                         const val = e.target.value.trim();
                         if (val && val !== cat.emoji) updateEmoji.mutate({ id: cat.id, emoji: val });
@@ -2280,7 +2284,7 @@ function CategoriesTab() {
                       title="تفعيل فلتر الأقسام (قسم / قسمين) في شريط البحث لهذه الفئة"
                       className={`text-xs px-2.5 py-1 rounded-full font-semibold transition-colors ${cat.showSectionFilter ? "bg-amber-800/50 text-amber-400" : "bg-slate-700 text-slate-400"}`}
                     >
-                      {cat.showSectionFilter ? "🔑 مفعّل" : "معطّل"}
+                      {cat.showSectionFilter ? " مفعّل" : "معطّل"}
                     </button>
                   </TableCell>
                   <TableCell>
@@ -2330,7 +2334,7 @@ function ServiceCategoriesTab() {
   const [isDirtyOrder, setIsDirtyOrder] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
 
-  const [newForm, setNewForm] = useState({ key: "", labelAr: "", emoji: "✨" });
+  const [newForm, setNewForm] = useState({ key: "", labelAr: "", emoji: "" });
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ labelAr: "", emoji: "" });
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -2359,7 +2363,7 @@ function ServiceCategoriesTab() {
         body: JSON.stringify({
           key: newForm.key.trim().toLowerCase().replace(/\s+/g, "_"),
           labelAr: newForm.labelAr.trim(),
-          emoji: newForm.emoji.trim() || "✨",
+          emoji: newForm.emoji.trim() || "",
           sortOrder: items.length,
         }),
       });
@@ -2367,7 +2371,7 @@ function ServiceCategoriesTab() {
       return r.json();
     },
     onSuccess: () => {
-      setNewForm({ key: "", labelAr: "", emoji: "✨" });
+      setNewForm({ key: "", labelAr: "", emoji: "" });
       qc.invalidateQueries({ queryKey: ["admin", "service-categories"] });
       qc.invalidateQueries({ queryKey: ["catalog", "service-categories"] });
     },
@@ -2462,7 +2466,7 @@ function ServiceCategoriesTab() {
             disabled={savingOrder}
             className="bg-amber-500 hover:bg-amber-600 text-black font-bold"
           >
-            {savingOrder ? <Loader2 className="w-4 h-4 animate-spin" /> : "💾 حفظ الترتيب"}
+            {savingOrder ? <Loader2 className="w-4 h-4 animate-spin" /> : " حفظ الترتيب"}
           </Button>
         )}
       </div>
@@ -2479,7 +2483,7 @@ function ServiceCategoriesTab() {
             <Input
               value={newForm.emoji}
               onChange={(e) => setNewForm((f) => ({ ...f, emoji: e.target.value }))}
-              placeholder="✨"
+              placeholder=""
               className="bg-slate-900 border-slate-600 text-white text-center text-xl w-full"
             />
           </div>
@@ -2657,7 +2661,7 @@ function ServiceCategoriesTab() {
               سيتم حذف الفئة <strong className="text-white">«{deleteLabel}»</strong> نهائياً.
               {!deleteIsOther && (
                 <span className="block mt-2 p-3 bg-amber-950/50 border border-amber-700/40 rounded-xl text-amber-300 text-sm">
-                  ⚠️ جميع مزودي الخدمة المسجلين ضمن هذه الفئة سيُنقلون تلقائياً إلى فئة <strong>«أخرى»</strong>.
+                  ️ جميع مزودي الخدمة المسجلين ضمن هذه الفئة سيُنقلون تلقائياً إلى فئة <strong>«أخرى»</strong>.
                 </span>
               )}
             </AlertDialogDescription>
@@ -2680,48 +2684,7 @@ function ServiceCategoriesTab() {
 /* ── Site Settings Tab ────────────────────────── */
 const PRESET_COLORS = ["#d97706", "#16a34a", "#2563eb", "#9333ea", "#dc2626", "#0891b2", "#c2410c", "#0f766e"];
 
-async function uploadSettingImage(file: File): Promise<string | null> {
-  const formData = new FormData();
-  formData.append("file", file);
-  const res = await fetch(`${BASE}/api/storage/uploads/process`, { method: "POST", body: formData });
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.url ?? null;
-}
 
-function SocialToggleRow({
-  label, icon, urlKey, showKey, form, setForm,
-}: {
-  label: string; icon: React.ReactNode; urlKey: string; showKey: string;
-  form: Record<string, string>; setForm: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-}) {
-  const enabled = form[showKey] !== "0";
-  return (
-    <div className={`rounded-xl border p-4 space-y-3 transition-colors ${enabled ? "border-amber-500/40 bg-slate-900/60" : "border-slate-700 bg-slate-900/20 opacity-60"}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-slate-200 font-medium">
-          {icon}
-          <span>{label}</span>
-        </div>
-        <button
-          onClick={() => setForm((f) => ({ ...f, [showKey]: enabled ? "0" : "1" }))}
-          className={`relative w-12 h-6 rounded-full transition-colors ${enabled ? "bg-amber-500" : "bg-slate-600"}`}
-        >
-          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${enabled ? "right-0.5" : "left-0.5"}`} />
-        </button>
-      </div>
-      {enabled && (
-        <Input
-          value={form[urlKey] ?? ""}
-          onChange={(e) => setForm((f) => ({ ...f, [urlKey]: e.target.value }))}
-          placeholder="https://..."
-          className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 text-sm"
-          dir="ltr"
-        />
-      )}
-    </div>
-  );
-}
 
 const FEAT_ICONS: { key: string; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "map-pin",      label: "موقع",    Icon: MapPin },
@@ -2740,688 +2703,7 @@ const FEAT_ICONS: { key: string; label: string; Icon: React.ComponentType<{ clas
   { key: "search",       label: "بحث",     Icon: Eye },
 ];
 
-function IconPickerField({
-  fieldKey, form, setForm,
-}: { fieldKey: string; form: Record<string, string>; setForm: React.Dispatch<React.SetStateAction<Record<string, string>>> }) {
-  const selected = form[fieldKey];
-  return (
-    <div className="space-y-1.5">
-      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">الأيقونة</label>
-      <div className="flex flex-wrap gap-2">
-        {FEAT_ICONS.map(({ key, label, Icon }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setForm((f) => ({ ...f, [fieldKey]: key }))}
-            title={label}
-            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl border text-xs transition-all ${
-              selected === key
-                ? "border-amber-400 bg-amber-500/20 text-amber-300"
-                : "border-slate-600 bg-slate-900/70 text-slate-400 hover:border-slate-400"
-            }`}
-          >
-            <Icon className="w-5 h-5" />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-function SettingsTab() {
-  const qc = useQueryClient();
-  const [form, setForm] = useState<Record<string, string>>({});
-  const [saved, setSaved]                     = useState(false);
-  const [logoUploading, setLogoUploading]     = useState(false);
-  const [heroBgUploading, setHeroBgUploading] = useState(false);
-
-  const { data: settings, isLoading } = useQuery<Record<string, string>>({
-    queryKey: ["admin", "settings"],
-    queryFn: async () => {
-      const r = await apiFetch("/admin/settings");
-      if (!r.ok) throw new Error("فشل التحميل");
-      return r.json();
-    },
-  });
-
-  useEffect(() => { if (settings) setForm(settings); }, [settings]);
-
-  const saveSettings = useMutation({
-    mutationFn: async (data: Record<string, string>) => {
-      const r = await apiFetch("/admin/settings", { method: "PATCH", body: JSON.stringify(data) });
-      if (!r.ok) throw new Error("فشل الحفظ");
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin", "settings"] });
-      qc.invalidateQueries({ queryKey: ["siteSettings"] });
-      qc.invalidateQueries({ queryKey: ["page-content"] });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    },
-  });
-
-  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLogoUploading(true);
-    const url = await uploadSettingImage(file);
-    setLogoUploading(false);
-    if (url) setForm((f) => ({ ...f, site_logo_url: `${BASE}${url}` }));
-  }
-
-  async function handleHeroBgUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setHeroBgUploading(true);
-    const url = await uploadSettingImage(file);
-    setHeroBgUploading(false);
-    if (url) setForm((f) => ({ ...f, hero_bg_url: `${BASE}${url}` }));
-  }
-
-  const pageContentFields = [
-    { key: "about_page_content",   label: "محتوى صفحة «من نحن»",          icon: "ℹ️", path: "/about"    },
-    { key: "faq_page_content",     label: "محتوى صفحة «أسئلة شائعة»",     icon: "❓", path: "/faq"      },
-    { key: "terms_page_content",   label: "محتوى صفحة «شروط الاستخدام»",  icon: "📄", path: "/terms"    },
-    { key: "privacy_page_content", label: "محتوى صفحة «سياسة الخصوصية»",  icon: "🔒", path: "/privacy"  },
-  ];
-
-  if (isLoading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-400 w-6 h-6" /></div>;
-
-  const SaveBtn = ({ label }: { label: string }) => (
-    <Button onClick={() => saveSettings.mutate(form)} disabled={saveSettings.isPending} className="bg-amber-600 hover:bg-amber-700 w-full gap-2">
-      <Save className="w-4 h-4" />
-      {saved ? "✓ تم الحفظ" : saveSettings.isPending ? "جاري الحفظ..." : label}
-    </Button>
-  );
-
-  return (
-    <div className="max-w-2xl space-y-6">
-
-      {/* ══ 0. Branding ══ */}
-      <div className="bg-slate-800 rounded-xl border border-amber-500/40 overflow-hidden">
-        <div className="bg-gradient-to-l from-amber-500/20 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <ImageIcon className="w-5 h-5 text-amber-400" />
-          <h3 className="text-slate-100 font-bold text-lg">الهوية البصرية (Branding)</h3>
-        </div>
-        <div className="p-6 space-y-5">
-          {/* Site Display Name */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">اسم الموقع في القائمة والترويسة</label>
-            <Input value={form.site_display_name ?? ""} onChange={(e) => setForm((f) => ({ ...f, site_display_name: e.target.value }))}
-              placeholder="تكية" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-base font-bold" dir="rtl" />
-            <p className="text-xs text-slate-500">يظهر بجانب الشعار في شريط التنقل وأسفل الصفحة.</p>
-          </div>
-          {/* Logo Upload */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">شعار الموقع (Logo)</label>
-            {form.site_logo_url && (
-              <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-slate-900 border border-slate-600 flex items-center justify-center">
-                <img src={form.site_logo_url} alt="Logo" className="w-full h-full object-contain p-2" />
-                <Button variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, site_logo_url: "" }))}
-                  className="absolute top-1 left-1 text-white bg-black/50 hover:bg-red-600/80 h-6 w-6 p-0 rounded-full"><X className="w-3 h-3" /></Button>
-              </div>
-            )}
-            <div className="flex gap-3 flex-wrap items-center">
-              <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" id="logo-upload-branding" />
-              <label htmlFor="logo-upload-branding" className="cursor-pointer bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm px-4 py-2 rounded-lg border border-slate-600 transition-colors flex items-center gap-2">
-                <ImageIcon className="w-4 h-4" />{logoUploading ? "جاري الرفع..." : "رفع الشعار"}
-              </label>
-              {form.site_logo_url && <span className="text-xs text-green-400 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> تم الرفع</span>}
-            </div>
-          </div>
-          {/* Logo Size */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">حجم الشعار</label>
-            <div className="flex gap-2">
-              {(["sm", "md", "lg"] as const).map((s) => (
-                <button key={s} type="button"
-                  onClick={() => setForm((f) => ({ ...f, logo_size: s }))}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors ${form.logo_size === s ? "bg-amber-600 border-amber-500 text-white" : "bg-slate-900 border-slate-600 text-slate-400 hover:text-white"}`}>
-                  {s === "sm" ? "صغير" : s === "md" ? "متوسط" : "كبير"}
-                </button>
-              ))}
-            </div>
-          </div>
-          <SaveBtn label="حفظ الهوية البصرية" />
-        </div>
-      </div>
-
-      {/* ══ 1. Home Page Content ══ */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-        <div className="bg-gradient-to-l from-amber-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <Home className="w-5 h-5 text-amber-400" />
-          <h3 className="text-slate-100 font-bold text-lg">محتوى الصفحة الرئيسية</h3>
-        </div>
-        <div className="p-6 space-y-5">
-          {/* Hero Line 1 + Line 2 */}
-          <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 space-y-3">
-            <p className="text-xs font-bold text-amber-400 uppercase tracking-wider">العنوان الرئيسي (سطرين)</p>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400">السطر الأول (الكلمة الأولى ملوّنة)</label>
-              <Input value={form.hero_line1 ?? ""} onChange={(e) => setForm((f) => ({ ...f, hero_line1: e.target.value }))}
-                placeholder="تكيّـة .." className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-lg font-bold" dir="rtl" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400">السطر الثاني</label>
-              <Input value={form.hero_line2 ?? ""} onChange={(e) => setForm((f) => ({ ...f, hero_line2: e.target.value }))}
-                placeholder="بوابتك المتكاملة لأجمل الوجهات و الخدمات" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400">لون الكلمة الأولى</label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={form.hero_word_color ?? "#F59E0B"}
-                  onChange={(e) => setForm((f) => ({ ...f, hero_word_color: e.target.value }))}
-                  className="w-10 h-10 rounded-lg cursor-pointer border border-slate-600 bg-transparent p-0.5"
-                />
-                <span className="text-sm font-mono text-slate-300">{form.hero_word_color ?? "#F59E0B"}</span>
-                <span className="text-2xl font-extrabold" style={{ color: form.hero_word_color ?? "#F59E0B" }}>
-                  {(form.hero_line1 ?? "تكيّة").trim().split(/\s+/)[0]}
-                </span>
-              </div>
-            </div>
-            <p className="text-xs text-slate-500">اترك السطرين فارغين لاستخدام العنوان التقليدي (حقل «العنوان الرئيسي» أدناه).</p>
-          </div>
-          {/* Hero Title (legacy single field) */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">العنوان الرئيسي (احتياطي — يُستخدم إن تُركت السطور أعلاه فارغة)</label>
-            <Input value={form.hero_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, hero_title: e.target.value }))}
-              placeholder="اكتشف أجمل الشاليهات في القصيم"
-              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-base" dir="rtl" />
-          </div>
-          {/* Hero Subtitle */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">النص الوصفي (تحت العنوان)</label>
-            <Textarea value={form.hero_subtitle ?? ""} onChange={(e) => setForm((f) => ({ ...f, hero_subtitle: e.target.value }))}
-              placeholder="نوفر لك أفضل تجربة إقامة في أجمل شاليهات المنطقة..."
-              rows={3} className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
-          </div>
-          {/* Hero BG Image */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">صورة خلفية القسم الرئيسي</label>
-            {form.hero_bg_url && (
-              <div className="relative w-full h-32 rounded-xl overflow-hidden bg-slate-900 border border-slate-600">
-                <img src={form.hero_bg_url} alt="Hero BG" className="w-full h-full object-cover" />
-                <Button variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, hero_bg_url: "" }))}
-                  className="absolute top-2 left-2 text-white bg-black/50 hover:bg-red-600/80 h-7 w-7 p-0 rounded-full"><X className="w-3.5 h-3.5" /></Button>
-              </div>
-            )}
-            <div className="flex gap-3">
-              <input type="file" accept="image/*" onChange={handleHeroBgUpload} className="hidden" id="hero-bg-upload" />
-              <label htmlFor="hero-bg-upload" className="cursor-pointer bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm px-4 py-2 rounded-lg border border-slate-600 transition-colors flex items-center gap-2">
-                <ImageIcon className="w-4 h-4" />{heroBgUploading ? "جاري الرفع..." : "رفع صورة الخلفية"}
-              </label>
-              {form.hero_bg_url && <span className="text-xs text-green-400 flex items-center gap-1 self-center"><CheckCircle className="w-3 h-3" /> مرفوعة</span>}
-            </div>
-          </div>
-          <SaveBtn label="حفظ محتوى الصفحة الرئيسية" />
-        </div>
-      </div>
-
-      {/* ══ 2. Features List ══ */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-        <div className="bg-gradient-to-l from-green-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <CheckCircle className="w-5 h-5 text-green-400" />
-          <h3 className="text-slate-100 font-bold text-lg">المميزات الرئيسية</h3>
-          <span className="text-xs text-slate-500 mr-auto">تظهر تحت العنوان الرئيسي في الصفحة</span>
-        </div>
-        <div className="p-6 space-y-4">
-          {[
-            { key: "feature_1", default: "أفضل الشاليهات",     num: "١" },
-            { key: "feature_2", default: "حجز سهل وآمن",       num: "٢" },
-            { key: "feature_3", default: "دعم فني متواصل",      num: "٣" },
-          ].map((f) => (
-            <div key={f.key} className="flex items-center gap-3">
-              <span className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 text-xs font-bold flex items-center justify-center shrink-0">{f.num}</span>
-              <Input value={form[f.key] ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                placeholder={f.default}
-                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-400 flex-1" dir="rtl" />
-            </div>
-          ))}
-          <p className="text-xs text-slate-500 pt-1">اترك الحقل فارغاً لاستخدام النص الافتراضي.</p>
-          <SaveBtn label="حفظ المميزات" />
-        </div>
-      </div>
-
-      {/* ══ 2.5. Bottom Feature Cards ══ */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-        <div className="bg-gradient-to-l from-teal-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <CheckCircle className="w-5 h-5 text-teal-400" />
-          <h3 className="text-slate-100 font-bold text-lg">قسم المميزات السفلي</h3>
-          <span className="text-xs text-slate-500 mr-auto">البطاقات الثلاث في أسفل الصفحة الرئيسية</span>
-        </div>
-        <div className="p-6 space-y-5">
-
-          {/* ─ Card 1 ─ */}
-          <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-teal-500/20 text-teal-400 text-xs font-bold flex items-center justify-center">١</span>
-              <p className="text-xs font-bold text-teal-400 uppercase tracking-wider">البطاقة الأولى</p>
-            </div>
-            <IconPickerField fieldKey="feat_card1_icon" form={form} setForm={setForm} />
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">العنوان</label>
-              <Input value={form.feat_card1_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card1_title: e.target.value }))}
-                placeholder="تغطية شاملة" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">النص الوصفي</label>
-              <Textarea value={form.feat_card1_text ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card1_text: e.target.value }))}
-                placeholder="خيارات واسعة تشمل بريدة، عنيزة، الرس وكافة مدن ومحافظات القصيم." rows={2}
-                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
-            </div>
-          </div>
-
-          {/* ─ Card 2 ─ */}
-          <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-teal-500/20 text-teal-400 text-xs font-bold flex items-center justify-center">٢</span>
-              <p className="text-xs font-bold text-teal-400 uppercase tracking-wider">البطاقة الثانية</p>
-            </div>
-            <IconPickerField fieldKey="feat_card2_icon" form={form} setForm={setForm} />
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">العنوان</label>
-              <Input value={form.feat_card2_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card2_title: e.target.value }))}
-                placeholder="حجز مباشر وآمن" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">النص الوصفي</label>
-              <Textarea value={form.feat_card2_text ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card2_text: e.target.value }))}
-                placeholder="تواصل مباشر مع الملاك وإدارة الشاليهات عبر الواتساب بدون وسطاء." rows={2}
-                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
-            </div>
-          </div>
-
-          {/* ─ Card 3 ─ */}
-          <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-teal-500/20 text-teal-400 text-xs font-bold flex items-center justify-center">٣</span>
-              <p className="text-xs font-bold text-teal-400 uppercase tracking-wider">البطاقة الثالثة</p>
-            </div>
-            <IconPickerField fieldKey="feat_card3_icon" form={form} setForm={setForm} />
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">العنوان</label>
-              <Input value={form.feat_card3_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card3_title: e.target.value }))}
-                placeholder="سهولة الدفع" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">النص الوصفي</label>
-              <Textarea value={form.feat_card3_text ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_card3_text: e.target.value }))}
-                placeholder="طرق دفع متعددة وآمنة تناسب احتياجاتك." rows={2}
-                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
-            </div>
-          </div>
-
-          <p className="text-xs text-slate-500">اترك أي حقل فارغاً لاستخدام النص الافتراضي. انقر على الأيقونة لتغييرها.</p>
-          <SaveBtn label="حفظ بطاقات المميزات" />
-        </div>
-      </div>
-
-      {/* ══ 2.7. "لماذا تختار" Section Header ══ */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-        <div className="bg-gradient-to-l from-purple-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <Star className="w-5 h-5 text-purple-400" />
-          <h3 className="text-slate-100 font-bold text-lg">عنوان قسم «لماذا تختار»</h3>
-          <span className="text-xs text-slate-500 mr-auto">يظهر فوق البطاقات الثلاث</span>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">عنوان القسم</label>
-            <Input value={form.feat_section_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_section_title: e.target.value }))}
-              placeholder="لماذا تختار شاليهات القصيم؟"
-              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">النص الوصفي أسفل العنوان</label>
-            <Textarea value={form.feat_section_desc ?? ""} onChange={(e) => setForm((f) => ({ ...f, feat_section_desc: e.target.value }))}
-              placeholder="نحن نسهل عليك العثور على المكان المثالي لمناسباتك العائلية والخاصة"
-              rows={2} className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
-          </div>
-          <SaveBtn label="حفظ عنوان القسم" />
-        </div>
-      </div>
-
-      {/* ══ 3. Contact Info ══ */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-        <div className="bg-gradient-to-l from-blue-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <Phone className="w-5 h-5 text-blue-400" />
-          <h3 className="text-slate-100 font-bold text-lg">بيانات التواصل</h3>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">رقم الواتساب الرئيسي (بدون +)</label>
-            <Input value={form.platform_whatsapp ?? ""} onChange={(e) => setForm((f) => ({ ...f, platform_whatsapp: e.target.value }))}
-              placeholder="966500000000" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 font-mono" dir="ltr" />
-            <p className="text-xs text-slate-500">يظهر في التذييل وزر التواصل. ابدأ بـ 966 بدون +.</p>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص رسالة الواتساب التلقائية</label>
-            <Textarea value={form.whatsapp_message ?? ""} onChange={(e) => setForm((f) => ({ ...f, whatsapp_message: e.target.value }))}
-              placeholder="مرحباً، أود الاستفسار عن الشاليهات المتاحة" rows={2}
-              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">البريد الإلكتروني للدعم</label>
-            <Input value={form.platform_email ?? ""} onChange={(e) => setForm((f) => ({ ...f, platform_email: e.target.value }))}
-              placeholder="info@example.com" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="ltr" />
-          </div>
-          {(form.platform_whatsapp) && (
-            <div className="bg-slate-900/60 border border-slate-600 rounded-lg p-3 text-xs text-slate-400 space-y-1">
-              <p className="font-semibold text-slate-300">معاينة رابط الواتساب:</p>
-              <a href={`https://wa.me/${(form.platform_whatsapp).replace(/\D/g,"")}?text=${encodeURIComponent(form.whatsapp_message??"")}`}
-                target="_blank" rel="noreferrer" className="text-[#25D366] break-all hover:underline">
-                {`https://wa.me/${(form.platform_whatsapp).replace(/\D/g,"")}...`}
-              </a>
-            </div>
-          )}
-          <SaveBtn label="حفظ بيانات التواصل" />
-        </div>
-      </div>
-
-      {/* ══ 3.5. WhatsApp Booking Message Template ══ */}
-      <div className="bg-slate-800 rounded-xl border border-green-500/30 overflow-hidden">
-        <div className="bg-gradient-to-l from-green-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <span className="text-[#25D366] text-xl leading-none">💬</span>
-          <h3 className="text-slate-100 font-bold text-lg">قالب رسالة حجز الواتساب</h3>
-          <span className="text-xs text-slate-500 mr-auto">تُرسَل عند الضغط على زر «احجز الآن»</span>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص القالب</label>
-            <Textarea
-              value={form.wa_message_template ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, wa_message_template: e.target.value }))}
-              placeholder={`السلام عليكم، أريد حجز {chalet_name} عبر منصة شاليهات القصيم 🌴\nتفاصيل الحجز:\nاليوم: {day_name}\nالتاريخ الهجري: {hijri_date} هـ\nالتاريخ الميلادي: {gregorian_date} م\nالفترة: {period_name}\nالإجمالي: {total_price}\nهل الحجز متاح؟`}
-              rows={9}
-              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-y font-mono text-sm leading-relaxed"
-              dir="rtl"
-            />
-          </div>
-          {/* Variable reference */}
-          <div className="bg-slate-900/60 border border-slate-600 rounded-lg p-4 space-y-2">
-            <p className="text-xs font-bold text-slate-300 mb-2">المتغيرات المتاحة (انسخ والصق في القالب):</p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { tag: "{chalet_name}",    desc: "اسم الشاليه" },
-                { tag: "{day_name}",       desc: "اسم اليوم" },
-                { tag: "{hijri_date}",     desc: "التاريخ الهجري" },
-                { tag: "{gregorian_date}", desc: "التاريخ الميلادي" },
-                { tag: "{period_name}",    desc: "الفترة المختارة" },
-                { tag: "{total_price}",    desc: "الإجمالي" },
-              ].map(({ tag, desc }) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, wa_message_template: (f.wa_message_template ?? "") + tag }))}
-                  title={`إدراج: ${desc}`}
-                  className="flex items-center gap-1.5 bg-slate-800 hover:bg-green-900/40 border border-slate-600 hover:border-green-500 text-slate-300 hover:text-green-300 text-xs px-2.5 py-1.5 rounded-lg transition-all font-mono"
-                >
-                  <span className="text-green-400 font-bold">{tag}</span>
-                  <span className="text-slate-500 text-[10px]">← {desc}</span>
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px] text-slate-500 pt-1">اضغط على أي متغير لإضافته تلقائياً في نهاية القالب. اترك الحقل فارغاً لاستخدام القالب الافتراضي.</p>
-          </div>
-          <SaveBtn label="حفظ قالب الرسالة" />
-        </div>
-      </div>
-
-      {/* ══ 3.6. WhatsApp Review Message Template ══ */}
-      <div className="bg-slate-800 rounded-xl border border-blue-500/30 overflow-hidden">
-        <div className="bg-gradient-to-l from-blue-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <span className="text-[#25D366] text-xl leading-none">⭐</span>
-          <h3 className="text-slate-100 font-bold text-lg">قالب رسالة تقييم الواتساب</h3>
-          <span className="text-xs text-slate-500 mr-auto">تُرسَل عند إنشاء رابط التقييم للضيف</span>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص القالب</label>
-            <Textarea
-              value={form.wa_review_template ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, wa_review_template: e.target.value }))}
-              placeholder="أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} 🌟&#10;اضغط هنا لتقييمك: {link}"
-              rows={5}
-              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-y font-mono text-sm leading-relaxed"
-              dir="rtl"
-            />
-          </div>
-          <div className="bg-slate-900/60 border border-slate-600 rounded-lg p-4 space-y-2">
-            <p className="text-xs font-bold text-slate-300 mb-2">المتغيرات المتاحة — اضغط للإدراج:</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, wa_review_template: (f.wa_review_template ?? "") + "{link}" }))}
-                className="flex items-center gap-1.5 bg-slate-800 hover:bg-blue-900/40 border border-slate-600 hover:border-blue-500 text-slate-300 hover:text-blue-300 text-xs px-2.5 py-1.5 rounded-lg transition-all font-mono"
-              >
-                <span className="text-blue-400 font-bold">{"{link}"}</span>
-                <span className="text-slate-500 text-[10px]">← رابط التقييم</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, wa_review_template: (f.wa_review_template ?? "") + "{guest_name}" }))}
-                className="flex items-center gap-1.5 bg-slate-800 hover:bg-teal-900/40 border border-slate-600 hover:border-teal-500 text-slate-300 hover:text-teal-300 text-xs px-2.5 py-1.5 rounded-lg transition-all font-mono"
-              >
-                <span className="text-teal-400 font-bold">{"{guest_name}"}</span>
-                <span className="text-slate-500 text-[10px]">← اسم الضيف</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, wa_review_template: (f.wa_review_template ?? "") + "{chalet_name}" }))}
-                className="flex items-center gap-1.5 bg-slate-800 hover:bg-amber-900/40 border border-slate-600 hover:border-amber-500 text-slate-300 hover:text-amber-300 text-xs px-2.5 py-1.5 rounded-lg transition-all font-mono"
-              >
-                <span className="text-amber-400 font-bold">{"{chalet_name}"}</span>
-                <span className="text-slate-500 text-[10px]">← اسم الشاليه</span>
-              </button>
-            </div>
-            <p className="text-[11px] text-slate-500 pt-1">
-              استخدم هذه المتغيرات في أي مكان بالرسالة وستُستبدل تلقائياً. اترك الحقل فارغاً لاستخدام الرسالة الافتراضية.
-            </p>
-          </div>
-          <SaveBtn label="حفظ قالب رسالة التقييم" />
-        </div>
-      </div>
-
-      {/* ══ 3.7. Service Suggestion Button ══ */}
-      <div className="bg-slate-800 rounded-xl border border-amber-500/30 overflow-hidden">
-        <div className="bg-gradient-to-l from-amber-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <span className="text-xl leading-none">🛎️</span>
-          <h3 className="text-slate-100 font-bold text-lg">زر اقتراح الخدمات</h3>
-          <span className="text-xs text-slate-500 mr-auto">يظهر أسفل زر الواتساب في صفحة الشاليه</span>
-          {/* Master toggle */}
-          <button
-            onClick={() => setForm((f) => ({ ...f, svc_btn_enabled: f.svc_btn_enabled === "true" ? "false" : "true" }))}
-            className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${form.svc_btn_enabled === "true" ? "bg-amber-500" : "bg-slate-600"}`}
-          >
-            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${form.svc_btn_enabled === "true" ? "right-0.5" : "left-0.5"}`} />
-          </button>
-        </div>
-        <div className="p-6 space-y-5">
-          {/* Label */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص الزر</label>
-            <Input
-              value={form.svc_btn_label ?? ""}
-              onChange={(e) => setForm((f) => ({ ...f, svc_btn_label: e.target.value }))}
-              placeholder="🛎️ تنسيق خدمات إضافية لمناسبتك (ذبائح، ضيافة...)"
-              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500"
-              dir="rtl"
-            />
-            <p className="text-[11px] text-slate-500">اترك الحقل فارغاً لاستخدام النص الافتراضي.</p>
-          </div>
-
-          {/* Color picker */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">لون الزر</label>
-            <div className="flex items-center gap-3">
-              <input
-                type="color"
-                value={form.svc_btn_color || "#b45309"}
-                onChange={(e) => setForm((f) => ({ ...f, svc_btn_color: e.target.value }))}
-                className="w-10 h-10 rounded-lg border border-slate-600 cursor-pointer bg-transparent p-0.5"
-              />
-              <div className="flex gap-2 flex-wrap">
-                {["#b45309","#d97706","#0369a1","#7c3aed","#be123c","#15803d"].map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setForm((f) => ({ ...f, svc_btn_color: c }))}
-                    title={c}
-                    style={{ background: c }}
-                    className={`w-7 h-7 rounded-full border-2 transition-all ${form.svc_btn_color === c ? "border-white scale-110" : "border-transparent"}`}
-                  />
-                ))}
-              </div>
-              <span className="text-xs text-slate-400 font-mono">{form.svc_btn_color || "#b45309"}</span>
-            </div>
-          </div>
-
-          {/* Live preview */}
-          {form.svc_btn_enabled === "true" && (
-            <div className="rounded-xl border border-slate-700 p-4 bg-slate-900/40 space-y-2">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">معاينة</p>
-              <div
-                style={{
-                  width: "100%", height: 46, borderRadius: 14,
-                  border: `2px solid ${form.svc_btn_color || "#b45309"}`,
-                  background: "transparent",
-                  color: form.svc_btn_color || "#b45309",
-                  fontWeight: 700, fontSize: 14,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-              >
-                {form.svc_btn_label?.trim() || "🛎️ تنسيق خدمات إضافية لمناسبتك (ذبائح، ضيافة...)"}
-              </div>
-            </div>
-          )}
-
-          <SaveBtn label="حفظ إعدادات زر الخدمات" />
-        </div>
-      </div>
-
-      {/* ══ 4. Social Media ══ */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-        <div className="bg-gradient-to-l from-purple-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <Instagram className="w-5 h-5 text-purple-400" />
-          <h3 className="text-slate-100 font-bold text-lg">وسائل التواصل الاجتماعي</h3>
-          <span className="text-xs text-slate-500 mr-auto">فعّل/أوقف وأدخل الروابط</span>
-        </div>
-        <div className="p-6 space-y-3">
-          <SocialToggleRow label="إنستقرام" urlKey="instagram_url" showKey="instagram_show"
-            icon={<Instagram className="w-4 h-4 text-pink-400" />} form={form} setForm={setForm} />
-          <SocialToggleRow label="تويتر / X" urlKey="twitter_url" showKey="twitter_show"
-            icon={<Twitter className="w-4 h-4 text-sky-400" />} form={form} setForm={setForm} />
-          <SocialToggleRow label="سناب شات" urlKey="snapchat_url" showKey="snapchat_show"
-            icon={<span className="text-yellow-300 text-base leading-none">👻</span>} form={form} setForm={setForm} />
-          <SocialToggleRow label="تيك توك" urlKey="tiktok_url" showKey="tiktok_show"
-            icon={<span className="text-slate-200 text-base leading-none">🎵</span>} form={form} setForm={setForm} />
-          <SaveBtn label="حفظ روابط التواصل" />
-        </div>
-      </div>
-
-      {/* ══ 5. Brand & Appearance ══ */}
-      <div className="bg-slate-800 rounded-xl border border-amber-500/30 overflow-hidden">
-        <div className="bg-gradient-to-l from-amber-500/15 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <Palette className="w-5 h-5 text-amber-400" />
-          <h3 className="text-slate-100 font-bold text-lg">الهوية البصرية</h3>
-        </div>
-        <div className="p-6 space-y-5">
-          {/* Logo Upload */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">شعار الموقع (Logo)</label>
-            {form.site_logo_url && (
-              <div className="flex items-center gap-3">
-                <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-900 border border-slate-600 flex items-center justify-center">
-                  <img src={form.site_logo_url} alt="Logo" className="w-full h-full object-contain p-1" />
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, site_logo_url: "" }))}
-                  className="text-slate-500 hover:text-red-400"><X className="w-4 h-4" /></Button>
-              </div>
-            )}
-            <div className="flex gap-3 items-center">
-              <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" id="logo-upload" />
-              <label htmlFor="logo-upload" className="cursor-pointer bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm px-4 py-2 rounded-lg border border-slate-600 transition-colors flex items-center gap-2">
-                <Upload className="w-4 h-4" />{logoUploading ? "جاري الرفع..." : "رفع الشعار"}
-              </label>
-            </div>
-          </div>
-          {/* Site Title */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">اسم الموقع (يظهر في القائمة العلوية)</label>
-            <Input value={form.site_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, site_title: e.target.value }))}
-              placeholder="شاليهات القصيم" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
-          </div>
-          {/* Primary Color */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">اللون الرئيسي</label>
-            <div className="flex items-center gap-3">
-              <input type="color" value={form.primary_color || "#d97706"}
-                onChange={(e) => setForm((f) => ({ ...f, primary_color: e.target.value }))}
-                className="w-11 h-11 rounded-lg cursor-pointer border-2 border-slate-600 bg-transparent p-0.5" />
-              <Input value={form.primary_color ?? ""} onChange={(e) => setForm((f) => ({ ...f, primary_color: e.target.value }))}
-                placeholder="#d97706" className="bg-slate-900 border-slate-600 text-white font-mono w-28" dir="ltr" maxLength={7} />
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              {PRESET_COLORS.map((c) => (
-                <button key={c} onClick={() => setForm((f) => ({ ...f, primary_color: c }))} title={c}
-                  className="w-7 h-7 rounded-full border-2 transition-all hover:scale-110"
-                  style={{ backgroundColor: c, borderColor: form.primary_color === c ? "white" : "transparent" }} />
-              ))}
-            </div>
-          </div>
-          <SaveBtn label="حفظ الهوية البصرية" />
-        </div>
-      </div>
-
-      {/* ══ 5.5. Footer Branding ══ */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-        <div className="bg-gradient-to-l from-slate-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <MapPin className="w-5 h-5 text-slate-400" />
-          <h3 className="text-slate-100 font-bold text-lg">هوية التذييل (Footer)</h3>
-          <span className="text-xs text-slate-500 mr-auto">النصوص التي تظهر في أسفل كل صفحة</span>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">اسم الموقع في التذييل</label>
-            <Input value={form.footer_title ?? ""} onChange={(e) => setForm((f) => ({ ...f, footer_title: e.target.value }))}
-              placeholder="شاليهات القصيم" className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
-            <p className="text-xs text-slate-500">يُستخدم في التذييل بشكل مستقل عن اسم الموقع في القائمة العلوية.</p>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">وصف قصير للموقع (التذييل)</label>
-            <Textarea value={form.footer_desc ?? ""} onChange={(e) => setForm((f) => ({ ...f, footer_desc: e.target.value }))}
-              placeholder="المنصة الأولى لحجز الشاليهات والاستراحات الفاخرة في منطقة القصيم. اكتشف أجمل الأماكن لقضاء أوقات لا تُنسى."
-              rows={3} className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 resize-none" dir="rtl" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص حقوق النشر</label>
-            <Input value={form.copyright_text ?? ""} onChange={(e) => setForm((f) => ({ ...f, copyright_text: e.target.value }))}
-              placeholder="جميع الحقوق محفوظة." className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
-            <p className="text-xs text-slate-500">يُضاف تلقائياً قبله: © {new Date().getFullYear()} + اسم التذييل.</p>
-          </div>
-          <SaveBtn label="حفظ هوية التذييل" />
-        </div>
-      </div>
-
-      {/* ══ 6. Page Content Sections ══ */}
-      {pageContentFields.map((field) => (
-        <div key={field.key} className="bg-slate-800 rounded-xl p-6 border border-slate-700 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-slate-200 font-semibold text-base flex items-center gap-2">
-              <span>{field.icon}</span>{field.label}
-            </h3>
-            <a href={field.path} target="_blank" rel="noreferrer" className="text-xs text-amber-400 hover:text-amber-300 underline">معاينة الصفحة ↗</a>
-          </div>
-          <Textarea value={form[field.key] ?? ""} onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
-            placeholder={`اكتب محتوى ${field.label} هنا...`} rows={10}
-            className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-sm leading-relaxed resize-y" dir="rtl" />
-          <SaveBtn label={`حفظ ${field.label}`} />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 /* ── Chalets Verification Tab ─────────────────── */
 function ChaletsVerifyTab() {
@@ -3570,7 +2852,7 @@ function ChaletsVerifyTab() {
             onClick={() => { setCityFilter(""); setCategoryFilter(""); }}
             className="text-xs text-slate-400 hover:text-amber-400 border border-slate-600 hover:border-amber-500/50 rounded-lg px-3 py-2 transition-colors"
           >
-            مسح الفلاتر ✕
+            مسح الفلاتر
           </button>
         )}
         <span className="text-slate-500 text-xs self-center">
@@ -3708,14 +2990,14 @@ function ChaletsVerifyTab() {
 
 /* ── Provider Submissions Tab ─────────────────── */
 const PROVIDER_CATEGORY_LABELS: Record<string, string> = {
-  bounce_houses: "🎪 نطيطات",
-  ice_cream: "🍦 آيس كريم",
-  productive_families: "🎀 أسر منتجة",
-  catering: "🍽️ تموين وضيافة",
-  photography: "📸 تصوير",
-  decoration: "🎊 ديكور وتزيين",
-  entertainment: "🎶 ترفيه وأناشيد",
-  other: "✨ أخرى",
+  bounce_houses: " نطيطات",
+  ice_cream: " آيس كريم",
+  productive_families: " أسر منتجة",
+  catering: "️ تموين وضيافة",
+  photography: " تصوير",
+  decoration: " ديكور وتزيين",
+  entertainment: " ترفيه وأناشيد",
+  other: " أخرى",
 };
 
 interface ProviderSubmission {
@@ -3996,7 +3278,7 @@ function ProviderSubmissionsTab() {
                   <img src={mainPhoto} alt={sub.businessName} className="w-20 h-16 rounded-xl object-cover shrink-0" />
                 ) : (
                   <div className="w-20 h-16 rounded-xl bg-slate-700 flex items-center justify-center text-2xl shrink-0">
-                    {PROVIDER_CATEGORY_LABELS[sub.category]?.split(" ")[0] ?? "✨"}
+                    {PROVIDER_CATEGORY_LABELS[sub.category]?.split(" ")[0] ?? ""}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
@@ -4043,7 +3325,7 @@ interface ExpCat { id: number; name: string; emoji: string; color: string; isOth
 
 function ExpenseCategoriesTab() {
   const qc = useQueryClient();
-  const [newForm, setNewForm] = useState({ name: "", emoji: "✨", color: "slate", isOther: false });
+  const [newForm, setNewForm] = useState({ name: "", emoji: "", color: "slate", isOther: false });
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ name: "", emoji: "", color: "", isOther: false });
 
@@ -4070,7 +3352,7 @@ function ExpenseCategoriesTab() {
       });
       if (!r.ok) throw new Error("فشل الإضافة");
     },
-    onSuccess: () => { setNewForm({ name: "", emoji: "✨", color: "slate", isOther: false }); invalidate(); },
+    onSuccess: () => { setNewForm({ name: "", emoji: "", color: "slate", isOther: false }); invalidate(); },
   });
 
   const patchCat = useMutation({
@@ -4657,9 +3939,9 @@ const APP_STATUS_BADGE: Record<string, { label: string; className: string }> = {
 };
 
 const DOCS_STATUS_BADGE: Record<string, { label: string; icon: string; className: string }> = {
-  pending_docs:   { label: "في انتظار المستندات", icon: "🕐", className: "bg-orange-900/40 text-orange-300 border border-orange-700/50" },
-  docs_submitted: { label: "مستندات مرفوعة",      icon: "📋", className: "bg-blue-900/40 text-blue-300 border border-blue-700/50" },
-  verified:       { label: "موثّق",                icon: "✅", className: "bg-emerald-900/40 text-emerald-300 border border-emerald-700/50" },
+  pending_docs:   { label: "في انتظار المستندات", icon: "", className: "bg-orange-900/40 text-orange-300 border border-orange-700/50" },
+  docs_submitted: { label: "مستندات مرفوعة",      icon: "", className: "bg-blue-900/40 text-blue-300 border border-blue-700/50" },
+  verified:       { label: "موثّق",                icon: "", className: "bg-emerald-900/40 text-emerald-300 border border-emerald-700/50" },
 };
 
 function PartnerApplicationsTab() {
@@ -4776,7 +4058,7 @@ function PartnerApplicationsTab() {
         <div className="flex items-center justify-between gap-2">
           {app.email_verified ? (
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full border bg-green-900/30 text-green-300 border-green-700/40">
-              ✓ تم التحقق من البريد
+               تم التحقق من البريد
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2.5 py-1 rounded-full border bg-amber-900/30 text-amber-300 border-amber-700/40">
@@ -5206,221 +4488,20 @@ const MONTH_AR: Record<string, string> = {
 
 const CHART_COLORS = ["#f59e0b","#10b981","#3b82f6","#ef4444","#8b5cf6","#ec4899"];
 
-function OverviewTab() {
-  const { data, isLoading } = useQuery<AnalyticsData>({
-    queryKey: ["admin", "analytics"],
-    queryFn: async () => {
-      const r = await fetch(`${API}/admin/analytics`, { credentials: "include" });
-      if (!r.ok) throw new Error("failed");
-      return r.json();
-    },
-    staleTime: 60_000,
-  });
-
-  if (isLoading) return (
-    <div className="flex items-center justify-center py-24 flex-col gap-3">
-      <Loader2 className="animate-spin text-amber-400 w-8 h-8" />
-      <p className="text-slate-500 text-sm">جارٍ تحميل الإحصائيات…</p>
-    </div>
-  );
-  if (!data) return (
-    <div className="flex items-center justify-center py-24 flex-col gap-3">
-      <BarChart3 className="w-10 h-10 text-slate-600" />
-      <p className="text-slate-400 text-sm font-medium">تعذّر تحميل الإحصائيات</p>
-      <p className="text-slate-600 text-xs">يُرجى إعادة تحميل الصفحة أو التواصل مع الدعم الفني</p>
-    </div>
-  );
-
-  const d = data;
-  const fmtN = (n: number) => toAr(Math.round(n).toLocaleString());
-
-  // Prepare monthly revenue with Arabic month labels
-  const revenueData = d.monthlyRevenue.map(r => ({
-    ...r,
-    label: MONTH_AR[r.month.split("-")[1]] ?? r.month,
-    totalLabel: `${fmtN(r.total)} ر.س`,
-  }));
-
-  // Pie data for market distribution
-  const marketPie = [
-    { name: "شاليهات", value: d.marketDistribution.chalets },
-    { name: "خدمات مناسبات", value: d.marketDistribution.services },
-  ];
-
-  // Account status pie
-  const statusPie = d.accountStatus.map(s => ({
-    name: STATUS_LABELS[s.status] ?? s.status,
-    value: s.count,
-  }));
-
-  const totalUnits = d.marketDistribution.chalets + d.marketDistribution.services;
-  const totalAccounts = d.accountStatus.reduce((s, r) => s + r.count, 0);
-
-  return (
-    <div className="space-y-6" dir="rtl">
-      {/* Title */}
-      <div>
-        <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-amber-400" />
-          لوحة الإحصائيات
-        </h2>
-        <p className="text-xs text-slate-500 mt-1">نظرة شاملة على أداء المنصة</p>
-      </div>
-
-      {/* KPI row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: "إجمالي الشاليهات", value: fmtN(d.marketDistribution.chalets), icon: <Home className="w-4 h-4 text-amber-400" /> },
-          { label: "الخدمات المسجّلة", value: fmtN(d.marketDistribution.services), icon: <Wrench className="w-4 h-4 text-blue-400" /> },
-          { label: "الحسابات النشطة", value: fmtN(d.accountStatus.find(s => s.status === "active")?.count ?? 0), icon: <CheckCircle className="w-4 h-4 text-emerald-400" /> },
-          { label: "إيرادات الاشتراكات", value: `${fmtN(d.monthlyRevenue.reduce((s, r) => s + r.total, 0))} ر.س`, icon: <TrendingUp className="w-4 h-4 text-amber-400" /> },
-        ].map(k => (
-          <div key={k.label} className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-2">
-            <div className="flex items-center gap-2">{k.icon}<span className="text-[10px] text-slate-500">{k.label}</span></div>
-            <p className="text-xl font-bold text-slate-100">{k.value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Row 1: Revenue Growth + Market Pie */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Revenue Growth Line Chart */}
-        <div className="lg:col-span-2 bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
-          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
-            نمو إيرادات الاشتراكات (آخر ١٢ شهرًا)
-          </h3>
-          {revenueData.length === 0 ? (
-            <p className="text-slate-500 text-xs text-center py-10">لا توجد بيانات إيرادات بعد</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={revenueData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} />
-                <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} tickFormatter={(v: number) => toAr(String(v))} />
-                <Tooltip
-                  contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" }}
-                  formatter={(v: number) => [`${fmtN(v)} ر.س`, "الإيراد"]}
-                  labelStyle={{ color: "#f59e0b" }}
-                />
-                <Line type="monotone" dataKey="total" stroke="#f59e0b" strokeWidth={2} dot={{ fill: "#f59e0b", r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        {/* Market Distribution Pie */}
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
-          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-            <Globe className="w-4 h-4 text-blue-400" />
-            توزيع السوق
-          </h3>
-          {totalUnits === 0 ? (
-            <p className="text-slate-500 text-xs text-center py-10">لا توجد بيانات</p>
-          ) : (
-            <>
-              <ResponsiveContainer width="100%" height={160}>
-                <PieChart>
-                  <Pie data={marketPie} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={3}>
-                    {marketPie.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-1.5">
-                {marketPie.map((item, i) => (
-                  <div key={item.name} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                      <span className="text-slate-400">{item.name}</span>
-                    </div>
-                    <span className="font-semibold text-slate-200">{fmtN(item.value)}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Row 2: Geographic Bar + Account Status Pie */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Geographic Heatmap Bar Chart */}
-        <div className="lg:col-span-2 bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
-          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-red-400" />
-            حجم الحجوزات حسب المدينة
-          </h3>
-          {d.geographicData.length === 0 ? (
-            <p className="text-slate-500 text-xs text-center py-10">لا توجد بيانات حجوزات بعد</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={d.geographicData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="city" tick={{ fill: "#94a3b8", fontSize: 10 }} />
-                <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} allowDecimals={false} tickFormatter={(v: number) => toAr(String(v))} />
-                <Tooltip
-                  contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" }}
-                  formatter={(v: number) => [fmtN(v), "حجز"]}
-                />
-                <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]}>
-                  {d.geographicData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        {/* Account Status Pie */}
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 space-y-3">
-          <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-            <Users className="w-4 h-4 text-purple-400" />
-            حالة الحسابات
-          </h3>
-          {totalAccounts === 0 ? (
-            <p className="text-slate-500 text-xs text-center py-10">لا توجد بيانات</p>
-          ) : (
-            <>
-              <ResponsiveContainer width="100%" height={160}>
-                <PieChart>
-                  <Pie data={statusPie} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={3}>
-                    {statusPie.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#e2e8f0" }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-1.5">
-                {statusPie.map((item, i) => (
-                  <div key={item.name} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                      <span className="text-slate-400">{item.name}</span>
-                    </div>
-                    <span className="font-semibold text-slate-200">{fmtN(item.value)}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ══════════════════════════════════════════════════════════════
    DirectAdd Tab — admin directly creates a chalet or service provider
    under a chosen owner, bypassing the submission review flow.
    ══════════════════════════════════════════════════════════════ */
 const DA_PROPERTY_TYPES = [
-  { value: "شالية",    label: "🏕️ شالية" },
-  { value: "مزرعة",   label: "🌿 مزرعة" },
-  { value: "استراحة", label: "🏡 استراحة" },
-  { value: "مخيم",    label: "⛺ مخيم" },
+  { value: "شالية",    label: "️ شالية" },
+  { value: "مزرعة",   label: " مزرعة" },
+  { value: "استراحة", label: " استراحة" },
+  { value: "مخيم",    label: " مخيم" },
 ];
 const DA_SECTIONS_OPTS = [
-  { value: "قسم واحد",      label: "🔑 قسم واحد" },
-  { value: "قسمين منفصلة", label: "🔑🔑 قسمين منفصلة" },
+  { value: "قسم واحد",      label: " قسم واحد" },
+  { value: "قسمين منفصلة", label: " قسمين منفصلة" },
 ];
 const DA_DAY_NAMES = ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
 const DA_DEFAULT_TERMS = "يمنع التدخين داخل العقار\nوقت تسجيل الخروج الساعة ١٠:٠٠ صباحاً\nيمنع إحضار الحيوانات الأليفة\nالضيوف المسموح بهم فقط كما هو محدد عند الحجز\nأي أضرار تلحق بالمكان تُحسب على الضيف";
@@ -5506,7 +4587,7 @@ function OwnerPickerInput({
             onClick={() => { onChange(""); setQuery(""); setOpen(false); }}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
           >
-            ✕
+
           </button>
         )}
       </div>
@@ -5725,8 +4806,8 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
       if (!r.ok) { setOwnerRegErr(json.error ?? "حدث خطأ أثناء التسجيل"); }
       else {
         setOwnerRegOk(newOwner.email.trim()
-          ? `✓ تم تسجيل "${newOwner.fullName}" بنجاح — سيظهر في قائمة الطلبات بعد تحقق البريد الإلكتروني`
-          : `✓ تم تسجيل "${newOwner.fullName}" بنجاح — رقم الجوال هو المعرّف الرئيسي للحساب`);
+          ? ` تم تسجيل "${newOwner.fullName}" بنجاح — سيظهر في قائمة الطلبات بعد تحقق البريد الإلكتروني`
+          : ` تم تسجيل "${newOwner.fullName}" بنجاح — رقم الجوال هو المعرّف الرئيسي للحساب`);
         setNewOwner({ fullName:"", phone:"", email:"", password:"", confirmPassword:"" });
         setShowNewOwner(false);
         qc.invalidateQueries({ queryKey: ["admin","owners"] });
@@ -5829,7 +4910,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
       const json = await r.json().catch(() => ({}));
       if (!r.ok) { setError(json.error ?? "حدث خطأ غير متوقع"); }
       else {
-        setSuccess(assetType === "chalet" ? `تم إضافة "${cForm.nameAr}" بنجاح ✓` : `تم إضافة "${sForm.businessName}" بنجاح ✓`);
+        setSuccess(assetType === "chalet" ? `تم إضافة "${cForm.nameAr}" بنجاح ` : `تم إضافة "${sForm.businessName}" بنجاح `);
         resetAll();
         qc.invalidateQueries({ queryKey: ["admin","owners"] });
         qc.invalidateQueries({ queryKey: ["admin","cities"] });
@@ -5853,8 +4934,8 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
 
       {/* Type toggle */}
       {!ownerOnly && <div className="flex rounded-lg overflow-hidden border border-slate-700">
-        <button type="button" onClick={() => { setAssetType("chalet"); resetAll(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType==="chalet" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}>🏡 عقار</button>
-        <button type="button" onClick={() => { setAssetType("service"); resetAll(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType==="service" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}>🎪 مزود خدمة / فعالية</button>
+        <button type="button" onClick={() => { setAssetType("chalet"); resetAll(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType==="chalet" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}> عقار</button>
+        <button type="button" onClick={() => { setAssetType("service"); resetAll(); }} className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${assetType==="service" ? "bg-amber-500 text-slate-900" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}> مزود خدمة / فعالية</button>
       </div>}
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -5870,7 +4951,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
             }
             {ownerId && (
               <p className="text-emerald-400 text-xs mt-1">
-                ✓ تم اختيار: {owners.find(o => o.ownerId === ownerId)?.ownerName ?? ownerId}
+                 تم اختيار: {owners.find(o => o.ownerId === ownerId)?.ownerName ?? ownerId}
               </p>
             )}
           </div>}
@@ -6042,7 +5123,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
               {slotFullDay && <div className="space-y-1.5"><label className="text-xs text-slate-400 font-medium">سعر اليوم الكامل</label><Input value={toAr(cForm.priceFullDay)} onChange={e => setCForm(f => ({...f, priceFullDay: fromAr(e.target.value)}))} placeholder="٠" inputMode="numeric" className="bg-slate-900 border-slate-600 text-white text-center" /></div>}
             </div>
             <details>
-              <summary className="cursor-pointer text-sm text-amber-400 hover:text-amber-300 select-none">📅 جدول أسعار الأيام (اختياري)</summary>
+              <summary className="cursor-pointer text-sm text-amber-400 hover:text-amber-300 select-none"> جدول أسعار الأيام (اختياري)</summary>
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full text-xs border-collapse">
                   <thead><tr>
@@ -6068,21 +5149,21 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
               <summary className="cursor-pointer text-sm text-amber-400 hover:text-amber-300 select-none">⏰ أوقات الدخول والخروج لكل فترة</summary>
               <div className="mt-3 space-y-3">
                 {slotMorning && <div>
-                  <p className="text-xs text-slate-400 mb-2 font-medium">📅 الفترة الصباحية</p>
+                  <p className="text-xs text-slate-400 mb-2 font-medium"> الفترة الصباحية</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1"><label className="text-xs text-slate-500">وقت الدخول</label><Input type="time" value={morningCheckIn} onChange={e => setMorningCheckIn(e.target.value)} className="bg-slate-900 border-slate-600 text-white h-8 text-sm" /></div>
                     <div className="space-y-1"><label className="text-xs text-slate-500">وقت الخروج</label><Input type="time" value={morningCheckOut} onChange={e => setMorningCheckOut(e.target.value)} className="bg-slate-900 border-slate-600 text-white h-8 text-sm" /></div>
                   </div>
                 </div>}
                 {slotEvening && <div>
-                  <p className="text-xs text-slate-400 mb-2 font-medium">🌙 الفترة المسائية</p>
+                  <p className="text-xs text-slate-400 mb-2 font-medium"> الفترة المسائية</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1"><label className="text-xs text-slate-500">وقت الدخول</label><Input type="time" value={eveningCheckIn} onChange={e => setEveningCheckIn(e.target.value)} className="bg-slate-900 border-slate-600 text-white h-8 text-sm" /></div>
                     <div className="space-y-1"><label className="text-xs text-slate-500">وقت الخروج</label><Input type="time" value={eveningCheckOut} onChange={e => setEveningCheckOut(e.target.value)} className="bg-slate-900 border-slate-600 text-white h-8 text-sm" /></div>
                   </div>
                 </div>}
                 {slotFullDay && <div>
-                  <p className="text-xs text-slate-400 mb-2 font-medium">☀️ اليوم الكامل</p>
+                  <p className="text-xs text-slate-400 mb-2 font-medium">️ اليوم الكامل</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1"><label className="text-xs text-slate-500">وقت الدخول</label><Input type="time" value={fullDayCheckIn} onChange={e => setFullDayCheckIn(e.target.value)} className="bg-slate-900 border-slate-600 text-white h-8 text-sm" /></div>
                     <div className="space-y-1"><label className="text-xs text-slate-500">وقت الخروج</label><Input type="time" value={fullDayCheckOut} onChange={e => setFullDayCheckOut(e.target.value)} className="bg-slate-900 border-slate-600 text-white h-8 text-sm" /></div>
@@ -6177,7 +5258,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
               {chaletVideo ? (
                 <div className="flex items-center gap-3 bg-slate-900 rounded-lg p-3">
                   <Video className="w-5 h-5 text-amber-400 flex-shrink-0" />
-                  <span className="text-sm text-slate-300 truncate flex-1">تم رفع الفيديو ✓</span>
+                  <span className="text-sm text-slate-300 truncate flex-1">تم رفع الفيديو </span>
                   <button type="button" onClick={() => setChaletVideo(null)} className="text-red-400 text-xs hover:underline">إزالة</button>
                 </div>
               ) : (
@@ -6388,7 +5469,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
               {svcVideo ? (
                 <div className="flex items-center gap-3 bg-slate-900 rounded-lg p-3">
                   <Video className="w-5 h-5 text-amber-400 flex-shrink-0" />
-                  <span className="text-sm text-slate-300 truncate flex-1">تم رفع الفيديو ✓</span>
+                  <span className="text-sm text-slate-300 truncate flex-1">تم رفع الفيديو </span>
                   <button type="button" onClick={() => setSvcVideo(null)} className="text-red-400 text-xs hover:underline">إزالة</button>
                 </div>
               ) : (
@@ -6438,191 +5519,6 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
 /* ══════════════════════════════════════════════════════════════
    Terms Management Tab — dedicated CRUD for platform Terms of Use
    ══════════════════════════════════════════════════════════════ */
-function TermsManagementTab() {
-  const qc = useQueryClient();
-  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-  function apiFetch(path: string, opts?: RequestInit) {
-    return fetch(`${BASE}/api${path}`, {
-      credentials: "include",
-      headers: { "Content-Type": "application/json", ...(opts?.headers ?? {}) },
-      ...opts,
-    });
-  }
-
-  const [termsText, setTermsText] = useState("");
-  const [saved, setSaved] = useState(false);
-  const [charCount, setCharCount] = useState(0);
-
-  const { data: settings, isLoading } = useQuery<Record<string, string>>({
-    queryKey: ["admin", "settings"],
-    queryFn: async () => {
-      const r = await apiFetch("/admin/settings");
-      if (!r.ok) throw new Error("فشل التحميل");
-      return r.json();
-    },
-  });
-
-  useEffect(() => {
-    if (settings?.terms_page_content !== undefined) {
-      setTermsText(settings.terms_page_content ?? "");
-      setCharCount((settings.terms_page_content ?? "").length);
-    }
-  }, [settings]);
-
-  const saveMutation = useMutation({
-    mutationFn: async (text: string) => {
-      const r = await apiFetch("/admin/settings", {
-        method: "PATCH",
-        body: JSON.stringify({ terms_page_content: text }),
-      });
-      if (!r.ok) throw new Error("فشل الحفظ");
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin", "settings"] });
-      qc.invalidateQueries({ queryKey: ["page-content"] });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    },
-  });
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="animate-spin text-slate-400 w-8 h-8" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-3xl space-y-6">
-      {/* Header card */}
-      <div className="bg-gradient-to-l from-amber-500/20 to-slate-800 border border-amber-500/30 rounded-2xl p-6 flex items-start gap-4">
-        <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
-          <FileCheck className="w-6 h-6 text-amber-400" />
-        </div>
-        <div className="flex-1">
-          <h2 className="text-xl font-bold text-slate-100 mb-1">إدارة شروط الاستخدام</h2>
-          <p className="text-slate-400 text-sm leading-relaxed">
-            النص الذي تكتبه هنا يظهر مباشرةً على{" "}
-            <span className="text-amber-300 font-medium">صفحة تسجيل الملاك الجدد</span> في خانة
-            «شروط استخدام المنصة»، ويُشترط الموافقة عليه لإتمام التسجيل.
-            أي تعديل تحفظه هنا ينعكس فوراً على نموذج التسجيل.
-          </p>
-          <div className="flex flex-wrap gap-3 mt-3">
-            <a
-              href="/register"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 underline underline-offset-2"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              معاينة صفحة التسجيل ↗
-            </a>
-            <a
-              href="/terms"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-300 underline underline-offset-2"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              معاينة صفحة الشروط الكاملة ↗
-            </a>
-          </div>
-        </div>
-      </div>
-
-      {/* Editor card */}
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-amber-400"></div>
-            <span className="text-slate-200 font-semibold text-sm">نص شروط الاستخدام</span>
-          </div>
-          <span className="text-xs text-slate-500">{charCount} حرف</span>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <Textarea
-            value={termsText}
-            onChange={(e) => {
-              setTermsText(e.target.value);
-              setCharCount(e.target.value.length);
-            }}
-            placeholder={`مثال على شروط الاستخدام:\n\nيمنع التدخين داخل الشاليه\nوقت تسجيل الخروج الساعة ١٠:٠٠ صباحاً\nيمنع إحضار الحيوانات الأليفة\nالضيوف المسموح بهم فقط كما هو محدد عند الحجز\nأي أضرار تلحق بالمكان تُحسب على الضيف\n\nيُقرّ المالك بأن هذه الشروط ملزمة قانوناً...`}
-            rows={18}
-            dir="rtl"
-            className="bg-slate-900 border-slate-600 text-slate-100 placeholder:text-slate-600 text-sm leading-relaxed resize-y font-medium"
-          />
-
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={() => saveMutation.mutate(termsText)}
-              disabled={saveMutation.isPending}
-              className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-8 py-2.5 gap-2 text-sm flex-1 sm:flex-none"
-            >
-              {saveMutation.isPending ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> جاري الحفظ...</>
-              ) : saved ? (
-                <><Check className="w-4 h-4" /> تم الحفظ ✓</>
-              ) : (
-                <><Save className="w-4 h-4" /> حفظ الشروط</>
-              )}
-            </Button>
-            {saved && (
-              <span className="text-green-400 text-sm font-medium animate-fade-in">
-                ✓ تم تحديث الشروط — يظهر الآن على صفحة التسجيل
-              </span>
-            )}
-          </div>
-
-          {saveMutation.isError && (
-            <p className="text-red-400 text-sm bg-red-950/30 border border-red-800/40 rounded-lg px-4 py-2">
-              ⚠️ فشل الحفظ، يرجى المحاولة مرة أخرى
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Live preview */}
-      {termsText && (
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-700 flex items-center gap-2">
-            <Eye className="w-4 h-4 text-slate-400" />
-            <span className="text-slate-300 font-semibold text-sm">معاينة — كما يراه المالك عند التسجيل</span>
-          </div>
-          <div className="p-6">
-            <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 max-h-48 overflow-y-auto">
-              <pre className="text-slate-300 text-sm whitespace-pre-wrap leading-relaxed font-sans" dir="rtl">
-                {termsText}
-              </pre>
-            </div>
-            <div className="mt-4 flex items-start gap-3 bg-green-950/30 border border-green-800/30 rounded-xl px-4 py-3">
-              <div className="w-4 h-4 rounded border border-green-500 bg-green-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                <Check className="w-3 h-3 text-green-400" />
-              </div>
-              <span className="text-green-300 text-sm">أوافق على شروط استخدام المنصة</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Instructions */}
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5 space-y-3">
-        <h4 className="text-slate-300 font-semibold text-sm flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-400" />
-          تعليمات الاستخدام
-        </h4>
-        <ul className="text-slate-400 text-sm space-y-2 list-disc list-inside leading-relaxed">
-          <li>اكتب كل بند في سطر مستقل لتظهر الشروط بشكل واضح ومرتب</li>
-          <li>يمكنك استخدام الأرقام في بداية كل سطر (مثال: ١. يمنع التدخين)</li>
-          <li>النص يُعرض كاملاً عند الضغط على «شروط استخدام المنصة» في نموذج التسجيل</li>
-          <li>يجب على كل مالك جديد الموافقة على هذه الشروط قبل إتمام تسجيل حسابه</li>
-          <li>التغييرات تنعكس فوراً — لا حاجة لإعادة تشغيل أي شيء</li>
-        </ul>
-      </div>
-    </div>
-  );
-}
 
 /* ══════════════════════════════════════════════════════════════
    Communication Settings Tab
@@ -6640,7 +5536,7 @@ const DEFAULT_OTP_TEMPLATE = `مرحباً {NAME}،
 
 const DEFAULT_WELCOME_TEMPLATE = `مرحباً {NAME}،
 
-يسعدنا انضمامك إلى منصة تكيّة! 🎉
+يسعدنا انضمامك إلى منصة تكيّة!
 
 حسابك الآن قيد المراجعة من فريق الإدارة. بعد التفعيل، يمكنك البدء بالخطوات التالية:
 
@@ -6650,235 +5546,11 @@ const DEFAULT_WELCOME_TEMPLATE = `مرحباً {NAME}،
 
 سنُرسل إليك إشعاراً فور تفعيل حسابك.
 
-فريق تكيّة ❤️`;
+فريق تكيّة ️`;
 
 const DEFAULT_WA_OTP_TEMPLATE = `مرحباً {NAME}، رمز التحقق الخاص بك في منصة تكيّة هو: {OTP}
 هذا الرمز صالح لمدة ١٠ دقائق فقط.`;
 
-function CommunicationSettingsTab() {
-  const qc = useQueryClient();
-  const [form, setForm] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState<string | null>(null);
-
-  const { data: settings, isLoading } = useQuery<Record<string, string>>({
-    queryKey: ["admin", "settings"],
-    queryFn: async () => {
-      const r = await apiFetch("/admin/settings");
-      if (!r.ok) throw new Error("فشل التحميل");
-      return r.json();
-    },
-  });
-
-  useEffect(() => { if (settings) setForm(settings); }, [settings]);
-
-  const saveMutation = useMutation({
-    mutationFn: async (data: Record<string, string>) => {
-      const r = await apiFetch("/admin/settings", { method: "PATCH", body: JSON.stringify(data) });
-      if (!r.ok) throw new Error("فشل الحفظ");
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin", "settings"] });
-    },
-  });
-
-  function saveSection(keys: string[], label: string) {
-    const partial: Record<string, string> = {};
-    keys.forEach(k => { if (form[k] !== undefined) partial[k] = form[k]; });
-    saveMutation.mutate(partial, {
-      onSuccess: () => {
-        setSaved(label);
-        setTimeout(() => setSaved(null), 2500);
-      },
-    });
-  }
-
-  function Toggle({ settingKey, label, description }: { settingKey: string; label: string; description?: string }) {
-    const on = form[settingKey] === "true";
-    return (
-      <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-900/40 px-5 py-4">
-        <div className="space-y-0.5">
-          <p className="text-sm font-semibold text-slate-200">{label}</p>
-          {description && <p className="text-xs text-slate-400">{description}</p>}
-        </div>
-        <button
-          onClick={() => setForm(f => ({ ...f, [settingKey]: on ? "false" : "true" }))}
-          className={`relative shrink-0 w-12 h-6 rounded-full transition-colors ${on ? "bg-green-500" : "bg-slate-600"}`}
-        >
-          <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${on ? "right-0.5" : "left-0.5"}`} />
-        </button>
-      </div>
-    );
-  }
-
-  function TemplateArea({ settingKey, placeholder, rows = 6 }: { settingKey: string; placeholder: string; rows?: number }) {
-    return (
-      <Textarea
-        value={form[settingKey] ?? ""}
-        onChange={e => setForm(f => ({ ...f, [settingKey]: e.target.value }))}
-        placeholder={placeholder}
-        rows={rows}
-        dir="rtl"
-        className="bg-slate-900 border-slate-600 text-white text-sm placeholder:text-slate-500 resize-y font-mono"
-      />
-    );
-  }
-
-  function SaveBtn({ keys, label }: { keys: string[]; label: string }) {
-    const isSaving = saveMutation.isPending;
-    const isSaved  = saved === label;
-    return (
-      <Button
-        onClick={() => saveSection(keys, label)}
-        disabled={isSaving}
-        className="bg-amber-600 hover:bg-amber-700 w-full gap-2"
-      >
-        <Save className="w-4 h-4" />
-        {isSaved ? "✓ تم الحفظ" : isSaving ? "جاري الحفظ..." : label}
-      </Button>
-    );
-  }
-
-  const placeholderBadge = (vars: string[]) => (
-    <div className="flex flex-wrap gap-2 mb-2">
-      {vars.map(v => (
-        <span key={v} className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded bg-slate-700 text-amber-300 border border-slate-600">
-          {`{${v}}`}
-        </span>
-      ))}
-      <span className="text-[10px] text-slate-500 self-center">متغيرات مدعومة</span>
-    </div>
-  );
-
-  if (isLoading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-400 w-6 h-6" /></div>;
-
-  return (
-    <div className="max-w-2xl space-y-6">
-
-      {/* ══ 1. Email OTP ══ */}
-      <div className="bg-slate-800 rounded-xl border border-green-500/30 overflow-hidden">
-        <div className="bg-gradient-to-l from-green-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <Mail className="w-5 h-5 text-green-400" />
-          <h3 className="text-slate-100 font-bold text-lg">رمز التحقق عبر البريد (Email OTP)</h3>
-        </div>
-        <div className="p-6 space-y-5">
-          <Toggle
-            settingKey="email_otp_enabled"
-            label="تفعيل رمز التحقق عبر البريد الإلكتروني"
-            description="يُرسل رمز ٦ أرقام لكل مالك جديد عند التسجيل"
-          />
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">موضوع البريد (Subject)</label>
-            <Input
-              value={form.email_otp_subject ?? ""}
-              onChange={e => setForm(f => ({ ...f, email_otp_subject: e.target.value }))}
-              placeholder="رمز التحقق: {OTP} — منصة تكيّة"
-              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-sm"
-              dir="ltr"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص رسالة البريد</label>
-            {placeholderBadge(["NAME", "OTP"])}
-            <TemplateArea settingKey="email_otp_template" placeholder={DEFAULT_OTP_TEMPLATE} rows={8} />
-            <p className="text-[11px] text-slate-500">اترك الحقل فارغاً لاستخدام القالب الافتراضي (HTML منسّق).</p>
-          </div>
-
-          <SaveBtn keys={["email_otp_enabled", "email_otp_subject", "email_otp_template"]} label="حفظ إعدادات OTP البريد" />
-        </div>
-      </div>
-
-      {/* ══ 2. WhatsApp OTP ══ */}
-      <div className="bg-slate-800 rounded-xl border border-emerald-500/30 overflow-hidden">
-        <div className="bg-gradient-to-l from-emerald-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <MessageSquare className="w-5 h-5 text-emerald-400" />
-          <h3 className="text-slate-100 font-bold text-lg">رمز التحقق عبر واتساب (WhatsApp OTP)</h3>
-          <span className="mr-auto text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded-full">قريباً</span>
-        </div>
-        <div className="p-6 space-y-5">
-          <Toggle
-            settingKey="wa_otp_enabled"
-            label="تفعيل رمز التحقق عبر واتساب"
-            description="إرسال رمز واتساب إضافي مع أو بدل البريد الإلكتروني (يتطلب تكامل WhatsApp API)"
-          />
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص رسالة واتساب</label>
-            {placeholderBadge(["NAME", "OTP"])}
-            <TemplateArea settingKey="wa_otp_template" placeholder={DEFAULT_WA_OTP_TEMPLATE} rows={4} />
-          </div>
-
-          <SaveBtn keys={["wa_otp_enabled", "wa_otp_template"]} label="حفظ إعدادات OTP واتساب" />
-        </div>
-      </div>
-
-      {/* ══ 3. Welcome Email ══ */}
-      <div className="bg-slate-800 rounded-xl border border-blue-500/30 overflow-hidden">
-        <div className="bg-gradient-to-l from-blue-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <Send className="w-5 h-5 text-blue-400" />
-          <h3 className="text-slate-100 font-bold text-lg">بريد الترحيب بعد التحقق</h3>
-        </div>
-        <div className="p-6 space-y-5">
-          <Toggle
-            settingKey="welcome_email_enabled"
-            label="إرسال بريد ترحيب تلقائياً"
-            description="يُرسل تلقائياً بعد نجاح التحقق من البريد، ويتضمن خطوات البداية"
-          />
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">موضوع البريد (Subject)</label>
-            <Input
-              value={form.welcome_email_subject ?? ""}
-              onChange={e => setForm(f => ({ ...f, welcome_email_subject: e.target.value }))}
-              placeholder="مرحباً بك في منصة تكيّة 🎉"
-              className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 text-sm"
-              dir="ltr"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">نص رسالة الترحيب</label>
-            {placeholderBadge(["NAME"])}
-            <TemplateArea settingKey="welcome_email_template" placeholder={DEFAULT_WELCOME_TEMPLATE} rows={10} />
-            <p className="text-[11px] text-slate-500">اترك الحقل فارغاً لاستخدام القالب الافتراضي مع خطوات التأهيل.</p>
-          </div>
-
-          <SaveBtn keys={["welcome_email_enabled", "welcome_email_subject", "welcome_email_template"]} label="حفظ إعدادات بريد الترحيب" />
-        </div>
-      </div>
-
-      {/* ══ 4. Dev Mode ══ */}
-      <div className="bg-slate-800 rounded-xl border border-amber-500/30 overflow-hidden">
-        <div className="bg-gradient-to-l from-amber-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-400" />
-          <h3 className="text-slate-100 font-bold text-lg">وضع التطوير (Dev Mode)</h3>
-          <span className="mr-auto text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">مؤقت</span>
-        </div>
-        <div className="p-6 space-y-4">
-          <Toggle
-            settingKey="otp_dev_mode"
-            label="تفعيل وضع التطوير لرمز OTP"
-            description="يقبل الرمز '123456' كرمز تحقق سحري بدون إرسال بريد — للاختبار فقط"
-          />
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 flex gap-3">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div className="text-sm text-amber-300/80 space-y-1">
-              <p className="font-semibold text-amber-300">عند تفعيل وضع التطوير:</p>
-              <ul className="list-disc list-inside space-y-0.5 text-xs">
-                <li>أي رمز التحقق المُدخل <span className="font-mono bg-amber-500/20 px-1 rounded">123456</span> سيُقبل لأي بريد إلكتروني</li>
-                <li>الرمز الحقيقي المُرسل بالبريد يظل يعمل أيضاً</li>
-                <li>أوقف هذا الخيار عند الإطلاق الفعلي للمنصة</li>
-              </ul>
-            </div>
-          </div>
-          <SaveBtn keys={["otp_dev_mode"]} label="حفظ إعداد وضع التطوير" />
-        </div>
-      </div>
-
-    </div>
-  );
-}
 
 /* ══════════════════════════════════════════════════════════════
    Contact Inquiries Tab — view and manage contact form submissions
@@ -7258,402 +5930,10 @@ const EMPTY_GUIDE_ENTRY: NewEntry = {
   saving: false,
 };
 
-function SectionGuidesAdminTab() {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const { data: guides = [] } = useQuery<GuideRow[]>({
-    queryKey: ["admin", "section-guides"],
-    queryFn: async () => {
-      const r = await apiFetch("/admin/section-guides");
-      if (!r.ok) return [];
-      return r.json();
-    },
-  });
-  const [newEntries, setNewEntries] = useState<Record<string, NewEntry>>({});
-  const [showAdd, setShowAdd]       = useState<Record<string, boolean>>({});
-  const [deleting, setDeleting]     = useState<Record<number, boolean>>({});
-
-  function toggleAdd(key: string) {
-    setShowAdd(s => ({ ...s, [key]: !s[key] }));
-    if (!newEntries[key]) setNewEntries(e => ({ ...e, [key]: { ...EMPTY_GUIDE_ENTRY } }));
-  }
-
-  async function addGuide(key: string) {
-    const e = newEntries[key];
-    if (!e?.title.trim() || !e?.url.trim()) return;
-    if (e.source === "youtube" && !getYouTubeEmbedUrl(e.url)) {
-      toast({ title: "رابط غير صالح", description: "يرجى إدخال رابط يوتيوب صحيح", variant: "destructive" });
-      return;
-    }
-    setNewEntries(n => ({ ...n, [key]: { ...n[key], saving: true } }));
-    try {
-      const r = await apiFetch("/admin/section-guides", {
-        method: "POST",
-        body: JSON.stringify({ sectionKey: key, title: e.title.trim(), videoUrl: e.url.trim() }),
-      });
-      if (!r.ok) throw new Error();
-      await qc.invalidateQueries({ queryKey: ["admin", "section-guides"] });
-      setNewEntries(n => ({ ...n, [key]: { ...EMPTY_GUIDE_ENTRY } }));
-      setShowAdd(s => ({ ...s, [key]: false }));
-      toast({ title: "تمت الإضافة ✓", description: `تمت إضافة "${e.title.trim()}" بنجاح` });
-    } catch {
-      toast({ title: "خطأ", description: "تعذّر الحفظ", variant: "destructive" });
-      setNewEntries(n => ({ ...n, [key]: { ...n[key], saving: false } }));
-    }
-  }
-
-  async function uploadGuideVideo(key: string, file: File) {
-    if (!file.type.startsWith("video/")) {
-      toast({ title: "ملف غير صالح", description: "يرجى اختيار ملف فيديو", variant: "destructive" });
-      return;
-    }
-    if (file.size > 200 * 1024 * 1024) {
-      toast({ title: "حجم الفيديو كبير", description: "الحد الأقصى المسموح 200MB", variant: "destructive" });
-      return;
-    }
-    setNewEntries(n => ({
-      ...n,
-      [key]: { ...n[key], uploading: true, fileName: file.name, url: "" },
-    }));
-    try {
-      const request = await fetch(`${BASE}/api/storage/uploads/request-url`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: file.name,
-          size: file.size,
-          contentType: file.type || "video/mp4",
-        }),
-        credentials: "include",
-      });
-      const uploadData = await request.json();
-      if (!request.ok || !uploadData.uploadURL || !uploadData.objectPath) {
-        throw new Error(uploadData.error || "تعذّر تجهيز رفع الفيديو");
-      }
-      const upload = await fetch(uploadData.uploadURL, {
-        method: "PUT",
-        headers: { "Content-Type": file.type || "video/mp4" },
-        body: file,
-      });
-      if (!upload.ok) throw new Error("تعذّر رفع الفيديو إلى التخزين");
-      const videoUrl = `${BASE}/api/storage${uploadData.objectPath}`;
-      setNewEntries(n => ({
-        ...n,
-        [key]: { ...n[key], uploading: false, url: videoUrl, fileName: file.name },
-      }));
-      toast({ title: "تم رفع الفيديو ✓", description: "يمكنك الآن حفظ الشرح" });
-    } catch (error: any) {
-      setNewEntries(n => ({
-        ...n,
-        [key]: { ...n[key], uploading: false, url: "", fileName: "" },
-      }));
-      toast({ title: "تعذّر رفع الفيديو", description: error.message, variant: "destructive" });
-    }
-  }
-
-  async function deleteGuide(id: number) {
-    setDeleting(d => ({ ...d, [id]: true }));
-    try {
-      const r = await apiFetch(`/admin/section-guides/${id}`, { method: "DELETE" });
-      if (!r.ok) throw new Error();
-      await qc.invalidateQueries({ queryKey: ["admin", "section-guides"] });
-      toast({ title: "تم الحذف" });
-    } catch {
-      toast({ title: "خطأ", description: "تعذّر الحذف", variant: "destructive" });
-    } finally {
-      setDeleting(d => ({ ...d, [id]: false }));
-    }
-  }
-
-  return (
-    <div className="space-y-5 p-1">
-      {/* Header */}
-      <div className="flex items-start gap-3 pb-1 border-b border-border">
-        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-          <BookOpen className="w-4.5 h-4.5 text-primary" />
-        </div>
-        <div>
-          <h2 className="text-base font-bold text-foreground">إدارة شروحات الأقسام</h2>
-          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-            أضف فيديوهات الشرح برفع ملف مباشر أو باستخدام رابط يوتيوب — ويمكن إضافة أكثر من فيديو للقسم الواحد.
-            سيظهر للمالك زر <span className="font-semibold text-primary">شروحات القسم</span> تلقائياً.
-          </p>
-        </div>
-      </div>
-
-      {/* Sections */}
-      <div className="space-y-3">
-        {GUIDE_SECTIONS.map(({ key, label }) => {
-          const sectionGuides = guides.filter(g => g.sectionKey === key);
-          const entry = newEntries[key] ?? EMPTY_GUIDE_ENTRY;
-          const isOpen = !!showAdd[key];
-
-          return (
-            <div key={key} className="rounded-xl border border-border bg-card overflow-hidden">
-
-              {/* ── Section header row ── */}
-              <div className="flex items-center gap-3 px-4 py-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-foreground leading-none">{label}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1 font-mono">{key}</p>
-                </div>
-                {sectionGuides.length > 0 ? (
-                  <span className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
-                    {toAr(sectionGuides.length)} فيديو
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-muted-foreground shrink-0">لا يوجد</span>
-                )}
-                <button
-                  onClick={() => toggleAdd(key)}
-                  className={`shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                    isOpen
-                      ? "bg-muted text-muted-foreground hover:bg-muted/80"
-                      : "bg-primary/10 text-primary hover:bg-primary/20"
-                  }`}
-                >
-                  {isOpen ? "إلغاء" : "+ إضافة فيديو"}
-                </button>
-              </div>
-
-              {/* ── Existing videos list ── */}
-              {sectionGuides.length > 0 && (
-                <div className="border-t border-border divide-y divide-border/60">
-                  {sectionGuides.map((g, idx) => (
-                    <div key={g.id} className="flex items-center gap-3 px-4 py-2.5 bg-muted/20">
-                      <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
-                        {toAr(idx + 1)}
-                      </span>
-                      <span className="flex-1 text-sm font-medium text-foreground truncate">{g.title}</span>
-                      <a
-                        href={g.videoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shrink-0 text-[11px] text-primary/80 hover:text-primary hover:underline"
-                      >
-                        معاينة ↗
-                      </a>
-                      <button
-                        onClick={() => deleteGuide(g.id)}
-                        disabled={deleting[g.id]}
-                        className="shrink-0 text-[11px] font-medium text-red-500 hover:text-red-600 disabled:opacity-40 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                      >
-                        {deleting[g.id] ? "..." : "حذف"}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* ── Add video form ── */}
-              {isOpen && (
-                <div className="border-t border-primary/20 bg-primary/5 px-4 py-4">
-                  <p className="text-xs font-bold text-primary mb-3 flex items-center gap-1.5">
-                    <Play className="w-3 h-3 fill-primary" />
-                    إضافة فيديو شرح جديد
-                  </p>
-                  <div className="space-y-2.5">
-                    {/* Title field */}
-                    <div>
-                      <label className="block text-[11px] font-semibold text-foreground mb-1">
-                        عنوان الفيديو الشارح
-                      </label>
-                      <input
-                        type="text"
-                        dir="rtl"
-                        placeholder="مثال: طريقة إضافة شاليه جديد"
-                        value={entry.title}
-                        onChange={e => setNewEntries(n => ({ ...n, [key]: { ...n[key], title: e.target.value } }))}
-                        className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                      />
-                    </div>
-                    {/* Video source */}
-                    <div>
-                      <label className="block text-[11px] font-semibold text-foreground mb-1">
-                        طريقة إضافة الفيديو
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setNewEntries(n => ({ ...n, [key]: { ...n[key], source: "youtube", url: "", fileName: "" } }))}
-                          className={`h-10 rounded-lg border text-xs font-bold transition-colors ${entry.source === "youtube" ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-muted"}`}
-                        >
-                          رابط يوتيوب
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNewEntries(n => ({ ...n, [key]: { ...n[key], source: "upload", url: "", fileName: "" } }))}
-                          className={`h-10 rounded-lg border text-xs font-bold transition-colors ${entry.source === "upload" ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:bg-muted"}`}
-                        >
-                          رفع ملف فيديو
-                        </button>
-                      </div>
-                    </div>
-
-                    {entry.source === "youtube" ? (
-                      <div>
-                        <label className="block text-[11px] font-semibold text-foreground mb-1">
-                          رابط يوتيوب (YouTube URL)
-                        </label>
-                        <input
-                          type="url"
-                          dir="ltr"
-                          placeholder="https://www.youtube.com/watch?v=..."
-                          value={entry.url}
-                          onChange={e => setNewEntries(n => ({ ...n, [key]: { ...n[key], url: e.target.value } }))}
-                          className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 font-mono text-xs"
-                        />
-                      </div>
-                    ) : (
-                      <label className={`flex min-h-20 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-3 text-center transition-colors ${entry.url ? "border-green-500/50 bg-green-500/5 text-green-700 dark:text-green-400" : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:bg-primary/5"}`}>
-                        <input
-                          type="file"
-                          accept="video/*"
-                          className="hidden"
-                          disabled={entry.uploading}
-                          onChange={event => {
-                            const file = event.target.files?.[0];
-                            if (file) void uploadGuideVideo(key, file);
-                            event.target.value = "";
-                          }}
-                        />
-                        {entry.uploading ? (
-                          <><Loader2 className="h-4 w-4 animate-spin" /><span className="text-xs font-semibold">جاري رفع ومعالجة الفيديو...</span></>
-                        ) : entry.url ? (
-                          <><CheckCircle className="h-4 w-4" /><span className="min-w-0 truncate text-xs font-semibold">{entry.fileName} — تم الرفع، اضغط للتغيير</span></>
-                        ) : (
-                          <><Upload className="h-4 w-4" /><span className="text-xs font-semibold">اختر فيديو كاملاً للرفع (حتى 200MB)</span></>
-                        )}
-                      </label>
-                    )}
-                    {/* Save button */}
-                    <div className="flex justify-end pt-1">
-                      <button
-                        onClick={() => addGuide(key)}
-                        disabled={entry.saving || entry.uploading || !entry.title.trim() || !entry.url.trim()}
-                        className="h-9 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                      >
-                        {entry.saving ? "جاري الحفظ..." : "حفظ الفيديو"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 /* ══════════════════════════════════════════════════════════════
    Contact Inquiries Tab
    ══════════════════════════════════════════════════════════════ */
-function ContactInquiriesTab() {
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [statusUpdating, setStatusUpdating] = useState<number | null>(null);
-
-  const { data: inquiries = [], isLoading, refetch } = useQuery<ContactInquiryRow[]>({
-    queryKey: ["admin", "contact-inquiries"],
-    queryFn: async () => {
-      const r = await apiFetch("/admin/contact-inquiries");
-      if (!r.ok) throw new Error("فشل التحميل");
-      return r.json();
-    },
-  });
-
-  async function updateStatus(id: number, status: string) {
-    setStatusUpdating(id);
-    try {
-      await apiFetch(`/admin/contact-inquiries/${id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
-      refetch();
-    } finally {
-      setStatusUpdating(null);
-    }
-  }
-
-  const statusLabel = (s: string) => s === "new" ? "جديد" : s === "read" ? "مقروء" : "تمت الإجابة";
-  const statusColor = (s: string) => s === "new" ? "bg-amber-500/20 text-amber-300" : s === "read" ? "bg-blue-500/20 text-blue-300" : "bg-green-500/20 text-green-300";
-  const newCount = inquiries.filter((i) => i.status === "new").length;
-
-  if (isLoading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-400 w-6 h-6" /></div>;
-
-  return (
-    <div className="max-w-3xl space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Mail className="w-5 h-5 text-blue-400" />
-          <h3 className="text-slate-100 font-bold text-lg">رسائل «اتصل بنا»</h3>
-          {newCount > 0 && (
-            <span className="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{newCount} جديد</span>
-          )}
-        </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()} className="border-slate-600 text-slate-300 hover:text-white">
-          تحديث
-        </Button>
-      </div>
-
-      {inquiries.length === 0 ? (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-12 text-center">
-          <Mail className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-500">لا توجد رسائل بعد.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {inquiries.map((inq) => (
-            <div key={inq.id} className={`bg-slate-800 rounded-xl border overflow-hidden transition-colors ${inq.status === "new" ? "border-amber-500/40" : "border-slate-700"}`}>
-              <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={() => setExpandedId(expandedId === inq.id ? null : inq.id)}>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-slate-100 font-semibold text-sm">{inq.name}</span>
-                    {inq.phone && <span className="text-slate-400 text-xs font-mono" dir="ltr">{inq.phone}</span>}
-                    {inq.email && <span className="text-slate-500 text-xs">{inq.email}</span>}
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(inq.status)}`}>{statusLabel(inq.status)}</span>
-                  </div>
-                  <p className="text-slate-400 text-xs mt-0.5 truncate">{inq.message}</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-slate-500">{new Date(inq.created_at).toLocaleDateString("ar-SA")}</span>
-                  <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${expandedId === inq.id ? "rotate-180" : ""}`} />
-                </div>
-              </div>
-
-              {expandedId === inq.id && (
-                <div className="border-t border-slate-700 px-4 pb-4 pt-3 space-y-3">
-                  <div className="bg-slate-900/60 rounded-lg p-3">
-                    <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap" dir="rtl">{inq.message}</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-slate-500 me-1">تغيير الحالة:</span>
-                    {["new", "read", "replied"].map((s) => (
-                      <button key={s} type="button" disabled={inq.status === s || statusUpdating === inq.id}
-                        onClick={() => updateStatus(inq.id, s)}
-                        className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors disabled:opacity-40 ${inq.status === s ? statusColor(s) + " border-transparent" : "bg-slate-700 border-slate-600 text-slate-300 hover:text-white"}`}>
-                        {statusUpdating === inq.id ? <Loader2 className="w-3 h-3 animate-spin" /> : statusLabel(s)}
-                      </button>
-                    ))}
-                    {inq.phone && (
-                      <a href={`https://wa.me/966${inq.phone.replace(/^0/, "").replace(/\D/g, "")}`}
-                        target="_blank" rel="noreferrer"
-                        className="px-3 py-1 rounded-lg text-xs font-medium bg-[#25D366]/20 text-[#25D366] border border-[#25D366]/30 hover:bg-[#25D366]/30 transition-colors ms-auto">
-                        💬 واتساب
-                      </a>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /* ══════════════════════════════════════════════════════════════
    WA Subscribers Tab — WhatsApp news opt-in list
@@ -8116,10 +6396,8 @@ const ALL_TABS = [
   { id: "ownerInbox",              label: "صندوق الوارد",          icon: Inbox },
   { id: "contactInquiries",        label: "رسائل التواصل",         icon: Mail },
   { id: "waSubscribers",           label: "قائمة المشتركين",       icon: Smartphone },
-  { id: "siteSettings",            label: "إعدادات الموقع",        icon: Settings },
-  { id: "communicationSettings",   label: "إعدادات التواصل",       icon: Mail },
-  { id: "termsManagement",         label: "شروط الاستخدام",        icon: FileCheck },
-  { id: "sectionGuides",           label: "شروحات الأقسام",        icon: BookOpen },
+  { id: "siteSettings",            label: "الإعدادات العامة",      icon: Settings },
+  { id: "auditLogs",               label: "سجل العمليات",          icon: FileText },
   { id: "adminStaff",              label: "موظفو الإدارة",         icon: Shield },
   { id: "directAdd",               label: "إضافة شاليه / مالك",   icon: Plus },
 ] as const;
@@ -8137,7 +6415,7 @@ const ADMIN_NAV_GROUPS: Array<{
   { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "ownerInbox", "adminStaff"] },
   { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "reviews", "waSubscribers", "services", "globalSeasons"] },
   { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
-  { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "communicationSettings", "contactInquiries", "termsManagement", "sectionGuides"] },
+  { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "contactInquiries", "auditLogs"] },
 ];
 
 /* ══════════════════════════════════════════════════════════════
@@ -8161,7 +6439,7 @@ interface AdminReviewRow {
   createdAt: string;
 }
 
-const DEFAULT_REVIEW_TEMPLATE = "أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} 🌟\nاضغط هنا لتقييمك: {link}";
+const DEFAULT_REVIEW_TEMPLATE = "أهلاً {guest_name}، يسعدنا تقييمك لتجربتك في {chalet_name} \nاضغط هنا لتقييمك: {link}";
 
 function ReviewsTab() {
   const qc = useQueryClient();
@@ -8415,7 +6693,7 @@ function ReviewsTab() {
                         className="border-slate-600 text-slate-300 hover:bg-slate-700 text-xs shrink-0"
                         onClick={() => copyLink(c.id)}
                       >
-                        {copiedId === c.id ? "✓ تم النسخ" : "نسخ"}
+                        {copiedId === c.id ? " تم النسخ" : "نسخ"}
                       </Button>
                       <Button
                         size="sm"
@@ -9111,7 +7389,7 @@ export default function Admin() {
     if (isAuthenticated && !isAdminStaff) {
       return (
         <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white px-4" dir="rtl">
-          <div className="text-6xl mb-6">🔐</div>
+          <div className="text-6xl mb-6"></div>
           <h1 className="text-2xl font-bold mb-2">إعداد حساب الإدارة</h1>
           <p className="text-slate-400 mb-8 text-center max-w-md">
             لتفعيل صلاحيات الإدارة، انسخ معرّفك أدناه وأضفه كمتغير بيئة باسم{" "}
@@ -9345,10 +7623,8 @@ export default function Admin() {
         {activeTab === "ownerInbox"          && <OwnerInboxTab />}
         {activeTab === "contactInquiries"      && <ContactInquiriesTab />}
         {activeTab === "waSubscribers"         && <WaSubscribersTab />}
-        {activeTab === "siteSettings"          && <SettingsTab />}
-        {activeTab === "communicationSettings" && <CommunicationSettingsTab />}
-        {activeTab === "termsManagement"     && <TermsManagementTab />}
-        {activeTab === "sectionGuides"       && <SectionGuidesAdminTab />}
+        {activeTab === "siteSettings"          && <CentralSettingsTab />}
+        {activeTab === "auditLogs"             && <AuditLogsTab />}
         {activeTab === "adminStaff"          && <AdminStaffTab isSuperAdmin={isSuperAdmin} currentUserName={displayName ?? ""} />}
         {activeTab === "directAdd"           && <DirectAddTab mode={directAddMode} />}
       </main>

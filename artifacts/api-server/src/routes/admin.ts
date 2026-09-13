@@ -28,13 +28,15 @@ import {
   ownerTempSessionsTable,
   sectionGuidesTable,
   globalSeasonsTable,
+  adminAuditLogsTable,
 } from "@workspace/db/schema";
-import { eq, inArray, and, gt, lt, ne, sql, isNull } from "drizzle-orm";
+import { eq, inArray, and, or, ilike, gt, lt, ne, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { extractCoordsFromMapsUrl } from "../lib/extractMapCoords";
+import { logger } from "../lib/logger";
 
 declare global {
   namespace Express {
@@ -170,6 +172,16 @@ export function requirePlatformSettingsAdmin(req: Request, res: Response, next: 
   res.status(403).json({ error: "لا تملك صلاحية إعدادات المنصة" });
 }
 
+function requireGlobalFinancialsAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.isSuperAdmin || req.adminStaff?.permissions?.globalFinancials) return next();
+  res.status(403).json({ error: "لا تملك صلاحية التقارير المالية العامة" });
+}
+
+export function requireSupportDisputesAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.isSuperAdmin || req.adminStaff?.permissions?.supportDisputes) return next();
+  res.status(403).json({ error: "لا تملك صلاحية الدعم والنزاعات" });
+}
+
 export async function requireAdminOrAdminStaff(req: Request, res: Response, next: NextFunction) {
   /* ── 1. OIDC super admin (legacy / Replit-hosted) ── */
   const adminId = process.env.ADMIN_USER_ID;
@@ -227,6 +239,77 @@ router.get("/impersonation-status", async (req, res) => {
 });
 
 router.use(requireAdminOrAdminStaff);
+
+/* Persist a write-ahead audit record before any state-changing admin action.
+ * The record is finalized before the JSON response is sent. If finalization
+ * fails, the durable "started" record remains for investigation, so a
+ * successful business mutation can never disappear from the audit trail. */
+router.use(async (req, res, next) => {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method) || req.path === "/audit-log") {
+    next();
+    return;
+  }
+
+  try {
+    const path = `${req.baseUrl}${req.path}`.split("?")[0].slice(0, 500);
+    const segments = req.path.split("/").filter(Boolean);
+    const entity = (segments[0] ?? "admin").slice(0, 100);
+    const initialEntityId = segments.find((segment) => /^\d+$/.test(segment)) ?? null;
+    const actorId = req.adminStaff?.id != null
+      ? String(req.adminStaff.id)
+      : req.user?.id != null ? String(req.user.id) : null;
+    const actorName = req.adminStaff?.name
+      ?? (req.user as { name?: string } | undefined)?.name
+      ?? "مجهول";
+
+    const [audit] = await db.insert(adminAuditLogsTable).values({
+      actorId,
+      actorName: String(actorName).slice(0, 255),
+      action: `${req.method.toLowerCase()}_${entity}`.slice(0, 255),
+      method: req.method,
+      path,
+      entity,
+      entityId: initialEntityId,
+      metadata: { source: "admin-router", status: "started" },
+    }).returning({ id: adminAuditLogsTable.id });
+
+    const originalJson = res.json.bind(res);
+    let finalized = false;
+    res.json = ((body: unknown) => {
+      if (finalized) return originalJson(body);
+      finalized = true;
+      const responseId = body && typeof body === "object" && "id" in body
+        ? (body as { id?: unknown }).id
+        : null;
+      const pathId = req.params?.id;
+      const finalEntityId = (Array.isArray(pathId) ? pathId[0] : pathId)
+        ?? initialEntityId
+        ?? (typeof responseId === "string" || typeof responseId === "number" ? responseId : null);
+      const succeeded = res.statusCode >= 200 && res.statusCode < 300;
+
+      void db.update(adminAuditLogsTable)
+        .set({
+          entityId: finalEntityId == null ? null : String(finalEntityId).slice(0, 100),
+          metadata: {
+            source: "admin-router",
+            status: succeeded ? "completed" : "failed",
+            statusCode: res.statusCode,
+          },
+        })
+        .where(eq(adminAuditLogsTable.id, audit.id))
+        .then(() => originalJson(body))
+        .catch((err: unknown) => {
+          logger.error({ err, auditId: audit.id, method: req.method, path }, "Failed to finalize admin audit log");
+          originalJson(body);
+        });
+      return res;
+    }) as Response["json"];
+    next();
+  } catch (err) {
+    logger.error({ err, method: req.method, path: req.path }, "Failed to initialize admin audit log");
+    res.status(500).json({ error: "تعذّر بدء سجل النشاط؛ لم تُنفذ العملية" });
+  }
+});
 
 /* ── Centrally managed chalet seasons ──────────────────────── */
 const globalSeasonDateSchema = z.string().trim().regex(
@@ -1114,7 +1197,7 @@ router.delete("/expense-categories/:id", async (req, res) => {
 
 /* ── Site Settings ───────────────────────────── */
 
-router.get("/settings", async (_req, res) => {
+router.get("/settings", requirePlatformSettingsAdmin, async (_req, res) => {
   const rows = await db.select().from(siteSettingsTable);
   const map: Record<string, string> = {};
   for (const row of rows) map[row.key] = row.value;
@@ -1191,7 +1274,7 @@ router.delete("/service-submissions/:id", async (req, res) => {
   return res.json({ ok: true });
 });
 
-router.patch("/settings", async (req, res) => {
+router.patch("/settings", requirePlatformSettingsAdmin, async (req, res) => {
   const body = z.record(z.string(), z.string()).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
   for (const [key, value] of Object.entries(body.data)) {
@@ -1203,7 +1286,152 @@ router.patch("/settings", async (req, res) => {
   return res.json({ ok: true });
 });
 
-router.get("/contact-inquiries", async (_req, res) => {
+/* ── Smart admin dashboard ───────────────────────────────────
+ * Keep this response deliberately small: it is intended for the admin
+ * overview cards and their action queues, not for full ticket management. */
+router.get(["/dashboard", "/smart-dashboard"], requireGlobalFinancialsAdmin, async (_req, res) => {
+  const expiring = await db.execute<{
+    id: number; owner_id: string; owner_name: string | null; property_name: string | null;
+    plan: string; status: string; expires_at: Date; days_remaining: string;
+  }>(sql`
+    SELECT os.id, os.owner_id,
+           COALESCE(NULLIF(TRIM(oa.full_name), ''), cs.name_ar, os.owner_id) AS owner_name,
+           cs.name_ar AS property_name, os.plan, os.status, os.expires_at,
+           GREATEST(0, CEIL(EXTRACT(EPOCH FROM (os.expires_at - NOW())) / 86400))::int AS days_remaining
+    FROM owner_subscriptions os
+    LEFT JOIN LATERAL (
+      SELECT name_ar FROM chalet_submissions
+      WHERE owner_id = os.owner_id
+      ORDER BY created_at DESC LIMIT 1
+    ) cs ON true
+    LEFT JOIN owner_applications oa
+      ON ('owner_' || oa.id::text) = os.owner_id
+    WHERE os.expires_at IS NOT NULL
+      AND os.expires_at >= NOW()
+      AND os.expires_at <= NOW() + INTERVAL '30 days'
+      AND LOWER(os.status) NOT IN ('cancelled', 'canceled', 'expired')
+    ORDER BY os.expires_at ASC
+    LIMIT 100
+  `);
+  const inquiries = await db.execute<{
+    id: number; name: string; phone: string | null; email: string | null;
+    message: string; status: string; admin_notes: string | null;
+    created_at: Date; updated_at: Date;
+  }>(sql`
+    SELECT id, name, phone, email, message,
+           CASE LOWER(status)
+             WHEN 'read' THEN 'in_progress'
+             WHEN 'replied' THEN 'answered'
+             ELSE LOWER(status)
+           END AS status,
+           admin_notes, created_at, updated_at
+    FROM contact_inquiries
+    WHERE LOWER(status) NOT IN ('answered', 'replied')
+    ORDER BY updated_at DESC, created_at DESC
+    LIMIT 100
+  `);
+  const support = await db.execute<{
+    id: number; owner_id: string; owner_name: string | null; subject: string;
+    status: string; created_at: Date;
+  }>(sql`
+    SELECT s.id, s.owner_id,
+           COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
+           s.subject, s.status, s.created_at
+    FROM owner_support_requests s
+    LEFT JOIN LATERAL (
+      SELECT full_name FROM owner_applications oa2
+      WHERE oa2.phone = (
+        SELECT whatsapp_number FROM chalet_submissions
+        WHERE owner_id = s.owner_id LIMIT 1
+      )
+      LIMIT 1
+    ) oa ON true
+    WHERE LOWER(COALESCE(s.status, 'new')) IN ('new', 'in_progress')
+      AND s.admin_reply IS NULL
+    ORDER BY s.created_at ASC
+    LIMIT 100
+  `);
+
+  const [expiringCount, inquiryCount, supportCount] = await Promise.all([
+    db.execute<{ count: string }>(sql`
+      SELECT COUNT(*) AS count FROM owner_subscriptions
+      WHERE expires_at IS NOT NULL
+        AND expires_at >= NOW()
+        AND expires_at <= NOW() + INTERVAL '30 days'
+        AND LOWER(status) NOT IN ('cancelled', 'canceled', 'expired')
+    `),
+    db.execute<{ count: string }>(sql`
+      SELECT COUNT(*) AS count FROM contact_inquiries
+      WHERE LOWER(status) NOT IN ('answered', 'replied')
+    `),
+    db.execute<{ count: string }>(sql`
+      SELECT COUNT(*) AS count FROM owner_support_requests
+      WHERE LOWER(COALESCE(status, 'new')) IN ('new', 'in_progress')
+        AND admin_reply IS NULL
+    `),
+  ]);
+
+  const totalExpiring = Number(expiringCount.rows[0]?.count ?? 0);
+  const totalInquiries = Number(inquiryCount.rows[0]?.count ?? 0);
+  const totalSupport = Number(supportCount.rows[0]?.count ?? 0);
+
+  return res.json({
+    counts: {
+      expiringSubscriptions: totalExpiring,
+      unansweredInquiries: totalInquiries,
+      pendingSupportRequests: totalSupport,
+    },
+    expiringSubscriptions: expiring.rows.map((row) => ({
+      id: row.id,
+      ownerId: row.owner_id,
+      ownerName: row.owner_name,
+      propertyName: row.property_name,
+      plan: row.plan,
+      status: row.status,
+      expiresAt: row.expires_at,
+      daysRemaining: Number(row.days_remaining),
+    })),
+    unansweredInquiries: inquiries.rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      createdAt: row.created_at,
+    })),
+    pendingSupportRequests: support.rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      createdAt: row.created_at,
+    })),
+    alerts: [
+      ...expiring.rows.map((row) => ({
+        type: "subscription_expiry",
+        severity: Number(row.days_remaining) <= 7 ? "high" : "medium",
+        title: `اشتراك ${row.owner_name ?? row.owner_id} يوشك على الانتهاء`,
+        description: `${row.property_name ? `${row.property_name} — ` : ""}تنتهي الخطة خلال ${Number(row.days_remaining)} يوم`,
+        entityId: row.owner_id,
+        expiresAt: row.expires_at,
+        daysRemaining: Number(row.days_remaining),
+      })),
+      ...(totalInquiries > 0 ? [{
+        type: "contact_inquiries",
+        severity: "medium",
+        title: "رسائل تواصل تنتظر المتابعة",
+        description: `${totalInquiries} رسالة لم تُجب بعد`,
+        entityId: "contact-inquiries",
+        messageCreatedAt: inquiries.rows[0]?.created_at,
+      }] : []),
+      ...(totalSupport > 0 ? [{
+        type: "owner_support",
+        severity: "high",
+        title: "طلبات دعم ملاك تنتظر الرد",
+        description: `${totalSupport} طلب دعم يحتاج إلى إجراء`,
+        entityId: "owner-support",
+        messageCreatedAt: support.rows[0]?.created_at,
+      }] : []),
+    ],
+  });
+});
+
+router.get("/contact-inquiries", requireSupportDisputesAdmin, async (_req, res) => {
   const rows = await db
     .select({
       id: contactInquiriesTable.id,
@@ -1212,24 +1440,42 @@ router.get("/contact-inquiries", async (_req, res) => {
       email: contactInquiriesTable.email,
       message: contactInquiriesTable.message,
       status: contactInquiriesTable.status,
+      admin_notes: contactInquiriesTable.adminNotes,
       created_at: contactInquiriesTable.createdAt,
+      updated_at: contactInquiriesTable.updatedAt,
     })
     .from(contactInquiriesTable)
     .orderBy(sql`${contactInquiriesTable.createdAt} DESC`)
     .limit(200);
-  return res.json(rows);
+  return res.json(rows.map((row) => ({
+    ...row,
+    status: row.status === "read" ? "in_progress" : row.status === "replied" ? "answered" : row.status,
+    adminNotes: row.admin_notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  })));
 });
 
-router.patch("/contact-inquiries/:id/status", async (req, res) => {
+router.patch(["/contact-inquiries/:id/status", "/contact-inquiries/:id"], requireSupportDisputesAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  const body = z.object({ status: z.enum(["new", "read", "replied"]) }).safeParse(req.body);
+  const body = z.object({
+    status: z.enum(["new", "in_progress", "answered", "read", "replied"]),
+    adminNotes: z.string().max(5000).nullable().optional(),
+    adminNote: z.string().max(5000).nullable().optional(),
+  }).safeParse(req.body);
   if (!body.success || !Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
-  await db.update(contactInquiriesTable).set({ status: body.data.status }).where(eq(contactInquiriesTable.id, id));
-  return res.json({ ok: true });
+  const status = body.data.status === "read" ? "in_progress" : body.data.status === "replied" ? "answered" : body.data.status;
+  const adminNotes = body.data.adminNotes !== undefined ? body.data.adminNotes : body.data.adminNote;
+  const [updated] = await db.update(contactInquiriesTable)
+    .set({ status, ...(adminNotes !== undefined ? { adminNotes } : {}) })
+    .where(eq(contactInquiriesTable.id, id))
+    .returning({ id: contactInquiriesTable.id, status: contactInquiriesTable.status, adminNotes: contactInquiriesTable.adminNotes, updatedAt: contactInquiriesTable.updatedAt });
+  if (!updated) return res.status(404).json({ error: "الاستفسار غير موجود" });
+  return res.json({ ok: true, ...updated });
 });
 
 /* ── Owner Support Requests ──────────────────────────────── */
-router.get("/support-requests", async (req, res) => {
+router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) => {
   try {
     const ownerId = req.query.ownerId as string | undefined;
     /*
@@ -1281,7 +1527,7 @@ router.get("/support-requests", async (req, res) => {
   }
 });
 
-router.patch("/support-requests/:id/status", async (req, res) => {
+router.patch("/support-requests/:id/status", requireSupportDisputesAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const body = z.object({ status: z.enum(["new", "in_progress", "resolved"]) }).safeParse(req.body);
   if (!body.success || !Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
@@ -1291,7 +1537,7 @@ router.patch("/support-requests/:id/status", async (req, res) => {
   return res.json({ ok: true });
 });
 
-router.post("/support-requests/:id/reply", adminReplyUpload.array("files", 10), async (req, res) => {
+router.post("/support-requests/:id/reply", requireSupportDisputesAdmin, adminReplyUpload.array("files", 10), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
   const reply = (req.body?.reply ?? "").trim();
@@ -1563,26 +1809,76 @@ router.post("/impersonate", async (req, res) => {
 });
 
 /* ── Audit Log (edit-mode activation) ──────────────── */
-router.post("/audit-log", async (req, res) => {
+router.get(["/audit-log", "/audit-logs"], requireSuperAdmin, async (req, res) => {
+  const page = Math.max(1, Number(req.query.page ?? 1) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize ?? req.query.page_size ?? req.query.limit ?? 50) || 50));
+  const offset = req.query.offset != null
+    ? Math.max(0, Number(req.query.offset) || 0)
+    : (page - 1) * pageSize;
+  const actorId = typeof (req.query.actorId ?? req.query.actor_id) === "string" ? String(req.query.actorId ?? req.query.actor_id) : undefined;
+  const action = typeof req.query.action === "string" ? req.query.action : undefined;
+  const entity = typeof req.query.entity === "string" ? req.query.entity : undefined;
+  const entityId = typeof (req.query.entityId ?? req.query.entity_id) === "string" ? String(req.query.entityId ?? req.query.entity_id) : undefined;
+  const method = typeof req.query.method === "string" ? req.query.method.toUpperCase() : undefined;
+  const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 100) : "";
+  const fromValue = req.query.from ?? req.query.fromDate ?? req.query.from_date;
+  const toValue = req.query.to ?? req.query.toDate ?? req.query.to_date;
+  const from = typeof fromValue === "string" ? new Date(fromValue) : undefined;
+  const to = typeof toValue === "string" ? new Date(toValue) : undefined;
+  const filters = [
+    actorId ? eq(adminAuditLogsTable.actorId, actorId) : undefined,
+    action ? eq(adminAuditLogsTable.action, action) : undefined,
+    entity ? eq(adminAuditLogsTable.entity, entity) : undefined,
+    entityId ? eq(adminAuditLogsTable.entityId, entityId) : undefined,
+    method ? eq(adminAuditLogsTable.method, method) : undefined,
+    search ? or(
+      ilike(adminAuditLogsTable.actorName, `%${search}%`),
+      ilike(adminAuditLogsTable.actorId, `%${search}%`),
+      ilike(adminAuditLogsTable.action, `%${search}%`),
+      ilike(adminAuditLogsTable.entity, `%${search}%`),
+      ilike(adminAuditLogsTable.entityId, `%${search}%`),
+      ilike(adminAuditLogsTable.path, `%${search}%`),
+    ) : undefined,
+    from && !Number.isNaN(from.getTime()) ? gt(adminAuditLogsTable.createdAt, from) : undefined,
+    to && !Number.isNaN(to.getTime()) ? lt(adminAuditLogsTable.createdAt, to) : undefined,
+  ].filter((condition): condition is NonNullable<typeof condition> => condition !== undefined);
+  const where = filters.length > 0 ? and(...filters) : undefined;
+  const [rows, total] = await Promise.all([
+    db.select().from(adminAuditLogsTable)
+      .where(where)
+      .orderBy(sql`${adminAuditLogsTable.createdAt} DESC`)
+      .limit(pageSize)
+      .offset(offset),
+    db.select({ count: sql<number>`COUNT(*)` }).from(adminAuditLogsTable).where(where),
+  ]);
+  return res.json({
+    rows: rows.map((row) => ({ ...row, entityType: row.entity })),
+    items: rows.map((row) => ({ ...row, entityType: row.entity })),
+    page,
+    pageSize,
+    offset,
+    total: Number(total[0]?.count ?? 0),
+  });
+});
+
+router.post("/audit-log", requireSuperAdmin, async (req, res) => {
   const { action, targetOwnerId } = req.body ?? {};
+  const parsedAction = z.enum(["ENABLE_EDIT_MODE", "DISABLE_EDIT_MODE"]).safeParse(action);
+  if (!parsedAction.success) {
+    return res.status(400).json({ error: "نوع العملية غير صحيح" });
+  }
   const adminName = (req as any).adminStaff?.name ?? (req as any).user?.name ?? "مجهول";
   const adminId   = (req as any).adminStaff?.id   ?? (req as any).user?.id  ?? null;
 
-  /* Persist in DB so it survives restarts */
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS admin_audit_logs (
-      id         SERIAL PRIMARY KEY,
-      admin_id   TEXT,
-      admin_name TEXT,
-      action     TEXT NOT NULL,
-      target_owner_id TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `);
-  await db.execute(sql`
-    INSERT INTO admin_audit_logs (admin_id, admin_name, action, target_owner_id)
-    VALUES (${String(adminId)}, ${adminName}, ${String(action ?? "")}, ${String(targetOwnerId ?? "")})
-  `);
+  /* Compatibility endpoint for the old edit-mode activation client. The
+   * table is managed by the schema/migration, never created per request. */
+  await db.insert(adminAuditLogsTable).values({
+    actorId: adminId == null ? null : String(adminId).slice(0, 100),
+    actorName: String(adminName).slice(0, 255),
+    action: parsedAction.data,
+    targetOwnerId: targetOwnerId == null ? null : String(targetOwnerId).slice(0, 100),
+    metadata: { source: "legacy-audit-endpoint" },
+  });
 
   return res.json({ ok: true, logged: true });
 });
@@ -1612,7 +1908,7 @@ router.patch("/applications/:id/docs", async (req, res) => {
 /* ══════════════════════════════════════════════════════
    Platform Budget — subscriptions income vs platform expenses → net profit
    ══════════════════════════════════════════════════════ */
-router.get("/platform-revenue", async (_req, res) => {
+router.get("/platform-revenue", requireSuperAdmin, async (_req, res) => {
   // Subscription revenue
   const subRows = await db.execute<{
     plan: string; count: string; plan_price: string;
@@ -1671,7 +1967,7 @@ router.get("/platform-revenue", async (_req, res) => {
   });
 });
 
-router.post("/platform-expenses", async (req, res) => {
+router.post("/platform-expenses", requireSuperAdmin, async (req, res) => {
   const { dateStr, category, amount, notes } = req.body ?? {};
   if (!dateStr || !category || !amount) {
     return res.status(400).json({ error: "البيانات ناقصة" });
@@ -1683,7 +1979,7 @@ router.post("/platform-expenses", async (req, res) => {
   return res.json({ ok: true });
 });
 
-router.delete("/platform-expenses/:id", async (req, res) => {
+router.delete("/platform-expenses/:id", requireSuperAdmin, async (req, res) => {
   await db.execute(sql`
     DELETE FROM owner_expenses WHERE id = ${Number(req.params.id)} AND owner_id = '__platform__'
   `);
@@ -1691,7 +1987,7 @@ router.delete("/platform-expenses/:id", async (req, res) => {
 });
 
 /* ── Admin Analytics ─────────────────────────────────────── */
-router.get("/analytics", async (_req, res) => {
+router.get("/analytics", requireGlobalFinancialsAdmin, async (_req, res) => {
   // 1. Monthly subscription revenue — last 12 months
   const monthlyRev = await db.execute<{ month: string; total: string }>(sql`
     SELECT TO_CHAR(DATE_TRUNC('month', os.created_at), 'YYYY-MM') AS month,
@@ -1731,6 +2027,85 @@ router.get("/analytics", async (_req, res) => {
       AND cs.owner_id NOT IN (SELECT owner_id FROM owner_subscriptions)
   `);
 
+  /* Booking performance excludes cancelled records and uses the owner's
+   * recorded revenue first, falling back to the legacy total_price field. */
+  const weeklyBookings = await db.execute<{ period: string; bookings: string; revenue: string }>(sql`
+    WITH periods AS (
+      SELECT generate_series(
+        DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '11 weeks',
+        DATE_TRUNC('week', CURRENT_DATE),
+        INTERVAL '1 week'
+      ) AS period
+    ), totals AS (
+      SELECT DATE_TRUNC('week', TO_DATE(NULLIF(b.booking_date, ''), 'YYYY-MM-DD')) AS period,
+             COUNT(*) AS bookings,
+             COALESCE(SUM(
+               CASE WHEN b.total_price IS NOT NULL
+                 THEN COALESCE(b.deposit_paid, 0)
+                   + CASE WHEN b.balance_collected
+                       THEN GREATEST(b.total_price - COALESCE(b.deposit_paid, 0), 0)
+                       ELSE 0 END
+                 ELSE COALESCE(b.revenue_amount, b.deposit_paid, 0)
+               END
+             ), 0) AS revenue
+      FROM owner_bookings b
+      WHERE b.cancelled_at IS NULL
+        AND b.booking_date IS NOT NULL
+        AND b.booking_date <> ''
+        AND TO_DATE(b.booking_date, 'YYYY-MM-DD') >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '11 weeks'
+      GROUP BY 1
+    )
+    SELECT TO_CHAR(p.period, 'YYYY-MM-DD') AS period,
+           COALESCE(t.bookings, 0)::text AS bookings,
+           COALESCE(t.revenue, 0)::text AS revenue
+    FROM periods p LEFT JOIN totals t ON t.period = p.period
+    ORDER BY p.period
+  `);
+  const monthlyBookings = await db.execute<{ period: string; bookings: string; revenue: string }>(sql`
+    WITH periods AS (
+      SELECT generate_series(
+        DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months',
+        DATE_TRUNC('month', CURRENT_DATE),
+        INTERVAL '1 month'
+      ) AS period
+    ), totals AS (
+      SELECT DATE_TRUNC('month', TO_DATE(NULLIF(b.booking_date, ''), 'YYYY-MM-DD')) AS period,
+             COUNT(*) AS bookings,
+             COALESCE(SUM(
+               CASE WHEN b.total_price IS NOT NULL
+                 THEN COALESCE(b.deposit_paid, 0)
+                   + CASE WHEN b.balance_collected
+                       THEN GREATEST(b.total_price - COALESCE(b.deposit_paid, 0), 0)
+                       ELSE 0 END
+                 ELSE COALESCE(b.revenue_amount, b.deposit_paid, 0)
+               END
+             ), 0) AS revenue
+      FROM owner_bookings b
+      WHERE b.cancelled_at IS NULL
+        AND b.booking_date IS NOT NULL
+        AND b.booking_date <> ''
+        AND TO_DATE(b.booking_date, 'YYYY-MM-DD') >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months'
+      GROUP BY 1
+    )
+    SELECT TO_CHAR(p.period, 'YYYY-MM') AS period,
+           COALESCE(t.bookings, 0)::text AS bookings,
+           COALESCE(t.revenue, 0)::text AS revenue
+    FROM periods p LEFT JOIN totals t ON t.period = p.period
+    ORDER BY p.period
+  `);
+  const toSeries = (rows: Array<{ period: string; bookings: string; revenue: string }>) =>
+    rows.map((row) => ({
+      period: row.period,
+      bookings: Number(row.bookings ?? 0),
+      revenue: Number(row.revenue ?? 0),
+    }));
+  const weeklyBookingSeries = toSeries(weeklyBookings.rows);
+  const monthlyBookingSeries = toSeries(monthlyBookings.rows);
+  const formatWeeklyLabel = (period: string) =>
+    new Intl.DateTimeFormat("ar-SA", { day: "numeric", month: "short" }).format(new Date(`${period}T00:00:00Z`));
+  const formatMonthlyLabel = (period: string) =>
+    new Intl.DateTimeFormat("ar-SA", { month: "short", year: "numeric" }).format(new Date(`${period}-01T00:00:00Z`));
+
   return res.json({
     monthlyRevenue: monthlyRev.rows.map(r => ({
       month: r.month,
@@ -1750,6 +2125,27 @@ router.get("/analytics", async (_req, res) => {
         ? [{ status: "no_sub", count: Number(noSubOwners.rows[0]?.count ?? 0) }]
         : []),
     ],
+    /* New booking series; monthlyRevenue above remains subscription revenue. */
+    weeklyBookings: weeklyBookingSeries,
+    monthlyBookings: monthlyBookingSeries,
+    weeklyBookingRevenue: weeklyBookingSeries.map(({ period, revenue }) => ({ period, revenue })),
+    monthlyBookingRevenue: monthlyBookingSeries.map(({ period, revenue }) => ({ period, revenue })),
+    bookingTimeSeries: {
+      weekly: weeklyBookingSeries,
+      monthly: monthlyBookingSeries,
+    },
+    weeklyPerformance: weeklyBookingSeries.map((row) => ({
+      ...row,
+      label: formatWeeklyLabel(row.period),
+      grossRevenue: row.revenue,
+      collectedRevenue: row.revenue,
+    })),
+    monthlyPerformance: monthlyBookingSeries.map((row) => ({
+      ...row,
+      label: formatMonthlyLabel(row.period),
+      grossRevenue: row.revenue,
+      collectedRevenue: row.revenue,
+    })),
   });
 });
 
@@ -2053,7 +2449,7 @@ export async function runSubscriptionExpiryJob() {
 
 /* ── GET /admin/wa-subscribers — WhatsApp news subscribers list ── */
 /* ── Section Guides ─────────────────────────────────────────── */
-router.get("/section-guides", async (_req, res) => {
+router.get("/section-guides", requirePlatformSettingsAdmin, async (_req, res) => {
   try {
     const rows = await db.select().from(sectionGuidesTable).orderBy(sectionGuidesTable.sectionKey, sectionGuidesTable.id);
     return res.json(rows);
@@ -2063,7 +2459,7 @@ router.get("/section-guides", async (_req, res) => {
   }
 });
 
-router.post("/section-guides", async (req, res) => {
+router.post("/section-guides", requirePlatformSettingsAdmin, async (req, res) => {
   try {
     const { sectionKey, title, videoUrl } = req.body as { sectionKey: string; title: string; videoUrl: string };
     if (!sectionKey || !title || !videoUrl) return res.status(400).json({ error: "بيانات ناقصة" });
@@ -2075,7 +2471,7 @@ router.post("/section-guides", async (req, res) => {
   }
 });
 
-router.put("/section-guides/:id", async (req, res) => {
+router.put("/section-guides/:id", requirePlatformSettingsAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { title, videoUrl } = req.body as { title?: string; videoUrl?: string };
@@ -2091,7 +2487,7 @@ router.put("/section-guides/:id", async (req, res) => {
   }
 });
 
-router.delete("/section-guides/:id", async (req, res) => {
+router.delete("/section-guides/:id", requirePlatformSettingsAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     await db.delete(sectionGuidesTable).where(eq(sectionGuidesTable.id, id));
