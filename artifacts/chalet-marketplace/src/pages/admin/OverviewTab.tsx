@@ -129,7 +129,7 @@ export function OverviewTab() {
       {d && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: "إجمالي الشاليهات", value: fmtN(d.marketDistribution?.chalets ?? 0), icon: <Home className="w-4 h-4 text-amber-400" /> },
+            { label: "إجمالي العقارات", value: fmtN(d.marketDistribution?.chalets ?? 0), icon: <Home className="w-4 h-4 text-amber-400" /> },
             { label: "الخدمات المسجّلة", value: fmtN(d.marketDistribution?.services ?? 0), icon: <Wrench className="w-4 h-4 text-blue-400" /> },
             { label: "الحسابات النشطة", value: fmtN(d.accountStatus?.find((s: any) => s.status === "active")?.count ?? 0), icon: <CheckCircle className="w-4 h-4 text-emerald-400" /> },
             { label: "إيرادات الاشتراكات", value: `${fmtN(d.monthlyRevenue?.reduce((s: any, r: any) => s + r.total, 0) ?? 0)} ر.س`, icon: <TrendingUp className="w-4 h-4 text-amber-400" /> },

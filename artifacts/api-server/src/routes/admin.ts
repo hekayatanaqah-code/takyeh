@@ -2000,9 +2000,9 @@ router.get("/analytics", requireGlobalFinancialsAdmin, async (_req, res) => {
     ORDER BY DATE_TRUNC('month', os.created_at)
   `);
 
-  // 2. Market distribution — chalets vs services
+  // 2. Market distribution — properties vs approved service providers
   const chaletCount = await db.execute<{ count: string }>(sql`SELECT COUNT(*) as count FROM chalets`);
-  const serviceCount = await db.execute<{ count: string }>(sql`SELECT COUNT(*) as count FROM external_services`);
+  const serviceCount = await db.execute<{ count: string }>(sql`SELECT COUNT(*) as count FROM service_providers`);
 
   // 3. Geographic heatmap — bookings by city (top 10)
   const geoData = await db.execute<{ city: string; count: string }>(sql`
