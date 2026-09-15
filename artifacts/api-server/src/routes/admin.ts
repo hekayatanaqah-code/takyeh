@@ -177,6 +177,11 @@ function requireGlobalFinancialsAdmin(req: Request, res: Response, next: NextFun
   res.status(403).json({ error: "لا تملك صلاحية التقارير المالية العامة" });
 }
 
+function requireChaletApprovalsAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.isSuperAdmin || req.adminStaff?.permissions?.chaletApprovals) return next();
+  res.status(403).json({ error: "لا تملك صلاحية مراجعة طلبات العقارات والخدمات" });
+}
+
 export function requireSupportDisputesAdmin(req: Request, res: Response, next: NextFunction) {
   if (req.isSuperAdmin || req.adminStaff?.permissions?.supportDisputes) return next();
   res.status(403).json({ error: "لا تملك صلاحية الدعم والنزاعات" });
@@ -1206,7 +1211,7 @@ router.get("/settings", requirePlatformSettingsAdmin, async (_req, res) => {
 
 /* ── Service Provider Submissions (Admin) ──────────────────── */
 
-router.get("/service-submissions", async (_req, res) => {
+router.get("/service-submissions", requireChaletApprovalsAdmin, async (_req, res) => {
   const rows = await db
     .select()
     .from(serviceProviderSubmissionsTable)
@@ -1214,7 +1219,7 @@ router.get("/service-submissions", async (_req, res) => {
   return res.json(rows.reverse());
 });
 
-router.patch("/service-submissions/:id/status", async (req, res) => {
+router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const body = z.object({
     status: z.enum(["pending", "approved", "rejected", "needs_revision"]),
@@ -1268,7 +1273,7 @@ router.patch("/service-submissions/:id/status", async (req, res) => {
   return res.json({ ok: true });
 });
 
-router.delete("/service-submissions/:id", async (req, res) => {
+router.delete("/service-submissions/:id", requireChaletApprovalsAdmin, async (req, res) => {
   const id = Number(req.params.id);
   await db.delete(serviceProviderSubmissionsTable).where(eq(serviceProviderSubmissionsTable.id, id));
   return res.json({ ok: true });

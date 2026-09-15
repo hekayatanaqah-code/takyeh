@@ -53,7 +53,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, FileText, Check, Video, Mail, MessageSquare, Send, Inbox, Smartphone, Download, Paperclip, BookOpen, Play } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, FileText, Check, Video, Mail, MessageSquare, Send, Inbox, Smartphone, Download, Paperclip, BookOpen, Play, ClipboardList } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -3009,6 +3009,16 @@ interface ProviderSubmission {
   whatsappNumber: string;
   logoUrl: string | null;
   galleryPhotos: string[];
+  videoUrl?: string | null;
+  yearsOfExperience?: number | null;
+  pricingUnit?: string | null;
+  dailyCapacity?: number | null;
+  requiresInsurance?: boolean;
+  insuranceAmount?: string | null;
+  requiresContract?: boolean;
+  contractText?: string | null;
+  coverageTags?: string[];
+  customFeatureTags?: string[];
   status: string;
   adminNote: string | null;
   createdAt: string;
@@ -3127,6 +3137,59 @@ function ProviderReviewModal({
               <p className="text-foreground leading-relaxed">{sub.descriptionAr}</p>
             </div>
           )}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="text-muted-foreground text-xs mb-1">سنوات الخبرة</p>
+              <p className="font-semibold text-foreground">
+                {sub.yearsOfExperience != null ? `${toAr(sub.yearsOfExperience)} سنة` : "—"}
+              </p>
+            </div>
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="text-muted-foreground text-xs mb-1">الطاقة اليومية</p>
+              <p className="font-semibold text-foreground">
+                {sub.dailyCapacity != null ? toAr(sub.dailyCapacity) : "—"}
+              </p>
+            </div>
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="text-muted-foreground text-xs mb-1">وحدة التسعير</p>
+              <p className="font-semibold text-foreground">{sub.pricingUnit || "—"}</p>
+            </div>
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="text-muted-foreground text-xs mb-1">التأمين</p>
+              <p className="font-semibold text-foreground">
+                {sub.requiresInsurance ? `${toAr(Number(sub.insuranceAmount ?? 0))} ر.س` : "غير مطلوب"}
+              </p>
+            </div>
+          </div>
+          {(sub.coverageTags?.length || sub.customFeatureTags?.length) ? (
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="text-muted-foreground text-xs mb-2">نطاق الخدمة والمميزات</p>
+              <div className="flex flex-wrap gap-1.5">
+                {[...(sub.coverageTags ?? []), ...(sub.customFeatureTags ?? [])].map((tag, index) => (
+                  <span key={`${tag}-${index}`} className="rounded-full bg-amber-500/10 text-amber-600 px-2.5 py-1 text-xs font-medium">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {sub.requiresContract && sub.contractText && (
+            <div className="bg-muted/50 rounded-xl p-3">
+              <p className="text-muted-foreground text-xs mb-1">نص العقد</p>
+              <p className="text-foreground leading-relaxed whitespace-pre-wrap">{sub.contractText}</p>
+            </div>
+          )}
+          {sub.videoUrl && (
+            <a
+              href={sub.videoUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 text-amber-500 hover:underline font-semibold"
+            >
+              <Play className="w-4 h-4" />
+              عرض فيديو الخدمة
+            </a>
+          )}
           {sub.ownerName && (
             <div className="bg-muted/50 rounded-xl p-3">
               <p className="text-muted-foreground text-xs mb-1">المقدِّم</p>
@@ -3207,6 +3270,20 @@ function ProviderSubmissionsTab() {
     },
   });
 
+  const quickDecision = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: "approved" | "rejected" }) => {
+      const r = await apiFetch(`/admin/service-submissions/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      if (!r.ok) {
+        const payload = await r.json().catch(() => ({}));
+        throw new Error(payload.error || "فشل تحديث الطلب");
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "provider-submissions"] }),
+  });
+
   const filtered = filter === "all" ? submissions : submissions.filter((s) => s.status === filter);
 
   const STATUS_COLORS: Record<string, string> = {
@@ -3258,6 +3335,12 @@ function ProviderSubmissionsTab() {
         ))}
       </div>
 
+      {quickDecision.isError && (
+        <div className="rounded-xl border border-red-800/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+          {quickDecision.error instanceof Error ? quickDecision.error.message : "تعذّر تحديث الطلب، حاول مرة أخرى"}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-amber-400" /></div>
       ) : filtered.length === 0 ? (
@@ -3298,15 +3381,44 @@ function ProviderSubmissionsTab() {
                     <span className="text-xs text-slate-500">
                       {fmtDate(sub.createdAt)}
                     </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setSelected(sub)}
-                      className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs h-7"
-                    >
-                      <Eye className="w-3.5 h-3.5 me-1" />
-                      مراجعة
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {sub.status === "pending" && (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => quickDecision.mutate({ id: sub.id, status: "approved" })}
+                            disabled={quickDecision.isPending}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-7"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5 me-1" />
+                            قبول
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (window.confirm(`هل تريد رفض طلب "${sub.businessName}"؟`)) {
+                                quickDecision.mutate({ id: sub.id, status: "rejected" });
+                              }
+                            }}
+                            disabled={quickDecision.isPending}
+                            className="border-red-500/50 text-red-400 hover:bg-red-500/10 text-xs h-7"
+                          >
+                            <XCircle className="w-3.5 h-3.5 me-1" />
+                            رفض
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelected(sub)}
+                        className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 text-xs h-7"
+                      >
+                        <Eye className="w-3.5 h-3.5 me-1" />
+                        عرض التفاصيل
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -6384,6 +6496,7 @@ const ALL_TABS = [
   { id: "partnerApplications",     label: "طلبات الملاك",          icon: Users },
   { id: "platformRevenue",         label: "ميزانية المنصة",        icon: TrendingUp },
   { id: "services",                label: "قائمة الخدمات",         icon: Wrench },
+  { id: "serviceSubmissions",      label: "طلبات الخدمات الجديدة", icon: ClipboardList },
   { id: "globalSeasons",           label: "المواسم والأعياد",       icon: Calendar },
   { id: "serviceCategories",       label: "فئات الخدمات",          icon: Tag },
   { id: "expenseCategories",       label: "فئات المصروفات",        icon: Tag },
@@ -6412,7 +6525,7 @@ const ADMIN_NAV_GROUPS: Array<{
 }> = [
   { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
   { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "amenities", "locations"] },
-  { id: "services", label: "إدارة الخدمات", icon: Wrench, tabs: ["services", "serviceCategories"] },
+  { id: "services", label: "إدارة الخدمات", icon: Wrench, tabs: ["services", "serviceSubmissions", "serviceCategories"] },
   { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "ownerInbox", "adminStaff"] },
   { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "reviews", "waSubscribers", "globalSeasons"] },
   { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
@@ -7612,6 +7725,7 @@ export default function Admin() {
         {activeTab === "partnerApplications" && <PartnerApplicationsTab />}
         {activeTab === "platformRevenue"      && <PlatformRevenueTab />}
         {activeTab === "services"             && <ServicesTab />}
+        {activeTab === "serviceSubmissions"   && <ProviderSubmissionsTab />}
         {activeTab === "globalSeasons"        && <GlobalSeasonsTab />}
         {activeTab === "serviceCategories"   && <ServiceCategoriesTab />}
         {activeTab === "expenseCategories"   && <ExpenseCategoriesTab />}
