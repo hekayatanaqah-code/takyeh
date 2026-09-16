@@ -1236,43 +1236,91 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
     adminNote: adminNote || null,
   };
 
-  if (body.data.status === "approved") {
-    const [submission] = await db
-      .select()
-      .from(serviceProviderSubmissionsTable)
-      .where(eq(serviceProviderSubmissionsTable.id, id))
-      .limit(1);
+  const result = await db.transaction(async (tx) => {
+    if (body.data.status === "approved") {
+      const [submission] = await tx
+        .select()
+        .from(serviceProviderSubmissionsTable)
+        .where(eq(serviceProviderSubmissionsTable.id, id))
+        .for("update")
+        .limit(1);
 
-    if (submission) {
-      await db.insert(serviceProvidersTable).values({
-        ownerId: submission.ownerId ?? null,
-        businessName: submission.businessName,
-        category: submission.category,
-        city: submission.city,
-        descriptionAr: submission.descriptionAr ?? undefined,
-        whatsappNumber: submission.whatsappNumber,
-        logoUrl: submission.logoUrl ?? undefined,
-        galleryPhotos: submission.galleryPhotos ?? [],
-        videoUrl: submission.videoUrl ?? undefined,
-        yearsOfExperience: submission.yearsOfExperience ?? undefined,
-        pricingUnit: submission.pricingUnit ?? undefined,
-        dailyCapacity: submission.dailyCapacity ?? undefined,
-        requiresInsurance: submission.requiresInsurance,
-        requiresContract: submission.requiresContract,
-        contractText: submission.contractText ?? null,
-        includeElectronicSignature: submission.includeElectronicSignature,
-        insuranceAmount: submission.requiresInsurance ? submission.insuranceAmount : null,
-        coverageTags: submission.coverageTags ?? [],
-        customFeatureTags: submission.customFeatureTags ?? [],
-        isActive: true,
-      }).onConflictDoNothing();
+      if (submission) {
+        const linkedProvider = await tx
+          .select({ id: serviceProvidersTable.id })
+          .from(serviceProvidersTable)
+          .where(eq(serviceProvidersTable.submissionId, submission.id))
+          .limit(1);
+
+        if (linkedProvider.length === 0) {
+          const legacyProviders = await tx
+            .select({ id: serviceProvidersTable.id })
+            .from(serviceProvidersTable)
+            .where(and(
+              isNull(serviceProvidersTable.submissionId),
+              sql`${serviceProvidersTable.ownerId} IS NOT DISTINCT FROM ${submission.ownerId}`,
+              eq(serviceProvidersTable.businessName, submission.businessName),
+              eq(serviceProvidersTable.category, submission.category),
+              eq(serviceProvidersTable.city, submission.city),
+              eq(serviceProvidersTable.whatsappNumber, submission.whatsappNumber),
+            ))
+            .for("update")
+            .limit(2);
+
+          if (legacyProviders.length > 1) {
+            return { conflict: true };
+          }
+
+          if (legacyProviders.length === 1) {
+            await tx
+              .update(serviceProvidersTable)
+              .set({ submissionId: submission.id })
+              .where(and(
+                eq(serviceProvidersTable.id, legacyProviders[0].id),
+                isNull(serviceProvidersTable.submissionId),
+              ));
+          } else {
+            await tx.insert(serviceProvidersTable).values({
+              submissionId: submission.id,
+              ownerId: submission.ownerId ?? null,
+              businessName: submission.businessName,
+              category: submission.category,
+              city: submission.city,
+              descriptionAr: submission.descriptionAr ?? undefined,
+              whatsappNumber: submission.whatsappNumber,
+              logoUrl: submission.logoUrl ?? undefined,
+              galleryPhotos: submission.galleryPhotos ?? [],
+              videoUrl: submission.videoUrl ?? undefined,
+              yearsOfExperience: submission.yearsOfExperience ?? undefined,
+              pricingUnit: submission.pricingUnit ?? undefined,
+              dailyCapacity: submission.dailyCapacity ?? undefined,
+              requiresInsurance: submission.requiresInsurance,
+              requiresContract: submission.requiresContract,
+              contractText: submission.contractText ?? null,
+              includeElectronicSignature: submission.includeElectronicSignature,
+              insuranceAmount: submission.requiresInsurance ? submission.insuranceAmount : null,
+              coverageTags: submission.coverageTags ?? [],
+              customFeatureTags: submission.customFeatureTags ?? [],
+              isActive: true,
+            }).onConflictDoNothing({ target: serviceProvidersTable.submissionId });
+          }
+        }
+      }
     }
-  }
 
-  await db
-    .update(serviceProviderSubmissionsTable)
-    .set(updateData)
-    .where(eq(serviceProviderSubmissionsTable.id, id));
+    await tx
+      .update(serviceProviderSubmissionsTable)
+      .set(updateData)
+      .where(eq(serviceProviderSubmissionsTable.id, id));
+
+    return { conflict: false };
+  });
+
+  if (result.conflict) {
+    return res.status(409).json({
+      error: "تعذر ربط الطلب تلقائياً لوجود أكثر من مزود مطابق",
+    });
+  }
 
   return res.json({ ok: true });
 });
@@ -2394,17 +2442,22 @@ router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
     videoUrl: data.videoUrl || null,
   };
 
-  /* Create submission (already approved) */
-  const [submission] = await db
-    .insert(serviceProviderSubmissionsTable)
-    .values({ ...svcVals, status: "approved" })
-    .returning({ id: serviceProviderSubmissionsTable.id });
+  const submission = await db.transaction(async (tx) => {
+    /* Create submission (already approved) */
+    const [createdSubmission] = await tx
+      .insert(serviceProviderSubmissionsTable)
+      .values({ ...svcVals, status: "approved" })
+      .returning({ id: serviceProviderSubmissionsTable.id });
 
-  /* Auto-create active service provider record */
-  await db.insert(serviceProvidersTable).values({
-    ...svcVals,
-    isActive: true,
-  }).onConflictDoNothing();
+    /* Auto-create active service provider record */
+    await tx.insert(serviceProvidersTable).values({
+      ...svcVals,
+      submissionId: createdSubmission.id,
+      isActive: true,
+    });
+
+    return createdSubmission;
+  });
 
   return res.status(201).json({ ok: true, submissionId: submission.id });
 });

@@ -343,6 +343,9 @@ export type ServiceProviderSubmission = typeof serviceProviderSubmissionsTable.$
 /* ── Approved Service Providers ────────────────────────────── */
 export const serviceProvidersTable = pgTable("service_providers", {
   id: serial("id").primaryKey(),
+  submissionId: integer("submission_id")
+    .references(() => serviceProviderSubmissionsTable.id, { onDelete: "set null" })
+    .unique(),
   ownerId: text("owner_id"),
   businessName: text("business_name").notNull(),
   category: text("category").notNull(),
