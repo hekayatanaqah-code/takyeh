@@ -3000,6 +3000,12 @@ const PROVIDER_CATEGORY_LABELS: Record<string, string> = {
   other: " أخرى",
 };
 
+const PROVIDER_PRICING_UNIT_LABELS: Record<string, string> = {
+  per_day: "لكل يوم",
+  per_hour: "لكل ساعة",
+  per_request: "لكل طلب / لكل حجز",
+};
+
 interface ProviderSubmission {
   id: number;
   businessName: string;
@@ -3045,13 +3051,20 @@ function ProviderReviewModal({
 
   const decide = useMutation({
     mutationFn: async ({ status, note }: { status: string; note?: string }) => {
+      const normalizedNote = note?.trim();
+      if ((status === "rejected" || status === "needs_revision") && !normalizedNote) {
+        throw new Error("يجب كتابة سبب الرفض أو طلب التعديل");
+      }
       const r = await fetch(`${API}/admin/service-submissions/${sub!.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status, adminNote: note }),
+        body: JSON.stringify({ status, adminNote: normalizedNote }),
         credentials: "include",
       });
-      if (!r.ok) throw new Error("فشل التحديث");
+      if (!r.ok) {
+        const payload = await r.json().catch(() => ({}));
+        throw new Error(payload.error || "فشل التحديث");
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "provider-submissions"] });
@@ -3152,7 +3165,9 @@ function ProviderReviewModal({
             </div>
             <div className="bg-muted/50 rounded-xl p-3">
               <p className="text-muted-foreground text-xs mb-1">وحدة التسعير</p>
-              <p className="font-semibold text-foreground">{sub.pricingUnit || "—"}</p>
+              <p className="font-semibold text-foreground">
+                {sub.pricingUnit ? (PROVIDER_PRICING_UNIT_LABELS[sub.pricingUnit] ?? "غير محدد") : "—"}
+              </p>
             </div>
             <div className="bg-muted/50 rounded-xl p-3">
               <p className="text-muted-foreground text-xs mb-1">التأمين</p>
@@ -3200,14 +3215,27 @@ function ProviderReviewModal({
 
         {/* Admin Note */}
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">ملاحظة للمزود (تُرسل عند الرفض/التعديل)</label>
+          <label className="text-sm font-semibold text-foreground">
+            ملاحظة للمزود (تُرسل عند الرفض/التعديل)
+            {step !== "view" && <span className="text-red-500"> *</span>}
+          </label>
           <Textarea
             value={adminNote}
             onChange={(e) => setAdminNote(e.target.value)}
-            placeholder="اكتب ملاحظتك هنا..."
+            placeholder="اكتب سبب الرفض أو التعديلات المطلوبة..."
             rows={3}
-            className="resize-none"
+            required={step !== "view"}
+            aria-required={step !== "view"}
+            className={`resize-none ${step !== "view" && !adminNote.trim() ? "border-red-500 focus-visible:ring-red-500" : ""}`}
           />
+          {step !== "view" && !adminNote.trim() && (
+            <p className="text-xs font-medium text-red-500">كتابة السبب إلزامية لإتمام هذا الإجراء.</p>
+          )}
+          {decide.isError && (
+            <p className="text-xs font-medium text-red-500">
+              {decide.error instanceof Error ? decide.error.message : "تعذّر تحديث الطلب"}
+            </p>
+          )}
         </div>
 
         {/* Actions */}
@@ -3231,8 +3259,8 @@ function ProviderReviewModal({
           <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t border-border pt-4 space-y-2">
             <p className="text-sm font-semibold text-destructive text-center">تأكيد الرفض؟</p>
             <div className="flex gap-3">
-              <Button onClick={() => decide.mutate({ status: "rejected", note: adminNote || undefined })}
-                disabled={decide.isPending} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold">
+              <Button onClick={() => decide.mutate({ status: "rejected", note: adminNote })}
+                disabled={decide.isPending || !adminNote.trim()} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold">
                 {decide.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "تأكيد الرفض"}
               </Button>
               <Button variant="outline" onClick={() => setStep("view")} className="flex-1">رجوع</Button>
@@ -3243,8 +3271,8 @@ function ProviderReviewModal({
           <div className="sticky bottom-0 bg-background/95 backdrop-blur border-t border-border pt-4 space-y-2">
             <p className="text-sm font-semibold text-orange-600 text-center">تأكيد طلب التعديل؟</p>
             <div className="flex gap-3">
-              <Button onClick={() => decide.mutate({ status: "needs_revision", note: adminNote || undefined })}
-                disabled={decide.isPending} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold">
+              <Button onClick={() => decide.mutate({ status: "needs_revision", note: adminNote })}
+                disabled={decide.isPending || !adminNote.trim()} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold">
                 {decide.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "تأكيد"}
               </Button>
               <Button variant="outline" onClick={() => setStep("view")} className="flex-1">رجوع</Button>

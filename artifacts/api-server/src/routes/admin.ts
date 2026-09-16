@@ -1223,13 +1223,17 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
   const id = Number(req.params.id);
   const body = z.object({
     status: z.enum(["pending", "approved", "rejected", "needs_revision"]),
-    adminNote: z.string().optional(),
+    adminNote: z.string().max(2000).optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const adminNote = body.data.adminNote?.trim();
+  if (["rejected", "needs_revision"].includes(body.data.status) && !adminNote) {
+    return res.status(400).json({ error: "يجب كتابة سبب الرفض أو طلب التعديل" });
+  }
 
   const updateData: Record<string, unknown> = {
     status: body.data.status,
-    adminNote: body.data.adminNote ?? null,
+    adminNote: adminNote || null,
   };
 
   if (body.data.status === "approved") {
