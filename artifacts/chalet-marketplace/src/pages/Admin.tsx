@@ -1168,13 +1168,17 @@ function LocationsTab() {
         <div className={`mb-4 rounded-lg border px-4 py-3 text-center ${selectedRegion ? "border-amber-500/60 bg-amber-500/10" : "border-slate-700 bg-slate-900"}`}>
           <p className="text-xs text-slate-400 mb-1">المنطقة التي تدير مدنها الآن</p>
           <p className={`font-extrabold text-lg ${selectedRegion ? "text-white" : "text-slate-500"}`}>
-            {selectedRegion ? `مدن منطقة: ${selectedRegion.name}` : "لم يتم اختيار منطقة"}
+            {selectedRegion ? `إدارة مدن: ${selectedRegion.name}` : "لم يتم اختيار منطقة"}
           </p>
         </div>
         <Select value={selectedRegionId} onValueChange={(value) => { setSelectedRegionId(value); setSelectedCityId(""); }}>
           <SelectTrigger className="bg-slate-900 border-slate-600 text-white mb-2"><SelectValue placeholder="اختر المنطقة" /></SelectTrigger>
           <SelectContent className="bg-slate-900 border-slate-700">
-            {regions.map((region: Region) => <SelectItem key={region.id} value={String(region.id)}>{region.name}</SelectItem>)}
+            {regions.map((region: Region) => (
+              <SelectItem key={region.id} value={String(region.id)} className="text-white focus:bg-slate-700 focus:text-white">
+                {region.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <div className="flex gap-2 mb-4">
@@ -1229,10 +1233,10 @@ function LocationsTab() {
         <h3 className="text-white font-bold mb-4 text-lg">الأحياء</h3>
         <div className={`mb-4 rounded-lg border px-4 py-3 text-center ${selectedRegion ? "border-amber-500/60 bg-amber-500/10" : "border-slate-700 bg-slate-900"}`}>
           <p className="text-xs text-slate-400 mb-1">المنطقة التي تدير أحياءها الآن</p>
-          <p className={`font-extrabold text-lg ${selectedRegion ? "text-amber-300" : "text-slate-500"}`}>
-            {selectedRegion ? `أحياء منطقة: ${selectedRegion.name}` : "لم يتم اختيار منطقة"}
+          <p className={`font-extrabold text-lg ${selectedCity ? "text-white" : "text-slate-500"}`}>
+            {selectedCity ? `إدارة أحياء: ${selectedCity.name}` : "لم يتم اختيار مدينة"}
           </p>
-          {selectedCity && <p className="mt-1 text-sm font-semibold text-white">المدينة: {selectedCity.name}</p>}
+          {selectedRegion && <p className="mt-1 text-sm font-semibold text-amber-300">المنطقة: {selectedRegion.name}</p>}
         </div>
         <div className="space-y-2 mb-4">
           <Select value={selectedCityId} onValueChange={setSelectedCityId}>
@@ -1241,7 +1245,9 @@ function LocationsTab() {
             </SelectTrigger>
             <SelectContent className="bg-slate-900 border-slate-700">
               {regionCities.map((city: City) => (
-                <SelectItem key={city.id} value={String(city.id)} className="text-white focus:bg-slate-700">{city.name}</SelectItem>
+                <SelectItem key={city.id} value={String(city.id)} className="text-white focus:bg-slate-700 focus:text-white">
+                  {city.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
