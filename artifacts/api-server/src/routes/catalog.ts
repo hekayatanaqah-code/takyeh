@@ -1,10 +1,64 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { citiesCatalogTable, regionsCatalogTable, amenitiesCatalogTable, districtsCatalogTable, chaletCategoriesTable, serviceCategoriesTable, expenseCategoriesTable, siteSettingsTable } from "@workspace/db/schema";
+import { citiesCatalogTable, regionsCatalogTable, amenitiesCatalogTable, districtsCatalogTable, chaletCategoriesTable, serviceCategoriesTable, expenseCategoriesTable, siteSettingsTable, serviceRegionsCatalogTable, serviceCitiesCatalogTable, serviceDistrictsCatalogTable } from "@workspace/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 const router = Router();
+
+router.get("/service-regions", async (_req, res) => {
+  const rows = await db.select().from(serviceRegionsCatalogTable)
+    .where(eq(serviceRegionsCatalogTable.isActive, true))
+    .orderBy(serviceRegionsCatalogTable.name);
+  return res.json(rows);
+});
+
+router.get("/service-cities", async (req, res) => {
+  const parsed = z.object({ regionId: z.coerce.number().int().positive().optional() }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: "معرّف المنطقة غير صحيح" });
+  if (parsed.data.regionId !== undefined) {
+    const [activeRegion] = await db
+      .select({ id: serviceRegionsCatalogTable.id })
+      .from(serviceRegionsCatalogTable)
+      .where(and(
+        eq(serviceRegionsCatalogTable.id, parsed.data.regionId),
+        eq(serviceRegionsCatalogTable.isActive, true),
+      ));
+    if (!activeRegion) return res.json([]);
+  }
+  const conditions = [eq(serviceCitiesCatalogTable.isActive, true)];
+  if (parsed.data.regionId !== undefined) conditions.push(eq(serviceCitiesCatalogTable.regionId, parsed.data.regionId));
+  const rows = await db.select().from(serviceCitiesCatalogTable)
+    .where(and(...conditions))
+    .orderBy(serviceCitiesCatalogTable.name);
+  return res.json(rows);
+});
+
+router.get("/service-districts", async (req, res) => {
+  const parsed = z.object({ cityId: z.coerce.number().int().positive().optional() }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: "معرّف المدينة غير صحيح" });
+  if (parsed.data.cityId !== undefined) {
+    const [activeCity] = await db
+      .select({ id: serviceCitiesCatalogTable.id })
+      .from(serviceCitiesCatalogTable)
+      .innerJoin(
+        serviceRegionsCatalogTable,
+        eq(serviceCitiesCatalogTable.regionId, serviceRegionsCatalogTable.id),
+      )
+      .where(and(
+        eq(serviceCitiesCatalogTable.id, parsed.data.cityId),
+        eq(serviceCitiesCatalogTable.isActive, true),
+        eq(serviceRegionsCatalogTable.isActive, true),
+      ));
+    if (!activeCity) return res.json([]);
+  }
+  const conditions = [eq(serviceDistrictsCatalogTable.isActive, true)];
+  if (parsed.data.cityId !== undefined) conditions.push(eq(serviceDistrictsCatalogTable.cityId, parsed.data.cityId));
+  const rows = await db.select().from(serviceDistrictsCatalogTable)
+    .where(and(...conditions))
+    .orderBy(serviceDistrictsCatalogTable.name);
+  return res.json(rows);
+});
 
 router.get("/regions", async (_req, res) => {
   const rows = await db.select().from(regionsCatalogTable).orderBy(regionsCatalogTable.name);

@@ -171,6 +171,39 @@ export const districtsCatalogTable = pgTable("districts_catalog", {
 });
 export type District = typeof districtsCatalogTable.$inferSelect;
 
+/* ── Independent service-location catalogs ─────────────────────────────── */
+export const serviceRegionsCatalogTable = pgTable("service_regions_catalog", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const insertServiceRegionSchema = createInsertSchema(serviceRegionsCatalogTable).omit({ id: true, createdAt: true });
+export type InsertServiceRegion = z.infer<typeof insertServiceRegionSchema>;
+export type ServiceRegion = typeof serviceRegionsCatalogTable.$inferSelect;
+
+export const serviceCitiesCatalogTable = pgTable("service_cities_catalog", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  regionId: integer("region_id").references(() => serviceRegionsCatalogTable.id, { onDelete: "restrict" }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const insertServiceCitySchema = createInsertSchema(serviceCitiesCatalogTable).omit({ id: true, createdAt: true });
+export type InsertServiceCity = z.infer<typeof insertServiceCitySchema>;
+export type ServiceCity = typeof serviceCitiesCatalogTable.$inferSelect;
+
+export const serviceDistrictsCatalogTable = pgTable("service_districts_catalog", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  cityId: integer("city_id").references(() => serviceCitiesCatalogTable.id, { onDelete: "cascade" }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const insertServiceDistrictSchema = createInsertSchema(serviceDistrictsCatalogTable).omit({ id: true, createdAt: true });
+export type InsertServiceDistrict = z.infer<typeof insertServiceDistrictSchema>;
+export type ServiceDistrict = typeof serviceDistrictsCatalogTable.$inferSelect;
+
 export const amenitiesCatalogTable = pgTable("amenities_catalog", {
   id: serial("id").primaryKey(),
   key: text("key").notNull().unique(),
@@ -330,6 +363,8 @@ export const serviceProviderSubmissionsTable = pgTable("service_provider_submiss
   ownerId: text("owner_id"),
   businessName: text("business_name").notNull(),
   category: text("category").notNull(),
+  serviceRegionId: integer("service_region_id").references(() => serviceRegionsCatalogTable.id, { onDelete: "restrict" }),
+  serviceCityId: integer("service_city_id").references(() => serviceCitiesCatalogTable.id, { onDelete: "restrict" }),
   city: text("city").notNull(),
   descriptionAr: text("description_ar"),
   whatsappNumber: text("whatsapp_number").notNull(),
@@ -361,6 +396,8 @@ export const serviceProvidersTable = pgTable("service_providers", {
   ownerId: text("owner_id"),
   businessName: text("business_name").notNull(),
   category: text("category").notNull(),
+  serviceRegionId: integer("service_region_id").references(() => serviceRegionsCatalogTable.id, { onDelete: "restrict" }),
+  serviceCityId: integer("service_city_id").references(() => serviceCitiesCatalogTable.id, { onDelete: "restrict" }),
   city: text("city").notNull(),
   descriptionAr: text("description_ar"),
   whatsappNumber: text("whatsapp_number").notNull(),

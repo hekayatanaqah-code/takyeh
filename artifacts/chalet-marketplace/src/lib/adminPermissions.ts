@@ -28,6 +28,7 @@ export const ADMIN_TAB_PERMISSION: Record<string, AdminPermKey | "__superadmin__
   serviceCategories:     "platformSettings",
   expenseCategories:     "platformSettings",
   locations:             "platformSettings",
+  serviceLocations:      "platformSettings",
   amenities:             "platformSettings",
   categories:            "platformSettings",
   owners:                "userManagement",

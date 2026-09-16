@@ -27,3 +27,4 @@
 - [Results search context](results-search-context.md) — city and date remain editable in the sticky results bar and stay synchronized with the URL.
 - [Global versus private seasons](global-private-seasons.md) — admin controls shared dates; each property controls activation and pricing, while owner-created seasons remain separate.
 - [Admin write-ahead auditing](admin-write-ahead-auditing.md) — privileged mutations must persist an audit intent before changing state; successful actions must never disappear from the log.
+- [Service location catalog isolation](service-location-catalog-isolation.md) — service regions, cities, and districts are managed independently from property locations.

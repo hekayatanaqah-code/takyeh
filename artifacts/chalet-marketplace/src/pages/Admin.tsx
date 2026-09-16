@@ -1310,6 +1310,69 @@ function LocationsTab() {
   );
 }
 
+/* ── Independent Service Locations Tab ────────────────────────────── */
+function ServiceLocationsTab() {
+  const qc = useQueryClient();
+  const [newRegion, setNewRegion] = useState("");
+  const [newCity, setNewCity] = useState("");
+  const [newDistrict, setNewDistrict] = useState("");
+  const [regionId, setRegionId] = useState("");
+  const [cityId, setCityId] = useState("");
+  const query = (path: string, key: string) => useQuery({
+    queryKey: ["admin", "service", key],
+    queryFn: async () => { const r = await apiFetch(path); if (!r.ok) throw new Error("فشل التحميل"); return r.json(); },
+  });
+  const { data: regions = [] } = query("/admin/service-regions", "regions");
+  const { data: cities = [] } = query("/admin/service-cities", "cities");
+  const { data: districts = [] } = query("/admin/service-districts", "districts");
+  const mutate = (path: string, body?: unknown, method = "POST") => useMutation({
+    mutationFn: async () => { const r = await apiFetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) }); if (!r.ok) throw new Error("فشلت العملية"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "service"] }); },
+  });
+  const addRegion = mutate("/admin/service-regions", { name: newRegion.trim() });
+  const addCity = mutate("/admin/service-cities", { name: newCity.trim(), regionId: Number(regionId) });
+  const addDistrict = mutate("/admin/service-districts", { name: newDistrict.trim(), cityId: Number(cityId) });
+  const toggle = useMutation({
+    mutationFn: async ({ type, id, isActive }: { type: "region" | "city" | "district"; id: number; isActive: boolean }) => {
+      const r = await apiFetch(`/admin/service-${type === "region" ? "regions" : type === "city" ? "cities" : "districts"}/${id}`, { method: "PATCH", body: JSON.stringify({ isActive }) });
+      if (!r.ok) throw new Error("فشل تحديث الحالة");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "service"] }),
+  });
+  const selectedRegion = regions.find((r: Region) => r.id === Number(regionId));
+  const regionCities = cities.filter((c: City) => c.regionId === Number(regionId));
+  const selectedCity = cities.find((c: City) => c.id === Number(cityId));
+  const cityDistricts = districts.filter((d: District) => d.cityId === Number(cityId));
+  const statusButton = (type: "region" | "city" | "district", item: Region | City | District) => (
+    <Button size="sm" variant="outline" disabled={toggle.isPending} onClick={() => toggle.mutate({ type, id: item.id, isActive: !item.isActive })}
+      className={item.isActive ? "h-8 border-green-700 bg-green-950/60 text-green-300" : "h-8 border-red-800 bg-red-950/50 text-red-300"}>
+      {item.isActive ? "مفعّلة" : "مقفلة"}
+    </Button>
+  );
+  return <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
+      <h3 className="text-white font-bold mb-4 text-lg">مناطق الخدمات</h3>
+      <div className="flex gap-2 mb-4"><Input value={newRegion} onChange={e => setNewRegion(e.target.value)} placeholder="اسم المنطقة" className="bg-slate-900 border-slate-600 text-white" />
+        <Button onClick={() => { if (newRegion.trim()) { addRegion.mutate(); setNewRegion(""); } }} disabled={!newRegion.trim() || addRegion.isPending} className="bg-amber-600 text-white">إضافة</Button></div>
+      <div className="space-y-2 max-h-96 overflow-y-auto">{regions.map((r: Region) => <div key={r.id} className="flex justify-between items-center p-3 rounded-lg bg-slate-900 border border-slate-700"><span className="text-white font-medium">{r.name}</span>{statusButton("region", r)}</div>)}</div>
+    </div>
+    <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
+      <h3 className="text-white font-bold mb-4 text-lg">مدن الخدمات</h3>
+      <div className="mb-4 rounded-lg border border-amber-500/60 bg-amber-500/10 px-4 py-3 text-center"><p className="text-xs text-slate-400">المنطقة المحددة</p><p className="font-extrabold text-lg text-white">{selectedRegion?.name ?? "لم يتم اختيار منطقة"}</p></div>
+      <Select value={regionId} onValueChange={v => { setRegionId(v); setCityId(""); }}><SelectTrigger className="bg-slate-900 border-slate-600 text-white mb-2"><SelectValue placeholder="اختر المنطقة" /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-700">{regions.map((r: Region) => <SelectItem key={r.id} value={String(r.id)} className="text-white">{r.name}</SelectItem>)}</SelectContent></Select>
+      <div className="flex gap-2 mb-4"><Input value={newCity} onChange={e => setNewCity(e.target.value)} placeholder="اسم المدينة" className="bg-slate-900 border-slate-600 text-white" /><Button onClick={() => { if (newCity.trim()) { addCity.mutate(); setNewCity(""); } }} disabled={!newCity.trim() || !regionId || addCity.isPending} className="bg-amber-600 text-white">إضافة</Button></div>
+      <div className="space-y-2 max-h-96 overflow-y-auto">{regionCities.map((c: City) => <div key={c.id} className="flex justify-between items-center p-3 rounded-lg bg-slate-900 border border-slate-700"><span className="text-white">{c.name}</span>{statusButton("city", c)}</div>)}</div>
+    </div>
+    <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
+      <h3 className="text-white font-bold mb-4 text-lg">أحياء الخدمات</h3>
+      <div className="mb-4 rounded-lg border border-amber-500/60 bg-amber-500/10 px-4 py-3 text-center"><p className="text-xs text-slate-400">المدينة المحددة</p><p className="font-extrabold text-lg text-white">{selectedCity?.name ?? "لم يتم اختيار مدينة"}</p>{selectedRegion && <p className="text-sm text-amber-300">المنطقة: {selectedRegion.name}</p>}</div>
+      <Select value={cityId} onValueChange={setCityId}><SelectTrigger className="bg-slate-900 border-slate-600 text-white mb-2"><SelectValue placeholder="اختر المدينة" /></SelectTrigger><SelectContent className="bg-slate-900 border-slate-700">{regionCities.map((c: City) => <SelectItem key={c.id} value={String(c.id)} className="text-white">{c.name}</SelectItem>)}</SelectContent></Select>
+      <div className="flex gap-2 mb-4"><Input value={newDistrict} onChange={e => setNewDistrict(e.target.value)} placeholder="اسم الحي" className="bg-slate-900 border-slate-600 text-white" /><Button onClick={() => { if (newDistrict.trim()) { addDistrict.mutate(); setNewDistrict(""); } }} disabled={!newDistrict.trim() || !cityId || addDistrict.isPending} className="bg-amber-600 text-white">إضافة</Button></div>
+      <div className="space-y-2 max-h-80 overflow-y-auto">{cityDistricts.map((d: District) => <div key={d.id} className="flex justify-between items-center p-3 rounded-lg bg-slate-900 border border-slate-700"><span className="text-white">{d.name}</span>{statusButton("district", d)}</div>)}</div>
+    </div>
+  </div>;
+}
+
 /* ── Amenities Tab ────────────────────────────── */
 function AmenitiesTab() {
   const qc = useQueryClient();
@@ -6642,6 +6705,7 @@ const ALL_TABS = [
   { id: "serviceCategories",       label: "فئات الخدمات",          icon: Tag },
   { id: "expenseCategories",       label: "فئات المصروفات",        icon: Tag },
   { id: "locations",               label: "المدن والأحياء",        icon: Building2 },
+  { id: "serviceLocations",        label: "المناطق والمدن",         icon: MapPin },
   { id: "amenities",               label: "المرافق",                icon: Tag },
   { id: "categories",              label: "فئات العقارات",         icon: Tag },
   { id: "owners",                  label: "الملاك",                 icon: Users },
@@ -6666,7 +6730,7 @@ const ADMIN_NAV_GROUPS: Array<{
 }> = [
   { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
   { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "amenities", "locations"] },
-  { id: "services", label: "إدارة الخدمات", icon: Wrench, tabs: ["services", "serviceSubmissions", "serviceCategories"] },
+  { id: "services", label: "إدارة الخدمات", icon: Wrench, tabs: ["services", "serviceSubmissions", "serviceCategories", "serviceLocations"] },
   { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "ownerInbox", "adminStaff"] },
   { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "reviews", "waSubscribers", "globalSeasons"] },
   { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
@@ -7871,6 +7935,7 @@ export default function Admin() {
         {activeTab === "serviceCategories"   && <ServiceCategoriesTab />}
         {activeTab === "expenseCategories"   && <ExpenseCategoriesTab />}
         {activeTab === "locations"           && <LocationsTab />}
+        {activeTab === "serviceLocations"    && <ServiceLocationsTab />}
         {activeTab === "amenities"           && <AmenitiesTab />}
         {activeTab === "categories"          && <CategoriesTab />}
         {activeTab === "owners"              && <OwnersTab isSuperAdmin={isSuperAdmin} />}

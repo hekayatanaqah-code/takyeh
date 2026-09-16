@@ -9,6 +9,9 @@ import {
   citiesCatalogTable,
   regionsCatalogTable,
   districtsCatalogTable,
+  serviceRegionsCatalogTable,
+  serviceCitiesCatalogTable,
+  serviceDistrictsCatalogTable,
   amenitiesCatalogTable,
   externalServicesTable,
   chaletCategoriesTable,
@@ -867,6 +870,116 @@ router.patch("/owners/:id/soft-delete", async (req, res) => {
   return res.json({ ok: true });
 });
 
+/* ── Independent service-location catalogs ───────────────── */
+
+router.get("/service-regions", requirePlatformSettingsAdmin, async (_req, res) => {
+  const rows = await db.select().from(serviceRegionsCatalogTable).orderBy(serviceRegionsCatalogTable.createdAt);
+  return res.json(rows);
+});
+
+router.post("/service-regions", requirePlatformSettingsAdmin, async (req, res) => {
+  const body = z.object({ name: z.string().trim().min(1) }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "الاسم مطلوب" });
+  const [region] = await db.insert(serviceRegionsCatalogTable).values({ name: body.data.name }).returning();
+  return res.status(201).json(region);
+});
+
+router.patch("/service-regions/:id", requirePlatformSettingsAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({ name: z.string().trim().min(1).optional(), isActive: z.boolean().optional() }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const [region] = await db.update(serviceRegionsCatalogTable).set(body.data)
+    .where(eq(serviceRegionsCatalogTable.id, id)).returning();
+  if (!region) return res.status(404).json({ error: "المنطقة غير موجودة" });
+  return res.json(region);
+});
+
+router.get("/service-cities", requirePlatformSettingsAdmin, async (_req, res) => {
+  const rows = await db.select().from(serviceCitiesCatalogTable)
+    .orderBy(serviceCitiesCatalogTable.createdAt);
+  return res.json(rows);
+});
+
+router.post("/service-cities", requirePlatformSettingsAdmin, async (req, res) => {
+  const body = z.object({ name: z.string().trim().min(1), regionId: z.number().int().positive() }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const [parent] = await db.select({ id: serviceRegionsCatalogTable.id }).from(serviceRegionsCatalogTable)
+    .where(eq(serviceRegionsCatalogTable.id, body.data.regionId));
+  if (!parent) return res.status(400).json({ error: "المنطقة غير موجودة" });
+  const [city] = await db.insert(serviceCitiesCatalogTable).values(body.data).returning();
+  return res.status(201).json(city);
+});
+
+router.patch("/service-cities/:id", requirePlatformSettingsAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({
+    name: z.string().trim().min(1).optional(),
+    regionId: z.number().int().positive().optional(),
+    isActive: z.boolean().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  if (body.data.regionId !== undefined) {
+    const [parent] = await db.select({ id: serviceRegionsCatalogTable.id }).from(serviceRegionsCatalogTable)
+      .where(eq(serviceRegionsCatalogTable.id, body.data.regionId));
+    if (!parent) return res.status(400).json({ error: "المنطقة غير موجودة" });
+  }
+  const [city] = await db.update(serviceCitiesCatalogTable).set(body.data)
+    .where(eq(serviceCitiesCatalogTable.id, id)).returning();
+  if (!city) return res.status(404).json({ error: "المدينة غير موجودة" });
+  return res.json(city);
+});
+
+router.delete("/service-cities/:id", requirePlatformSettingsAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const [city] = await db.delete(serviceCitiesCatalogTable)
+    .where(eq(serviceCitiesCatalogTable.id, id)).returning();
+  if (!city) return res.status(404).json({ error: "المدينة غير موجودة" });
+  return res.json({ ok: true });
+});
+
+router.get("/service-districts", requirePlatformSettingsAdmin, async (_req, res) => {
+  const rows = await db.select().from(serviceDistrictsCatalogTable)
+    .orderBy(serviceDistrictsCatalogTable.cityId, serviceDistrictsCatalogTable.createdAt);
+  return res.json(rows);
+});
+
+router.post("/service-districts", requirePlatformSettingsAdmin, async (req, res) => {
+  const body = z.object({ name: z.string().trim().min(1), cityId: z.number().int().positive() }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const [parent] = await db.select({ id: serviceCitiesCatalogTable.id }).from(serviceCitiesCatalogTable)
+    .where(eq(serviceCitiesCatalogTable.id, body.data.cityId));
+  if (!parent) return res.status(400).json({ error: "المدينة غير موجودة" });
+  const [district] = await db.insert(serviceDistrictsCatalogTable).values(body.data).returning();
+  return res.status(201).json(district);
+});
+
+router.patch("/service-districts/:id", requirePlatformSettingsAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({
+    name: z.string().trim().min(1).optional(),
+    cityId: z.number().int().positive().optional(),
+    isActive: z.boolean().optional(),
+  }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  if (body.data.cityId !== undefined) {
+    const [parent] = await db.select({ id: serviceCitiesCatalogTable.id }).from(serviceCitiesCatalogTable)
+      .where(eq(serviceCitiesCatalogTable.id, body.data.cityId));
+    if (!parent) return res.status(400).json({ error: "المدينة غير موجودة" });
+  }
+  const [district] = await db.update(serviceDistrictsCatalogTable).set(body.data)
+    .where(eq(serviceDistrictsCatalogTable.id, id)).returning();
+  if (!district) return res.status(404).json({ error: "الحي غير موجود" });
+  return res.json(district);
+});
+
+router.delete("/service-districts/:id", requirePlatformSettingsAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const [district] = await db.delete(serviceDistrictsCatalogTable)
+    .where(eq(serviceDistrictsCatalogTable.id, id)).returning();
+  if (!district) return res.status(404).json({ error: "الحي غير موجود" });
+  return res.json({ ok: true });
+});
+
 /* ── Regions & Cities ────────────────────────────────────── */
 
 router.get("/regions", async (_req, res) => {
@@ -1307,6 +1420,8 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
               ownerId: submission.ownerId ?? null,
               businessName: submission.businessName,
               category: submission.category,
+              serviceRegionId: submission.serviceRegionId,
+              serviceCityId: submission.serviceCityId,
               city: submission.city,
               descriptionAr: submission.descriptionAr ?? undefined,
               whatsappNumber: submission.whatsappNumber,

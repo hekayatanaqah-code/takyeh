@@ -11,6 +11,8 @@ import {
   serviceReviewsTable,
   ownerCustomersTable,
   serviceCategoriesTable,
+  serviceRegionsCatalogTable,
+  serviceCitiesCatalogTable,
   citiesCatalogTable,
 } from "@workspace/db/schema";
 import { eq, and, ne, desc, isNull, gte, sql, inArray } from "drizzle-orm";
@@ -241,6 +243,8 @@ router.post("/submit", requireAuth, async (req: any, res) => {
   const schema = z.object({
     businessName: z.string().min(2, "اسم النشاط يجب أن يكون حرفين على الأقل"),
     category: z.string().min(1, "يرجى اختيار فئة الخدمة"),
+    serviceRegionId: z.number().int().positive(),
+    serviceCityId: z.number().int().positive(),
     city: z.string().min(1, "يرجى اختيار المدينة"),
     descriptionAr: z.string().optional(),
     whatsappNumber: z.string().min(9, "رقم الواتساب يجب أن يكون 9 أرقام على الأقل"),
@@ -271,6 +275,22 @@ router.post("/submit", requireAuth, async (req: any, res) => {
   }
 
   const data = parsed.data;
+  const [activeServiceCity] = await db
+    .select({ id: serviceCitiesCatalogTable.id, name: serviceCitiesCatalogTable.name })
+    .from(serviceCitiesCatalogTable)
+    .innerJoin(serviceRegionsCatalogTable, eq(serviceCitiesCatalogTable.regionId, serviceRegionsCatalogTable.id))
+    .where(and(
+      eq(serviceCitiesCatalogTable.id, data.serviceCityId),
+      eq(serviceCitiesCatalogTable.regionId, data.serviceRegionId),
+      eq(serviceCitiesCatalogTable.isActive, true),
+      eq(serviceRegionsCatalogTable.isActive, true),
+    ));
+  if (!activeServiceCity || activeServiceCity.name !== data.city) {
+    return res.status(422).json({
+      error: "المنطقة أو المدينة غير مفعلة",
+      fieldErrors: { city: "يرجى اختيار مدينة مفعلة من القائمة" },
+    });
+  }
   const insuranceConfig = normalizeInsuranceConfig(data.requiresInsurance, data.insuranceAmount);
   if (!insuranceConfig) {
     return res.status(422).json({
@@ -302,6 +322,8 @@ router.post("/submit", requireAuth, async (req: any, res) => {
     ownerId: req.user.id,
     businessName: data.businessName,
     category: data.category,
+    serviceRegionId: data.serviceRegionId,
+    serviceCityId: data.serviceCityId,
     city: data.city,
     descriptionAr: data.descriptionAr ?? null,
     whatsappNumber: data.whatsappNumber,
@@ -387,6 +409,8 @@ router.patch("/my/submissions/:id", requireAuth, async (req: any, res) => {
   const schema = z.object({
     businessName: z.string().min(2, "اسم النشاط يجب أن يكون حرفين على الأقل").optional(),
     category: z.string().min(1, "يرجى اختيار فئة الخدمة").optional(),
+    serviceRegionId: z.number().int().positive().optional(),
+    serviceCityId: z.number().int().positive().optional(),
     city: z.string().min(1, "يرجى اختيار المدينة").optional(),
     descriptionAr: z.string().optional().nullable(),
     whatsappNumber: z.string().min(9, "رقم الواتساب يجب أن يكون 9 أرقام على الأقل").optional(),
@@ -411,6 +435,27 @@ router.patch("/my/submissions/:id", requireAuth, async (req: any, res) => {
       error: "بيانات غير صحيحة",
       fieldErrors: parsed.error.flatten().fieldErrors,
     });
+  }
+  const nextRegionId = parsed.data.serviceRegionId ?? submission.serviceRegionId;
+  const nextCityId = parsed.data.serviceCityId ?? submission.serviceCityId;
+  const nextCityName = parsed.data.city ?? submission.city;
+  if (nextRegionId != null || nextCityId != null) {
+    if (nextRegionId == null || nextCityId == null) {
+      return res.status(422).json({ error: "يجب اختيار المنطقة والمدينة معاً" });
+    }
+    const [activeServiceCity] = await db
+      .select({ name: serviceCitiesCatalogTable.name })
+      .from(serviceCitiesCatalogTable)
+      .innerJoin(serviceRegionsCatalogTable, eq(serviceCitiesCatalogTable.regionId, serviceRegionsCatalogTable.id))
+      .where(and(
+        eq(serviceCitiesCatalogTable.id, nextCityId),
+        eq(serviceCitiesCatalogTable.regionId, nextRegionId),
+        eq(serviceCitiesCatalogTable.isActive, true),
+        eq(serviceRegionsCatalogTable.isActive, true),
+      ));
+    if (!activeServiceCity || activeServiceCity.name !== nextCityName) {
+      return res.status(422).json({ error: "يرجى اختيار منطقة ومدينة مفعلتين" });
+    }
   }
   const insuranceConfig = normalizeInsuranceConfig(
     parsed.data.requiresInsurance ?? submission.requiresInsurance,

@@ -22,33 +22,8 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const MAX_GALLERY = 10;
 const ALL_KINGDOM_COVERAGE = "جميع مناطق المملكة";
-const REGIONAL_CITIES: Record<string, string[]> = {
-  القصيم: ["بريدة", "عنيزة", "الرس", "البكيرية", "البدائع", "المذنب", "رياض الخبراء", "الخبراء", "الأسياح", "عيون الجواء", "الشماسية", "ضرية", "عقلة الصقور", "النبهانية"],
-  الرياض: ["الرياض", "الخرج", "الدوادمي", "المجمعة", "شقراء", "وادي الدواسر", "الزلفي", "الغاط", "حوطة بني تميم", "الأفلاج", "رماح", "ثادق", "حريملاء"],
-  مكة: ["مكة المكرمة", "جدة", "الطائف", "رابغ", "الليث", "القنفذة", "الجموم", "خليص"],
-  المدينة: ["المدينة المنورة", "ينبع", "العلا", "بدر", "خيبر", "المهد", "الحناكية"],
-  الشرقية: ["الدمام", "الخبر", "الظهران", "الأحساء", "القطيف", "الجبيل", "حفر الباطن", "الخفجي", "رأس تنورة"],
-  عسير: ["أبها", "خميس مشيط", "بيشة", "النماص", "محايل عسير", "سراة عبيدة", "رجال ألمع"],
-  تبوك: ["تبوك", "الوجه", "ضباء", "أملج", "حقل", "تيماء"],
-  حائل: ["حائل", "بقعاء", "الغزالة", "الشنان"],
-  جازان: ["جازان", "صبيا", "أبو عريش", "صامطة", "بيش", "فرسان"],
-  نجران: ["نجران", "شرورة", "حبونا", "بدر الجنوب"],
-  الباحة: ["الباحة", "بلجرشي", "المندق", "المخواة", "قلوة"],
-  الجوف: ["سكاكا", "القريات", "دومة الجندل", "طبرجل"],
-  "الحدود الشمالية": ["عرعر", "رفحاء", "طريف", "العويقيلة"],
-};
-
-const REGION_OPTIONS = Object.keys(REGIONAL_CITIES);
-
-function getRegionalCoverage(city: string, regionName?: string): { name: string; cities: string[] } {
-  const matchedRegion = Object.entries(REGIONAL_CITIES).find(([, cities]) => cities.includes(city));
-  const resolvedRegionName = regionName || matchedRegion?.[0];
-  const resolvedCities = resolvedRegionName ? REGIONAL_CITIES[resolvedRegionName] : undefined;
-  return {
-    name: resolvedRegionName ?? "المنطقة المحلية",
-    cities: resolvedCities ?? (city ? [city] : []),
-  };
-}
+interface ServiceRegion { id: number; name: string; isActive: boolean }
+interface ServiceCity { id: number; name: string; regionId: number; isActive: boolean }
 
 const pricingUnitOptions = [
   { value: "per_day", label: "باليوم" },
@@ -137,6 +112,9 @@ export default function AddServiceProvider() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const [regionSelectVal, setRegionSelectVal] = useState("");
+  const [citySelectVal, setCitySelectVal] = useState("");
+  const [customCity, setCustomCity] = useState("");
 
   const { data: serviceCategories = [] } = useQuery<{ id: number; key: string; labelAr: string; emoji: string }[]>({
     queryKey: ["catalog", "service-categories"],
@@ -145,6 +123,17 @@ export default function AddServiceProvider() {
       if (!r.ok) return [];
       return r.json();
     },
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: serviceRegions = [] } = useQuery<ServiceRegion[]>({
+    queryKey: ["service-locations", "regions"],
+    queryFn: async () => { const r = await fetch(`${BASE}/api/service-regions`); return r.ok ? r.json() : []; },
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: serviceCities = [] } = useQuery<ServiceCity[]>({
+    queryKey: ["service-locations", "cities", regionSelectVal],
+    queryFn: async () => { const r = await fetch(`${BASE}/api/service-cities?regionId=${encodeURIComponent(regionSelectVal)}`); return r.ok ? r.json() : []; },
+    enabled: !!regionSelectVal,
     staleTime: 5 * 60 * 1000,
   });
   const { data: editingSubmission, isLoading: editingSubmissionLoading } = useQuery<any | null>({
@@ -171,20 +160,22 @@ export default function AddServiceProvider() {
     },
   ];
 
-  const [regionSelectVal, setRegionSelectVal] = useState("");
-  const [citySelectVal, setCitySelectVal] = useState("");
-  const [customCity, setCustomCity] = useState("");
   const selectedPrimaryCity = citySelectVal === "__other__" ? customCity.trim() : form.city;
-  const regionalCoverage = getRegionalCoverage(selectedPrimaryCity, regionSelectVal || undefined);
+  const selectedRegion = serviceRegions.find((region) => String(region.id) === regionSelectVal);
+  const regionalCoverage = {
+    name: selectedRegion?.name ?? "المنطقة المحلية",
+    cities: serviceCities.filter((city) => city.isActive).map((city) => city.name),
+  };
 
   useEffect(() => {
-    if (!editingSubmission || serviceCategories.length === 0) return;
+    if (!editingSubmission || serviceCategories.length === 0 || serviceRegions.length === 0) return;
     const submissionCategory = String(editingSubmission.category ?? "");
     const isKnownCategory = serviceCategories.some((category) => category.key === submissionCategory);
     const submissionCity = String(editingSubmission.city ?? "");
-    const matchedRegion = Object.entries(REGIONAL_CITIES).find(([, cities]) => cities.includes(submissionCity))?.[0] ?? "";
+    const matchedRegionRecord = serviceRegions.find((region) => region.id === editingSubmission.serviceRegionId);
+    const matchedRegion = matchedRegionRecord ? String(matchedRegionRecord.id) : "";
     const submissionTags = Array.isArray(editingSubmission.coverageTags) ? editingSubmission.coverageTags : [];
-    const matchedRegionCities = matchedRegion ? REGIONAL_CITIES[matchedRegion] : [];
+    const matchedRegionCities = matchedRegionRecord && matchedRegion === regionSelectVal ? serviceCities.map((city) => city.name) : [];
 
     setForm({
       businessName: editingSubmission.businessName ?? "",
@@ -220,7 +211,7 @@ export default function AddServiceProvider() {
     );
     setVideo(editingSubmission.videoUrl ? { url: editingSubmission.videoUrl, name: "الفيديو الحالي", preview: editingSubmission.videoUrl } : null);
     setLegalAccepted(true);
-  }, [editingSubmission, serviceCategories]);
+  }, [editingSubmission, serviceCategories, serviceRegions, serviceCities, regionSelectVal]);
 
   const handleChange = (field: string, value: string | boolean) =>
     setForm((p) => ({ ...p, [field]: value }));
@@ -247,7 +238,7 @@ export default function AddServiceProvider() {
     }
     handleChange("city", city);
     if (!coverageAll) {
-      setCoverageTags(coverageRegionAll ? getRegionalCoverage(city).cities : (city ? [city] : []));
+        setCoverageTags(coverageRegionAll ? regionalCoverage.cities : (city ? [city] : []));
     }
   };
 
@@ -255,7 +246,7 @@ export default function AddServiceProvider() {
     setCustomCity(value);
     if (!coverageAll) {
       const city = value.trim();
-      setCoverageTags(coverageRegionAll ? getRegionalCoverage(city).cities : (city ? [city] : []));
+      setCoverageTags(coverageRegionAll ? regionalCoverage.cities : (city ? [city] : []));
     }
   };
 
@@ -413,23 +404,9 @@ export default function AddServiceProvider() {
         setSubmitError("يجب إدخال اسم المدينة");
         return;
       }
-      try {
-        const r = await fetch(`${BASE}/api/cities`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ name: trimmedCity }),
-        });
-        const city = await r.json();
-        resolvedCity = city.name ?? trimmedCity;
-        if (!coverageAll) {
-          resolvedCoverageTags = coverageRegionAll ? regionalCoverage.cities : [resolvedCity];
-        }
-      } catch {
-        resolvedCity = trimmedCity;
-        if (!coverageAll) {
-          resolvedCoverageTags = coverageRegionAll ? regionalCoverage.cities : [resolvedCity];
-        }
+      resolvedCity = trimmedCity;
+      if (!coverageAll) {
+        resolvedCoverageTags = coverageRegionAll ? regionalCoverage.cities : [resolvedCity];
       }
     }
 
@@ -473,6 +450,8 @@ export default function AddServiceProvider() {
       const payload = {
         businessName: form.businessName.trim(),
         category: finalCategory,
+        serviceRegionId: Number(regionSelectVal),
+        serviceCityId: serviceCities.find((city) => city.name === resolvedCity)?.id,
         city: resolvedCity,
         descriptionAr: form.descriptionAr.trim() || undefined,
         whatsappNumber: form.whatsappNumber,
@@ -645,8 +624,8 @@ export default function AddServiceProvider() {
                       <SelectValue placeholder="اختر المنطقة" />
                     </SelectTrigger>
                     <SelectContent>
-                      {REGION_OPTIONS.map((region) => (
-                        <SelectItem key={region} value={region}>{region}</SelectItem>
+                      {serviceRegions.filter((region) => region.isActive).map((region) => (
+                        <SelectItem key={region.id} value={String(region.id)}>{region.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -662,10 +641,9 @@ export default function AddServiceProvider() {
                       <SelectValue placeholder={regionSelectVal ? "اختر المدينة الرئيسية" : "اختر المنطقة أولاً"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {regionalCoverage.cities.map((city) => (
-                        <SelectItem key={city} value={city}>{city}</SelectItem>
+                      {serviceCities.filter((city) => city.isActive).map((city) => (
+                        <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
                       ))}
-                      <SelectItem value="__other__">مدينة أخرى...</SelectItem>
                     </SelectContent>
                   </Select>
                   {fieldErrors.city && (
