@@ -42,6 +42,20 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 interface CityOption { id: number; name: string; }
 interface DistrictOption { id: number; name: string; cityId: number; }
 
+const REGION_CITIES: Record<string, Set<string>> = {
+  "منطقة القصيم": new Set([
+    "بريدة",
+    "عنيزة",
+    "الرس",
+    "الخبراء",
+    "البكيرية",
+    "عيون الجواء",
+    "الأسياح",
+    "البدائع",
+    "المذنب",
+  ]),
+};
+
 function useCatalog(selectedCityId: number | null) {
   const { data: cities = [] } = useQuery<CityOption[]>({
     queryKey: ["catalog", "cities"],
@@ -56,14 +70,11 @@ function useCatalog(selectedCityId: number | null) {
   const { data: districts = [] } = useQuery<DistrictOption[]>({
     queryKey: ["catalog", "districts", selectedCityId],
     queryFn: async () => {
-      const url = selectedCityId
-        ? `${BASE}/api/districts?cityId=${selectedCityId}`
-        : `${BASE}/api/districts`;
-      const r = await fetch(url, { credentials: "include" });
+      const r = await fetch(`${BASE}/api/districts?cityId=${selectedCityId}`, { credentials: "include" });
       if (!r.ok) return [];
       return r.json();
     },
-    enabled: true,
+    enabled: selectedCityId != null,
     staleTime: 1000 * 60 * 5,
   });
 
@@ -126,6 +137,7 @@ async function uploadFile(file: File): Promise<string | null> {
 
 export default function AddChalet() {
   const qc = useQueryClient();
+  const [selectedRegion, setSelectedRegion] = useState("");
   const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
   const { cities, districts, amenities, propertyCategories } = useCatalog(selectedCityId);
   const [submitted, setSubmitted] = useState(false);
@@ -139,7 +151,6 @@ export default function AddChalet() {
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [customDistrict, setCustomDistrict] = useState("");
   const [citySelectVal, setCitySelectVal] = useState("");
-  const [customCity, setCustomCity] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const [video, setVideo] = useState<UploadedVideo | null>(null);
@@ -225,8 +236,8 @@ export default function AddChalet() {
   const validateStep1 = (): Record<string, string[]> => {
     const errs: Record<string, string[]> = {};
     if (!form.nameAr.trim()) errs.nameAr = ["اسم الشاليه مطلوب"];
-    const finalLoc = citySelectVal === "__other__" ? customCity.trim() : form.location;
-    if (!finalLoc) errs.location = ["المدينة مطلوبة"];
+    if (!selectedRegion) errs.region = ["المنطقة مطلوبة"];
+    if (!form.location) errs.location = ["المدينة مطلوبة"];
     if (!propertyType) errs.propertyType = ["نوع العقار مطلوب"];
     if (!sections) errs.sections = ["عدد الأقسام مطلوب"];
     return errs;
@@ -346,6 +357,16 @@ export default function AddChalet() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editSub]);
+
+  useEffect(() => {
+    if (!editSub?.location || cities.length === 0) return;
+    const city = cities.find((item) => item.name === editSub.location);
+    if (!city) return;
+    const region = Object.entries(REGION_CITIES).find(([, cityNames]) => cityNames.has(city.name))?.[0];
+    if (region) setSelectedRegion(region);
+    setCitySelectVal(city.name);
+    setSelectedCityId(city.id);
+  }, [editSub, cities]);
 
   const handleChange = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -565,29 +586,8 @@ export default function AddChalet() {
     setFieldErrors({});
     mutation.reset();
 
-    /* ── Resolve custom city (if "other" selected) ── */
-    let resolvedLocation = citySelectVal === "__other__" ? "" : form.location;
-    let resolvedCityId = selectedCityId;
-    if (citySelectVal === "__other__") {
-      const trimmedCity = customCity.trim();
-      if (!trimmedCity) {
-        setFieldErrors({ location: ["يجب إدخال اسم المدينة"] });
-        return;
-      }
-      try {
-        const r = await fetch(`${BASE}/api/cities`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ name: trimmedCity }),
-        });
-        const city = await r.json();
-        resolvedLocation = city.name ?? trimmedCity;
-        resolvedCityId = city.id ?? null;
-      } catch {
-        resolvedLocation = trimmedCity;
-      }
-    }
+    const resolvedLocation = form.location;
+    const resolvedCityId = selectedCityId;
 
     /* ── Resolve custom district (if "other" selected) ── */
     let resolvedDistrict: string | undefined;
@@ -687,6 +687,8 @@ export default function AddChalet() {
     setSelectedAmenities(new Set());
     setCustomAmenityTags([]);
     setCustomAmenityInput("");
+    setSelectedRegion("");
+    setCitySelectVal("");
     setSelectedCityId(null);
     setSelectedDistrict("");
     setCustomDistrict("");
@@ -785,7 +787,7 @@ export default function AddChalet() {
                   انضم إلينا كمالك
                 </h1>
                 <p className="text-muted-foreground text-lg max-w-md mx-auto leading-relaxed">
-                  أضف شاليهك وابدأ في استقبال الحجوزات من عملاء في منطقة القصيم
+                  أضف عقارك وابدأ في استقبال الحجوزات بسهولة
                 </p>
               </div>
             )}
@@ -844,61 +846,79 @@ export default function AddChalet() {
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="location" className="text-base font-medium">
-                        المدينة <span className="text-destructive">*</span>
-                      </Label>
-                      <Select
-                        value={citySelectVal}
-                        onValueChange={(val) => {
-                          setCitySelectVal(val);
-                          setSelectedDistrict("");
-                          setCustomDistrict("");
-                          if (val === "__other__") {
-                            handleChange("location", "");
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <div className="space-y-2">
+                        <Label className="text-base font-medium">
+                          المنطقة <span className="text-destructive">*</span>
+                        </Label>
+                        <Select
+                          value={selectedRegion}
+                          onValueChange={(region) => {
+                            setSelectedRegion(region);
+                            setCitySelectVal("");
                             setSelectedCityId(null);
-                          } else {
+                            handleChange("location", "");
+                            setSelectedDistrict("");
+                            setCustomDistrict("");
+                          }}
+                        >
+                          <SelectTrigger className={`h-12 text-base ${fieldErrors.region ? "border-red-500 ring-1 ring-red-500" : ""}`}>
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-muted-foreground" />
+                              <SelectValue placeholder="اختر المنطقة" />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.keys(REGION_CITIES).map((region) => (
+                              <SelectItem key={region} value={region}>{region}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {fieldErrors.region && (
+                          <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.region[0]}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="location" className="text-base font-medium">
+                          المدينة <span className="text-destructive">*</span>
+                        </Label>
+                        <Select
+                          value={citySelectVal}
+                          onValueChange={(val) => {
+                            setCitySelectVal(val);
+                            setSelectedDistrict("");
+                            setCustomDistrict("");
                             handleChange("location", val);
                             const city = cities.find((c) => c.name === val);
                             setSelectedCityId(city?.id ?? null);
-                          }
-                        }}
-                        required
-                      >
-                        <SelectTrigger className="h-12 text-base">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-muted-foreground" />
-                            <SelectValue placeholder="اختر المدينة" />
-                          </div>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {cities.map((city) => (
-                            <SelectItem key={city.id} value={city.name}>
-                              {city.name}
-                            </SelectItem>
-                          ))}
-                          <SelectItem value="__other__">مدينة أخرى...</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {citySelectVal === "__other__" && (
-                        <Input
-                          placeholder="اكتب اسم المدينة"
-                          value={customCity}
-                          onChange={(e) => setCustomCity(e.target.value)}
-                          className={`h-12 text-base ${fieldErrors.location ? "border-red-500 ring-1 ring-red-500" : ""}`}
-                          autoFocus
-                        />
-                      )}
-                      {fieldErrors.location && (
-                        <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.location[0]}</p>
-                      )}
+                          }}
+                          disabled={!selectedRegion}
+                          required
+                        >
+                          <SelectTrigger className="h-12 text-base">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-muted-foreground" />
+                              <SelectValue placeholder={selectedRegion ? "اختر المدينة" : "اختر المنطقة أولاً"} />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {cities.filter((city) => REGION_CITIES[selectedRegion]?.has(city.name)).map((city) => (
+                              <SelectItem key={city.id} value={city.name}>
+                                {city.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {fieldErrors.location && (
+                          <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.location[0]}</p>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Smart District Dropdown */}
-                    {(form.location || citySelectVal === "__other__") && (
-                      <div className="space-y-2">
+                    <div className="space-y-2">
                         <Label htmlFor="district" className="text-base font-medium">
-                          الحي أو المنطقة <span className="text-destructive">*</span>
+                          الحي <span className="text-destructive">*</span>
                         </Label>
                         <Select
                           value={selectedDistrict}
@@ -906,11 +926,12 @@ export default function AddChalet() {
                             setSelectedDistrict(val);
                             if (val !== "__other__") setCustomDistrict("");
                           }}
+                          disabled={!selectedCityId}
                         >
                           <SelectTrigger className="h-12 text-base">
                             <div className="flex items-center gap-2">
                               <Building2 className="w-4 h-4 text-muted-foreground" />
-                              <SelectValue placeholder={districts.length > 0 ? "اختر الحي" : "حي / منطقة"} />
+                              <SelectValue placeholder={!selectedCityId ? "اختر المدينة أولاً" : districts.length > 0 ? "اختر الحي" : "لا توجد أحياء مسجلة"} />
                             </div>
                           </SelectTrigger>
                           <SelectContent>
@@ -924,7 +945,7 @@ export default function AddChalet() {
                         </Select>
                         {selectedDistrict === "__other__" && (
                           <Input
-                            placeholder="اكتب اسم الحي أو المنطقة"
+                            placeholder="اكتب اسم الحي"
                             value={customDistrict}
                             onChange={(e) => setCustomDistrict(e.target.value)}
                             className={`h-12 text-base ${fieldErrors.district ? "border-red-500 ring-1 ring-red-500" : ""}`}
@@ -934,7 +955,6 @@ export default function AddChalet() {
                           <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.district[0]}</p>
                         )}
                       </div>
-                    )}
 
                     {/* Property Type */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -1010,18 +1030,18 @@ export default function AddChalet() {
                           </button>
                         </div>
                         {hasBedrooms && (
-                          <div className="relative">
-                            <Input
-                              type="number"
-                              min="1"
-                              max="30"
-                              placeholder="عدد الغرف"
-                              value={bedroomCount}
-                              onChange={(e) => setBedroomCount(e.target.value)}
-                              className="h-10 text-sm"
-                              dir="rtl"
-                            />
-                          </div>
+                          <Select value={bedroomCount} onValueChange={setBedroomCount}>
+                            <SelectTrigger className="h-10 text-sm" dir="rtl">
+                              <SelectValue placeholder="اختر عدد الغرف" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 30 }, (_, index) => index + 1).map((count) => (
+                                <SelectItem key={count} value={String(count)}>
+                                  {toAr(count)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         )}
                         {!hasBedrooms && (
                           <p className="text-xs text-muted-foreground">نظام مفتوح / لا يوجد</p>
