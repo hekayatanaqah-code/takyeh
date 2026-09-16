@@ -1167,7 +1167,7 @@ function LocationsTab() {
         <h3 className="text-white font-bold mb-4 text-lg">المدن</h3>
         <div className={`mb-4 rounded-lg border px-4 py-3 text-center ${selectedRegion ? "border-amber-500/60 bg-amber-500/10" : "border-slate-700 bg-slate-900"}`}>
           <p className="text-xs text-slate-400 mb-1">المنطقة التي تدير مدنها الآن</p>
-          <p className={`font-extrabold text-lg ${selectedRegion ? "text-amber-300" : "text-slate-500"}`}>
+          <p className={`font-extrabold text-lg ${selectedRegion ? "text-white" : "text-slate-500"}`}>
             {selectedRegion ? `مدن منطقة: ${selectedRegion.name}` : "لم يتم اختيار منطقة"}
           </p>
         </div>
