@@ -6686,7 +6686,7 @@ const ALL_TABS = [
   { id: "submissions",             label: "الطلبات/الحجوزات",      icon: Settings },
   { id: "partnerApplications",     label: "طلبات الملاك",          icon: Users },
   { id: "platformRevenue",         label: "ميزانية المنصة",        icon: TrendingUp },
-  { id: "services",                label: "قائمة الخدمات",         icon: Wrench },
+  { id: "services",                label: "الخدمات النشطة والمنشورة", icon: Wrench },
   { id: "serviceSubmissions",      label: "طلبات الخدمات الجديدة", icon: ClipboardList },
   { id: "globalSeasons",           label: "المواسم والأعياد",       icon: Calendar },
   { id: "serviceCategories",       label: "فئات الخدمات",          icon: Tag },
@@ -6716,9 +6716,10 @@ const ADMIN_NAV_GROUPS: Array<{
   tabs: TabId[];
 }> = [
   { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
-  { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "amenities", "locations"] },
+  { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "partnerApplications", "categories", "amenities", "locations"] },
   { id: "services", label: "إدارة الخدمات", icon: Wrench, tabs: ["services", "serviceSubmissions", "serviceCategories", "serviceLocations"] },
-  { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "partnerApplications", "ownerInbox", "adminStaff"] },
+  { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "ownerInbox"] },
+  { id: "staff", label: "طاقم العمل", icon: Shield, tabs: ["adminStaff"] },
   { id: "operations", label: "العمليات", icon: Calendar, tabs: ["submissions", "reviews", "waSubscribers", "globalSeasons"] },
   { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
   { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "contactInquiries", "auditLogs"] },

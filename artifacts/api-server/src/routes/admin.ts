@@ -1116,6 +1116,7 @@ router.get("/services", async (_req, res) => {
   const rows = await db
     .select()
     .from(externalServicesTable)
+    .where(eq(externalServicesTable.isActive, true))
     .orderBy(externalServicesTable.createdAt);
   return res.json(rows.reverse());
 });
