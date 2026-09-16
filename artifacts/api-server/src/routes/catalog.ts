@@ -1,17 +1,23 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { citiesCatalogTable, amenitiesCatalogTable, districtsCatalogTable, chaletCategoriesTable, serviceCategoriesTable, expenseCategoriesTable, siteSettingsTable } from "@workspace/db/schema";
+import { citiesCatalogTable, regionsCatalogTable, amenitiesCatalogTable, districtsCatalogTable, chaletCategoriesTable, serviceCategoriesTable, expenseCategoriesTable, siteSettingsTable } from "@workspace/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 const router = Router();
+
+router.get("/regions", async (_req, res) => {
+  const rows = await db.select().from(regionsCatalogTable).orderBy(regionsCatalogTable.name);
+  return res.json(rows.filter((r) => r.isActive));
+});
 
 router.get("/cities", async (_req, res) => {
   const rows = await db
     .select()
     .from(citiesCatalogTable)
     .orderBy(citiesCatalogTable.name);
-  return res.json(rows.filter((r) => r.isActive));
+  const regionId = _req.query.regionId ? Number(_req.query.regionId) : null;
+  return res.json(rows.filter((r) => r.isActive && (!regionId || r.regionId === regionId)));
 });
 
 router.get("/districts", async (req, res) => {

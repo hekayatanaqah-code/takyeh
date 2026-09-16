@@ -274,6 +274,8 @@ components:
           type: string
         location:
           type: string
+        region:
+          type: string
         websiteUrl:
           type: [string, 'null']
         descriptionAr:
@@ -333,6 +335,12 @@ components:
         location:
           type: string
           description: City name
+        region:
+          type: string
+          description: Region name
+        suggestedCityName:
+          type: string
+          description: Owner-proposed city when it is not in the catalog
         district:
           type: string
           description: Optional district or neighborhood name
@@ -368,6 +376,7 @@ components:
         - nameAr
         - whatsappNumber
         - location
+        - region
         - descriptionAr
         - pricePerNight
 
@@ -415,6 +424,16 @@ components:
         pricePerNight:
           type: number
           description: Price per night in SAR
+        priceMorning:
+          type: [number, 'null']
+        priceEvening:
+          type: [number, 'null']
+        priceFullDay:
+          type: [number, 'null']
+        priceWeekday:
+          type: [number, 'null']
+        priceWeekend:
+          type: [number, 'null']
         maxGuests:
           type: integer
           description: Maximum number of guests

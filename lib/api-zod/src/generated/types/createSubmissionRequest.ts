@@ -13,6 +13,10 @@ export interface CreateSubmissionRequest {
   whatsappNumber: string;
   /** City name */
   location: string;
+  /** Region name */
+  region: string;
+  /** Owner-proposed city when it is not in the catalog */
+  suggestedCityName?: string;
   /** Optional district or neighborhood name */
   district?: string;
   /** Property type (شالية، مزرعة، استراحة، مخيم) */
@@ -31,5 +35,4 @@ export interface CreateSubmissionRequest {
   amenities?: string[];
   /** List of object paths (up to 5) */
   photos?: string[];
-  videoUrl?: string;
 }

@@ -14,6 +14,7 @@ export interface ChaletSubmission {
   nameAr: string;
   whatsappNumber: string;
   location: string;
+  region?: string;
   /** @nullable */
   websiteUrl?: string | null;
   descriptionAr: string;

@@ -7,6 +7,7 @@ import {
   chaletSubmissionsTable,
   chaletsTable,
   citiesCatalogTable,
+  regionsCatalogTable,
   districtsCatalogTable,
   amenitiesCatalogTable,
   externalServicesTable,
@@ -541,6 +542,7 @@ router.patch("/submissions/:id/status", async (req, res) => {
         ownerId: submission.ownerId,
         nameAr: submission.nameAr,
         descriptionAr: submission.descriptionAr,
+        region: submission.region,
         location: submission.location,
         district: submission.district ?? undefined,
         category: submission.category ?? undefined,
@@ -865,7 +867,27 @@ router.patch("/owners/:id/soft-delete", async (req, res) => {
   return res.json({ ok: true });
 });
 
-/* ── Cities ──────────────────────────────────────────────── */
+/* ── Regions & Cities ────────────────────────────────────── */
+
+router.get("/regions", async (_req, res) => {
+  const rows = await db.select().from(regionsCatalogTable).orderBy(regionsCatalogTable.createdAt);
+  return res.json(rows);
+});
+
+router.post("/regions", async (req, res) => {
+  const body = z.object({ name: z.string().trim().min(1) }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "الاسم مطلوب" });
+  const [region] = await db.insert(regionsCatalogTable).values({ name: body.data.name }).returning();
+  return res.status(201).json(region);
+});
+
+router.patch("/regions/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({ name: z.string().trim().min(1).optional(), isActive: z.boolean().optional() }).safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  await db.update(regionsCatalogTable).set(body.data).where(eq(regionsCatalogTable.id, id));
+  return res.json({ ok: true });
+});
 
 router.get("/cities", async (_req, res) => {
   const rows = await db
@@ -876,12 +898,12 @@ router.get("/cities", async (_req, res) => {
 });
 
 router.post("/cities", async (req, res) => {
-  const body = z.object({ name: z.string().min(1) }).safeParse(req.body);
+  const body = z.object({ name: z.string().min(1), regionId: z.number().int().positive() }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "الاسم مطلوب" });
 
   const [city] = await db
     .insert(citiesCatalogTable)
-    .values({ name: body.data.name })
+    .values({ name: body.data.name, regionId: body.data.regionId })
     .returning();
 
   return res.status(201).json(city);

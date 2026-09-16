@@ -24,6 +24,16 @@ export interface Chalet {
   sections?: string | null;
   /** Price per night in SAR */
   pricePerNight: number;
+  /** @nullable */
+  priceMorning?: number | null;
+  /** @nullable */
+  priceEvening?: number | null;
+  /** @nullable */
+  priceFullDay?: number | null;
+  /** @nullable */
+  priceWeekday?: number | null;
+  /** @nullable */
+  priceWeekend?: number | null;
   /** Maximum number of guests */
   maxGuests: number;
   /** Number of bedrooms */

@@ -45,6 +45,7 @@ export interface ChaletSubmission {
   nameAr: string;
   whatsappNumber: string;
   location: string;
+  region?: string;
   /** @nullable */
   websiteUrl?: string | null;
   descriptionAr: string;
@@ -72,6 +73,10 @@ export interface CreateSubmissionRequest {
   whatsappNumber: string;
   /** City name */
   location: string;
+  /** Region name */
+  region: string;
+  /** Owner-proposed city when it is not in the catalog */
+  suggestedCityName?: string;
   /** Optional district or neighborhood name */
   district?: string;
   /** Property type (شالية، مزرعة، استراحة، مخيم) */
@@ -84,50 +89,12 @@ export interface CreateSubmissionRequest {
   socialLink?: string;
   /** Chalet description in Arabic */
   descriptionAr: string;
-  /** Average price per night in SAR (kept for backward compat) */
+  /** Average price per night in SAR */
   pricePerNight: number;
-  /** Morning slot price in SAR */
-  priceMorning?: number | null;
-  /** Evening slot price in SAR */
-  priceEvening?: number | null;
-  /** Full-day price in SAR */
-  priceFullDay?: number | null;
-  /** Whether morning slot is offered */
-  slotMorning?: boolean;
-  /** Whether evening slot is offered */
-  slotEvening?: boolean;
-  /** Whether full-day slot is offered */
-  slotFullDay?: boolean;
-  /** Weekday starting price in SAR */
-  priceWeekday?: number | null;
-  /** Weekend starting price in SAR */
-  priceWeekend?: number | null;
-  /** Whether seasonal price disclaimer applies */
-  seasonalDisclaimer?: boolean;
   /** List of selected amenity keys */
   amenities?: string[];
-  /** List of object paths (up to 15) */
+  /** List of object paths (up to 5) */
   photos?: string[];
-  /** Optional video URL for the chalet */
-  videoUrl?: string;
-  /** Maximum number of guests allowed */
-  maxGuests?: number | null;
-  /** Number of bedrooms */
-  bedrooms?: number | null;
-  /** Custom terms and conditions from owner */
-  termsAndConditions?: string | null;
-  /** Morning period check-in time (HH:MM) */
-  morningCheckIn?: string | null;
-  /** Morning period check-out time (HH:MM) */
-  morningCheckOut?: string | null;
-  /** Evening period check-in time (HH:MM) */
-  eveningCheckIn?: string | null;
-  /** Evening period check-out time (HH:MM) */
-  eveningCheckOut?: string | null;
-  /** Full-day period check-in time (HH:MM) */
-  fullDayCheckIn?: string | null;
-  /** Full-day period check-out time (HH:MM) */
-  fullDayCheckOut?: string | null;
 }
 
 export interface SubmissionResponse {
@@ -151,26 +118,18 @@ export interface Chalet {
   propertyType?: string | null;
   /** Number of sections (قسم واحد، قسمين منفصلة) */
   sections?: string | null;
-  /** Price per night in SAR (legacy) */
+  /** Price per night in SAR */
   pricePerNight: number;
-  /** Morning slot price in SAR */
-  priceMorning?: string | null;
-  /** Evening slot price in SAR */
-  priceEvening?: string | null;
-  /** Full-day price in SAR */
-  priceFullDay?: string | null;
-  /** Whether morning slot is offered */
-  slotMorning?: boolean;
-  /** Whether evening slot is offered */
-  slotEvening?: boolean;
-  /** Whether full-day slot is offered */
-  slotFullDay?: boolean;
-  /** Weekday starting price in SAR */
-  priceWeekday?: string | null;
-  /** Weekend starting price in SAR */
-  priceWeekend?: string | null;
-  /** Whether seasonal price disclaimer applies */
-  seasonalDisclaimer?: boolean;
+  /** @nullable */
+  priceMorning?: number | null;
+  /** @nullable */
+  priceEvening?: number | null;
+  /** @nullable */
+  priceFullDay?: number | null;
+  /** @nullable */
+  priceWeekday?: number | null;
+  /** @nullable */
+  priceWeekend?: number | null;
   /** Maximum number of guests */
   maxGuests: number;
   /** Number of bedrooms */

@@ -1,6 +1,6 @@
 import { db } from "@workspace/db";
-import { citiesCatalogTable, amenitiesCatalogTable, siteSettingsTable } from "@workspace/db/schema";
-import { sql } from "drizzle-orm";
+import { citiesCatalogTable, regionsCatalogTable, amenitiesCatalogTable, siteSettingsTable } from "@workspace/db/schema";
+import { isNull, sql } from "drizzle-orm";
 
 const INITIAL_CITIES = [
   "بريدة", "عنيزة", "الرس", "الخبراء",
@@ -142,11 +142,21 @@ export async function seedCatalogIfEmpty() {
        OR arrival_reminder_template NOT LIKE '%{استرداد_العربون}%'
   `);
 
+  const [qassimRegion] = await db
+    .insert(regionsCatalogTable)
+    .values({ name: "منطقة القصيم" })
+    .onConflictDoUpdate({ target: regionsCatalogTable.name, set: { name: "منطقة القصيم" } })
+    .returning();
+
   const existingCities = await db.select().from(citiesCatalogTable);
   if (existingCities.length === 0) {
     await db.insert(citiesCatalogTable).values(
-      INITIAL_CITIES.map((name) => ({ name }))
+      INITIAL_CITIES.map((name) => ({ name, regionId: qassimRegion.id }))
     );
+  } else {
+    await db.update(citiesCatalogTable)
+      .set({ regionId: qassimRegion.id })
+      .where(isNull(citiesCatalogTable.regionId));
   }
 
   for (const amenity of INITIAL_AMENITIES) {

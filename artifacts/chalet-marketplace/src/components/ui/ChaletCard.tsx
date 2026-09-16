@@ -19,7 +19,7 @@ const PERIOD_LABEL: Record<Period, string> = {
   full_day: "يوم كامل",
 };
 
-function fmt(v: string | null | undefined): string | null {
+function fmt(v: string | number | null | undefined): string | null {
   return v && Number(v) > 0 ? Number(v).toLocaleString("ar-SA") : null;
 }
 

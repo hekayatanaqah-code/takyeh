@@ -9,6 +9,7 @@ export const chaletsTable = pgTable("chalets", {
   ownerId: text("owner_id"),
   nameAr: text("name_ar").notNull(),
   descriptionAr: text("description_ar").notNull(),
+  region: text("region"),
   location: text("location").notNull(),
   district: text("district"),
   category: text("category"),
@@ -85,7 +86,9 @@ export const chaletSubmissionsTable = pgTable("chalet_submissions", {
   ownerId: text("owner_id"),
   nameAr: text("name_ar").notNull(),
   whatsappNumber: text("whatsapp_number").notNull(),
+  region: text("region"),
   location: text("location").notNull(),
+  suggestedCityName: text("suggested_city_name"),
   district: text("district"),
   category: text("category"),
   propertyType: text("property_type"),
@@ -142,9 +145,18 @@ export const insertSubmissionSchema = createInsertSchema(chaletSubmissionsTable)
 export type InsertSubmission = z.infer<typeof insertSubmissionSchema>;
 export type ChaletSubmission = typeof chaletSubmissionsTable.$inferSelect;
 
+export const regionsCatalogTable = pgTable("regions_catalog", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type Region = typeof regionsCatalogTable.$inferSelect;
+
 export const citiesCatalogTable = pgTable("cities_catalog", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  regionId: integer("region_id").references(() => regionsCatalogTable.id, { onDelete: "restrict" }),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

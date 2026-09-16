@@ -8,6 +8,8 @@ import { sendAdminNewSubmissionEmail } from "../lib/email";
 
 const SubmissionBodyStrict = CreateSubmissionBody.extend({
   nameAr: z.string().trim().min(2, "اسم الشاليه مطلوب (حرفان على الأقل)"),
+  region: z.string().trim().min(2, "المنطقة مطلوبة"),
+  suggestedCityName: z.string().trim().min(2).optional(),
   location: z.string().trim().min(2, "المدينة مطلوبة"),
   district: z.string().trim().optional(),
   descriptionAr: z.string().trim().min(3, "الوصف قصير جداً (٣ أحرف على الأقل)"),
@@ -303,7 +305,9 @@ router.post("/", async (req, res) => {
       ownerId,
       nameAr: data.nameAr,
       whatsappNumber: data.whatsappNumber,
+      region: data.region,
       location: data.location,
+      suggestedCityName: data.suggestedCityName || null,
       district: data.district || null,
       websiteUrl: data.mapsUrl || null,
       mapsUrl: data.mapsUrl || null,
@@ -409,6 +413,8 @@ router.patch("/:id", async (req, res) => {
     nameAr: z.string().trim().min(2).optional(),
     descriptionAr: z.string().trim().min(3).optional(),
     whatsappNumber: z.string().trim().min(9).optional(),
+    region: z.string().trim().min(2).optional(),
+    suggestedCityName: z.string().trim().min(2).nullable().optional(),
     location: z.string().trim().min(2).optional(),
     district: z.string().trim().nullable().optional(),
     pricePerNight: z.number().min(0).optional(),
@@ -523,6 +529,8 @@ router.patch("/:id", async (req, res) => {
   if (d.nameAr        !== undefined) updateSet.nameAr = d.nameAr;
   if (d.descriptionAr !== undefined) updateSet.descriptionAr = d.descriptionAr;
   if (d.whatsappNumber!== undefined) updateSet.whatsappNumber = d.whatsappNumber;
+  if (d.region        !== undefined) updateSet.region = d.region;
+  if (d.suggestedCityName !== undefined) updateSet.suggestedCityName = d.suggestedCityName;
   if (d.location      !== undefined) updateSet.location = d.location;
   if (d.district      !== undefined) updateSet.district = d.district ?? null;
   if (d.pricePerNight !== undefined) updateSet.pricePerNight = String(d.pricePerNight);

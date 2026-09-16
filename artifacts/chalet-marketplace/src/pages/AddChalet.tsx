@@ -39,31 +39,29 @@ import {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-interface CityOption { id: number; name: string; }
+interface RegionOption { id: number; name: string; }
+interface CityOption { id: number; name: string; regionId: number | null; }
 interface DistrictOption { id: number; name: string; cityId: number; }
 
-const REGION_CITIES: Record<string, Set<string>> = {
-  "منطقة القصيم": new Set([
-    "بريدة",
-    "عنيزة",
-    "الرس",
-    "الخبراء",
-    "البكيرية",
-    "عيون الجواء",
-    "الأسياح",
-    "البدائع",
-    "المذنب",
-  ]),
-};
-
-function useCatalog(selectedCityId: number | null) {
-  const { data: cities = [] } = useQuery<CityOption[]>({
-    queryKey: ["catalog", "cities"],
+function useCatalog(selectedRegionId: number | null, selectedCityId: number | null) {
+  const { data: regions = [] } = useQuery<RegionOption[]>({
+    queryKey: ["catalog", "regions"],
     queryFn: async () => {
-      const r = await fetch(`${BASE}/api/cities`, { credentials: "include" });
+      const r = await fetch(`${BASE}/api/regions`, { credentials: "include" });
       if (!r.ok) return [];
       return r.json();
     },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: cities = [] } = useQuery<CityOption[]>({
+    queryKey: ["catalog", "cities", selectedRegionId],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/cities?regionId=${selectedRegionId}`, { credentials: "include" });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: selectedRegionId != null,
     staleTime: 1000 * 60 * 5,
   });
 
@@ -98,7 +96,7 @@ function useCatalog(selectedCityId: number | null) {
     staleTime: 1000 * 60 * 5,
   });
 
-  return { cities, districts, amenities, propertyCategories };
+  return { regions, cities, districts, amenities, propertyCategories };
 }
 
 const MAX_PHOTOS = 15;
@@ -137,9 +135,9 @@ async function uploadFile(file: File): Promise<string | null> {
 
 export default function AddChalet() {
   const qc = useQueryClient();
-  const [selectedRegion, setSelectedRegion] = useState("");
+  const [selectedRegionId, setSelectedRegionId] = useState<number | null>(null);
   const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
-  const { cities, districts, amenities, propertyCategories } = useCatalog(selectedCityId);
+  const { regions, cities, districts, amenities, propertyCategories } = useCatalog(selectedRegionId, selectedCityId);
   const [submitted, setSubmitted] = useState(false);
   const [photos, setPhotos] = useState<UploadedPhoto[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -151,6 +149,7 @@ export default function AddChalet() {
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [customDistrict, setCustomDistrict] = useState("");
   const [citySelectVal, setCitySelectVal] = useState("");
+  const [customCity, setCustomCity] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const [video, setVideo] = useState<UploadedVideo | null>(null);
@@ -236,8 +235,8 @@ export default function AddChalet() {
   const validateStep1 = (): Record<string, string[]> => {
     const errs: Record<string, string[]> = {};
     if (!form.nameAr.trim()) errs.nameAr = ["اسم الشاليه مطلوب"];
-    if (!selectedRegion) errs.region = ["المنطقة مطلوبة"];
-    if (!form.location) errs.location = ["المدينة مطلوبة"];
+    if (!selectedRegionId) errs.region = ["المنطقة مطلوبة"];
+    if (!(citySelectVal === "__other__" ? customCity.trim() : form.location)) errs.location = ["المدينة مطلوبة"];
     if (!propertyType) errs.propertyType = ["نوع العقار مطلوب"];
     if (!sections) errs.sections = ["عدد الأقسام مطلوب"];
     return errs;
@@ -362,11 +361,15 @@ export default function AddChalet() {
     if (!editSub?.location || cities.length === 0) return;
     const city = cities.find((item) => item.name === editSub.location);
     if (!city) return;
-    const region = Object.entries(REGION_CITIES).find(([, cityNames]) => cityNames.has(city.name))?.[0];
-    if (region) setSelectedRegion(region);
     setCitySelectVal(city.name);
     setSelectedCityId(city.id);
   }, [editSub, cities]);
+
+  useEffect(() => {
+    if (!editSub?.region || regions.length === 0 || selectedRegionId) return;
+    const region = regions.find((item) => item.name === editSub.region);
+    if (region) setSelectedRegionId(region.id);
+  }, [editSub, regions, selectedRegionId]);
 
   const handleChange = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -539,7 +542,9 @@ export default function AddChalet() {
     return {
       nameAr: form.nameAr,
       whatsappNumber: form.whatsappNumber,
+      region: regions.find((region) => region.id === selectedRegionId)?.name ?? "",
       location: locationOverride ?? form.location,
+      suggestedCityName: citySelectVal === "__other__" ? customCity.trim() : undefined,
       district: finalDistrict,
       propertyType: propertyType || undefined,
       suggestedCategoryName: propertyType === "__other__" ? (suggestedCategoryName.trim() || undefined) : undefined,
@@ -586,7 +591,7 @@ export default function AddChalet() {
     setFieldErrors({});
     mutation.reset();
 
-    const resolvedLocation = form.location;
+    const resolvedLocation = citySelectVal === "__other__" ? customCity.trim() : form.location;
     const resolvedCityId = selectedCityId;
 
     /* ── Resolve custom district (if "other" selected) ── */
@@ -687,8 +692,9 @@ export default function AddChalet() {
     setSelectedAmenities(new Set());
     setCustomAmenityTags([]);
     setCustomAmenityInput("");
-    setSelectedRegion("");
+    setSelectedRegionId(null);
     setCitySelectVal("");
+    setCustomCity("");
     setSelectedCityId(null);
     setSelectedDistrict("");
     setCustomDistrict("");
@@ -852,9 +858,9 @@ export default function AddChalet() {
                           المنطقة <span className="text-destructive">*</span>
                         </Label>
                         <Select
-                          value={selectedRegion}
-                          onValueChange={(region) => {
-                            setSelectedRegion(region);
+                          value={selectedRegionId ? String(selectedRegionId) : ""}
+                          onValueChange={(regionId) => {
+                            setSelectedRegionId(Number(regionId));
                             setCitySelectVal("");
                             setSelectedCityId(null);
                             handleChange("location", "");
@@ -869,8 +875,8 @@ export default function AddChalet() {
                             </div>
                           </SelectTrigger>
                           <SelectContent>
-                            {Object.keys(REGION_CITIES).map((region) => (
-                              <SelectItem key={region} value={region}>{region}</SelectItem>
+                            {regions.map((region) => (
+                              <SelectItem key={region.id} value={String(region.id)}>{region.name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -887,29 +893,38 @@ export default function AddChalet() {
                           value={citySelectVal}
                           onValueChange={(val) => {
                             setCitySelectVal(val);
-                            setSelectedDistrict("");
+                            setSelectedDistrict(val === "__other__" ? "__other__" : "");
                             setCustomDistrict("");
-                            handleChange("location", val);
+                            handleChange("location", val === "__other__" ? "" : val);
                             const city = cities.find((c) => c.name === val);
                             setSelectedCityId(city?.id ?? null);
                           }}
-                          disabled={!selectedRegion}
+                          disabled={!selectedRegionId}
                           required
                         >
                           <SelectTrigger className="h-12 text-base">
                             <div className="flex items-center gap-2">
                               <MapPin className="w-4 h-4 text-muted-foreground" />
-                              <SelectValue placeholder={selectedRegion ? "اختر المدينة" : "اختر المنطقة أولاً"} />
+                              <SelectValue placeholder={selectedRegionId ? "اختر المدينة" : "اختر المنطقة أولاً"} />
                             </div>
                           </SelectTrigger>
                           <SelectContent>
-                            {cities.filter((city) => REGION_CITIES[selectedRegion]?.has(city.name)).map((city) => (
+                            {cities.map((city) => (
                               <SelectItem key={city.id} value={city.name}>
                                 {city.name}
                               </SelectItem>
                             ))}
+                            <SelectItem value="__other__">أخرى - مدينة غير موجودة</SelectItem>
                           </SelectContent>
                         </Select>
+                        {citySelectVal === "__other__" && (
+                          <Input
+                            value={customCity}
+                            onChange={(event) => setCustomCity(event.target.value)}
+                            placeholder="اكتب اسم المدينة"
+                            className="h-12 text-base"
+                          />
+                        )}
                         {fieldErrors.location && (
                           <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.location[0]}</p>
                         )}
@@ -926,7 +941,7 @@ export default function AddChalet() {
                             setSelectedDistrict(val);
                             if (val !== "__other__") setCustomDistrict("");
                           }}
-                          disabled={!selectedCityId}
+                          disabled={!selectedCityId || citySelectVal === "__other__"}
                         >
                           <SelectTrigger className="h-12 text-base">
                             <div className="flex items-center gap-2">
@@ -1030,18 +1045,15 @@ export default function AddChalet() {
                           </button>
                         </div>
                         {hasBedrooms && (
-                          <Select value={bedroomCount} onValueChange={setBedroomCount}>
-                            <SelectTrigger className="h-10 text-sm" dir="rtl">
-                              <SelectValue placeholder="اختر عدد الغرف" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Array.from({ length: 30 }, (_, index) => index + 1).map((count) => (
-                                <SelectItem key={count} value={String(count)}>
-                                  {toAr(count)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            value={toAr(bedroomCount)}
+                            onChange={(event) => setBedroomCount(fromAr(event.target.value).replace(/\D/g, ""))}
+                            placeholder="مثال: ٣"
+                            className="h-10 text-sm"
+                            dir="rtl"
+                          />
                         )}
                         {!hasBedrooms && (
                           <p className="text-xs text-muted-foreground">نظام مفتوح / لا يوجد</p>

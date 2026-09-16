@@ -47,6 +47,11 @@ export const GetChaletsResponseItem = zod.object({
     .nullish()
     .describe("Number of sections (قسم واحد، قسمين منفصلة)"),
   pricePerNight: zod.number().describe("Price per night in SAR"),
+  priceMorning: zod.number().nullish(),
+  priceEvening: zod.number().nullish(),
+  priceFullDay: zod.number().nullish(),
+  priceWeekday: zod.number().nullish(),
+  priceWeekend: zod.number().nullish(),
   maxGuests: zod.number().describe("Maximum number of guests"),
   bedrooms: zod.number().describe("Number of bedrooms"),
   amenities: zod.array(zod.string()).describe("List of amenities in Arabic"),
@@ -93,6 +98,11 @@ export const GetChaletByIdResponse = zod.object({
     .nullish()
     .describe("Number of sections (قسم واحد، قسمين منفصلة)"),
   pricePerNight: zod.number().describe("Price per night in SAR"),
+  priceMorning: zod.number().nullish(),
+  priceEvening: zod.number().nullish(),
+  priceFullDay: zod.number().nullish(),
+  priceWeekday: zod.number().nullish(),
+  priceWeekend: zod.number().nullish(),
   maxGuests: zod.number().describe("Maximum number of guests"),
   bedrooms: zod.number().describe("Number of bedrooms"),
   amenities: zod.array(zod.string()).describe("List of amenities in Arabic"),
@@ -174,6 +184,7 @@ export const GetMySubmissionsResponseItem = zod.object({
   nameAr: zod.string(),
   whatsappNumber: zod.string(),
   location: zod.string(),
+  region: zod.string().optional(),
   websiteUrl: zod.string().nullish(),
   descriptionAr: zod.string(),
   pricePerNight: zod.number(),
@@ -191,6 +202,11 @@ export const CreateSubmissionBody = zod.object({
   nameAr: zod.string().describe("Chalet name in Arabic"),
   whatsappNumber: zod.string().describe("Owner WhatsApp number"),
   location: zod.string().describe("City name"),
+  region: zod.string().describe("Region name"),
+  suggestedCityName: zod
+    .string()
+    .optional()
+    .describe("Owner-proposed city when it is not in the catalog"),
   district: zod
     .string()
     .optional()
@@ -212,16 +228,7 @@ export const CreateSubmissionBody = zod.object({
     .optional()
     .describe("Instagram or Snapchat profile link for verification"),
   descriptionAr: zod.string().describe("Chalet description in Arabic"),
-  pricePerNight: zod.number().describe("Average price per night in SAR (kept for backward compat)"),
-  priceMorning: zod.number().nullable().optional().describe("Morning slot price in SAR"),
-  priceEvening: zod.number().nullable().optional().describe("Evening slot price in SAR"),
-  priceFullDay: zod.number().nullable().optional().describe("Full-day price in SAR"),
-  slotMorning: zod.boolean().optional().describe("Whether morning slot is offered"),
-  slotEvening: zod.boolean().optional().describe("Whether evening slot is offered"),
-  slotFullDay: zod.boolean().optional().describe("Whether full-day slot is offered"),
-  priceWeekday: zod.number().min(0).nullable().optional().describe("Weekday starting price in SAR"),
-  priceWeekend: zod.number().min(0).nullable().optional().describe("Weekend starting price in SAR"),
-  seasonalDisclaimer: zod.boolean().optional().describe("Whether seasonal price disclaimer applies"),
+  pricePerNight: zod.number().describe("Average price per night in SAR"),
   amenities: zod
     .array(zod.string())
     .optional()
@@ -229,9 +236,5 @@ export const CreateSubmissionBody = zod.object({
   photos: zod
     .array(zod.string())
     .optional()
-    .describe("List of object paths (up to 15)"),
-  videoUrl: zod
-    .string()
-    .optional()
-    .describe("Optional video URL for the chalet"),
+    .describe("List of object paths (up to 5)"),
 });

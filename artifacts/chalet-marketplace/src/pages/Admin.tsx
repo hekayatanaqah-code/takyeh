@@ -86,6 +86,8 @@ interface Submission {
   id: number;
   nameAr: string;
   location: string;
+  region?: string | null;
+  suggestedCityName?: string | null;
   district?: string | null;
   whatsappNumber: string;
   pricePerNight: string;
@@ -151,6 +153,13 @@ interface AdminChalet {
 }
 
 interface City {
+  id: number;
+  name: string;
+  regionId: number | null;
+  isActive: boolean;
+}
+
+interface Region {
   id: number;
   name: string;
   isActive: boolean;
@@ -906,6 +915,8 @@ function SubmissionsTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                 <TableCell className="font-semibold text-white">{s.nameAr}</TableCell>
                 <TableCell className="text-slate-300">
                   {s.location}
+                  {s.suggestedCityName && <span className="block text-xs font-semibold text-amber-400">مدينة مقترحة: {s.suggestedCityName}</span>}
+                  {s.region && <span className="block text-xs text-slate-500">{s.region}</span>}
                   {s.district && <span className="block text-xs text-slate-500">{s.district}</span>}
                 </TableCell>
                 <TableCell className="text-slate-300 font-mono text-sm">{toAr(s.whatsappNumber)}</TableCell>
@@ -1017,9 +1028,20 @@ function SubmissionsTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
 /* ── Locations Tab ────────────────────────────── */
 function LocationsTab() {
   const qc = useQueryClient();
+  const [newRegion, setNewRegion] = useState("");
   const [newCity, setNewCity] = useState("");
   const [newDistrict, setNewDistrict] = useState("");
   const [selectedCityId, setSelectedCityId] = useState<string>("");
+  const [selectedRegionId, setSelectedRegionId] = useState<string>("");
+  const { data: regions = [] } = useQuery({
+    queryKey: ["admin", "regions"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/regions");
+      if (!r.ok) throw new Error("فشل التحميل");
+      return r.json();
+    },
+  });
+
   const [deleteDialog, setDeleteDialog] = useState<{ type: "city" | "district"; id: number } | null>(null);
 
   const { data: cities = [] } = useQuery({
@@ -1040,9 +1062,20 @@ function LocationsTab() {
     },
   });
 
+  const addRegion = useMutation({
+    mutationFn: async (name: string) => {
+      const r = await apiFetch("/admin/regions", { method: "POST", body: JSON.stringify({ name }) });
+      if (!r.ok) throw new Error("فشل الإضافة");
+    },
+    onSuccess: () => {
+      setNewRegion("");
+      qc.invalidateQueries({ queryKey: ["admin", "regions"] });
+    },
+  });
+
   const addCity = useMutation({
     mutationFn: async (name: string) => {
-      const r = await apiFetch("/admin/cities", { method: "POST", body: JSON.stringify({ name }) });
+      const r = await apiFetch("/admin/cities", { method: "POST", body: JSON.stringify({ name, regionId: Number(selectedRegionId) }) });
       if (!r.ok) throw new Error("فشل الإضافة");
     },
     onSuccess: () => {
@@ -1078,13 +1111,47 @@ function LocationsTab() {
     },
   });
 
+  const regionCities = cities.filter((city: City) => city.regionId === Number(selectedRegionId));
   const cityDistricts = districts.filter((d: District) => d.cityId === Number(selectedCityId));
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
+        <h3 className="text-white font-bold mb-4 text-lg">المناطق</h3>
+        <div className="flex gap-2 mb-4">
+          <Input value={newRegion} onChange={(e) => setNewRegion(e.target.value)} placeholder="اسم المنطقة"
+            className="bg-slate-900 border-slate-600 text-white placeholder-slate-400" />
+          <Button onClick={() => newRegion.trim() && addRegion.mutate(newRegion.trim())}
+            disabled={!newRegion.trim() || addRegion.isPending} className="bg-amber-600 hover:bg-amber-700 text-white shrink-0">
+            {addRegion.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : "إضافة"}
+          </Button>
+        </div>
+        <div className="space-y-2 max-h-80 overflow-y-auto">
+          {regions.map((region: Region) => (
+            <div key={region.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-700">
+              <span className="text-white font-medium">{region.name}</span>
+              <Button size="sm" variant="ghost"
+                onClick={async () => {
+                  await apiFetch(`/admin/regions/${region.id}`, { method: "PATCH", body: JSON.stringify({ isActive: !region.isActive }) });
+                  qc.invalidateQueries({ queryKey: ["admin", "regions"] });
+                }}
+                className={region.isActive ? "text-green-400" : "text-slate-500"}>
+                {region.isActive ? "مفعّلة" : "مخفية"}
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Cities */}
       <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
         <h3 className="text-white font-bold mb-4 text-lg">المدن</h3>
+        <Select value={selectedRegionId} onValueChange={(value) => { setSelectedRegionId(value); setSelectedCityId(""); }}>
+          <SelectTrigger className="bg-slate-900 border-slate-600 text-white mb-2"><SelectValue placeholder="اختر المنطقة" /></SelectTrigger>
+          <SelectContent className="bg-slate-900 border-slate-700">
+            {regions.map((region: Region) => <SelectItem key={region.id} value={String(region.id)}>{region.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <div className="flex gap-2 mb-4">
           <Input
             value={newCity}
@@ -1095,14 +1162,14 @@ function LocationsTab() {
           />
           <Button
             onClick={() => newCity.trim() && addCity.mutate(newCity.trim())}
-            disabled={!newCity.trim() || addCity.isPending}
+            disabled={!newCity.trim() || !selectedRegionId || addCity.isPending}
             className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
           >
             {addCity.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : "إضافة"}
           </Button>
         </div>
         <div className="space-y-2 max-h-80 overflow-y-auto">
-          {cities.map((city: City) => (
+          {regionCities.map((city: City) => (
             <div key={city.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-700">
               <span className="text-white font-medium">{city.name}</span>
               <div className="flex items-center gap-2">
@@ -1120,7 +1187,7 @@ function LocationsTab() {
               </div>
             </div>
           ))}
-          {cities.length === 0 && <p className="text-slate-500 text-center py-4">لا توجد مدن بعد</p>}
+          {selectedRegionId && regionCities.length === 0 && <p className="text-slate-500 text-center py-4">لا توجد مدن بعد</p>}
         </div>
       </div>
 
