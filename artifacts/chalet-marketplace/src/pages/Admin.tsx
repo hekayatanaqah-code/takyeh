@@ -1111,8 +1111,24 @@ function LocationsTab() {
     },
   });
 
+  const toggleStatus = useMutation({
+    mutationFn: async ({ type, id, isActive }: { type: "region" | "city"; id: number; isActive: boolean }) => {
+      const r = await apiFetch(`/admin/${type === "region" ? "regions" : "cities"}/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive }),
+      });
+      if (!r.ok) throw new Error("فشل تحديث الحالة");
+      return { type };
+    },
+    onSuccess: ({ type }) => {
+      qc.invalidateQueries({ queryKey: ["admin", type === "region" ? "regions" : "cities"] });
+    },
+  });
+
   const regionCities = cities.filter((city: City) => city.regionId === Number(selectedRegionId));
   const cityDistricts = districts.filter((d: District) => d.cityId === Number(selectedCityId));
+  const selectedRegion = regions.find((region: Region) => region.id === Number(selectedRegionId));
+  const selectedCity = cities.find((city: City) => city.id === Number(selectedCityId));
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1130,13 +1146,16 @@ function LocationsTab() {
           {regions.map((region: Region) => (
             <div key={region.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-700">
               <span className="text-white font-medium">{region.name}</span>
-              <Button size="sm" variant="ghost"
-                onClick={async () => {
-                  await apiFetch(`/admin/regions/${region.id}`, { method: "PATCH", body: JSON.stringify({ isActive: !region.isActive }) });
-                  qc.invalidateQueries({ queryKey: ["admin", "regions"] });
-                }}
-                className={region.isActive ? "text-green-400" : "text-slate-500"}>
-                {region.isActive ? "مفعّلة" : "مخفية"}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={toggleStatus.isPending}
+                onClick={() => toggleStatus.mutate({ type: "region", id: region.id, isActive: !region.isActive })}
+                className={region.isActive
+                  ? "border-green-700 bg-green-950/60 text-green-300 hover:bg-green-900/70 hover:text-green-200"
+                  : "border-red-800 bg-red-950/50 text-red-300 hover:bg-red-900/60 hover:text-red-200"}
+              >
+                {region.isActive ? "مفعّلة" : "مقفلة"}
               </Button>
             </div>
           ))}
@@ -1146,6 +1165,12 @@ function LocationsTab() {
       {/* Cities */}
       <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
         <h3 className="text-white font-bold mb-4 text-lg">المدن</h3>
+        <div className={`mb-4 rounded-lg border px-4 py-3 text-center ${selectedRegion ? "border-amber-500/60 bg-amber-500/10" : "border-slate-700 bg-slate-900"}`}>
+          <p className="text-xs text-slate-400 mb-1">المنطقة التي تدير مدنها الآن</p>
+          <p className={`font-extrabold text-lg ${selectedRegion ? "text-amber-300" : "text-slate-500"}`}>
+            {selectedRegion ? `مدن منطقة: ${selectedRegion.name}` : "لم يتم اختيار منطقة"}
+          </p>
+        </div>
         <Select value={selectedRegionId} onValueChange={(value) => { setSelectedRegionId(value); setSelectedCityId(""); }}>
           <SelectTrigger className="bg-slate-900 border-slate-600 text-white mb-2"><SelectValue placeholder="اختر المنطقة" /></SelectTrigger>
           <SelectContent className="bg-slate-900 border-slate-700">
@@ -1173,9 +1198,17 @@ function LocationsTab() {
             <div key={city.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-700">
               <span className="text-white font-medium">{city.name}</span>
               <div className="flex items-center gap-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full ${city.isActive ? "bg-green-900/50 text-green-400" : "bg-slate-700 text-slate-400"}`}>
-                  {city.isActive ? "مفعّل" : "مخفي"}
-                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={toggleStatus.isPending}
+                  onClick={() => toggleStatus.mutate({ type: "city", id: city.id, isActive: !city.isActive })}
+                  className={city.isActive
+                    ? "h-8 border-green-700 bg-green-950/60 text-green-300 hover:bg-green-900/70 hover:text-green-200"
+                    : "h-8 border-red-800 bg-red-950/50 text-red-300 hover:bg-red-900/60 hover:text-red-200"}
+                >
+                  {city.isActive ? "مفعّلة" : "مقفلة"}
+                </Button>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -1194,13 +1227,20 @@ function LocationsTab() {
       {/* Districts */}
       <div className="bg-slate-800 rounded-lg border border-slate-700 p-5">
         <h3 className="text-white font-bold mb-4 text-lg">الأحياء</h3>
+        <div className={`mb-4 rounded-lg border px-4 py-3 text-center ${selectedRegion ? "border-amber-500/60 bg-amber-500/10" : "border-slate-700 bg-slate-900"}`}>
+          <p className="text-xs text-slate-400 mb-1">المنطقة التي تدير أحياءها الآن</p>
+          <p className={`font-extrabold text-lg ${selectedRegion ? "text-amber-300" : "text-slate-500"}`}>
+            {selectedRegion ? `أحياء منطقة: ${selectedRegion.name}` : "لم يتم اختيار منطقة"}
+          </p>
+          {selectedCity && <p className="mt-1 text-sm font-semibold text-white">المدينة: {selectedCity.name}</p>}
+        </div>
         <div className="space-y-2 mb-4">
           <Select value={selectedCityId} onValueChange={setSelectedCityId}>
             <SelectTrigger className="bg-slate-900 border-slate-600 text-white">
               <SelectValue placeholder="اختر المدينة" />
             </SelectTrigger>
             <SelectContent className="bg-slate-900 border-slate-700">
-              {cities.map((city: City) => (
+              {regionCities.map((city: City) => (
                 <SelectItem key={city.id} value={String(city.id)} className="text-white focus:bg-slate-700">{city.name}</SelectItem>
               ))}
             </SelectContent>
