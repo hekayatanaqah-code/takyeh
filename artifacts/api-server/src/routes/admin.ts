@@ -1347,6 +1347,31 @@ router.get("/settings", requirePlatformSettingsAdmin, async (_req, res) => {
 
 /* ── Service Provider Submissions (Admin) ──────────────────── */
 
+router.get("/service-providers", requireChaletApprovalsAdmin, async (_req, res) => {
+  const rows = await db
+    .select({
+      id: serviceProviderSubmissionsTable.id,
+      submissionId: serviceProviderSubmissionsTable.id,
+      businessName: serviceProviderSubmissionsTable.businessName,
+      category: serviceProviderSubmissionsTable.category,
+      categoryLabel: serviceCategoriesTable.labelAr,
+      descriptionAr: serviceProviderSubmissionsTable.descriptionAr,
+      city: serviceProviderSubmissionsTable.city,
+      whatsappNumber: serviceProviderSubmissionsTable.whatsappNumber,
+      pricingUnit: serviceProviderSubmissionsTable.pricingUnit,
+      isActive: sql<boolean>`true`,
+      createdAt: serviceProviderSubmissionsTable.createdAt,
+    })
+    .from(serviceProviderSubmissionsTable)
+    .leftJoin(
+      serviceCategoriesTable,
+      eq(serviceProviderSubmissionsTable.category, serviceCategoriesTable.key),
+    )
+    .where(eq(serviceProviderSubmissionsTable.status, "approved"))
+    .orderBy(serviceProviderSubmissionsTable.createdAt);
+  return res.json(rows.reverse());
+});
+
 router.get("/service-submissions", requireChaletApprovalsAdmin, async (_req, res) => {
   const rows = await db
     .select()

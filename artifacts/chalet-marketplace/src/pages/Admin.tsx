@@ -204,6 +204,20 @@ interface Service {
   isActive: boolean;
 }
 
+interface PublishedService {
+  id: number;
+  submissionId: number;
+  businessName: string;
+  category: string;
+  categoryLabel: string | null;
+  descriptionAr: string | null;
+  city: string;
+  whatsappNumber: string;
+  pricingUnit: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
 function apiFetch(path: string, opts?: RequestInit) {
   return fetch(`${API}${path}`, {
     credentials: "include",
@@ -2026,7 +2040,7 @@ const BLANK_SERVICE: ServiceFormData = {
   whatsappNumber: "", price: "", priceNote: "", city: "",
 };
 
-function ServicesTab() {
+function LegacyServicesTab() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -2312,6 +2326,93 @@ function ServicesTab() {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+function ServicesTab() {
+  const { data: services = [], isLoading } = useQuery<PublishedService[]>({
+    queryKey: ["admin", "published-service-providers"],
+    queryFn: async () => {
+      const response = await apiFetch("/admin/service-providers");
+      if (!response.ok) throw new Error("فشل تحميل الخدمات المنشورة");
+      return response.json();
+    },
+  });
+
+  const pricingUnitLabel = (unit: string | null) => {
+    if (unit === "per_day") return "باليوم";
+    if (unit === "per_hour") return "بالساعة";
+    if (unit === "per_request") return "بالطلب";
+    return "حسب الاتفاق";
+  };
+
+  if (isLoading) {
+    return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-slate-400 w-8 h-8" /></div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-emerald-800/60 bg-emerald-950/20 px-4 py-3">
+        <p className="text-sm font-semibold text-emerald-300">
+          تعرض هذه القائمة الخدمات المقبولة والمفعلة والمنشورة تلقائياً.
+        </p>
+        <p className="mt-1 text-xs text-slate-400">
+          عند قبول طلب مزود خدمة جديد سيظهر هنا مباشرة دون إضافته يدوياً.
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-slate-700 overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-slate-700 bg-slate-800">
+              <TableHead className="text-slate-300 text-right">الخدمة</TableHead>
+              <TableHead className="text-slate-300 text-right">الفئة</TableHead>
+              <TableHead className="text-slate-300 text-right">المدينة</TableHead>
+              <TableHead className="text-slate-300 text-right">التسعير</TableHead>
+              <TableHead className="text-slate-300 text-right">الحالة</TableHead>
+              <TableHead className="text-slate-300 text-right">التواصل</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {services.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-slate-400 py-12">
+                  لا توجد خدمات مقبولة ومفعلة حالياً
+                </TableCell>
+              </TableRow>
+            ) : services.map((service) => (
+              <TableRow key={service.id} className="border-slate-700 hover:bg-slate-800/50">
+                <TableCell>
+                  <div className="font-semibold text-white">{service.businessName}</div>
+                  {service.descriptionAr && (
+                    <div className="text-slate-400 text-xs mt-0.5 line-clamp-1">{service.descriptionAr}</div>
+                  )}
+                </TableCell>
+                <TableCell className="text-slate-300">{service.categoryLabel ?? service.category}</TableCell>
+                <TableCell className="text-slate-300">{service.city}</TableCell>
+                <TableCell className="text-slate-300">{pricingUnitLabel(service.pricingUnit)}</TableCell>
+                <TableCell>
+                  <span className="inline-flex rounded-full bg-green-900/50 px-2.5 py-1 text-xs font-semibold text-green-400">
+                    منشورة
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <a
+                    href={`https://wa.me/${service.whatsappNumber.replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-slate-300 hover:text-green-400 transition-colors"
+                  >
+                    <Phone className="w-4 h-4" />
+                    <span className="text-xs">واتساب</span>
+                  </a>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
   );
 }
 
@@ -3231,6 +3332,7 @@ function ProviderReviewModal({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "provider-submissions"] });
+      qc.invalidateQueries({ queryKey: ["admin", "published-service-providers"] });
       onClose();
     },
   });
@@ -3472,7 +3574,10 @@ function ProviderSubmissionsTab() {
         throw new Error(payload.error || "فشل تحديث الطلب");
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin", "provider-submissions"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "provider-submissions"] });
+      qc.invalidateQueries({ queryKey: ["admin", "published-service-providers"] });
+    },
   });
 
   const filtered = filter === "all" ? submissions : submissions.filter((s) => s.status === filter);

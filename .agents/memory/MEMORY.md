@@ -28,3 +28,4 @@
 - [Global versus private seasons](global-private-seasons.md) — admin controls shared dates; each property controls activation and pricing, while owner-created seasons remain separate.
 - [Admin write-ahead auditing](admin-write-ahead-auditing.md) — privileged mutations must persist an audit intent before changing state; successful actions must never disappear from the log.
 - [Service location catalog isolation](service-location-catalog-isolation.md) — service region/city administration is independent from property locations; no service-district UI.
+- [Approved service publishing source](approved-service-publishing-source.md) — admin published-services list is sourced from approved submissions; provider rows are the public mirror.
