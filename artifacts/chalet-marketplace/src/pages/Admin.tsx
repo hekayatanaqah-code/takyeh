@@ -2974,6 +2974,7 @@ function ChaletsVerifyTab() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<"active" | "pending" | "paused" | "deleted">("active");
   const [deleteChaletTarget, setDeleteChaletTarget] = useState<{ id: number; name: string } | null>(null);
+  const [reviewSubmission, setReviewSubmission] = useState<Submission | null>(null);
   const [cityFilter, setCityFilter]         = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
 
@@ -2983,6 +2984,34 @@ function ChaletsVerifyTab() {
       const r = await apiFetch("/admin/chalets?includeStatus=true");
       if (!r.ok) throw new Error(await r.text());
       return r.json();
+    },
+  });
+
+  const { data: submissions = [] } = useQuery<Submission[]>({
+    queryKey: ["admin", "submissions"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/submissions");
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    },
+  });
+
+  const submissionById = useMemo(
+    () => new Map(submissions.map((submission) => [submission.id, submission])),
+    [submissions],
+  );
+
+  const updateSubmissionStatus = useMutation({
+    mutationFn: async ({ id, status, adminNote }: { id: number; status: string; adminNote?: string }) => {
+      const r = await apiFetch(`/admin/submissions/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, adminNote }),
+      });
+      if (!r.ok) throw new Error("فشل تحديث حالة العقار");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "submissions"] });
+      qc.invalidateQueries({ queryKey: ["admin", "chalets"] });
     },
   });
 
@@ -3062,6 +3091,14 @@ function ChaletsVerifyTab() {
 
   return (
     <div className="space-y-6">
+      <SubmissionReviewModal
+        submission={reviewSubmission}
+        open={reviewSubmission !== null}
+        onClose={() => setReviewSubmission(null)}
+        onDecision={(id, status, adminNote) => updateSubmissionStatus.mutate({ id, status, adminNote })}
+        isPending={updateSubmissionStatus.isPending}
+      />
+
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-xl font-bold text-white">إدارة ومراقبة الشاليهات</h2>
@@ -3158,6 +3195,7 @@ function ChaletsVerifyTab() {
               <TableHead className="text-slate-300 text-right font-semibold">الفئة</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">الحالة</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">الإيقاف المؤقت</TableHead>
+              <TableHead className="text-slate-300 text-center font-semibold">التفاصيل</TableHead>
               <TableHead className="text-slate-300 text-center font-semibold">توثيق</TableHead>
               <TableHead className="text-slate-300 text-center font-semibold">حذف</TableHead>
             </TableRow>
@@ -3165,12 +3203,23 @@ function ChaletsVerifyTab() {
           <TableBody>
             {filteredChalets.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-slate-400 py-12">لا توجد شاليهات ضمن هذا التصنيف</TableCell>
+                <TableCell colSpan={8} className="text-center text-slate-400 py-12">لا توجد شاليهات ضمن هذا التصنيف</TableCell>
               </TableRow>
             ) : filteredChalets.map((c) => {
               const adminStatus = c.adminStatus ?? "active";
               return (
-              <TableRow key={c.id} className="border-slate-700 hover:bg-slate-800/50 transition-colors">
+              <TableRow
+                key={c.id}
+                className={`border-slate-700 hover:bg-slate-800/50 transition-colors ${
+                  adminStatus === "pending" && c.submissionId && submissionById.has(c.submissionId)
+                    ? "cursor-pointer"
+                    : ""
+                }`}
+                onClick={() => {
+                  if (adminStatus !== "pending" || !c.submissionId) return;
+                  setReviewSubmission(submissionById.get(c.submissionId) ?? null);
+                }}
+              >
                 <TableCell className="font-semibold text-white">{c.nameAr}</TableCell>
                 <TableCell className="text-slate-300 text-sm">
                   {c.location}
@@ -3203,9 +3252,31 @@ function ChaletsVerifyTab() {
                   )}
                 </TableCell>
                 <TableCell className="text-center">
+                  {adminStatus === "pending" && c.submissionId ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 gap-1.5 px-2 text-blue-400 hover:bg-blue-900/30 hover:text-blue-300"
+                      disabled={!submissionById.has(c.submissionId)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setReviewSubmission(submissionById.get(c.submissionId!) ?? null);
+                      }}
+                    >
+                      <Eye className="w-4 h-4" />
+                      عرض
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-slate-500">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
                   {c.id > 0 ? (
                     <button
-                      onClick={() => toggleVerify.mutate({ id: c.id, isVerified: !c.isVerified })}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleVerify.mutate({ id: c.id, isVerified: !c.isVerified });
+                      }}
                       disabled={toggleVerify.isPending}
                       title={c.isVerified ? "إلغاء التوثيق" : "منح التوثيق"}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
@@ -3225,7 +3296,10 @@ function ChaletsVerifyTab() {
                 <TableCell className="text-center">
                   {adminStatus !== "deleted" && c.id > 0 && (
                     <button
-                      onClick={() => setDeleteChaletTarget({ id: c.id, name: c.nameAr })}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDeleteChaletTarget({ id: c.id, name: c.nameAr });
+                      }}
                       title="حذف ناعم"
                       className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"
                     >
