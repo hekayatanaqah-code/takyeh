@@ -5282,8 +5282,8 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
       if (!r.ok) { setOwnerRegErr(json.error ?? "حدث خطأ أثناء التسجيل"); }
       else {
         setOwnerRegOk(newOwner.email.trim()
-          ? ` تم تسجيل "${newOwner.fullName}" بنجاح — سيظهر في قائمة الطلبات بعد تحقق البريد الإلكتروني`
-          : ` تم تسجيل "${newOwner.fullName}" بنجاح — رقم الجوال هو المعرّف الرئيسي للحساب`);
+          ? ` تم تسجيل "${newOwner.fullName}" وتفعيل حسابه مباشرة — يلزم فقط تحقق البريد الإلكتروني`
+          : ` تم تسجيل "${newOwner.fullName}" وتفعيل حسابه مباشرة — رقم الجوال هو المعرّف الرئيسي للحساب`);
         setNewOwner({ fullName:"", phone:"", email:"", password:"", confirmPassword:"" });
         setShowNewOwner(false);
         qc.invalidateQueries({ queryKey: ["admin","owners"] });
@@ -6014,13 +6014,13 @@ const DEFAULT_WELCOME_TEMPLATE = `مرحباً {NAME}،
 
 يسعدنا انضمامك إلى منصة تكيّة!
 
-حسابك الآن قيد المراجعة من فريق الإدارة. بعد التفعيل، يمكنك البدء بالخطوات التالية:
+تم تفعيل حسابك مباشرة. يمكنك الآن البدء بالخطوات التالية:
 
 1️⃣  أضف شاليهك — أدخل الصور والتفاصيل والموقع
 2️⃣  حدّد الأسعار والمواسم — يومي، نهاية أسبوع، مواسم خاصة
 3️⃣  استقبل الحجوزات — وتابعها مباشرة من لوحة التحكم
 
-سنُرسل إليك إشعاراً فور تفعيل حسابك.
+سجّل الدخول واختر نوع نشاطك للبدء بإضافة عقارك أو خدمتك.
 
 فريق تكيّة ️`;
 
@@ -6857,7 +6857,6 @@ const ALL_TABS = [
   { id: "overview",                label: "الإحصائيات",            icon: BarChart3 },
   { id: "chalets",                 label: "قائمة العقارات",        icon: Home },
   { id: "submissions",             label: "الطلبات/الحجوزات",      icon: Settings },
-  { id: "partnerApplications",     label: "طلبات الملاك",          icon: Users },
   { id: "platformRevenue",         label: "ميزانية المنصة",        icon: TrendingUp },
   { id: "services",                label: "الخدمات النشطة والمنشورة", icon: Wrench },
   { id: "serviceSubmissions",      label: "طلبات الخدمات الجديدة", icon: ClipboardList },
@@ -6889,7 +6888,7 @@ const ADMIN_NAV_GROUPS: Array<{
   tabs: TabId[];
 }> = [
   { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
-  { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "partnerApplications", "categories", "amenities", "locations"] },
+  { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "categories", "amenities", "locations"] },
   { id: "services", label: "إدارة الخدمات", icon: Wrench, tabs: ["services", "serviceSubmissions", "serviceCategories", "serviceLocations"] },
   { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "ownerInbox"] },
   { id: "staff", label: "طاقم العمل", icon: Shield, tabs: ["adminStaff"] },
@@ -8088,7 +8087,6 @@ export default function Admin() {
         {activeTab === "overview"             && <OverviewTab />}
         {activeTab === "chalets"              && <ChaletsVerifyTab />}
         {activeTab === "submissions"          && <SubmissionsTab isSuperAdmin={isSuperAdmin} />}
-        {activeTab === "partnerApplications" && <PartnerApplicationsTab />}
         {activeTab === "platformRevenue"      && <PlatformRevenueTab />}
         {activeTab === "services"             && <ServicesTab />}
         {activeTab === "serviceSubmissions"   && <ProviderSubmissionsTab />}

@@ -35,7 +35,6 @@ export const ADMIN_TAB_PERMISSION: Record<string, AdminPermKey | "__superadmin__
   plans:                 "platformSettings",
   reviews:               "supportDisputes",
   ownerInbox:            "supportDisputes",
-  partnerApplications:   "userManagement",
   contactInquiries:      "supportDisputes",
   siteSettings:          "platformSettings",
   auditLogs:             "__superadmin__",

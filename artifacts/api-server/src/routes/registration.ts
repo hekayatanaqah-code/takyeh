@@ -152,7 +152,7 @@ router.post("/auth/check-exists", async (req, res) => {
 
 /* ── POST /register-owner ───────────────────────────────────
    Public registration — only personal info required.
-   Business details are collected after account activation.
+   The owner account is active immediately; business details are collected next.
    ─────────────────────────────────────────────────────────── */
 router.post("/register-owner", async (req, res) => {
   const { fullName, phone, email, password } = req.body ?? {};
@@ -187,7 +187,7 @@ router.post("/register-owner", async (req, res) => {
     const passwordHash = await bcrypt.hash(String(password), 10);
     const nameClean    = String(fullName).trim();
 
-    /* businessName = fullName, businessType = "chalet" (updated after activation) */
+    /* businessName = fullName, businessType = "chalet" (updated during onboarding) */
     await db.execute(
       sql`INSERT INTO owner_applications
             (full_name, business_name, business_type, phone, email, password_hash, status, email_verified)
@@ -198,7 +198,7 @@ router.post("/register-owner", async (req, res) => {
             ${phoneClean},
              ${emailLower || null},
             ${passwordHash},
-            'pending',
+             'approved',
              ${!emailLower}
           )`
     );
@@ -221,7 +221,7 @@ router.post("/register-owner", async (req, res) => {
       }
     }
 
-    console.log(`[New Partner Application] Name: ${nameClean}, Phone: ${phoneClean}, Email: ${emailLower || "not provided"}`);
+    console.log(`[New Owner Account] Name: ${nameClean}, Phone: ${phoneClean}, Email: ${emailLower || "not provided"}`);
 
     return res.status(201).json({ ok: true, requiresVerification: Boolean(emailLower), email: emailLower || null });
   } catch (err) {

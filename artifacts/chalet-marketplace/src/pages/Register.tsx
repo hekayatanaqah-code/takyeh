@@ -254,7 +254,7 @@ export default function Register() {
         <div className="w-full max-w-md bg-white border border-[#EBEBEB] rounded-3xl p-8 shadow-sm">
           <h2 className="text-xl font-bold text-[#2D2D2D] mb-1 text-center">إنشاء حساب جديد</h2>
           <p className="text-sm text-[#656565] font-medium mb-6 text-center">
-            أدخل بياناتك الشخصية — ستُضاف تفاصيل النشاط بعد التفعيل
+            أدخل بياناتك الشخصية، ثم اختر نوع نشاطك وابدأ بإضافة عقارك أو خدمتك
           </p>
 
           <form onSubmit={handleSubmitClick} className="space-y-4">
