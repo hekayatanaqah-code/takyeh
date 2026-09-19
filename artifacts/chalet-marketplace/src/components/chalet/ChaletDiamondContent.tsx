@@ -105,15 +105,21 @@ function Lightbox({ photos, startIdx, onClose }: { photos: string[]; startIdx: n
   return (
     <div
       className="fixed inset-0 z-[200] bg-black/96 flex items-center justify-center"
-      onTouchStart={e => { touchX.current = e.touches[0].clientX; }}
+      onPointerDown={e => e.stopPropagation()}
+      onClick={e => e.stopPropagation()}
+      onTouchStart={e => {
+        e.stopPropagation();
+        touchX.current = e.touches[0].clientX;
+      }}
       onTouchEnd={e => {
+        e.stopPropagation();
         if (touchX.current === null) return;
         const d = touchX.current - e.changedTouches[0].clientX;
         if (Math.abs(d) > 40) d > 0 ? next() : prev();
         touchX.current = null;
       }}
     >
-      <button onClick={onClose}
+      <button type="button" onPointerDown={e => e.stopPropagation()} onClick={e => { e.preventDefault(); e.stopPropagation(); onClose(); }}
         className="absolute top-5 left-5 z-10 w-11 h-11 rounded-full bg-white/15 hover:bg-white/30 flex items-center justify-center border border-white/20 transition-colors"
         aria-label="إغلاق">
         <X className="w-5 h-5 text-white" />
@@ -121,14 +127,14 @@ function Lightbox({ photos, startIdx, onClose }: { photos: string[]; startIdx: n
       <div className="absolute top-5 right-5 text-white/80 text-sm bg-black/40 px-3 py-1 rounded-full">
         {idx + 1} / {photos.length}
       </div>
-      <button onClick={prev}
+      <button type="button" onClick={e => { e.stopPropagation(); prev(); }}
         className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/15 hover:bg-amber-500/60 flex items-center justify-center border border-white/20 transition-colors"
         aria-label="السابق">
         <ChevronRight className="w-6 h-6 text-white" />
       </button>
       <img src={photos[idx]} alt={`صورة ${idx + 1}`}
         className="max-h-[88vh] max-w-[92vw] object-contain rounded-xl select-none shadow-2xl" draggable={false} />
-      <button onClick={next}
+      <button type="button" onClick={e => { e.stopPropagation(); next(); }}
         className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/15 hover:bg-amber-500/60 flex items-center justify-center border border-white/20 transition-colors"
         aria-label="التالي">
         <ChevronLeft className="w-6 h-6 text-white" />
@@ -136,7 +142,7 @@ function Lightbox({ photos, startIdx, onClose }: { photos: string[]; startIdx: n
       {photos.length > 1 && (
         <div className="absolute bottom-5 flex gap-2.5">
           {photos.map((_, i) => (
-            <button key={i} onClick={() => setIdx(i)}
+            <button type="button" key={i} onClick={e => { e.stopPropagation(); setIdx(i); }}
               className={`rounded-full transition-all ${i === idx ? "w-6 h-2.5 bg-amber-400" : "w-2.5 h-2.5 bg-white/35 hover:bg-white/60"}`} />
           ))}
         </div>
@@ -388,7 +394,7 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
               <div className="overflow-hidden" ref={emblaRef}>
                 <div className="flex touch-pan-y">
                   {photos.map((url, i) => (
-                    <div key={i} className="flex-none w-full aspect-[16/9]" onClick={() => setLbIdx(i)}>
+                    <div key={i} className="flex-none w-full aspect-[16/9]" onClick={e => { e.stopPropagation(); setLbIdx(i); }}>
                       <img src={url} alt={`صورة ${i + 1}`} className="w-full h-full object-cover cursor-zoom-in" />
                     </div>
                   ))}
@@ -396,11 +402,11 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
               </div>
               {photos.length > 1 && (
                 <>
-                  <button onClick={() => emblaApi?.scrollPrev()}
+                  <button type="button" onClick={e => { e.stopPropagation(); emblaApi?.scrollPrev(); }}
                     className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 flex items-center justify-center text-white backdrop-blur-sm">
                     <ChevronRight className="w-4 h-4" />
                   </button>
-                  <button onClick={() => emblaApi?.scrollNext()}
+                  <button type="button" onClick={e => { e.stopPropagation(); emblaApi?.scrollNext(); }}
                     className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 flex items-center justify-center text-white backdrop-blur-sm">
                     <ChevronLeft className="w-4 h-4" />
                   </button>
@@ -409,7 +415,7 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
               <div className="absolute bottom-3 right-3 bg-black/50 text-white text-xs px-2.5 py-1 rounded-full backdrop-blur-sm">
                 {slideIdx + 1} / {photos.length}
               </div>
-              <button onClick={() => setLbIdx(0)}
+              <button type="button" onClick={e => { e.stopPropagation(); setLbIdx(0); }}
                 className="absolute bottom-3 left-3 bg-black/50 text-white text-xs px-2.5 py-1 rounded-full backdrop-blur-sm flex items-center gap-1">
                 <ExternalLink className="w-3 h-3" /> عرض كامل
               </button>

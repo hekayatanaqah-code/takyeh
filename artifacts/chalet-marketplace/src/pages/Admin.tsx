@@ -3210,15 +3210,7 @@ function ChaletsVerifyTab() {
               return (
               <TableRow
                 key={c.id}
-                className={`border-slate-700 hover:bg-slate-800/50 transition-colors ${
-                  adminStatus === "pending" && c.submissionId && submissionById.has(c.submissionId)
-                    ? "cursor-pointer"
-                    : ""
-                }`}
-                onClick={() => {
-                  if (adminStatus !== "pending" || !c.submissionId) return;
-                  setReviewSubmission(submissionById.get(c.submissionId) ?? null);
-                }}
+                className="border-slate-700 hover:bg-slate-800/50 transition-colors"
               >
                 <TableCell className="font-semibold text-white">{c.nameAr}</TableCell>
                 <TableCell className="text-slate-300 text-sm">
@@ -3258,7 +3250,9 @@ function ChaletsVerifyTab() {
                       variant="ghost"
                       className="h-8 gap-1.5 px-2 text-blue-400 hover:bg-blue-900/30 hover:text-blue-300"
                       disabled={!submissionById.has(c.submissionId)}
+                      onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
+                        event.preventDefault();
                         event.stopPropagation();
                         setReviewSubmission(submissionById.get(c.submissionId!) ?? null);
                       }}
