@@ -770,97 +770,189 @@ router.patch("/chalets/:id/soft-delete", async (req, res) => {
 /* ── Owners ──────────────────────────────────────────────── */
 
 router.get("/owners", async (_req, res) => {
-  /* ── Step 1: pull all submissions with enrichment data ── */
-  const subRows = await db
+  const propertyRows = await db
     .select({
       ownerId:       chaletSubmissionsTable.ownerId,
       whatsappNumber: chaletSubmissionsTable.whatsappNumber,
       nameAr:        chaletSubmissionsTable.nameAr,
       location:      chaletSubmissionsTable.location,
       district:      chaletSubmissionsTable.district,
+      category:      chaletSubmissionsTable.category,
       propertyType:  chaletSubmissionsTable.propertyType,
       createdAt:     chaletSubmissionsTable.createdAt,
     })
     .from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.status, "approved"))
     .orderBy(chaletSubmissionsTable.createdAt);
 
-  /* ── Step 2: pull owner_applications for full names / phones ── */
+  const serviceRows = await db
+    .select({
+      ownerId:        serviceProviderSubmissionsTable.ownerId,
+      whatsappNumber: serviceProviderSubmissionsTable.whatsappNumber,
+      businessName:   serviceProviderSubmissionsTable.businessName,
+      category:       serviceProviderSubmissionsTable.category,
+      city:           serviceProviderSubmissionsTable.city,
+      createdAt:      serviceProviderSubmissionsTable.createdAt,
+    })
+    .from(serviceProviderSubmissionsTable)
+    .where(eq(serviceProviderSubmissionsTable.status, "approved"))
+    .orderBy(serviceProviderSubmissionsTable.createdAt);
+
   const appRows = await db.execute<{
     id: number; full_name: string; phone: string; created_at: string;
+    user_id: string | null; deleted_at: string | null;
   }>(
-    sql`SELECT id, full_name, phone, created_at FROM owner_applications WHERE deleted_at IS NULL ORDER BY created_at ASC`
+    sql`SELECT oa.id, oa.full_name, oa.phone, oa.created_at, oa.deleted_at, oal.user_id
+        FROM owner_applications oa
+        LEFT JOIN owner_account_links oal ON oal.owner_application_id = oa.id
+        ORDER BY oa.created_at ASC`
   );
+  const ownerAliases = new Map<string, string>();
+  const deletedOwnerIds = new Set<string>();
   const appByOwnerId = new Map<string, { fullName: string; phone: string; createdAt: string }>();
   for (const a of (appRows as any).rows) {
-    appByOwnerId.set(`owner_${a.id}`, {
+    const legacyOwnerId = `owner_${a.id}`;
+    const canonicalOwnerId = a.user_id || legacyOwnerId;
+    ownerAliases.set(legacyOwnerId, canonicalOwnerId);
+    ownerAliases.set(canonicalOwnerId, canonicalOwnerId);
+    if (a.deleted_at) {
+      deletedOwnerIds.add(canonicalOwnerId);
+      continue;
+    }
+    const app = {
       fullName: a.full_name ?? "",
       phone: a.phone ?? "",
       createdAt: a.created_at ?? "",
-    });
+    };
+    appByOwnerId.set(canonicalOwnerId, app);
   }
 
-  /* ── Step 3: pull subscription data ── */
   const subData = await db.execute<{ owner_id: string; expires_at: string | null; status: string }>(
     sql`SELECT owner_id, expires_at, status FROM owner_subscriptions`
   );
   const subsByOwnerId = new Map<string, { expiresAt: string | null; subscriptionStatus: string }>();
   for (const s of (subData as any).rows) {
-    subsByOwnerId.set(s.owner_id, { expiresAt: s.expires_at ?? null, subscriptionStatus: s.status ?? "" });
+    const ownerId = ownerAliases.get(s.owner_id) ?? s.owner_id;
+    subsByOwnerId.set(ownerId, { expiresAt: s.expires_at ?? null, subscriptionStatus: s.status ?? "" });
   }
 
-  type OwnerRow = {
-    ownerId: string; ownerName: string; primaryProperty: string;
-    whatsappNumber: string; location: string; district?: string; propertyType: string | null;
-    createdAt: string | null; expiresAt: string | null; subscriptionStatus: string;
+  type OwnerAsset = {
+    name: string;
+    category: string;
+    location: string;
+    district?: string;
+    createdAt: Date;
+  };
+  type OwnerAccumulator = {
+    ownerId: string;
+    properties: OwnerAsset[];
+    services: OwnerAsset[];
+    whatsappNumber: string;
+    createdAt: string | null;
   };
 
-  const seen = new Set<string>();
-  const result: OwnerRow[] = [];
-
-  for (const r of subRows) {
-    if (!r.ownerId || seen.has(r.ownerId)) continue;
-    seen.add(r.ownerId);
-    const app = appByOwnerId.get(r.ownerId);
-    const sub = subsByOwnerId.get(r.ownerId);
-    result.push({
-      ownerId:            r.ownerId,
-      ownerName:          app?.fullName || r.ownerId,
-      primaryProperty:    r.nameAr ?? "",
-      whatsappNumber:     r.whatsappNumber ?? "",
-      location:           r.location ?? "",
-      district:           r.district ?? "",
-      propertyType:       r.propertyType ?? null,
-      createdAt:          r.createdAt?.toISOString() ?? null,
-      expiresAt:          sub?.expiresAt ?? null,
-      subscriptionStatus: sub?.subscriptionStatus ?? "",
-    });
-  }
-
-  /* Approved owners with NO chalet yet */
-  for (const a of (appRows as any).rows) {
-    const ownerId = `owner_${a.id}`;
-    if (seen.has(ownerId)) continue;
-    seen.add(ownerId);
-    const sub = subsByOwnerId.get(ownerId);
-    result.push({
+  const owners = new Map<string, OwnerAccumulator>();
+  const ensureOwner = (ownerId: string, phone = "", createdAt: string | null = null) => {
+    const existing = owners.get(ownerId);
+    if (existing) {
+      if (!existing.whatsappNumber && phone) existing.whatsappNumber = phone;
+      return existing;
+    }
+    const next: OwnerAccumulator = {
       ownerId,
-      ownerName:          a.full_name ?? ownerId,
-      primaryProperty:    "—",
-      whatsappNumber:     a.phone ?? "",
-      location:           "",
-      propertyType:       null,
-      createdAt:          a.created_at ?? null,
-      expiresAt:          sub?.expiresAt ?? null,
-      subscriptionStatus: sub?.subscriptionStatus ?? "",
+      properties: [],
+      services: [],
+      whatsappNumber: phone,
+      createdAt,
+    };
+    owners.set(ownerId, next);
+    return next;
+  };
+
+  for (const row of propertyRows) {
+    if (!row.ownerId) continue;
+    const ownerId = ownerAliases.get(row.ownerId) ?? row.ownerId;
+    if (deletedOwnerIds.has(ownerId)) continue;
+    const owner = ensureOwner(ownerId, row.whatsappNumber, row.createdAt?.toISOString() ?? null);
+    owner.properties.push({
+      name: row.nameAr,
+      category: row.category?.trim() || row.propertyType?.trim() || "غير مصنف",
+      location: row.location,
+      district: row.district ?? "",
+      createdAt: row.createdAt,
     });
   }
+
+  for (const row of serviceRows) {
+    if (!row.ownerId) continue;
+    const ownerId = ownerAliases.get(row.ownerId) ?? row.ownerId;
+    if (deletedOwnerIds.has(ownerId)) continue;
+    const owner = ensureOwner(ownerId, row.whatsappNumber, row.createdAt?.toISOString() ?? null);
+    owner.services.push({
+      name: row.businessName,
+      category: row.category.trim() || "غير مصنف",
+      location: row.city,
+      createdAt: row.createdAt,
+    });
+  }
+
+  for (const a of (appRows as any).rows) {
+    const ownerId = ownerAliases.get(`owner_${a.id}`) ?? `owner_${a.id}`;
+    if (deletedOwnerIds.has(ownerId)) continue;
+    ensureOwner(ownerId, a.phone ?? "", a.created_at ?? null);
+  }
+
+  const countCategories = (assets: OwnerAsset[]) => {
+    const counts = new Map<string, number>();
+    for (const asset of assets) counts.set(asset.category, (counts.get(asset.category) ?? 0) + 1);
+    return Array.from(counts, ([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name, "ar"));
+  };
+
+  const result = Array.from(owners.values()).map((owner) => {
+    const app = appByOwnerId.get(owner.ownerId);
+    const subscription = subsByOwnerId.get(owner.ownerId);
+    const primaryProperty = owner.properties[0];
+    const primaryService = owner.services[0];
+    const propertyCount = owner.properties.length;
+    const serviceCount = owner.services.length;
+    const ownerKind = propertyCount > 0 && serviceCount > 0
+      ? "both"
+      : propertyCount > 0
+        ? "property"
+        : serviceCount > 0
+          ? "service"
+          : "none";
+    return {
+      ownerId: owner.ownerId,
+      ownerName: app?.fullName || owner.ownerId,
+      ownerKind,
+      propertyCount,
+      serviceCount,
+      propertyCategories: countCategories(owner.properties),
+      serviceCategories: countCategories(owner.services),
+      primaryProperty: primaryProperty?.name ?? "—",
+      primaryService: primaryService?.name ?? "—",
+      whatsappNumber: app?.phone || owner.whatsappNumber,
+      location: primaryProperty?.location || primaryService?.location || "",
+      district: primaryProperty?.district || "",
+      createdAt: app?.createdAt || owner.createdAt,
+      expiresAt: subscription?.expiresAt ?? null,
+      subscriptionStatus: subscription?.subscriptionStatus ?? "",
+    };
+  }).sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 
   return res.json(result);
 });
 
 router.patch("/owners/:id/soft-delete", async (req, res) => {
   const rawId = String(req.params.id);
-  const numId = Number(rawId.replace(/^owner_/, ""));
+  let numId = Number(rawId.replace(/^owner_/, ""));
+  if ((!numId || isNaN(numId)) && !rawId.startsWith("owner_")) {
+    const link = await db.execute<{ owner_application_id: number }>(
+      sql`SELECT owner_application_id FROM owner_account_links WHERE user_id = ${rawId} LIMIT 1`
+    );
+    numId = Number(link.rows[0]?.owner_application_id);
+  }
   if (!numId || isNaN(numId)) return res.status(400).json({ error: "معرّف غير صحيح" });
   const body = z.object({ reason: z.string().trim().min(3, "سبب الحذف مطلوب (٣ أحرف على الأقل)") }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: body.error.errors[0].message });
