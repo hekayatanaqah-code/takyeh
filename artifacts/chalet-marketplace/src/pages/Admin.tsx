@@ -191,6 +191,10 @@ interface Owner {
   serviceLocations: Array<{region:string;city:string;district:string}>;
   primaryProperty: string;
   primaryService: string;
+  primaryPropertyId: number | null;
+  primaryServiceId: number | null;
+  messageCount: number;
+  hasMessages: boolean;
   whatsappNumber: string;
   region: string;
   location: string;
@@ -1607,7 +1611,6 @@ function DeleteSafeModal({
 }
 
 function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
-  const [impersonating, setImpersonating] = useState<string | null>(null);
   const [mainTab, setMainTab]             = useState<"property" | "service" | "both">("property");
   const [search, setSearch]               = useState("");
   const [regionFilter, setRegionFilter]   = useState("");
@@ -1615,6 +1618,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [districtFilter, setDistrictFilter] = useState("");
   const [propertyCatFilter, setPropertyCatFilter] = useState("all");
   const [serviceCatFilter, setServiceCatFilter]   = useState("all");
+  const [messageFilter, setMessageFilter] = useState<"all" | "with" | "without">("all");
   const [page, setPage]                   = useState(1);
   const [selected, setSelected]           = useState<Set<string>>(new Set());
   const [archiveOwner, setArchiveOwner]   = useState<{ id: string; name: string } | null>(null);
@@ -1699,7 +1703,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   useEffect(() => {
     setPage(1);
     setSelected(new Set());
-  }, [mainTab, search, regionFilter, cityFilter, districtFilter, propertyCatFilter, serviceCatFilter]);
+  }, [mainTab, search, regionFilter, cityFilter, districtFilter, propertyCatFilter, serviceCatFilter, messageFilter]);
 
   useEffect(() => {
     setRegionFilter("");
@@ -1778,16 +1782,18 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       if (mainTab === 'service' && serviceCatFilter !== 'all') {
         if (!o.serviceCategories?.some(c => c.name === serviceCatFilter || c.name === serviceCats.find(sc => sc.key === serviceCatFilter)?.labelAr)) return false;
       }
+      if (messageFilter === "with" && !o.hasMessages) return false;
+      if (messageFilter === "without" && o.hasMessages) return false;
       return true;
     });
-  }, [baseOwners, search, regionFilter, cityFilter, districtFilter, mainTab, propertyCatFilter, serviceCatFilter, serviceCats]);
+  }, [baseOwners, search, regionFilter, cityFilter, districtFilter, mainTab, propertyCatFilter, serviceCatFilter, serviceCats, messageFilter]);
 
   const pageSize = 15;
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const allSelectedOnPage = paginated.length > 0 && paginated.every((o) => selected.has(o.ownerId));
-  const hasFilters  = search || regionFilter || cityFilter || districtFilter || (mainTab === 'property' && propertyCatFilter !== 'all') || (mainTab === 'service' && serviceCatFilter !== 'all');
+  const hasFilters  = search || regionFilter || cityFilter || districtFilter || messageFilter !== "all" || (mainTab === 'property' && propertyCatFilter !== 'all') || (mainTab === 'service' && serviceCatFilter !== 'all');
 
   const toggleAllOnPage = () => {
     const newSel = new Set(selected);
@@ -1824,24 +1830,6 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       qc.invalidateQueries({ queryKey: ["admin", "owners"] });
     },
     onError: (e: Error) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
-  });
-
-  const impersonate = useMutation({
-    mutationFn: async (ownerId: string) => {
-      setImpersonating(ownerId);
-      const r = await apiFetch("/admin/impersonate", {
-        method: "POST",
-        body: JSON.stringify({ ownerId }),
-      });
-      if (!r.ok) {
-        setImpersonating(null);
-        const data = await r.json().catch(() => ({}));
-        throw new Error(data.error ?? "فشل تسجيل الدخول");
-      }
-      const { token } = await r.json();
-      window.location.href = `${API}/owner/enter-session?token=${token}`;
-    },
-    onError: (e: Error) => alert(e.message),
   });
 
   if (isLoading) {
@@ -1971,7 +1959,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       )}
 
       {/* ── Filter bar ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 p-3 bg-slate-800/60 rounded-lg border border-slate-700">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 p-3 bg-slate-800/60 rounded-lg border border-slate-700">
         <div className="relative sm:col-span-1">
           <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
@@ -2021,6 +2009,15 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
             ))}
           </select>
         )}
+        <select
+          value={messageFilter}
+          onChange={(e) => setMessageFilter(e.target.value as "all" | "with" | "without")}
+          className="bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200 px-3 py-2 focus:outline-none focus:border-amber-500/60"
+        >
+          <option value="all">كل المراسلات</option>
+          <option value="with">لديهم مراسلات</option>
+          <option value="without">ليس لديهم مراسلات</option>
+        </select>
       </div>
 
       {/* Active filter summary */}
@@ -2032,9 +2029,14 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
           {regionFilter && <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">{regionFilter}</span>}
           {cityFilter && <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">{cityFilter}</span>}
           {districtFilter && <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">{districtFilter}</span>}
+          {messageFilter !== "all" && (
+            <span className="bg-violet-500/10 text-violet-300 border border-violet-500/20 px-2 py-0.5 rounded-full">
+              {messageFilter === "with" ? "لديهم مراسلات" : "ليس لديهم مراسلات"}
+            </span>
+          )}
           {search && <span className="bg-slate-700 px-2 py-0.5 rounded-full">"{search}"</span>}
           <button
-            onClick={() => { setSearch(""); setRegionFilter(""); setCityFilter(""); setDistrictFilter(""); setPropertyCatFilter("all"); setServiceCatFilter("all"); }}
+            onClick={() => { setSearch(""); setRegionFilter(""); setCityFilter(""); setDistrictFilter(""); setPropertyCatFilter("all"); setServiceCatFilter("all"); setMessageFilter("all"); }}
             className="mr-auto text-slate-500 hover:text-white transition-colors"
           >
             مسح الكل
@@ -2199,17 +2201,35 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                 <TableCell>
                   <div className="flex items-center justify-end gap-1">
                     <Button variant="ghost" size="sm" onClick={() => setArchiveOwner({ id: owner.ownerId, name: owner.ownerName })}
-                      className="h-8 text-xs text-slate-400 hover:text-amber-400 hover:bg-slate-700" title="المراسلات والدعم">
+                      className={`relative h-8 text-xs hover:bg-slate-700 ${owner.hasMessages ? "text-amber-400 hover:text-amber-300" : "text-slate-400 hover:text-amber-400"}`}
+                      title={owner.hasMessages ? `أرشيف المراسلات والدعم — ${owner.messageCount} مراسلات` : "أرشيف المراسلات والدعم"}>
                       <Inbox className="w-4 h-4" />
+                      {owner.hasMessages && (
+                        <span className="absolute -top-1 -left-1 min-w-4 h-4 px-1 rounded-full bg-amber-500 text-slate-950 text-[9px] font-bold leading-4 text-center ring-2 ring-slate-900">
+                          {owner.messageCount > 99 ? "+٩٩" : toAr(owner.messageCount)}
+                        </span>
+                      )}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setDeleteOwnerTarget({ id: owner.ownerId, name: owner.ownerName })}
                       className="h-8 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/20" title="حذف الأرشفة">
                       <Trash2 className="w-4 h-4" />
                     </Button>
-                    {isSuperAdmin && (
-                      <Button variant="ghost" size="sm" onClick={() => impersonate.mutate(owner.ownerId)} disabled={impersonating === owner.ownerId}
-                        className="h-8 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-900/20" title="دخول كمالك">
-                        {impersonating === owner.ownerId ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                    {(owner.primaryPropertyId || owner.primaryServiceId) && (
+                      <Button asChild variant="ghost" size="sm"
+                        className="h-8 px-2 text-xs text-blue-400 hover:text-blue-300 hover:bg-blue-900/20"
+                        title={owner.primaryPropertyId ? "معاينة العقار كما يراه العملاء" : "عرض تفاصيل الخدمة كما يراها العملاء"}>
+                        <a
+                          href={owner.primaryPropertyId
+                            ? `${BASE}/chalets/${owner.primaryPropertyId}`
+                            : `${BASE}/services/${owner.primaryServiceId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Eye className="w-4 h-4" />
+                          <span className="mr-1">
+                            {owner.primaryPropertyId ? "معاينة العقار" : "عرض التفاصيل"}
+                          </span>
+                        </a>
                       </Button>
                     )}
                   </div>

@@ -772,6 +772,7 @@ router.patch("/chalets/:id/soft-delete", async (req, res) => {
 router.get("/owners", async (_req, res) => {
   const propertyRows = await db
     .select({
+      submissionId: chaletSubmissionsTable.id,
       ownerId:       chaletSubmissionsTable.ownerId,
       whatsappNumber: chaletSubmissionsTable.whatsappNumber,
       nameAr:        chaletSubmissionsTable.nameAr,
@@ -788,6 +789,7 @@ router.get("/owners", async (_req, res) => {
 
   const serviceRows = await db
     .select({
+      submissionId:  serviceProviderSubmissionsTable.id,
       ownerId:        serviceProviderSubmissionsTable.ownerId,
       whatsappNumber: serviceProviderSubmissionsTable.whatsappNumber,
       businessName:   serviceProviderSubmissionsTable.businessName,
@@ -803,6 +805,26 @@ router.get("/owners", async (_req, res) => {
     )
     .where(eq(serviceProviderSubmissionsTable.status, "approved"))
     .orderBy(serviceProviderSubmissionsTable.createdAt);
+
+  const publishedPropertyRows = await db
+    .select({ id: chaletsTable.id, submissionId: chaletsTable.submissionId })
+    .from(chaletsTable);
+  const propertyIdBySubmission = new Map<number, number>();
+  for (const row of publishedPropertyRows) {
+    if (row.submissionId != null && !propertyIdBySubmission.has(row.submissionId)) {
+      propertyIdBySubmission.set(row.submissionId, row.id);
+    }
+  }
+
+  const publishedServiceRows = await db
+    .select({ id: serviceProvidersTable.id, submissionId: serviceProvidersTable.submissionId })
+    .from(serviceProvidersTable);
+  const serviceIdBySubmission = new Map<number, number>();
+  for (const row of publishedServiceRows) {
+    if (row.submissionId != null && !serviceIdBySubmission.has(row.submissionId)) {
+      serviceIdBySubmission.set(row.submissionId, row.id);
+    }
+  }
 
   const appRows = await db.execute<{
     id: number; full_name: string; phone: string; created_at: string;
@@ -842,12 +864,27 @@ router.get("/owners", async (_req, res) => {
     subsByOwnerId.set(ownerId, { expiresAt: s.expires_at ?? null, subscriptionStatus: s.status ?? "" });
   }
 
+  const supportData = await db.execute<{ owner_id: string; message_count: string }>(
+    sql`SELECT owner_id, COUNT(*)::text AS message_count
+        FROM owner_support_requests
+        GROUP BY owner_id`
+  );
+  const supportCountByOwnerId = new Map<string, number>();
+  for (const row of supportData.rows) {
+    const ownerId = ownerAliases.get(row.owner_id) ?? row.owner_id;
+    supportCountByOwnerId.set(
+      ownerId,
+      (supportCountByOwnerId.get(ownerId) ?? 0) + Number(row.message_count ?? 0),
+    );
+  }
+
   type OwnerAsset = {
     name: string;
     category: string;
     region: string;
     location: string;
     district?: string;
+    publicId?: number;
     createdAt: Date;
   };
   type OwnerAccumulator = {
@@ -887,6 +924,7 @@ router.get("/owners", async (_req, res) => {
       region: row.region ?? "",
       location: row.location,
       district: row.district ?? "",
+      publicId: propertyIdBySubmission.get(row.submissionId),
       createdAt: row.createdAt,
     });
   }
@@ -901,6 +939,7 @@ router.get("/owners", async (_req, res) => {
       category: row.category.trim() || "غير مصنف",
       region: row.region ?? "",
       location: row.city,
+      publicId: serviceIdBySubmission.get(row.submissionId),
       createdAt: row.createdAt,
     });
   }
@@ -951,6 +990,10 @@ router.get("/owners", async (_req, res) => {
       })),
       primaryProperty: primaryProperty?.name ?? "—",
       primaryService: primaryService?.name ?? "—",
+      primaryPropertyId: primaryProperty?.publicId ?? null,
+      primaryServiceId: primaryService?.publicId ?? null,
+      messageCount: supportCountByOwnerId.get(owner.ownerId) ?? 0,
+      hasMessages: (supportCountByOwnerId.get(owner.ownerId) ?? 0) > 0,
       whatsappNumber: app?.phone || owner.whatsappNumber,
       region: primaryProperty?.region || primaryService?.region || "",
       location: primaryProperty?.location || primaryService?.location || "",
@@ -1810,6 +1853,23 @@ router.patch(["/contact-inquiries/:id/status", "/contact-inquiries/:id"], requir
 router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) => {
   try {
     const ownerId = req.query.ownerId as string | undefined;
+    const ownerIds = ownerId ? [ownerId] : [];
+    if (ownerId?.startsWith("owner_")) {
+      const applicationId = Number(ownerId.slice("owner_".length));
+      if (Number.isFinite(applicationId)) {
+        const linked = await db.execute<{ user_id: string }>(
+          sql`SELECT user_id FROM owner_account_links WHERE owner_application_id = ${applicationId} LIMIT 1`
+        );
+        if (linked.rows[0]?.user_id) ownerIds.push(linked.rows[0].user_id);
+      }
+    } else if (ownerId) {
+      const linked = await db.execute<{ owner_application_id: number }>(
+        sql`SELECT owner_application_id FROM owner_account_links WHERE user_id = ${ownerId} LIMIT 1`
+      );
+      if (linked.rows[0]?.owner_application_id) {
+        ownerIds.push(`owner_${linked.rows[0].owner_application_id}`);
+      }
+    }
     /*
      * Multi-strategy name resolution (owner_id may be a Replit user ID like "56719001"
      * or a custom key like "owner_4" — neither maps directly to owner_applications.email).
@@ -1836,7 +1896,7 @@ router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) =>
                 SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
               ) cs ON true
               LEFT JOIN owner_applications oa ON oa.phone = cs.whatsapp_number
-              WHERE s.owner_id = ${ownerId}
+               WHERE s.owner_id = ANY(${ownerIds}::text[])
               ORDER BY s.created_at DESC LIMIT 300`
         : sql`SELECT s.id, s.owner_id,
                 COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
