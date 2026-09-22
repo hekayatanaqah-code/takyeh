@@ -1885,28 +1885,36 @@ router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) =>
      */
     const result = await db.execute(
       ownerId
-        ? sql`SELECT s.id, s.owner_id,
-                COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
+        ? sql`SELECT s.id, s.owner_id, COALESCE(oal.user_id, s.owner_id) AS owner_group_id,
+                COALESCE(NULLIF(TRIM(s.owner_name), ''), linked_oa.full_name, oa.full_name, s.owner_id) AS owner_name,
                 s.subject, s.message, s.status,
                 CASE WHEN array_length(s.attachment_urls, 1) > 0 THEN s.attachment_urls WHEN s.attachment_url IS NOT NULL THEN ARRAY[s.attachment_url] ELSE '{}'::text[] END AS attachment_urls,
                 s.admin_reply, s.admin_reply_at,
                 CASE WHEN array_length(s.admin_attachment_urls, 1) > 0 THEN s.admin_attachment_urls WHEN s.admin_attachment_url IS NOT NULL THEN ARRAY[s.admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
                 s.is_read_by_owner, s.created_at
               FROM owner_support_requests s
+              LEFT JOIN owner_account_links oal
+                ON oal.user_id = s.owner_id
+                OR ('owner_' || oal.owner_application_id::text) = s.owner_id
+              LEFT JOIN owner_applications linked_oa ON linked_oa.id = oal.owner_application_id
               LEFT JOIN LATERAL (
                 SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
               ) cs ON true
               LEFT JOIN owner_applications oa ON oa.phone = cs.whatsapp_number
                WHERE s.owner_id IN (${sql.join(uniqueOwnerIds.map((id) => sql`${id}`), sql`, `)})
               ORDER BY s.created_at DESC LIMIT 300`
-        : sql`SELECT s.id, s.owner_id,
-                COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
+        : sql`SELECT s.id, s.owner_id, COALESCE(oal.user_id, s.owner_id) AS owner_group_id,
+                COALESCE(NULLIF(TRIM(s.owner_name), ''), linked_oa.full_name, oa.full_name, s.owner_id) AS owner_name,
                 s.subject, s.message, s.status,
                 CASE WHEN array_length(s.attachment_urls, 1) > 0 THEN s.attachment_urls WHEN s.attachment_url IS NOT NULL THEN ARRAY[s.attachment_url] ELSE '{}'::text[] END AS attachment_urls,
                 s.admin_reply, s.admin_reply_at,
                 CASE WHEN array_length(s.admin_attachment_urls, 1) > 0 THEN s.admin_attachment_urls WHEN s.admin_attachment_url IS NOT NULL THEN ARRAY[s.admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
                 s.is_read_by_owner, s.created_at
               FROM owner_support_requests s
+              LEFT JOIN owner_account_links oal
+                ON oal.user_id = s.owner_id
+                OR ('owner_' || oal.owner_application_id::text) = s.owner_id
+              LEFT JOIN owner_applications linked_oa ON linked_oa.id = oal.owner_application_id
               LEFT JOIN LATERAL (
                 SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
               ) cs ON true

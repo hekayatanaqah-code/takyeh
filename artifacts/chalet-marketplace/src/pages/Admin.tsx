@@ -53,7 +53,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, FileText, Check, Video, Mail, MessageSquare, Send, Inbox, Smartphone, Download, Paperclip, BookOpen, Play, ClipboardList } from "lucide-react";
+import { Loader2, Trash2, CheckCircle, XCircle, MapPin, Settings, Users, Tag, Building2, Wrench, Plus, Edit2, Phone, Eye, EyeOff, Calendar, ShieldCheck, ShieldOff, Shield, Clock, Zap, Globe, Heart, ExternalLink, Instagram, Twitter, AlertTriangle, RotateCcw, Home, DoorOpen, Star, Image as ImageIcon, ChevronLeft, ChevronRight, ChevronDown, GripVertical, ToggleLeft, ToggleRight, CreditCard, Save, X, Upload, Palette, TrendingUp, DollarSign, BarChart3, FileCheck, FileText, Check, Video, Mail, MessageSquare, Send, Inbox, Smartphone, Download, Paperclip, BookOpen, Play, ClipboardList, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -6327,6 +6327,7 @@ interface ContactInquiryRow {
 interface OwnerSupportRequest {
   id: number;
   owner_id: string;
+  owner_group_id?: string;
   owner_name: string;
   subject: string;
   message: string;
@@ -6348,6 +6349,12 @@ const SUPPORT_STATUS_LABELS: Record<string, { label: string; className: string }
 };
 
 function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
+  const [activeTab, setActiveTab] = useState<"all" | "new" | "in_progress" | "resolved">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState("all");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
+  const [expandedOwnerId, setExpandedOwnerId] = useState<string | null>(null);
+
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [updating, setUpdating] = useState<number | null>(null);
   const [replyingId, setReplyingId] = useState<number | null>(null);
@@ -6412,12 +6419,262 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
     }
   }
 
-  const newCount   = requests.filter((r) => r.status === "new").length;
+  const newCount = requests.filter((r) => r.status === "new").length;
   const totalCount = requests.length;
+  const statusCounts = useMemo(() => ({
+    all: requests.length,
+    new: requests.filter((request) => request.status === "new").length,
+    in_progress: requests.filter((request) => request.status === "in_progress").length,
+    resolved: requests.filter((request) => request.status === "resolved").length,
+  }), [requests]);
+
+  const uniqueSubjects = useMemo(() => {
+    const subs = new Set<string>();
+    requests.forEach(r => { if (r.subject) subs.add(r.subject); });
+    return Array.from(subs);
+  }, [requests]);
+
+  const filteredRequests = useMemo(() => {
+    return requests.filter(req => {
+      if (activeTab !== "all" && req.status !== activeTab) return false;
+      if (subjectFilter !== "all" && req.subject !== subjectFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchName = req.owner_name?.toLowerCase().includes(q) || false;
+        const matchId = req.owner_id?.toLowerCase().includes(q) || false;
+        const matchSubject = req.subject?.toLowerCase().includes(q) || false;
+        if (!matchName && !matchId && !matchSubject) return false;
+      }
+      return true;
+    }).sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return sortBy === "newest" ? dateB - dateA : dateA - dateB;
+    });
+  }, [requests, activeTab, searchQuery, subjectFilter, sortBy]);
+
+  const ownerGroups = useMemo(() => {
+    if (ownerIdFilter) return []; // Not used in single owner mode
+    const groups: Record<string, {
+      owner_id: string;
+      owner_name: string;
+      requests: typeof requests;
+      newCount: number;
+      inProgressCount: number;
+      resolvedCount: number;
+      latestDate: number;
+    }> = {};
+
+    filteredRequests.forEach(req => {
+      const oid = req.owner_group_id ?? req.owner_id;
+      if (!groups[oid]) {
+        groups[oid] = {
+          owner_id: oid,
+          owner_name: req.owner_name || oid,
+          requests: [],
+          newCount: 0,
+          inProgressCount: 0,
+          resolvedCount: 0,
+          latestDate: 0,
+        };
+      }
+      groups[oid].requests.push(req);
+      if (req.status === "new") groups[oid].newCount++;
+      if (req.status === "in_progress") groups[oid].inProgressCount++;
+      if (req.status === "resolved") groups[oid].resolvedCount++;
+      const time = new Date(req.created_at).getTime();
+      if (time > groups[oid].latestDate) groups[oid].latestDate = time;
+    });
+
+    return Object.values(groups).sort((a, b) => {
+      return sortBy === "newest" ? b.latestDate - a.latestDate : a.latestDate - b.latestDate;
+    });
+  }, [filteredRequests, sortBy, ownerIdFilter]);
+
+  const renderRequestItem = (req: OwnerSupportRequest) => {
+    const isExpanded = expandedId === req.id;
+    const isReplying = replyingId === req.id;
+    const statusInfo = SUPPORT_STATUS_LABELS[req.status] ?? { label: req.status, className: "bg-slate-800 text-slate-400 border border-slate-600" };
+    return (
+      <div key={req.id} className={`bg-slate-800/80 border rounded-xl overflow-hidden transition-all ${req.status === "new" ? "border-red-700/50" : "border-slate-700"}`}>
+        <div
+          className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-slate-700/60 transition-colors"
+          onClick={() => { setExpandedId(isExpanded ? null : req.id); if (!isExpanded) setReplyingId(null); }}
+        >
+          {req.status === "new" && <span className="w-2 h-2 rounded-full bg-red-400 shrink-0 animate-pulse" />}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              {ownerIdFilter ? (
+                <span className="font-semibold text-slate-100 text-sm truncate">{req.subject}</span>
+              ) : (
+                <>
+                  <span className="text-slate-300 text-sm truncate">{req.subject}</span>
+                </>
+              )}
+              {req.admin_reply && (
+                <span className="text-[10px] bg-green-900/30 text-green-400 border border-green-700/30 px-1.5 py-0.5 rounded-full shrink-0">تم الرد</span>
+              )}
+            </div>
+            <p className="text-slate-500 text-xs mt-0.5">{fmtDate(req.created_at)}</p>
+          </div>
+          <span className={`text-[10px] md:text-xs px-2.5 py-1 rounded-full shrink-0 ${statusInfo.className}`}>{statusInfo.label}</span>
+          <ChevronDown className={`w-4 h-4 text-slate-500 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+        </div>
+
+        {isExpanded && (
+          <div className="border-t border-slate-700 bg-slate-900/50 px-4 py-4 space-y-4">
+            <div>
+              <p className="text-xs text-slate-500 mb-1.5 font-medium">الرسالة:</p>
+              <div className="bg-slate-800/80 rounded-lg p-3 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{req.message}</div>
+              {(() => {
+                const urls = req.attachment_urls?.length ? req.attachment_urls : req.attachment_url ? [req.attachment_url] : [];
+                return urls.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {urls.map((url: string, i: number) => url.toLowerCase().includes(".pdf") ? (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-xs font-medium text-amber-300 hover:text-amber-200 border border-slate-600 hover:border-amber-500/50 rounded-lg px-3 py-2 bg-slate-800 transition-colors">
+                        <FileText className="w-4 h-4 text-red-400 shrink-0" />
+                        مرفق PDF {urls.length > 1 ? `(${i + 1})` : ""}
+                        <ExternalLink className="w-3 h-3 opacity-60" />
+                      </a>
+                    ) : (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-fit">
+                        <img src={url} alt="مرفق المالك" className="max-h-48 max-w-xs rounded-lg border border-slate-600 object-cover hover:border-amber-500/50 hover:opacity-90 transition-all" />
+                      </a>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
+            </div>
+
+            {req.admin_reply && (
+              <div className="space-y-2">
+                <p className="text-xs text-green-500 mb-1.5 font-medium flex items-center gap-1.5">
+                  <Send className="w-3 h-3" /> ردّ الإدارة — {req.admin_reply_at ? fmtDate(req.admin_reply_at) : ""}:
+                </p>
+                <div className="bg-green-900/20 border border-green-700/30 rounded-lg p-3 text-green-200 text-sm leading-relaxed whitespace-pre-wrap">{req.admin_reply}</div>
+                {(() => {
+                  const adminUrls = req.admin_attachment_urls?.length ? req.admin_attachment_urls : req.admin_attachment_url ? [req.admin_attachment_url] : [];
+                  return adminUrls.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {adminUrls.map((url: string, i: number) => url.toLowerCase().includes(".pdf") ? (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-amber-900/30 border border-amber-700/40 text-amber-300 hover:bg-amber-900/50 transition-colors">
+                          <FileText className="w-3.5 h-3.5" />
+                          مرفق PDF {adminUrls.length > 1 ? `(${i + 1})` : ""}
+                          <ExternalLink className="w-3 h-3 opacity-60" />
+                        </a>
+                      ) : (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-fit">
+                          <img src={url} alt="مرفق الإدارة" className="max-h-48 max-w-xs rounded-lg border border-green-700/40 object-cover hover:border-green-500/50 hover:opacity-90 transition-all" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+            )}
+
+            {isReplying ? (
+              <div className="space-y-2">
+                <p className="text-xs text-amber-400 font-medium">{req.admin_reply ? "تعديل الرد:" : "كتابة رد:"}</p>
+                <textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="اكتب ردّك هنا..."
+                  rows={4}
+                  dir="rtl"
+                  className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-amber-500 placeholder:text-slate-500"
+                />
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={replyFileInputRef}
+                    type="file"
+                    accept="image/*,.pdf"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const newFs = Array.from(e.target.files ?? []);
+                      setReplyFiles(prev => [...prev, ...newFs].slice(0, 10));
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => replyFileInputRef.current?.click()}
+                    className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 flex items-center gap-1.5"
+                  >
+                    <Paperclip className="w-3 h-3" />
+                    إرفاق ملفات
+                  </button>
+                  {replyFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 max-w-[160px]">
+                      {f.type === "application/pdf"
+                        ? <FileText className="w-3 h-3 text-amber-400 shrink-0" />
+                        : <ImageIcon className="w-3 h-3 text-blue-400 shrink-0" />}
+                      <span className="truncate">{f.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setReplyFiles(prev => prev.filter((_, j) => j !== i))}
+                        className="text-slate-500 hover:text-red-400 shrink-0 ml-0.5"
+                      ><X className="w-3 h-3" /></button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => { setReplyingId(null); setReplyText(""); setReplyFiles([]); }}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600"
+                  >إلغاء</button>
+                  <button
+                    onClick={() => sendReply(req.id)}
+                    disabled={!replyText.trim() || replySending}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40 flex items-center gap-1.5"
+                  >
+                    {replySending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                    إرسال الرد
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setReplyingId(req.id);
+                    setReplyText(req.admin_reply ?? "");
+                  }}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-amber-600/20 border border-amber-600/40 text-amber-300 hover:bg-amber-600/30 flex items-center gap-1.5"
+                >
+                  <Send className="w-3 h-3" />
+                  {req.admin_reply ? "تعديل الرد" : "رد"}
+                </button>
+                <span className="text-slate-600 text-xs">|</span>
+                <span className="text-slate-400 text-xs">الحالة:</span>
+                {(["new", "in_progress", "resolved"] as const).map((s) => (
+                  <button
+                    key={s}
+                    disabled={req.status === s || updating === req.id}
+                    onClick={(e) => { e.stopPropagation(); updateStatus(req.id, s); }}
+                    className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+                      req.status === s
+                        ? "bg-amber-500/20 border-amber-600 text-amber-200 cursor-default"
+                        : "bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600"
+                    }`}
+                  >
+                    {updating === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : SUPPORT_STATUS_LABELS[s]?.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Header */}
       {!ownerIdFilter && (
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
@@ -6434,206 +6691,135 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
             {newCount > 0 && (
               <span className="bg-red-900/40 border border-red-700/40 text-red-300 text-sm px-3 py-1.5 rounded-lg flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-                جديد: <span className="font-bold">{toAr(newCount)}</span>
+                جديدة: <span className="font-bold">{toAr(newCount)}</span>
               </span>
             )}
           </div>
         </div>
       )}
 
+      {/* Controls */}
+      <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-slate-800/40 p-3 rounded-xl border border-slate-700/50">
+        <div className="flex bg-slate-900/50 p-1 rounded-lg border border-slate-700/50 w-full xl:w-auto overflow-x-auto scrollbar-hide">
+          {(["all", "new", "in_progress", "resolved"] as const).map(tab => {
+            const labels = { all: "الكل", new: "الجديدة", in_progress: "قيد المعالجة", resolved: "تم الحل" };
+            const isActive = activeTab === tab;
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center gap-2 ${
+                  isActive
+                    ? "bg-slate-700 text-amber-400 shadow-sm"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
+                }`}
+              >
+                {labels[tab]}
+                {statusCounts[tab] > 0 && (
+                  <span className={`inline-flex items-center justify-center text-[10px] min-w-5 h-5 px-1 rounded-full ${
+                    tab === "new" ? "bg-red-500 text-white" : isActive ? "bg-amber-500/20 text-amber-300" : "bg-slate-700 text-slate-300"
+                  }`}>
+                    {toAr(statusCounts[tab])}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="flex gap-3 w-full xl:w-auto flex-wrap">
+          <div className="relative flex-1 xl:w-64 min-w-[200px]">
+            <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Input
+              placeholder={ownerIdFilter ? "بحث في الموضوع..." : "بحث باسم، معرف، أو موضوع..."}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-3 pr-9 bg-slate-900/50 border-slate-700 text-sm h-10 w-full"
+            />
+          </div>
+          <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+            <SelectTrigger className="w-[140px] bg-slate-900/50 border-slate-700 h-10 text-sm">
+              <SelectValue placeholder="تصنيف الموضوع" />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+              <SelectItem value="all">كل المواضيع</SelectItem>
+              {uniqueSubjects.map(sub => (
+                <SelectItem key={sub} value={sub}>{sub}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={sortBy} onValueChange={(value) => setSortBy(value as "newest" | "oldest")}>
+            <SelectTrigger className="w-[120px] bg-slate-900/50 border-slate-700 h-10 text-sm">
+              <div className="flex items-center gap-2">
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                <SelectValue placeholder="فرز" />
+              </div>
+            </SelectTrigger>
+            <SelectContent className="bg-slate-800 border-slate-700 text-slate-200">
+              <SelectItem value="newest">الأحدث</SelectItem>
+              <SelectItem value="oldest">الأقدم</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       {isLoading ? (
         <div className="text-center py-16 text-slate-400"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
-      ) : requests.length === 0 ? (
-        <div className="text-center py-12 bg-slate-800/50 rounded-xl border border-slate-700">
-          <Inbox className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400">لا توجد رسائل حتى الآن</p>
-          {!ownerIdFilter && <p className="text-slate-500 text-sm mt-1">ستظهر هنا الرسائل المُرسلة من الملاك عبر مركز الدعم</p>}
+      ) : filteredRequests.length === 0 ? (
+        <div className="text-center py-16 bg-slate-800/40 rounded-xl border border-slate-700/50">
+          <Inbox className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+          <p className="text-slate-300 font-medium text-lg">لا توجد رسائل مطابقة</p>
+          <p className="text-slate-500 text-sm mt-1">جرب تغيير فلاتر البحث أو التبويب</p>
+        </div>
+      ) : ownerIdFilter ? (
+        <div className="space-y-3">
+          {filteredRequests.map(req => renderRequestItem(req))}
         </div>
       ) : (
-        <div className="space-y-3">
-          {requests.map((req) => {
-            const isExpanded = expandedId === req.id;
-            const isReplying = replyingId === req.id;
-            const statusInfo = SUPPORT_STATUS_LABELS[req.status] ?? { label: req.status, className: "bg-slate-800 text-slate-400 border border-slate-600" };
-            return (
-              <div key={req.id} className={`bg-slate-800 border rounded-xl overflow-hidden transition-all ${req.status === "new" ? "border-red-700/50" : "border-slate-700"}`}>
-                {/* Row header */}
-                <div
-                  className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-slate-700/40 transition-colors"
-                  onClick={() => { setExpandedId(isExpanded ? null : req.id); if (!isExpanded) setReplyingId(null); }}
-                >
-                  {req.status === "new" && <span className="w-2 h-2 rounded-full bg-red-400 shrink-0 animate-pulse" />}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-slate-100 text-sm">{req.owner_name || req.owner_id}</span>
-                      <span className="text-slate-500 text-xs">—</span>
-                      <span className="text-slate-300 text-sm truncate">{req.subject}</span>
-                      {req.admin_reply && (
-                        <span className="text-[10px] bg-green-900/30 text-green-400 border border-green-700/30 px-1.5 py-0.5 rounded-full shrink-0">تم الرد</span>
-                      )}
-                    </div>
-                    <p className="text-slate-500 text-xs mt-0.5">{fmtDate(req.created_at)}</p>
-                  </div>
-                  <span className={`text-xs px-2.5 py-1 rounded-full shrink-0 ${statusInfo.className}`}>{statusInfo.label}</span>
-                  <ChevronDown className={`w-4 h-4 text-slate-500 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+        <div className="space-y-4">
+          {ownerGroups.map(group => (
+            <div key={group.owner_id} className={`bg-slate-800/40 border rounded-xl overflow-hidden transition-colors ${expandedOwnerId === group.owner_id ? "border-amber-700/50 bg-slate-800/60" : "border-slate-700"}`}>
+              <div
+                className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-slate-700/40 transition-colors"
+                onClick={() => setExpandedOwnerId(expandedOwnerId === group.owner_id ? null : group.owner_id)}
+              >
+                <div className="w-10 h-10 rounded-full bg-slate-900/80 flex items-center justify-center shrink-0 border border-slate-700">
+                  <Users className="w-5 h-5 text-slate-400" />
                 </div>
-
-                {/* Expanded detail */}
-                {isExpanded && (
-                  <div className="border-t border-slate-700 bg-slate-900/50 px-4 py-4 space-y-4">
-                    {/* Original message */}
-                    <div>
-                      <p className="text-xs text-slate-500 mb-1.5 font-medium">رسالة المالك:</p>
-                      <div className="bg-slate-800/80 rounded-lg p-3 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{req.message}</div>
-                      {(() => {
-                        const urls = req.attachment_urls?.length ? req.attachment_urls : req.attachment_url ? [req.attachment_url] : [];
-                        return urls.length > 0 ? (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {urls.map((url, i) => url.toLowerCase().includes(".pdf") ? (
-                              <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 text-xs font-medium text-amber-300 hover:text-amber-200 border border-slate-600 hover:border-amber-500/50 rounded-lg px-3 py-2 bg-slate-800 transition-colors">
-                                <FileText className="w-4 h-4 text-red-400 shrink-0" />
-                                مرفق PDF {urls.length > 1 ? `(${i + 1})` : ""}
-                                <ExternalLink className="w-3 h-3 opacity-60" />
-                              </a>
-                            ) : (
-                              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-fit">
-                                <img src={url} alt="مرفق المالك" className="max-h-48 max-w-xs rounded-lg border border-slate-600 object-cover hover:border-amber-500/50 hover:opacity-90 transition-all" />
-                              </a>
-                            ))}
-                          </div>
-                        ) : null;
-                      })()}
-                    </div>
-
-                    {/* Existing reply */}
-                    {req.admin_reply && (
-                      <div className="space-y-2">
-                        <p className="text-xs text-green-500 mb-1.5 font-medium flex items-center gap-1.5">
-                          <Send className="w-3 h-3" /> ردّ الإدارة — {req.admin_reply_at ? fmtDate(req.admin_reply_at) : ""}:
-                        </p>
-                        <div className="bg-green-900/20 border border-green-700/30 rounded-lg p-3 text-green-200 text-sm leading-relaxed whitespace-pre-wrap">{req.admin_reply}</div>
-                        {(() => {
-                          const adminUrls = req.admin_attachment_urls?.length ? req.admin_attachment_urls : req.admin_attachment_url ? [req.admin_attachment_url] : [];
-                          return adminUrls.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                              {adminUrls.map((url, i) => url.toLowerCase().includes(".pdf") ? (
-                                <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-amber-900/30 border border-amber-700/40 text-amber-300 hover:bg-amber-900/50 transition-colors">
-                                  <FileText className="w-3.5 h-3.5" />
-                                  مرفق PDF {adminUrls.length > 1 ? `(${i + 1})` : ""}
-                                  <ExternalLink className="w-3 h-3 opacity-60" />
-                                </a>
-                              ) : (
-                                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-fit">
-                                  <img src={url} alt="مرفق الإدارة" className="max-h-48 max-w-xs rounded-lg border border-green-700/40 object-cover hover:border-green-500/50 hover:opacity-90 transition-all" />
-                                </a>
-                              ))}
-                            </div>
-                          ) : null;
-                        })()}
-                      </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-100 truncate">{group.owner_name}</h3>
+                    <span className="text-xs text-slate-500 font-mono hidden sm:inline-block">({group.owner_id})</span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                      <Inbox className="w-3.5 h-3.5" />
+                      {toAr(group.requests.length)} طلب
+                    </span>
+                    {group.newCount > 0 && (
+                      <span className="text-[10px] text-red-300 flex items-center gap-1.5 bg-red-900/30 px-2 py-0.5 rounded-full border border-red-800/50">
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                        {toAr(group.newCount)} جديدة
+                      </span>
                     )}
-
-                    {/* Reply form */}
-                    {isReplying ? (
-                      <div className="space-y-2">
-                        <p className="text-xs text-amber-400 font-medium">{req.admin_reply ? "تعديل الرد:" : "كتابة رد:"}</p>
-                        <textarea
-                          value={replyText}
-                          onChange={(e) => setReplyText(e.target.value)}
-                          placeholder="اكتب ردّك هنا..."
-                          rows={4}
-                          dir="rtl"
-                          className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-amber-500 placeholder:text-slate-500"
-                        />
-                        {/* File attachment row */}
-                        <div className="flex items-center gap-2">
-                          <input
-                            ref={replyFileInputRef}
-                            type="file"
-                            accept="image/*,.pdf"
-                            multiple
-                            className="hidden"
-                            onChange={(e) => {
-                              const newFs = Array.from(e.target.files ?? []);
-                              setReplyFiles(prev => [...prev, ...newFs].slice(0, 10));
-                              e.target.value = "";
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => replyFileInputRef.current?.click()}
-                            className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 flex items-center gap-1.5"
-                          >
-                            <Paperclip className="w-3 h-3" />
-                            إرفاق ملفات
-                          </button>
-                          {replyFiles.map((f, i) => (
-                            <div key={i} className="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 max-w-[160px]">
-                              {f.type === "application/pdf"
-                                ? <FileText className="w-3 h-3 text-amber-400 shrink-0" />
-                                : <ImageIcon className="w-3 h-3 text-blue-400 shrink-0" />}
-                              <span className="truncate">{f.name}</span>
-                              <button
-                                type="button"
-                                onClick={() => setReplyFiles(prev => prev.filter((_, j) => j !== i))}
-                                className="text-slate-500 hover:text-red-400 shrink-0 ml-0.5"
-                              ><X className="w-3 h-3" /></button>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex gap-2 justify-end">
-                          <button
-                            onClick={() => { setReplyingId(null); setReplyText(""); setReplyFiles([]); }}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600"
-                          >إلغاء</button>
-                          <button
-                            onClick={() => sendReply(req.id)}
-                            disabled={!replyText.trim() || replySending}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40 flex items-center gap-1.5"
-                          >
-                            {replySending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                            إرسال الرد
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setReplyingId(req.id);
-                            setReplyText(req.admin_reply ?? "");
-                          }}
-                          className="text-xs px-3 py-1.5 rounded-lg bg-amber-600/20 border border-amber-600/40 text-amber-300 hover:bg-amber-600/30 flex items-center gap-1.5"
-                        >
-                          <Send className="w-3 h-3" />
-                          {req.admin_reply ? "تعديل الرد" : "رد"}
-                        </button>
-                        <span className="text-slate-600 text-xs">|</span>
-                        <span className="text-slate-400 text-xs">الحالة:</span>
-                        {(["new", "in_progress", "resolved"] as const).map((s) => (
-                          <button
-                            key={s}
-                            disabled={req.status === s || updating === req.id}
-                            onClick={(e) => { e.stopPropagation(); updateStatus(req.id, s); }}
-                            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
-                              req.status === s
-                                ? "bg-amber-500/20 border-amber-600 text-amber-200 cursor-default"
-                                : "bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600"
-                            }`}
-                          >
-                            {updating === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : SUPPORT_STATUS_LABELS[s]?.label}
-                          </button>
-                        ))}
-                      </div>
+                    {group.inProgressCount > 0 && (
+                      <span className="text-[10px] text-amber-300 flex items-center gap-1 bg-amber-900/30 px-2 py-0.5 rounded-full border border-amber-800/50">
+                        <Clock className="w-3 h-3" />
+                        {toAr(group.inProgressCount)} قيد المعالجة
+                      </span>
                     )}
                   </div>
-                )}
+                </div>
+                <ChevronDown className={`w-5 h-5 text-slate-500 transition-transform ${expandedOwnerId === group.owner_id ? "rotate-180 text-amber-400" : ""}`} />
               </div>
-            );
-          })}
+
+              {expandedOwnerId === group.owner_id && (
+                <div className="border-t border-slate-700/50 bg-slate-900/50 p-4 space-y-3">
+                  {group.requests.map(req => renderRequestItem(req))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
