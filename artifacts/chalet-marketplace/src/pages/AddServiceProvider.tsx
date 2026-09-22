@@ -128,13 +128,15 @@ export default function AddServiceProvider() {
   const { data: serviceRegions = [] } = useQuery<ServiceRegion[]>({
     queryKey: ["service-locations", "regions"],
     queryFn: async () => { const r = await fetch(`${BASE}/api/service-regions`); return r.ok ? r.json() : []; },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
   const { data: serviceCities = [] } = useQuery<ServiceCity[]>({
     queryKey: ["service-locations", "cities", regionSelectVal],
     queryFn: async () => { const r = await fetch(`${BASE}/api/service-cities?regionId=${encodeURIComponent(regionSelectVal)}`); return r.ok ? r.json() : []; },
     enabled: !!regionSelectVal,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
   const { data: editingSubmission, isLoading: editingSubmissionLoading } = useQuery<any | null>({
     queryKey: ["my-service-submission", editSubmissionId],
