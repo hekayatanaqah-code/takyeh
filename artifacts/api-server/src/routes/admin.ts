@@ -775,6 +775,7 @@ router.get("/owners", async (_req, res) => {
       ownerId:       chaletSubmissionsTable.ownerId,
       whatsappNumber: chaletSubmissionsTable.whatsappNumber,
       nameAr:        chaletSubmissionsTable.nameAr,
+      region:        chaletSubmissionsTable.region,
       location:      chaletSubmissionsTable.location,
       district:      chaletSubmissionsTable.district,
       category:      chaletSubmissionsTable.category,
@@ -791,10 +792,15 @@ router.get("/owners", async (_req, res) => {
       whatsappNumber: serviceProviderSubmissionsTable.whatsappNumber,
       businessName:   serviceProviderSubmissionsTable.businessName,
       category:       serviceProviderSubmissionsTable.category,
+      region:         serviceRegionsCatalogTable.name,
       city:           serviceProviderSubmissionsTable.city,
       createdAt:      serviceProviderSubmissionsTable.createdAt,
     })
     .from(serviceProviderSubmissionsTable)
+    .leftJoin(
+      serviceRegionsCatalogTable,
+      eq(serviceProviderSubmissionsTable.serviceRegionId, serviceRegionsCatalogTable.id),
+    )
     .where(eq(serviceProviderSubmissionsTable.status, "approved"))
     .orderBy(serviceProviderSubmissionsTable.createdAt);
 
@@ -839,6 +845,7 @@ router.get("/owners", async (_req, res) => {
   type OwnerAsset = {
     name: string;
     category: string;
+    region: string;
     location: string;
     district?: string;
     createdAt: Date;
@@ -877,6 +884,7 @@ router.get("/owners", async (_req, res) => {
     owner.properties.push({
       name: row.nameAr,
       category: row.category?.trim() || row.propertyType?.trim() || "غير مصنف",
+      region: row.region ?? "",
       location: row.location,
       district: row.district ?? "",
       createdAt: row.createdAt,
@@ -891,6 +899,7 @@ router.get("/owners", async (_req, res) => {
     owner.services.push({
       name: row.businessName,
       category: row.category.trim() || "غير مصنف",
+      region: row.region ?? "",
       location: row.city,
       createdAt: row.createdAt,
     });
@@ -930,9 +939,20 @@ router.get("/owners", async (_req, res) => {
       serviceCount,
       propertyCategories: countCategories(owner.properties),
       serviceCategories: countCategories(owner.services),
+      propertyLocations: owner.properties.map(({ region, location, district }) => ({
+        region,
+        city: location,
+        district: district ?? "",
+      })),
+      serviceLocations: owner.services.map(({ region, location }) => ({
+        region,
+        city: location,
+        district: "",
+      })),
       primaryProperty: primaryProperty?.name ?? "—",
       primaryService: primaryService?.name ?? "—",
       whatsappNumber: app?.phone || owner.whatsappNumber,
+      region: primaryProperty?.region || primaryService?.region || "",
       location: primaryProperty?.location || primaryService?.location || "",
       district: primaryProperty?.district || "",
       createdAt: app?.createdAt || owner.createdAt,

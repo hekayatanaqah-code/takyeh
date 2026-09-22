@@ -187,9 +187,12 @@ interface Owner {
   serviceCount: number;
   propertyCategories: Array<{name:string;count:number}>;
   serviceCategories: Array<{name:string;count:number}>;
+  propertyLocations: Array<{region:string;city:string;district:string}>;
+  serviceLocations: Array<{region:string;city:string;district:string}>;
   primaryProperty: string;
   primaryService: string;
   whatsappNumber: string;
+  region: string;
   location: string;
   district: string;
   createdAt: string | null;
@@ -1607,6 +1610,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [impersonating, setImpersonating] = useState<string | null>(null);
   const [mainTab, setMainTab]             = useState<"property" | "service" | "both">("property");
   const [search, setSearch]               = useState("");
+  const [regionFilter, setRegionFilter]   = useState("");
   const [cityFilter, setCityFilter]       = useState("");
   const [districtFilter, setDistrictFilter] = useState("");
   const [propertyCatFilter, setPropertyCatFilter] = useState("all");
@@ -1628,21 +1632,48 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   });
 
   /* ── Fetch catalogs ── */
-  const { data: citiesCatalog = [] } = useQuery({
+  const { data: regionsCatalog = [] } = useQuery<Region[]>({
+    queryKey: ["admin", "regions"],
+    queryFn: async () => {
+      const r = await apiFetch("/admin/regions");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const { data: citiesCatalog = [] } = useQuery<City[]>({
     queryKey: ["admin", "cities"],
     queryFn: async () => {
       const r = await apiFetch("/admin/cities");
       if (!r.ok) return [];
-      return r.json() as Promise<{ id: number; name: string }[]>;
+      return r.json();
     },
   });
 
-  const { data: allDistricts = [] } = useQuery({
+  const { data: allDistricts = [] } = useQuery<District[]>({
     queryKey: ["admin", "districts"],
     queryFn: async () => {
       const r = await apiFetch("/admin/districts");
       if (!r.ok) return [];
-      return r.json() as Promise<{ id: number; name: string; cityId: number }[]>;
+      return r.json();
+    },
+  });
+
+  const { data: serviceRegionsCatalog = [] } = useQuery<Region[]>({
+    queryKey: ["service-regions"],
+    queryFn: async () => {
+      const r = await apiFetch("/service-regions");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
+
+  const { data: serviceCitiesCatalog = [] } = useQuery<City[]>({
+    queryKey: ["service-cities"],
+    queryFn: async () => {
+      const r = await apiFetch("/service-cities");
+      if (!r.ok) return [];
+      return r.json();
     },
   });
 
@@ -1668,17 +1699,37 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   useEffect(() => {
     setPage(1);
     setSelected(new Set());
-  }, [mainTab, search, cityFilter, districtFilter, propertyCatFilter, serviceCatFilter]);
+  }, [mainTab, search, regionFilter, cityFilter, districtFilter, propertyCatFilter, serviceCatFilter]);
 
-  // Reset district when city changes
+  useEffect(() => {
+    setRegionFilter("");
+    setCityFilter("");
+    setDistrictFilter("");
+  }, [mainTab]);
+
+  useEffect(() => {
+    setCityFilter("");
+    setDistrictFilter("");
+  }, [regionFilter]);
+
   useEffect(() => { setDistrictFilter(""); }, [cityFilter]);
 
+  const activeRegions = mainTab === "service" ? serviceRegionsCatalog : regionsCatalog;
+  const activeCities = mainTab === "service" ? serviceCitiesCatalog : citiesCatalog;
+
+  const availableCities = useMemo(() => {
+    if (!regionFilter) return [];
+    const region = activeRegions.find((r) => r.name === regionFilter);
+    if (!region) return [];
+    return activeCities.filter((c) => c.regionId === region.id);
+  }, [regionFilter, activeRegions, activeCities]);
+
   const availableDistricts = useMemo(() => {
-    if (!cityFilter) return [];
-    const city = citiesCatalog.find((c) => c.name === cityFilter);
+    if (mainTab === "service" || !cityFilter) return [];
+    const city = activeCities.find((c) => c.name === cityFilter);
     if (!city) return [];
     return allDistricts.filter((d) => d.cityId === city.id);
-  }, [cityFilter, citiesCatalog, allDistricts]);
+  }, [mainTab, cityFilter, activeCities, allDistricts]);
 
   // Base list by main tab
   const baseOwners = useMemo(() => {
@@ -1687,7 +1738,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       if (mainTab === 'property') return o.ownerKind === 'property';
       if (mainTab === 'service') return o.ownerKind === 'service';
       return o.ownerKind === 'both' && o.propertyCount > 0 && o.serviceCount > 0;
-    });
+    }).sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
   }, [owners, mainTab]);
 
   const dynamicPropertyCats = useMemo(() => {
@@ -1709,8 +1760,16 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
     const q = search.trim().toLowerCase();
     return baseOwners.filter(o => {
       if (q && !o.ownerName.toLowerCase().includes(q) && !o.whatsappNumber.includes(q)) return false;
-      if (cityFilter && o.location !== cityFilter) return false;
-      if (districtFilter && (o.district ?? "") !== districtFilter) return false;
+      const locations = mainTab === "service" ? o.serviceLocations : o.propertyLocations;
+      if (regionFilter && !locations.some((location) => location.region === regionFilter)) return false;
+      if (cityFilter && !locations.some((location) =>
+        location.city === cityFilter && (!regionFilter || location.region === regionFilter)
+      )) return false;
+      if (districtFilter && !locations.some((location) =>
+        location.district === districtFilter &&
+        (!cityFilter || location.city === cityFilter) &&
+        (!regionFilter || location.region === regionFilter)
+      )) return false;
 
       if (mainTab === 'property' && propertyCatFilter !== 'all') {
         const categoryKey = normaliseOwnerCategory(propertyCatFilter);
@@ -1721,14 +1780,14 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       }
       return true;
     });
-  }, [baseOwners, search, cityFilter, districtFilter, mainTab, propertyCatFilter, serviceCatFilter, serviceCats]);
+  }, [baseOwners, search, regionFilter, cityFilter, districtFilter, mainTab, propertyCatFilter, serviceCatFilter, serviceCats]);
 
   const pageSize = 15;
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const allSelectedOnPage = paginated.length > 0 && paginated.every((o) => selected.has(o.ownerId));
-  const hasFilters  = search || cityFilter || districtFilter || (mainTab === 'property' && propertyCatFilter !== 'all') || (mainTab === 'service' && serviceCatFilter !== 'all');
+  const hasFilters  = search || regionFilter || cityFilter || districtFilter || (mainTab === 'property' && propertyCatFilter !== 'all') || (mainTab === 'service' && serviceCatFilter !== 'all');
 
   const toggleAllOnPage = () => {
     const newSel = new Set(selected);
@@ -1912,7 +1971,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       )}
 
       {/* ── Filter bar ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-800/60 rounded-lg border border-slate-700">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 p-3 bg-slate-800/60 rounded-lg border border-slate-700">
         <div className="relative sm:col-span-1">
           <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
@@ -1925,28 +1984,43 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
           />
         </div>
         <select
-          value={cityFilter}
-          onChange={(e) => setCityFilter(e.target.value)}
+          value={regionFilter}
+          onChange={(e) => setRegionFilter(e.target.value)}
           className="bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200 px-3 py-2 focus:outline-none focus:border-amber-500/60"
         >
-          <option value="">كل المدن</option>
-          {citiesCatalog.map((c) => (
-            <option key={c.id} value={c.name}>{c.name}</option>
+          <option value="">كل المناطق</option>
+          {activeRegions.map((region) => (
+            <option key={region.id} value={region.name}>{region.name}</option>
           ))}
         </select>
         <select
-          value={districtFilter}
-          onChange={(e) => setDistrictFilter(e.target.value)}
-          disabled={!cityFilter || availableDistricts.length === 0}
+          value={cityFilter}
+          onChange={(e) => setCityFilter(e.target.value)}
+          disabled={!regionFilter || availableCities.length === 0}
           className="bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200 px-3 py-2 focus:outline-none focus:border-amber-500/60 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <option value="">
-            {!cityFilter ? "اختر المدينة أولاً" : availableDistricts.length === 0 ? "لا توجد أحياء" : "كل الأحياء"}
+            {!regionFilter ? "اختر المنطقة أولاً" : availableCities.length === 0 ? "لا توجد مدن" : "كل المدن"}
           </option>
-          {availableDistricts.map((d) => (
-            <option key={d.id} value={d.name}>{d.name}</option>
+          {availableCities.map((c) => (
+            <option key={c.id} value={c.name}>{c.name}</option>
           ))}
         </select>
+        {mainTab !== "service" && (
+          <select
+            value={districtFilter}
+            onChange={(e) => setDistrictFilter(e.target.value)}
+            disabled={!cityFilter || availableDistricts.length === 0}
+            className="bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200 px-3 py-2 focus:outline-none focus:border-amber-500/60 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <option value="">
+              {!cityFilter ? "اختر المدينة أولاً" : availableDistricts.length === 0 ? "لا توجد أحياء" : "كل الأحياء"}
+            </option>
+            {availableDistricts.map((d) => (
+              <option key={d.id} value={d.name}>{d.name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Active filter summary */}
@@ -1955,11 +2029,12 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
           <span>الفلاتر النشطة:</span>
           {mainTab === 'property' && propertyCatFilter !== 'all' && <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">{propertyCatFilter}</span>}
           {mainTab === 'service' && serviceCatFilter !== 'all' && <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">{serviceCats.find(c => c.key === serviceCatFilter)?.labelAr || serviceCatFilter}</span>}
+          {regionFilter && <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">{regionFilter}</span>}
           {cityFilter && <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">{cityFilter}</span>}
           {districtFilter && <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">{districtFilter}</span>}
           {search && <span className="bg-slate-700 px-2 py-0.5 rounded-full">"{search}"</span>}
           <button
-            onClick={() => { setSearch(""); setCityFilter(""); setDistrictFilter(""); setPropertyCatFilter("all"); setServiceCatFilter("all"); }}
+            onClick={() => { setSearch(""); setRegionFilter(""); setCityFilter(""); setDistrictFilter(""); setPropertyCatFilter("all"); setServiceCatFilter("all"); }}
             className="mr-auto text-slate-500 hover:text-white transition-colors"
           >
             مسح الكل
@@ -2085,6 +2160,8 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                     </div>
                   )}
                   <div className="flex items-center gap-1 mt-1.5">
+                    {owner.region && <span className="text-slate-500 text-[10px]">{owner.region}</span>}
+                    {owner.region && owner.location && <span className="text-slate-600 text-[10px]">←</span>}
                     {owner.location && <span className="text-slate-500 text-[10px]">{owner.location}</span>}
                     {owner.location && owner.district && <span className="text-slate-600 text-[10px]">←</span>}
                     {owner.district && <span className="text-slate-500 text-[10px]">{owner.district}</span>}
