@@ -1699,6 +1699,15 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
     },
   });
 
+  const serviceCategoryLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const category of serviceCats) {
+      labels.set(category.key, category.labelAr);
+      labels.set(category.labelAr, category.labelAr);
+    }
+    return labels;
+  }, [serviceCats]);
+
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
@@ -2143,7 +2152,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                       <div className="flex flex-wrap gap-1 mt-1">
                         {owner.serviceCategories.map((c, i) => (
                           <span key={i} className="text-[10px] bg-indigo-900/40 text-indigo-300 border border-indigo-700/50 px-1.5 py-0.5 rounded whitespace-nowrap">
-                            {c.name} {c.count > 1 ? `(${toAr(c.count)})` : ""}
+                            {serviceCategoryLabels.get(c.name) ?? c.name} {c.count > 1 ? `(${toAr(c.count)})` : ""}
                           </span>
                         ))}
                       </div>
