@@ -2014,7 +2014,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
           onChange={(e) => setMessageFilter(e.target.value as "all" | "with" | "without")}
           className="bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200 px-3 py-2 focus:outline-none focus:border-amber-500/60"
         >
-          <option value="all">كل المراسلات</option>
+          <option value="all">جميع الملاك</option>
           <option value="with">لديهم مراسلات</option>
           <option value="without">ليس لديهم مراسلات</option>
         </select>

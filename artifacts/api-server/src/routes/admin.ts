@@ -1870,6 +1870,7 @@ router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) =>
         ownerIds.push(`owner_${linked.rows[0].owner_application_id}`);
       }
     }
+    const uniqueOwnerIds = Array.from(new Set(ownerIds));
     /*
      * Multi-strategy name resolution (owner_id may be a Replit user ID like "56719001"
      * or a custom key like "owner_4" — neither maps directly to owner_applications.email).
@@ -1896,7 +1897,7 @@ router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) =>
                 SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
               ) cs ON true
               LEFT JOIN owner_applications oa ON oa.phone = cs.whatsapp_number
-               WHERE s.owner_id = ANY(${ownerIds}::text[])
+               WHERE s.owner_id IN (${sql.join(uniqueOwnerIds.map((id) => sql`${id}`), sql`, `)})
               ORDER BY s.created_at DESC LIMIT 300`
         : sql`SELECT s.id, s.owner_id,
                 COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
