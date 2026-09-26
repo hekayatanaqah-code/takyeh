@@ -486,10 +486,15 @@ router.put("/change-password", async (req, res) => {
 
 /* ── Submissions ─────────────────────────────────────────── */
 
-router.get("/submissions", async (_req, res) => {
+router.get("/submissions", async (req, res) => {
+  const status = req.query.status;
+  if (status !== undefined && status !== "pending") {
+    return res.status(400).json({ error: "حالة الطلب غير صحيحة" });
+  }
   const rows = await db
     .select()
     .from(chaletSubmissionsTable)
+    .where(status === "pending" ? eq(chaletSubmissionsTable.status, "pending") : undefined)
     .orderBy(chaletSubmissionsTable.createdAt);
   return res.json(rows.reverse());
 });

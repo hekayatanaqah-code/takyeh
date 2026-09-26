@@ -871,13 +871,14 @@ function SubmissionsTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
     }
   }
 
-  const { data: submissions = [], isLoading } = useQuery({
-    queryKey: ["admin", "submissions"],
+  const { data: submissions = [], isLoading, isError, refetch } = useQuery<Submission[]>({
+    queryKey: ["admin", "submissions", "pending"],
     queryFn: async () => {
-      const r = await apiFetch("/admin/submissions");
+      const r = await apiFetch("/admin/submissions?status=pending");
       if (!r.ok) throw new Error(await r.text());
       return r.json();
     },
+    refetchInterval: 30_000,
   });
 
   const updateStatus = useMutation({
@@ -902,12 +903,30 @@ function SubmissionsTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
     },
   });
 
+  const heading = (
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 className="text-xl font-bold text-white">طلبات العقارات الجديدة</h2>
+        <p className="mt-1 text-sm text-slate-400">العقارات التي تنتظر مراجعة الإدارة</p>
+      </div>
+      <span className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-300">
+        الطلبات المعلقة: {isLoading || isError ? "—" : toAr(submissions.length)}
+      </span>
+    </div>
+  );
+
   if (isLoading) {
-    return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-slate-400 w-8 h-8" /></div>;
+    return <>{heading}<div className="flex justify-center py-20"><Loader2 className="animate-spin text-slate-400 w-8 h-8" /></div></>;
+  }
+  if (isError) {
+    return <>{heading}<div className="rounded-lg border border-red-800/50 bg-red-950/20 p-8 text-center text-red-300">
+      تعذّر تحميل الطلبات. <Button variant="outline" onClick={() => refetch()} className="mr-2 border-slate-600 text-slate-200">إعادة المحاولة</Button>
+    </div></>;
   }
 
   return (
     <>
+      {heading}
       <SubmissionReviewModal
         submission={reviewSubmission}
         open={reviewSubmission !== null}
@@ -933,10 +952,10 @@ function SubmissionsTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
           <TableBody>
             {submissions.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-slate-400 py-12">لا توجد طلبات بعد</TableCell>
+                <TableCell colSpan={8} className="text-center text-slate-400 py-12">لا توجد طلبات عقارات معلقة حالياً</TableCell>
               </TableRow>
             )}
-            {submissions.map((s: Submission) => (
+            {submissions.map((s) => (
               <TableRow key={s.id} className="border-slate-700 hover:bg-slate-800/50 transition-colors">
                 <TableCell className="font-semibold text-white">{s.nameAr}</TableCell>
                 <TableCell className="text-slate-300">
@@ -970,29 +989,25 @@ function SubmissionsTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                     >
                       <Eye className="w-4 h-4" />
                     </Button>
-                    {s.status !== "approved" && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 px-2 text-green-400 hover:text-green-300 hover:bg-green-900/30"
-                        onClick={() => updateStatus.mutate({ id: s.id, status: "approved" })}
-                        disabled={updateStatus.isPending}
-                        title="قبول"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                      </Button>
-                    )}
-                    {s.status !== "rejected" && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 px-2 text-red-400 hover:text-red-300 hover:bg-red-900/30"
-                        onClick={() => setReviewSubmission(s)}
-                        title="رفض (افتح المراجعة)"
-                      >
-                        <XCircle className="w-4 h-4" />
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2 text-green-400 hover:text-green-300 hover:bg-green-900/30"
+                      onClick={() => updateStatus.mutate({ id: s.id, status: "approved" })}
+                      disabled={updateStatus.isPending}
+                      title="قبول"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 px-2 text-red-400 hover:text-red-300 hover:bg-red-900/30"
+                      onClick={() => setReviewSubmission(s)}
+                      title="رفض (افتح المراجعة)"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </Button>
                     {s.mapsUrl && (
                       <a href={s.mapsUrl} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-blue-400 transition-colors">
                         <MapPin className="w-4 h-4" />
