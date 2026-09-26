@@ -66,6 +66,7 @@ import { OverviewTab } from "./admin/OverviewTab";
 import { CentralSettingsTab } from "./admin/CentralSettingsTab";
 import { ContactInquiriesTab } from "./admin/ContactInquiriesTab";
 import { AuditLogsTab } from "./admin/AuditLogsTab";
+import { ChaletDetailsModal, type ChaletDetails } from "./admin/ChaletDetailsModal";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const API = `${BASE}/api`;
@@ -131,24 +132,15 @@ interface Submission {
   videoUrl?: string | null;
 }
 
-interface AdminChalet {
-  id: number;
+interface AdminChalet extends ChaletDetails {
   submissionId?: number | null;
-  nameAr: string;
-  location: string;
-  district?: string | null;
-  category?: string | null;
-  propertyType?: string | null;
-  isVerified: boolean;
   isActive?: boolean;
-  adminStatus?: "active" | "pending" | "paused" | "deleted";
   isPausedNow?: boolean;
   hiddenByOwner?: boolean;
   pausedFrom?: string | null;
   pausedUntil?: string | null;
   pausedDays?: number;
   pauseAlert?: boolean;
-  whatsappNumber: string;
   createdAt: string;
 }
 
@@ -3268,6 +3260,7 @@ const FEAT_ICONS: { key: string; label: string; Icon: React.ComponentType<{ clas
 function ChaletsVerifyTab() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<"active" | "pending" | "paused" | "deleted">("active");
+  const [detailsChaletId, setDetailsChaletId] = useState<number | null>(null);
   const [deleteChaletTarget, setDeleteChaletTarget] = useState<{ id: number; name: string } | null>(null);
   const [reviewSubmission, setReviewSubmission] = useState<Submission | null>(null);
   const [cityFilter, setCityFilter]         = useState("");
@@ -3295,6 +3288,10 @@ function ChaletsVerifyTab() {
     () => new Map(submissions.map((submission) => [submission.id, submission])),
     [submissions],
   );
+  const selectedChalet = chalets.find((chalet) => chalet.id === detailsChaletId) ?? null;
+  const detailsChalet = selectedChalet && selectedChalet.id < 0 && selectedChalet.submissionId
+    ? { ...selectedChalet, ...submissionById.get(selectedChalet.submissionId), id: selectedChalet.id, isVerified: selectedChalet.isVerified, adminStatus: selectedChalet.adminStatus }
+    : selectedChalet;
 
   const updateSubmissionStatus = useMutation({
     mutationFn: async ({ id, status, adminNote }: { id: number; status: string; adminNote?: string }) => {
@@ -3386,6 +3383,7 @@ function ChaletsVerifyTab() {
 
   return (
     <div className="space-y-6">
+      <ChaletDetailsModal key={detailsChalet?.id ?? "closed"} chalet={detailsChalet} onClose={() => setDetailsChaletId(null)} />
       <SubmissionReviewModal
         submission={reviewSubmission}
         open={reviewSubmission !== null}
@@ -3539,24 +3537,24 @@ function ChaletsVerifyTab() {
                   )}
                 </TableCell>
                 <TableCell className="text-center">
-                  {adminStatus === "pending" && c.submissionId ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5 border-amber-500/40 px-2 text-amber-300 hover:bg-amber-500/10 hover:text-amber-200"
+                    onClick={() => setDetailsChaletId(c.id)}
+                  >
+                    <Eye className="w-4 h-4" />
+                    عرض التفاصيل
+                  </Button>
+                  {adminStatus === "pending" && c.submissionId && submissionById.has(c.submissionId) && (
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="h-8 gap-1.5 px-2 text-blue-400 hover:bg-blue-900/30 hover:text-blue-300"
-                      disabled={!submissionById.has(c.submissionId)}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setReviewSubmission(submissionById.get(c.submissionId!) ?? null);
-                      }}
+                      className="h-8 px-2 text-blue-400 hover:text-blue-300"
+                      onClick={() => setReviewSubmission(submissionById.get(c.submissionId!) ?? null)}
                     >
-                      <Eye className="w-4 h-4" />
-                      عرض
+                      مراجعة الطلب
                     </Button>
-                  ) : (
-                    <span className="text-xs text-slate-500">—</span>
                   )}
                 </TableCell>
                 <TableCell className="text-center">
