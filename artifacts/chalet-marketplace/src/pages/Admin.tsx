@@ -15,6 +15,7 @@ import {
   ALL_ADMIN_PERM_KEYS,
   ADMIN_PERM_LABELS,
   ADMIN_TAB_PERMISSION,
+  hasAdminPermission,
   type AdminPermKey,
   type AdminStaffPermissions,
 } from "@/lib/adminPermissions";
@@ -7377,7 +7378,7 @@ function ReviewsTab() {
   const { data: chalets = [], isLoading } = useQuery<ReviewChalet[]>({
     queryKey: ["admin", "chalets-list"],
     queryFn: async () => {
-      const r = await fetch(`${API}/admin/chalets`, { credentials: "include" });
+      const r = await fetch(`${API}/admin/review-chalets`, { credentials: "include" });
       if (!r.ok) throw new Error("failed");
       return r.json();
     },
@@ -7755,6 +7756,8 @@ interface AdminStaffRow {
   id: number;
   name: string;
   username: string;
+  personalEmail: string | null;
+  mobile: string | null;
   permissions: AdminStaffPermissions;
   isActive: boolean;
   createdAt: string;
@@ -7768,11 +7771,20 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
 
   const [newName, setNewName] = useState("");
   const [newUsername, setNewUsername] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newMobile, setNewMobile] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [newPerms, setNewPerms] = useState<AdminStaffPermissions>({});
+  const [newIsActive, setNewIsActive] = useState(true);
+  const [newPerms, setNewPerms] = useState<AdminStaffPermissions>(
+    () => Object.fromEntries(ALL_ADMIN_PERM_KEYS.map((key) => [key, false])),
+  );
 
+  const [editCredName, setEditCredName] = useState("");
   const [editCredUsername, setEditCredUsername] = useState("");
+  const [editCredEmail, setEditCredEmail] = useState("");
+  const [editCredMobile, setEditCredMobile] = useState("");
   const [editCredPassword, setEditCredPassword] = useState("");
+  const [credError, setCredError] = useState("");
   const [editPerms, setEditPerms] = useState<AdminStaffPermissions>({});
 
   /* Change own password */
@@ -7815,7 +7827,11 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: newName, username: newUsername, password: newPassword, permissions: newPerms }),
+        body: JSON.stringify({
+          name: newName.trim(), username: newUsername.trim(),
+          personalEmail: newEmail.trim(), mobile: newMobile.trim(),
+          password: newPassword, isActive: newIsActive, permissions: newPerms,
+        }),
       });
       if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "فشل الحفظ"); }
       return r.json();
@@ -7823,7 +7839,9 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "staff"] });
       setShowAdd(false);
-      setNewName(""); setNewUsername(""); setNewPassword(""); setNewPerms({});
+      setNewName(""); setNewUsername(""); setNewEmail(""); setNewMobile("");
+      setNewPassword(""); setNewIsActive(true);
+      setNewPerms(Object.fromEntries(ALL_ADMIN_PERM_KEYS.map((key) => [key, false])));
     },
   });
 
@@ -7835,7 +7853,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
         credentials: "include",
         body: JSON.stringify({ permissions }),
       });
-      if (!r.ok) throw new Error("فشل");
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "فشل حفظ الصلاحيات"); }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "staff"] }); setPermEditId(null); },
   });
@@ -7846,11 +7864,19 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username: editCredUsername || undefined, password: editCredPassword || undefined }),
+        body: JSON.stringify({
+          name: editCredName.trim(), username: editCredUsername.trim(),
+          personalEmail: editCredEmail.trim(), mobile: editCredMobile.trim(),
+          password: editCredPassword || undefined,
+        }),
       });
-      if (!r.ok) throw new Error("فشل");
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "فشل تحديث بيانات الموظف"); }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "staff"] }); setCredEditId(null); setEditCredUsername(""); setEditCredPassword(""); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "staff"] });
+      setCredEditId(null); setEditCredPassword(""); setCredError("");
+    },
+    onError: (error: Error) => setCredError(error.message),
   });
 
   const statusMutation = useMutation({
@@ -7996,15 +8022,34 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                 className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
               />
             </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">البريد الإلكتروني الشخصي</label>
+              <Input type="email" dir="ltr" value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="name@example.com" className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500" />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">رقم الجوال</label>
+              <Input type="tel" dir="ltr" value={newMobile} onChange={(e) => setNewMobile(e.target.value)}
+                placeholder="05xxxxxxxx" className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500" />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-2">حالة الحساب</label>
+              <div className="flex items-center gap-3 min-h-10">
+                <Switch checked={newIsActive} onCheckedChange={setNewIsActive} aria-label="تفعيل حساب الموظف" />
+                <span className="text-sm text-slate-200">{newIsActive ? "مفعّل — يمكنه الدخول فوراً" : "معطّل — لا يمكنه الدخول"}</span>
+              </div>
+              <p className="text-xs text-slate-400">لا يتطلب تفعيل الحساب رمز تحقق خارجي.</p>
+            </div>
           </div>
 
           {/* Permission toggles */}
           <div className="mb-4">
             <p className="text-sm text-slate-400 mb-3">الصلاحيات الممنوحة:</p>
+            <p className="text-xs text-amber-300 mb-3">إدارة موظفي الإدارة وسجل العمليات وميزانية المنصة والإضافة المباشرة مخصصة للمشرف العام فقط.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {ALL_ADMIN_PERM_KEYS.map((key) => {
                 const info = ADMIN_PERM_LABELS[key];
-                const enabled = !!newPerms[key];
+                const enabled = hasAdminPermission(newPerms, key);
                 return (
                   <button
                     key={key}
@@ -8019,7 +8064,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                     <span className="text-base shrink-0">{info.icon}</span>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium">{info.label}</div>
-                      <div className="text-xs text-slate-400 truncate">{info.description}</div>
+                      <div className="text-xs text-slate-400">{info.description}</div>
                     </div>
                     <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center ${
                       enabled ? "bg-amber-500 border-amber-500" : "border-slate-500"
@@ -8038,7 +8083,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
             </Button>
             <Button
               onClick={() => addMutation.mutate()}
-              disabled={!newName || !newUsername || !newPassword || addMutation.isPending}
+              disabled={!newName.trim() || !newUsername.trim() || !newEmail.trim() || !newMobile.trim() || newPassword.length < 8 || addMutation.isPending}
               className="bg-amber-600 hover:bg-amber-700 text-white"
             >
               {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "حفظ الموظف"}
@@ -8062,7 +8107,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
       ) : (
         <div className="space-y-4">
           {staffList.map((member) => {
-            const activePerms = ALL_ADMIN_PERM_KEYS.filter((k) => member.permissions?.[k]);
+            const activePerms = ALL_ADMIN_PERM_KEYS.filter((k) => hasAdminPermission(member.permissions ?? {}, k));
             const isPermOpen = permEditId === member.id;
             const isCredOpen = credEditId === member.id;
 
@@ -8081,6 +8126,11 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                         <span className="bg-red-900/40 text-red-400 text-xs px-2 py-0.5 rounded-full border border-red-800">موقوف</span>
                       )}
                     </div>
+                    {(member.personalEmail || member.mobile) && (
+                      <p className="text-slate-400 text-xs mt-1" dir="auto">
+                        {[member.personalEmail, member.mobile].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
                     {activePerms.length === 0 ? (
                       <p className="text-slate-500 text-xs mt-1">لا توجد صلاحيات ممنوحة</p>
                     ) : (
@@ -8095,13 +8145,23 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button
-                      onClick={() => { setCredEditId(isCredOpen ? null : member.id); setPermEditId(null); setEditCredUsername(member.username); setEditCredPassword(""); }}
+                      onClick={() => {
+                        setCredEditId(isCredOpen ? null : member.id); setPermEditId(null);
+                        setEditCredName(member.name); setEditCredUsername(member.username);
+                        setEditCredEmail(member.personalEmail ?? ""); setEditCredMobile(member.mobile ?? "");
+                        setEditCredPassword(""); setCredError("");
+                      }}
                       className="text-xs text-slate-400 hover:text-amber-400 px-2 py-1 rounded border border-slate-600 hover:border-amber-600 transition-colors"
                     >
-                      بيانات الدخول
+                      تعديل البيانات
                     </button>
                     <button
-                      onClick={() => { setPermEditId(isPermOpen ? null : member.id); setCredEditId(null); setEditPerms({ ...member.permissions }); }}
+                      onClick={() => {
+                        setPermEditId(isPermOpen ? null : member.id); setCredEditId(null);
+                        setEditPerms(Object.fromEntries(ALL_ADMIN_PERM_KEYS.map((key) => [
+                          key, hasAdminPermission(member.permissions ?? {}, key),
+                        ])));
+                      }}
                       className="text-xs text-slate-400 hover:text-amber-400 px-2 py-1 rounded border border-slate-600 hover:border-amber-600 transition-colors"
                     >
                       الصلاحيات
@@ -8124,12 +8184,17 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                     </button>
                   </div>
                 </div>
+                {statusMutation.isError && <p className="text-red-400 text-sm px-4 pb-2">تعذّر تغيير حالة الحساب. حاول مرة أخرى.</p>}
 
                 {/* Credential Editor */}
                 {isCredOpen && (
                   <div className="border-t border-slate-700 bg-slate-900/40 p-4">
-                    <p className="text-slate-300 text-sm font-medium mb-3">تعديل بيانات الدخول</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                    <p className="text-slate-300 text-sm font-medium mb-3">تعديل بيانات الموظف</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">الاسم الكامل</label>
+                        <Input value={editCredName} onChange={(e) => setEditCredName(e.target.value)} className="bg-slate-700 border-slate-600 text-white text-sm h-8" />
+                      </div>
                       <div>
                         <label className="block text-xs text-slate-400 mb-1">اسم المستخدم الجديد</label>
                         <Input
@@ -8139,6 +8204,14 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                           dir="ltr"
                           className="bg-slate-700 border-slate-600 text-white text-sm h-8"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">البريد الإلكتروني الشخصي</label>
+                        <Input type="email" dir="ltr" value={editCredEmail} onChange={(e) => setEditCredEmail(e.target.value)} className="bg-slate-700 border-slate-600 text-white text-sm h-8" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">رقم الجوال</label>
+                        <Input type="tel" dir="ltr" value={editCredMobile} onChange={(e) => setEditCredMobile(e.target.value)} className="bg-slate-700 border-slate-600 text-white text-sm h-8" />
                       </div>
                       <div>
                         <label className="block text-xs text-slate-400 mb-1">كلمة مرور جديدة (اتركها فارغة لعدم التغيير)</label>
@@ -8151,12 +8224,13 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                         />
                       </div>
                     </div>
+                    {credError && <p className="text-red-400 text-sm mb-2">{credError}</p>}
                     <div className="flex gap-2 justify-end">
                       <Button variant="ghost" size="sm" onClick={() => setCredEditId(null)} className="text-slate-400 hover:text-white text-xs h-7">إلغاء</Button>
                       <Button
                         size="sm"
                         onClick={() => credMutation.mutate({ id: member.id })}
-                        disabled={credMutation.isPending}
+                        disabled={!editCredName.trim() || !editCredUsername.trim() || (editCredPassword.length > 0 && editCredPassword.length < 8) || credMutation.isPending}
                         className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-7"
                       >
                         {credMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "حفظ"}
@@ -8172,7 +8246,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
                       {ALL_ADMIN_PERM_KEYS.map((key) => {
                         const info = ADMIN_PERM_LABELS[key];
-                        const enabled = !!editPerms[key];
+                        const enabled = hasAdminPermission(editPerms, key);
                         return (
                           <button
                             key={key}
@@ -8187,7 +8261,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                             <span className="text-base shrink-0">{info.icon}</span>
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium">{info.label}</div>
-                              <div className="text-xs text-slate-400 truncate">{info.description}</div>
+                              <div className="text-xs text-slate-400">{info.description}</div>
                             </div>
                             <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center ${
                               enabled ? "bg-amber-500 border-amber-500" : "border-slate-500"
@@ -8198,6 +8272,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                         );
                       })}
                     </div>
+                    {permMutation.isError && <p className="text-red-400 text-sm mb-2">{(permMutation.error as Error).message}</p>}
                     <div className="flex gap-2 justify-end">
                       <Button variant="ghost" size="sm" onClick={() => setPermEditId(null)} className="text-slate-400 hover:text-white text-xs h-7">إلغاء</Button>
                       <Button
@@ -8259,7 +8334,7 @@ export default function Admin() {
     return ALL_TABS.filter((tab) => {
       const permKey = ADMIN_TAB_PERMISSION[tab.id];
       if (!permKey || permKey === "__superadmin__") return false;
-      return adminPerms[permKey as AdminPermKey] === true;
+      return hasAdminPermission(adminPerms, permKey as AdminPermKey);
     });
   }, [isSuperAdmin, adminPerms]);
 
@@ -8406,7 +8481,7 @@ export default function Admin() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <button
+          {isSuperAdmin && <button
             onClick={async () => {
               const r = await apiFetch("/admin/demo-preview", { method: "POST" });
               if (r.ok) window.location.href = `${BASE}/dashboard`;
@@ -8418,7 +8493,7 @@ export default function Admin() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
             لوحة تحكم الملاك (تجربة)
-          </button>
+          </button>}
           <a
             href={`${BASE}/`}
             target="_blank"

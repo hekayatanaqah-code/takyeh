@@ -684,7 +684,11 @@ export type AdminPermKey =
   | "globalFinancials"
   | "userManagement"
   | "platformSettings"
-  | "supportDisputes";
+  | "supportDisputes"
+  | "serviceListings"
+  | "serviceCatalog"
+  | "financeSettings"
+  | "subscriberManagement";
 
 export type AdminStaffPermissions = Partial<Record<AdminPermKey, boolean>>;
 
@@ -701,6 +705,8 @@ export const adminStaffTable = pgTable("admin_staff", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   username: text("username").notNull().unique(),
+  personalEmail: text("email"),
+  mobile: text("mobile"),
   passwordHash: text("password_hash").notNull(),
   permissions: jsonb("permissions").$type<AdminStaffPermissions>().notNull().default({}),
   isActive: boolean("is_active").notNull().default(true),

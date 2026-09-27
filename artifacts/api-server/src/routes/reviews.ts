@@ -15,7 +15,7 @@ import {
 import { eq, desc, and } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { z } from "zod/v4";
-import { requireAdmin, requireAdminOrAdminStaff, requireSuperAdmin } from "./admin";
+import { requireAdmin, requireAdminOrAdminStaff, requireSuperAdmin, requireSupportDisputesAdmin } from "./admin";
 
 const router = Router();
 
@@ -25,7 +25,7 @@ function getRouteParam(value: string | string[]) {
 
 /* ── POST /admin/chalets/:id/review-invite ─────────────────────
    Admin generates a one-time review token for a chalet */
-router.post("/admin/chalets/:id/review-invite", requireAdminOrAdminStaff, async (req, res) => {
+router.post("/admin/chalets/:id/review-invite", requireAdminOrAdminStaff, requireSupportDisputesAdmin, async (req, res) => {
   const chaletId = parseInt(getRouteParam(req.params.id), 10);
   if (isNaN(chaletId)) return res.status(400).json({ error: "invalid id" });
 
@@ -255,7 +255,7 @@ router.get("/chalets/:id/reviews", async (req, res) => {
 
 /* ── GET /admin/reviews ────────────────────────────────────────
    Admin: all reviews across all chalets (including hidden + reported) */
-router.get("/admin/reviews", requireAdminOrAdminStaff, async (req, res) => {
+router.get("/admin/reviews", requireAdminOrAdminStaff, requireSupportDisputesAdmin, async (req, res) => {
   const rows = await db
     .select({
       id: reviewsTable.id,
@@ -284,7 +284,7 @@ router.get("/admin/reviews", requireAdminOrAdminStaff, async (req, res) => {
 
 /* ── GET /admin/review-invitations ────────────────────────────
    Admin: list all invitations with chalet name */
-router.get("/admin/review-invitations", requireAdminOrAdminStaff, async (req, res) => {
+router.get("/admin/review-invitations", requireAdminOrAdminStaff, requireSupportDisputesAdmin, async (req, res) => {
   const rows = await db
     .select({
       id: reviewInvitationsTable.id,
@@ -304,7 +304,7 @@ router.get("/admin/review-invitations", requireAdminOrAdminStaff, async (req, re
 
 /* ── PATCH /admin/reviews/:id ──────────────────────────────────
    Admin: hide or show a review */
-router.patch("/admin/reviews/:id", requireAdminOrAdminStaff, async (req, res) => {
+router.patch("/admin/reviews/:id", requireAdminOrAdminStaff, requireSupportDisputesAdmin, async (req, res) => {
   const reviewId = parseInt(getRouteParam(req.params.id), 10);
   if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
 
@@ -324,7 +324,7 @@ router.patch("/admin/reviews/:id", requireAdminOrAdminStaff, async (req, res) =>
 /* ── POST /admin/reviews/:id/dismiss-report ────────────────────
    Admin: dismiss the owner's report without deleting the review.
    Also sends a "report dismissed" notification to the owner. */
-router.post("/admin/reviews/:id/dismiss-report", requireAdminOrAdminStaff, async (req, res) => {
+router.post("/admin/reviews/:id/dismiss-report", requireAdminOrAdminStaff, requireSupportDisputesAdmin, async (req, res) => {
   const reviewId = parseInt(getRouteParam(req.params.id), 10);
   if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
 
@@ -369,7 +369,7 @@ router.post("/admin/reviews/:id/dismiss-report", requireAdminOrAdminStaff, async
 
 /* ── DELETE /admin/reviews/:id ─────────────────────────────────
    Admin: permanently delete a review */
-router.delete("/admin/reviews/:id", requireAdminOrAdminStaff, async (req, res) => {
+router.delete("/admin/reviews/:id", requireAdminOrAdminStaff, requireSupportDisputesAdmin, async (req, res) => {
   const reviewId = parseInt(getRouteParam(req.params.id), 10);
   if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
 

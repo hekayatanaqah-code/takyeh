@@ -33,6 +33,8 @@ import {
   sectionGuidesTable,
   globalSeasonsTable,
   adminAuditLogsTable,
+  type AdminPermKey,
+  type AdminStaffPermissions,
 } from "@workspace/db/schema";
 import { eq, inArray, and, or, ilike, gt, lt, ne, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
@@ -191,6 +193,19 @@ export function requireSupportDisputesAdmin(req: Request, res: Response, next: N
   res.status(403).json({ error: "لا تملك صلاحية الدعم والنزاعات" });
 }
 
+function requireServiceCatalogAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.isSuperAdmin || staffHasPermission(req.adminStaff?.permissions, "serviceCatalog")
+    || (req.method === "GET" && ["userManagement", "chaletApprovals", "serviceListings"].some((key) =>
+      staffHasPermission(req.adminStaff?.permissions, key as AdminPermKey)))) return next();
+  res.status(403).json({ error: "لا تملك صلاحية فئات ومواقع الخدمات" });
+}
+
+function requirePublishedServicesAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.isSuperAdmin || staffHasPermission(req.adminStaff?.permissions, "serviceListings")
+    || staffHasPermission(req.adminStaff?.permissions, "chaletApprovals")) return next();
+  res.status(403).json({ error: "لا تملك صلاحية عرض قائمة الخدمات" });
+}
+
 export async function requireAdminOrAdminStaff(req: Request, res: Response, next: NextFunction) {
   /* ── 1. OIDC super admin (legacy / Replit-hosted) ── */
   const adminId = process.env.ADMIN_USER_ID;
@@ -248,6 +263,43 @@ router.get("/impersonation-status", async (req, res) => {
 });
 
 router.use(requireAdminOrAdminStaff);
+
+const legacyAdminPermissions: Partial<Record<AdminPermKey, AdminPermKey>> = {
+  serviceListings: "chaletApprovals",
+  serviceCatalog: "platformSettings",
+  financeSettings: "platformSettings",
+};
+
+function staffHasPermission(perms: AdminStaffPermissions | undefined, key: AdminPermKey) {
+  if (perms?.[key] !== undefined) return perms[key] === true;
+  const legacy = legacyAdminPermissions[key];
+  return legacy ? perms?.[legacy] === true : false;
+}
+
+const adminRoutePermissions: Array<[RegExp, AdminPermKey]> = [
+  [/^\/(?:submissions|chalets|pause-alerts)(?:\/|$)/, "chaletApprovals"],
+  [/^\/(?:owners|applications)(?:\/|$)/, "userManagement"],
+  [/^\/(?:regions|cities|districts|amenities|categories)(?:\/|$)/, "platformSettings"],
+  [/^\/(?:services)(?:\/|$)/, "serviceListings"],
+  [/^\/(?:service-categories|service-regions|service-cities|service-districts)(?:\/|$)/, "serviceCatalog"],
+  [/^\/(?:expense-categories|plans)(?:\/|$)/, "financeSettings"],
+  [/^\/wa-subscribers(?:\/|$)/, "subscriberManagement"],
+];
+router.use((req, res, next) => {
+  if (req.isSuperAdmin) return next();
+  if (/^\/(?:demo-preview|impersonate)(?:\/|$)/.test(req.path)) {
+    return res.status(403).json({ error: "المشرف العام فقط يملك هذه الصلاحية" });
+  }
+  // Other permitted tabs need catalog names for filters; catalog writes remain restricted.
+  if (req.method === "GET" && /^\/(?:regions|cities|districts|categories|service-regions|service-cities|service-districts|service-categories)(?:\/|$)/.test(req.path)
+    && (["userManagement", "chaletApprovals", "serviceListings", "platformSettings", "serviceCatalog"] as const)
+      .some((key) => staffHasPermission(req.adminStaff?.permissions, key))) return next();
+  const match = adminRoutePermissions.find(([pattern]) => pattern.test(req.path));
+  if (match && !staffHasPermission(req.adminStaff?.permissions, match[1])) {
+    return res.status(403).json({ error: "لا تملك صلاحية الوصول إلى هذا القسم" });
+  }
+  next();
+});
 
 /* Persist a write-ahead audit record before any state-changing admin action.
  * The record is finalized before the JSON response is sent. If finalization
@@ -397,11 +449,34 @@ router.get("/access-check", (req, res) => {
 });
 
 /* ── Admin Staff CRUD (super admin only) ──────────────────── */
+const adminPermissionKeys = [
+  "chaletApprovals", "globalFinancials", "userManagement", "platformSettings",
+  "supportDisputes", "serviceListings", "serviceCatalog", "financeSettings", "subscriberManagement",
+] as const;
+const adminPermissionsSchema = z.record(z.enum(adminPermissionKeys), z.boolean());
+const staffCreateSchema = z.object({
+  name: z.string().trim().min(1, "الاسم الكامل مطلوب"),
+  username: z.string().trim().min(3, "اسم المستخدم يجب أن يكون ٣ أحرف على الأقل"),
+  personalEmail: z.string().trim().email("البريد الإلكتروني غير صحيح").optional(),
+  mobile: z.string().trim().regex(/^\+?[0-9٠-٩۰-۹\s-]{8,20}$/, "رقم الجوال غير صحيح").optional(),
+  password: z.string().min(8, "كلمة المرور يجب أن تكون ٨ أحرف على الأقل"),
+  isActive: z.boolean().default(true),
+  permissions: adminPermissionsSchema.default({}),
+});
+const staffCredentialsSchema = staffCreateSchema.pick({
+  name: true, username: true, personalEmail: true, mobile: true, password: true,
+}).partial().extend({
+  personalEmail: z.union([z.string().trim().email(), z.literal("")]).optional(),
+  mobile: z.union([z.string().trim().regex(/^\+?[0-9٠-٩۰-۹\s-]{8,20}$/), z.literal("")]).optional(),
+});
+
 router.get("/staff", requireSuperAdmin, async (_req, res) => {
   const rows = await db.select({
     id: adminStaffTable.id,
     name: adminStaffTable.name,
     username: adminStaffTable.username,
+    personalEmail: adminStaffTable.personalEmail,
+    mobile: adminStaffTable.mobile,
     permissions: adminStaffTable.permissions,
     isActive: adminStaffTable.isActive,
     isSuperAdmin: adminStaffTable.isSuperAdmin,
@@ -413,45 +488,77 @@ router.get("/staff", requireSuperAdmin, async (_req, res) => {
 });
 
 router.post("/staff", requireSuperAdmin, async (req, res) => {
-  const { name, username, password, permissions } = req.body ?? {};
-  if (!name || !username || !password) {
-    return res.status(400).json({ error: "يرجى تعبئة الاسم واسم المستخدم وكلمة المرور" });
+  const parsed = staffCreateSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" });
+  const { password, ...fields } = parsed.data;
+  const [existing] = await db.select({ id: adminStaffTable.id }).from(adminStaffTable).where(eq(adminStaffTable.username, fields.username));
+  if (existing) return res.status(409).json({ error: "اسم المستخدم مستخدم بالفعل" });
+  const passwordHash = await bcrypt.hash(password, 10);
+  try {
+    const [staff] = await db.insert(adminStaffTable)
+      .values({ ...fields, passwordHash })
+      .returning({ id: adminStaffTable.id, name: adminStaffTable.name, username: adminStaffTable.username, personalEmail: adminStaffTable.personalEmail, mobile: adminStaffTable.mobile, permissions: adminStaffTable.permissions, isActive: adminStaffTable.isActive, createdAt: adminStaffTable.createdAt });
+    return res.status(201).json(staff);
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505") return res.status(409).json({ error: "اسم المستخدم مستخدم بالفعل" });
+    throw error;
   }
-  const passwordHash = await bcrypt.hash(String(password), 10);
-  const [staff] = await db.insert(adminStaffTable)
-    .values({ name: String(name), username: String(username).trim(), passwordHash, permissions: permissions ?? {} })
-    .returning({ id: adminStaffTable.id, name: adminStaffTable.name, username: adminStaffTable.username, permissions: adminStaffTable.permissions, isActive: adminStaffTable.isActive, createdAt: adminStaffTable.createdAt });
-  return res.json(staff);
 });
 
 router.put("/staff/:id/permissions", requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  const { permissions } = req.body ?? {};
-  await db.update(adminStaffTable).set({ permissions: permissions ?? {} }).where(eq(adminStaffTable.id, id));
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: "معرّف الموظف غير صحيح" });
+  const parsed = adminPermissionsSchema.safeParse(req.body?.permissions);
+  if (!parsed.success) return res.status(400).json({ error: "الصلاحيات غير صحيحة" });
+  const [updated] = await db.update(adminStaffTable).set({ permissions: parsed.data }).where(and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false))).returning({ id: adminStaffTable.id });
+  if (!updated) return res.status(404).json({ error: "الموظف غير موجود" });
   return res.json({ ok: true });
 });
 
 router.put("/staff/:id/credentials", requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  const { username, password } = req.body ?? {};
-  const updates: Record<string, unknown> = {};
-  if (username) updates.username = String(username).trim();
-  if (password) updates.passwordHash = await bcrypt.hash(String(password), 10);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: "معرّف الموظف غير صحيح" });
+  const parsed = staffCredentialsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" });
+  const { password, ...fields } = parsed.data;
+  const updates: Partial<typeof adminStaffTable.$inferInsert> = {
+    ...fields,
+    ...(fields.personalEmail !== undefined ? { personalEmail: fields.personalEmail || null } : {}),
+    ...(fields.mobile !== undefined ? { mobile: fields.mobile || null } : {}),
+  };
+  if (password) updates.passwordHash = await bcrypt.hash(password, 10);
   if (Object.keys(updates).length === 0) return res.status(400).json({ error: "لا توجد بيانات للتحديث" });
-  await db.update(adminStaffTable).set(updates).where(eq(adminStaffTable.id, id));
-  return res.json({ ok: true });
+  try {
+    const [updated] = await db.update(adminStaffTable).set(updates)
+      .where(and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)))
+      .returning({ id: adminStaffTable.id });
+    if (!updated) return res.status(404).json({ error: "الموظف غير موجود" });
+    return res.json({ ok: true });
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505") return res.status(409).json({ error: "اسم المستخدم مستخدم بالفعل" });
+    throw error;
+  }
 });
 
 router.put("/staff/:id/status", requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const { isActive } = req.body ?? {};
-  await db.update(adminStaffTable).set({ isActive: Boolean(isActive) }).where(eq(adminStaffTable.id, id));
+  if (!Number.isInteger(id) || id < 1 || typeof isActive !== "boolean") return res.status(400).json({ error: "حالة الحساب غير صحيحة" });
+  const [updated] = await db.update(adminStaffTable).set({ isActive })
+    .where(and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)))
+    .returning({ id: adminStaffTable.id });
+  if (!updated) return res.status(404).json({ error: "الموظف غير موجود" });
+  if (!isActive) await db.delete(adminSessionsTable).where(eq(adminSessionsTable.adminStaffId, id));
   return res.json({ ok: true });
 });
 
 router.delete("/staff/:id", requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  await db.delete(adminStaffTable).where(eq(adminStaffTable.id, id));
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: "معرّف الموظف غير صحيح" });
+  const [deleted] = await db.delete(adminStaffTable)
+    .where(and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)))
+    .returning({ id: adminStaffTable.id });
+  if (!deleted) return res.status(404).json({ error: "الموظف غير موجود" });
   return res.json({ ok: true });
 });
 
@@ -658,6 +765,15 @@ router.post("/submissions/:id/reassign-category", async (req, res) => {
 });
 
 /* ── Chalets Verification ────────────────────────────────── */
+
+router.get("/review-chalets", requireSupportDisputesAdmin, async (_req, res) => {
+  const rows = await db.select({
+    id: chaletsTable.id,
+    nameAr: chaletsTable.nameAr,
+    photos: chaletsTable.photos,
+  }).from(chaletsTable).orderBy(chaletsTable.id);
+  return res.json(rows);
+});
 
 router.get("/chalets", async (req, res) => {
   const rows = await db
@@ -1032,19 +1148,19 @@ router.patch("/owners/:id/soft-delete", async (req, res) => {
 
 /* ── Independent service-location catalogs ───────────────── */
 
-router.get("/service-regions", requirePlatformSettingsAdmin, async (_req, res) => {
+router.get("/service-regions", requireServiceCatalogAdmin, async (_req, res) => {
   const rows = await db.select().from(serviceRegionsCatalogTable).orderBy(serviceRegionsCatalogTable.createdAt);
   return res.json(rows);
 });
 
-router.post("/service-regions", requirePlatformSettingsAdmin, async (req, res) => {
+router.post("/service-regions", requireServiceCatalogAdmin, async (req, res) => {
   const body = z.object({ name: z.string().trim().min(1) }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "الاسم مطلوب" });
   const [region] = await db.insert(serviceRegionsCatalogTable).values({ name: body.data.name }).returning();
   return res.status(201).json(region);
 });
 
-router.patch("/service-regions/:id", requirePlatformSettingsAdmin, async (req, res) => {
+router.patch("/service-regions/:id", requireServiceCatalogAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const body = z.object({ name: z.string().trim().min(1).optional(), isActive: z.boolean().optional() }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
@@ -1054,13 +1170,13 @@ router.patch("/service-regions/:id", requirePlatformSettingsAdmin, async (req, r
   return res.json(region);
 });
 
-router.get("/service-cities", requirePlatformSettingsAdmin, async (_req, res) => {
+router.get("/service-cities", requireServiceCatalogAdmin, async (_req, res) => {
   const rows = await db.select().from(serviceCitiesCatalogTable)
     .orderBy(serviceCitiesCatalogTable.createdAt);
   return res.json(rows);
 });
 
-router.post("/service-cities", requirePlatformSettingsAdmin, async (req, res) => {
+router.post("/service-cities", requireServiceCatalogAdmin, async (req, res) => {
   const body = z.object({ name: z.string().trim().min(1), regionId: z.number().int().positive() }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
   const [parent] = await db.select({ id: serviceRegionsCatalogTable.id }).from(serviceRegionsCatalogTable)
@@ -1070,7 +1186,7 @@ router.post("/service-cities", requirePlatformSettingsAdmin, async (req, res) =>
   return res.status(201).json(city);
 });
 
-router.patch("/service-cities/:id", requirePlatformSettingsAdmin, async (req, res) => {
+router.patch("/service-cities/:id", requireServiceCatalogAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const body = z.object({
     name: z.string().trim().min(1).optional(),
@@ -1089,7 +1205,7 @@ router.patch("/service-cities/:id", requirePlatformSettingsAdmin, async (req, re
   return res.json(city);
 });
 
-router.delete("/service-cities/:id", requirePlatformSettingsAdmin, async (req, res) => {
+router.delete("/service-cities/:id", requireServiceCatalogAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const [city] = await db.delete(serviceCitiesCatalogTable)
     .where(eq(serviceCitiesCatalogTable.id, id)).returning();
@@ -1097,13 +1213,13 @@ router.delete("/service-cities/:id", requirePlatformSettingsAdmin, async (req, r
   return res.json({ ok: true });
 });
 
-router.get("/service-districts", requirePlatformSettingsAdmin, async (_req, res) => {
+router.get("/service-districts", requireServiceCatalogAdmin, async (_req, res) => {
   const rows = await db.select().from(serviceDistrictsCatalogTable)
     .orderBy(serviceDistrictsCatalogTable.cityId, serviceDistrictsCatalogTable.createdAt);
   return res.json(rows);
 });
 
-router.post("/service-districts", requirePlatformSettingsAdmin, async (req, res) => {
+router.post("/service-districts", requireServiceCatalogAdmin, async (req, res) => {
   const body = z.object({ name: z.string().trim().min(1), cityId: z.number().int().positive() }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
   const [parent] = await db.select({ id: serviceCitiesCatalogTable.id }).from(serviceCitiesCatalogTable)
@@ -1113,7 +1229,7 @@ router.post("/service-districts", requirePlatformSettingsAdmin, async (req, res)
   return res.status(201).json(district);
 });
 
-router.patch("/service-districts/:id", requirePlatformSettingsAdmin, async (req, res) => {
+router.patch("/service-districts/:id", requireServiceCatalogAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const body = z.object({
     name: z.string().trim().min(1).optional(),
@@ -1132,7 +1248,7 @@ router.patch("/service-districts/:id", requirePlatformSettingsAdmin, async (req,
   return res.json(district);
 });
 
-router.delete("/service-districts/:id", requirePlatformSettingsAdmin, async (req, res) => {
+router.delete("/service-districts/:id", requireServiceCatalogAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const [district] = await db.delete(serviceDistrictsCatalogTable)
     .where(eq(serviceDistrictsCatalogTable.id, id)).returning();
@@ -1507,7 +1623,7 @@ router.get("/settings", requirePlatformSettingsAdmin, async (_req, res) => {
 
 /* ── Service Provider Submissions (Admin) ──────────────────── */
 
-router.get("/service-providers", requireChaletApprovalsAdmin, async (_req, res) => {
+router.get("/service-providers", requirePublishedServicesAdmin, async (_req, res) => {
   const rows = await db
     .select({
       id: serviceProviderSubmissionsTable.id,
