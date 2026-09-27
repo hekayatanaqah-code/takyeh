@@ -8007,8 +8007,8 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
               <Input
                 value={newUsername}
                 onChange={(e) => setNewUsername(e.target.value)}
-                placeholder="username"
-                dir="ltr"
+                placeholder="اسم_المستخدم"
+                dir="auto"
                 className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
               />
             </div>
@@ -8024,13 +8024,13 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-1">البريد الإلكتروني الشخصي</label>
-              <Input type="email" dir="ltr" value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="name@example.com" className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500" />
+              <Input type="email" dir="auto" value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
+                placeholder="أدخل بريدك الإلكتروني الشخصي" className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500" />
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-1">رقم الجوال</label>
               <Input type="tel" dir="ltr" value={newMobile} onChange={(e) => setNewMobile(e.target.value)}
-                placeholder="05xxxxxxxx" className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500" />
+                placeholder="٠٥١٢٣٤٥٦٧٨" className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500" />
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-2">حالة الحساب</label>
