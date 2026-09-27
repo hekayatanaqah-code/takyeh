@@ -2111,8 +2111,7 @@ router.post("/support-requests/:id/reply", requireSupportDisputesAdmin, adminRep
 /* ── Subscription Plans Management ──────────────────────── */
 
 const PlanSchema = z.object({
-  slug: z.string().min(1),
-  nameAr: z.string().min(1),
+  nameAr: z.string().trim().min(1),
   price: z.number().min(0),
   durationDays: z.number().int().min(1),
   trialDays: z.number().int().min(0).default(0),
@@ -2120,6 +2119,16 @@ const PlanSchema = z.object({
   isActive: z.boolean().default(true),
   sortOrder: z.number().int().default(0),
 });
+
+function planSlugFromName(name: string): string {
+  return name.normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80)
+    .replace(/-$/g, "");
+}
 
 router.get("/plans", async (_req, res) => {
   const plans = await db
@@ -2132,12 +2141,19 @@ router.get("/plans", async (_req, res) => {
 router.post("/plans", async (req, res) => {
   const parsed = PlanSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة", issues: parsed.error.issues });
-  const { slug, nameAr, price, durationDays, trialDays, features, isActive, sortOrder } = parsed.data;
-  const [plan] = await db
-    .insert(subscriptionPlansTable)
-    .values({ slug, nameAr, price: String(price), durationDays, trialDays, features, isActive, sortOrder })
-    .returning();
-  return res.json(plan);
+  const { nameAr, price, durationDays, trialDays, features, isActive, sortOrder } = parsed.data;
+  const baseSlug = planSlugFromName(nameAr);
+  if (!baseSlug) return res.status(400).json({ error: "اسم الخطة يجب أن يحتوي على حروف أو أرقام" });
+  for (let suffix = 1; suffix <= 100; suffix++) {
+    const slug = suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
+    const [plan] = await db
+      .insert(subscriptionPlansTable)
+      .values({ slug, nameAr, price: String(price), durationDays, trialDays, features, isActive, sortOrder })
+      .onConflictDoNothing({ target: subscriptionPlansTable.slug })
+      .returning();
+    if (plan) return res.json(plan);
+  }
+  return res.status(409).json({ error: "تعذّر إضافة الخطة بهذا الاسم. جرّب اسماً مختلفاً." });
 });
 
 router.put("/plans/:id", async (req, res) => {

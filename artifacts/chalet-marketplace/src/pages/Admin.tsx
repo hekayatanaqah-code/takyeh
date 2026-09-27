@@ -4248,7 +4248,6 @@ interface Plan {
 }
 
 const BLANK_PLAN = {
-  slug: "",
   nameAr: "",
   price: "",
   durationDays: 30,
@@ -4257,6 +4256,13 @@ const BLANK_PLAN = {
   isActive: true,
   sortOrder: 0,
 };
+
+const PLAN_DURATION_OPTIONS = [
+  { label: "شهر", days: 30 },
+  { label: "٣ أشهر", days: 90 },
+  { label: "٦ أشهر", days: 180 },
+  { label: "سنة", days: 365 },
+];
 
 async function adminFetch(path: string, opts?: RequestInit) {
   return fetch(`${API}/admin${path}`, { credentials: "include", ...opts });
@@ -4292,7 +4298,6 @@ function PlansTab() {
   function openEdit(p: Plan) {
     setEditId(p.id);
     setForm({
-      slug: p.slug,
       nameAr: p.nameAr,
       price: String(Number(p.price)),
       durationDays: p.durationDays,
@@ -4340,6 +4345,8 @@ function PlansTab() {
       }
       await qc.invalidateQueries({ queryKey: ["admin", "plans"] });
       setShowForm(false);
+    } catch {
+      setError("تعذّر حفظ الخطة. حاول مرة أخرى.");
     } finally {
       setSaving(false);
     }
@@ -4361,6 +4368,14 @@ function PlansTab() {
   }
 
   const deletePlan = plans.find((p) => p.id === deleteId);
+  const approximateMonths = Math.round(form.durationDays / 30);
+  const monthsLabel = approximateMonths === 1
+    ? "شهر واحد"
+    : approximateMonths === 2
+      ? "شهرين"
+      : approximateMonths <= 10
+        ? `${toAr(approximateMonths)} أشهر`
+        : `${toAr(approximateMonths)} شهراً`;
 
   return (
     <div>
@@ -4419,9 +4434,6 @@ function PlansTab() {
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span className="font-bold text-white text-base">{p.nameAr}</span>
-                  <span className="text-xs font-mono text-slate-400 bg-slate-700 px-2 py-0.5 rounded">
-                    {p.slug}
-                  </span>
                   {p.isActive ? (
                     <span className="text-xs font-semibold text-green-400 bg-green-900/30 px-2 py-0.5 rounded-full">مُفعّل</span>
                   ) : (
@@ -4490,29 +4502,17 @@ function PlansTab() {
           </DialogHeader>
 
           <div className="space-y-4 mt-2 overflow-y-auto flex-1" style={{ paddingBottom: '100px' }}>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">اسم الخطة *</label>
-                <Input
-                  placeholder="مثال: الخطة الذهبية"
-                  value={form.nameAr}
-                  onChange={(e) => setForm({ ...form, nameAr: e.target.value })}
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">المعرّف (slug) *</label>
-                <Input
-                  placeholder="مثال: gold_plan"
-                  value={form.slug}
-                  onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                  className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500 font-mono"
-                  dir="ltr"
-                />
-              </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">اسم الخطة *</label>
+              <Input
+                placeholder="مثال: الخطة الذهبية"
+                value={form.nameAr}
+                onChange={(e) => setForm({ ...form, nameAr: e.target.value })}
+                className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
+              />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">السعر (ر.س) *</label>
                 <Input
@@ -4546,6 +4546,29 @@ function PlansTab() {
                   className="bg-slate-800 border-slate-600 text-white"
                 />
               </div>
+            </div>
+            <p className="text-xs text-slate-400" aria-live="polite">
+              {form.durationDays >= 30
+                ? `المدة تعادل نحو ${monthsLabel} (على أساس ٣٠ يوماً للشهر)`
+                : form.durationDays > 0
+                  ? "المدة أقل من شهر (على أساس ٣٠ يوماً للشهر)"
+                  : "أدخل مدة لا تقل عن يوم واحد"}
+            </p>
+            <div className="flex flex-wrap gap-2" aria-label="مدد مقترحة للخطة">
+              {PLAN_DURATION_OPTIONS.map(({ label, days }) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setForm({ ...form, durationDays: days })}
+                  className={`rounded-lg px-3 py-1.5 text-xs border transition-colors ${
+                    form.durationDays === days
+                      ? "border-amber-500 bg-amber-900/30 text-amber-300"
+                      : "border-slate-600 text-slate-300 hover:bg-slate-800"
+                  }`}
+                >
+                  {label} · {toAr(days)} يوماً
+                </button>
+              ))}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -4595,7 +4618,7 @@ function PlansTab() {
             <div className="flex gap-3 pt-1">
               <Button
                 onClick={handleSave}
-                disabled={saving || !form.nameAr || !form.slug || !form.price}
+                disabled={saving || !form.nameAr.trim() || !form.price || form.durationDays < 1}
                 className="flex-1 bg-amber-600 hover:bg-amber-700 text-white gap-2"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
