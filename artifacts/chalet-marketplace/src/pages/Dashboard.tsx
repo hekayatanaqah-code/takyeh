@@ -16,6 +16,7 @@ import { RiyalIcon } from "@/components/icons/RiyalIcon";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
+import { AddonPaymentModal } from "@/components/AddonPaymentModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1453,6 +1454,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [showAddonPayment, setShowAddonPayment] = useState(false);
   const [blockTarget, setBlockTarget] = useState<{ id: number; nameAr: string } | null>(null);
   const [pauseTarget, setPauseTarget] = useState<any | null>(null);
   const [editTarget, setEditTarget] = useState<any | null>(null);
@@ -1509,11 +1511,11 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
     });
   }
 
-  const { data: planLimits } = useQuery<{ plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number }>({
+  const { data: planLimits } = useQuery<OwnerPlanLimits>({
     queryKey: ["owner", "plan-limits"],
     queryFn: async () => {
       const r = await apiFetch("/owner/plan-limits");
-      if (!r.ok) return { plan: "trial", chaletLimit: 1, chaletCount: 0, serviceLimit: 1 };
+      if (!r.ok) return { plan: "trial", active: true, scope: "full", chaletLimit: 1, chaletCount: 0, serviceLimit: 1, serviceCount: 0 };
       return r.json();
     },
   });
@@ -1544,7 +1546,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
   }
 
   const atChaletLimit = planLimits
-    ? (submissions?.length ?? 0) >= planLimits.chaletLimit
+    ? planLimits.active === false || (submissions?.length ?? 0) >= planLimits.chaletLimit
     : false;
 
   if (isLoading) {
@@ -1564,10 +1566,10 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
         <Home className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-foreground mb-2">لا توجد عقارات بعد</h3>
         <p className="text-muted-foreground mb-6">ابدأ بإضافة عقارك الأول للمراجعة والنشر</p>
-        <Link href="/add-chalet">
+        <Link href={planLimits?.active === false ? "/subscription" : "/add-chalet"}>
           <Button>
-            <Plus className="w-4 h-4 me-2" />
-            إضافة عقار جديد
+            {planLimits?.active === false ? <Lock className="w-4 h-4 me-2" /> : <Plus className="w-4 h-4 me-2" />}
+            {planLimits?.active === false ? "جدّد الاشتراك لإضافة عقار" : "إضافة عقار جديد"}
           </Button>
         </Link>
       </motion.div>
@@ -1593,14 +1595,34 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
             </span>
           </div>
           {atChaletLimit && (
-            <Button size="sm" variant="default" className="rounded-xl shrink-0 text-xs h-8" onClick={() => setShowUpgrade(true)}>
-              <Zap className="w-3.5 h-3.5 me-1" />
-              ترقية الخطة
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {planLimits.active === false ? (
+                <Link href="/subscription">
+                  <Button size="sm" variant="default" className="rounded-xl shrink-0 text-xs h-8">
+                    <Zap className="w-3.5 h-3.5 me-1" />
+                    تجديد الاشتراك
+                  </Button>
+                </Link>
+              ) : (
+                <>
+                  {planLimits.extraChaletPrice != null && (
+                    <Button size="sm" variant="default" className="rounded-xl shrink-0 text-xs h-8" onClick={() => setShowAddonPayment(true)}>
+                      <Plus className="w-3.5 h-3.5 me-1" />
+                      شراء عقار إضافي · {toAr(Number(planLimits.extraChaletPrice))} ر.س
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" className="rounded-xl shrink-0 text-xs h-8" onClick={() => setShowUpgrade(true)}>
+                    <Zap className="w-3.5 h-3.5 me-1" />
+                    ترقية الخطة
+                  </Button>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}
       <UpgradePlanDialog open={showUpgrade} onClose={() => setShowUpgrade(false)} context="chalet" />
+      <AddonPaymentModal open={showAddonPayment} onClose={() => setShowAddonPayment(false)} addonType="chalet" />
       <BlockDatesDialog
         open={!!blockTarget}
         chalet={blockTarget}
@@ -25037,6 +25059,18 @@ type DashboardSubscription = {
   paymentStatus: string;
 };
 
+type OwnerPlanLimits = {
+  plan: string;
+  active?: boolean;
+  scope?: "full" | "property";
+  chaletLimit: number;
+  chaletCount: number;
+  serviceLimit: number;
+  serviceCount: number;
+  extraChaletPrice?: number | string | null;
+  extraServicePrice?: number | string | null;
+};
+
 function SubscriptionAccountBanner({
   subscription,
   onManage,
@@ -25064,21 +25098,25 @@ function SubscriptionAccountBanner({
     <button
       type="button"
       onClick={onManage}
-      className="mb-5 w-full bg-card border border-border rounded-2xl px-4 sm:px-5 py-3 flex items-center gap-3 flex-wrap text-sm hover:bg-accent/40 transition-colors text-start cursor-pointer"
+      className={`mb-5 w-full border rounded-2xl px-4 sm:px-5 py-3 flex items-center gap-3 flex-wrap text-sm transition-colors text-start cursor-pointer ${
+        subscription.status === "expired"
+          ? "bg-red-50 border-red-300 text-red-800 dark:bg-red-950/30 dark:border-red-800 dark:text-red-200"
+          : "bg-card border-border hover:bg-accent/40"
+      }`}
     >
       <CreditCard className="w-4 h-4 text-primary shrink-0" />
-      <span className="font-semibold text-foreground">حسابي والاشتراك</span>
+      <span className="font-semibold">{subscription.status === "expired" ? "انتهى اشتراكك" : "حسابي والاشتراك"}</span>
       <span className="font-medium text-muted-foreground">{planLabels[subscription.plan] ?? subscription.plan}</span>
       <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${statusCls[subscription.status] ?? "bg-muted text-muted-foreground"}`}>
         {{ active: "نشط ✓", trial: "تجريبي", expired: "منتهي", suspended: "موقوف" }[subscription.status] ?? subscription.status}
       </span>
       {days !== null && (
         <span className={`text-xs font-medium ${days < 7 ? "text-red-600" : "text-muted-foreground"}`}>
-          {toArN(Math.max(0, days))} يوم متبقي
+          {subscription.status === "expired" ? "جدّد الآن لمواصلة استقبال الحجوزات" : `${toArN(Math.max(0, days))} يوم متبقي`}
         </span>
       )}
       <span className="sm:ms-auto flex items-center gap-1.5 text-xs font-semibold text-primary">
-        إدارة
+        {subscription.status === "expired" ? "تجديد الاشتراك" : "إدارة"}
         <ExternalLink className="w-3.5 h-3.5" />
       </span>
     </button>
@@ -25095,6 +25133,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "customers" | "digitalContracts" | "notifications">("chalets");
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
+  const [showHeaderAddon, setShowHeaderAddon] = useState<"chalet" | "service" | null>(null);
   const [serviceFinanceMode, setServiceFinanceMode] = useState<"separate" | "consolidated">(() => (localStorage.getItem("svc_finance_mode") as any) ?? "separate");
   const [clientListMode, setClientListMode] = useState<"unified" | "separate">(() => (localStorage.getItem("svc_client_mode") as any) ?? "unified");
   function toggleFinanceMode() { const n = serviceFinanceMode === "separate" ? "consolidated" : "separate"; setServiceFinanceMode(n); localStorage.setItem("svc_finance_mode", n); }
@@ -25221,16 +25260,6 @@ export default function Dashboard() {
         : "both";
   const canSeeChalets  = businessType === "chalet" || businessType === "both";
   const canSeeServices = businessType === "service" || businessType === "both";
-  /* Render the account's only valid section immediately when the profile arrives.
-     This avoids one paint of the default chalet mode before the syncing effect runs. */
-  const activeDashMode: "chalets" | "services" | "admin-finance" =
-    dashMode === "admin-finance"
-      ? "admin-finance"
-      : !actAsStaff && businessType === "service"
-      ? "services"
-      : !actAsStaff && businessType === "chalet"
-        ? "chalets"
-        : dashMode;
 
   /* ── Submissions: use apiFetch (credentials: include) + wait for auth ── */
   const { data: submissions, isLoading: submissionsLoading } = useQuery<any[]>({
@@ -25253,11 +25282,11 @@ export default function Dashboard() {
     enabled: isStaff || ((isAuthenticated || isImpersonating) && canSeeChalets),
   });
 
-  const { data: planLimits } = useQuery<{ plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number }>({
+  const { data: planLimits } = useQuery<OwnerPlanLimits>({
     queryKey: ["owner", "plan-limits"],
     queryFn: async () => {
       const r = await apiFetch("/owner/plan-limits");
-      if (!r.ok) return { plan: "trial", chaletLimit: 1, chaletCount: 0, serviceLimit: 1 };
+      if (!r.ok) return { plan: "trial", active: true, scope: "full", chaletLimit: 1, chaletCount: 0, serviceLimit: 1, serviceCount: 0 };
       return r.json();
     },
     enabled: isAuthenticated || isImpersonating,
@@ -25272,6 +25301,20 @@ export default function Dashboard() {
     },
     enabled: isAuthenticated || isImpersonating,
   });
+
+  /* Render only modules granted by the current subscription. The property-only
+     package keeps bookings and property management available. */
+  const canAccessFinancialAdmin = isStaff || actAsStaff || planLimits?.scope !== "property";
+  const activeDashMode: "chalets" | "services" | "admin-finance" =
+    dashMode === "admin-finance" && canAccessFinancialAdmin
+      ? "admin-finance"
+      : dashMode === "admin-finance" && !canAccessFinancialAdmin
+        ? businessType === "service" ? "services" : "chalets"
+      : !actAsStaff && businessType === "service"
+      ? "services"
+      : !actAsStaff && businessType === "chalet"
+        ? "chalets"
+        : dashMode;
 
   /* ── My independent service submissions & approved providers ── */
   const { data: myServiceSubmissions = [] } = useQuery<{ id: number; status: string; businessName: string }[]>({
@@ -25293,6 +25336,12 @@ export default function Dashboard() {
 
   /* Cross-owner logic: user has BOTH chalets AND service providers */
   const isCrossOwner = (ownerChalets?.length ?? 0) > 0 && myApprovedProviders.length > 0;
+  const headerAtChaletLimit = planLimits
+    ? planLimits.active === false || (submissions?.length ?? planLimits.chaletCount) >= planLimits.chaletLimit
+    : false;
+  const atServiceLimit = planLimits
+    ? planLimits.active === false || (planLimits.serviceCount ?? myServiceSubmissions.length + myApprovedProviders.length) >= planLimits.serviceLimit
+    : false;
 
   /* Auto-set dashMode based on businessType when profile loads; also seed calendar prefs from DB */
   useEffect(() => {
@@ -25325,6 +25374,11 @@ export default function Dashboard() {
       setSelectedServiceId(null);
     }
   }, [activeDashMode, myApprovedProviders.length]);
+
+  useEffect(() => {
+    if (planLimits?.scope !== "property" || dashMode !== "admin-finance") return;
+    setDashMode(businessType === "service" ? "services" : "chalets");
+  }, [planLimits?.scope, dashMode, businessType]);
 
   useEffect(() => {
     if (typeof selectedServiceId !== "number") return;
@@ -25624,6 +25678,20 @@ export default function Dashboard() {
         </div>
       )}
       <Navbar />
+      {subscription?.status === "expired" && !actAsStaff && !isStaff && (
+        <div role="alert" className="container mx-auto max-w-4xl px-4 pt-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-red-300 bg-red-50 px-4 py-4 text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100">
+            <div>
+              <p className="font-bold">انتهت صلاحية اشتراكك</p>
+              <p className="mt-1 text-sm">جدّد الاشتراك لمواصلة استقبال الحجوزات وإضافة العقارات والخدمات.</p>
+            </div>
+            <Button className="shrink-0 bg-red-700 text-white hover:bg-red-800" onClick={() => navigate("/subscription")}>
+              تجديد الاشتراك
+              <ExternalLink className="w-4 h-4 me-2" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="container mx-auto px-4 py-10 max-w-4xl">
 
@@ -25677,11 +25745,30 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             {!actAsStaff && !isImpersonating && (
               <>
-                {canSeeChalets && (planLimits && (submissions?.length ?? 0) >= planLimits.chaletLimit ? (
-                  <Button variant={activeDashMode === "chalets" ? "default" : "outline"} className="rounded-xl font-semibold text-sm" onClick={() => setShowHeaderUpgrade("chalet")}>
-                    <Lock className="w-4 h-4 me-1.5 text-amber-500" />
-                    إضافة عقار
-                  </Button>
+                {canSeeChalets && (headerAtChaletLimit ? (
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant={activeDashMode === "chalets" ? "default" : "outline"}
+                      className="rounded-xl font-semibold text-sm"
+                      onClick={() => {
+                        if (planLimits?.active === false) navigate("/subscription");
+                        else if (planLimits?.extraChaletPrice != null) setShowHeaderAddon("chalet");
+                        else setShowHeaderUpgrade("chalet");
+                      }}
+                    >
+                      <Lock className="w-4 h-4 me-1.5 text-amber-500" />
+                      {planLimits?.active === false
+                        ? "تجديد الاشتراك"
+                        : planLimits?.extraChaletPrice != null
+                          ? `شراء عقار إضافي · ${toAr(Number(planLimits.extraChaletPrice))} ر.س`
+                          : "إضافة عقار"}
+                    </Button>
+                    {planLimits?.active !== false && planLimits?.extraChaletPrice != null && (
+                      <Button variant="ghost" className="rounded-xl text-xs" onClick={() => setShowHeaderUpgrade("chalet")}>
+                        ترقية الخطة
+                      </Button>
+                    )}
+                  </div>
                 ) : (
                   <Link href="/add-chalet">
                     <Button variant={activeDashMode === "chalets" ? "default" : "outline"} className="rounded-xl font-semibold text-sm">
@@ -25690,14 +25777,38 @@ export default function Dashboard() {
                     </Button>
                   </Link>
                 ))}
-                {canSeeServices && (
+                {canSeeServices && (atServiceLimit ? (
+                  <div className="flex flex-col items-start gap-1">
+                    <Button
+                      variant={activeDashMode === "services" ? "default" : "outline"}
+                      className="rounded-xl font-semibold text-sm"
+                      onClick={() => {
+                        if (planLimits?.active === false) navigate("/subscription");
+                        else if (planLimits?.extraServicePrice != null) setShowHeaderAddon("service");
+                        else setShowHeaderUpgrade("service");
+                      }}
+                    >
+                      <Lock className="w-4 h-4 me-1.5 text-amber-500" />
+                      {planLimits?.active === false
+                        ? "تجديد الاشتراك"
+                        : planLimits?.extraServicePrice != null
+                          ? `شراء خدمة إضافية · ${toAr(Number(planLimits.extraServicePrice))} ر.س`
+                          : "ترقية لإضافة خدمة"}
+                    </Button>
+                    {planLimits?.extraServicePrice != null && planLimits?.active !== false && (
+                      <Button variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setShowHeaderUpgrade("service")}>
+                        ترقية الخطة
+                      </Button>
+                    )}
+                  </div>
+                ) : (
                   <Link href="/add-service-provider">
                     <Button variant={activeDashMode === "services" ? "default" : "outline"} className="rounded-xl font-semibold text-sm">
                       <Plus className="w-4 h-4 me-1.5" />
                       إضافة خدمة
                     </Button>
                   </Link>
-                )}
+                ))}
               </>
             )}
             {!actAsStaff && !isImpersonating ? (
@@ -25758,6 +25869,11 @@ export default function Dashboard() {
           onClose={() => setShowHeaderUpgrade(null)}
           context={showHeaderUpgrade ?? "chalet"}
         />
+        <AddonPaymentModal
+          open={showHeaderAddon !== null}
+          onClose={() => setShowHeaderAddon(null)}
+          addonType={showHeaderAddon ?? "chalet"}
+        />
         <Dialog open={accountSettingsOpen} onOpenChange={setAccountSettingsOpen}>
           <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6" dir="rtl">
             <DialogHeader className="sr-only">
@@ -25815,22 +25931,24 @@ export default function Dashboard() {
               </button>
             )}
             {/* Admin Finance mode — always visible */}
-            <button
-              onClick={() => setDashMode("admin-finance")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                activeDashMode === "admin-finance"
-                  ? "bg-background text-slate-700 dark:text-slate-200 shadow-sm ring-1 ring-border"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Briefcase className="w-4 h-4" />
-              الشؤون المالية والإدارية
-              {(unreadNotifCount + unreadSupportCount) > 0 && (
-                <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full px-2 py-0.5 font-semibold">
-                  {unreadNotifCount + unreadSupportCount}
-                </span>
-              )}
-            </button>
+            {canAccessFinancialAdmin && (
+              <button
+                onClick={() => setDashMode("admin-finance")}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                  activeDashMode === "admin-finance"
+                    ? "bg-background text-slate-700 dark:text-slate-200 shadow-sm ring-1 ring-border"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Briefcase className="w-4 h-4" />
+                الشؤون المالية والإدارية
+                {(unreadNotifCount + unreadSupportCount) > 0 && (
+                  <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full px-2 py-0.5 font-semibold">
+                    {unreadNotifCount + unreadSupportCount}
+                  </span>
+                )}
+              </button>
+            )}
           </motion.div>
         )}
 
@@ -25858,7 +25976,7 @@ export default function Dashboard() {
             </div>
 
             {/* Cross-owner shortcut to admin section */}
-            {isCrossOwner && (
+            {isCrossOwner && canAccessFinancialAdmin && (
               <div className="bg-primary/5 border border-primary/20 rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2 text-sm text-primary font-semibold">
                   <Zap className="w-4 h-4" />
@@ -26008,13 +26126,13 @@ export default function Dashboard() {
                         {selectedServiceTab === "messages" && <OwnerMessageSettingsTab establishmentName={selectedProvider?.businessName} providerId={selectedServiceId} />}
                       </div>
                       {/* Shortcut to admin-finance */}
-                      <div className="mt-4 pt-4 border-t border-border">
+                      {canAccessFinancialAdmin && <div className="mt-4 pt-4 border-t border-border">
                         <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" />الإيرادات والمصروفات والموظفون والتقارير → </p>
                         <button type="button" onClick={() => setDashMode("admin-finance")}
                           className="text-xs font-semibold text-primary underline underline-offset-2 hover:opacity-80">
                           الانتقال إلى الشؤون المالية والإدارية
                         </button>
-                      </div>
+                      </div>}
                     </ServiceErpCtx.Provider>
                   );
                 })()}

@@ -20,6 +20,59 @@ interface Plan {
   label: string;
   price: number;
   days: number;
+  scope?: "property" | "full" | null;
+  chaletLimit?: number | null;
+  serviceLimit?: number | null;
+  trialDays?: number;
+  features?: string[];
+}
+
+interface PendingSubscriptionCheckout {
+  checkoutId: string;
+  plan: string;
+}
+
+const PENDING_SUBSCRIPTION_KEY = "subscription-payment-pending:v1";
+
+function readPendingSubscriptionCheckout(): PendingSubscriptionCheckout | null {
+  try {
+    const raw = window.sessionStorage.getItem(PENDING_SUBSCRIPTION_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw);
+    if (typeof value?.checkoutId !== "string" || !value.checkoutId ||
+        typeof value?.plan !== "string" || !value.plan) return null;
+    return { checkoutId: value.checkoutId, plan: value.plan };
+  } catch {
+    return null;
+  }
+}
+
+function savePendingSubscriptionCheckout(checkout: PendingSubscriptionCheckout): boolean {
+  try {
+    window.sessionStorage.setItem(PENDING_SUBSCRIPTION_KEY, JSON.stringify(checkout));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearPendingSubscriptionCheckout(checkoutId: string) {
+  try {
+    if (readPendingSubscriptionCheckout()?.checkoutId === checkoutId) {
+      window.sessionStorage.removeItem(PENDING_SUBSCRIPTION_KEY);
+    }
+  } catch {
+    // The server confirmation remains successful if browser storage is unavailable.
+  }
+}
+
+function clearPaymentReturnParams() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("checkout_flow");
+  for (const name of ["id", "payment_id", "paymentId", "status", "payment_status", "paymentStatus"]) {
+    url.searchParams.delete(name);
+  }
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 const PLAN_ICONS: Record<string, React.ReactNode> = {
@@ -133,16 +186,30 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
   const [step, setStep] = useState<Step>("plan");
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [initiateData, setInitiateData] = useState<{ publishableKey: string; amountHalala: number } | null>(null);
+  const [initiateData, setInitiateData] = useState<{
+    checkoutId: string;
+    publishableKey: string;
+    amountHalala: number;
+    discountHalala: number;
+    label: string;
+    days: number;
+  } | null>(null);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [pendingCheckout, setPendingCheckout] = useState<PendingSubscriptionCheckout | null>(() => readPendingSubscriptionCheckout());
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [returnPaymentId, setReturnPaymentId] = useState<string | null>(null);
+  const [returnPaymentStatus, setReturnPaymentStatus] = useState<string | null>(null);
+  const [returnNotice, setReturnNotice] = useState<string | null>(null);
+  const handledReturnRef = useRef<string | null>(null);
 
   /* Load plans */
   useEffect(() => {
-    if (!open) return;
+    if (!open && !returnDialogOpen) return;
     apiFetch("/owner/plans").then(r => r.json()).then(setPlans).catch(() => {});
-  }, [open]);
+  }, [open, returnDialogOpen]);
 
   /* Reset on close */
   useEffect(() => {
@@ -153,20 +220,57 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
       setInvoice(null);
       setPayError(null);
       setPaying(false);
+      setPromoCode("");
       moyasarInstance.current = null;
     }
   }, [open]);
 
   /* Confirm payment mutation */
   const confirmMutation = useMutation({
-    mutationFn: async ({ paymentId, plan }: { paymentId: string; plan: string }) => {
+    mutationFn: async ({ paymentId, checkoutId }: { paymentId: string; checkoutId: string; isRedirectReturn?: boolean }) => {
       const r = await apiFetch("/owner/subscription/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentId, plan }),
+        body: JSON.stringify({ paymentId, checkoutId }),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? "فشل تأكيد الدفع");
+      return data as { subscription: any; invoice: Invoice };
+    },
+    onSuccess: (data, variables) => {
+      clearPendingSubscriptionCheckout(variables.checkoutId);
+      setPendingCheckout((current) => current?.checkoutId === variables.checkoutId ? null : current);
+      setInvoice(data.invoice);
+      setStep("success");
+      setPaying(false);
+      setPayError(null);
+      if (variables.isRedirectReturn) {
+        clearPaymentReturnParams();
+        setReturnPaymentId(null);
+        setReturnPaymentStatus(null);
+        setReturnNotice(null);
+        setReturnDialogOpen(true);
+        handledReturnRef.current = null;
+      }
+      qc.invalidateQueries({ queryKey: ["owner", "subscription"] });
+      qc.invalidateQueries({ queryKey: ["owner", "subscription-header"] });
+      qc.invalidateQueries({ queryKey: ["owner", "plan-limits"] });
+    },
+    onError: (err: Error) => {
+      setPayError(err.message);
+      setPaying(false);
+    },
+  });
+
+  const redeemMutation = useMutation({
+    mutationFn: async ({ checkoutId }: { checkoutId: string }) => {
+      const r = await apiFetch("/owner/subscription/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checkoutId }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "تعذّر تفعيل العرض المجاني");
       return data as { subscription: any; invoice: Invoice };
     },
     onSuccess: (data) => {
@@ -183,6 +287,42 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
     },
   });
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("checkout_flow") && params.get("checkout_flow") !== "subscription") return;
+    const paymentId = params.get("id") || params.get("payment_id") || params.get("paymentId");
+    const status = params.get("status") || params.get("payment_status") || params.get("paymentStatus");
+    if (!paymentId && !status) return;
+
+    const pending = readPendingSubscriptionCheckout();
+    if (!pending) return;
+
+    const returnKey = `${paymentId ?? ""}:${status ?? ""}:${pending.checkoutId}`;
+    if (handledReturnRef.current === returnKey) return;
+    handledReturnRef.current = returnKey;
+    setPendingCheckout(pending);
+    setReturnDialogOpen(true);
+    setStep("plan");
+    setPayError(null);
+
+    if (!paymentId) {
+      setReturnPaymentStatus(status);
+      setReturnNotice(status
+        ? `عادت بوابة الدفع بالحالة «${status}» دون رقم عملية دفع؛ لم نبدأ عملية اشتراك أخرى.`
+        : "لم يتضمن رابط العودة رقم عملية دفع؛ الاشتراك المحفوظ لم يُحذف.");
+      setPayError("تعذّر تأكيد الدفع دون رقم العملية. أعد فتح رابط العودة بعد التحقق من الدفع.");
+      return;
+    }
+
+    setReturnPaymentId(paymentId);
+    setReturnPaymentStatus(status);
+    setReturnNotice(status
+      ? `عادت بوابة الدفع بالحالة «${status}»؛ جارٍ التحقق من الدفع مع الخادم.`
+      : "جارٍ التحقق من نتيجة الدفع مع الخادم...");
+    setPaying(true);
+    confirmMutation.mutate({ paymentId, checkoutId: pending.checkoutId, isRedirectReturn: true });
+  }, []);
+
   /* Mount Moyasar form when we enter pay step */
   useEffect(() => {
     if (step !== "pay" || !scriptReady || !initiateData || !formContainerRef.current) return;
@@ -192,19 +332,25 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
     const container = formContainerRef.current;
     container.innerHTML = ""; // clear any previous instance
 
-    const plan = selectedPlan!;
-
     moyasarInstance.current = Moyasar.init({
       element: container,
       amount: initiateData.amountHalala,
       currency: "SAR",
-      description: `${plan.label} — حكاية أناقة`,
+      description: `${initiateData.label} — حكاية أناقة [${initiateData.checkoutId}]`,
       publishable_api_key: initiateData.publishableKey,
-      callback_url: window.location.href, // not used (we handle success ourselves)
+      callback_url: (() => {
+        const url = new URL(window.location.href);
+        url.searchParams.set("checkout_flow", "subscription");
+        return url.toString();
+      })(), // redirects are verified against the saved intent on return
       on_completed: (payment: any) => {
         if (payment.status === "paid") {
           setPaying(true);
-          confirmMutation.mutate({ paymentId: payment.id, plan: plan.id });
+          confirmMutation.mutate({
+            paymentId: payment.id,
+            checkoutId: initiateData.checkoutId,
+            isRedirectReturn: false,
+          });
         } else {
           setPayError(`لم يكتمل الدفع — الحالة: ${payment.status}`);
         }
@@ -222,22 +368,84 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
 
   /* Step 1: Select a plan */
   async function handleSelectPlan(p: Plan) {
+    const existingPending = readPendingSubscriptionCheckout();
+    if (existingPending) {
+      setPendingCheckout(existingPending);
+      setPayError("توجد عملية اشتراك سابقة قيد التأكيد؛ لن نبدأ عملية دفع جديدة قبل حسمها.");
+      return;
+    }
     setSelectedPlan(p);
     setPayError(null);
-    const r = await apiFetch("/owner/subscription/initiate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: p.id }),
-    });
-    const data = await r.json();
-    if (!r.ok) { setPayError(data.error); return; }
-    setInitiateData({ publishableKey: data.publishableKey, amountHalala: data.amountHalala });
-    setStep("pay");
+    setPaying(true);
+    try {
+      const r = await apiFetch("/owner/subscription/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: p.id, ...(promoCode.trim() ? { promoCode: promoCode.trim() } : {}) }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        setPayError(data.error ?? "تعذّر التحقق من رمز الخصم");
+        return;
+      }
+      const quote = {
+        checkoutId: data.checkoutId as string,
+        publishableKey: data.publishableKey as string,
+        amountHalala: Number(data.amountHalala),
+        discountHalala: Number(data.discountHalala ?? 0),
+        label: String(data.label ?? p.label),
+        days: Number(data.days ?? p.days),
+      };
+      setInitiateData(quote);
+      if (!quote.checkoutId || !Number.isInteger(quote.amountHalala) || quote.amountHalala < 0) {
+        setPayError("تعذّر إعداد مبلغ الدفع. حاول مرة أخرى.");
+        return;
+      }
+      if (quote.amountHalala === 0) {
+        redeemMutation.mutate({ checkoutId: quote.checkoutId });
+        return;
+      }
+      const pending = { checkoutId: quote.checkoutId, plan: p.id };
+      if (!savePendingSubscriptionCheckout(pending)) {
+        setInitiateData(null);
+        setPayError("تعذّر حفظ عملية الاشتراك بأمان في هذه الجلسة؛ لم يبدأ الدفع. يرجى تفعيل التخزين المؤقت أو المحاولة من متصفح آخر.");
+        return;
+      }
+      setPendingCheckout(pending);
+      setStep("pay");
+    } catch {
+      setPayError("تعذّر الاتصال بخدمة الدفع. حاول مرة أخرى.");
+    } finally {
+      setPaying(false);
+    }
   }
+
+  const formatPrice = (halala: number) =>
+    `${(halala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
+
+  const closeModal = () => {
+    if (paying || confirmMutation.isPending || redeemMutation.isPending) return;
+    setReturnDialogOpen(false);
+    onClose();
+  };
+
+  const retryPendingConfirmation = () => {
+    if (!pendingCheckout || !returnPaymentId || paying) return;
+    setPayError(null);
+    setReturnNotice(returnPaymentStatus
+      ? `جارٍ إعادة التحقق من نتيجة الدفع «${returnPaymentStatus}» مع الخادم...`
+      : "جارٍ إعادة التحقق من نتيجة الدفع مع الخادم...");
+    setPaying(true);
+    confirmMutation.mutate({
+      checkoutId: pendingCheckout.checkoutId,
+      paymentId: returnPaymentId,
+      isRedirectReturn: true,
+    });
+  };
 
   /* ─── UI ─── */
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o && !paying) onClose(); }}>
+    <Dialog open={open || returnDialogOpen} onOpenChange={(o) => { if (!o) closeModal(); }}>
       <DialogContent
         className="max-w-lg rounded-3xl p-0 flex flex-col overflow-hidden"
         dir="rtl"
@@ -256,7 +464,47 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                 اشتراك بدون عمولة — سعر ثابت فقط
               </DialogDescription>
             </DialogHeader>
-            <div className="p-5 grid gap-2 overflow-y-auto flex-1" style={{ paddingBottom: '100px' }}>
+             <div className="p-5 grid gap-2 overflow-y-auto flex-1" style={{ paddingBottom: '100px' }}>
+              {pendingCheckout && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                  <p className="font-semibold">توجد عملية اشتراك محفوظة قيد التأكيد</p>
+                  <p className="mt-1">
+                    {returnNotice ?? `الخطة المرتبطة بالعملية: ${pendingCheckout.plan}. لن نبدأ دفعاً جديداً أو نحذفها قبل تأكيد الخادم.`}
+                  </p>
+                  {returnPaymentStatus && (
+                    <p className="mt-1 text-xs">الحالة الواردة من بوابة الدفع: {returnPaymentStatus}</p>
+                  )}
+                  {returnPaymentId && (
+                    <Button
+                      className="mt-3 w-full"
+                      variant="outline"
+                      onClick={retryPendingConfirmation}
+                      disabled={paying || confirmMutation.isPending}
+                    >
+                      إعادة التحقق من الدفع
+                    </Button>
+                  )}
+                </div>
+              )}
+              <label className="text-sm font-medium text-foreground" htmlFor="subscription-promo-code">
+                رمز الخصم (اختياري)
+              </label>
+              <input
+                id="subscription-promo-code"
+                data-testid="input-subscription-promo-code"
+                value={promoCode}
+                onChange={(event) => setPromoCode(event.target.value)}
+                placeholder="أدخل رمز الخصم"
+                autoComplete="off"
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                disabled={paying}
+              />
+              {paying && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  جارٍ التحقق من الباقة ورمز الخصم...
+                </div>
+              )}
               {plans.length === 0 && (
                 <div className="flex justify-center py-8">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -265,11 +513,16 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
               {plans.map((p) => {
                 const isPopular = POPULAR_PLANS.includes(p.id);
                 const isCurrent = p.id === currentPlan;
+                const accessDescription = p.features?.length
+                  ? p.features.slice(0, 3).join(" · ")
+                  : p.scope === "property"
+                    ? "إدارة العقارات فقط"
+                    : "إدارة العقارات والمالية والإدارة";
                 return (
                   <button
                     key={p.id}
-                    onClick={() => !isCurrent && handleSelectPlan(p)}
-                    disabled={isCurrent}
+                    onClick={() => !paying && !redeemMutation.isPending && !pendingCheckout && handleSelectPlan(p)}
+                    disabled={paying || redeemMutation.isPending || !!pendingCheckout}
                     className={`w-full text-start rounded-2xl border-2 p-4 flex items-center gap-3 transition-all cursor-pointer hover:border-primary/70 hover:bg-primary/5 disabled:opacity-60 disabled:cursor-default ${
                       isCurrent ? "border-primary bg-primary/5" : "border-border"
                     }`}
@@ -286,9 +539,17 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">{p.days} يوم</p>
+                      {accessDescription && <p className="text-xs text-muted-foreground mt-1">{accessDescription}</p>}
+                      {(p.chaletLimit != null || p.serviceLimit != null) && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {p.chaletLimit != null ? `العقارات: ${p.chaletLimit === 999 ? "غير محدود" : p.chaletLimit}` : ""}
+                          {p.chaletLimit != null && p.serviceLimit != null ? " · " : ""}
+                          {p.serviceLimit != null ? `الخدمات: ${p.serviceLimit === 999 ? "غير محدود" : p.serviceLimit}` : ""}
+                        </p>
+                      )}
                     </div>
                     <div className="text-end shrink-0">
-                      <p className="font-black text-lg text-foreground">{p.price}</p>
+                        <p className="font-black text-lg text-foreground">{p.price.toLocaleString("ar-SA")}</p>
                       <p className="text-xs text-muted-foreground">ر.س</p>
                     </div>
                   </button>
@@ -313,23 +574,36 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                 إتمام الدفع
               </DialogTitle>
               <DialogDescription>
-                <span className="font-semibold">{selectedPlan.label}</span>
+                <span className="font-semibold">{initiateData?.label ?? selectedPlan.label}</span>
                 {" — "}
-                <span className="font-black text-foreground">{selectedPlan.price} ر.س</span>
+                <span className="font-black text-foreground">
+                  {initiateData ? formatPrice(initiateData.amountHalala) : "جارٍ احتساب المبلغ"}
+                </span>
+                {initiateData && initiateData.discountHalala > 0 && (
+                  <span className="ms-2 text-xs text-muted-foreground line-through">
+                    {formatPrice(selectedPlan.price * 100)}
+                  </span>
+                )}
                 {" لمدة "}
-                <span>{selectedPlan.days} يوم</span>
+                <span>{initiateData?.days ?? selectedPlan.days} يوم</span>
               </DialogDescription>
             </DialogHeader>
 
             <div className="p-5 space-y-4 overflow-y-auto flex-1" style={{ paddingBottom: '100px' }}>
               {/* Moyasar form mount point */}
-              {!scriptReady && (
+              {initiateData?.amountHalala !== 0 && !scriptReady && (
                 <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
                   <Loader2 className="w-5 h-5 animate-spin" />
                   <span className="text-sm">جارٍ تحميل بوابة الدفع...</span>
                 </div>
               )}
-              <div ref={formContainerRef} id="moyasar-form" />
+              {initiateData?.amountHalala !== 0 && <div ref={formContainerRef} id="moyasar-form" />}
+
+              {initiateData && initiateData.discountHalala > 0 && (
+                <p className="text-sm text-green-700 bg-green-50 rounded-xl p-3" data-testid="text-promo-discount">
+                  وفّرت {formatPrice(initiateData.discountHalala)} باستخدام رمز الخصم.
+                </p>
+              )}
 
               {paying && (
                 <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground">
@@ -356,7 +630,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                 </div>
               </div>
 
-              <Button
+                <Button
                 variant="outline"
                 className="w-full rounded-xl"
                 onClick={() => { setStep("plan"); setPayError(null); }}
@@ -386,7 +660,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">المبلغ المدفوع</span>
-                <span className="font-bold text-green-700">{invoice.amount} {invoice.currency}</span>
+                  <span className="font-bold text-green-700">{invoice.amount.toLocaleString("ar-SA")} {invoice.currency}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">تاريخ الدفع</span>
@@ -418,7 +692,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
               <Button
                 variant="outline"
                 className="flex-1 rounded-xl"
-                onClick={onClose}
+                onClick={closeModal}
               >
                 إغلاق
               </Button>

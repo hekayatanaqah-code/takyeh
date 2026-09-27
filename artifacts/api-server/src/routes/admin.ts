@@ -28,6 +28,9 @@ import {
   ownerExpensesTable,
   customerNotesTable,
   ownerSubscriptionsTable,
+  subscriptionPromoCodesTable,
+  subscriptionCheckoutIntentsTable,
+  subscriptionGrantAuditTable,
   contactInquiriesTable,
   ownerTempSessionsTable,
   sectionGuidesTable,
@@ -43,6 +46,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { extractCoordsFromMapsUrl } from "../lib/extractMapCoords";
 import { logger } from "../lib/logger";
+import { getOrStartOwnerSubscription } from "../lib/subscription-access";
 
 declare global {
   namespace Express {
@@ -619,9 +623,6 @@ router.patch("/submissions/:id/status", async (req, res) => {
     adminNote: body.data.adminNote ?? null,
   };
   if (body.data.status === "approved") {
-    const trialExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    updateData.trialEndsAt = trialExpiry;
-
     const [submission] = await db
       .select()
       .from(chaletSubmissionsTable)
@@ -629,21 +630,8 @@ router.patch("/submissions/:id/status", async (req, res) => {
       .limit(1);
 
     if (submission?.ownerId) {
-      // Create or refresh a free-trial subscription for the owner
-      const existingSub = await db
-        .select()
-        .from(ownerSubscriptionsTable)
-        .where(eq(ownerSubscriptionsTable.ownerId, submission.ownerId))
-        .limit(1);
-      if (existingSub.length === 0) {
-        await db.insert(ownerSubscriptionsTable).values({
-          ownerId: submission.ownerId,
-          plan: "trial",
-          status: "active",
-          paymentStatus: "free",
-          expiresAt: trialExpiry,
-        }).onConflictDoNothing();
-      }
+      const subscription = await getOrStartOwnerSubscription(submission.ownerId);
+      updateData.trialEndsAt = subscription.plan === "trial" ? subscription.expiresAt : null;
     }
 
     if (submission) {
@@ -2116,6 +2104,11 @@ const PlanSchema = z.object({
   durationDays: z.number().int().min(1),
   trialDays: z.number().int().min(0).default(0),
   features: z.array(z.string()).default([]),
+  scope: z.enum(["property", "full"]),
+  chaletLimit: z.number().int().min(0).nullable(),
+  serviceLimit: z.number().int().min(0).nullable(),
+  extraChaletPrice: z.number().min(0).nullable().optional(),
+  extraServicePrice: z.number().min(0).nullable().optional(),
   isActive: z.boolean().default(true),
   sortOrder: z.number().int().default(0),
 });
@@ -2141,14 +2134,23 @@ router.get("/plans", async (_req, res) => {
 router.post("/plans", async (req, res) => {
   const parsed = PlanSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة", issues: parsed.error.issues });
-  const { nameAr, price, durationDays, trialDays, features, isActive, sortOrder } = parsed.data;
+  const {
+    nameAr, price, durationDays, trialDays, features, scope, chaletLimit, serviceLimit,
+    extraChaletPrice, extraServicePrice, isActive, sortOrder,
+  } = parsed.data;
   const baseSlug = planSlugFromName(nameAr);
   if (!baseSlug) return res.status(400).json({ error: "اسم الخطة يجب أن يحتوي على حروف أو أرقام" });
   for (let suffix = 1; suffix <= 100; suffix++) {
     const slug = suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
     const [plan] = await db
       .insert(subscriptionPlansTable)
-      .values({ slug, nameAr, price: String(price), durationDays, trialDays, features, isActive, sortOrder })
+      .values({
+        slug, nameAr, price: String(price), durationDays, trialDays, features,
+        scope, chaletLimit, serviceLimit,
+        extraChaletPrice: extraChaletPrice == null ? null : String(extraChaletPrice),
+        extraServicePrice: extraServicePrice == null ? null : String(extraServicePrice),
+        isActive, sortOrder,
+      })
       .onConflictDoNothing({ target: subscriptionPlansTable.slug })
       .returning();
     if (plan) return res.json(plan);
@@ -2160,10 +2162,19 @@ router.put("/plans/:id", async (req, res) => {
   const id = Number(req.params.id);
   const parsed = PlanSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
-  const { price, ...rest } = parsed.data;
+  const { price, extraChaletPrice, extraServicePrice, ...rest } = parsed.data;
   const [plan] = await db
     .update(subscriptionPlansTable)
-    .set({ ...rest, ...(price !== undefined ? { price: String(price) } : {}) })
+    .set({
+      ...rest,
+      ...(price !== undefined ? { price: String(price) } : {}),
+      ...(extraChaletPrice !== undefined
+        ? { extraChaletPrice: extraChaletPrice === null ? null : String(extraChaletPrice) }
+        : {}),
+      ...(extraServicePrice !== undefined
+        ? { extraServicePrice: extraServicePrice === null ? null : String(extraServicePrice) }
+        : {}),
+    })
     .where(eq(subscriptionPlansTable.id, id))
     .returning();
   if (!plan) return res.status(404).json({ error: "الخطة غير موجودة" });
@@ -2174,6 +2185,239 @@ router.delete("/plans/:id", async (req, res) => {
   const id = Number(req.params.id);
   await db.delete(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id));
   return res.json({ ok: true });
+});
+
+const PromoCodeBaseBody = z.object({
+  code: z.string().trim().min(3).max(40).regex(/^[A-Za-z0-9_-]+$/),
+  kind: z.enum(["percent", "fixed"]),
+  value: z.number().positive(),
+  usageLimit: z.number().int().positive().nullable().default(null),
+  expiresAt: z.coerce.date().nullable().default(null),
+  isActive: z.boolean().default(true),
+});
+const PromoCodeBody = PromoCodeBaseBody.superRefine((promo, ctx) => {
+  if (promo.kind === "percent" && promo.value > 100) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message: "نسبة الخصم لا يمكن أن تتجاوز ١٠٠٪" });
+  }
+});
+
+router.get("/promo-codes", requireSuperAdmin, async (_req, res) => {
+  const codes = await db.select().from(subscriptionPromoCodesTable)
+    .orderBy(subscriptionPromoCodesTable.createdAt, subscriptionPromoCodesTable.id);
+  res.json(codes);
+});
+
+router.post("/promo-codes", requireSuperAdmin, async (req, res) => {
+  const parsed = PromoCodeBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "تحقّق من الرمز وقيمة الخصم وحدود استخدامه" });
+    return;
+  }
+  const promo = parsed.data;
+  const code = promo.code.toUpperCase();
+  const [duplicate] = await db.select({ id: subscriptionPromoCodesTable.id })
+    .from(subscriptionPromoCodesTable)
+    .where(eq(subscriptionPromoCodesTable.code, code))
+    .limit(1);
+  if (duplicate) {
+    res.status(409).json({ error: "رمز الخصم مستخدم بالفعل" });
+    return;
+  }
+  const [created] = await db.insert(subscriptionPromoCodesTable).values({
+    ...promo,
+    code,
+    value: String(promo.value),
+  }).returning();
+  res.status(201).json(created);
+});
+
+router.put("/promo-codes/:id", requireSuperAdmin, async (req, res) => {
+  const params = z.coerce.number().int().positive().safeParse(req.params.id);
+  const parsed = PromoCodeBaseBody.partial().safeParse(req.body);
+  if (!params.success || !parsed.success || Object.keys(parsed.data).length === 0) {
+    res.status(400).json({ error: "بيانات تعديل الرمز غير صحيحة" });
+    return;
+  }
+  const [current] = await db.select().from(subscriptionPromoCodesTable)
+    .where(eq(subscriptionPromoCodesTable.id, params.data));
+  if (!current) {
+    res.status(404).json({ error: "رمز الخصم غير موجود" });
+    return;
+  }
+  const promo = parsed.data;
+  const effectiveKind = promo.kind ?? current.kind;
+  const effectiveValue = promo.value ?? Number(current.value);
+  if (effectiveKind === "percent" && effectiveValue > 100) {
+    res.status(400).json({ error: "نسبة الخصم لا يمكن أن تتجاوز ١٠٠٪" });
+    return;
+  }
+  const code = promo.code?.toUpperCase();
+  if (code && code !== current.code) {
+    const [pendingCheckout] = await db.select({ id: subscriptionCheckoutIntentsTable.id })
+      .from(subscriptionCheckoutIntentsTable)
+      .where(and(
+        eq(subscriptionCheckoutIntentsTable.discountCode, current.code),
+        isNull(subscriptionCheckoutIntentsTable.consumedAt),
+        gt(subscriptionCheckoutIntentsTable.expiresAt, new Date()),
+      )).limit(1);
+    if (pendingCheckout) {
+      res.status(409).json({ error: "لا يمكن تغيير رمز الخصم قبل إتمام أو انتهاء طلبات الدفع المرتبطة به" });
+      return;
+    }
+  }
+  if (code) {
+    const [duplicate] = await db.select({ id: subscriptionPromoCodesTable.id })
+      .from(subscriptionPromoCodesTable)
+      .where(eq(subscriptionPromoCodesTable.code, code))
+      .limit(1);
+    if (duplicate && duplicate.id !== params.data) {
+      res.status(409).json({ error: "رمز الخصم مستخدم بالفعل" });
+      return;
+    }
+  }
+  const { value, ...promoRest } = promo;
+  const [updated] = await db.update(subscriptionPromoCodesTable)
+    .set({
+      ...promoRest,
+      ...(code ? { code } : {}),
+      ...(value !== undefined ? { value: String(value) } : {}),
+    })
+    .where(eq(subscriptionPromoCodesTable.id, params.data))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "رمز الخصم غير موجود" });
+    return;
+  }
+  res.json(updated);
+});
+
+router.delete("/promo-codes/:id", requireSuperAdmin, async (req, res) => {
+  const parsed = z.coerce.number().int().positive().safeParse(req.params.id);
+  if (!parsed.success) {
+    res.status(400).json({ error: "معرّف الرمز غير صحيح" });
+    return;
+  }
+  const [promo] = await db.select().from(subscriptionPromoCodesTable)
+    .where(eq(subscriptionPromoCodesTable.id, parsed.data));
+  if (!promo) {
+    res.status(404).json({ error: "رمز الخصم غير موجود" });
+    return;
+  }
+  // Keep the original code available for already-paid but not yet confirmed
+  // checkouts; deactivation prevents future uses without stranding buyers.
+  const [deactivated] = await db.update(subscriptionPromoCodesTable)
+    .set({ isActive: false })
+    .where(eq(subscriptionPromoCodesTable.id, promo.id))
+    .returning();
+  res.json({ ...deactivated, deactivatedInsteadOfDeleted: true });
+});
+
+const ManualGrantBody = z.object({
+  plan: z.string().trim().min(1).max(120),
+  days: z.number().int().min(1).max(3650),
+  reason: z.string().trim().min(5).max(500),
+});
+const legacySubscriptionPlans = new Set([
+  "trial", "monthly", "yearly", "chalet_basic", "chalet_pro",
+  "chalet_unlimited", "service_basic", "service_pro", "bundle",
+]);
+
+router.post("/owners/:ownerId/subscription-grant", requireSuperAdmin, async (req, res) => {
+  const ownerId = z.string().trim().min(1).max(200).regex(/^[A-Za-z0-9_:-]+$/)
+    .safeParse(Array.isArray(req.params.ownerId) ? req.params.ownerId[0] : req.params.ownerId);
+  const parsed = ManualGrantBody.safeParse(req.body);
+  if (!ownerId.success || !parsed.success) {
+    res.status(400).json({ error: "تحقّق من حساب المالك ومدة التمديد وسبب المنح" });
+    return;
+  }
+  const { plan, days, reason } = parsed.data;
+  const [configuredPlan] = await db.select({
+    slug: subscriptionPlansTable.slug,
+    nameAr: subscriptionPlansTable.nameAr,
+    features: subscriptionPlansTable.features,
+    scope: subscriptionPlansTable.scope,
+    chaletLimit: subscriptionPlansTable.chaletLimit,
+    serviceLimit: subscriptionPlansTable.serviceLimit,
+  })
+    .from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, plan)).limit(1);
+  if (!configuredPlan && !legacySubscriptionPlans.has(plan)) {
+    res.status(400).json({ error: "اختر باقة موجودة في إعدادات الاشتراكات" });
+    return;
+  }
+  const ownerResult = await db.execute<{ owner_id: string }>(sql`
+    SELECT owner_id FROM (
+      SELECT COALESCE(oal.user_id, 'owner_' || oa.id::text) AS owner_id
+      FROM owner_applications oa
+      LEFT JOIN owner_account_links oal ON oal.owner_application_id = oa.id
+      WHERE oa.deleted_at IS NULL
+      UNION
+      SELECT 'owner_' || id::text AS owner_id
+      FROM owner_applications WHERE deleted_at IS NULL
+      UNION
+      SELECT owner_id FROM chalet_submissions
+      UNION
+      SELECT owner_id FROM service_provider_submissions
+    ) AS known_owners
+    WHERE owner_id = ${ownerId.data}
+    LIMIT 1
+  `);
+  if (ownerResult.rows.length === 0) {
+    res.status(404).json({ error: "لم يتم العثور على حساب المالك" });
+    return;
+  }
+  const actorId = String(req.adminStaff?.id ?? req.user?.id ?? "").trim();
+  if (!actorId) {
+    res.status(403).json({ error: "تعذّر التحقق من هوية المشرف" });
+    return;
+  }
+
+  const existingSubscription = await getOrStartOwnerSubscription(ownerId.data);
+  const grantTerms = configuredPlan ? {
+    nameAr: configuredPlan.nameAr,
+    features: configuredPlan.features,
+    scope: configuredPlan.scope === "property" ? "property" as const : "full" as const,
+    chaletLimit: configuredPlan.chaletLimit,
+    serviceLimit: configuredPlan.serviceLimit,
+  } : null;
+  const subscriptionOwnerId = existingSubscription.ownerId;
+  const now = new Date();
+  const newExpiry = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+  await db.transaction(async (tx) => {
+    await tx.insert(ownerSubscriptionsTable)
+      .values({
+        ownerId: subscriptionOwnerId,
+        plan,
+        status: "active",
+        paymentStatus: "manual",
+        termsSnapshot: grantTerms,
+        expiresAt: newExpiry,
+      })
+      .onConflictDoUpdate({
+        target: ownerSubscriptionsTable.ownerId,
+        set: {
+          plan,
+          status: "active",
+          paymentStatus: "manual",
+          termsSnapshot: grantTerms,
+          expiresAt: sql`GREATEST(COALESCE(${ownerSubscriptionsTable.expiresAt}, NOW()), NOW()) + (${days} * INTERVAL '1 day')`,
+        },
+      });
+    await tx.insert(subscriptionGrantAuditTable).values({
+      ownerId: subscriptionOwnerId,
+      actorId,
+      plan,
+      days,
+      reason,
+    });
+  });
+  const [subscription] = await db.select().from(ownerSubscriptionsTable)
+    .where(eq(ownerSubscriptionsTable.ownerId, subscriptionOwnerId));
+  res.json({
+    ok: true,
+    subscription,
+    listingReactivationRequired: false,
+    notice: "تم تفعيل الاشتراك. تظهر العقارات والخدمات المفعّلة تلقائياً؛ المعطّلة يدوياً تظل معطّلة.",
+  });
 });
 
 /* ══════════════════════════════════════════════════════
@@ -2942,53 +3186,6 @@ router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
 
   return res.status(201).json({ ok: true, submissionId: submission.id });
 });
-
-/* ── Auto-deactivation export (called at server startup) ─── */
-export async function runSubscriptionExpiryJob() {
-  try {
-    // Find expired active subscriptions
-    const expired = await db
-      .select({ ownerId: ownerSubscriptionsTable.ownerId })
-      .from(ownerSubscriptionsTable)
-      .where(
-        and(
-          eq(ownerSubscriptionsTable.status, "active"),
-          lt(ownerSubscriptionsTable.expiresAt, new Date()),
-        )
-      );
-
-    if (expired.length === 0) return;
-
-    const ownerIds = expired.map(r => r.ownerId);
-
-    // Mark subscriptions as inactive
-    await db
-      .update(ownerSubscriptionsTable)
-      .set({ status: "inactive" })
-      .where(
-        and(
-          eq(ownerSubscriptionsTable.status, "active"),
-          lt(ownerSubscriptionsTable.expiresAt, new Date()),
-        )
-      );
-
-    // Deactivate all chalets belonging to expired owners
-    await db
-      .update(chaletsTable)
-      .set({ isActive: false })
-      .where(inArray(chaletsTable.ownerId, ownerIds));
-
-    // Deactivate all services belonging to expired owners
-    await db
-      .update(externalServicesTable)
-      .set({ isActive: false })
-      .where(inArray(externalServicesTable.ownerId, ownerIds));
-
-    console.log(`[subscription-expiry] Deactivated ${ownerIds.length} owners`);
-  } catch (err) {
-    console.error("[subscription-expiry] Error:", err);
-  }
-}
 
 /* ── GET /admin/wa-subscribers — WhatsApp news subscribers list ── */
 /* ── Section Guides ─────────────────────────────────────────── */

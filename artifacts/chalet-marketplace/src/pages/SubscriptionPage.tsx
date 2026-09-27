@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/layout/Navbar";
 import { useAuth } from "@workspace/replit-auth-web";
 import { PaymentModal } from "@/components/PaymentModal";
+import { AddonPaymentModal } from "@/components/AddonPaymentModal";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 async function apiFetch(path: string) {
@@ -31,10 +32,11 @@ const PLAN_META: Record<string, PlanMeta> = {
     icon: <Clock className="w-5 h-5" />,
     color: "from-stone-500 to-stone-400",
     features: [
-      "شاليه واحد",
-      "خدمة تقديم واحدة",
-      "لوحة تحكم أساسية",
-      "إدارة الحجوزات",
+      "إدارة العقارات والخدمات",
+      "إدارة الحجوزات والعملاء",
+      "إدارة المصروفات والتقارير المالية",
+      "إدارة الموظفين والإعدادات",
+      "جميع أقسام المنصة متاحة خلال شهر التجربة المجاني",
     ],
   },
   monthly: {
@@ -117,10 +119,12 @@ export default function SubscriptionPage() {
   const [, navigate] = useLocation();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [showPayment, setShowPayment] = useState(false);
+  const [addonType, setAddonType] = useState<"chalet" | "service" | null>(null);
 
   const { data: sub, isLoading: subLoading } = useQuery<{
     id: number | null; plan: string; status: string; expiresAt: string | null;
     paymentStatus: string; createdAt: string;
+    planDetails?: { nameAr: string; features: string[]; scope: string | null } | null;
   } | null>({
     queryKey: ["owner", "subscription"],
     queryFn: async () => {
@@ -132,12 +136,14 @@ export default function SubscriptionPage() {
   });
 
   const { data: planLimits } = useQuery<{
-    plan: string; chaletLimit: number; chaletCount: number; serviceLimit: number;
+    plan: string; active?: boolean; chaletLimit: number; chaletCount: number;
+    serviceLimit: number; serviceCount?: number;
+    extraChaletPrice?: number | string | null; extraServicePrice?: number | string | null;
   }>({
     queryKey: ["owner", "plan-limits"],
     queryFn: async () => {
       const r = await apiFetch("/owner/plan-limits");
-      if (!r.ok) return { plan: "trial", chaletLimit: 1, chaletCount: 0, serviceLimit: 1 };
+      if (!r.ok) return { plan: "trial", chaletLimit: 1, chaletCount: 0, serviceLimit: 1, serviceCount: 0 };
       return r.json();
     },
     enabled: isAuthenticated,
@@ -152,12 +158,18 @@ export default function SubscriptionPage() {
   }
 
   const plan = sub?.plan ?? "trial";
-  const meta = PLAN_META[plan] ?? PLAN_META.trial;
+  const fallbackMeta = PLAN_META[plan] ?? PLAN_META.trial;
+  const meta = {
+    ...fallbackMeta,
+    label: sub?.planDetails?.nameAr ?? fallbackMeta.label,
+    features: sub?.planDetails?.features ?? fallbackMeta.features,
+  };
   const statusInfo = STATUS_MAP[sub?.status ?? "active"] ?? STATUS_MAP.active;
   const days = daysUntil(sub?.expiresAt ?? null);
   const chaletUsed = planLimits?.chaletCount ?? 0;
   const chaletMax = planLimits?.chaletLimit === Infinity ? "∞" : (planLimits?.chaletLimit ?? 1);
   const serviceMax = planLimits?.serviceLimit === Infinity ? "∞" : (planLimits?.serviceLimit ?? 1);
+  const serviceUsed = planLimits?.serviceCount ?? 0;
 
   const paymentCls =
     sub?.paymentStatus === "paid"    ? "text-green-600"
@@ -239,6 +251,21 @@ export default function SubscriptionPage() {
           )}
         </motion.div>
 
+        {sub?.status === "expired" && (
+          <div className="mb-6 rounded-2xl border border-red-300 bg-red-50 p-5 text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200" role="alert" data-testid="status-subscription-expired">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-bold">انتهى اشتراكك وتوقفت إتاحة عقاراتك وخدماتك للعملاء</p>
+                <p className="mt-1 text-sm">جدّد الآن لاستعادة ظهورها ومتابعة استقبال الحجوزات.</p>
+              </div>
+              <Button className="shrink-0 gap-2" onClick={() => setShowPayment(true)} data-testid="button-renew-expired-subscription">
+                <CreditCard className="w-4 h-4" />
+                جدّد الاشتراك الآن
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* ── Summary cards ── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 [&>*]:shrink-0">
           <SummaryCard
@@ -251,7 +278,7 @@ export default function SubscriptionPage() {
           <SummaryCard
             icon={<Star className="w-5 h-5 text-amber-500" />}
             label="الخدمات"
-            value={`${serviceMax}`}
+            value={`${serviceUsed} / ${serviceMax}`}
             sub="الحد الأقصى المسموح"
             bg="bg-amber-50 dark:bg-amber-900/20"
           />
@@ -264,6 +291,35 @@ export default function SubscriptionPage() {
             valueCls={paymentCls}
           />
         </div>
+
+        {planLimits?.active && (
+          <div className="mb-6 grid gap-3 sm:grid-cols-2">
+            {planLimits.chaletCount >= planLimits.chaletLimit && planLimits.extraChaletPrice != null && (
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="font-semibold">تحتاج إلى سعة عقار إضافية؟</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  إضافة عقار واحد مقابل {Number(planLimits.extraChaletPrice).toLocaleString("ar-SA")} ر.س، دفعة واحدة.
+                </p>
+                <Button className="mt-3 w-full gap-2" variant="outline" onClick={() => setAddonType("chalet")}>
+                  <Building2 className="h-4 w-4" />
+                  شراء عقار إضافي
+                </Button>
+              </div>
+            )}
+            {(planLimits.serviceCount ?? 0) >= planLimits.serviceLimit && planLimits.extraServicePrice != null && (
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <p className="font-semibold">تحتاج إلى سعة خدمة إضافية؟</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  إضافة خدمة واحدة مقابل {Number(planLimits.extraServicePrice).toLocaleString("ar-SA")} ر.س، دفعة واحدة.
+                </p>
+                <Button className="mt-3 w-full gap-2" variant="outline" onClick={() => setAddonType("service")}>
+                  <Star className="h-4 w-4" />
+                  شراء خدمة إضافية
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Plan features ── */}
         <motion.div
@@ -378,6 +434,11 @@ export default function SubscriptionPage() {
         open={showPayment}
         onClose={() => setShowPayment(false)}
         currentPlan={plan}
+      />
+      <AddonPaymentModal
+        open={addonType !== null}
+        onClose={() => setAddonType(null)}
+        addonType={addonType ?? "chalet"}
       />
     </div>
   );

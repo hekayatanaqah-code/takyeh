@@ -6,8 +6,11 @@ import {
   chaletServicesTable,
   globalSeasonsTable,
   chaletGlobalSeasonsTable,
+  ownerAccountLinksTable,
+  ownerSubscriptionsTable,
 } from "@workspace/db/schema";
-import { eq, lte, gte, and, sql, inArray, isNull, type SQL } from "drizzle-orm";
+import { eq, lte, gte, and, sql, inArray, isNull, or, type SQL } from "drizzle-orm";
+import { isSubscriptionActive, preferredOwnerSubscription } from "../lib/subscription-access";
 import {
   GetChaletsQueryParams,
   GetChaletByIdParams,
@@ -16,6 +19,43 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+async function activeInventoryOwnerIds(ownerIds: Array<string | null | undefined>) {
+  const owners = [...new Set(ownerIds.filter((id): id is string => !!id))];
+  if (owners.length === 0) return new Set<string>();
+  const applicationIds = owners
+    .map((id) => /^owner_(\d+)$/.exec(id)?.[1])
+    .filter((id): id is string => !!id)
+    .map(Number);
+  const userIds = owners.filter((id) => !/^owner_\d+$/.test(id));
+  const linkConditions = [];
+  if (userIds.length > 0) linkConditions.push(inArray(ownerAccountLinksTable.userId, userIds));
+  if (applicationIds.length > 0) linkConditions.push(inArray(ownerAccountLinksTable.ownerApplicationId, applicationIds));
+  const links = linkConditions.length > 0
+    ? await db.select({
+        userId: ownerAccountLinksTable.userId,
+        applicationId: ownerAccountLinksTable.ownerApplicationId,
+      }).from(ownerAccountLinksTable).where(or(...linkConditions))
+    : [];
+  const keysByOwner = new Map(owners.map((ownerId) => [ownerId, new Set([ownerId])]));
+  for (const link of links) {
+    const legacyId = `owner_${link.applicationId}`;
+    keysByOwner.get(link.userId)?.add(legacyId);
+    keysByOwner.get(legacyId)?.add(link.userId);
+  }
+  const subscriptionKeys = [...new Set([...keysByOwner.values()].flatMap((keys) => [...keys]))];
+  const subscriptions = await db.select({
+    ownerId: ownerSubscriptionsTable.ownerId,
+    status: ownerSubscriptionsTable.status,
+    expiresAt: ownerSubscriptionsTable.expiresAt,
+    paymentStatus: ownerSubscriptionsTable.paymentStatus,
+  }).from(ownerSubscriptionsTable).where(inArray(ownerSubscriptionsTable.ownerId, subscriptionKeys));
+  return new Set(owners.filter((ownerId) =>
+    isSubscriptionActive(preferredOwnerSubscription(
+      subscriptions.filter((subscription) => keysByOwner.get(ownerId)?.has(subscription.ownerId)),
+    ) ?? { status: "expired", expiresAt: null }),
+  ));
+}
 
 function todayStr() {
   const d = new Date();
@@ -143,6 +183,8 @@ router.get("/", async (req, res) => {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(sql`RANDOM()`);
 
+  const activeOwners = await activeInventoryOwnerIds(rows.map((row) => row.ownerId));
+  rows = rows.filter((row) => !row.ownerId || activeOwners.has(row.ownerId));
   rows = rows.filter((row) => !isPausedNow(row));
 
   /* ── Availability filter ─────────────────────────────────── */
@@ -308,7 +350,10 @@ router.get("/next-available", async (req, res) => {
     .from(chaletsTable)
     .where(and(eq(chaletsTable.isActive, true), eq(chaletsTable.location, location)));
 
-  const activeChalets = allChalets.filter((row) => !isPausedNow(row));
+  const activeOwners = await activeInventoryOwnerIds(allChalets.map((row) => row.ownerId));
+  const activeChalets = allChalets.filter((row) =>
+    (!row.ownerId || activeOwners.has(row.ownerId)) && !isPausedNow(row),
+  );
 
   if (activeChalets.length === 0) {
     res.json({ cityEmpty: true, chalets: [] });
@@ -519,7 +564,8 @@ router.get("/:id", async (req, res) => {
   }
 
   const row = rows[0];
-  if (row.isActive === false || isPausedNow(row)) {
+  if (row.isActive === false || isPausedNow(row) ||
+    (row.ownerId && !(await activeInventoryOwnerIds([row.ownerId])).has(row.ownerId))) {
     res.status(404).json({ error: "Chalet not found" });
     return;
   }
@@ -578,6 +624,11 @@ router.get("/:id", async (req, res) => {
 router.get("/:id/services", async (req, res) => {
   const chaletId = Number(req.params.id);
   if (!chaletId) return res.json([]);
+  const [chalet] = await db.select({ ownerId: chaletsTable.ownerId })
+    .from(chaletsTable).where(eq(chaletsTable.id, chaletId)).limit(1);
+  if (!chalet || (chalet.ownerId && !(await activeInventoryOwnerIds([chalet.ownerId])).has(chalet.ownerId))) {
+    return res.json([]);
+  }
   const services = await db.select({
     id: chaletServicesTable.id,
     name: chaletServicesTable.name,

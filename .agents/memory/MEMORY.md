@@ -31,3 +31,4 @@
 - [Approved service publishing source](approved-service-publishing-source.md) — admin published-services list is sourced from approved submissions; provider rows are the public mirror.
 - [Admin permission compatibility](admin-permission-compatibility.md) — new delegated permissions inherit old grants only while unset; explicit choices must override the legacy grant.
 - [Subscription plan identifiers](subscription-plan-identifiers.md) — generate identifiers on creation, but keep them stable when names change because subscriptions reference them.
+- [Subscription billing boundary](subscription-billing-boundary.md) — extra slots are one-time purchases; preserve quoted terms across admin edits and legacy trials across rollout.

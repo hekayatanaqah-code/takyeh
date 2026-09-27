@@ -14,15 +14,56 @@ import {
   serviceRegionsCatalogTable,
   serviceCitiesCatalogTable,
   citiesCatalogTable,
+  ownerAccountLinksTable,
+  ownerSubscriptionsTable,
 } from "@workspace/db/schema";
-import { eq, and, ne, desc, isNull, gte, sql, inArray } from "drizzle-orm";
+import { eq, and, ne, desc, isNull, gte, sql, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { randomBytes } from "crypto";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
+import { isSubscriptionActive, ownerPlanAccess, preferredOwnerSubscription } from "../lib/subscription-access";
 
 const router = Router();
 const ALL_KINGDOM_COVERAGE = "جميع مناطق المملكة";
+
+async function activeInventoryOwnerIds(ownerIds: Array<string | null | undefined>) {
+  const owners = [...new Set(ownerIds.filter((id): id is string => !!id))];
+  if (owners.length === 0) return new Set<string>();
+  const applicationIds = owners
+    .map((id) => /^owner_(\d+)$/.exec(id)?.[1])
+    .filter((id): id is string => !!id)
+    .map(Number);
+  const userIds = owners.filter((id) => !/^owner_\d+$/.test(id));
+  const linkConditions = [];
+  if (userIds.length > 0) linkConditions.push(inArray(ownerAccountLinksTable.userId, userIds));
+  if (applicationIds.length > 0) linkConditions.push(inArray(ownerAccountLinksTable.ownerApplicationId, applicationIds));
+  const links = linkConditions.length > 0
+    ? await db.select({
+        userId: ownerAccountLinksTable.userId,
+        applicationId: ownerAccountLinksTable.ownerApplicationId,
+      }).from(ownerAccountLinksTable).where(or(...linkConditions))
+    : [];
+  const keysByOwner = new Map(owners.map((ownerId) => [ownerId, new Set([ownerId])]));
+  for (const link of links) {
+    const legacyId = `owner_${link.applicationId}`;
+    keysByOwner.get(link.userId)?.add(legacyId);
+    keysByOwner.get(legacyId)?.add(link.userId);
+  }
+  const subscriptionKeys = [...new Set([...keysByOwner.values()].flatMap((keys) => [...keys]))];
+  const subscriptions = await db.select({
+    ownerId: ownerSubscriptionsTable.ownerId,
+    status: ownerSubscriptionsTable.status,
+    expiresAt: ownerSubscriptionsTable.expiresAt,
+    paymentStatus: ownerSubscriptionsTable.paymentStatus,
+  }).from(ownerSubscriptionsTable).where(inArray(ownerSubscriptionsTable.ownerId, subscriptionKeys));
+  return new Set(owners.filter((ownerId) =>
+    isSubscriptionActive(preferredOwnerSubscription(
+      subscriptions.filter((subscription) => keysByOwner.get(ownerId)?.has(subscription.ownerId)),
+    ) ?? { status: "expired", expiresAt: null }),
+  ));
+}
+
 const canonicalGregorianDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "يجب أن يكون التاريخ بصيغة YYYY-MM-DD")
@@ -166,22 +207,26 @@ router.get("/", async (req, res) => {
     .from(serviceProvidersTable)
     .where(and(...conditions))
     .orderBy(sql`RANDOM()`);
-  return res.json(rows);
+  const activeOwners = await activeInventoryOwnerIds(rows.map((row) => row.ownerId));
+  return res.json(rows.filter((row) => row.ownerId && activeOwners.has(row.ownerId)));
 });
 
 /* ── Public: service-only search options with active owner inventory ── */
 router.get("/search-options", async (_req, res) => {
   const providers = await db
     .select({
+      ownerId: serviceProvidersTable.ownerId,
       category: serviceProvidersTable.category,
       city: serviceProvidersTable.city,
       coverageTags: serviceProvidersTable.coverageTags,
     })
     .from(serviceProvidersTable)
     .where(eq(serviceProvidersTable.isActive, true));
+  const activeOwners = await activeInventoryOwnerIds(providers.map((provider) => provider.ownerId));
+  const activeProviders = providers.filter((provider) => provider.ownerId && activeOwners.has(provider.ownerId));
 
   const categoryKeys = [...new Set(
-    providers.map((provider) => provider.category).filter((key): key is string => !!key),
+    activeProviders.map((provider) => provider.category).filter((key): key is string => !!key),
   )];
   const categories = categoryKeys.length > 0
     ? await db
@@ -199,7 +244,7 @@ router.get("/search-options", async (_req, res) => {
       .orderBy(serviceCategoriesTable.sortOrder)
     : [];
 
-  const coversAllKingdom = providers.some((provider) =>
+  const coversAllKingdom = activeProviders.some((provider) =>
     (provider.coverageTags ?? []).some((tag) => tag.trim() === ALL_KINGDOM_COVERAGE),
   );
   let cities: Array<{ id: number; name: string }>;
@@ -211,7 +256,7 @@ router.get("/search-options", async (_req, res) => {
       .orderBy(citiesCatalogTable.name);
   } else {
     const availableCityNames = [...new Set(
-      providers.flatMap((provider) => [
+      activeProviders.flatMap((provider) => [
         provider.city,
         ...(provider.coverageTags ?? []),
       ])
@@ -232,7 +277,9 @@ router.get("/:id", async (req, res) => {
     .from(serviceProvidersTable)
     .where(eq(serviceProvidersTable.id, id));
 
-  if (!provider) return res.status(404).json({ error: "مزود الخدمة غير موجود" });
+  if (!provider || !provider.ownerId || !(await activeInventoryOwnerIds([provider.ownerId])).has(provider.ownerId)) {
+    return res.status(404).json({ error: "مزود الخدمة غير موجود" });
+  }
   return res.json(provider);
 });
 
@@ -275,6 +322,13 @@ router.post("/submit", requireAuth, async (req: any, res) => {
   }
 
   const data = parsed.data;
+  const access = await ownerPlanAccess(req.user.id);
+  if (!isSubscriptionActive(access.subscription)) {
+    return res.status(403).json({ error: "انتهى اشتراكك. جدّده لإضافة خدمة جديدة.", upgradeRequired: true });
+  }
+  if (access.serviceCount >= access.serviceLimit) {
+    return res.status(403).json({ error: "وصلت إلى الحد الأقصى للخدمات في باقتك. جدّد اشتراكك أو اختر باقة أعلى.", upgradeRequired: true });
+  }
   const [activeServiceCity] = await db
     .select({ id: serviceCitiesCatalogTable.id, name: serviceCitiesCatalogTable.name })
     .from(serviceCitiesCatalogTable)
@@ -354,10 +408,16 @@ router.post("/submit", requireAuth, async (req: any, res) => {
     );
   }
 
-  const [row] = await db
-    .insert(serviceProviderSubmissionsTable)
-    .values(values)
-    .returning();
+  const [row] = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(731206, hashtext(${access.subscription.ownerId}))`);
+    const currentAccess = await ownerPlanAccess(req.user.id);
+    if (!isSubscriptionActive(currentAccess.subscription) ||
+        currentAccess.serviceCount >= currentAccess.serviceLimit) return [null];
+    return tx.insert(serviceProviderSubmissionsTable).values(values).returning();
+  });
+  if (!row) {
+    return res.status(403).json({ error: "انتهى اشتراكك أو وصلت إلى حد الخدمات المتاح. جدّد أو اشترِ سعة إضافية.", upgradeRequired: true });
+  }
 
   return res.status(201).json(row);
 });
@@ -817,6 +877,10 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
   const providerId = Number(req.params.id);
   const [provider] = await db.select().from(serviceProvidersTable).where(eq(serviceProvidersTable.id, providerId)).limit(1);
   if (!provider || provider.ownerId !== req.user.id) return res.status(404).json({ error: "المزود غير موجود" });
+  const access = await ownerPlanAccess(req.user.id);
+  if (!isSubscriptionActive(access.subscription)) {
+    return res.status(403).json({ error: "انتهى اشتراكك. جدّده لإضافة مواعيد جديدة.", upgradeRequired: true });
+  }
 
   const schema = z.object({
     clientName: z.string().min(1),

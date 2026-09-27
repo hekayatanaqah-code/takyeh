@@ -443,6 +443,14 @@ export const chaletAvailabilityTable = pgTable("chalet_availability", {
 export type ChaletAvailability = typeof chaletAvailabilityTable.$inferSelect;
 
 /* ── Owner Subscriptions ───────────────────────────────────── */
+export type SubscriptionTerms = {
+  nameAr: string;
+  features: string[];
+  scope: "property" | "full";
+  chaletLimit: number | null;
+  serviceLimit: number | null;
+};
+
 export const ownerSubscriptionsTable = pgTable("owner_subscriptions", {
   id: serial("id").primaryKey(),
   ownerId: text("owner_id").notNull().unique(),
@@ -450,6 +458,7 @@ export const ownerSubscriptionsTable = pgTable("owner_subscriptions", {
   status: text("status").notNull().default("active"),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   paymentStatus: text("payment_status").notNull().default("paid"),
+  termsSnapshot: jsonb("terms_snapshot").$type<SubscriptionTerms>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   expiresStatusIdx: index("owner_subscriptions_expires_status_idx").on(table.expiresAt, table.status),
@@ -465,11 +474,84 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
   durationDays: integer("duration_days").notNull(),
   trialDays: integer("trial_days").notNull().default(0),
   features: jsonb("features").$type<string[]>().notNull().default([]),
+  scope: text("scope"),
+  chaletLimit: integer("chalet_limit"),
+  serviceLimit: integer("service_limit"),
+  extraChaletPrice: numeric("extra_chalet_price", { precision: 10, scale: 2 }),
+  extraServicePrice: numeric("extra_service_price", { precision: 10, scale: 2 }),
   isActive: boolean("is_active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type SubscriptionPlan = typeof subscriptionPlansTable.$inferSelect;
+
+/* ── Subscription Promo Codes ───────────────────────────── */
+export const subscriptionPromoCodesTable = pgTable("subscription_promo_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  kind: text("kind").$type<"percent" | "fixed">().notNull(),
+  value: numeric("value", { precision: 10, scale: 2 }).notNull(),
+  usageLimit: integer("usage_limit"),
+  usedCount: integer("used_count").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type SubscriptionPromoCode = typeof subscriptionPromoCodesTable.$inferSelect;
+
+/* ── Subscription checkout intents and payment idempotency ─ */
+export const subscriptionCheckoutIntentsTable = pgTable("subscription_checkout_intents", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  plan: text("plan").notNull(),
+  amountHalala: integer("amount_halala").notNull(),
+  listPriceHalala: integer("list_price_halala").notNull(),
+  durationDays: integer("duration_days").notNull(),
+  planLabel: text("plan_label").notNull(),
+  termsSnapshot: jsonb("terms_snapshot").$type<SubscriptionTerms>(),
+  discountCode: text("discount_code"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+});
+
+export const subscriptionPaymentsTable = pgTable("subscription_payments", {
+  paymentId: text("payment_id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  intentId: text("intent_id").notNull().unique(),
+  plan: text("plan").notNull(),
+  amountHalala: integer("amount_halala").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ── One-time additional subscription slots ───────────────── */
+export const subscriptionAddonCheckoutIntentsTable = pgTable("subscription_addon_checkout_intents", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  addonType: text("addon_type").$type<"chalet" | "service">().notNull(),
+  amountHalala: integer("amount_halala").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+});
+
+export const subscriptionAddonPurchasesTable = pgTable("subscription_addon_purchases", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  addonType: text("addon_type").$type<"chalet" | "service">().notNull(),
+  paymentId: text("payment_id").notNull().unique(),
+  intentId: text("intent_id").notNull().unique(),
+  amountHalala: integer("amount_halala").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const subscriptionGrantAuditTable = pgTable("subscription_grant_audit", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  actorId: text("actor_id").notNull(),
+  plan: text("plan").notNull(),
+  days: integer("days").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 /* ── Expense Management ────────────────────────────────────── */
 

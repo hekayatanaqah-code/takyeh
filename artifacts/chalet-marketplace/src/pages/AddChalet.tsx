@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCreateSubmission } from "@workspace/api-client-react";
 import { Navbar } from "@/components/layout/Navbar";
+import { AddonPaymentModal } from "@/components/AddonPaymentModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,6 +36,8 @@ import {
   ShieldCheck,
   ArrowRight,
   ArrowLeft,
+  Lock,
+  CreditCard,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -135,6 +138,7 @@ async function uploadFile(file: File): Promise<string | null> {
 
 export default function AddChalet() {
   const qc = useQueryClient();
+  const [showAddonPayment, setShowAddonPayment] = useState(false);
   const [selectedRegionId, setSelectedRegionId] = useState<number | null>(null);
   const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
   const { regions, cities, districts, amenities, propertyCategories } = useCatalog(selectedRegionId, selectedCityId);
@@ -269,7 +273,15 @@ export default function AddChalet() {
   const editId = editIdParam ? Number(editIdParam) : null;
   const isEditMode = !!editId;
 
-  const { data: planLimits } = useQuery<{ chaletLimit: number; chaletCount: number; serviceLimit: number; serviceCount: number }>({
+  const { data: planLimits } = useQuery<{
+    active: boolean;
+    scope: "full" | "property";
+    chaletLimit: number;
+    chaletCount: number;
+    serviceLimit: number;
+    serviceCount: number;
+    extraChaletPrice?: number | string | null;
+  } | null>({
     queryKey: ["owner", "plan-limits"],
     queryFn: async () => {
       const r = await fetch(`${BASE}/api/owner/plan-limits`, { credentials: "include" });
@@ -590,6 +602,16 @@ export default function AddChalet() {
     e.preventDefault();
     setFieldErrors({});
     mutation.reset();
+    if (!isEditMode && !planLimits) {
+      setFieldErrors({ general: ["تعذّر التحقق من حالة الاشتراك. أعد تحميل الصفحة وحاول مجدداً."] });
+      return;
+    }
+    if (!isEditMode && planLimits && (
+      planLimits.active === false || planLimits.chaletCount >= planLimits.chaletLimit
+    )) {
+      navigate("/subscription");
+      return;
+    }
 
     const resolvedLocation = citySelectVal === "__other__" ? customCity.trim() : form.location;
     const resolvedCityId = selectedCityId;
@@ -671,12 +693,13 @@ export default function AddChalet() {
         },
         onError: (err: unknown) => {
           try {
-            const apiErr = err as { data?: { details?: Record<string, string[]>; error?: string } };
+            const apiErr = err as { data?: { details?: Record<string, string[]>; error?: string; upgradeRequired?: boolean } };
             if (apiErr?.data?.details && typeof apiErr.data.details === "object") {
               setFieldErrors(apiErr.data.details);
             } else if (apiErr?.data?.error && typeof apiErr.data.error === "string") {
               setFieldErrors({ general: [apiErr.data.error] });
             }
+            if (apiErr?.data?.upgradeRequired) navigate("/subscription");
           } catch {}
         },
       }
@@ -712,6 +735,56 @@ export default function AddChalet() {
 
   const canAddMore = photos.length < MAX_PHOTOS && !isUploading;
   const allUploaded = photos.every((p) => p.url !== "") && !isUploadingVideo && !isUploadingLogo && (video ? video.url !== "" : true);
+
+  const planBlocksNewChalet = !isEditMode && !!planLimits
+    && (planLimits.active === false || planLimits.chaletCount >= planLimits.chaletLimit);
+  if (planBlocksNewChalet && !submitted) {
+    const subscriptionExpired = planLimits?.active === false;
+    return (
+      <div className="min-h-screen bg-background" dir="rtl">
+        <Navbar />
+        <main className="container mx-auto max-w-2xl px-4 py-16">
+          <div role="alert" className="rounded-3xl border border-red-300 bg-red-50 p-8 text-center dark:border-red-800 dark:bg-red-950/30">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200">
+              <Lock className="h-8 w-8" />
+            </div>
+            <h1 className="text-2xl font-bold text-foreground">
+              {subscriptionExpired ? "انتهت صلاحية اشتراكك" : "وصلت إلى حد العقارات في باقتك"}
+            </h1>
+            <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
+              {subscriptionExpired
+                ? "لا يمكن بدء إضافة عقار جديد قبل تجديد الاشتراك. بيانات عقاراتك الحالية ما زالت محفوظة."
+                : "لإضافة عقار آخر، راجع الباقات المتاحة. لا تُفعّل الإضافات ذات الرسوم إلا بعد إتمام الترقية والدفع."}
+            </p>
+            {!subscriptionExpired && planLimits?.extraChaletPrice != null ? (
+              <div className="mt-6 flex flex-col items-center gap-3">
+                <p className="text-sm text-muted-foreground">
+                  سعر إضافة عقار واحد: {toAr(Number(planLimits.extraChaletPrice))} ر.س — دفعة واحدة
+                </p>
+                <Button onClick={() => setShowAddonPayment(true)} className="gap-2">
+                  <CreditCard className="h-4 w-4" />
+                  شراء عقار إضافي
+                </Button>
+                <Button variant="outline" onClick={() => navigate("/subscription")}>
+                  عرض الباقات
+                </Button>
+              </div>
+            ) : (
+              <Button className="mt-6" onClick={() => navigate("/subscription")}>
+                <CreditCard className="me-2 h-4 w-4" />
+                {subscriptionExpired ? "الانتقال إلى تجديد الاشتراك" : "عرض الباقات"}
+              </Button>
+            )}
+          </div>
+        </main>
+        <AddonPaymentModal
+          open={showAddonPayment}
+          onClose={() => setShowAddonPayment(false)}
+          addonType="chalet"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
@@ -752,7 +825,12 @@ export default function AddChalet() {
                       <Info className="w-4 h-4 shrink-0" />
                       <span>وصلت إلى الحد الأقصى لعدد الشاليهات في خطتك الحالية</span>
                     </div>
-                    <p className="text-xs text-muted-foreground">تواصل مع الإدارة لترقية خطتك وإضافة المزيد</p>
+                    {planLimits.extraChaletPrice != null && (
+                      <p className="text-xs text-muted-foreground">
+                        رسوم الإضافة المحددة {toAr(Number(planLimits.extraChaletPrice))} ر.س، ولا تُفعّل إلا بعد إتمام الترقية والدفع.
+                      </p>
+                    )}
+                    <Button variant="outline" onClick={() => navigate("/subscription")}>عرض الباقات والتجديد</Button>
                   </div>
                 ) : (
                   <Button className="mt-8" onClick={resetForm}>

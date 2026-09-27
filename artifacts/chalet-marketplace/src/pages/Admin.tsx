@@ -1590,6 +1590,12 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [selected, setSelected]           = useState<Set<string>>(new Set());
   const [archiveOwner, setArchiveOwner]   = useState<{ id: string; name: string } | null>(null);
   const [deleteOwnerTarget, setDeleteOwnerTarget] = useState<{ id: string; name: string } | null>(null);
+  const [grantOwner, setGrantOwner] = useState<{ id: string; name: string } | null>(null);
+  const [grantPlan, setGrantPlan] = useState("");
+  const [grantDays, setGrantDays] = useState("30");
+  const [grantReason, setGrantReason] = useState("");
+  const [grantError, setGrantError] = useState<string | null>(null);
+  const { toast } = useToast();
   const qc = useQueryClient();
 
   /* ── Fetch owners ── */
@@ -1600,6 +1606,44 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       if (!r.ok) throw new Error("فشل التحميل");
       return r.json() as Promise<Owner[]>;
     },
+  });
+
+  const { data: grantPlans = [] } = useQuery<Plan[]>({
+    queryKey: ["admin", "plans"],
+    queryFn: async () => {
+      const r = await adminFetch("/plans");
+      if (!r.ok) throw new Error("فشل تحميل الخطط");
+      return r.json();
+    },
+    enabled: isSuperAdmin && grantOwner !== null,
+  });
+
+  const grantSubscription = useMutation({
+    mutationFn: async () => {
+      if (!grantOwner) throw new Error("اختر حساباً أولاً");
+      const r = await adminFetch(`/owners/${encodeURIComponent(grantOwner.id)}/subscription-grant`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: grantPlan,
+          days: Number(fromAr(grantDays)),
+          reason: grantReason.trim(),
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "تعذّر تمديد الاشتراك");
+      return data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "owners"] });
+      setGrantOwner(null);
+      setGrantPlan("");
+      setGrantDays("30");
+      setGrantReason("");
+      setGrantError(null);
+      toast({ title: "تم تحديث الاشتراك", description: "ستظهر العقارات والخدمات المفعّلة تلقائياً؛ تبقى المعطّلة يدوياً كما هي." });
+    },
+    onError: (error: Error) => setGrantError(error.message),
   });
 
   /* ── Fetch catalogs ── */
@@ -1787,7 +1831,6 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
     setSelected(newSel);
   };
 
-  const { toast } = useToast();
   const softDeleteOwner = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
       const r = await apiFetch(`/admin/owners/${id}/soft-delete`, {
@@ -2176,6 +2219,24 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
 
                 <TableCell>
                   <div className="flex items-center justify-end gap-1">
+                    {isSuperAdmin && (
+                      <Button
+                        data-testid={`button-grant-subscription-${owner.ownerId}`}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setGrantOwner({ id: owner.ownerId, name: owner.ownerName });
+                          setGrantPlan("");
+                          setGrantDays("30");
+                          setGrantReason("");
+                          setGrantError(null);
+                        }}
+                        className="h-8 border-amber-700 text-amber-300 hover:bg-amber-900/20"
+                      >
+                        <Calendar className="ml-1 h-4 w-4" />
+                        تمديد الاشتراك
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" onClick={() => setArchiveOwner({ id: owner.ownerId, name: owner.ownerName })}
                       className={`relative h-8 text-xs hover:bg-slate-700 ${owner.hasMessages ? "text-amber-400 hover:text-amber-300" : "text-slate-400 hover:text-amber-400"}`}
                       title={owner.hasMessages ? `أرشيف المراسلات والدعم — ${owner.messageCount} مراسلات` : "أرشيف المراسلات والدعم"}>
@@ -2257,6 +2318,79 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
             </DialogHeader>
             <div className="p-4 flex-1">
               <OwnerInboxTab ownerIdFilter={archiveOwner.id} />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {isSuperAdmin && grantOwner && (
+        <Dialog open={true} onOpenChange={(open) => { if (!open && !grantSubscription.isPending) setGrantOwner(null); }}>
+          <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-white" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-amber-400" />
+                تمديد اشتراك {grantOwner.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">الباقة</label>
+                <Select value={grantPlan} onValueChange={setGrantPlan}>
+                  <SelectTrigger data-testid="select-grant-plan" className="bg-slate-800 border-slate-600 text-white">
+                    <SelectValue placeholder="اختر باقة" />
+                  </SelectTrigger>
+                  <SelectContent dir="rtl">
+                    {grantPlans.map((plan) => (
+                      <SelectItem key={plan.slug} value={plan.slug}>{plan.nameAr}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">مدة التمديد بالأيام</label>
+                <Input
+                  data-testid="input-grant-days"
+                  type="text"
+                  inputMode="numeric"
+                  value={toAr(grantDays)}
+                  onChange={(event) => setGrantDays(fromAr(event.target.value))}
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">سبب المنح أو التمديد</label>
+                <Textarea
+                  data-testid="input-grant-reason"
+                  value={grantReason}
+                  onChange={(event) => setGrantReason(event.target.value)}
+                  placeholder="اكتب سبب التمديد الاستثنائي"
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
+              </div>
+              <p className="rounded-lg bg-amber-900/20 p-3 text-xs text-amber-200">
+                لا يعيد هذا الإجراء تفعيل العقارات أو الخدمات التي عُطّلت عند انتهاء الاشتراك؛ يجب إعادة تفعيلها يدوياً.
+              </p>
+              {grantError && <p className="text-sm text-red-400" role="alert">{grantError}</p>}
+              <div className="flex gap-2">
+                <Button
+                  data-testid="button-confirm-grant"
+                  onClick={() => grantSubscription.mutate()}
+                  disabled={grantSubscription.isPending || !grantPlan || Number(fromAr(grantDays)) < 1 || grantReason.trim().length < 5}
+                  className="flex-1 bg-amber-600 text-white hover:bg-amber-700"
+                >
+                  {grantSubscription.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                  تأكيد التمديد
+                </Button>
+                <Button
+                  data-testid="button-cancel-grant"
+                  variant="outline"
+                  onClick={() => setGrantOwner(null)}
+                  disabled={grantSubscription.isPending}
+                  className="border-slate-600 text-slate-300"
+                >
+                  إلغاء
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
@@ -4242,9 +4376,29 @@ interface Plan {
   durationDays: number;
   trialDays: number;
   features: string[];
+  scope: "property" | "full" | null;
+  chaletLimit: number | null;
+  serviceLimit: number | null;
+  extraChaletPrice: string | null;
+  extraServicePrice: string | null;
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
+}
+
+interface PlanForm {
+  nameAr: string;
+  price: string;
+  durationDays: number;
+  trialDays: number;
+  features: string[];
+  scope: "property" | "full" | "";
+  chaletLimit: number | null;
+  serviceLimit: number | null;
+  extraChaletPrice: string;
+  extraServicePrice: string;
+  isActive: boolean;
+  sortOrder: number;
 }
 
 const BLANK_PLAN = {
@@ -4253,6 +4407,11 @@ const BLANK_PLAN = {
   durationDays: 30,
   trialDays: 0,
   features: [] as string[],
+  scope: "" as const,
+  chaletLimit: 1 as number | null,
+  serviceLimit: 0 as number | null,
+  extraChaletPrice: "",
+  extraServicePrice: "",
   isActive: true,
   sortOrder: 0,
 };
@@ -4268,12 +4427,250 @@ async function adminFetch(path: string, opts?: RequestInit) {
   return fetch(`${API}/admin${path}`, { credentials: "include", ...opts });
 }
 
-function PlansTab() {
+interface PromoCode {
+  id: number;
+  code: string;
+  kind: "percent" | "fixed";
+  value: string;
+  usageLimit: number | null;
+  usedCount: number;
+  expiresAt: string | null;
+  isActive: boolean;
+}
+
+function PromoCodesPanel() {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState<number | null>(null);
+  const [code, setCode] = useState("");
+  const [kind, setKind] = useState<"percent" | "fixed">("percent");
+  const [value, setValue] = useState("");
+  const [usageLimit, setUsageLimit] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const { data: codes = [], isLoading } = useQuery<PromoCode[]>({
+    queryKey: ["admin", "subscription-promo-codes"],
+    queryFn: async () => {
+      const response = await adminFetch("/promo-codes");
+      if (!response.ok) throw new Error("تعذّر تحميل رموز الخصم");
+      return response.json();
+    },
+  });
+
+  function resetForm() {
+    setEditing(null);
+    setCode("");
+    setKind("percent");
+    setValue("");
+    setUsageLimit("");
+    setExpiresAt("");
+    setError(null);
+  }
+
+  function editPromo(promo: PromoCode) {
+    setEditing(promo.id);
+    setCode(promo.code);
+    setKind(promo.kind);
+    setValue(String(Number(promo.value)));
+    setUsageLimit(promo.usageLimit == null ? "" : String(promo.usageLimit));
+    setExpiresAt(promo.expiresAt
+      ? new Date(new Date(promo.expiresAt).getTime() - new Date(promo.expiresAt).getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+      : "");
+    setError(null);
+  }
+
+  async function savePromo() {
+    setSaving(true);
+    setError(null);
+    try {
+      const body = {
+        code: code.trim().toUpperCase(),
+        kind,
+        value: Number(fromAr(value)),
+        usageLimit: usageLimit === "" ? null : Number(fromAr(usageLimit)),
+        expiresAt: expiresAt || null,
+      };
+      const response = await adminFetch(
+        editing === null ? "/promo-codes" : `/promo-codes/${editing}`,
+        {
+          method: editing === null ? "POST" : "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        setError(data.error ?? "تعذّر حفظ رمز الخصم");
+        return;
+      }
+      await qc.invalidateQueries({ queryKey: ["admin", "subscription-promo-codes"] });
+      resetForm();
+    } catch {
+      setError("تعذّر حفظ رمز الخصم. حاول مرة أخرى.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function togglePromo(promo: PromoCode) {
+    const response = await adminFetch(`/promo-codes/${promo.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !promo.isActive }),
+    });
+    if (response.ok) await qc.invalidateQueries({ queryKey: ["admin", "subscription-promo-codes"] });
+    else setError((await response.json()).error ?? "تعذّر تحديث الرمز");
+  }
+
+  async function deletePromo(promo: PromoCode) {
+    const action = promo.usedCount > 0 ? "تعطيل" : "حذف";
+    if (!confirm(`هل تريد ${action} رمز الخصم ${promo.code}؟`)) return;
+    const response = await adminFetch(`/promo-codes/${promo.id}`, { method: "DELETE" });
+    const data = await response.json();
+    if (!response.ok) {
+      setError(data.error ?? "تعذّر إزالة الرمز");
+      return;
+    }
+    await qc.invalidateQueries({ queryKey: ["admin", "subscription-promo-codes"] });
+  }
+
+  return (
+    <section className="mt-8 rounded-2xl border border-slate-700 bg-slate-800/60 p-5" dir="rtl">
+      <div className="mb-4 flex items-center gap-2">
+        <Tag className="h-5 w-5 text-amber-400" />
+        <div>
+          <h3 className="font-bold text-white">رموز الخصم</h3>
+          <p className="text-xs text-slate-400">تُطبّق الرموز على الاشتراك عند إتمام الدفع.</p>
+        </div>
+      </div>
+
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <label className="mb-1 block text-xs text-slate-400">رمز الخصم</label>
+          <Input
+            data-testid="input-promo-code"
+            value={code}
+            onChange={(event) => setCode(event.target.value.toUpperCase())}
+            placeholder="مثال: WELCOME20"
+            dir="ltr"
+            className="bg-slate-900 border-slate-600 text-white"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-slate-400">نوع الخصم</label>
+          <Select value={kind} onValueChange={(v) => setKind(v as "percent" | "fixed")}>
+            <SelectTrigger data-testid="select-promo-kind" className="bg-slate-900 border-slate-600 text-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent dir="rtl">
+              <SelectItem value="percent">نسبة مئوية</SelectItem>
+              <SelectItem value="fixed">مبلغ ثابت (ر.س)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-slate-400">قيمة الخصم{kind === "percent" ? " (%)" : " (ر.س)"}</label>
+          <Input
+            data-testid="input-promo-value"
+            type="text"
+            inputMode="decimal"
+            value={toAr(value)}
+            onChange={(event) => setValue(fromAr(event.target.value))}
+            placeholder={kind === "percent" ? "٢٠" : "٢٠"}
+            className="bg-slate-900 border-slate-600 text-white"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-slate-400">الحد الأقصى للاستخدام (اختياري)</label>
+          <Input
+            data-testid="input-promo-limit"
+            type="text"
+            inputMode="numeric"
+            value={toAr(usageLimit)}
+            onChange={(event) => setUsageLimit(fromAr(event.target.value))}
+            placeholder="بلا حد"
+            className="bg-slate-900 border-slate-600 text-white"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-slate-400">تاريخ الانتهاء (اختياري)</label>
+          <Input
+            data-testid="input-promo-expiry"
+            type="datetime-local"
+            value={expiresAt}
+            onChange={(event) => setExpiresAt(event.target.value)}
+            className="bg-slate-900 border-slate-600 text-white"
+          />
+        </div>
+      </div>
+
+      {error && <p className="mb-3 text-sm text-red-400" role="alert">{error}</p>}
+      <div className="mb-5 flex gap-2">
+        <Button
+          data-testid="button-save-promo"
+          onClick={savePromo}
+          disabled={saving || !code.trim() || !value || Number(fromAr(value)) <= 0}
+          className="bg-amber-600 text-white hover:bg-amber-700"
+        >
+          {saving ? <Loader2 className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}
+          {editing === null ? "إضافة رمز" : "حفظ التعديل"}
+        </Button>
+        {editing !== null && (
+          <Button data-testid="button-cancel-promo-edit" variant="outline" onClick={resetForm} className="border-slate-600 text-slate-300">
+            إلغاء التعديل
+          </Button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
+      ) : codes.length === 0 ? (
+        <p className="text-sm text-slate-400">لا توجد رموز خصم بعد.</p>
+      ) : (
+        <div className="space-y-2">
+          {codes.map((promo) => (
+            <div key={promo.id} data-testid={`row-promo-code-${promo.id}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
+              <div className="min-w-0">
+                <span className="font-mono font-bold text-white" dir="ltr">{promo.code}</span>
+                <span className="mr-2 text-sm text-amber-300">
+                  {promo.kind === "percent" ? `${toAr(Number(promo.value))}٪` : `${toAr(Number(promo.value))} ر.س`}
+                </span>
+                <p className="mt-1 text-xs text-slate-400">
+                  استُخدم {toAr(promo.usedCount)} مرة
+                  {promo.usageLimit != null ? ` من ${toAr(promo.usageLimit)}` : ""}
+                  {promo.expiresAt ? ` · ينتهي ${fmtDate(promo.expiresAt)}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs ${promo.isActive ? "text-green-400" : "text-slate-500"}`}>
+                  {promo.isActive ? "مفعّل" : "معطّل"}
+                </span>
+                <Button data-testid={`button-edit-promo-${promo.id}`} variant="ghost" size="sm" onClick={() => editPromo(promo)} className="text-slate-300 hover:text-white">
+                  <Edit2 className="h-4 w-4" />
+                  <span className="mr-1">تعديل</span>
+                </Button>
+                <Button data-testid={`button-toggle-promo-${promo.id}`} variant="ghost" size="sm" onClick={() => togglePromo(promo)} className="text-amber-300 hover:bg-amber-900/20">
+                  {promo.isActive ? "تعطيل" : "تفعيل"}
+                </Button>
+                <Button data-testid={`button-delete-promo-${promo.id}`} variant="ghost" size="sm" onClick={() => deletePromo(promo)} className="text-red-400 hover:bg-red-900/20">
+                  {promo.usedCount > 0 ? "تعطيل الرمز" : "حذف"}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState({ ...BLANK_PLAN });
+  const [form, setForm] = useState<PlanForm>({ ...BLANK_PLAN });
   const [featuresInput, setFeaturesInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -4303,6 +4700,11 @@ function PlansTab() {
       durationDays: p.durationDays,
       trialDays: p.trialDays,
       features: p.features ?? [],
+      scope: p.scope ?? "",
+      chaletLimit: p.chaletLimit,
+      serviceLimit: p.serviceLimit,
+      extraChaletPrice: p.extraChaletPrice ?? "",
+      extraServicePrice: p.extraServicePrice ?? "",
       isActive: p.isActive,
       sortOrder: p.sortOrder,
     });
@@ -4325,6 +4727,11 @@ function PlansTab() {
         durationDays: Number(form.durationDays),
         trialDays: Number(form.trialDays),
         sortOrder: Number(form.sortOrder),
+        scope: form.scope || undefined,
+        chaletLimit: form.chaletLimit,
+        serviceLimit: form.serviceLimit,
+        extraChaletPrice: form.extraChaletPrice === "" ? null : Number(fromAr(form.extraChaletPrice)),
+        extraServicePrice: form.extraServicePrice === "" ? null : Number(fromAr(form.extraServicePrice)),
         features,
       };
       const r = editId
@@ -4449,6 +4856,20 @@ function PlansTab() {
                   {p.trialDays > 0 && (
                     <span className="text-blue-400">تجريبي: {toAr(p.trialDays)} يوم</span>
                   )}
+                  {p.scope && (
+                    <span className="text-slate-300">
+                      {p.scope === "property" ? "إدارة العقار فقط" : "العقار مع النظام المالي والإداري"}
+                    </span>
+                  )}
+                  {p.chaletLimit != null && (
+                    <span className="text-slate-400">العقارات: {p.chaletLimit === 0 ? "غير متاح" : toAr(p.chaletLimit)}</span>
+                  )}
+                  {p.serviceLimit != null && (
+                    <span className="text-slate-400">الخدمات: {p.serviceLimit === 0 ? "غير متاح" : toAr(p.serviceLimit)}</span>
+                  )}
+                  {(p.extraChaletPrice == null || p.extraServicePrice == null) && (
+                    <span className="text-amber-300">رسوم الإضافات غير مكتملة</span>
+                  )}
                   <span className="text-slate-500">ترتيب: {toAr(p.sortOrder)}</span>
                 </div>
                 {(p.features ?? []).length > 0 && (
@@ -4487,6 +4908,8 @@ function PlansTab() {
         </div>
       )}
 
+      {isSuperAdmin && <PromoCodesPanel />}
+
       {/* Add/Edit Form Dialog */}
       <Dialog open={showForm} onOpenChange={(o) => { if (!o) setShowForm(false); }}>
         <DialogContent
@@ -4510,6 +4933,88 @@ function PlansTab() {
                 onChange={(e) => setForm({ ...form, nameAr: e.target.value })}
                 className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
               />
+            </div>
+
+            <div className="rounded-xl border border-slate-700 bg-slate-800/60 p-3 space-y-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">نوع الباقة *</label>
+                <Select
+                  value={form.scope || "unset"}
+                  onValueChange={(value) => setForm({
+                    ...form,
+                    scope: value === "unset" ? "" : value as "property" | "full",
+                  })}
+                >
+                  <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
+                    <SelectValue placeholder="اختر نوع الباقة" />
+                  </SelectTrigger>
+                  <SelectContent dir="rtl">
+                    <SelectItem value="unset">اختر نوع الباقة</SelectItem>
+                    <SelectItem value="property">إدارة العقار فقط</SelectItem>
+                    <SelectItem value="full">إدارة العقار مع النظام المالي والإداري</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs text-slate-400">
+                الحد الفارغ يعني بلا حد؛ القيمة صفر تعني عدم إتاحة هذا النوع من الأصول.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">عدد العقارات ضمن الباقة</label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="بلا حد"
+                    value={form.chaletLimit == null ? "" : toAr(String(form.chaletLimit))}
+                    onChange={(e) => {
+                      const value = fromAr(e.target.value);
+                      setForm({ ...form, chaletLimit: value === "" ? null : Number(value) });
+                    }}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">عدد الخدمات ضمن الباقة</label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="بلا حد"
+                    value={form.serviceLimit == null ? "" : toAr(String(form.serviceLimit))}
+                    onChange={(e) => {
+                      const value = fromAr(e.target.value);
+                      setForm({ ...form, serviceLimit: value === "" ? null : Number(value) });
+                    }}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">رسوم العقار الإضافي (ر.س)</label>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="غير محدد"
+                    value={toAr(form.extraChaletPrice)}
+                    onChange={(e) => setForm({ ...form, extraChaletPrice: fromAr(e.target.value) })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">رسوم الخدمة الإضافية (ر.س)</label>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="غير محدد"
+                    value={toAr(form.extraServicePrice)}
+                    onChange={(e) => setForm({ ...form, extraServicePrice: fromAr(e.target.value) })}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-amber-300">
+                يجب تحديد رسوم الإضافات قبل بيعها؛ الحقول الفارغة تعني أنها غير مفعّلة للتحصيل.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -4618,7 +5123,7 @@ function PlansTab() {
             <div className="flex gap-3 pt-1">
               <Button
                 onClick={handleSave}
-                disabled={saving || !form.nameAr.trim() || !form.price || form.durationDays < 1}
+                disabled={saving || !form.nameAr.trim() || !form.price || !form.scope || form.durationDays < 1}
                 className="flex-1 bg-amber-600 hover:bg-amber-700 text-white gap-2"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -8634,7 +9139,7 @@ export default function Admin() {
         {activeTab === "amenities"           && <AmenitiesTab />}
         {activeTab === "categories"          && <CategoriesTab />}
         {activeTab === "owners"              && <OwnersTab isSuperAdmin={isSuperAdmin} />}
-        {activeTab === "plans"               && <PlansTab />}
+        {activeTab === "plans"               && <PlansTab isSuperAdmin={isSuperAdmin} />}
         {activeTab === "reviews"             && <ReviewsTab />}
         {activeTab === "ownerInbox"          && <OwnerInboxTab />}
         {activeTab === "contactInquiries"      && <ContactInquiriesTab />}

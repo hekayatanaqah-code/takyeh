@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { fromAr, toAr } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ import {
   Globe,
 } from "lucide-react";
 import { useAuth } from "@workspace/replit-auth-web";
+import { AddonPaymentModal } from "@/components/AddonPaymentModal";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -64,7 +66,29 @@ async function uploadCompressed(file: File, type: "image" | "video"): Promise<st
 
 export default function AddServiceProvider() {
   const { isAuthenticated, login, isLoading: authLoading } = useAuth();
+  const [, navigate] = useLocation();
   const editSubmissionId = Number(new URLSearchParams(window.location.search).get("editSubmission") || 0) || null;
+  const [showAddonPayment, setShowAddonPayment] = useState(false);
+  const [showQuotaAction, setShowQuotaAction] = useState(false);
+
+  const { data: planLimits, isLoading: planLimitsLoading } = useQuery<{
+    active: boolean;
+    serviceLimit: number;
+    serviceCount: number;
+    extraServicePrice: number | string | null;
+  }>({
+    queryKey: ["owner", "plan-limits"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/owner/plan-limits`, { credentials: "include" });
+      if (!r.ok) throw new Error("تعذّر التحقق من حد الخدمات");
+      return r.json();
+    },
+    enabled: isAuthenticated && !editSubmissionId,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+  const serviceLimitReached = !!planLimits &&
+    planLimits.serviceCount >= planLimits.serviceLimit;
 
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -395,6 +419,22 @@ export default function AddServiceProvider() {
     e.preventDefault();
     setSubmitError(null);
     setFieldErrors({});
+    setShowQuotaAction(false);
+
+    // Existing service submissions remain editable; entitlement is checked
+    // only when creating another service.
+    if (!editSubmissionId && isAuthenticated && !planLimitsLoading && planLimits) {
+      if (!planLimits.active) {
+        setSubmitError("انتهى اشتراكك. جدّد الاشتراك قبل إضافة خدمة جديدة.");
+        setShowQuotaAction(true);
+        return;
+      }
+      if (serviceLimitReached) {
+        setSubmitError("وصلت إلى الحد الأقصى للخدمات في باقتك.");
+        setShowQuotaAction(true);
+        return;
+      }
+    }
 
     /* ── Resolve custom city if "other" selected ── */
     let resolvedCity = citySelectVal === "__other__" ? "" : form.city;
@@ -481,6 +521,11 @@ export default function AddServiceProvider() {
       );
       if (!r.ok) {
         const err = await r.json().catch(() => ({})) as any;
+        if (err.upgradeRequired) {
+          setSubmitError(err.error ?? "تحتاج إلى مساحة إضافية أو ترقية الباقة لإضافة الخدمة.");
+          setShowQuotaAction(!editSubmissionId);
+          return;
+        }
         // Display field-specific errors from the API if available
         if (err.fieldErrors && typeof err.fieldErrors === "object") {
           setFieldErrors(err.fieldErrors);
@@ -569,6 +614,36 @@ export default function AddServiceProvider() {
              <h1 className="text-3xl font-extrabold text-foreground mb-2">{editSubmissionId ? "تعديل بيانات خدمتك" : "تسجيل خدمتك"}</h1>
              <p className="text-muted-foreground">{editSubmissionId ? "حدّث بيانات الطلب ثم أعد إرساله للمراجعة" : "أضف خدمتك وابدأ الوصول لعملاء جدد"}</p>
           </motion.div>
+
+          {!editSubmissionId && planLimits && (serviceLimitReached || !planLimits.active) && (
+            <div role="status" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+              <p className="font-semibold">
+                {!planLimits.active ? "انتهى اشتراكك" : "وصلت إلى الحد الأقصى للخدمات في باقتك"}
+              </p>
+              <p className="mt-1">
+                {!planLimits.active
+                  ? "جدّد الاشتراك لاستعادة صلاحية إضافة الخدمات."
+                  : planLimits.extraServicePrice != null
+                    ? `يمكنك شراء مساحة خدمة إضافية لمرة واحدة مقابل ${toAr(Number(planLimits.extraServicePrice))} ر.س.`
+                    : "اختر باقة أعلى لإضافة خدمة أخرى."}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                className="mt-3"
+                onClick={() => {
+                  if (!planLimits.active || planLimits.extraServicePrice == null) navigate("/subscription");
+                  else setShowAddonPayment(true);
+                }}
+              >
+                {!planLimits.active
+                  ? "تجديد الاشتراك"
+                  : planLimits.extraServicePrice != null
+                    ? "شراء خدمة إضافية"
+                    : "عرض الباقات والترقية"}
+              </Button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-8">
 
@@ -1257,12 +1332,29 @@ export default function AddServiceProvider() {
                 {submitError}
               </motion.div>
             )}
+            {showQuotaAction && !editSubmissionId && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (planLimits?.active === false) navigate("/subscription");
+                  else if (planLimits?.extraServicePrice != null) setShowAddonPayment(true);
+                  else navigate("/subscription");
+                }}
+              >
+                {planLimits?.active === false
+                  ? "تجديد الاشتراك"
+                  : planLimits?.extraServicePrice != null
+                    ? "شراء خدمة إضافية"
+                    : "عرض الباقات والترقية"}
+              </Button>
+            )}
 
             <Button
               type="submit"
               size="lg"
               className="w-full text-base font-bold py-6 rounded-2xl"
-              disabled={!canSubmit}
+              disabled={!canSubmit || (!editSubmissionId && isAuthenticated && planLimitsLoading)}
             >
               {isSubmitting ? (
                 <><Loader2 className="w-5 h-5 me-2 animate-spin" />جارٍ الإرسال...</>
@@ -1273,6 +1365,11 @@ export default function AddServiceProvider() {
           </form>
         </div>
       </main>
+      <AddonPaymentModal
+        open={showAddonPayment}
+        onClose={() => setShowAddonPayment(false)}
+        addonType="service"
+      />
     </div>
   );
 }

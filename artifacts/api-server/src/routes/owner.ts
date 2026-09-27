@@ -42,6 +42,9 @@ import type { Request, Response, NextFunction } from "express";
 import { sendOtpEmail, sendReportEmail } from "../lib/email";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
+import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess } from "../lib/subscription-access";
+import { createSubscriptionCheckout, confirmSubscriptionCheckout, redeemFreeSubscriptionCheckout, SubscriptionCheckoutError } from "../lib/subscription-checkout";
+import { createAddonCheckout, confirmAddonCheckout, redeemFreeAddonCheckout, SubscriptionAddonCheckoutError } from "../lib/subscription-addon-checkout";
 
 const router = Router();
 
@@ -441,6 +444,19 @@ router.post("/contract/:bookingId/sign", async (req, res) => {
 });
 
 router.use(requireAuth);
+
+// A property-only plan retains booking and property tools, but not the financial
+// and staff-management modules. The trial deliberately enables every module.
+router.use(async (req, res, next) => {
+  if (!/^\/(reports|expenses|expense-categories|staff|salaries|salary|financial-summary|future-cash-summary|refunds|cash-deposit|message-settings)(\/|$)/.test(req.path)) return next();
+  try {
+    const access = await ownerPlanAccess(req.user!.id);
+    if (access.scope !== "full") return res.status(403).json({ error: "هذا القسم متاح في الباقة المالية والإدارية", upgradeRequired: true });
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 /* ── Impersonation Mode check (called by Dashboard banner) ── */
 router.get("/impersonation-mode", async (req, res) => {
@@ -1442,6 +1458,10 @@ router.get("/bookings/cancelled", async (req, res) => {
 router.post("/bookings", async (req, res) => {
   console.log("[POST /owner/bookings] raw body:", JSON.stringify(req.body));
   const ownerId = req.user!.id;
+  const subscription = await getOrStartOwnerSubscription(ownerId);
+  if (!isSubscriptionActive(subscription)) {
+    return res.status(403).json({ error: "انتهى اشتراكك. جدّده لاستقبال حجوزات جديدة.", upgradeRequired: true });
+  }
   const body = z.object({
     submissionId: z.number().int().positive().optional(),
     clientName: z.string().optional(),
@@ -2108,6 +2128,9 @@ router.patch("/chalets/:id/toggle-active", async (req, res) => {
   const [chalet] = await db.select({ id: chaletsTable.id, submissionId: chaletsTable.submissionId, isActive: chaletsTable.isActive })
     .from(chaletsTable).where(eq(chaletsTable.id, chaletId)).limit(1);
   if (!chalet) return res.status(404).json({ error: "الشاليه غير موجود" });
+  if (!chalet.isActive && !isSubscriptionActive(await getOrStartOwnerSubscription(ownerId))) {
+    return res.status(403).json({ error: "جدّد اشتراكك لتفعيل العقار", upgradeRequired: true });
+  }
 
   const [sub] = await db.select({ ownerId: chaletSubmissionsTable.ownerId })
     .from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, chalet.submissionId!)).limit(1);
@@ -2720,50 +2743,21 @@ router.delete("/seasons/:id", async (req, res) => {
 
 router.get("/plan-limits", async (req, res) => {
   const ownerId = req.user!.id;
-
-  const [sub] = await db
-    .select()
-    .from(ownerSubscriptionsTable)
-    .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
-
-  const plan = sub?.plan ?? "trial";
-
-  const CHALET_LIMITS: Record<string, number> = {
-    trial: 1,
-    chalet_basic: 1,
-    chalet_pro: 5,
-    chalet_unlimited: Infinity,
-    service_basic: 0,
-    service_pro: Infinity,
-    bundle: Infinity,
-    monthly: 1,
-    yearly: 3,
-  };
-  const SERVICE_LIMITS: Record<string, number> = {
-    trial: 1,
-    chalet_basic: 0,
-    chalet_pro: 0,
-    chalet_unlimited: 0,
-    service_basic: 1,
-    service_pro: Infinity,
-    bundle: Infinity,
-    monthly: 1,
-    yearly: 3,
-  };
-
-  const chaletLimit = CHALET_LIMITS[plan] ?? 1;
-  const serviceLimit = SERVICE_LIMITS[plan] ?? 1;
-
-  const submissions = await db
-    .select({ id: chaletSubmissionsTable.id })
-    .from(chaletSubmissionsTable)
-    .where(eq(chaletSubmissionsTable.ownerId, ownerId));
-
+  const access = await ownerPlanAccess(ownerId);
   return res.json({
-    plan,
-    chaletLimit: chaletLimit === Infinity ? 999 : chaletLimit,
-    serviceLimit: serviceLimit === Infinity ? 999 : serviceLimit,
-    chaletCount: submissions.length,
+    plan: access.subscription.plan,
+    active: access.active,
+    scope: access.scope,
+    chaletLimit: access.chaletLimit,
+    serviceLimit: access.serviceLimit,
+    baseChaletLimit: access.baseChaletLimit,
+    baseServiceLimit: access.baseServiceLimit,
+    purchasedChaletSlots: access.purchasedChaletSlots,
+    purchasedServiceSlots: access.purchasedServiceSlots,
+    chaletCount: access.chaletCount,
+    serviceCount: access.serviceCount,
+    extraChaletPrice: access.extraChaletPrice,
+    extraServicePrice: access.extraServicePrice,
   });
 });
 
@@ -2899,210 +2893,100 @@ router.get("/reports", async (req, res) => {
 
 /* ── Subscription ──────────────────────────────────────────── */
 
-/* Plan config: price in SAR and duration */
-const PLAN_CONFIG: Record<string, { price: number; days: number; label: string }> = {
-  monthly:          { price: 99,   days: 30,  label: "الخطة الشهرية" },
-  yearly:           { price: 799,  days: 365, label: "الخطة السنوية" },
-  chalet_basic:     { price: 149,  days: 30,  label: "شاليه — أساسي" },
-  chalet_pro:       { price: 299,  days: 30,  label: "شاليه — احترافي" },
-  chalet_unlimited: { price: 499,  days: 30,  label: "شاليه — غير محدود" },
-  service_basic:    { price: 99,   days: 30,  label: "خدمات — أساسي" },
-  service_pro:      { price: 249,  days: 30,  label: "خدمات — احترافي" },
-  bundle:           { price: 599,  days: 30,  label: "حزمة شاملة" },
-};
-
-/* GET /owner/plans — return available plans (DB-first, fallback to hardcoded) */
+/* GET /owner/plans — administrators control the entire purchasable catalog. */
 router.get("/plans", async (_req, res) => {
   const dbPlans = await db
     .select()
     .from(subscriptionPlansTable)
     .orderBy(subscriptionPlansTable.sortOrder, subscriptionPlansTable.id);
 
-  if (dbPlans.length > 0) {
-    return res.json(
-      dbPlans
-        .filter((p) => p.isActive)
-        .map((p) => ({
-          id: p.slug,
-          label: p.nameAr,
-          price: Number(p.price),
-          days: p.durationDays,
-          trialDays: p.trialDays,
-          features: p.features ?? [],
-        }))
-    );
-  }
-
-  // Fallback to hardcoded config if no plans in DB yet
-  return res.json(
-    Object.entries(PLAN_CONFIG).map(([id, cfg]) => ({ id, ...cfg }))
-  );
+  return res.json(dbPlans.filter((p) => p.isActive).map((p) => ({
+    id: p.slug,
+    label: p.nameAr,
+    price: Number(p.price),
+    days: p.durationDays,
+    trialDays: p.trialDays,
+    features: p.features ?? [],
+    scope: p.scope ?? "full",
+    chaletLimit: p.chaletLimit,
+    serviceLimit: p.serviceLimit,
+    extraChaletPrice: p.extraChaletPrice == null ? null : Number(p.extraChaletPrice),
+    extraServicePrice: p.extraServicePrice == null ? null : Number(p.extraServicePrice),
+  })));
 });
 
 /* POST /owner/subscription/initiate — create a Moyasar payment and return payment_id + form data */
 router.post("/subscription/initiate", async (req, res) => {
-  const ownerId = req.user!.id;
-  const { plan } = req.body as { plan: string };
-
-  // Resolve plan from DB or fallback to hardcoded
-  let resolvedCfg: { price: number; days: number; label: string } | undefined;
-  const [dbPlan] = await db
-    .select()
-    .from(subscriptionPlansTable)
-    .where(eq(subscriptionPlansTable.slug, plan))
-    .limit(1);
-  if (dbPlan) {
-    resolvedCfg = { price: Number(dbPlan.price), days: dbPlan.durationDays, label: dbPlan.nameAr };
-  } else {
-    resolvedCfg = PLAN_CONFIG[plan];
+  try {
+    const { plan, promoCode } = req.body ?? {};
+    return res.json(await createSubscriptionCheckout({ ownerId: req.user!.id, plan, promoCode }));
+  } catch (error) {
+    if (error instanceof SubscriptionCheckoutError) return res.status(error.statusCode).json({ error: error.message });
+    throw error;
   }
-
-  if (!resolvedCfg) {
-    return res.status(400).json({ error: "خطة غير صالحة" });
-  }
-  const cfg = resolvedCfg;
-
-  const secretKey = process.env.MOYASAR_SECRET_KEY;
-  if (!secretKey) {
-    return res.status(500).json({ error: "بوابة الدفع غير مُهيأة — يرجى إضافة MOYASAR_SECRET_KEY" });
-  }
-
-  const amountHalala = cfg.price * 100; // Moyasar uses smallest currency unit
-
-  // We do NOT pre-create the payment on server here.
-  // Instead we return the publishable key and plan info, and let the client use
-  // Moyasar.js form (hosted fields) to submit directly to Moyasar and get a payment_id back.
-  // The client then calls /subscription/confirm with the payment_id.
-
-  return res.json({
-    publishableKey: process.env.MOYASAR_PUBLISHABLE_KEY ?? "",
-    plan,
-    amountHalala,
-    label: cfg.label,
-    days: cfg.days,
-  });
 });
 
 /* POST /owner/subscription/confirm — verify payment with Moyasar and activate subscription */
 router.post("/subscription/confirm", async (req, res) => {
-  const ownerId = req.user!.id;
-  const { paymentId, plan } = req.body as { paymentId: string; plan: string };
-
-  if (!paymentId || !plan) {
-    return res.status(400).json({ error: "بيانات غير مكتملة" });
-  }
-
-  // Resolve plan from DB or fallback to hardcoded
-  let resolvedConfirmCfg: { price: number; days: number; label: string } | undefined;
-  const [dbConfirmPlan] = await db
-    .select()
-    .from(subscriptionPlansTable)
-    .where(eq(subscriptionPlansTable.slug, plan))
-    .limit(1);
-  if (dbConfirmPlan) {
-    resolvedConfirmCfg = { price: Number(dbConfirmPlan.price), days: dbConfirmPlan.durationDays, label: dbConfirmPlan.nameAr };
-  } else {
-    resolvedConfirmCfg = PLAN_CONFIG[plan];
-  }
-  if (!resolvedConfirmCfg) {
-    return res.status(400).json({ error: "خطة غير صالحة" });
-  }
-  const cfg = resolvedConfirmCfg;
-
-  const secretKey = process.env.MOYASAR_SECRET_KEY;
-  if (!secretKey) {
-    return res.status(500).json({ error: "بوابة الدفع غير مُهيأة" });
-  }
-
-  // Fetch payment from Moyasar to verify it
-  let moyasarPayment: any;
   try {
-    const moyasarRes = await fetch(`https://api.moyasar.com/v1/payments/${paymentId}`, {
-      headers: {
-        Authorization: `Basic ${Buffer.from(secretKey + ":").toString("base64")}`,
-      },
-    });
-    if (!moyasarRes.ok) {
-      const errText = await moyasarRes.text();
-      return res.status(400).json({ error: `فشل التحقق من الدفع: ${errText}` });
-    }
-    moyasarPayment = await moyasarRes.json();
-  } catch (e: any) {
-    return res.status(500).json({ error: `خطأ في الاتصال بموياسار: ${e.message}` });
+    const { checkoutId, paymentId } = req.body ?? {};
+    return res.json(await confirmSubscriptionCheckout({ ownerId: req.user!.id, checkoutId, paymentId }));
+  } catch (error) {
+    if (error instanceof SubscriptionCheckoutError) return res.status(error.statusCode).json({ error: error.message });
+    throw error;
   }
+});
 
-  // Verify payment status and amount
-  const expectedAmount = cfg.price * 100;
-  if (moyasarPayment.status !== "paid") {
-    return res.status(400).json({ error: `حالة الدفع: ${moyasarPayment.status} — لم يكتمل` });
+router.post("/subscription/redeem", async (req, res) => {
+  try {
+    return res.json(await redeemFreeSubscriptionCheckout({ ownerId: req.user!.id, checkoutId: req.body?.checkoutId }));
+  } catch (error) {
+    if (error instanceof SubscriptionCheckoutError) return res.status(error.statusCode).json({ error: error.message });
+    throw error;
   }
-  if (moyasarPayment.amount !== expectedAmount) {
-    return res.status(400).json({ error: "المبلغ المدفوع لا يتطابق مع الخطة المطلوبة" });
+});
+
+router.post("/subscription/addons/initiate", async (req, res) => {
+  const parsed = z.object({ addonType: z.enum(["chalet", "service"]) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "اختر نوع الإضافة المطلوب" });
+  try {
+    return res.json(await createAddonCheckout({ ownerId: req.user!.id, addonType: parsed.data.addonType }));
+  } catch (error) {
+    if (error instanceof SubscriptionAddonCheckoutError) return res.status(error.statusCode).json({ error: error.message });
+    throw error;
   }
+});
 
-  // Activate / extend subscription
-  const now = new Date();
-  const [existing] = await db
-    .select()
-    .from(ownerSubscriptionsTable)
-    .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
-
-  // If sub exists and is still active, extend from current expiry; otherwise from today
-  const baseDate =
-    existing?.expiresAt && new Date(existing.expiresAt) > now
-      ? new Date(existing.expiresAt)
-      : now;
-
-  const newExpiry = new Date(baseDate.getTime() + cfg.days * 24 * 60 * 60 * 1000);
-
-  if (existing) {
-    await db
-      .update(ownerSubscriptionsTable)
-      .set({
-        plan,
-        status: "active",
-        expiresAt: newExpiry,
-        paymentStatus: "paid",
-      })
-      .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
-  } else {
-    await db.insert(ownerSubscriptionsTable).values({
-      ownerId,
-      plan,
-      status: "active",
-      expiresAt: newExpiry,
-      paymentStatus: "paid",
-    });
+router.post("/subscription/addons/confirm", async (req, res) => {
+  try {
+    return res.json(await confirmAddonCheckout({
+      ownerId: req.user!.id,
+      checkoutId: req.body?.checkoutId,
+      paymentId: req.body?.paymentId,
+    }));
+  } catch (error) {
+    if (error instanceof SubscriptionAddonCheckoutError) return res.status(error.statusCode).json({ error: error.message });
+    throw error;
   }
+});
 
-  // Return updated subscription + invoice details
-  const [updated] = await db
-    .select()
-    .from(ownerSubscriptionsTable)
-    .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
-
-  return res.json({
-    subscription: updated,
-    invoice: {
-      paymentId: moyasarPayment.id,
-      plan,
-      label: cfg.label,
-      amount: cfg.price,
-      currency: "SAR",
-      paidAt: moyasarPayment.created_at ?? now.toISOString(),
-      expiresAt: newExpiry.toISOString(),
-      ownerName: (req.user as any)?.firstName ?? "صاحب الحساب",
-    },
-  });
+router.post("/subscription/addons/redeem", async (req, res) => {
+  try {
+    return res.json(await redeemFreeAddonCheckout({ ownerId: req.user!.id, checkoutId: req.body?.checkoutId }));
+  } catch (error) {
+    if (error instanceof SubscriptionAddonCheckoutError) return res.status(error.statusCode).json({ error: error.message });
+    throw error;
+  }
 });
 
 router.get("/subscription", async (req, res) => {
   const ownerId = req.user!.id;
-
-  const [sub] = await db
-    .select()
-    .from(ownerSubscriptionsTable)
-    .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+  const sub = await getOrStartOwnerSubscription(ownerId);
+  const [planDetails] = await db.select({
+    nameAr: subscriptionPlansTable.nameAr,
+    features: subscriptionPlansTable.features,
+    scope: subscriptionPlansTable.scope,
+  }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, sub.plan)).limit(1);
 
   const calcDaysLeft = (expiresAt: Date | null): number => {
     if (!expiresAt) return 0;
@@ -3110,20 +2994,12 @@ router.get("/subscription", async (req, res) => {
     return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
   };
 
-  if (!sub) {
-    const trialExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    return res.json({
-      id: null,
-      plan: "trial",
-      status: "active",
-      expiresAt: trialExpiry.toISOString(),
-      paymentStatus: "pending",
-      createdAt: new Date().toISOString(),
-      daysLeft: 30,
-    });
-  }
-
-  return res.json({ ...sub, daysLeft: calcDaysLeft(sub.expiresAt) });
+  return res.json({
+    ...sub,
+    planDetails: sub.termsSnapshot ?? planDetails ?? null,
+    status: isSubscriptionActive(sub) ? sub.status : "expired",
+    daysLeft: calcDaysLeft(sub.expiresAt),
+  });
 });
 
 /* ── Expenses ──────────────────────────────────────────────── */

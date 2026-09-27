@@ -5,6 +5,7 @@ import { CreateSubmissionBody } from "@workspace/api-zod";
 import { eq, and, ne, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { sendAdminNewSubmissionEmail } from "../lib/email";
+import { isSubscriptionActive, ownerPlanAccess } from "../lib/subscription-access";
 
 const SubmissionBodyStrict = CreateSubmissionBody.extend({
   nameAr: z.string().trim().min(2, "اسم الشاليه مطلوب (حرفان على الأقل)"),
@@ -216,6 +217,19 @@ router.post("/", async (req, res) => {
       if (row?.owner_id) ownerId = row.owner_id;
     }
   }
+  if (!ownerId) {
+    return res.status(401).json({ error: "سجّل الدخول لإضافة عقار واستخدام الشهر التجريبي", upgradeRequired: true });
+  }
+
+  const ownerAccess = ownerId ? await ownerPlanAccess(ownerId) : null;
+  if (ownerAccess) {
+    if (!isSubscriptionActive(ownerAccess.subscription)) {
+      return res.status(403).json({ error: "انتهى اشتراكك. جدّده لإضافة عقار جديد.", upgradeRequired: true });
+    }
+    if (ownerAccess.chaletCount >= ownerAccess.chaletLimit) {
+      return res.status(403).json({ error: "وصلت إلى الحد الأقصى للعقارات في باقتك. جدّد اشتراكك أو اختر باقة أعلى.", upgradeRequired: true });
+    }
+  }
 
   /* ── Full-scan duplicate check — collect ALL conflicts before returning ── */
   const dupFields: string[] = [];
@@ -299,8 +313,14 @@ router.post("/", async (req, res) => {
     return res.status(409).json({ error, fields: dupFields, mapsConflict: mapsIsDup });
   }
 
-  const [submission] = await db
-    .insert(chaletSubmissionsTable)
+  // Lock the owner's property quota until the submission is committed. Without
+  // this second check, two concurrent requests can both consume the last slot.
+  const [submission] = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${ownerAccess!.subscription.ownerId}))`);
+    const currentAccess = await ownerPlanAccess(ownerId!);
+    if (!isSubscriptionActive(currentAccess.subscription) ||
+        currentAccess.chaletCount >= currentAccess.chaletLimit) return [null];
+    return tx.insert(chaletSubmissionsTable)
     .values({
       ownerId,
       nameAr: data.nameAr,
@@ -343,9 +363,13 @@ router.post("/", async (req, res) => {
       eveningCheckOut: data.eveningCheckOut || null,
       fullDayCheckIn: data.fullDayCheckIn || null,
       fullDayCheckOut: data.fullDayCheckOut || null,
-      trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      trialEndsAt: ownerAccess?.subscription.plan === "trial" ? ownerAccess.subscription.expiresAt : null,
     })
     .returning({ id: chaletSubmissionsTable.id });
+  });
+  if (!submission) {
+    return res.status(403).json({ error: "انتهى اشتراكك أو وصلت إلى حد العقارات المتاح. جدّد أو اشترِ سعة إضافية.", upgradeRequired: true });
+  }
 
   sendAdminNewSubmissionEmail({
     nameAr: data.nameAr,
