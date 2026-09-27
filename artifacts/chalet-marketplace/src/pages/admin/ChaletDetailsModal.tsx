@@ -1,7 +1,11 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, ExternalLink, MapPin, ShieldCheck, ShieldOff } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { resolveAmenity } from "@/lib/amenityUtils";
 import { toAr } from "@/lib/utils";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export interface ChaletDetails {
   id: number;
@@ -35,6 +39,15 @@ const statusLabels = {
 
 export function ChaletDetailsModal({ chalet, onClose }: { chalet: ChaletDetails | null; onClose: () => void }) {
   const [photoIndex, setPhotoIndex] = useState(0);
+  const { data: amenitiesCatalog, isError: amenitiesError } = useQuery<Array<{ key: string; labelAr: string }>>({
+    queryKey: ["admin", "amenities"],
+    queryFn: async () => {
+      const response = await fetch(`${BASE}/api/admin/amenities`, { credentials: "include" });
+      if (!response.ok) throw new Error("تعذّر تحميل أسماء المرافق");
+      return response.json();
+    },
+    enabled: !!chalet?.amenities?.length,
+  });
   if (!chalet) return null;
 
   const photos = chalet.photos?.length ? chalet.photos : chalet.logoUrl ? [chalet.logoUrl] : [];
@@ -114,11 +127,17 @@ export function ChaletDetailsModal({ chalet, onClose }: { chalet: ChaletDetails 
 
         <div className="rounded-xl bg-slate-800 p-3 text-sm">
           <p className="mb-2 text-xs text-slate-400">المرافق</p>
+          {amenitiesError && <p className="mb-2 text-xs text-amber-300">تعذّر تحميل أسماء بعض المرافق؛ تُعرض الأسماء العربية المتاحة.</p>}
           {chalet.amenities?.length ? (
             <div className="flex flex-wrap gap-2">
-              {chalet.amenities.map((amenity, index) => (
-                <span key={`${amenity}-${index}`} className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">{amenity}</span>
-              ))}
+              {chalet.amenities.map((amenity, index) => {
+                const label = resolveAmenity(amenity, amenitiesCatalog).ar;
+                return (
+                  <span key={`${amenity}-${index}`} className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
+                    {/[a-z]/i.test(label) ? "مرفق إضافي" : label}
+                  </span>
+                );
+              })}
             </div>
           ) : <p className="text-slate-400">لم تُضف مرافق</p>}
         </div>
