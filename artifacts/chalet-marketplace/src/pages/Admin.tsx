@@ -1365,7 +1365,6 @@ function ServiceLocationsTab() {
 /* ── Amenities Tab ────────────────────────────── */
 function AmenitiesTab() {
   const qc = useQueryClient();
-  const [newKey, setNewKey] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
@@ -1382,12 +1381,11 @@ function AmenitiesTab() {
     mutationFn: async () => {
       const r = await apiFetch("/admin/amenities", {
         method: "POST",
-        body: JSON.stringify({ key: newKey.trim(), labelAr: newLabel.trim() }),
+        body: JSON.stringify({ key: `amenity_${crypto.randomUUID()}`, labelAr: newLabel.trim() }),
       });
       if (!r.ok) throw new Error("فشل الإضافة");
     },
     onSuccess: () => {
-      setNewKey("");
       setNewLabel("");
       qc.invalidateQueries({ queryKey: ["admin", "amenities"] });
     },
@@ -1421,13 +1419,6 @@ function AmenitiesTab() {
         <h3 className="text-white font-bold mb-4">إضافة ميزة جديدة</h3>
         <div className="flex flex-col sm:flex-row gap-3">
           <Input
-            value={newKey}
-            onChange={(e) => setNewKey(e.target.value)}
-            placeholder="المفتاح (بالإنجليزية، مثل: wifi)"
-            className="bg-slate-900 border-slate-600 text-white placeholder-slate-400"
-            dir="ltr"
-          />
-          <Input
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             placeholder="الاسم بالعربية (مثل: واي فاي)"
@@ -1435,33 +1426,32 @@ function AmenitiesTab() {
           />
           <Button
             onClick={() => addAmenity.mutate()}
-            disabled={!newKey.trim() || !newLabel.trim() || addAmenity.isPending}
+            disabled={!newLabel.trim() || addAmenity.isPending}
             className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
           >
             {addAmenity.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : "إضافة"}
           </Button>
         </div>
+        {addAmenity.isError && <p className="mt-2 text-sm text-red-400">تعذّرت إضافة المرفق. حاول مرة أخرى.</p>}
       </div>
 
       <div className="rounded-lg border border-slate-700 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-slate-700 bg-slate-800">
-              <TableHead className="text-slate-300 text-right">المفتاح</TableHead>
               <TableHead className="text-slate-300 text-right">الاسم بالعربية</TableHead>
               <TableHead className="text-slate-300 text-right">الحالة</TableHead>
-              <TableHead className="text-slate-300 text-right">إجراء</TableHead>
+              <TableHead className="text-slate-300 text-right">الإجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {amenities.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-slate-400 py-12">لا توجد مرافق بعد</TableCell>
+                <TableCell colSpan={3} className="text-center text-slate-400 py-12">لا توجد مرافق بعد</TableCell>
               </TableRow>
             )}
             {amenities.map((a: Amenity) => (
               <TableRow key={a.id} className="border-slate-700 hover:bg-slate-800/50">
-                <TableCell className="font-mono text-sm text-slate-400" dir="ltr">{a.key}</TableCell>
                 <TableCell className="text-white font-medium">{a.labelAr}</TableCell>
                 <TableCell>
                   <button
