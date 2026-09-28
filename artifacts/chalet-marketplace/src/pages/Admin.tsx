@@ -75,10 +75,19 @@ const API = `${BASE}/api`;
 /** Display an ISO/YYYY-MM-DD date as "Hijri هـ · Gregorian م" */
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const dateStr = iso.split("T")[0];
+  const dateStr = iso.includes("T") ? localDateString(new Date(iso)) : iso;
   const { hijri, gregorian } = formatDualDate(dateStr);
   if (!hijri) return gregorian || "—";
   return `${hijri} · ${gregorian} م`;
+}
+
+function localDateString(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function localEndOfDayIso(dateString: string): string {
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(year, month - 1, day, 23, 59, 59, 999).toISOString();
 }
 
 /* ── Domain types ─────────────────────────────── */
@@ -1593,6 +1602,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [grantOwner, setGrantOwner] = useState<{ id: string; name: string } | null>(null);
   const [grantPlan, setGrantPlan] = useState("");
   const [grantDays, setGrantDays] = useState("30");
+  const [grantExpiryDate, setGrantExpiryDate] = useState("");
   const [grantReason, setGrantReason] = useState("");
   const [grantError, setGrantError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -1626,7 +1636,9 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan: grantPlan,
-          days: Number(fromAr(grantDays)),
+          ...(grantExpiryDate
+            ? { expiresAt: localEndOfDayIso(grantExpiryDate) }
+            : { days: Number(fromAr(grantDays)) }),
           reason: grantReason.trim(),
         }),
       });
@@ -1639,6 +1651,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       setGrantOwner(null);
       setGrantPlan("");
       setGrantDays("30");
+      setGrantExpiryDate("");
       setGrantReason("");
       setGrantError(null);
       toast({ title: "تم تحديث الاشتراك", description: "ستظهر العقارات والخدمات المفعّلة تلقائياً؛ تبقى المعطّلة يدوياً كما هي." });
@@ -2214,6 +2227,11 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                        owner.subscriptionStatus === "trial" ? "فترة تجريبية" :
                        owner.subscriptionStatus === "expired" ? "منتهي" : "غير محدد"}
                     </span>
+                    {owner.expiresAt && (
+                      <span className="text-slate-500 text-[11px]">
+                        ينتهي {fmtDate(owner.expiresAt)}
+                      </span>
+                    )}
                   </div>
                 </TableCell>
 
@@ -2228,6 +2246,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                           setGrantOwner({ id: owner.ownerId, name: owner.ownerName });
                           setGrantPlan("");
                           setGrantDays("30");
+                          setGrantExpiryDate("");
                           setGrantReason("");
                           setGrantError(null);
                         }}
@@ -2329,7 +2348,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-amber-400" />
-                تمديد اشتراك {grantOwner.name}
+                تحديث اشتراك {grantOwner.name}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
@@ -2354,8 +2373,27 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                   inputMode="numeric"
                   value={toAr(grantDays)}
                   onChange={(event) => setGrantDays(fromAr(event.target.value))}
+                  disabled={!!grantExpiryDate}
                   className="bg-slate-800 border-slate-600 text-white"
                 />
+                <p className="mt-1 text-[11px] text-slate-500">تُستخدم المدة ما لم يُحدّد تاريخ انتهاء صريح أدناه.</p>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">أو اختر تاريخ الانتهاء بالتقويم الهجري أو الميلادي</label>
+                <DualDatePicker
+                  value={grantExpiryDate}
+                  onChange={setGrantExpiryDate}
+                  minDate={localDateString(new Date())}
+                  placeholder="اختر تاريخ الانتهاء"
+                  className="[&_button]:w-full"
+                />
+                {grantExpiryDate ? (
+                  <p className="mt-1 text-xs text-amber-200" data-testid="text-grant-expiry-dual">
+                    تاريخ الانتهاء: {fmtDate(grantExpiryDate)}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-slate-500">عند اختيار تاريخ، تكون له الأولوية على مدة التمديد ويُعتمد حتى نهاية اليوم بالتوقيت المحلي.</p>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-xs text-slate-400">سبب المنح أو التمديد</label>
@@ -2375,7 +2413,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                 <Button
                   data-testid="button-confirm-grant"
                   onClick={() => grantSubscription.mutate()}
-                  disabled={grantSubscription.isPending || !grantPlan || Number(fromAr(grantDays)) < 1 || grantReason.trim().length < 5}
+                  disabled={grantSubscription.isPending || !grantPlan || (!grantExpiryDate && (Number(fromAr(grantDays)) < 1 || Number(fromAr(grantDays)) > 3650)) || grantReason.trim().length < 5}
                   className="flex-1 bg-amber-600 text-white hover:bg-amber-700"
                 >
                   {grantSubscription.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
@@ -4445,7 +4483,8 @@ function PromoCodesPanel() {
   const [kind, setKind] = useState<"percent" | "fixed">("percent");
   const [value, setValue] = useState("");
   const [usageLimit, setUsageLimit] = useState("");
-  const [expiresAt, setExpiresAt] = useState("");
+  const [expiresAtDate, setExpiresAtDate] = useState("");
+  const [expiresAtTime, setExpiresAtTime] = useState("23:59");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -4464,7 +4503,8 @@ function PromoCodesPanel() {
     setKind("percent");
     setValue("");
     setUsageLimit("");
-    setExpiresAt("");
+    setExpiresAtDate("");
+    setExpiresAtTime("23:59");
     setError(null);
   }
 
@@ -4474,9 +4514,15 @@ function PromoCodesPanel() {
     setKind(promo.kind);
     setValue(String(Number(promo.value)));
     setUsageLimit(promo.usageLimit == null ? "" : String(promo.usageLimit));
-    setExpiresAt(promo.expiresAt
-      ? new Date(new Date(promo.expiresAt).getTime() - new Date(promo.expiresAt).getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
-      : "");
+    if (promo.expiresAt) {
+      const localExpiry = new Date(new Date(promo.expiresAt).getTime() - new Date(promo.expiresAt).getTimezoneOffset() * 60_000)
+        .toISOString().slice(0, 16);
+      setExpiresAtDate(localExpiry.slice(0, 10));
+      setExpiresAtTime(localExpiry.slice(11, 16));
+    } else {
+      setExpiresAtDate("");
+      setExpiresAtTime("23:59");
+    }
     setError(null);
   }
 
@@ -4489,7 +4535,9 @@ function PromoCodesPanel() {
         kind,
         value: Number(fromAr(value)),
         usageLimit: usageLimit === "" ? null : Number(fromAr(usageLimit)),
-        expiresAt: expiresAt || null,
+        expiresAt: expiresAtDate
+          ? new Date(`${expiresAtDate}T${expiresAtTime || "23:59"}`).toISOString()
+          : null,
       };
       const response = await adminFetch(
         editing === null ? "/promo-codes" : `/promo-codes/${editing}`,
@@ -4593,15 +4641,25 @@ function PromoCodesPanel() {
             className="bg-slate-900 border-slate-600 text-white"
           />
         </div>
-        <div>
-          <label className="mb-1 block text-xs text-slate-400">تاريخ الانتهاء (اختياري)</label>
-          <Input
-            data-testid="input-promo-expiry"
-            type="datetime-local"
-            value={expiresAt}
-            onChange={(event) => setExpiresAt(event.target.value)}
-            className="bg-slate-900 border-slate-600 text-white"
-          />
+        <div className="sm:col-span-2 lg:col-span-2">
+          <label className="mb-1 block text-xs text-slate-400">تاريخ ووقت الانتهاء (اختياري)</label>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]">
+            <DualDatePicker
+              value={expiresAtDate}
+              onChange={setExpiresAtDate}
+              placeholder="اختر تاريخ الانتهاء"
+              className="[&_button]:w-full"
+            />
+            <Input
+              data-testid="input-promo-expiry-time"
+              type="time"
+              dir="ltr"
+              aria-label="وقت انتهاء رمز الخصم"
+              value={expiresAtTime}
+              onChange={(event) => setExpiresAtTime(event.target.value)}
+              className="bg-slate-900 border-slate-600 text-white text-left"
+            />
+          </div>
         </div>
       </div>
 

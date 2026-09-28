@@ -9,6 +9,12 @@ An additional property or service slot is a separate one-time purchase. It remai
 
 **How to apply:** Keep over-limit creation blocked until a separately quoted, verified, recorded payment unlocks an additional slot. Admin edits apply to new checkouts; existing paid terms remain as quoted. A paid buyer must not lose a slot simply because the base subscription expired during payment: retain it for their next renewal.
 
+An active property-only subscription can purchase a service slot, and an active service-only subscription can purchase a property slot, without replacing the base subscription. Default cross-category add-on prices should be enabled only once for untouched seeded plans; later administrator edits, including disabling a price, must remain authoritative.
+
+**Why:** A buyer asked to pay only for extra capacity, not an entirely new plan. Yet a recurring seed that fills disabled prices would undo the administrator's future decision.
+
+**How to apply:** Treat the add-on as a separate, owner-scoped purchase counted toward effective capacity regardless of base plan category. Keep the base subscription intact and avoid rewriting configured prices on later starts.
+
 For legacy accounts with published inventory but no subscription record, a single persisted trial prevents the new system from silently removing active listings on rollout. An already-recorded expired or inactive subscription is not a missing trial and must not be reset.
 
 **Why:** Absence of a row in the old system did not prove that an owner had used a trial; an existing expired row does prove previous entitlement and should remain expired.

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CreditCard, ArrowRight, CheckCircle2, Clock, AlertTriangle,
   Building2, Star, Zap, Crown, Package, RefreshCw, MessageCircle,
@@ -12,10 +12,19 @@ import { Navbar } from "@/components/layout/Navbar";
 import { useAuth } from "@workspace/replit-auth-web";
 import { PaymentModal } from "@/components/PaymentModal";
 import { AddonPaymentModal } from "@/components/AddonPaymentModal";
+import { formatDualDate } from "@/lib/hijri";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 async function apiFetch(path: string) {
   return fetch(`${BASE}/api${path}`, { credentials: "include" });
+}
+
+function expiryInBothCalendars(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "غير محدد";
+  const localDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const { hijri, gregorian } = formatDualDate(localDate);
+  return `${hijri} · ${gregorian} م`;
 }
 
 /* ── Plan meta ── */
@@ -117,6 +126,7 @@ function daysUntil(dateStr: string | null): number | null {
 
 export default function SubscriptionPage() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [showPayment, setShowPayment] = useState(false);
   const [addonType, setAddonType] = useState<"chalet" | "service" | null>(null);
@@ -135,9 +145,11 @@ export default function SubscriptionPage() {
     enabled: isAuthenticated,
   });
 
-  const { data: planLimits } = useQuery<{
+  const { data: planLimits, isLoading: planLimitsLoading } = useQuery<{
     plan: string; active?: boolean; chaletLimit: number; chaletCount: number;
     serviceLimit: number; serviceCount?: number;
+    baseChaletLimit?: number; baseServiceLimit?: number;
+    purchasedChaletSlots?: number; purchasedServiceSlots?: number;
     extraChaletPrice?: number | string | null; extraServicePrice?: number | string | null;
   }>({
     queryKey: ["owner", "plan-limits"],
@@ -148,6 +160,22 @@ export default function SubscriptionPage() {
     },
     enabled: isAuthenticated,
   });
+
+  useEffect(() => {
+    const requestedAddon = new URLSearchParams(search).get("addon");
+    if (requestedAddon !== "chalet" && requestedAddon !== "service") return;
+    if (planLimitsLoading || !planLimits) return;
+
+    const isEligible = requestedAddon === "chalet"
+      ? planLimits.active !== false &&
+        planLimits.chaletCount >= planLimits.chaletLimit &&
+        planLimits.extraChaletPrice != null
+      : planLimits.active !== false &&
+        (planLimits.serviceCount ?? 0) >= planLimits.serviceLimit &&
+        planLimits.extraServicePrice != null;
+    if (isEligible) setAddonType(requestedAddon);
+    navigate("/subscription", { replace: true });
+  }, [search, planLimits, planLimitsLoading, navigate]);
 
   if (authLoading || subLoading) {
     return (
@@ -170,6 +198,10 @@ export default function SubscriptionPage() {
   const chaletMax = planLimits?.chaletLimit === Infinity ? "∞" : (planLimits?.chaletLimit ?? 1);
   const serviceMax = planLimits?.serviceLimit === Infinity ? "∞" : (planLimits?.serviceLimit ?? 1);
   const serviceUsed = planLimits?.serviceCount ?? 0;
+  const chaletBase = planLimits?.baseChaletLimit ?? planLimits?.chaletLimit ?? 1;
+  const serviceBase = planLimits?.baseServiceLimit ?? planLimits?.serviceLimit ?? 1;
+  const chaletAddons = planLimits?.purchasedChaletSlots ?? Math.max(0, (planLimits?.chaletLimit ?? 1) - chaletBase);
+  const serviceAddons = planLimits?.purchasedServiceSlots ?? Math.max(0, (planLimits?.serviceLimit ?? 1) - serviceBase);
 
   const paymentCls =
     sub?.paymentStatus === "paid"    ? "text-green-600"
@@ -245,7 +277,7 @@ export default function SubscriptionPage() {
               })()}
               <div className="flex justify-between text-xs opacity-70 mt-1">
                 <span>بدأ: {new Date(sub.createdAt).toLocaleDateString("ar-SA")}</span>
-                <span>ينتهي: {sub.expiresAt ? new Date(sub.expiresAt).toLocaleDateString("ar-SA") : "—"}</span>
+                <span>ينتهي: {sub.expiresAt ? expiryInBothCalendars(sub.expiresAt) : "—"}</span>
               </div>
             </div>
           )}
@@ -272,14 +304,14 @@ export default function SubscriptionPage() {
             icon={<Building2 className="w-5 h-5 text-indigo-500" />}
             label="الشاليهات"
             value={`${chaletUsed} / ${chaletMax}`}
-            sub="مستخدم / الحد الأقصى"
+            sub={`مستخدم / الحد الفعلي · أساس ${chaletBase} + إضافي ${chaletAddons}`}
             bg="bg-indigo-50 dark:bg-indigo-900/20"
           />
           <SummaryCard
             icon={<Star className="w-5 h-5 text-amber-500" />}
             label="الخدمات"
             value={`${serviceUsed} / ${serviceMax}`}
-            sub="الحد الأقصى المسموح"
+            sub={`الحد الفعلي · أساس ${serviceBase} + إضافي ${serviceAddons}`}
             bg="bg-amber-50 dark:bg-amber-900/20"
           />
           <SummaryCard
@@ -367,7 +399,7 @@ export default function SubscriptionPage() {
 
             <dt className="text-muted-foreground">تاريخ الانتهاء</dt>
             <dd className="font-semibold text-foreground text-end">
-              {sub?.expiresAt ? new Date(sub.expiresAt).toLocaleDateString("ar-SA") : "غير محدد"}
+              {sub?.expiresAt ? expiryInBothCalendars(sub.expiresAt) : "غير محدد"}
             </dd>
 
             <dt className="text-muted-foreground">الأيام المتبقية</dt>

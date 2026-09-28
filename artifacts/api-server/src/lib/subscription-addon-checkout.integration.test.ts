@@ -55,7 +55,7 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       durationDays: 30,
       trialDays: 0,
       features: ["اختبار معزول"],
-      scope: "full",
+      scope: "property",
       chaletLimit: 0,
       serviceLimit: 0,
       extraChaletPrice: "0.00",
@@ -117,6 +117,7 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
 
     const paidQuote = await createAddonCheckout({ ownerId, addonType: "service" });
     const reusedPaidQuote = await createAddonCheckout({ ownerId, addonType: "service" });
+    assert.equal((await ownerPlanAccess(ownerId)).scope, "property", "service slots may be added without buying a full plan");
     assert.equal(paidQuote.amountHalala, 5000);
     assert.equal(reusedPaidQuote.checkoutId, paidQuote.checkoutId, "an open quote is reused, not double-sold");
     assert.equal(reusedPaidQuote.amountHalala, paidQuote.amountHalala);

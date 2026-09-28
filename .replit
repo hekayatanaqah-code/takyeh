@@ -33,3 +33,11 @@ channel = "stable-25_05"
 [userenv.shared]
 MOYASAR_PUBLISHABLE_KEY = "pk_test_vcFUHJDBwiyRypcFChTLtgpI4skLeU6R6Tez5SrF"
 MOYASAR_SECRET_KEY_PLACEHOLDER = "sk_test_vcFUHJDBwiyRypcFChTLtgpI4skLeU6R6Tez5SrF"
+
+[[ports]]
+localPort = 8080
+externalPort = 80
+
+[[ports]]
+localPort = 22125
+externalPort = 3000

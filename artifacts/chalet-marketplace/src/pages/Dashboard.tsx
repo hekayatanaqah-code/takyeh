@@ -438,100 +438,58 @@ interface GlobalSeason {
 }
 
 /* ── Upgrade Popup + Chalets Tab ─────────────── */
-const TIER_PLANS = [
-  {
-    key: "chalet_basic",
-    name: "أساسي - عقارات",
-    price: "99 ر.س / شهر",
-    chaletLimit: 1,
-    serviceLimit: 0,
-    features: ["عقار واحد", "تقارير أساسية", "دعم عبر واتساب"],
-    highlight: false,
-  },
-  {
-    key: "chalet_pro",
-    name: "احترافي - عقارات",
-    price: "199 ر.س / شهر",
-    chaletLimit: 5,
-    serviceLimit: 0,
-    features: ["حتى 5 عقارات", "تقارير تفصيلية", "أولوية في الدعم"],
-    highlight: true,
-  },
-  {
-    key: "chalet_unlimited",
-    name: "غير محدود - عقارات",
-    price: "349 ر.س / شهر",
-    chaletLimit: 999,
-    serviceLimit: 0,
-    features: ["عقارات غير محدودة", "تقارير شهرية واتساب", "مدير حساب خاص"],
-    highlight: false,
-  },
-  {
-    key: "bundle",
-    name: "باقة شاملة",
-    price: "499 ر.س / شهر",
-    chaletLimit: 999,
-    serviceLimit: 999,
-    features: ["عقارات + خدمات غير محدودة", "تقارير متقدمة", "أولوية قصوى"],
-    highlight: false,
-  },
-];
-
-function UpgradePlanDialog({ open, onClose, context }: { open: boolean; onClose: () => void; context: "chalet" | "service" }) {
+function UpgradePlanDialog({
+  open,
+  onClose,
+  context,
+  active,
+  extraPrice,
+}: {
+  open: boolean;
+  onClose: () => void;
+  context: "chalet" | "service";
+  active?: boolean;
+  extraPrice?: number | string | null;
+}) {
+  const [, navigate] = useLocation();
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl" dir="rtl">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <Zap className="w-5 h-5 text-primary" />
-            ترقية الخطة
+            خيارات السعة والاشتراك
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
             {context === "chalet"
-              ? "لقد وصلت إلى الحد الأقصى من العقارات في خطتك الحالية. اختر خطة أعلى للاستمرار."
-              : "لقد وصلت إلى الحد الأقصى من الخدمات. اختر خطة أعلى للاستمرار."}
+              ? "لقد وصلت إلى الحد الأقصى من العقارات في خطتك الحالية. يمكنك إضافة سعة إلى اشتراكك أو اختيار خطة أعلى."
+              : "لقد وصلت إلى الحد الأقصى من الخدمات. يمكنك إضافة سعة إلى اشتراكك أو اختيار خطة أعلى."}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-          {TIER_PLANS.map((plan) => (
-            <div
-              key={plan.key}
-              className={`rounded-2xl border p-4 flex flex-col gap-3 ${
-                plan.highlight
-                  ? "border-primary bg-primary/5 shadow-sm"
-                  : "border-border bg-card"
-              }`}
-            >
-              {plan.highlight && (
-                <span className="text-xs font-bold bg-primary text-primary-foreground px-2.5 py-0.5 rounded-full self-start">الأكثر طلباً</span>
-              )}
-              <div>
-                <p className="font-bold text-foreground text-sm">{plan.name}</p>
-                <p className="text-lg font-extrabold text-primary mt-0.5">{plan.price}</p>
-              </div>
-              <ul className="space-y-1.5">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-              <Button
-                size="sm"
-                variant={plan.highlight ? "default" : "outline"}
-                className="mt-auto w-full rounded-xl"
-                onClick={() => {
-                  const msg = `أريد الترقية إلى خطة: ${plan.name} (${plan.price})`;
-                  window.open(`https://wa.me/?text=${encodeWhatsAppText(msg)}`, "_blank");
-                }}
-              >
-                اختر هذه الخطة
-              </Button>
+        {active && extraPrice != null && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-bold text-foreground">
+                {context === "chalet" ? "أضف عقاراً إلى اشتراكك الحالي" : "أضف خدمة إلى اشتراكك الحالي"}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                إضافة واحدة برسوم لمرة واحدة: {toAr(Number(extraPrice))} ر.س.
+              </p>
             </div>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground text-center mt-2">سيتم التواصل معك عبر واتساب لإتمام الاشتراك</p>
+            <Button
+              className="shrink-0"
+              onClick={() => {
+                onClose();
+                navigate(`/subscription?addon=${context}`);
+              }}
+            >
+              شراء سعة إضافية
+            </Button>
+          </div>
+        )}
+        <Button variant="outline" className="w-full mt-4" onClick={() => { onClose(); navigate("/subscription"); }}>
+          عرض الباقات والأسعار الحالية
+        </Button>
       </DialogContent>
     </Dialog>
   );
@@ -1621,7 +1579,13 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
           )}
         </div>
       )}
-      <UpgradePlanDialog open={showUpgrade} onClose={() => setShowUpgrade(false)} context="chalet" />
+      <UpgradePlanDialog
+        open={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        context="chalet"
+        active={planLimits?.active}
+        extraPrice={planLimits?.extraChaletPrice}
+      />
       <AddonPaymentModal open={showAddonPayment} onClose={() => setShowAddonPayment(false)} addonType="chalet" />
       <BlockDatesDialog
         open={!!blockTarget}
@@ -25868,6 +25832,8 @@ export default function Dashboard() {
           open={showHeaderUpgrade !== null}
           onClose={() => setShowHeaderUpgrade(null)}
           context={showHeaderUpgrade ?? "chalet"}
+          active={planLimits?.active}
+          extraPrice={showHeaderUpgrade === "service" ? planLimits?.extraServicePrice : planLimits?.extraChaletPrice}
         />
         <AddonPaymentModal
           open={showHeaderAddon !== null}

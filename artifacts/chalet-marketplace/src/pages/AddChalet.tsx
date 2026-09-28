@@ -273,7 +273,7 @@ export default function AddChalet() {
   const editId = editIdParam ? Number(editIdParam) : null;
   const isEditMode = !!editId;
 
-  const { data: planLimits } = useQuery<{
+  const { data: planLimits, refetch: refetchPlanLimits } = useQuery<{
     active: boolean;
     scope: "full" | "property";
     chaletLimit: number;
@@ -609,7 +609,9 @@ export default function AddChalet() {
     if (!isEditMode && planLimits && (
       planLimits.active === false || planLimits.chaletCount >= planLimits.chaletLimit
     )) {
-      navigate("/subscription");
+      const canBuySlot = planLimits.active && planLimits.chaletCount >= planLimits.chaletLimit &&
+        planLimits.extraChaletPrice != null;
+      navigate(canBuySlot ? "/subscription?addon=chalet" : "/subscription");
       return;
     }
 
@@ -691,7 +693,7 @@ export default function AddChalet() {
           qc.invalidateQueries({ queryKey: ["owner", "plan-limits"] });
           setSubmitted(true);
         },
-        onError: (err: unknown) => {
+        onError: async (err: unknown) => {
           try {
             const apiErr = err as { data?: { details?: Record<string, string[]>; error?: string; upgradeRequired?: boolean } };
             if (apiErr?.data?.details && typeof apiErr.data.details === "object") {
@@ -699,7 +701,12 @@ export default function AddChalet() {
             } else if (apiErr?.data?.error && typeof apiErr.data.error === "string") {
               setFieldErrors({ general: [apiErr.data.error] });
             }
-            if (apiErr?.data?.upgradeRequired) navigate("/subscription");
+            if (apiErr?.data?.upgradeRequired) {
+              const refreshed = await refetchPlanLimits();
+              const currentLimits = refreshed.data ?? planLimits;
+              const canBuySlot = currentLimits?.active && currentLimits.extraChaletPrice != null;
+              navigate(canBuySlot ? "/subscription?addon=chalet" : "/subscription");
+            }
           } catch {}
         },
       }
@@ -754,7 +761,7 @@ export default function AddChalet() {
             <p className="mx-auto mt-3 max-w-lg text-muted-foreground">
               {subscriptionExpired
                 ? "لا يمكن بدء إضافة عقار جديد قبل تجديد الاشتراك. بيانات عقاراتك الحالية ما زالت محفوظة."
-                : "لإضافة عقار آخر، راجع الباقات المتاحة. لا تُفعّل الإضافات ذات الرسوم إلا بعد إتمام الترقية والدفع."}
+                : "يمكنك توسيع اشتراكك الحالي بشراء سعة لعقار إضافي، أو الاطلاع على الباقات إذا رغبت في ترقية خطتك."}
             </p>
             {!subscriptionExpired && planLimits?.extraChaletPrice != null ? (
               <div className="mt-6 flex flex-col items-center gap-3">
@@ -827,7 +834,7 @@ export default function AddChalet() {
                     </div>
                     {planLimits.extraChaletPrice != null && (
                       <p className="text-xs text-muted-foreground">
-                        رسوم الإضافة المحددة {toAr(Number(planLimits.extraChaletPrice))} ر.س، ولا تُفعّل إلا بعد إتمام الترقية والدفع.
+                        رسوم الإضافة {toAr(Number(planLimits.extraChaletPrice))} ر.س لمرة واحدة؛ تُضاف إلى اشتراكك الحالي بعد تأكيد الدفع.
                       </p>
                     )}
                     <Button variant="outline" onClick={() => navigate("/subscription")}>عرض الباقات والتجديد</Button>

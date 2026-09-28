@@ -2314,8 +2314,17 @@ router.delete("/promo-codes/:id", requireSuperAdmin, async (req, res) => {
 
 const ManualGrantBody = z.object({
   plan: z.string().trim().min(1).max(120),
-  days: z.number().int().min(1).max(3650),
+  days: z.number().int().min(1).max(3650).optional(),
+  expiresAt: z.string().datetime({ offset: true }).optional(),
   reason: z.string().trim().min(5).max(500),
+}).superRefine((grant, ctx) => {
+  if (grant.days === undefined && grant.expiresAt === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["days"],
+      message: "حدد مدة التمديد أو تاريخ انتهاء صريح",
+    });
+  }
 });
 const legacySubscriptionPlans = new Set([
   "trial", "monthly", "yearly", "chalet_basic", "chalet_pro",
@@ -2327,10 +2336,18 @@ router.post("/owners/:ownerId/subscription-grant", requireSuperAdmin, async (req
     .safeParse(Array.isArray(req.params.ownerId) ? req.params.ownerId[0] : req.params.ownerId);
   const parsed = ManualGrantBody.safeParse(req.body);
   if (!ownerId.success || !parsed.success) {
-    res.status(400).json({ error: "تحقّق من حساب المالك ومدة التمديد وسبب المنح" });
+    res.status(400).json({ error: "تحقّق من حساب المالك والمدة أو تاريخ الانتهاء وسبب المنح" });
     return;
   }
-  const { plan, days, reason } = parsed.data;
+  const { plan, days, expiresAt, reason } = parsed.data;
+  const now = new Date();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const newExpiry = expiresAt ? new Date(expiresAt) : new Date(now.getTime() + days! * dayMs);
+  if (expiresAt && (newExpiry <= now || newExpiry.getTime() - now.getTime() > 3650 * dayMs)) {
+    res.status(400).json({ error: "يجب أن يكون تاريخ الانتهاء في المستقبل وفي حدود عشر سنوات" });
+    return;
+  }
+  const auditDays = Math.max(1, Math.ceil((newExpiry.getTime() - now.getTime()) / dayMs));
   const [configuredPlan] = await db.select({
     slug: subscriptionPlansTable.slug,
     nameAr: subscriptionPlansTable.nameAr,
@@ -2380,8 +2397,6 @@ router.post("/owners/:ownerId/subscription-grant", requireSuperAdmin, async (req
     serviceLimit: configuredPlan.serviceLimit,
   } : null;
   const subscriptionOwnerId = existingSubscription.ownerId;
-  const now = new Date();
-  const newExpiry = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
   await db.transaction(async (tx) => {
     await tx.insert(ownerSubscriptionsTable)
       .values({
@@ -2399,14 +2414,16 @@ router.post("/owners/:ownerId/subscription-grant", requireSuperAdmin, async (req
           status: "active",
           paymentStatus: "manual",
           termsSnapshot: grantTerms,
-          expiresAt: sql`GREATEST(COALESCE(${ownerSubscriptionsTable.expiresAt}, NOW()), NOW()) + (${days} * INTERVAL '1 day')`,
+          expiresAt: expiresAt
+            ? newExpiry
+            : sql`GREATEST(COALESCE(${ownerSubscriptionsTable.expiresAt}, NOW()), NOW()) + (${days} * INTERVAL '1 day')`,
         },
       });
     await tx.insert(subscriptionGrantAuditTable).values({
       ownerId: subscriptionOwnerId,
       actorId,
       plan,
-      days,
+      days: auditDays,
       reason,
     });
   });

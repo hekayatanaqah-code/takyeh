@@ -71,7 +71,7 @@ export default function AddServiceProvider() {
   const [showAddonPayment, setShowAddonPayment] = useState(false);
   const [showQuotaAction, setShowQuotaAction] = useState(false);
 
-  const { data: planLimits, isLoading: planLimitsLoading } = useQuery<{
+  const { data: planLimits, isLoading: planLimitsLoading, refetch: refetchPlanLimits } = useQuery<{
     active: boolean;
     serviceLimit: number;
     serviceCount: number;
@@ -523,6 +523,9 @@ export default function AddServiceProvider() {
         const err = await r.json().catch(() => ({})) as any;
         if (err.upgradeRequired) {
           setSubmitError(err.error ?? "تحتاج إلى مساحة إضافية أو ترقية الباقة لإضافة الخدمة.");
+          // Keep the form in place and present the current subscription's direct
+          // add-on action (or renewal/plan route when the subscription is inactive).
+          await refetchPlanLimits();
           setShowQuotaAction(!editSubmissionId);
           return;
         }
