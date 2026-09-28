@@ -28,7 +28,6 @@ import {
   ownerExpensesTable,
   customerNotesTable,
   ownerSubscriptionsTable,
-  ownerNotificationsTable,
   subscriptionPromoCodesTable,
   subscriptionCheckoutIntentsTable,
   subscriptionGrantAuditTable,
@@ -40,7 +39,7 @@ import {
   type AdminPermKey,
   type AdminStaffPermissions,
 } from "@workspace/db/schema";
-import { eq, inArray, and, or, ilike, gt, lt, ne, sql, isNull, desc } from "drizzle-orm";
+import { eq, inArray, and, or, ilike, gt, lt, ne, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
@@ -2122,28 +2121,59 @@ router.get("/subscription-reminder-log", requireSuperAdmin, async (_req, res): P
     }
   }
 
-  const notifications = await db
-    .select({
-      id: ownerNotificationsTable.id,
-      ownerId: ownerNotificationsTable.ownerId,
-      message: ownerNotificationsTable.message,
-      createdAt: ownerNotificationsTable.createdAt,
-    })
-    .from(ownerNotificationsTable)
-    .where(eq(ownerNotificationsTable.type, "subscription_expiry_reminder"))
-    .orderBy(desc(ownerNotificationsTable.createdAt))
-    .limit(200);
+  const notifications = await db.execute<{
+    id: number;
+    owner_id: string;
+    owner_name: string | null;
+    phone: string | null;
+    message: string;
+    created_at: Date;
+  }>(sql`
+    SELECT n.id, n.owner_id, n.message, n.created_at,
+      oa.full_name AS owner_name,
+      NULLIF(oa.phone, '') AS phone
+    FROM (
+      SELECT id, owner_id, message, created_at
+      FROM owner_notifications
+      WHERE type = 'subscription_expiry_reminder'
+      ORDER BY created_at DESC
+      LIMIT 200
+    ) n
+    LEFT JOIN LATERAL (
+      SELECT app.full_name, app.phone
+      FROM owner_applications app
+      LEFT JOIN owner_account_links account ON account.owner_application_id = app.id
+      WHERE app.deleted_at IS NULL
+        AND (account.user_id = n.owner_id OR n.owner_id = 'owner_' || app.id::text)
+      LIMIT 1
+    ) oa ON true
+    ORDER BY n.created_at DESC
+  `);
 
-  const reminders = notifications.flatMap((notification) => {
+  const reminders = notifications.rows.flatMap((notification) => {
     const markerMatch = notification.message.match(/\u2063subscription-expiry:\d+:(5|3|0)\u2063/);
     if (!markerMatch) return [];
     const daysBeforeExpiry = Number(markerMatch[1]) as 5 | 3 | 0;
+    const ownerName = notification.owner_name?.trim() || null;
+    const phone = notification.phone?.trim() || null;
+    let phoneDigits = (phone ?? "")
+      .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+      .replace(/\D/g, "");
+    if (phoneDigits.startsWith("00966")) phoneDigits = phoneDigits.slice(2);
+    const validPhone = /^05\d{8}$|^5\d{8}$|^9665\d{8}$/.test(phoneDigits);
     return [{
       id: notification.id,
-      ownerId: notification.ownerId,
+      ownerId: notification.owner_id,
+      ownerName,
+      phone,
       milestone: daysBeforeExpiry,
-      createdAt: notification.createdAt,
-      status: "created" as const,
+      createdAt: notification.created_at,
+      channels: {
+        inApp: "created" as const,
+        whatsapp: !phone ? "no_phone" as const
+          : !validPhone ? "invalid_phone" as const
+            : !ownerName ? "no_name" as const : "ready" as const,
+      },
     }];
   });
 

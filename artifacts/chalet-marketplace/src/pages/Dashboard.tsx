@@ -25023,6 +25023,22 @@ type DashboardSubscription = {
   paymentStatus: string;
 };
 
+function subscriptionDaysRemaining(subscription: DashboardSubscription): number | null {
+  if (!subscription.expiresAt) return null;
+  const expiresAt = new Date(subscription.expiresAt).getTime();
+  if (!Number.isFinite(expiresAt)) return null;
+  // Match the backend's remaining-days calculation (ceil of elapsed 24-hour periods).
+  return Math.ceil((expiresAt - Date.now()) / 86_400_000);
+}
+
+function isSubscriptionExpiryWarning(subscription: DashboardSubscription | null | undefined): boolean {
+  if (!subscription) return false;
+  if (subscription.status === "expired") return true;
+  if (subscription.status !== "active" && subscription.status !== "trial") return false;
+  const daysRemaining = subscriptionDaysRemaining(subscription);
+  return daysRemaining !== null && daysRemaining <= 5;
+}
+
 type OwnerPlanLimits = {
   plan: string;
   active?: boolean;
@@ -25054,9 +25070,7 @@ function SubscriptionAccountBanner({
     expired: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
     suspended: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
   };
-  const days = subscription.expiresAt
-    ? Math.ceil((new Date(subscription.expiresAt).getTime() - Date.now()) / 86_400_000)
-    : null;
+  const days = subscriptionDaysRemaining(subscription);
 
   return (
     <button
@@ -25642,20 +25656,48 @@ export default function Dashboard() {
         </div>
       )}
       <Navbar />
-      {subscription?.status === "expired" && !actAsStaff && !isStaff && (
-        <div role="alert" className="container mx-auto max-w-4xl px-4 pt-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-red-300 bg-red-50 px-4 py-4 text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100">
-            <div>
-              <p className="font-bold">انتهت صلاحية اشتراكك</p>
-              <p className="mt-1 text-sm">جدّد الاشتراك لمواصلة استقبال الحجوزات وإضافة العقارات والخدمات.</p>
+      {!isStaff && !isImpersonating && !actAsStaff && subscription && isSubscriptionExpiryWarning(subscription) && (() => {
+        const daysRemaining = subscriptionDaysRemaining(subscription);
+        const isExpired = subscription.status === "expired" || (daysRemaining !== null && daysRemaining <= 0);
+        const dayLabel = daysRemaining === 1
+          ? "يوم واحد"
+          : daysRemaining === 2
+            ? "يومان"
+            : daysRemaining !== null && daysRemaining >= 3 && daysRemaining <= 10
+              ? `${toArN(daysRemaining)} أيام`
+              : `${toArN(daysRemaining ?? 0)} يوم`;
+        return (
+          <div role="alert" className="container mx-auto max-w-4xl px-4 pt-4">
+            <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border px-4 py-4 ${
+              isExpired
+                ? "border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100"
+                : "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+            }`}>
+              <div className="flex items-start gap-3">
+                <AlertTriangle className={`w-5 h-5 mt-0.5 shrink-0 ${isExpired ? "text-red-600 dark:text-red-300" : "text-amber-600 dark:text-amber-300"}`} />
+                <div>
+                  <p className="font-bold">
+                    {isExpired ? "انتهت صلاحية اشتراكك" : `تبقّى على انتهاء اشتراكك ${dayLabel}`}
+                  </p>
+                  <p className="mt-1 text-sm">
+                    {isExpired
+                      ? "جدّد الاشتراك الآن لمواصلة استقبال الحجوزات وإضافة العقارات والخدمات."
+                      : "جدّد اشتراكك الآن لضمان استمرار خدماتك دون انقطاع."}
+                  </p>
+                </div>
+              </div>
+              <Button
+                data-testid="button-renew-subscription-warning"
+                className={`shrink-0 text-white ${isExpired ? "bg-red-700 hover:bg-red-800" : "bg-amber-700 hover:bg-amber-800"}`}
+                onClick={() => navigate("/subscription")}
+              >
+                تجديد الاشتراك
+                <ExternalLink className="w-4 h-4 me-2" />
+              </Button>
             </div>
-            <Button className="shrink-0 bg-red-700 text-white hover:bg-red-800" onClick={() => navigate("/subscription")}>
-              تجديد الاشتراك
-              <ExternalLink className="w-4 h-4 me-2" />
-            </Button>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div className="container mx-auto px-4 py-10 max-w-4xl">
 
@@ -25926,7 +25968,7 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-5"
           >
-            {subscription && (
+            {subscription && !isSubscriptionExpiryWarning(subscription) && (
               <SubscriptionAccountBanner subscription={subscription} onManage={() => navigate("/subscription")} />
             )}
 
@@ -26257,7 +26299,7 @@ export default function Dashboard() {
           <>
 
         {/* Subscription / Account Settings — clickable banner */}
-        {subscription && (
+        {subscription && !isSubscriptionExpiryWarning(subscription) && (
           <SubscriptionAccountBanner subscription={subscription} onManage={() => navigate("/subscription")} />
         )}
 

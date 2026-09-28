@@ -4468,9 +4468,41 @@ async function adminFetch(path: string, opts?: RequestInit) {
 interface SubscriptionReminderLogEntry {
   id: number;
   ownerId: string;
+  ownerName: string | null;
+  phone: string | null;
   milestone: 5 | 3 | 0;
   createdAt: string;
-  status: "created";
+  channels: {
+    inApp: "created";
+    whatsapp: "ready" | "no_phone" | "invalid_phone" | "no_name";
+  };
+}
+
+function reminderWhatsAppNumber(phone: string | null): string | null {
+  if (!phone) return null;
+  let digits = fromAr(phone).replace(/\D/g, "");
+  if (digits.startsWith("00966")) digits = digits.slice(2);
+  if (/^05\d{8}$/.test(digits)) return `966${digits.slice(1)}`;
+  if (/^5\d{8}$/.test(digits)) return `966${digits}`;
+  return /^9665\d{8}$/.test(digits) ? digits : null;
+}
+
+function reminderRenewalUrl(): string {
+  const host = window.location.hostname;
+  if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".replit.dev")) {
+    return "https://takyah.replit.app/subscription";
+  }
+  return new URL(`${import.meta.env.BASE_URL}subscription`, window.location.origin).href;
+}
+
+function reminderWhatsAppUrl(reminder: SubscriptionReminderLogEntry): string | null {
+  const number = reminderWhatsAppNumber(reminder.phone);
+  if (!number || !reminder.ownerName) return null;
+  const remaining = reminder.milestone === 0
+    ? "ينتهي اليوم (٠ يوم متبقٍ)"
+    : `ينتهي بعد ${toAr(reminder.milestone)} أيام`;
+  const message = `مرحباً ${reminder.ownerName}، نذكّرك بأن اشتراكك في تكيّة ${remaining}. جدّد اشتراكك بسهولة من الرابط: ${reminderRenewalUrl()}`;
+  return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 }
 
 function SubscriptionReminderLog() {
@@ -4500,7 +4532,7 @@ function SubscriptionReminderLog() {
             سجل تذكيرات انتهاء الاشتراك
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            يعرض الإشعارات التي حُفظت داخل التطبيق. حالة «تم الإنشاء» وتاريخها لا يؤكدان تسليماً خارجياً.
+            تُنشأ إشعارات المنصة تلقائياً قبل ٥ أيام، ٣ أيام، ويوم الانتهاء. الواتساب رسالة جاهزة يفتحها المشرف؛ فتح الرابط لا يؤكد إرسالها أو وصولها.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" data-testid="status-subscription-reminder-heartbeat">
             <span className="text-slate-400">آخر فحص للمهمة المجدولة:</span>
@@ -4553,27 +4585,51 @@ function SubscriptionReminderLog() {
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="text-slate-400 border-b border-slate-700">
+                <th className="font-medium p-2">اسم المالك</th>
+                <th className="font-medium p-2">رقم الجوال</th>
                 <th className="font-medium p-2">المرحلة</th>
-                <th className="font-medium p-2">تاريخ إنشاء الإشعار</th>
-                <th className="font-medium p-2">مرجع المالك</th>
-                <th className="font-medium p-2">الحالة</th>
+                <th className="font-medium p-2">التاريخ</th>
+                <th className="font-medium p-2">داخل المنصة</th>
+                <th className="font-medium p-2">واتساب / حالة الإرسال</th>
               </tr>
             </thead>
             <tbody>
-              {reminders.map((reminder) => (
-                <tr key={reminder.id} className="border-b border-slate-700/70 last:border-0" data-testid={`row-subscription-reminder-${reminder.id}`}>
+              {reminders.map((reminder) => {
+                const whatsappUrl = reminderWhatsAppUrl(reminder);
+                return <tr key={reminder.id} className="border-b border-slate-700/70 last:border-0" data-testid={`row-subscription-reminder-${reminder.id}`}>
+                  <td className="p-2 text-slate-200">
+                    <div className="font-semibold">{reminder.ownerName ?? "اسم المالك غير متوفر"}</div>
+                    <div className="text-xs text-slate-500" dir="ltr">{reminder.ownerId}</div>
+                  </td>
+                  <td className="p-2 text-slate-300 whitespace-nowrap" dir="ltr">{reminder.phone ? toAr(reminder.phone) : "غير متوفر"}</td>
                   <td className="p-2 text-slate-200">{milestoneLabel(reminder.milestone)}</td>
                   <td className="p-2 text-slate-300 whitespace-nowrap">
                     {new Intl.DateTimeFormat("ar-SA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(reminder.createdAt))}
                   </td>
-                  <td className="p-2 text-slate-300 font-mono text-xs" dir="ltr">{reminder.ownerId}</td>
                   <td className="p-2">
                     <Badge className="bg-emerald-900/40 text-emerald-300 border border-emerald-800" data-testid={`status-subscription-reminder-${reminder.id}`}>
-                      تم إنشاء الإشعار داخل التطبيق
+                      تم إنشاء الإشعار
                     </Badge>
                   </td>
-                </tr>
-              ))}
+                  <td className="p-2">
+                    {reminder.channels.whatsapp === "ready" && whatsappUrl ? (
+                      <div className="flex flex-col items-start gap-1">
+                        <a href={whatsappUrl} target="_blank" rel="noopener noreferrer"
+                          className="text-emerald-300 font-semibold underline underline-offset-2 hover:text-emerald-200">
+                          فتح رسالة واتساب الجاهزة
+                        </a>
+                        <span className="text-xs text-amber-300">جاهزة فقط — الإرسال غير مؤكد</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">
+                        {reminder.channels.whatsapp === "no_phone" ? "لا يوجد رقم جوال"
+                          : reminder.channels.whatsapp === "no_name" ? "اسم المالك غير متوفر"
+                            : "رقم الجوال غير صالح"}
+                      </span>
+                    )}
+                  </td>
+                </tr>;
+              })}
             </tbody>
           </table>
           <p className="text-xs text-slate-500 mt-3">يعرض أحدث {toAr(200)} سجل كحد أقصى.</p>
