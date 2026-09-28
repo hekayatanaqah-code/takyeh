@@ -1,5 +1,6 @@
 import { and, eq, gte, like, lt, notInArray, sql } from "drizzle-orm";
 import { db, ownerNotificationsTable, ownerSubscriptionsTable } from "@workspace/db";
+import { siteSettingsTable } from "@workspace/db/schema";
 import { logger } from "./logger";
 
 const RIYADH_TIME_ZONE = "Asia/Riyadh";
@@ -7,6 +8,7 @@ const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const REMINDER_DAYS = [5, 3, 0] as const;
 const REMINDER_LOCK_NAMESPACE = 1414746448;
 const REMINDER_LOCK_ID = 1;
+const REMINDER_HEARTBEAT_KEY = "subscription_expiry_reminder_heartbeat";
 
 function getRiyadhDateParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -48,6 +50,7 @@ function reminderMessage(daysUntilExpiry: number, marker: string): string {
  * safe across restarts and concurrent server instances.
  */
 export async function runSubscriptionExpiryReminders(): Promise<void> {
+  let status: "success" | "failure" = "success";
   try {
     const createdCount = await db.transaction(async (tx) => {
       await tx.execute(
@@ -108,6 +111,20 @@ export async function runSubscriptionExpiryReminders(): Promise<void> {
       logger.info({ createdCount }, "Subscription expiry reminders created");
     }
   } catch (error) {
+    status = "failure";
     logger.error({ err: error }, "Subscription expiry reminder job failed");
+  } finally {
+    const heartbeat = JSON.stringify({ lastCheckAt: new Date().toISOString(), status });
+    try {
+      await db.insert(siteSettingsTable)
+        .values({ key: REMINDER_HEARTBEAT_KEY, value: heartbeat, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: siteSettingsTable.key,
+          set: { value: heartbeat, updatedAt: new Date() },
+        });
+    } catch (heartbeatError) {
+      // Preserve the scheduler's original outcome; heartbeat persistence is best-effort.
+      logger.error({ err: heartbeatError, jobStatus: status }, "Subscription expiry reminder heartbeat could not be saved");
+    }
   }
 }

@@ -4465,6 +4465,124 @@ async function adminFetch(path: string, opts?: RequestInit) {
   return fetch(`${API}/admin${path}`, { credentials: "include", ...opts });
 }
 
+interface SubscriptionReminderLogEntry {
+  id: number;
+  ownerId: string;
+  milestone: 5 | 3 | 0;
+  createdAt: string;
+  status: "created";
+}
+
+function SubscriptionReminderLog() {
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<{
+    heartbeat: { lastCheckAt: string; status: "success" | "failure" } | null;
+    reminders: SubscriptionReminderLogEntry[];
+  }>({
+    queryKey: ["admin", "subscription-reminder-log"],
+    queryFn: async () => {
+      const response = await adminFetch("/subscription-reminder-log");
+      if (!response.ok) throw new Error("تعذّر تحميل سجل تذكيرات الاشتراك");
+      return response.json();
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const reminders = data?.reminders ?? [];
+  const milestoneLabel = (milestone: SubscriptionReminderLogEntry["milestone"]) =>
+    milestone === 0 ? "يوم انتهاء الاشتراك" : `قبل الانتهاء بـ ${toAr(milestone)} أيام`;
+
+  return (
+    <section className="mt-8 bg-slate-800/70 border border-slate-700 rounded-xl p-4 sm:p-5" dir="rtl" data-testid="section-subscription-reminder-log">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 className="text-white font-bold flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-400" />
+            سجل تذكيرات انتهاء الاشتراك
+          </h3>
+          <p className="text-xs text-slate-400 mt-1">
+            يعرض الإشعارات التي حُفظت داخل التطبيق. حالة «تم الإنشاء» وتاريخها لا يؤكدان تسليماً خارجياً.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" data-testid="status-subscription-reminder-heartbeat">
+            <span className="text-slate-400">آخر فحص للمهمة المجدولة:</span>
+            {isLoading ? (
+              <span className="text-slate-300">جارٍ تحميل حالة الفحص</span>
+            ) : isError && !data ? (
+              <span className="text-red-300">تعذّر تحميل حالة الفحص</span>
+            ) : !data?.heartbeat ? (
+              <span className="text-slate-300">لا توجد حالة فحص محفوظة</span>
+            ) : (
+              <>
+                <Badge className={data.heartbeat.status === "success"
+                  ? "bg-emerald-900/40 text-emerald-300 border border-emerald-800"
+                  : "bg-red-900/30 text-red-300 border border-red-800"}>
+                  {data.heartbeat.status === "success" ? "نجح الفحص" : "فشل الفحص"}
+                </Badge>
+                <time className="text-slate-300" dateTime={data.heartbeat.lastCheckAt}>
+                  {new Intl.DateTimeFormat("ar-SA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(data.heartbeat.lastCheckAt))}
+                </time>
+              </>
+            )}
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+          className="shrink-0 border-slate-600 text-slate-200 hover:bg-slate-700"
+          data-testid="button-refresh-subscription-reminder-log"
+        >
+          {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8" data-testid="status-subscription-reminder-log-loading">
+          <Loader2 className="animate-spin text-amber-400 w-6 h-6" />
+        </div>
+      ) : isError ? (
+        <div className="text-sm text-red-300 bg-red-900/20 border border-red-800 rounded-lg px-3 py-3" data-testid="status-subscription-reminder-log-error">
+          تعذّر تحميل سجل التذكيرات. تحقق من الاتصال ثم أعد المحاولة.
+        </div>
+      ) : reminders.length === 0 ? (
+        <div className="text-center text-sm text-slate-400 py-8" data-testid="status-subscription-reminder-log-empty">
+          لا توجد تذكيرات محفوظة حتى الآن.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-right">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-700">
+                <th className="font-medium p-2">المرحلة</th>
+                <th className="font-medium p-2">تاريخ إنشاء الإشعار</th>
+                <th className="font-medium p-2">مرجع المالك</th>
+                <th className="font-medium p-2">الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reminders.map((reminder) => (
+                <tr key={reminder.id} className="border-b border-slate-700/70 last:border-0" data-testid={`row-subscription-reminder-${reminder.id}`}>
+                  <td className="p-2 text-slate-200">{milestoneLabel(reminder.milestone)}</td>
+                  <td className="p-2 text-slate-300 whitespace-nowrap">
+                    {new Intl.DateTimeFormat("ar-SA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(reminder.createdAt))}
+                  </td>
+                  <td className="p-2 text-slate-300 font-mono text-xs" dir="ltr">{reminder.ownerId}</td>
+                  <td className="p-2">
+                    <Badge className="bg-emerald-900/40 text-emerald-300 border border-emerald-800" data-testid={`status-subscription-reminder-${reminder.id}`}>
+                      تم إنشاء الإشعار داخل التطبيق
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-xs text-slate-500 mt-3">يعرض أحدث {toAr(200)} سجل كحد أقصى.</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 interface PromoCode {
   id: number;
   code: string;
@@ -4992,6 +5110,7 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       )}
 
       {isSuperAdmin && <PromoCodesPanel />}
+      {isSuperAdmin && <SubscriptionReminderLog />}
 
       {/* Add/Edit Form Dialog */}
       <Dialog open={showForm} onOpenChange={(o) => { if (!o) setShowForm(false); }}>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Building2, CheckCircle2, CreditCard, Loader2, Plus, ShieldCheck, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -123,6 +123,20 @@ function useMoyasarScript() {
 
 export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModalProps) {
   const queryClient = useQueryClient();
+  const { data: currentLimits, isLoading: isPriceLoading } = useQuery<{
+    extraChaletPrice: number | string | null;
+    extraServicePrice: number | string | null;
+  }>({
+    queryKey: ["owner", "plan-limits"],
+    queryFn: async () => {
+      const response = await apiFetch("/owner/plan-limits");
+      if (!response.ok) throw new Error("تعذّر تحميل سعر الإضافة");
+      return response.json();
+    },
+    enabled: open,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
   const { ready: scriptReady, failed: scriptFailed } = useMoyasarScript();
   const formContainerRef = useRef<HTMLDivElement>(null);
   const checkoutRef = useRef<any>(null);
@@ -138,6 +152,7 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
 
   const activeAddonType = returnAttempt?.addonType ?? addonType;
   const label = activeAddonType === "chalet" ? "عقار إضافي" : "خدمة إضافية";
+  const listedPrice = activeAddonType === "chalet" ? currentLimits?.extraChaletPrice : currentLimits?.extraServicePrice;
 
   function refreshOwnerData() {
     for (const queryKey of [
@@ -411,8 +426,16 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
                       <Plus className="h-4 w-4 text-primary" />
                       {label}
                     </div>
-                    <p className="mt-2">يعرض الخادم السعر النهائي الحالي قبل إتمام الدفع.</p>
-                    {quote && <p className="mt-2 font-bold text-foreground">{amountLabel} ر.س — لمرة واحدة</p>}
+                    <p className="mt-2">الإضافة توسّع باقتك الحالية دون شراء باقة رئيسية جديدة.</p>
+                    {quote ? (
+                      <p className="mt-2 font-bold text-foreground">السعر النهائي: {amountLabel} ر.س — لمرة واحدة</p>
+                    ) : listedPrice != null ? (
+                      <p className="mt-2 font-bold text-foreground">
+                        السعر الحالي: {Number(listedPrice).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س — لمرة واحدة
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs">{isPriceLoading ? "جارٍ تحميل سعر الإضافة..." : "سيُتحقق من السعر النهائي قبل الدفع."}</p>
+                    )}
                   </div>
                   <p className="flex items-start gap-2 text-xs text-muted-foreground">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />

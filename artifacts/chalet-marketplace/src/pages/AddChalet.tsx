@@ -139,6 +139,7 @@ async function uploadFile(file: File): Promise<string | null> {
 export default function AddChalet() {
   const qc = useQueryClient();
   const [showAddonPayment, setShowAddonPayment] = useState(false);
+  const promptedForAddon = useRef(false);
   const [selectedRegionId, setSelectedRegionId] = useState<number | null>(null);
   const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
   const { regions, cities, districts, amenities, propertyCategories } = useCatalog(selectedRegionId, selectedCityId);
@@ -291,6 +292,13 @@ export default function AddChalet() {
     staleTime: 1000 * 60,
     enabled: !isEditMode,
   });
+
+  useEffect(() => {
+    if (isEditMode || promptedForAddon.current || !planLimits?.active ||
+        planLimits.chaletCount < planLimits.chaletLimit || planLimits.extraChaletPrice == null) return;
+    promptedForAddon.current = true;
+    setShowAddonPayment(true);
+  }, [isEditMode, planLimits]);
 
   const { data: editSub } = useQuery({
     queryKey: ["owner", "submission", editId],
@@ -611,7 +619,8 @@ export default function AddChalet() {
     )) {
       const canBuySlot = planLimits.active && planLimits.chaletCount >= planLimits.chaletLimit &&
         planLimits.extraChaletPrice != null;
-      navigate(canBuySlot ? "/subscription?addon=chalet" : "/subscription");
+      if (canBuySlot) setShowAddonPayment(true);
+      else navigate("/subscription");
       return;
     }
 
@@ -705,7 +714,8 @@ export default function AddChalet() {
               const refreshed = await refetchPlanLimits();
               const currentLimits = refreshed.data ?? planLimits;
               const canBuySlot = currentLimits?.active && currentLimits.extraChaletPrice != null;
-              navigate(canBuySlot ? "/subscription?addon=chalet" : "/subscription");
+              if (canBuySlot) setShowAddonPayment(true);
+              else navigate("/subscription");
             }
           } catch {}
         },

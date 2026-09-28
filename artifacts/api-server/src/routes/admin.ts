@@ -28,6 +28,7 @@ import {
   ownerExpensesTable,
   customerNotesTable,
   ownerSubscriptionsTable,
+  ownerNotificationsTable,
   subscriptionPromoCodesTable,
   subscriptionCheckoutIntentsTable,
   subscriptionGrantAuditTable,
@@ -39,7 +40,7 @@ import {
   type AdminPermKey,
   type AdminStaffPermissions,
 } from "@workspace/db/schema";
-import { eq, inArray, and, or, ilike, gt, lt, ne, sql, isNull } from "drizzle-orm";
+import { eq, inArray, and, or, ilike, gt, lt, ne, sql, isNull, desc } from "drizzle-orm";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
@@ -2098,6 +2099,56 @@ router.post("/support-requests/:id/reply", requireSupportDisputesAdmin, adminRep
 });
 
 /* ── Subscription Plans Management ──────────────────────── */
+
+router.get("/subscription-reminder-log", requireSuperAdmin, async (_req, res): Promise<void> => {
+  const [heartbeatSetting] = await db
+    .select({ value: siteSettingsTable.value })
+    .from(siteSettingsTable)
+    .where(eq(siteSettingsTable.key, "subscription_expiry_reminder_heartbeat"))
+    .limit(1);
+  const heartbeatSchema = z.object({
+    lastCheckAt: z.string().datetime({ offset: true }),
+    status: z.enum(["success", "failure"]),
+  });
+  let heartbeat: z.infer<typeof heartbeatSchema> | null = null;
+  if (heartbeatSetting?.value) {
+    try {
+      const parsed = heartbeatSchema.safeParse(JSON.parse(heartbeatSetting.value));
+      if (parsed.success && Number.isFinite(Date.parse(parsed.data.lastCheckAt))) {
+        heartbeat = parsed.data;
+      }
+    } catch {
+      // Ignore malformed or legacy setting values; never expose raw setting contents.
+    }
+  }
+
+  const notifications = await db
+    .select({
+      id: ownerNotificationsTable.id,
+      ownerId: ownerNotificationsTable.ownerId,
+      message: ownerNotificationsTable.message,
+      createdAt: ownerNotificationsTable.createdAt,
+    })
+    .from(ownerNotificationsTable)
+    .where(eq(ownerNotificationsTable.type, "subscription_expiry_reminder"))
+    .orderBy(desc(ownerNotificationsTable.createdAt))
+    .limit(200);
+
+  const reminders = notifications.flatMap((notification) => {
+    const markerMatch = notification.message.match(/\u2063subscription-expiry:\d+:(5|3|0)\u2063/);
+    if (!markerMatch) return [];
+    const daysBeforeExpiry = Number(markerMatch[1]) as 5 | 3 | 0;
+    return [{
+      id: notification.id,
+      ownerId: notification.ownerId,
+      milestone: daysBeforeExpiry,
+      createdAt: notification.createdAt,
+      status: "created" as const,
+    }];
+  });
+
+  res.json({ heartbeat, reminders });
+});
 
 const PlanSchema = z.object({
   nameAr: z.string().trim().min(1),

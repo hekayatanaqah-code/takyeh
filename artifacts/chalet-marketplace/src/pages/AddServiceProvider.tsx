@@ -70,6 +70,7 @@ export default function AddServiceProvider() {
   const editSubmissionId = Number(new URLSearchParams(window.location.search).get("editSubmission") || 0) || null;
   const [showAddonPayment, setShowAddonPayment] = useState(false);
   const [showQuotaAction, setShowQuotaAction] = useState(false);
+  const promptedForAddon = useRef(false);
 
   const { data: planLimits, isLoading: planLimitsLoading, refetch: refetchPlanLimits } = useQuery<{
     active: boolean;
@@ -89,6 +90,13 @@ export default function AddServiceProvider() {
   });
   const serviceLimitReached = !!planLimits &&
     planLimits.serviceCount >= planLimits.serviceLimit;
+
+  useEffect(() => {
+    if (editSubmissionId || promptedForAddon.current || !planLimits?.active ||
+        !serviceLimitReached || planLimits.extraServicePrice == null) return;
+    promptedForAddon.current = true;
+    setShowAddonPayment(true);
+  }, [editSubmissionId, planLimits, serviceLimitReached]);
 
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -432,6 +440,7 @@ export default function AddServiceProvider() {
       if (serviceLimitReached) {
         setSubmitError("وصلت إلى الحد الأقصى للخدمات في باقتك.");
         setShowQuotaAction(true);
+        if (planLimits.extraServicePrice != null) setShowAddonPayment(true);
         return;
       }
     }
@@ -525,7 +534,11 @@ export default function AddServiceProvider() {
           setSubmitError(err.error ?? "تحتاج إلى مساحة إضافية أو ترقية الباقة لإضافة الخدمة.");
           // Keep the form in place and present the current subscription's direct
           // add-on action (or renewal/plan route when the subscription is inactive).
-          await refetchPlanLimits();
+          const refreshed = await refetchPlanLimits();
+          const latestLimits = refreshed.data ?? planLimits;
+          if (!editSubmissionId && latestLimits?.active && latestLimits.extraServicePrice != null) {
+            setShowAddonPayment(true);
+          }
           setShowQuotaAction(!editSubmissionId);
           return;
         }
