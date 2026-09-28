@@ -44,6 +44,7 @@ import { normalizeCustomerPhone } from "../lib/customerPhone";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
 import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess } from "../lib/subscription-access";
 import { createSubscriptionCheckout, confirmSubscriptionCheckout, redeemFreeSubscriptionCheckout, SubscriptionCheckoutError } from "../lib/subscription-checkout";
+import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
 import { createAddonCheckout, confirmAddonCheckout, redeemFreeAddonCheckout, SubscriptionAddonCheckoutError } from "../lib/subscription-addon-checkout";
 
 const router = Router();
@@ -2900,7 +2901,7 @@ router.get("/plans", async (_req, res) => {
     .from(subscriptionPlansTable)
     .orderBy(subscriptionPlansTable.sortOrder, subscriptionPlansTable.id);
 
-  return res.json(dbPlans.filter((p) => p.isActive).map((p) => ({
+  return res.json(dbPlans.filter((p) => p.isActive && !isArchivedSubscriptionPlan(p)).map((p) => ({
     id: p.slug,
     label: p.nameAr,
     price: Number(p.price),

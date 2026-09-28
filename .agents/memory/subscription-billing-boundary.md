@@ -20,3 +20,9 @@ For legacy accounts with published inventory but no subscription record, a singl
 **Why:** Absence of a row in the old system did not prove that an owner had used a trial; an existing expired row does prove previous entitlement and should remain expired.
 
 **How to apply:** When migrating or joining owner identities, check all linked aliases before issuing a trial; a linked paid subscription takes precedence over a second trial.
+
+Removing obsolete plans from the catalog is different from deleting historic billing evidence. Old plans with no references may be deleted once; those referenced by an owner subscription, checkout quote, or payment must be archived and hidden from selection instead.
+
+**Why:** A clean administrator list must not erase the terms or identity needed to interpret an older customer's subscription and payment.
+
+**How to apply:** Keep current purchasable and grantable catalogs free of legacy plans while retaining referenced records for entitlement lookup and audit history. Do not re-seed the removed plans at startup.

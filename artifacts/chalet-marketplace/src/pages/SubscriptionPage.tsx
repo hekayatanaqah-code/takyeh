@@ -37,78 +37,30 @@ interface PlanMeta {
 
 const PLAN_META: Record<string, PlanMeta> = {
   trial: {
-    label: "تجريبي",
+    label: "التجربة المجانية",
     icon: <Clock className="w-5 h-5" />,
     color: "from-stone-500 to-stone-400",
-    features: [
-      "إدارة العقارات والخدمات",
-      "إدارة الحجوزات والعملاء",
-      "إدارة المصروفات والتقارير المالية",
-      "إدارة الموظفين والإعدادات",
-      "جميع أقسام المنصة متاحة خلال شهر التجربة المجاني",
-    ],
+    features: [],
   },
-  monthly: {
-    label: "شهري",
-    icon: <Package className="w-5 h-5" />,
+  "property-monthly": {
+    label: "إدارة العقار — شهري",
+    icon: <Building2 className="w-5 h-5" />,
     color: "from-amber-700 to-amber-500",
-    features: [
-      "شاليه واحد",
-      "خدمة تقديم واحدة",
-      "تقارير شهرية",
-      "إدارة مالية كاملة",
-      "دعم فني بالواتساب",
-    ],
+    features: [],
   },
-  yearly: {
-    label: "سنوي",
+  "full-monthly": {
+    label: "إدارة شاملة — شهري",
     icon: <Crown className="w-5 h-5" />,
     color: "from-amber-600 to-yellow-500",
-    features: [
-      "حتى 3 شاليهات",
-      "حتى 3 خدمات",
-      "تقارير سنوية",
-      "إدارة مالية كاملة",
-      "دعم فني أولوية",
-      "تقارير قابلة للمشاركة",
-    ],
+    features: [],
   },
-  chalet_basic: {
-    label: "شاليه — أساسي",
-    icon: <Building2 className="w-5 h-5" />,
-    color: "from-stone-600 to-amber-500",
-    features: ["شاليه واحد", "إدارة الحجوزات", "تقارير أساسية"],
-  },
-  chalet_pro: {
-    label: "شاليه — احترافي",
-    icon: <Zap className="w-5 h-5" />,
-    color: "from-amber-700 to-orange-500",
-    features: ["حتى 5 شاليهات", "إدارة مالية كاملة", "تقارير تفصيلية", "دعم أولوية"],
-  },
-  chalet_unlimited: {
-    label: "شاليه — غير محدود",
-    icon: <Crown className="w-5 h-5" />,
-    color: "from-amber-800 to-amber-600",
-    features: ["شاليهات غير محدودة", "إدارة مالية كاملة", "تقارير تفصيلية", "دعم أولوية VIP"],
-  },
-  service_basic: {
-    label: "خدمات — أساسي",
-    icon: <Star className="w-5 h-5" />,
-    color: "from-stone-500 to-stone-400",
-    features: ["خدمة واحدة", "ملف مزود الخدمة", "إدارة أساسية"],
-  },
-  service_pro: {
-    label: "خدمات — احترافي",
-    icon: <Zap className="w-5 h-5" />,
-    color: "from-stone-600 to-amber-600",
-    features: ["خدمات غير محدودة", "ملف موسع", "إدارة كاملة", "دعم أولوية"],
-  },
-  bundle: {
-    label: "حزمة شاملة",
-    icon: <Crown className="w-5 h-5" />,
-    color: "from-amber-600 to-orange-500",
-    features: ["شاليهات + خدمات غير محدودة", "إدارة مالية كاملة", "تقارير VIP", "دعم أولوية قصوى"],
-  },
+};
+
+const UNKNOWN_PLAN_META: PlanMeta = {
+  label: "اشتراك محفوظ",
+  icon: <Package className="w-5 h-5" />,
+  color: "from-stone-600 to-stone-400",
+  features: [],
 };
 
 const STATUS_MAP: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
@@ -186,7 +138,7 @@ export default function SubscriptionPage() {
   }
 
   const plan = sub?.plan ?? "trial";
-  const fallbackMeta = PLAN_META[plan] ?? PLAN_META.trial;
+  const fallbackMeta = PLAN_META[plan] ?? UNKNOWN_PLAN_META;
   const meta = {
     ...fallbackMeta,
     label: sub?.planDetails?.nameAr ?? fallbackMeta.label,

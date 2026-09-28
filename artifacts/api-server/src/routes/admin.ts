@@ -47,6 +47,7 @@ import crypto from "crypto";
 import { extractCoordsFromMapsUrl } from "../lib/extractMapCoords";
 import { logger } from "../lib/logger";
 import { getOrStartOwnerSubscription } from "../lib/subscription-access";
+import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
 
 declare global {
   namespace Express {
@@ -2128,7 +2129,7 @@ router.get("/plans", async (_req, res) => {
     .select()
     .from(subscriptionPlansTable)
     .orderBy(subscriptionPlansTable.sortOrder, subscriptionPlansTable.id);
-  return res.json(plans);
+  return res.json(plans.filter((plan) => !isArchivedSubscriptionPlan(plan)));
 });
 
 router.post("/plans", async (req, res) => {
@@ -2326,10 +2327,6 @@ const ManualGrantBody = z.object({
     });
   }
 });
-const legacySubscriptionPlans = new Set([
-  "trial", "monthly", "yearly", "chalet_basic", "chalet_pro",
-  "chalet_unlimited", "service_basic", "service_pro", "bundle",
-]);
 
 router.post("/owners/:ownerId/subscription-grant", requireSuperAdmin, async (req, res) => {
   const ownerId = z.string().trim().min(1).max(200).regex(/^[A-Za-z0-9_:-]+$/)
@@ -2357,7 +2354,7 @@ router.post("/owners/:ownerId/subscription-grant", requireSuperAdmin, async (req
     serviceLimit: subscriptionPlansTable.serviceLimit,
   })
     .from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, plan)).limit(1);
-  if (!configuredPlan && !legacySubscriptionPlans.has(plan)) {
+  if (!configuredPlan || isArchivedSubscriptionPlan(configuredPlan)) {
     res.status(400).json({ error: "اختر باقة موجودة في إعدادات الاشتراكات" });
     return;
   }

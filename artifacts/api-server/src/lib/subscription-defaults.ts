@@ -2,6 +2,15 @@ import { db } from "@workspace/db";
 import { siteSettingsTable, subscriptionPlansTable } from "@workspace/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
+const LEGACY_PLAN_SLUGS = [
+  "monthly", "yearly", "chalet_basic", "chalet_pro",
+  "chalet_unlimited", "service_basic", "service_pro", "bundle",
+] as const;
+
+export function isArchivedSubscriptionPlan(plan: { slug: string; nameAr: string }): boolean {
+  return LEGACY_PLAN_SLUGS.some((slug) => slug === plan.slug) || plan.nameAr.includes("سابق");
+}
+
 // Starting prices only. The administrative plan editor is the source of truth
 // after this one-time seed; never overwrite an administrator's changes.
 const DEFAULT_PLANS = [
@@ -29,25 +38,6 @@ const DEFAULT_PLANS = [
     features: ["جميع أقسام المنصة", "عقار واحد", "خدمة واحدة"],
     isActive: false, sortOrder: 0,
   },
-  // Historical subscriptions retain their entitlements and are editable by the
-  // administrator. Inactive legacy plans aren't offered to new purchasers.
-  ...([
-    ["monthly", "شهري سابق", "99.00", 30, "full", 1, 1],
-    ["yearly", "سنوي سابق", "799.00", 365, "full", 3, 3],
-    ["chalet_basic", "عقار أساسي سابق", "149.00", 30, "property", 1, 0],
-    ["chalet_pro", "عقار احترافي سابق", "299.00", 30, "full", 5, 0],
-    ["chalet_unlimited", "عقارات غير محدودة سابقة", "499.00", 30, "full", null, 0],
-    ["service_basic", "خدمة أساسية سابقة", "99.00", 30, "property", 0, 1],
-    ["service_pro", "خدمات احترافية سابقة", "249.00", 30, "full", 0, null],
-    ["bundle", "حزمة سابقة", "599.00", 30, "full", null, null],
-  ] as const).map(([slug, nameAr, price, durationDays, scope, chaletLimit, serviceLimit], index) => ({
-    slug, nameAr, price, durationDays, trialDays: 0, scope,
-    chaletLimit, serviceLimit,
-    extraChaletPrice: "50.00",
-    extraServicePrice: "50.00",
-    features: [] as string[],
-    isActive: false, sortOrder: 100 + index,
-  })),
 ];
 
 export async function seedSubscriptionPlansOnce() {
@@ -78,24 +68,33 @@ export async function seedSubscriptionPlansOnce() {
           eq(subscriptionPlansTable.serviceLimit, 0),
           isNull(subscriptionPlansTable.extraServicePrice),
         ));
-      await tx.update(subscriptionPlansTable).set({ extraServicePrice: "50.00" })
-        .where(and(
-          eq(subscriptionPlansTable.slug, "chalet_basic"),
-          eq(subscriptionPlansTable.price, "149.00"),
-          eq(subscriptionPlansTable.chaletLimit, 1),
-          eq(subscriptionPlansTable.serviceLimit, 0),
-          isNull(subscriptionPlansTable.extraServicePrice),
-        ));
-      await tx.update(subscriptionPlansTable).set({ extraChaletPrice: "50.00" })
-        .where(and(
-          eq(subscriptionPlansTable.slug, "service_basic"),
-          eq(subscriptionPlansTable.price, "99.00"),
-          eq(subscriptionPlansTable.chaletLimit, 0),
-          eq(subscriptionPlansTable.serviceLimit, 1),
-          isNull(subscriptionPlansTable.extraChaletPrice),
-        ));
       await tx.insert(siteSettingsTable)
         .values({ key: "subscription_cross_category_addons_seeded", value: "1" })
+        .onConflictDoNothing({ target: siteSettingsTable.key });
+    }
+
+    const [cleanupMarker] = await tx.select({ key: siteSettingsTable.key })
+      .from(siteSettingsTable).where(eq(siteSettingsTable.key, "legacy_subscription_plans_cleaned"));
+    if (!cleanupMarker) {
+      // Keep an archived row if historic purchases, quotes, or subscriptions
+      // still refer to it; otherwise remove only the known old/test catalog.
+      const archived = sql`(${subscriptionPlansTable.slug} IN
+        ('monthly', 'yearly', 'chalet_basic', 'chalet_pro', 'chalet_unlimited',
+         'service_basic', 'service_pro', 'bundle')
+        OR ${subscriptionPlansTable.nameAr} LIKE ${"%سابق%"})`;
+      await tx.execute(sql`
+        DELETE FROM subscription_plans AS p
+        WHERE (p.slug IN ('monthly', 'yearly', 'chalet_basic', 'chalet_pro',
+                         'chalet_unlimited', 'service_basic', 'service_pro', 'bundle')
+               OR p.name_ar LIKE ${"%سابق%"})
+          AND p.slug NOT IN ('trial', 'property-monthly', 'full-monthly')
+          AND NOT EXISTS (SELECT 1 FROM owner_subscriptions s WHERE s.plan = p.slug)
+          AND NOT EXISTS (SELECT 1 FROM subscription_checkout_intents i WHERE i.plan = p.slug)
+          AND NOT EXISTS (SELECT 1 FROM subscription_payments pay WHERE pay.plan = p.slug)
+      `);
+      await tx.update(subscriptionPlansTable).set({ isActive: false }).where(archived);
+      await tx.insert(siteSettingsTable)
+        .values({ key: "legacy_subscription_plans_cleaned", value: "1" })
         .onConflictDoNothing({ target: siteSettingsTable.key });
     }
   });

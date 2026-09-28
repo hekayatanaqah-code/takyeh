@@ -11,6 +11,7 @@ import {
   type SubscriptionTerms,
 } from "@workspace/db/schema";
 import { getOrStartOwnerSubscription, subscriptionOwnerKeys } from "./subscription-access";
+import { isArchivedSubscriptionPlan } from "./subscription-defaults";
 
 const INTENT_TTL_MS = 30 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -64,7 +65,9 @@ async function resolveActivePlan(plan: string): Promise<ResolvedPlan> {
   }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, plan)).limit(1);
 
   if (!configured) throw new SubscriptionCheckoutError("الباقة المطلوبة غير موجودة");
-  if (!configured.isActive) throw new SubscriptionCheckoutError("هذه الباقة غير متاحة حالياً");
+  if (!configured.isActive || isArchivedSubscriptionPlan({ slug: configured.slug, nameAr: configured.nameAr })) {
+    throw new SubscriptionCheckoutError("هذه الباقة غير متاحة حالياً");
+  }
   const price = Number(configured.price);
   if (!Number.isFinite(price) || price < 0 || configured.durationDays < 1) {
     throw new SubscriptionCheckoutError("إعدادات سعر الباقة أو مدتها غير صالحة", 500);
