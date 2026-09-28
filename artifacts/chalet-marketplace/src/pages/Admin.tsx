@@ -4771,10 +4771,21 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
     setShowForm(true);
   }
 
+  function parseAddonPrice(value: string, label: string): number | null {
+    const normalized = fromAr(value).trim().replace(/\u066b/g, ".");
+    if (!normalized) return null;
+    if (!/^\d+(?:\.\d{1,2})?$/.test(normalized) || Number(normalized) > 99999999.99) {
+      throw new Error(`${label}: أدخل مبلغاً صحيحاً بالريال وبحد أقصى منزلتين عشريتين، أو اترك الحقل فارغاً لتعطيل الإضافة.`);
+    }
+    return Number(normalized);
+  }
+
   async function handleSave() {
     setError(null);
     setSaving(true);
     try {
+      const extraChaletPrice = parseAddonPrice(form.extraChaletPrice, "سعر العقار الإضافي");
+      const extraServicePrice = parseAddonPrice(form.extraServicePrice, "سعر الخدمة الإضافية");
       const features = featuresInput
         .split("\n")
         .map((l) => l.trim())
@@ -4788,8 +4799,8 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
         scope: form.scope || undefined,
         chaletLimit: form.chaletLimit,
         serviceLimit: form.serviceLimit,
-        extraChaletPrice: form.extraChaletPrice === "" ? null : Number(fromAr(form.extraChaletPrice)),
-        extraServicePrice: form.extraServicePrice === "" ? null : Number(fromAr(form.extraServicePrice)),
+        extraChaletPrice,
+        extraServicePrice,
         features,
       };
       const r = editId
@@ -4810,8 +4821,8 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       }
       await qc.invalidateQueries({ queryKey: ["admin", "plans"] });
       setShowForm(false);
-    } catch {
-      setError("تعذّر حفظ الخطة. حاول مرة أخرى.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذّر حفظ الخطة. حاول مرة أخرى.");
     } finally {
       setSaving(false);
     }
@@ -4925,10 +4936,24 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                   {p.serviceLimit != null && (
                     <span className="text-slate-400">الخدمات: {p.serviceLimit === 0 ? "غير متاح" : toAr(p.serviceLimit)}</span>
                   )}
-                  {(p.extraChaletPrice == null || p.extraServicePrice == null) && (
-                    <span className="text-amber-300">رسوم الإضافات غير مكتملة</span>
-                  )}
                   <span className="text-slate-500">ترتيب: {toAr(p.sortOrder)}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-700 pt-3 text-xs">
+                  <span className="rounded-md bg-slate-700/70 px-2.5 py-1 text-slate-200">
+                    عقار إضافي: <strong className="text-amber-300">{p.extraChaletPrice == null
+                      ? "غير متاح"
+                      : Number(p.extraChaletPrice) === 0
+                        ? "مجاناً"
+                        : `${toAr(Number(p.extraChaletPrice).toLocaleString("en-US", { maximumFractionDigits: 2 }))} ر.س`}</strong>
+                  </span>
+                  <span className="rounded-md bg-slate-700/70 px-2.5 py-1 text-slate-200">
+                    خدمة إضافية: <strong className="text-amber-300">{p.extraServicePrice == null
+                      ? "غير متاحة"
+                      : Number(p.extraServicePrice) === 0
+                        ? "مجاناً"
+                        : `${toAr(Number(p.extraServicePrice).toLocaleString("en-US", { maximumFractionDigits: 2 }))} ر.س`}</strong>
+                  </span>
+                  <span className="text-slate-400 self-center">الرسوم لمرة واحدة لكل إضافة</span>
                 </div>
                 {(p.features ?? []).length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -5046,33 +5071,38 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-amber-700/40 bg-amber-950/20 p-3">
+                <p className="mb-2 text-sm font-semibold text-amber-200">تسعير الإضافات لهذه الباقة</p>
+                <p className="mb-3 text-xs text-slate-400">اختياري لكل نوع: اترك السعر فارغاً لتعطيل شراء الإضافة، أو أدخل ٠ لتفعيلها مجاناً. السعر المدفوع يُحصّل مرة واحدة لكل إضافة، دون تغيير سعر الاشتراك.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">رسوم العقار الإضافي (ر.س)</label>
+                  <label htmlFor="plan-extra-chalet-price" className="text-xs text-slate-200 mb-1 block">سعر العقار الإضافي (ر.س) — اختياري</label>
                   <Input
+                    id="plan-extra-chalet-price"
+                    data-testid="input-plan-extra-chalet-price"
                     type="text"
                     inputMode="decimal"
-                    placeholder="غير محدد"
+                    placeholder="مثال: ٥٠"
                     value={toAr(form.extraChaletPrice)}
                     onChange={(e) => setForm({ ...form, extraChaletPrice: fromAr(e.target.value) })}
                     className="bg-slate-800 border-slate-600 text-white"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">رسوم الخدمة الإضافية (ر.س)</label>
+                  <label htmlFor="plan-extra-service-price" className="text-xs text-slate-200 mb-1 block">سعر الخدمة الإضافية (ر.س) — اختياري</label>
                   <Input
+                    id="plan-extra-service-price"
+                    data-testid="input-plan-extra-service-price"
                     type="text"
                     inputMode="decimal"
-                    placeholder="غير محدد"
+                    placeholder="مثال: ٥٠"
                     value={toAr(form.extraServicePrice)}
                     onChange={(e) => setForm({ ...form, extraServicePrice: fromAr(e.target.value) })}
                     className="bg-slate-800 border-slate-600 text-white"
                   />
                 </div>
+                </div>
               </div>
-              <p className="text-xs text-amber-300">
-                يجب تحديد رسوم الإضافات قبل بيعها؛ الحقول الفارغة تعني أنها غير مفعّلة للتحصيل.
-              </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
