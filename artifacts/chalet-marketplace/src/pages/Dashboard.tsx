@@ -25021,6 +25021,7 @@ type DashboardSubscription = {
   status: string;
   expiresAt: string | null;
   paymentStatus: string;
+  reminderPreviewMilestone?: 3 | 0;
 };
 
 function subscriptionDaysRemaining(subscription: DashboardSubscription): number | null {
@@ -25273,11 +25274,13 @@ export default function Dashboard() {
   const { data: subscription } = useQuery<DashboardSubscription | null>({
     queryKey: ["owner", "subscription-header"],
     queryFn: async () => {
-      const r = await apiFetch("/owner/subscription");
+      const r = await apiFetch("/owner/subscription?reminderPreview=1");
       if (!r.ok) return null;
       return r.json();
     },
     enabled: isAuthenticated || isImpersonating,
+    refetchInterval: (query) =>
+      (query.state.data as DashboardSubscription | null)?.reminderPreviewMilestone !== undefined ? 30_000 : false,
   });
 
   /* Render only modules granted by the current subscription. The property-only
@@ -25656,9 +25659,11 @@ export default function Dashboard() {
         </div>
       )}
       <Navbar />
-      {!isStaff && !isImpersonating && !actAsStaff && subscription && isSubscriptionExpiryWarning(subscription) && (() => {
+      {!actAsStaff && subscription && isSubscriptionExpiryWarning(subscription)
+        && (subscription.reminderPreviewMilestone !== undefined || (!isStaff && !isImpersonating)) && (() => {
+        const isPreview = subscription.reminderPreviewMilestone !== undefined;
         const daysRemaining = subscriptionDaysRemaining(subscription);
-        const isExpired = subscription.status === "expired" || (daysRemaining !== null && daysRemaining <= 0);
+        const isExpired = !isPreview && (subscription.status === "expired" || (daysRemaining !== null && daysRemaining <= 0));
         const dayLabel = daysRemaining === 1
           ? "يوم واحد"
           : daysRemaining === 2
@@ -25667,7 +25672,7 @@ export default function Dashboard() {
               ? `${toArN(daysRemaining)} أيام`
               : `${toArN(daysRemaining ?? 0)} يوم`;
         return (
-          <div role="alert" className="container mx-auto max-w-4xl px-4 pt-4">
+          <div role="alert" className="container mx-auto max-w-4xl px-4 pt-4" data-testid={isPreview ? "banner-subscription-reminder-preview" : undefined}>
             <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border px-4 py-4 ${
               isExpired
                 ? "border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100"
@@ -25677,10 +25682,15 @@ export default function Dashboard() {
                 <AlertTriangle className={`w-5 h-5 mt-0.5 shrink-0 ${isExpired ? "text-red-600 dark:text-red-300" : "text-amber-600 dark:text-amber-300"}`} />
                 <div>
                   <p className="font-bold">
-                    {isExpired ? "انتهت صلاحية اشتراكك" : `تبقّى على انتهاء اشتراكك ${dayLabel}`}
+                    {isPreview && <span className="ml-2 rounded bg-amber-200 px-2 py-0.5 text-xs text-amber-950">TEST · معاينة</span>}
+                    {isPreview && subscription.reminderPreviewMilestone === 0
+                      ? "ينتهي اشتراكك اليوم"
+                      : isExpired ? "انتهت صلاحية اشتراكك" : `تبقّى على انتهاء اشتراكك ${dayLabel}`}
                   </p>
                   <p className="mt-1 text-sm">
-                    {isExpired
+                    {isPreview
+                      ? "هذا تنبيه تجريبي لمعاينة الشكل فقط؛ اشتراكك الحقيقي لم يتغير. زر التجديد يفتح صفحة اشتراكك الحقيقي."
+                      : isExpired
                       ? "جدّد الاشتراك الآن لمواصلة استقبال الحجوزات وإضافة العقارات والخدمات."
                       : "جدّد اشتراكك الآن لضمان استمرار خدماتك دون انقطاع."}
                   </p>

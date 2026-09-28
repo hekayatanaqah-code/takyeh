@@ -43,6 +43,7 @@ import { sendOtpEmail, sendReportEmail } from "../lib/email";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
 import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess } from "../lib/subscription-access";
+import { getReminderPreview } from "../lib/subscription-reminder-preview";
 import { createSubscriptionCheckout, confirmSubscriptionCheckout, redeemFreeSubscriptionCheckout, SubscriptionCheckoutError } from "../lib/subscription-checkout";
 import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
 import { createAddonCheckout, confirmAddonCheckout, redeemFreeAddonCheckout, SubscriptionAddonCheckoutError } from "../lib/subscription-addon-checkout";
@@ -2983,6 +2984,10 @@ router.post("/subscription/addons/redeem", async (req, res) => {
 router.get("/subscription", async (req, res) => {
   const ownerId = req.user!.id;
   const sub = await getOrStartOwnerSubscription(ownerId);
+  // Only the dashboard explicitly opts in to the visual preview. Billing and
+  // checkout readers of this endpoint always receive the real subscription.
+  const preview = req.query.reminderPreview === "1"
+    ? await getReminderPreview(ownerId) : null;
   const [planDetails] = await db.select({
     nameAr: subscriptionPlansTable.nameAr,
     features: subscriptionPlansTable.features,
@@ -2998,8 +3003,10 @@ router.get("/subscription", async (req, res) => {
   return res.json({
     ...sub,
     planDetails: sub.termsSnapshot ?? planDetails ?? null,
-    status: isSubscriptionActive(sub) ? sub.status : "expired",
-    daysLeft: calcDaysLeft(sub.expiresAt),
+    status: preview ? "active" : isSubscriptionActive(sub) ? sub.status : "expired",
+    expiresAt: preview ? preview.expiresAt : sub.expiresAt,
+    daysLeft: preview ? preview.milestone : calcDaysLeft(sub.expiresAt),
+    ...(preview ? { reminderPreviewMilestone: preview.milestone } : {}),
   });
 });
 

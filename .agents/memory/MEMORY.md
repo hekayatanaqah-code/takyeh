@@ -33,3 +33,4 @@
 - [Subscription plan identifiers](subscription-plan-identifiers.md) — generate identifiers on creation, but keep them stable when names change because subscriptions reference them.
 - [Subscription billing boundary](subscription-billing-boundary.md) — extra slots are one-time purchases; preserve quoted terms across admin edits and legacy trials across rollout.
 - [Subscription reminder observability](subscription-reminder-observability.md) — report persisted in-app notifications and scheduler checks; never imply external message delivery.
+- [Subscription reminder previews](subscription-reminder-previews.md) — test reminders should be visibly simulated and time-limited without modifying real billing entitlements.

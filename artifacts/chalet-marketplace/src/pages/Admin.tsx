@@ -4472,10 +4472,17 @@ interface SubscriptionReminderLogEntry {
   phone: string | null;
   milestone: 5 | 3 | 0;
   createdAt: string;
+  isPreview?: boolean;
   channels: {
     inApp: "created";
     whatsapp: "ready" | "no_phone" | "invalid_phone" | "no_name";
   };
+}
+
+interface SubscriptionReminderPreview {
+  ownerId: string;
+  milestone: 3 | 0;
+  previewUntil: string;
 }
 
 function reminderWhatsAppNumber(phone: string | null): string | null {
@@ -4501,11 +4508,89 @@ function reminderWhatsAppUrl(reminder: SubscriptionReminderLogEntry): string | n
   const remaining = reminder.milestone === 0
     ? "ينتهي اليوم (٠ يوم متبقٍ)"
     : `ينتهي بعد ${toAr(reminder.milestone)} أيام`;
-  const message = `مرحباً ${reminder.ownerName}، نذكّرك بأن اشتراكك في تكيّة ${remaining}. جدّد اشتراكك بسهولة من الرابط: ${reminderRenewalUrl()}`;
+  const message = reminder.isPreview
+    ? `TEST — هذا إشعار تجريبي فقط وليس فاتورة أو تنبيهاً حقيقياً ولا يغيّر اشتراكك. مرحباً ${reminder.ownerName}، نذكّرك بأن اشتراكك في تكيّة ${remaining}. جدّد اشتراكك بسهولة من الرابط: ${reminderRenewalUrl()}`
+    : `مرحباً ${reminder.ownerName}، نذكّرك بأن اشتراكك في تكيّة ${remaining}. جدّد اشتراكك بسهولة من الرابط: ${reminderRenewalUrl()}`;
   return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 }
 
 function SubscriptionReminderLog() {
+  const queryClient = useQueryClient();
+  const [selectedOwnerId, setSelectedOwnerId] = useState("");
+  const [selectedMilestone, setSelectedMilestone] = useState<3 | 0>(3);
+  const [previewMutationError, setPreviewMutationError] = useState<string | null>(null);
+  const { data: owners = [], isLoading: ownersLoading, isError: ownersError } = useQuery<Owner[]>({
+    queryKey: ["admin", "owners"],
+    queryFn: async () => {
+      const response = await adminFetch("/owners");
+      if (!response.ok) throw new Error("تعذّر تحميل قائمة الملاك");
+      return response.json();
+    },
+    staleTime: 30_000,
+  });
+  const {
+    data: previewData,
+    isLoading: previewsLoading,
+    isError: previewsError,
+    refetch: refetchPreviews,
+  } = useQuery<{ previews: SubscriptionReminderPreview[] }>({
+    queryKey: ["admin", "subscription-reminder-preview"],
+    queryFn: async () => {
+      const response = await adminFetch("/subscription-reminder-preview");
+      if (!response.ok) throw new Error("تعذّر تحميل المعاينات المؤقتة");
+      return response.json();
+    },
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+  const invalidatePreviewData = () => {
+    void queryClient.invalidateQueries({ queryKey: ["admin", "subscription-reminder-log"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin", "subscription-reminder-preview"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin", "owners"] });
+  };
+  const createPreview = useMutation({
+    mutationFn: async ({ ownerId, milestone }: { ownerId: string; milestone: 3 | 0 }) => {
+      const response = await adminFetch("/subscription-reminder-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerId, milestone }),
+      });
+      if (!response.ok) throw new Error("تعذّر بدء معاينة التذكير");
+      return response.json() as Promise<{ ok: true; previewUntil: string }>;
+    },
+    onSuccess: () => {
+      setPreviewMutationError(null);
+      invalidatePreviewData();
+    },
+    onError: (error) => setPreviewMutationError(error instanceof Error ? error.message : "تعذّر بدء المعاينة"),
+  });
+  const stopPreview = useMutation({
+    mutationFn: async (ownerId: string) => {
+      const response = await adminFetch(`/subscription-reminder-preview/${encodeURIComponent(ownerId)}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("تعذّر إيقاف المعاينة");
+      return response.json() as Promise<{ ok: true }>;
+    },
+    onSuccess: () => {
+      setPreviewMutationError(null);
+      invalidatePreviewData();
+    },
+    onError: (error) => setPreviewMutationError(error instanceof Error ? error.message : "تعذّر إيقاف المعاينة"),
+  });
+  const openOwnerPreview = useMutation({
+    mutationFn: async (ownerId: string) => {
+      const response = await adminFetch("/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerId }),
+      });
+      if (!response.ok) throw new Error("تعذّر فتح لوحة المالك للمعاينة");
+      return response.json() as Promise<{ token: string }>;
+    },
+    onSuccess: ({ token }) => {
+      window.location.href = `${BASE}/api/owner/enter-session?token=${encodeURIComponent(token)}`;
+    },
+    onError: (error) => setPreviewMutationError(error instanceof Error ? error.message : "تعذّر فتح لوحة المالك"),
+  });
   const { data, isLoading, isError, refetch, isFetching } = useQuery<{
     heartbeat: { lastCheckAt: string; status: "success" | "failure" } | null;
     reminders: SubscriptionReminderLogEntry[];
@@ -4520,6 +4605,7 @@ function SubscriptionReminderLog() {
     refetchInterval: 60_000,
   });
   const reminders = data?.reminders ?? [];
+  const previews = previewData?.previews ?? [];
   const milestoneLabel = (milestone: SubscriptionReminderLogEntry["milestone"]) =>
     milestone === 0 ? "يوم انتهاء الاشتراك" : `قبل الانتهاء بـ ${toAr(milestone)} أيام`;
 
@@ -4568,6 +4654,120 @@ function SubscriptionReminderLog() {
         </Button>
       </div>
 
+      <div className="mb-5 rounded-lg border border-amber-700/50 bg-amber-950/20 p-3" data-testid="section-subscription-reminder-preview">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h4 className="text-sm font-bold text-amber-200">معاينة مؤقتة لتذكير الاشتراك</h4>
+            <p className="mt-1 text-xs text-slate-400">اختبار إشعار فقط لمدة ساعة؛ لن يتغير الاشتراك أو تاريخ انتهائه.</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void refetchPreviews()}
+            disabled={previewsLoading}
+            className="border-slate-600 text-slate-200 hover:bg-slate-700"
+            data-testid="button-refresh-subscription-reminder-previews"
+          >
+            {previewsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+          </Button>
+        </div>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <select
+            value={selectedOwnerId}
+            onChange={(event) => setSelectedOwnerId(event.target.value)}
+            disabled={ownersLoading || ownersError || owners.length === 0}
+            className="min-h-10 flex-1 rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white disabled:opacity-50"
+            data-testid="select-subscription-reminder-preview-owner"
+            aria-label="اختيار المالك"
+          >
+            <option value="">{ownersLoading ? "جارٍ تحميل الملاك..." : ownersError ? "تعذّر تحميل الملاك" : "اختر المالك"}</option>
+            {owners.map((owner) => (
+              <option key={owner.ownerId} value={owner.ownerId}>{owner.ownerName} — {owner.ownerId}</option>
+            ))}
+          </select>
+          <select
+            value={selectedMilestone}
+            onChange={(event) => setSelectedMilestone(Number(event.target.value) as 3 | 0)}
+            className="min-h-10 rounded-md border border-slate-600 bg-slate-900 px-3 text-sm text-white"
+            data-testid="select-subscription-reminder-preview-stage"
+            aria-label="مرحلة التذكير"
+          >
+            <option value={3}>قبل الانتهاء بـ ٣ أيام</option>
+            <option value={0}>يوم الانتهاء — اليوم</option>
+          </select>
+          <Button
+            size="sm"
+            disabled={!selectedOwnerId || createPreview.isPending}
+            onClick={() => {
+              const confirmed = window.confirm("سيُنشأ إشعار اختبار لهذا المالك، وستظهر المعاينة لمدة ساعة. هذا اختبار فقط ولن يتغير الاشتراك الحقيقي أو تاريخ انتهائه. هل تريد المتابعة؟");
+              if (confirmed) {
+                setPreviewMutationError(null);
+                createPreview.mutate({ ownerId: selectedOwnerId, milestone: selectedMilestone });
+              }
+            }}
+            className="min-h-10 bg-amber-600 text-white hover:bg-amber-700"
+            data-testid="button-create-subscription-reminder-preview"
+          >
+            {createPreview.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "بدء معاينة TEST"}
+          </Button>
+        </div>
+        {(ownersError || previewsError || previewMutationError) && (
+          <p className="mt-2 text-sm text-red-300" role="alert" data-testid="status-subscription-reminder-preview-error">
+            {previewMutationError ?? (ownersError ? "تعذّر تحميل قائمة الملاك." : "تعذّر تحميل المعاينات المؤقتة.")}
+          </p>
+        )}
+        <div className="mt-3 border-t border-slate-700/70 pt-3">
+          <h5 className="text-xs font-semibold text-slate-300">المعاينات النشطة</h5>
+          {previewsLoading ? (
+            <p className="mt-2 flex items-center gap-2 text-xs text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" /> جارٍ تحميل المعاينات...</p>
+          ) : previews.length === 0 ? (
+            <p className="mt-2 text-xs text-slate-500">لا توجد معاينات نشطة.</p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {previews.map((preview) => {
+                const owner = owners.find((entry) => entry.ownerId === preview.ownerId);
+                const until = new Date(preview.previewUntil);
+                return (
+                  <li key={preview.ownerId} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-900/70 px-3 py-2 text-xs" data-testid={`row-subscription-reminder-preview-${preview.ownerId}`}>
+                    <span className="text-slate-200">
+                      <Badge className="me-2 border border-amber-700 bg-amber-900/40 text-amber-200">TEST</Badge>
+                      {owner?.ownerName ?? preview.ownerId} · {preview.milestone === 0 ? "اليوم" : "قبل ٣ أيام"}
+                      <span className="ms-2 text-slate-400">تنتهي المعاينة: {Number.isNaN(until.getTime()) ? preview.previewUntil : new Intl.DateTimeFormat("ar-SA", { dateStyle: "short", timeStyle: "short" }).format(until)}</span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <Button variant="outline" size="sm"
+                        disabled={openOwnerPreview.isPending}
+                        onClick={() => {
+                          setPreviewMutationError(null);
+                          openOwnerPreview.mutate(preview.ownerId);
+                        }}
+                        className="h-7 border-amber-700 text-amber-200 hover:bg-amber-950/40"
+                        data-testid={`button-open-subscription-reminder-preview-${preview.ownerId}`}>
+                        {openOwnerPreview.isPending && openOwnerPreview.variables === preview.ownerId
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "معاينة لوحة المالك"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={stopPreview.isPending}
+                        onClick={() => {
+                          setPreviewMutationError(null);
+                          stopPreview.mutate(preview.ownerId);
+                        }}
+                        className="h-7 border-red-800 text-red-300 hover:bg-red-950/40"
+                        data-testid={`button-stop-subscription-reminder-preview-${preview.ownerId}`}
+                      >
+                        {stopPreview.isPending && stopPreview.variables === preview.ownerId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "إيقاف"}
+                      </Button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+
       {isLoading ? (
         <div className="flex justify-center py-8" data-testid="status-subscription-reminder-log-loading">
           <Loader2 className="animate-spin text-amber-400 w-6 h-6" />
@@ -4598,7 +4798,10 @@ function SubscriptionReminderLog() {
                 const whatsappUrl = reminderWhatsAppUrl(reminder);
                 return <tr key={reminder.id} className="border-b border-slate-700/70 last:border-0" data-testid={`row-subscription-reminder-${reminder.id}`}>
                   <td className="p-2 text-slate-200">
-                    <div className="font-semibold">{reminder.ownerName ?? "اسم المالك غير متوفر"}</div>
+                    <div className="font-semibold">
+                      {reminder.ownerName ?? "اسم المالك غير متوفر"}
+                      {reminder.isPreview && <Badge className="ms-2 border border-amber-700 bg-amber-900/40 text-amber-200">TEST</Badge>}
+                    </div>
                     <div className="text-xs text-slate-500" dir="ltr">{reminder.ownerId}</div>
                   </td>
                   <td className="p-2 text-slate-300 whitespace-nowrap" dir="ltr">{reminder.phone ? toAr(reminder.phone) : "غير متوفر"}</td>

@@ -18,6 +18,7 @@ import {
   serviceCategoriesTable,
   expenseCategoriesTable,
   siteSettingsTable,
+  ownerNotificationsTable,
   serviceProviderSubmissionsTable,
   serviceProvidersTable,
   subscriptionPlansTable,
@@ -48,6 +49,7 @@ import { extractCoordsFromMapsUrl } from "../lib/extractMapCoords";
 import { logger } from "../lib/logger";
 import { getOrStartOwnerSubscription } from "../lib/subscription-access";
 import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
+import { REMINDER_PREVIEW_PREFIX, getReminderPreview, parseReminderPreview } from "../lib/subscription-reminder-preview";
 
 declare global {
   namespace Express {
@@ -1606,7 +1608,10 @@ router.delete("/expense-categories/:id", async (req, res) => {
 router.get("/settings", requirePlatformSettingsAdmin, async (_req, res) => {
   const rows = await db.select().from(siteSettingsTable);
   const map: Record<string, string> = {};
-  for (const row of rows) map[row.key] = row.value;
+  for (const row of rows) {
+    if (row.key.startsWith(REMINDER_PREVIEW_PREFIX)) continue;
+    map[row.key] = row.value;
+  }
   return res.json(map);
 });
 
@@ -2099,6 +2104,94 @@ router.post("/support-requests/:id/reply", requireSupportDisputesAdmin, adminRep
 
 /* ── Subscription Plans Management ──────────────────────── */
 
+router.get("/subscription-reminder-preview", requireSuperAdmin, async (_req, res): Promise<void> => {
+  const settings = await db.select({ key: siteSettingsTable.key, value: siteSettingsTable.value })
+    .from(siteSettingsTable)
+    .where(sql`${siteSettingsTable.key} LIKE ${`${REMINDER_PREVIEW_PREFIX}%`}`);
+  const previews = settings.flatMap(({ key, value }) => {
+    const preview = parseReminderPreview(value);
+    return preview && key === `${REMINDER_PREVIEW_PREFIX}${preview.ownerId}` ? [preview] : [];
+  });
+  res.json({ previews });
+});
+
+router.post("/subscription-reminder-preview", requireSuperAdmin, async (req, res): Promise<void> => {
+  const body = z.object({
+    ownerId: z.string().trim().min(1).max(200).regex(/^[A-Za-z0-9_:-]+$/),
+    milestone: z.union([z.literal(3), z.literal(0)]),
+  }).safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "اختر المالك ومرحلة المعاينة: ٣ أيام أو اليوم" });
+    return;
+  }
+
+  const requestedId = body.data.ownerId;
+  const owner = await db.execute<{ owner_id: string }>(sql`
+    SELECT COALESCE(account.user_id, 'owner_' || app.id::text) AS owner_id
+    FROM owner_applications app
+    LEFT JOIN owner_account_links account ON account.owner_application_id = app.id
+    WHERE app.deleted_at IS NULL
+      AND (account.user_id = ${requestedId} OR 'owner_' || app.id::text = ${requestedId})
+    LIMIT 1
+  `);
+  if (!owner.rows[0]) {
+    res.status(404).json({ error: "المالك غير متاح للمعاينة؛ اختر حساب مالك يمكنه تسجيل الدخول" });
+    return;
+  }
+  const ownerId = owner.rows[0].owner_id;
+  const existing = await getReminderPreview(ownerId);
+  if (existing?.milestone === body.data.milestone) {
+    res.json({ ok: true, id: ownerId, previewUntil: existing.previewUntil });
+    return;
+  }
+
+  const now = new Date();
+  const milestone = body.data.milestone;
+  const expiresAt = milestone === 3
+    ? new Date(now.getTime() + 3 * 86_400_000)
+    : (() => {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit",
+      }).formatToParts(now);
+      const part = (type: string) => parts.find((item) => item.type === type)?.value;
+      return new Date(`${part("year")}-${part("month")}-${part("day")}T23:59:59+03:00`);
+    })();
+  if (expiresAt <= now) {
+    res.status(400).json({ error: "انتهى يوم الرياض؛ اختر المعاينة بعد بداية اليوم الجديد" });
+    return;
+  }
+  const previewUntil = new Date(Math.min(now.getTime() + 60 * 60_000, expiresAt.getTime()));
+  const preview = { ownerId, milestone, expiresAt: expiresAt.toISOString(), previewUntil: previewUntil.toISOString() };
+  const remaining = milestone === 0 ? "اليوم" : "بعد ٣ أيام";
+  const marker = `subscription-expiry:${expiresAt.getTime()}:${milestone}`;
+
+  await db.transaction(async (tx) => {
+    await tx.insert(siteSettingsTable)
+      .values({ key: `${REMINDER_PREVIEW_PREFIX}${ownerId}`, value: JSON.stringify(preview), updatedAt: now })
+      .onConflictDoUpdate({
+        target: siteSettingsTable.key,
+        set: { value: JSON.stringify(preview), updatedAt: now },
+      });
+    await tx.insert(ownerNotificationsTable).values({
+      ownerId,
+      type: "subscription_expiry_reminder",
+      message: `🧪 اختبار فقط: معاينة تنبيه انتهاء الاشتراك ${remaining}؛ اشتراكك الحقيقي لم يتغير.\u2063${marker}\u2063`,
+    });
+  });
+  res.json({ ok: true, id: ownerId, previewUntil: preview.previewUntil });
+});
+
+router.delete("/subscription-reminder-preview/:id", requireSuperAdmin, async (req, res): Promise<void> => {
+  const ownerId = z.string().trim().min(1).max(200).regex(/^[A-Za-z0-9_:-]+$/)
+    .safeParse(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+  if (!ownerId.success) {
+    res.status(400).json({ error: "معرّف المالك غير صحيح" });
+    return;
+  }
+  await db.delete(siteSettingsTable).where(eq(siteSettingsTable.key, `${REMINDER_PREVIEW_PREFIX}${ownerId.data}`));
+  res.json({ ok: true });
+});
+
 router.get("/subscription-reminder-log", requireSuperAdmin, async (_req, res): Promise<void> => {
   const [heartbeatSetting] = await db
     .select({ value: siteSettingsTable.value })
@@ -2168,6 +2261,7 @@ router.get("/subscription-reminder-log", requireSuperAdmin, async (_req, res): P
       phone,
       milestone: daysBeforeExpiry,
       createdAt: notification.created_at,
+      isPreview: notification.message.startsWith("🧪 اختبار فقط:"),
       channels: {
         inApp: "created" as const,
         whatsapp: !phone ? "no_phone" as const
