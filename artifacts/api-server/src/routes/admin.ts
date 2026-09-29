@@ -1779,6 +1779,59 @@ router.patch("/settings", requirePlatformSettingsAdmin, async (req, res) => {
 /* ── Smart admin dashboard ───────────────────────────────────
  * Keep this response deliberately small: it is intended for the admin
  * overview cards and their action queues, not for full ticket management. */
+const expiringSubscriptionWhere = sql`
+  os.expires_at IS NOT NULL
+  AND os.expires_at >= NOW()
+  AND os.expires_at <= NOW() + INTERVAL '5 days'
+  AND LOWER(os.status) NOT IN ('cancelled', 'canceled', 'expired')
+`;
+
+router.get("/expiring-subscriptions", requireSuperAdmin, async (req, res) => {
+  const page = z.coerce.number().int().min(1).max(10000).safeParse(req.query.page ?? 1);
+  if (!page.success) return res.status(400).json({ error: "رقم الصفحة غير صالح" });
+  const pageSize = 20;
+  const offset = (page.data - 1) * pageSize;
+  const [result, count] = await Promise.all([
+    db.execute<{
+      id: number; owner_id: string; owner_name: string | null; plan: string;
+      expires_at: Date; days_remaining: string;
+    }>(sql`
+      SELECT os.id, os.owner_id,
+        COALESCE(NULLIF(TRIM(owner_profile.full_name), ''), os.owner_id) AS owner_name,
+        os.plan, os.expires_at,
+        GREATEST(0, CEIL(EXTRACT(EPOCH FROM (os.expires_at - NOW())) / 86400))::int AS days_remaining
+      FROM owner_subscriptions os
+      LEFT JOIN LATERAL (
+        SELECT oa.full_name FROM owner_applications oa
+        LEFT JOIN owner_account_links account ON account.owner_application_id = oa.id
+        WHERE oa.deleted_at IS NULL
+          AND (account.user_id = os.owner_id OR os.owner_id = 'owner_' || oa.id::text)
+        LIMIT 1
+      ) owner_profile ON true
+      WHERE ${expiringSubscriptionWhere}
+      ORDER BY os.expires_at ASC, os.id ASC
+      LIMIT ${pageSize} OFFSET ${offset}
+    `),
+    db.execute<{ count: string }>(sql`
+      SELECT COUNT(*) AS count FROM owner_subscriptions os
+      WHERE ${expiringSubscriptionWhere}
+    `),
+  ]);
+  return res.json({
+    total: Number(count.rows[0]?.count ?? 0),
+    page: page.data,
+    pageSize,
+    rows: result.rows.map((row) => ({
+      id: row.id,
+      ownerId: row.owner_id,
+      ownerName: row.owner_name,
+      plan: row.plan,
+      expiresAt: row.expires_at,
+      daysRemaining: Number(row.days_remaining),
+    })),
+  });
+});
+
 router.get(["/dashboard", "/smart-dashboard"], requireGlobalFinancialsAdmin, async (_req, res) => {
   const expiring = await db.execute<{
     id: number; owner_id: string; owner_name: string | null; property_name: string | null;
@@ -1796,10 +1849,7 @@ router.get(["/dashboard", "/smart-dashboard"], requireGlobalFinancialsAdmin, asy
     ) cs ON true
     LEFT JOIN owner_applications oa
       ON ('owner_' || oa.id::text) = os.owner_id
-    WHERE os.expires_at IS NOT NULL
-      AND os.expires_at >= NOW()
-      AND os.expires_at <= NOW() + INTERVAL '30 days'
-      AND LOWER(os.status) NOT IN ('cancelled', 'canceled', 'expired')
+    WHERE ${expiringSubscriptionWhere}
     ORDER BY os.expires_at ASC
     LIMIT 100
   `);
@@ -1844,11 +1894,8 @@ router.get(["/dashboard", "/smart-dashboard"], requireGlobalFinancialsAdmin, asy
 
   const [expiringCount, inquiryCount, supportCount] = await Promise.all([
     db.execute<{ count: string }>(sql`
-      SELECT COUNT(*) AS count FROM owner_subscriptions
-      WHERE expires_at IS NOT NULL
-        AND expires_at >= NOW()
-        AND expires_at <= NOW() + INTERVAL '30 days'
-        AND LOWER(status) NOT IN ('cancelled', 'canceled', 'expired')
+      SELECT COUNT(*) AS count FROM owner_subscriptions os
+      WHERE ${expiringSubscriptionWhere}
     `),
     db.execute<{ count: string }>(sql`
       SELECT COUNT(*) AS count FROM contact_inquiries
@@ -1892,15 +1939,13 @@ router.get(["/dashboard", "/smart-dashboard"], requireGlobalFinancialsAdmin, asy
       createdAt: row.created_at,
     })),
     alerts: [
-      ...expiring.rows.map((row) => ({
+      ...(totalExpiring > 0 ? [{
         type: "subscription_expiry",
-        severity: Number(row.days_remaining) <= 7 ? "high" : "medium",
-        title: `اشتراك ${row.owner_name ?? row.owner_id} يوشك على الانتهاء`,
-        description: `${row.property_name ? `${row.property_name} — ` : ""}تنتهي الخطة خلال ${Number(row.days_remaining)} يوم`,
-        entityId: row.owner_id,
-        expiresAt: row.expires_at,
-        daysRemaining: Number(row.days_remaining),
-      })),
+        severity: "high",
+        title: "اشتراكات قريبة من الانتهاء",
+        description: `${totalExpiring} اشتراك ينتهي خلال ٥ أيام أو أقل`,
+        entityId: "expiring-subscriptions",
+      }] : []),
       ...(totalInquiries > 0 ? [{
         type: "contact_inquiries",
         severity: "medium",

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { 
+import {
   BarChart3, Loader2, Home, Wrench, CheckCircle, TrendingUp,
-  AlertCircle, ArrowLeftRight, Clock, ShieldCheck, Mail, AlertTriangle, Play
+  AlertCircle, ArrowLeft, Clock, ShieldCheck, Mail, AlertTriangle
 } from "lucide-react";
 import { toAr } from "@/lib/utils";
 import {
@@ -25,17 +25,18 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 interface SmartAlert {
-  type: string;
+  type: "subscription_expiry" | "contact_inquiries" | "owner_support";
   severity: "high" | "medium" | "low";
   title: string;
   description: string;
-  entityId?: string | number;
-  expiresAt?: string;
-  daysRemaining?: number;
-  messageCreatedAt?: string;
 }
 
-export function OverviewTab() {
+type OverviewTarget = "plans" | "ownerInbox" | "contactInquiries" | "chalets" | "services" | "owners" | "platformRevenue";
+
+export function OverviewTab({ onNavigate, canNavigate }: {
+  onNavigate: (target: OverviewTarget) => void;
+  canNavigate: (target: OverviewTarget) => boolean;
+}) {
   const { data: analytics, isLoading: isAnalyticsLoading, isError: isAnalyticsError } = useQuery({
     queryKey: ["admin", "analytics"],
     queryFn: async () => {
@@ -67,7 +68,17 @@ export function OverviewTab() {
 
   const d = analytics;
   const alerts: SmartAlert[] = smartDash?.alerts || [];
-  
+  const alertTargets: Record<SmartAlert["type"], OverviewTarget> = {
+    subscription_expiry: "plans",
+    owner_support: "ownerInbox",
+    contact_inquiries: "contactInquiries",
+  };
+  const alertCounts: Record<SmartAlert["type"], number> = {
+    subscription_expiry: smartDash?.counts?.expiringSubscriptions ?? 0,
+    owner_support: smartDash?.counts?.pendingSupportRequests ?? 0,
+    contact_inquiries: smartDash?.counts?.unansweredInquiries ?? 0,
+  };
+
   const fmtN = (n: number) => toAr(Math.round(n).toLocaleString());
 
   const weeklyPerf = d?.weeklyPerformance || [];
@@ -101,24 +112,25 @@ export function OverviewTab() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {alerts.map((alert, i) => {
+             {alerts.map((alert) => {
               const Icon = alert.severity === "high" ? AlertTriangle : alert.severity === "medium" ? Clock : Mail;
-              const color = alert.severity === "high" ? "text-red-400 bg-red-900/20 border-red-800/50" : 
+               const color = alert.severity === "high" ? "text-red-400 bg-red-900/20 border-red-800/50" :
                             alert.severity === "medium" ? "text-orange-400 bg-orange-900/20 border-orange-800/50" :
                             "text-blue-400 bg-blue-900/20 border-blue-800/50";
+               const target = alertTargets[alert.type];
+               const available = canNavigate(target);
               return (
-                <div key={i} className={`p-4 rounded-xl border flex gap-3 items-start ${color}`}>
+                 <button type="button" key={alert.type} onClick={() => onNavigate(target)} disabled={!available}
+                   aria-label={`${alert.title} — ${toAr(alertCounts[alert.type])}، فتح السجل`}
+                   className={`p-4 rounded-xl border flex gap-3 items-start text-right w-full ${color} ${available ? "cursor-pointer hover:brightness-125 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300" : "cursor-default"}`}>
                   <Icon className="w-5 h-5 shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-bold text-sm mb-1">{alert.title}</h4>
-                    <p className="text-xs opacity-80 leading-relaxed">{alert.description}</p>
-                    {alert.daysRemaining !== undefined && (
-                      <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full bg-black/20">
-                        متبقي {toAr(alert.daysRemaining)} يوم
-                      </span>
-                    )}
+                   <div className="min-w-0 flex-1">
+                     <p className="text-2xl font-bold leading-none">{toAr(alertCounts[alert.type])}</p>
+                     <h4 className="font-bold text-sm mt-2">{alert.title}</h4>
+                     <p className="text-xs opacity-80 leading-relaxed mt-1">{alert.description}</p>
                   </div>
-                </div>
+                   {available && <ArrowLeft className="w-4 h-4 shrink-0 self-center" aria-hidden />}
+                 </button>
               );
             })}
           </div>
@@ -129,15 +141,19 @@ export function OverviewTab() {
       {d && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: "إجمالي العقارات", value: fmtN(d.marketDistribution?.chalets ?? 0), icon: <Home className="w-4 h-4 text-amber-400" /> },
-            { label: "الخدمات المسجّلة", value: fmtN(d.marketDistribution?.services ?? 0), icon: <Wrench className="w-4 h-4 text-blue-400" /> },
-            { label: "الحسابات النشطة", value: fmtN(d.accountStatus?.find((s: any) => s.status === "active")?.count ?? 0), icon: <CheckCircle className="w-4 h-4 text-emerald-400" /> },
-            { label: "إيرادات الاشتراكات", value: `${fmtN(d.monthlyRevenue?.reduce((s: any, r: any) => s + r.total, 0) ?? 0)} ر.س`, icon: <TrendingUp className="w-4 h-4 text-amber-400" /> },
+             { label: "إجمالي العقارات", value: fmtN(d.marketDistribution?.chalets ?? 0), icon: <Home className="w-4 h-4 text-amber-400" />, target: "chalets" },
+             { label: "الخدمات المسجّلة", value: fmtN(d.marketDistribution?.services ?? 0), icon: <Wrench className="w-4 h-4 text-blue-400" />, target: "services" },
+             { label: "الحسابات النشطة", value: fmtN(d.accountStatus?.find((s: any) => s.status === "active")?.count ?? 0), icon: <CheckCircle className="w-4 h-4 text-emerald-400" />, target: "owners" },
+             { label: "إيرادات الاشتراكات", value: `${fmtN(d.monthlyRevenue?.reduce((s: any, r: any) => s + r.total, 0) ?? 0)} ر.س`, icon: <TrendingUp className="w-4 h-4 text-amber-400" />, target: "platformRevenue" },
           ].map(k => (
-            <div key={k.label} className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-2">
+             <button type="button" key={k.label} onClick={() => onNavigate(k.target as OverviewTarget)}
+               disabled={!canNavigate(k.target as OverviewTarget)}
+               aria-label={`${k.label}: ${k.value}، عرض التفاصيل`}
+               className="bg-slate-800/60 border border-slate-700/40 rounded-2xl p-4 space-y-2 text-right enabled:hover:border-amber-500/60 enabled:hover:bg-slate-800 enabled:cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 disabled:cursor-default">
               <div className="flex items-center gap-2">{k.icon}<span className="text-[10px] text-slate-500">{k.label}</span></div>
               <p className="text-xl font-bold text-slate-100">{k.value}</p>
-            </div>
+               {canNavigate(k.target as OverviewTarget) && <span className="flex items-center gap-1 text-[10px] text-amber-300">عرض التفاصيل <ArrowLeft className="w-3 h-3" /></span>}
+             </button>
           ))}
         </div>
       )}

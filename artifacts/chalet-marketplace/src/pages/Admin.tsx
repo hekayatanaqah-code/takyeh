@@ -5100,6 +5100,77 @@ function PromoCodesPanel() {
   );
 }
 
+type ExpiringSubscriptionRow = {
+  id: number;
+  ownerId: string;
+  ownerName: string;
+  plan: string;
+  expiresAt: string;
+  daysRemaining: number;
+};
+
+function ExpiringSubscriptionsPanel() {
+  const [page, setPage] = useState(1);
+  const { data, isLoading, isError } = useQuery<{
+    rows: ExpiringSubscriptionRow[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }>({
+    queryKey: ["admin", "expiring-subscriptions", page],
+    queryFn: async () => {
+      const response = await adminFetch(`/expiring-subscriptions?page=${page}`);
+      if (!response.ok) throw new Error("تعذّر تحميل الاشتراكات القريبة من الانتهاء");
+      return response.json();
+    },
+    staleTime: 30_000,
+  });
+  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.pageSize ?? 20)));
+
+  return (
+    <section className="mb-6 rounded-xl border border-amber-700/50 bg-slate-800/70 p-4 sm:p-5" dir="rtl" data-testid="section-expiring-subscriptions">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-base font-bold text-amber-200">اشتراكات تنتهي خلال ٥ أيام أو أقل</h3>
+          <p className="mt-1 text-xs text-slate-400">سجل الاشتراكات النشطة القريبة من الانتهاء، مرتّب حسب تاريخ الانتهاء.</p>
+        </div>
+        {data && <span className="rounded-full bg-amber-900/40 px-3 py-1 text-sm font-bold text-amber-200">{toAr(data.total)} اشتراك</span>}
+      </div>
+      {isLoading ? (
+        <p className="mt-4 text-sm text-slate-400">جارٍ تحميل الاشتراكات...</p>
+      ) : isError ? (
+        <p className="mt-4 text-sm text-red-300" role="alert">تعذّر تحميل السجل. أعد فتح الصفحة للمحاولة مجدداً.</p>
+      ) : data?.rows.length === 0 ? (
+        <p className="mt-4 text-sm text-slate-400">لا توجد اشتراكات تنتهي خلال ٥ أيام.</p>
+      ) : (
+        <>
+          <ul className="mt-4 divide-y divide-slate-700/70">
+            {data?.rows.map((row) => (
+              <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-100">{row.ownerName}</p>
+                  <p className="text-xs text-slate-400" dir="ltr">{row.ownerId} · {row.plan}</p>
+                </div>
+                <div className="text-xs text-amber-200">
+                  <span className="font-bold">{toAr(row.daysRemaining)} يوم متبقٍ</span>
+                  <span className="block text-slate-400">{new Intl.DateTimeFormat("ar-SA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(row.expiresAt))}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {totalPages > 1 && (
+            <div className="mt-3 flex items-center justify-end gap-3 border-t border-slate-700 pt-3 text-sm text-slate-300">
+              <Button type="button" size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>السابق</Button>
+              <span>صفحة {toAr(page)} من {toAr(totalPages)}</span>
+              <Button type="button" size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>التالي</Button>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -5251,6 +5322,8 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
           إضافة خطة
         </Button>
       </div>
+
+      {isSuperAdmin && <ExpiringSubscriptionsPanel />}
 
       {/* Plans list */}
       {isLoading ? (
@@ -9591,7 +9664,10 @@ export default function Admin() {
 
       {/* Content */}
       <main className="p-6 max-w-7xl mx-auto">
-        {activeTab === "overview"             && <OverviewTab />}
+        {activeTab === "overview"             && <OverviewTab
+          onNavigate={(target) => { if (tabById[target] && (target !== "plans" || isSuperAdmin)) setActiveTab(target); }}
+          canNavigate={(target) => Boolean(tabById[target]) && (target !== "plans" || isSuperAdmin)}
+        />}
         {activeTab === "chalets"              && <ChaletsVerifyTab />}
         {activeTab === "submissions"          && <SubmissionsTab />}
         {activeTab === "platformRevenue"      && <PlatformRevenueTab />}
