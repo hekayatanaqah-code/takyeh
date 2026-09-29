@@ -7,7 +7,7 @@ import {
   chaletSubmissionsTable,
   serviceProviderSubmissionsTable,
 } from "@workspace/db/schema";
-import { and, count, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 
 const DEFAULT_TRIAL_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -97,9 +97,9 @@ export async function ownerPlanAccess(ownerId: string) {
       .where(and(inArray(chaletSubmissionsTable.ownerId, keys), ne(chaletSubmissionsTable.status, "rejected"))),
     db.select({ id: serviceProviderSubmissionsTable.id }).from(serviceProviderSubmissionsTable)
       .where(and(inArray(serviceProviderSubmissionsTable.ownerId, keys), ne(serviceProviderSubmissionsTable.status, "rejected"))),
-    db.select({ value: count() }).from(subscriptionAddonPurchasesTable)
+    db.select({ value: sql<number>`coalesce(sum(${subscriptionAddonPurchasesTable.quantity}), 0)` }).from(subscriptionAddonPurchasesTable)
       .where(and(inArray(subscriptionAddonPurchasesTable.ownerId, keys), eq(subscriptionAddonPurchasesTable.addonType, "chalet"))),
-    db.select({ value: count() }).from(subscriptionAddonPurchasesTable)
+    db.select({ value: sql<number>`coalesce(sum(${subscriptionAddonPurchasesTable.quantity}), 0)` }).from(subscriptionAddonPurchasesTable)
       .where(and(inArray(subscriptionAddonPurchasesTable.ownerId, keys), eq(subscriptionAddonPurchasesTable.addonType, "service"))),
   ]);
   const baseChaletLimit = terms ? (terms.chaletLimit ?? 999) : legacy.chalets;

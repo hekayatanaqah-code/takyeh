@@ -4,7 +4,6 @@ import { test } from "node:test";
 import { and, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
-  chaletSubmissionsTable,
   ownerSubscriptionsTable,
   subscriptionAddonCheckoutIntentsTable,
   subscriptionAddonPurchasesTable,
@@ -73,22 +72,31 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
 
     // A zero-priced property slot is redeemable without a payment provider and
     // the same redemption is idempotent, even when requested again.
-    const freeQuote = await createAddonCheckout({ ownerId, addonType: "chalet" });
+    const freeQuote = await createAddonCheckout({ ownerId, addonType: "chalet", quantity: 3 });
     assert.equal(freeQuote.amountHalala, 0);
+    assert.equal(freeQuote.quantity, 3);
+    assert.equal(freeQuote.unitPriceHalala, 0);
+    const pendingSecondFreeQuote = await createAddonCheckout({ ownerId, addonType: "chalet", quantity: 2 });
     const freeResult = await redeemFreeAddonCheckout({ ownerId, checkoutId: freeQuote.checkoutId });
     assert.equal(freeResult.purchase.amountHalala, 0);
+    assert.equal(freeResult.purchase.quantity, 3);
     const repeatedFreeResult = await redeemFreeAddonCheckout({ ownerId, checkoutId: freeQuote.checkoutId });
     assert.equal(repeatedFreeResult.purchase.id, freeResult.purchase.id);
 
     const afterFree = await ownerPlanAccess(ownerId);
     assert.equal(afterFree.baseChaletLimit, 0);
-    assert.equal(afterFree.purchasedChaletSlots, 1);
-    assert.equal(afterFree.chaletLimit, 1);
+    assert.equal(afterFree.purchasedChaletSlots, 3);
+    assert.equal(afterFree.chaletLimit, 3);
     assert.equal(afterFree.chaletCount, 0);
     await assert.rejects(
-      createAddonCheckout({ ownerId, addonType: "chalet" }),
+      redeemFreeAddonCheckout({ ownerId, checkoutId: pendingSecondFreeQuote.checkoutId }),
       (error: unknown) => error instanceof SubscriptionAddonCheckoutError && error.statusCode === 409,
-      "must not sell another slot while the purchased one remains unused",
+      "a pending free quote cannot grant more capacity while existing slots are unused",
+    );
+    await assert.rejects(
+      createAddonCheckout({ ownerId, addonType: "chalet", quantity: 1 }),
+      (error: unknown) => error instanceof SubscriptionAddonCheckoutError && error.statusCode === 409,
+      "a new free quote is rejected while purchased slots remain unused",
     );
     await assert.rejects(
       redeemFreeAddonCheckout({ ownerId: otherOwnerId, checkoutId: freeQuote.checkoutId }),
@@ -96,31 +104,30 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       "another account cannot redeem this quote",
     );
 
-    // Consume the granted property slot so the test owner is eligible to quote
-    // the next one.
-    await db.insert(chaletSubmissionsTable).values({
-      ownerId,
-      nameAr: `اختبار إضافة ${suffix}`,
-      whatsappNumber: "0500000000",
-      location: "اختبار",
-      descriptionAr: "عقار اصطناعي لأجل اختبار تكامل الفوترة فقط",
-      pricePerNight: "1.00",
-    });
-
-    // An administrator's price edit is picked up by subsequent quotes.
+    // Add-ons can be purchased proactively, and quote totals are unit price
+    // multiplied by the requested quantity.
+    const paidQuote = await createAddonCheckout({ ownerId, addonType: "service", quantity: 3 });
     await db.update(subscriptionPlansTable).set({ extraServicePrice: "51.25" })
       .where(eq(subscriptionPlansTable.slug, planSlug));
     const editedServicePrice = await ownerPlanAccess(ownerId);
     assert.equal(editedServicePrice.extraServicePrice, "51.25");
-    await db.update(subscriptionPlansTable).set({ extraServicePrice: "50.00" })
-      .where(eq(subscriptionPlansTable.slug, planSlug));
-
-    const paidQuote = await createAddonCheckout({ ownerId, addonType: "service" });
-    const reusedPaidQuote = await createAddonCheckout({ ownerId, addonType: "service" });
+    const differentQuantityQuote = await createAddonCheckout({ ownerId, addonType: "service", quantity: 2 });
+    const reusedPaidQuote = await createAddonCheckout({ ownerId, addonType: "service", quantity: 3 });
     assert.equal((await ownerPlanAccess(ownerId)).scope, "property", "service slots may be added without buying a full plan");
-    assert.equal(paidQuote.amountHalala, 5000);
+    assert.equal(paidQuote.amountHalala, 15000);
+    assert.equal(paidQuote.quantity, 3);
+    assert.equal(paidQuote.unitPriceHalala, 5000);
+    assert.equal(differentQuantityQuote.amountHalala, 10250);
+    assert.equal(differentQuantityQuote.quantity, 2);
+    assert.notEqual(differentQuantityQuote.checkoutId, paidQuote.checkoutId);
     assert.equal(reusedPaidQuote.checkoutId, paidQuote.checkoutId, "an open quote is reused, not double-sold");
     assert.equal(reusedPaidQuote.amountHalala, paidQuote.amountHalala);
+    assert.equal(reusedPaidQuote.unitPriceHalala, 5000, "reuse keeps original price after catalogue edits");
+    await assert.rejects(
+      confirmAddonCheckout({ ownerId: otherOwnerId, checkoutId: paidQuote.checkoutId, paymentId: `foreign_${suffix}` }),
+      (error: unknown) => error instanceof SubscriptionAddonCheckoutError && error.statusCode === 404,
+      "another account cannot confirm this quote",
+    );
 
     const paymentId = `synthetic_${suffix}`;
     const paidAt = new Date().toISOString();
@@ -171,7 +178,8 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       ownerId, checkoutId: paidQuote.checkoutId, paymentId,
     });
     assert.equal(paidResult.purchase.amountHalala, paidQuote.amountHalala);
-    assert.equal(paidResult.invoice.amount, 50);
+    assert.equal(paidResult.purchase.quantity, 3);
+    assert.equal(paidResult.invoice.amount, 150);
     assert.equal(paidResult.invoice.currency, "SAR");
 
     // Editing the current catalogue price after quoting cannot alter the
@@ -182,13 +190,48 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       ownerId, checkoutId: paidQuote.checkoutId, paymentId,
     });
     assert.equal(repeatedPaidResult.purchase.id, paidResult.purchase.id);
-    assert.equal(repeatedPaidResult.purchase.amountHalala, 5000);
+    assert.equal(repeatedPaidResult.purchase.amountHalala, 15000);
+    assert.equal(repeatedPaidResult.purchase.quantity, 3);
     assert.equal(fetchCalls, 4, "three rejected provider responses, then one successful response; retry is local");
 
+    const secondPaymentId = `synthetic_second_${suffix}`;
+    providerReply = {
+      id: secondPaymentId,
+      status: "paid",
+      amount: differentQuantityQuote.amountHalala,
+      currency: "SAR",
+      description: `شراء خدمة اختبارية [${differentQuantityQuote.checkoutId}]`,
+      created_at: paidAt,
+    };
+    const secondPaidResult = await confirmAddonCheckout({
+      ownerId, checkoutId: differentQuantityQuote.checkoutId, paymentId: secondPaymentId,
+    });
+    assert.equal(secondPaidResult.purchase.quantity, 2);
+    assert.equal(secondPaidResult.purchase.amountHalala, 10250);
+
+    // A completed purchase does not block a new purchase; the new quote picks
+    // up the current catalogue price and grants its full requested quantity.
     const afterPaid = await ownerPlanAccess(ownerId);
-    assert.equal(afterPaid.purchasedServiceSlots, 1);
-    assert.equal(afterPaid.serviceLimit, 1);
+    assert.equal(afterPaid.purchasedServiceSlots, 5);
+    assert.equal(afterPaid.serviceLimit, 5);
     assert.equal(afterPaid.extraServicePrice, "99.00");
+    const repurchaseQuote = await createAddonCheckout({ ownerId, addonType: "service", quantity: 1 });
+    assert.equal(repurchaseQuote.amountHalala, 9900);
+    assert.equal(repurchaseQuote.unitPriceHalala, 9900);
+    const repurchasePaymentId = `synthetic_repurchase_${suffix}`;
+    providerReply = {
+      id: repurchasePaymentId,
+      status: "paid",
+      amount: repurchaseQuote.amountHalala,
+      currency: "SAR",
+      description: `شراء خدمة اختبارية [${repurchaseQuote.checkoutId}]`,
+      created_at: paidAt,
+    };
+    const repurchase = await confirmAddonCheckout({
+      ownerId, checkoutId: repurchaseQuote.checkoutId, paymentId: repurchasePaymentId,
+    });
+    assert.equal(repurchase.purchase.quantity, 1);
+    assert.equal((await ownerPlanAccess(ownerId)).purchasedServiceSlots, 6);
     assert.equal(process.env.MOYASAR_PUBLISHABLE_KEY, fakePublishable);
   } finally {
     globalThis.fetch = originalFetch;
@@ -200,7 +243,6 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
     await db.delete(subscriptionPaymentsTable).where(eq(subscriptionPaymentsTable.ownerId, ownerId));
     await db.delete(subscriptionAddonPurchasesTable).where(eq(subscriptionAddonPurchasesTable.ownerId, ownerId));
     await db.delete(subscriptionAddonCheckoutIntentsTable).where(eq(subscriptionAddonCheckoutIntentsTable.ownerId, ownerId));
-    await db.delete(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.ownerId, ownerId));
     await db.delete(ownerSubscriptionsTable).where(eq(ownerSubscriptionsTable.ownerId, ownerId));
     await db.delete(subscriptionPlansTable).where(and(
       eq(subscriptionPlansTable.slug, planSlug),

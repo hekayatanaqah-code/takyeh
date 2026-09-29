@@ -2949,10 +2949,19 @@ router.post("/subscription/redeem", async (req, res) => {
 });
 
 router.post("/subscription/addons/initiate", async (req, res) => {
-  const parsed = z.object({ addonType: z.enum(["chalet", "service"]) }).safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "اختر نوع الإضافة المطلوب" });
+  const parsed = z.object({
+    addonType: z.enum(["chalet", "service"]),
+    quantity: z.number().int().min(1).max(50).default(1),
+  }).safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "نوع الإضافة غير صالح، ويجب أن تكون الكمية عدداً صحيحاً بين 1 و50" });
+  }
   try {
-    return res.json(await createAddonCheckout({ ownerId: req.user!.id, addonType: parsed.data.addonType }));
+    return res.json(await createAddonCheckout({
+      ownerId: req.user!.id,
+      addonType: parsed.data.addonType,
+      quantity: parsed.data.quantity,
+    }));
   } catch (error) {
     if (error instanceof SubscriptionAddonCheckoutError) return res.status(error.statusCode).json({ error: error.message });
     throw error;

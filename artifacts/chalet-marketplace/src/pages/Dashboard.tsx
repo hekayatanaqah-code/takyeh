@@ -473,7 +473,7 @@ function UpgradePlanDialog({
                 {context === "chalet" ? "أضف عقاراً إلى اشتراكك الحالي" : "أضف خدمة إلى اشتراكك الحالي"}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                إضافة واحدة برسوم لمرة واحدة: {toAr(Number(extraPrice))} ر.س.
+                اختر العدد الذي تحتاجه؛ سعر كل إضافة {toAr(Number(extraPrice))} ر.س، برسوم لمرة واحدة. سيظهر الإجمالي قبل الدفع.
               </p>
             </div>
             <Button
@@ -483,7 +483,7 @@ function UpgradePlanDialog({
                 navigate(`/subscription?addon=${context}`);
               }}
             >
-              شراء سعة إضافية
+              طلب إضافات
             </Button>
           </div>
         )}
@@ -1566,7 +1566,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
                   {planLimits.extraChaletPrice != null && (
                     <Button size="sm" variant="default" className="rounded-xl shrink-0 text-xs h-8" onClick={() => setShowAddonPayment(true)}>
                       <Plus className="w-3.5 h-3.5 me-1" />
-                      شراء عقار إضافي · {toAr(Number(planLimits.extraChaletPrice))} ر.س
+                      طلب عقارات إضافية · {toAr(Number(planLimits.extraChaletPrice))} ر.س للوحدة
                     </Button>
                   )}
                   <Button size="sm" variant="outline" className="rounded-xl shrink-0 text-xs h-8" onClick={() => setShowUpgrade(true)}>
@@ -25779,7 +25779,7 @@ export default function Dashboard() {
                       {planLimits?.active === false
                         ? "تجديد الاشتراك"
                         : planLimits?.extraChaletPrice != null
-                          ? `شراء عقار إضافي · ${toAr(Number(planLimits.extraChaletPrice))} ر.س`
+                          ? `طلب عقارات إضافية · ${toAr(Number(planLimits.extraChaletPrice))} ر.س للوحدة`
                           : "إضافة عقار"}
                     </Button>
                     {planLimits?.active !== false && planLimits?.extraChaletPrice != null && (
@@ -25811,7 +25811,7 @@ export default function Dashboard() {
                       {planLimits?.active === false
                         ? "تجديد الاشتراك"
                         : planLimits?.extraServicePrice != null
-                          ? `شراء خدمة إضافية · ${toAr(Number(planLimits.extraServicePrice))} ر.س`
+                          ? `طلب خدمات إضافية · ${toAr(Number(planLimits.extraServicePrice))} ر.س للوحدة`
                           : "ترقية لإضافة خدمة"}
                     </Button>
                     {planLimits?.extraServicePrice != null && planLimits?.active !== false && (
@@ -25828,6 +25828,13 @@ export default function Dashboard() {
                     </Button>
                   </Link>
                 ))}
+                {planLimits?.active && (planLimits.extraChaletPrice != null || planLimits.extraServicePrice != null) && (
+                  <Button variant="outline" className="rounded-xl font-semibold text-sm"
+                    onClick={() => navigate("/subscription")}>
+                    <Plus className="w-4 h-4 me-1.5" />
+                    طلب الإضافات
+                  </Button>
+                )}
               </>
             )}
             {!actAsStaff && !isImpersonating ? (

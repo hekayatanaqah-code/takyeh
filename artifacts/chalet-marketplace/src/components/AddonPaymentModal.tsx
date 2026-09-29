@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@workspace/replit-auth-web";
 import { AlertTriangle, Building2, CheckCircle2, CreditCard, Loader2, Plus, ShieldCheck, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,8 @@ interface AddonPaymentModalProps {
 interface AddonQuote {
   checkoutId: string;
   amountHalala: number;
+  unitPriceHalala: number;
+  quantity: number;
   publishableKey: string;
   addonType: "chalet" | "service";
 }
@@ -27,6 +30,7 @@ interface AddonQuote {
 interface PendingCheckout {
   checkoutId: string;
   addonType: "chalet" | "service";
+  quantity?: number;
 }
 
 interface ReturnAttempt extends PendingCheckout {
@@ -36,45 +40,64 @@ interface ReturnAttempt extends PendingCheckout {
 
 type Step = "quote" | "pay" | "success";
 
-function pendingStorageKey(addonType: PendingCheckout["addonType"]) {
-  return `addon-payment-pending:v1:${addonType}`;
+function pendingStorageKey(ownerId: string, addonType: PendingCheckout["addonType"]) {
+  return `addon-payment-pending:v2:${ownerId}:${addonType}`;
 }
 
-function readPendingCheckout(addonType: PendingCheckout["addonType"]): PendingCheckout | null {
+function readPendingCheckouts(ownerId: string, addonType: PendingCheckout["addonType"]): PendingCheckout[] {
   try {
-    const raw = window.sessionStorage.getItem(pendingStorageKey(addonType));
-    if (!raw) return null;
-    const value = JSON.parse(raw);
-    if (value?.addonType !== addonType || typeof value?.checkoutId !== "string" || !value.checkoutId) return null;
-    return { checkoutId: value.checkoutId, addonType };
+    const raw = window.sessionStorage.getItem(pendingStorageKey(ownerId, addonType));
+    const values = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(values)) return [];
+    return values.filter((value) => value?.addonType === addonType &&
+      typeof value?.checkoutId === "string" && value.checkoutId)
+      .map((value) => ({
+        checkoutId: value.checkoutId,
+        addonType,
+        quantity: Number.isInteger(value.quantity) && value.quantity >= 1 ? value.quantity : 1,
+      }));
   } catch {
-    return null;
+    return [];
   }
 }
 
-function savePendingCheckout(checkout: PendingCheckout): boolean {
+function savePendingCheckout(ownerId: string, checkout: PendingCheckout): boolean {
   try {
-    window.sessionStorage.setItem(pendingStorageKey(checkout.addonType), JSON.stringify(checkout));
+    const pending = readPendingCheckouts(ownerId, checkout.addonType)
+      .filter((item) => item.checkoutId !== checkout.checkoutId);
+    window.sessionStorage.setItem(pendingStorageKey(ownerId, checkout.addonType), JSON.stringify([...pending, checkout]));
     return true;
   } catch {
     return false;
   }
 }
 
-function clearPendingCheckout(checkout: PendingCheckout) {
+function clearPendingCheckout(ownerId: string, checkout: PendingCheckout) {
   try {
-    const pending = readPendingCheckout(checkout.addonType);
-    if (pending?.checkoutId === checkout.checkoutId) {
-      window.sessionStorage.removeItem(pendingStorageKey(checkout.addonType));
-    }
+    const remaining = readPendingCheckouts(ownerId, checkout.addonType)
+      .filter((pending) => pending.checkoutId !== checkout.checkoutId);
+    window.sessionStorage.setItem(pendingStorageKey(ownerId, checkout.addonType), JSON.stringify(remaining));
   } catch {
     // Confirmation remains successful if browser storage is unavailable.
+  }
+}
+
+function readLegacyPendingCheckout(addonType: PendingCheckout["addonType"]): PendingCheckout | null {
+  try {
+    const raw = window.sessionStorage.getItem(`addon-payment-pending:v1:${addonType}`);
+    if (!raw) return null;
+    const value = JSON.parse(raw);
+    if (value?.addonType !== addonType || typeof value.checkoutId !== "string") return null;
+    return { checkoutId: value.checkoutId, addonType, quantity: 1 };
+  } catch {
+    return null;
   }
 }
 
 function clearPaymentReturnParams() {
   const url = new URL(window.location.href);
   url.searchParams.delete("checkout_flow");
+  url.searchParams.delete("addon_checkout");
   for (const name of ["id", "payment_id", "paymentId", "status", "payment_status", "paymentStatus"]) {
     url.searchParams.delete(name);
   }
@@ -122,10 +145,16 @@ function useMoyasarScript() {
 }
 
 export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModalProps) {
+  const { user } = useAuth();
+  const ownerId = user?.id ?? "";
   const queryClient = useQueryClient();
-  const { data: currentLimits, isLoading: isPriceLoading } = useQuery<{
+  const { data: currentLimits, isLoading: isPriceLoading, isError: isPriceError } = useQuery<{
     extraChaletPrice: number | string | null;
     extraServicePrice: number | string | null;
+    chaletCount: number;
+    chaletLimit: number;
+    serviceCount: number;
+    serviceLimit: number;
   }>({
     queryKey: ["owner", "plan-limits"],
     queryFn: async () => {
@@ -141,10 +170,12 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
   const formContainerRef = useRef<HTMLDivElement>(null);
   const checkoutRef = useRef<any>(null);
   const [step, setStep] = useState<Step>("quote");
+  const [quantity, setQuantity] = useState(1);
+  const [completedQuantity, setCompletedQuantity] = useState(1);
+  const [completedType, setCompletedType] = useState<"chalet" | "service">(addonType);
   const [quote, setQuote] = useState<AddonQuote | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
-  const [pendingCheckout, setPendingCheckout] = useState<PendingCheckout | null>(() => readPendingCheckout(addonType));
   const [returnAttempt, setReturnAttempt] = useState<ReturnAttempt | null>(null);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [returnNotice, setReturnNotice] = useState<string | null>(null);
@@ -153,6 +184,12 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
   const activeAddonType = returnAttempt?.addonType ?? addonType;
   const label = activeAddonType === "chalet" ? "عقار إضافي" : "خدمة إضافية";
   const listedPrice = activeAddonType === "chalet" ? currentLimits?.extraChaletPrice : currentLimits?.extraServicePrice;
+  const numericPrice = listedPrice == null ? null : Number(listedPrice);
+  const validPrice = numericPrice !== null && Number.isFinite(numericPrice) && numericPrice >= 0;
+  const freeCapacityAvailable = numericPrice === 0 && currentLimits != null &&
+    (activeAddonType === "chalet"
+      ? currentLimits.chaletCount < currentLimits.chaletLimit
+      : currentLimits.serviceCount < currentLimits.serviceLimit);
 
   function refreshOwnerData() {
     for (const queryKey of [
@@ -170,7 +207,9 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
     }
   }
 
-  const handleSuccess = () => {
+  const handleSuccess = (purchasedQuantity: number, purchasedType: "chalet" | "service") => {
+    setCompletedQuantity(purchasedQuantity);
+    setCompletedType(purchasedType);
     setCompleted(true);
     setError(null);
     setStep("success");
@@ -188,8 +227,14 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
       if (!response.ok) throw new Error(data.error ?? "تعذّر تأكيد الدفع");
       return data;
     },
-    onSuccess: (_data, checkout) => {
-      clearPendingCheckout(checkout);
+    onSuccess: (data, checkout) => {
+      clearPendingCheckout(ownerId, checkout);
+      try {
+        const legacy = readLegacyPendingCheckout(checkout.addonType);
+        if (legacy?.checkoutId === checkout.checkoutId) {
+          window.sessionStorage.removeItem(`addon-payment-pending:v1:${checkout.addonType}`);
+        }
+      } catch { /* server confirmation has already succeeded */ }
       if (checkout.isRedirectReturn) {
         clearPaymentReturnParams();
         setReturnAttempt(null);
@@ -197,8 +242,7 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
         setReturnDialogOpen(true);
         handledReturnRef.current = null;
       }
-      setPendingCheckout((current) => current?.checkoutId === checkout.checkoutId ? null : current);
-      handleSuccess();
+      handleSuccess(Number(data.purchase?.quantity ?? checkout.quantity ?? 1), checkout.addonType);
     },
     onError: (cause: Error) => {
       setError(cause.message);
@@ -207,37 +251,42 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
   });
 
   const redeemMutation = useMutation({
-    mutationFn: async (checkoutId: string) => {
+    mutationFn: async (checkout: { checkoutId: string; quantity: number }) => {
       const response = await apiFetch("/owner/subscription/addons/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ checkoutId }),
+        body: JSON.stringify({ checkoutId: checkout.checkoutId }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "تعذّر تفعيل الإضافة");
       return data;
     },
-    onSuccess: handleSuccess,
+    onSuccess: (data, checkout) => handleSuccess(Number(data.purchase?.quantity ?? checkout.quantity), addonType),
     onError: (cause: Error) => setError(cause.message),
   });
 
   const quoteMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (requestedQuantity: number) => {
       const response = await apiFetch("/owner/subscription/addons/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addonType }),
+        body: JSON.stringify({ addonType, quantity: requestedQuantity }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "تعذّر احتساب سعر الإضافة");
       const nextQuote: AddonQuote = {
         checkoutId: String(data.checkoutId ?? ""),
         amountHalala: Number(data.amountHalala),
+        unitPriceHalala: Number(data.unitPriceHalala),
+        quantity: Number(data.quantity),
         publishableKey: String(data.publishableKey ?? ""),
         addonType: data.addonType,
       };
       if (!nextQuote.checkoutId || !Number.isSafeInteger(nextQuote.amountHalala) ||
-          nextQuote.amountHalala < 0 || nextQuote.addonType !== addonType) {
+          nextQuote.amountHalala < 0 || nextQuote.addonType !== addonType ||
+          !Number.isSafeInteger(nextQuote.unitPriceHalala) || nextQuote.unitPriceHalala < 0 ||
+          nextQuote.quantity !== requestedQuantity ||
+          nextQuote.amountHalala !== nextQuote.unitPriceHalala * nextQuote.quantity) {
         throw new Error("تعذّر التحقق من عرض سعر الإضافة");
       }
       if (nextQuote.amountHalala > 0 && !nextQuote.publishableKey) {
@@ -249,16 +298,15 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
       setQuote(nextQuote);
       setError(null);
       if (nextQuote.amountHalala === 0) {
-        redeemMutation.mutate(nextQuote.checkoutId);
+        redeemMutation.mutate({ checkoutId: nextQuote.checkoutId, quantity: nextQuote.quantity });
         return;
       }
-      const pending = { checkoutId: nextQuote.checkoutId, addonType: nextQuote.addonType };
-      if (!savePendingCheckout(pending)) {
+      const pending = { checkoutId: nextQuote.checkoutId, addonType: nextQuote.addonType, quantity: nextQuote.quantity };
+      if (!ownerId || !savePendingCheckout(ownerId, pending)) {
         setQuote(null);
         setError("تعذّر حفظ عملية الدفع بأمان في هذه الجلسة؛ لم يتم بدء الدفع. يرجى تفعيل التخزين المؤقت أو المحاولة من متصفح آخر.");
         return;
       }
-      setPendingCheckout(pending);
       setReturnNotice(null);
       setStep("pay");
     },
@@ -283,6 +331,7 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
       callback_url: (() => {
         const url = new URL(window.location.href);
         url.searchParams.set("checkout_flow", "addon");
+        url.searchParams.set("addon_checkout", quote.checkoutId);
         return url.toString();
       })(),
       on_completed: (payment: { id: string; status: string }) => {
@@ -291,6 +340,7 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
             paymentId: payment.id,
             checkoutId: quote.checkoutId,
             addonType: quote.addonType,
+            quantity: quote.quantity,
             isRedirectReturn: false,
           });
         }
@@ -310,10 +360,10 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
   useEffect(() => {
     if (open) {
       setStep("quote");
+      setQuantity(1);
       setQuote(null);
       setError(null);
       setCompleted(false);
-      setPendingCheckout(readPendingCheckout(addonType));
       return;
     }
     setStep("quote");
@@ -321,7 +371,7 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
     setError(null);
     setCompleted(false);
     checkoutRef.current = null;
-  }, [open, addonType]);
+  }, [open, addonType, ownerId]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -330,13 +380,16 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
     const status = params.get("status") || params.get("payment_status") || params.get("paymentStatus");
     if (!paymentId && !status) return;
 
-    const storedCheckouts = (["chalet", "service"] as const)
-      .map(readPendingCheckout)
+    const checkoutId = params.get("addon_checkout");
+    const storedCheckouts = ownerId ? (["chalet", "service"] as const)
+      .flatMap((type) => readPendingCheckouts(ownerId, type)) : [];
+    const legacyCheckouts = (["chalet", "service"] as const)
+      .map(readLegacyPendingCheckout)
       .filter((checkout): checkout is PendingCheckout => checkout !== null);
-    const pending = paymentId
-      ? (storedCheckouts.length === 1 ? storedCheckouts[0] : storedCheckouts.find((checkout) => checkout.addonType === addonType) ?? null)
-      : storedCheckouts.find((checkout) => checkout.addonType === addonType) ??
-        (storedCheckouts.length === 1 ? storedCheckouts[0] : null);
+    const matching = [...storedCheckouts, ...legacyCheckouts];
+    const pending = checkoutId
+      ? matching.find((checkout) => checkout.checkoutId === checkoutId) ?? null
+      : matching.length === 1 ? matching[0] : null;
     const attemptKey = `${paymentId ?? ""}:${status ?? ""}:${pending?.checkoutId ?? ""}`;
     if (handledReturnRef.current === attemptKey) return;
     handledReturnRef.current = attemptKey;
@@ -352,7 +405,6 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
     }
 
     const attempt: ReturnAttempt = { ...pending, paymentId, status };
-    setPendingCheckout(pending);
     setReturnAttempt(attempt);
     setError(null);
     if (!paymentId) {
@@ -371,15 +423,14 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
       paymentId,
       isRedirectReturn: true,
     });
-  }, [addonType]);
+  }, [addonType, ownerId]);
 
   const amountLabel = quote
     ? (quote.amountHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : null;
-  const unresolvedCheckout = returnAttempt ?? (
-    pendingCheckout?.addonType === activeAddonType ? pendingCheckout : null
-  );
-  const purchaseBlocked = !!unresolvedCheckout || !!returnNotice;
+  const estimatedTotal = validPrice ?
+    (numericPrice * quantity).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null;
+  const purchaseBlocked = !!returnAttempt || !!returnNotice;
   const closeModal = () => {
     if (isBusy) return;
     setReturnDialogOpen(false);
@@ -401,7 +452,7 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
             <div>
               <DialogTitle className="text-xl font-bold">تمت إضافة السعة بنجاح</DialogTitle>
               <DialogDescription id="addon-payment-description" className="mt-2">
-                يمكنك الآن إضافة {label === "عقار إضافي" ? "عقار" : "خدمة"} واحدة أخرى.
+                 تمت إضافة {completedQuantity.toLocaleString("ar-SA")} {completedType === "chalet" ? "عقار إضافي" : "خدمة إضافية"} إلى الحد المتاح في حسابك الحالي.
               </DialogDescription>
             </div>
             <Button className="w-full" onClick={closeModal}>متابعة</Button>
@@ -411,10 +462,10 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-xl font-bold">
                 {activeAddonType === "chalet" ? <Building2 className="h-5 w-5 text-primary" /> : <Star className="h-5 w-5 text-primary" />}
-                شراء {label}
+                 طلب {activeAddonType === "chalet" ? "عقارات إضافية" : "خدمات إضافية"}
               </DialogTitle>
               <DialogDescription id="addon-payment-description">
-                تُضاف سعة واحدة إلى حد باقتك، برسوم لمرة واحدة فقط وبدون تجديد تلقائي.
+                 اختر عدد الإضافات المطلوبة؛ تُضاف كلها إلى حسابك الحالي برسوم لمرة واحدة وبدون تجديد تلقائي.
               </DialogDescription>
             </DialogHeader>
 
@@ -426,16 +477,27 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
                       <Plus className="h-4 w-4 text-primary" />
                       {label}
                     </div>
-                    <p className="mt-2">الإضافة توسّع باقتك الحالية دون شراء باقة رئيسية جديدة.</p>
+                     <p className="mt-2">الإضافات توسّع باقتك الحالية وتُدار من لوحة التحكم نفسها.</p>
+                     <label htmlFor="addon-quantity" className="mt-4 block font-semibold text-foreground">
+                       عدد {activeAddonType === "chalet" ? "العقارات الإضافية" : "الخدمات الإضافية"}
+                     </label>
+                     <input id="addon-quantity" type="number" min={1} max={50} step={1} inputMode="numeric"
+                       value={quantity} disabled={isBusy}
+                       onChange={(event) => setQuantity(Math.min(50, Math.max(1, Math.trunc(Number(event.target.value) || 1))))}
+                       className="mt-1 w-24 rounded-md border border-input bg-background px-3 py-2 text-foreground"
+                     />
                     {quote ? (
                       <p className="mt-2 font-bold text-foreground">السعر النهائي: {amountLabel} ر.س — لمرة واحدة</p>
-                    ) : listedPrice != null ? (
-                      <p className="mt-2 font-bold text-foreground">
-                        السعر الحالي: {Number(listedPrice).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س — لمرة واحدة
-                      </p>
+                     ) : validPrice ? (
+                       <div className="mt-3 rounded-lg border border-primary/20 bg-background p-3 text-foreground">
+                         <p>سعر الوحدة: {numericPrice.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</p>
+                         <p className="mt-1 font-bold">الإجمالي التقديري: {quantity.toLocaleString("ar-SA")} × {numericPrice.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} = {estimatedTotal} ر.س</p>
+                         <p className="mt-1 text-xs text-muted-foreground">يؤكد الخادم السعر النهائي قبل فتح الدفع.</p>
+                       </div>
                     ) : (
-                      <p className="mt-2 text-xs">{isPriceLoading ? "جارٍ تحميل سعر الإضافة..." : "سيُتحقق من السعر النهائي قبل الدفع."}</p>
+                       <p className="mt-2 text-xs">{isPriceLoading ? "جارٍ تحميل سعر الإضافة..." : isPriceError ? "تعذّر تحميل سعر الإضافة. أعد فتح النافذة للمحاولة." : "هذه الإضافة غير متاحة للشراء في خطتك الحالية."}</p>
                     )}
+                     {freeCapacityAvailable && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">يمكنك تفعيل الإضافات المجانية بعد استخدام السعة المتاحة في خطتك.</p>}
                   </div>
                   <p className="flex items-start gap-2 text-xs text-muted-foreground">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
@@ -468,6 +530,19 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
                         إعادة التحقق من الدفع
                       </Button>
                     )}
+                    {!returnAttempt?.paymentId && (
+                      <Button variant="outline" className="w-full" disabled={isBusy}
+                        onClick={() => {
+                          clearPaymentReturnParams();
+                          setReturnAttempt(null);
+                          setReturnNotice(null);
+                          setReturnDialogOpen(false);
+                          setError(null);
+                          handledReturnRef.current = null;
+                        }}>
+                        العودة لاختيار العدد دون حذف الطلب المحفوظ
+                      </Button>
+                    )}
                     <Button className="w-full" variant="ghost" onClick={closeModal} disabled={isBusy}>
                       إغلاق
                     </Button>
@@ -478,7 +553,8 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
               {step === "pay" && (
                 <>
                   <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                    <p className="font-semibold text-foreground">{label}</p>
+                     <p className="font-semibold text-foreground">{quote?.quantity.toLocaleString("ar-SA")} × {label}</p>
+                     <p className="text-xs text-muted-foreground">سعر الوحدة: {quote ? (quote.unitPriceHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 }) : "—"} ر.س</p>
                     <p className="mt-1 text-xl font-black text-primary">{amountLabel} ر.س</p>
                     <p className="text-xs text-muted-foreground">رسوم لمرة واحدة — لا يوجد تجديد تلقائي</p>
                   </div>
@@ -511,9 +587,9 @@ export function AddonPaymentModal({ open, onClose, addonType }: AddonPaymentModa
 
               {step === "quote" && !purchaseBlocked && (
                 <div className="flex gap-2">
-                  <Button className="flex-1 gap-2" onClick={() => quoteMutation.mutate()} disabled={isBusy}>
+                   <Button className="flex-1 gap-2" onClick={() => quoteMutation.mutate(quantity)} disabled={isBusy || !validPrice || isPriceLoading || freeCapacityAvailable}>
                     {quoteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                    احتساب السعر والمتابعة
+                     {numericPrice === 0 && validPrice ? "تفعيل الإضافات مجاناً" : "احتساب السعر والمتابعة"}
                   </Button>
                   <Button variant="outline" onClick={closeModal} disabled={isBusy}>إلغاء</Button>
                 </div>

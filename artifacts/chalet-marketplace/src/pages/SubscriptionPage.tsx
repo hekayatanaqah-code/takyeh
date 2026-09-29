@@ -118,13 +118,9 @@ export default function SubscriptionPage() {
     if (requestedAddon !== "chalet" && requestedAddon !== "service") return;
     if (planLimitsLoading || !planLimits) return;
 
-    const isEligible = requestedAddon === "chalet"
-      ? planLimits.active !== false &&
-        planLimits.chaletCount >= planLimits.chaletLimit &&
-        planLimits.extraChaletPrice != null
-      : planLimits.active !== false &&
-        (planLimits.serviceCount ?? 0) >= planLimits.serviceLimit &&
-        planLimits.extraServicePrice != null;
+    const isEligible = planLimits.active === true && (requestedAddon === "chalet"
+      ? planLimits.extraChaletPrice != null
+      : planLimits.extraServicePrice != null);
     if (isEligible) setAddonType(requestedAddon);
     navigate("/subscription", { replace: true });
   }, [search, planLimits, planLimitsLoading, navigate]);
@@ -278,27 +274,27 @@ export default function SubscriptionPage() {
 
         {planLimits?.active && (
           <div className="mb-6 grid gap-3 sm:grid-cols-2">
-            {planLimits.chaletCount >= planLimits.chaletLimit && planLimits.extraChaletPrice != null && (
+            {planLimits.extraChaletPrice != null && (
               <div className="rounded-2xl border border-border bg-card p-4">
-                <p className="font-semibold">تحتاج إلى سعة عقار إضافية؟</p>
+                <p className="font-semibold">أضف عقارات إلى خطتك</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  إضافة عقار واحد مقابل {Number(planLimits.extraChaletPrice).toLocaleString("ar-SA")} ر.س، دفعة واحدة.
+                  {Number(planLimits.extraChaletPrice).toLocaleString("ar-SA")} ر.س لكل عقار إضافي، دفعة واحدة. اختر العدد قبل الدفع.
                 </p>
                 <Button className="mt-3 w-full gap-2" variant="outline" onClick={() => setAddonType("chalet")}>
                   <Building2 className="h-4 w-4" />
-                  شراء عقار إضافي
+                  طلب عقارات إضافية
                 </Button>
               </div>
             )}
-            {(planLimits.serviceCount ?? 0) >= planLimits.serviceLimit && planLimits.extraServicePrice != null && (
+            {planLimits.extraServicePrice != null && (
               <div className="rounded-2xl border border-border bg-card p-4">
-                <p className="font-semibold">تحتاج إلى سعة خدمة إضافية؟</p>
+                <p className="font-semibold">أضف خدمات إلى خطتك</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  إضافة خدمة واحدة مقابل {Number(planLimits.extraServicePrice).toLocaleString("ar-SA")} ر.س، دفعة واحدة.
+                  {Number(planLimits.extraServicePrice).toLocaleString("ar-SA")} ر.س لكل خدمة إضافية، دفعة واحدة. اختر العدد قبل الدفع.
                 </p>
                 <Button className="mt-3 w-full gap-2" variant="outline" onClick={() => setAddonType("service")}>
                   <Star className="h-4 w-4" />
-                  شراء خدمة إضافية
+                  طلب خدمات إضافية
                 </Button>
               </div>
             )}

@@ -7,9 +7,10 @@ import {
   subscriptionAddonPurchasesTable,
   subscriptionPaymentsTable,
 } from "@workspace/db/schema";
-import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess, subscriptionOwnerKeys } from "./subscription-access";
+import { isSubscriptionActive, ownerPlanAccess, subscriptionOwnerKeys } from "./subscription-access";
 
 const INTENT_TTL_MS = 30 * 60 * 1000;
+const MAX_HALALA_AMOUNT = 2_147_483_647;
 
 export class SubscriptionAddonCheckoutError extends Error {
   constructor(message: string, readonly statusCode = 400) {
@@ -40,6 +41,12 @@ function validateAddonType(addonType: unknown): asserts addonType is Subscriptio
   }
 }
 
+function validateQuantity(quantity: unknown): asserts quantity is number {
+  if (!Number.isInteger(quantity) || (quantity as number) < 1 || (quantity as number) > 50) {
+    throw new SubscriptionAddonCheckoutError("كمية الإضافة يجب أن تكون عدداً صحيحاً من 1 إلى 50");
+  }
+}
+
 function validateCheckoutId(checkoutId: unknown): asserts checkoutId is string {
   if (typeof checkoutId !== "string" || !/^[0-9a-f-]{36}$/i.test(checkoutId)) {
     throw new SubscriptionAddonCheckoutError("طلب الدفع غير صالح");
@@ -54,6 +61,27 @@ function validatePaymentId(paymentId: unknown): asserts paymentId is string {
 
 function addonLabel(addonType: SubscriptionAddonType) {
   return addonType === "chalet" ? "عقار إضافي" : "خدمة إضافية";
+}
+
+function hasUnusedCapacity(
+  access: Awaited<ReturnType<typeof ownerPlanAccess>>,
+  addonType: SubscriptionAddonType,
+) {
+  return addonType === "chalet"
+    ? access.chaletCount < access.chaletLimit
+    : access.serviceCount < access.serviceLimit;
+}
+
+function assertNoUnusedCapacity(
+  access: Awaited<ReturnType<typeof ownerPlanAccess>>,
+  addonType: SubscriptionAddonType,
+) {
+  if (hasUnusedCapacity(access, addonType)) {
+    throw new SubscriptionAddonCheckoutError(
+      `لديك سعة متاحة بالفعل؛ استخدمها قبل تفعيل ${addonLabel(addonType)} المجانية`,
+      409,
+    );
+  }
 }
 
 function buildInvoice(
@@ -86,90 +114,83 @@ async function readCompletedAddonCheckout(
   return { purchase, invoice: buildInvoice(purchase) };
 }
 
-async function assertCurrentSlotIsUsed(
-  ownerId: string,
-  addonType: SubscriptionAddonType,
-) {
-  const access = await ownerPlanAccess(ownerId);
-  if (!isSubscriptionActive(access.subscription)) {
-    throw new SubscriptionAddonCheckoutError("انتهى اشتراكك. جدّده قبل شراء الإضافات.", 403);
-  }
-
-  const currentLimit = addonType === "chalet" ? access.chaletLimit : access.serviceLimit;
-  const currentCount = addonType === "chalet" ? access.chaletCount : access.serviceCount;
-  if (currentCount < currentLimit) {
-    throw new SubscriptionAddonCheckoutError(
-      `لديك سعة متاحة بالفعل؛ اشغل الحد الحالي قبل شراء ${addonLabel(addonType)} أخرى`,
-      409,
-    );
-  }
-  return { access };
-}
-
 export async function createAddonCheckout(input: {
   ownerId: string;
   addonType: SubscriptionAddonType;
+  quantity?: number;
 }): Promise<{
   checkoutId: string;
   amountHalala: number;
   publishableKey: string;
   addonType: SubscriptionAddonType;
+  quantity: number;
+  unitPriceHalala: number;
 }> {
   if (typeof input.ownerId !== "string" || !input.ownerId) {
     throw new SubscriptionAddonCheckoutError("سجّل الدخول أولاً", 401);
   }
   validateAddonType(input.addonType);
-
-  const { access } = await assertCurrentSlotIsUsed(input.ownerId, input.addonType);
-  const configuredPrice = input.addonType === "chalet"
-    ? access.extraChaletPrice
-    : access.extraServicePrice;
-  if (configuredPrice == null) {
-    throw new SubscriptionAddonCheckoutError("لم تُحدّد الإدارة سعر هذه الإضافة بعد", 409);
-  }
-  const price = Number(configuredPrice);
-  const amountHalala = Math.round(price * 100);
-  if (!Number.isFinite(price) || price < 0 || !Number.isSafeInteger(amountHalala)) {
-    throw new SubscriptionAddonCheckoutError("سعر الإضافة غير صالح", 500);
-  }
-  if (amountHalala > 0 &&
-      (!process.env.MOYASAR_SECRET_KEY || !process.env.MOYASAR_PUBLISHABLE_KEY)) {
-    throw new SubscriptionAddonCheckoutError("بوابة الدفع غير مهيأة لإتمام الدفع", 503);
-  }
-
-  const subscription = await getOrStartOwnerSubscription(input.ownerId);
-  if (!isSubscriptionActive(subscription)) {
+  const quantity = input.quantity ?? 1;
+  validateQuantity(quantity);
+  const access = await ownerPlanAccess(input.ownerId);
+  if (!isSubscriptionActive(access.subscription)) {
     throw new SubscriptionAddonCheckoutError("انتهى اشتراكك. جدّده قبل شراء الإضافات.", 403);
   }
-  // Reuse an open quote for this owner and slot type. A double click, a modal
-  // reopening, or two parallel requests must not create separately payable
-  // invoices for the same currently needed slot.
+  // An active subscription may buy ahead of current usage. Keep quotes grouped
+  // by requested quantity so changing quantity cannot silently reuse a quote.
   const intent = await db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(731207, hashtext(${`${subscription.ownerId}:${input.addonType}`}))`);
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(731207, hashtext(${`${access.subscription.ownerId}:${input.addonType}`}))`);
     const [pending] = await tx.select().from(subscriptionAddonCheckoutIntentsTable)
       .where(and(
-        eq(subscriptionAddonCheckoutIntentsTable.ownerId, subscription.ownerId),
+        eq(subscriptionAddonCheckoutIntentsTable.ownerId, access.subscription.ownerId),
         eq(subscriptionAddonCheckoutIntentsTable.addonType, input.addonType),
+        eq(subscriptionAddonCheckoutIntentsTable.quantity, quantity),
         isNull(subscriptionAddonCheckoutIntentsTable.consumedAt),
         gt(subscriptionAddonCheckoutIntentsTable.expiresAt, new Date()),
       )).limit(1);
-    if (pending) return pending;
+    if (pending) {
+      if (pending.amountHalala === 0) assertNoUnusedCapacity(access, input.addonType);
+      return pending;
+    }
+    const configuredPrice = input.addonType === "chalet"
+      ? access.extraChaletPrice
+      : access.extraServicePrice;
+    if (configuredPrice == null) {
+      throw new SubscriptionAddonCheckoutError("لم تُحدّد الإدارة سعر هذه الإضافة بعد", 409);
+    }
+    const price = Number(configuredPrice);
+    const unitPriceHalala = Math.round(price * 100);
+    if (!Number.isFinite(price) || price < 0 || !Number.isSafeInteger(unitPriceHalala)) {
+      throw new SubscriptionAddonCheckoutError("سعر الإضافة غير صالح", 500);
+    }
+    if (unitPriceHalala === 0) assertNoUnusedCapacity(access, input.addonType);
+    const amountHalala = unitPriceHalala * quantity;
+    if (!Number.isSafeInteger(amountHalala) || amountHalala > MAX_HALALA_AMOUNT) {
+      throw new SubscriptionAddonCheckoutError("إجمالي سعر الإضافة يتجاوز الحد الأقصى المسموح به", 400);
+    }
     const [created] = await tx.insert(subscriptionAddonCheckoutIntentsTable).values({
       id: randomUUID(),
-      ownerId: subscription.ownerId,
+      ownerId: access.subscription.ownerId,
       addonType: input.addonType,
+      quantity,
       amountHalala,
       expiresAt: new Date(Date.now() + INTENT_TTL_MS),
     }).returning();
     return created;
   });
   if (!intent) throw new SubscriptionAddonCheckoutError("تعذّر إنشاء طلب الإضافة", 500);
+  if (intent.amountHalala > 0 &&
+      (!process.env.MOYASAR_SECRET_KEY || !process.env.MOYASAR_PUBLISHABLE_KEY)) {
+    throw new SubscriptionAddonCheckoutError("بوابة الدفع غير مهيأة لإتمام الدفع", 503);
+  }
 
   return {
     checkoutId: intent.id,
     amountHalala: intent.amountHalala,
     publishableKey: process.env.MOYASAR_PUBLISHABLE_KEY ?? "",
     addonType: input.addonType,
+    quantity: intent.quantity,
+    unitPriceHalala: intent.amountHalala / intent.quantity,
   };
 }
 
@@ -197,6 +218,7 @@ async function finalizeAddonCheckout(input: {
       if (!intent || !ownerKeys.includes(intent.ownerId)) {
         throw new SubscriptionAddonCheckoutError("طلب الدفع غير موجود أو لا يخص هذا الحساب", 404);
       }
+      validateQuantity(intent.quantity);
 
       const [existingPurchase] = await tx.select().from(subscriptionAddonPurchasesTable)
         .where(eq(subscriptionAddonPurchasesTable.intentId, intent.id)).limit(1);
@@ -223,9 +245,15 @@ async function finalizeAddonCheckout(input: {
         .where(eq(ownerSubscriptionsTable.ownerId, intent.ownerId))
         .for("update")
         .limit(1);
-       if (!subscription || (input.paidAmountHalala === 0 && !isSubscriptionActive(subscription))) {
-         throw new SubscriptionAddonCheckoutError("انتهى اشتراكك؛ جدّده قبل تفعيل الإضافة المجانية.", 403);
-       }
+      if (!subscription || (input.paidAmountHalala === 0 && !isSubscriptionActive(subscription))) {
+        throw new SubscriptionAddonCheckoutError("انتهى اشتراكك؛ جدّده قبل تفعيل الإضافة المجانية.", 403);
+      }
+      if (input.paidAmountHalala === 0) {
+        // The subscription-row lock serializes free grants. Resolve the intent's
+        // owner aliases so another account's capacity cannot affect this check.
+        const access = await ownerPlanAccess(intent.ownerId);
+        assertNoUnusedCapacity(access, intent.addonType);
+      }
 
       const now = new Date();
       const [purchase] = await tx.insert(subscriptionAddonPurchasesTable).values({
@@ -233,6 +261,7 @@ async function finalizeAddonCheckout(input: {
         addonType: intent.addonType,
         paymentId: input.paymentId,
         intentId: intent.id,
+        quantity: intent.quantity,
         amountHalala: intent.amountHalala,
       }).returning();
 

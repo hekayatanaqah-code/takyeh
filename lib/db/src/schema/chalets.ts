@@ -528,6 +528,7 @@ export const subscriptionAddonCheckoutIntentsTable = pgTable("subscription_addon
   id: text("id").primaryKey(),
   ownerId: text("owner_id").notNull(),
   addonType: text("addon_type").$type<"chalet" | "service">().notNull(),
+  quantity: integer("quantity").notNull().default(1),
   amountHalala: integer("amount_halala").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   consumedAt: timestamp("consumed_at", { withTimezone: true }),
@@ -539,6 +540,7 @@ export const subscriptionAddonPurchasesTable = pgTable("subscription_addon_purch
   addonType: text("addon_type").$type<"chalet" | "service">().notNull(),
   paymentId: text("payment_id").notNull().unique(),
   intentId: text("intent_id").notNull().unique(),
+  quantity: integer("quantity").notNull().default(1),
   amountHalala: integer("amount_halala").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
