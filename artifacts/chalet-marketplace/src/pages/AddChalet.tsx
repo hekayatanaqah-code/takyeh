@@ -617,10 +617,8 @@ export default function AddChalet() {
     if (!isEditMode && planLimits && (
       planLimits.active === false || planLimits.chaletCount >= planLimits.chaletLimit
     )) {
-      const canBuySlot = planLimits.active && planLimits.chaletCount >= planLimits.chaletLimit &&
-        planLimits.extraChaletPrice != null;
-      if (canBuySlot) setShowAddonPayment(true);
-      else navigate("/subscription");
+      if (planLimits.active === false) navigate("/subscription");
+      else setShowAddonPayment(true);
       return;
     }
 
@@ -713,9 +711,8 @@ export default function AddChalet() {
             if (apiErr?.data?.upgradeRequired) {
               const refreshed = await refetchPlanLimits();
               const currentLimits = refreshed.data ?? planLimits;
-              const canBuySlot = currentLimits?.active && currentLimits.extraChaletPrice != null;
-              if (canBuySlot) setShowAddonPayment(true);
-              else navigate("/subscription");
+              if (currentLimits?.active === false) navigate("/subscription");
+              else setShowAddonPayment(true);
             }
           } catch {}
         },
@@ -773,11 +770,13 @@ export default function AddChalet() {
                 ? "لا يمكن بدء إضافة عقار جديد قبل تجديد الاشتراك. بيانات عقاراتك الحالية ما زالت محفوظة."
                 : "يمكنك توسيع اشتراكك الحالي بشراء سعة لعقار إضافي، أو الاطلاع على الباقات إذا رغبت في ترقية خطتك."}
             </p>
-            {!subscriptionExpired && planLimits?.extraChaletPrice != null ? (
+            {!subscriptionExpired ? (
               <div className="mt-6 flex flex-col items-center gap-3">
-                <p className="text-sm text-muted-foreground">
-                  سعر إضافة عقار واحد: {toAr(Number(planLimits.extraChaletPrice))} ر.س — دفعة واحدة
-                </p>
+                {planLimits?.extraChaletPrice != null && (
+                  <p className="text-sm text-muted-foreground">
+                    سعر إضافة عقار واحد: {toAr(Number(planLimits.extraChaletPrice))} ر.س — دفعة واحدة
+                  </p>
+                )}
                 <Button onClick={() => setShowAddonPayment(true)} className="gap-2">
                   <CreditCard className="h-4 w-4" />
                   شراء عقار إضافي
@@ -798,6 +797,7 @@ export default function AddChalet() {
           open={showAddonPayment}
           onClose={() => setShowAddonPayment(false)}
           addonType="chalet"
+          selectableType
         />
       </div>
     );

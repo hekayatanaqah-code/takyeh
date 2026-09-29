@@ -641,22 +641,20 @@ export default function AddServiceProvider() {
                   ? "جدّد الاشتراك لاستعادة صلاحية إضافة الخدمات."
                   : planLimits.extraServicePrice != null
                     ? `يمكنك شراء مساحة خدمة إضافية لمرة واحدة مقابل ${toAr(Number(planLimits.extraServicePrice))} ر.س.`
-                    : "اختر باقة أعلى لإضافة خدمة أخرى."}
+                    : "تحقق من توفر أسعار الإضافات في خطتك الحالية."}
               </p>
               <Button
                 type="button"
                 size="sm"
                 className="mt-3"
                 onClick={() => {
-                  if (!planLimits.active || planLimits.extraServicePrice == null) navigate("/subscription");
+                  if (!planLimits.active) navigate("/subscription");
                   else setShowAddonPayment(true);
                 }}
               >
                 {!planLimits.active
                   ? "تجديد الاشتراك"
-                  : planLimits.extraServicePrice != null
-                    ? "شراء خدمة إضافية"
-                    : "عرض الباقات والترقية"}
+                  : "إضافة عقار أو خدمة"}
               </Button>
             </div>
           )}
@@ -1354,15 +1352,12 @@ export default function AddServiceProvider() {
                 variant="outline"
                 onClick={() => {
                   if (planLimits?.active === false) navigate("/subscription");
-                  else if (planLimits?.extraServicePrice != null) setShowAddonPayment(true);
-                  else navigate("/subscription");
+                  else setShowAddonPayment(true);
                 }}
               >
                 {planLimits?.active === false
                   ? "تجديد الاشتراك"
-                  : planLimits?.extraServicePrice != null
-                    ? "شراء خدمة إضافية"
-                    : "عرض الباقات والترقية"}
+                  : "إضافة عقار أو خدمة"}
               </Button>
             )}
 
@@ -1385,6 +1380,7 @@ export default function AddServiceProvider() {
         open={showAddonPayment}
         onClose={() => setShowAddonPayment(false)}
         addonType="service"
+        selectableType
       />
     </div>
   );

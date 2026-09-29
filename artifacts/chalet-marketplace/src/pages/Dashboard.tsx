@@ -441,12 +441,14 @@ interface GlobalSeason {
 function UpgradePlanDialog({
   open,
   onClose,
+  onRequestAddon,
   context,
   active,
   extraPrice,
 }: {
   open: boolean;
   onClose: () => void;
+  onRequestAddon: () => void;
   context: "chalet" | "service";
   active?: boolean;
   extraPrice?: number | string | null;
@@ -480,7 +482,7 @@ function UpgradePlanDialog({
               className="shrink-0"
               onClick={() => {
                 onClose();
-                navigate(`/subscription?addon=${context}`);
+                onRequestAddon();
               }}
             >
               طلب إضافات
@@ -1408,11 +1410,10 @@ function SectionGuideButton({ sectionKey }: { sectionKey: string }) {
 
 /* ════════════════════════════════════════════════════════════════ */
 
-function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any[] | undefined; isLoading: boolean; ownerChalets: any[] }) {
+function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { submissions: any[] | undefined; isLoading: boolean; ownerChalets: any[]; onRequestAddon: () => void }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const [showAddonPayment, setShowAddonPayment] = useState(false);
   const [blockTarget, setBlockTarget] = useState<{ id: number; nameAr: string } | null>(null);
   const [pauseTarget, setPauseTarget] = useState<any | null>(null);
   const [editTarget, setEditTarget] = useState<any | null>(null);
@@ -1564,7 +1565,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
               ) : (
                 <>
                   {planLimits.extraChaletPrice != null && (
-                    <Button size="sm" variant="default" className="rounded-xl shrink-0 text-xs h-8" onClick={() => setShowAddonPayment(true)}>
+                    <Button size="sm" variant="default" className="rounded-xl shrink-0 text-xs h-8" onClick={onRequestAddon}>
                       <Plus className="w-3.5 h-3.5 me-1" />
                       طلب عقارات إضافية · {toAr(Number(planLimits.extraChaletPrice))} ر.س للوحدة
                     </Button>
@@ -1582,11 +1583,11 @@ function ChaletsTab({ submissions, isLoading, ownerChalets }: { submissions: any
       <UpgradePlanDialog
         open={showUpgrade}
         onClose={() => setShowUpgrade(false)}
+        onRequestAddon={onRequestAddon}
         context="chalet"
         active={planLimits?.active}
         extraPrice={planLimits?.extraChaletPrice}
       />
-      <AddonPaymentModal open={showAddonPayment} onClose={() => setShowAddonPayment(false)} addonType="chalet" />
       <BlockDatesDialog
         open={!!blockTarget}
         chalet={blockTarget}
@@ -25114,7 +25115,6 @@ export default function Dashboard() {
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
   const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "customers" | "digitalContracts" | "notifications">("chalets");
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
-  const [showHeaderUpgrade, setShowHeaderUpgrade] = useState<"chalet" | "service" | null>(null);
   const [showHeaderAddon, setShowHeaderAddon] = useState<"chalet" | "service" | null>(null);
   const [serviceFinanceMode, setServiceFinanceMode] = useState<"separate" | "consolidated">(() => (localStorage.getItem("svc_finance_mode") as any) ?? "separate");
   const [clientListMode, setClientListMode] = useState<"unified" | "separate">(() => (localStorage.getItem("svc_client_mode") as any) ?? "unified");
@@ -25764,76 +25764,37 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             {!actAsStaff && !isImpersonating && (
               <>
-                {canSeeChalets && (headerAtChaletLimit ? (
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      variant={activeDashMode === "chalets" ? "default" : "outline"}
-                      className="rounded-xl font-semibold text-sm"
-                      onClick={() => {
-                        if (planLimits?.active === false) navigate("/subscription");
-                        else if (planLimits?.extraChaletPrice != null) setShowHeaderAddon("chalet");
-                        else setShowHeaderUpgrade("chalet");
-                      }}
-                    >
-                      <Lock className="w-4 h-4 me-1.5 text-amber-500" />
-                      {planLimits?.active === false
-                        ? "تجديد الاشتراك"
-                        : planLimits?.extraChaletPrice != null
-                          ? `طلب عقارات إضافية · ${toAr(Number(planLimits.extraChaletPrice))} ر.س للوحدة`
-                          : "إضافة عقار"}
-                    </Button>
-                    {planLimits?.active !== false && planLimits?.extraChaletPrice != null && (
-                      <Button variant="ghost" className="rounded-xl text-xs" onClick={() => setShowHeaderUpgrade("chalet")}>
-                        ترقية الخطة
-                      </Button>
-                    )}
-                  </div>
-                ) : (
+                {canSeeChalets && !headerAtChaletLimit && (
                   <Link href="/add-chalet">
                     <Button variant={activeDashMode === "chalets" ? "default" : "outline"} className="rounded-xl font-semibold text-sm">
                       <Plus className="w-4 h-4 me-1.5" />
                       إضافة عقار
                     </Button>
                   </Link>
-                ))}
-                {canSeeServices && (atServiceLimit ? (
-                  <div className="flex flex-col items-start gap-1">
-                    <Button
-                      variant={activeDashMode === "services" ? "default" : "outline"}
-                      className="rounded-xl font-semibold text-sm"
-                      onClick={() => {
-                        if (planLimits?.active === false) navigate("/subscription");
-                        else if (planLimits?.extraServicePrice != null) setShowHeaderAddon("service");
-                        else setShowHeaderUpgrade("service");
-                      }}
-                    >
-                      <Lock className="w-4 h-4 me-1.5 text-amber-500" />
-                      {planLimits?.active === false
-                        ? "تجديد الاشتراك"
-                        : planLimits?.extraServicePrice != null
-                          ? `طلب خدمات إضافية · ${toAr(Number(planLimits.extraServicePrice))} ر.س للوحدة`
-                          : "ترقية لإضافة خدمة"}
-                    </Button>
-                    {planLimits?.extraServicePrice != null && planLimits?.active !== false && (
-                      <Button variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setShowHeaderUpgrade("service")}>
-                        ترقية الخطة
-                      </Button>
-                    )}
-                  </div>
-                ) : (
+                )}
+                {canSeeServices && !atServiceLimit && (
                   <Link href="/add-service-provider">
                     <Button variant={activeDashMode === "services" ? "default" : "outline"} className="rounded-xl font-semibold text-sm">
                       <Plus className="w-4 h-4 me-1.5" />
                       إضافة خدمة
                     </Button>
                   </Link>
-                ))}
-                {planLimits?.active && (planLimits.extraChaletPrice != null || planLimits.extraServicePrice != null) && (
-                  <Button variant="outline" className="rounded-xl font-semibold text-sm"
-                    onClick={() => navigate("/subscription")}>
-                    <Plus className="w-4 h-4 me-1.5" />
-                    طلب الإضافات
-                  </Button>
+                )}
+                {(canSeeChalets || canSeeServices) && (headerAtChaletLimit || atServiceLimit || (planLimits?.active && (planLimits.extraChaletPrice != null || planLimits.extraServicePrice != null))) && (
+                  planLimits?.active === false ? (
+                    <Button data-testid="button-renew-subscription" className="rounded-xl font-semibold text-sm" onClick={() => navigate("/subscription")}>
+                      <Lock className="w-4 h-4 me-1.5 text-amber-500" />
+                      تجديد الاشتراك
+                    </Button>
+                  ) : (
+                    <Button data-testid="button-add-property-or-service-capacity"
+                      variant={headerAtChaletLimit || atServiceLimit ? "default" : "outline"}
+                      className="rounded-xl font-semibold text-sm"
+                      onClick={() => setShowHeaderAddon(canSeeChalets && headerAtChaletLimit ? "chalet" : canSeeServices && atServiceLimit ? "service" : planLimits?.extraChaletPrice != null ? "chalet" : "service")}>
+                      {headerAtChaletLimit || atServiceLimit ? <Lock className="w-4 h-4 me-1.5 text-amber-500" /> : <Plus className="w-4 h-4 me-1.5" />}
+                      إضافة عقار أو خدمة
+                    </Button>
+                  )
                 )}
               </>
             )}
@@ -25890,17 +25851,11 @@ export default function Dashboard() {
             )}
           </div>
         </motion.div>
-        <UpgradePlanDialog
-          open={showHeaderUpgrade !== null}
-          onClose={() => setShowHeaderUpgrade(null)}
-          context={showHeaderUpgrade ?? "chalet"}
-          active={planLimits?.active}
-          extraPrice={showHeaderUpgrade === "service" ? planLimits?.extraServicePrice : planLimits?.extraChaletPrice}
-        />
         <AddonPaymentModal
           open={showHeaderAddon !== null}
           onClose={() => setShowHeaderAddon(null)}
           addonType={showHeaderAddon ?? "chalet"}
+          selectableType
         />
         <Dialog open={accountSettingsOpen} onOpenChange={setAccountSettingsOpen}>
           <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6" dir="rtl">
@@ -26385,6 +26340,7 @@ export default function Dashboard() {
             submissions={submissions as any[]}
             isLoading={submissionsLoading || authLoading || impersonationLoading}
             ownerChalets={ownerChalets}
+            onRequestAddon={() => setShowHeaderAddon("chalet")}
           />
         )}
         {activeTab === "seasons" && (
