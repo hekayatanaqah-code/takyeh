@@ -1,25 +1,25 @@
 ---
 name: Subscription billing boundary
-description: Billing boundary for paid extra slots and legacy trial continuity.
+description: Billing boundary for recurring extra slots, legacy purchases, and trial continuity.
 ---
 
-An additional property or service slot is a separate one-time purchase. It remains attached to the owner's linked account across subscription renewals, but is usable only while a base subscription is active. Plan and add-on pricing are editable; a checkout keeps its original quoted amount and terms.
+New additional property or service slots are recurring, prorated through the current base period, and charged alongside the base plan on renewal. Historical one-time purchases keep their original nonrecurring entitlement. Both remain usable only while the base subscription is active. Plan and add-on prices remain editable; a checkout and agreed recurring price keep their quoted terms.
 
-**Why:** The user authorized temporary defaults and unrestricted future edits by the general administrator. Repricing or modifying a plan after checkout must not alter a charge already initiated or strip a buyer's purchased entitlement.
+**Why:** The user replaced separate one-time add-on billing with unified renewals, but explicitly kept old one-time purchases grandfathered. Repricing after consent must not silently change an agreed future charge or strip purchased capacity.
 
-**How to apply:** Keep over-limit creation blocked until a separately quoted, verified, recorded payment unlocks an additional slot. Admin edits apply to new checkouts; existing paid terms remain as quoted. A paid buyer must not lose a slot simply because the base subscription expired during payment: retain it for their next renewal.
+**How to apply:** Show the exact days remaining, amount due now, future combined charge and renewal date before obtaining recurring-payment consent. Unlock capacity only after verified payment; on renewal, advance the base and included add-ons together only after one verified combined charge. Admin edits apply to new checkouts, not agreed renewal amounts. Never charge a legacy one-time purchase again.
 
 An active property-only subscription can purchase a service slot, and an active service-only subscription can purchase a property slot, without replacing the base subscription. Default cross-category add-on prices should be enabled only once for untouched seeded plans; later administrator edits, including disabling a price, must remain authoritative.
 
 **Why:** A buyer asked to pay only for extra capacity, not an entirely new plan. Yet a recurring seed that fills disabled prices would undo the administrator's future decision.
 
-**How to apply:** Treat the add-on as a separate, owner-scoped purchase counted toward effective capacity regardless of base plan category. Keep the base subscription intact and avoid rewriting configured prices on later starts.
+**How to apply:** Count the owner-scoped add-on toward capacity regardless of base plan category, but bill and renew new recurring add-ons with the base period. Keep the base subscription intact and avoid rewriting configured prices on later starts.
 
 Trial add-on prices are set by the administrator for each type; do not infer them from paid plans or invent a default charge when no amount has been supplied.
 
 **Why:** The user declined to choose fixed trial prices and instead requested editable prices in the subscription-plan administration screen. A guessed charge would be a billing decision they did not make.
 
-**How to apply:** Permit an active trial to buy as soon as its per-type price is configured. When unset, explain that the administrator has not priced the add-on yet; never silently replace an intentionally empty price with a seed.
+**How to apply:** Permit an active trial to buy as soon as its per-type price is configured. When unset, explain that the administrator has not priced the add-on yet; never silently replace an intentionally empty price with a seed. At trial expiry, require the owner to select a paid plan before any combined renewal; never automatically choose a paid plan for them.
 
 For legacy accounts with published inventory but no subscription record, a single persisted trial prevents the new system from silently removing active listings on rollout. An already-recorded expired or inactive subscription is not a missing trial and must not be reset.
 

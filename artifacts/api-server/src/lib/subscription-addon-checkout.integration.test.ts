@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   ownerSubscriptionsTable,
+  ownerBillingProfilesTable,
   subscriptionAddonCheckoutIntentsTable,
   subscriptionAddonPurchasesTable,
   subscriptionPaymentsTable,
@@ -18,6 +19,7 @@ import {
   SubscriptionAddonCheckoutError,
 } from "./subscription-addon-checkout";
 import { ownerPlanAccess } from "./subscription-access";
+import { proratedAddonAmountHalala } from "./subscription-billing-math";
 
 test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }, async () => {
   const suffix = randomUUID();
@@ -27,6 +29,7 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
   const originalFetch = globalThis.fetch;
   const oldPublishable = process.env.MOYASAR_PUBLISHABLE_KEY;
   const oldSecret = process.env.MOYASAR_SECRET_KEY;
+  const oldSessionSecret = process.env.SESSION_SECRET;
   const fakePublishable = "test-publishable-key-not-for-provider";
   const fakeSecret = "test-secret-key-not-for-provider";
   let providerReply: {
@@ -36,6 +39,7 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
     currency: string;
     description: string;
     created_at: string;
+    source?: { token?: string };
   } | null = null;
   let fetchCalls = 0;
   let rejectedByUnexpectedFetch = false;
@@ -48,6 +52,7 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
   try {
     process.env.MOYASAR_PUBLISHABLE_KEY = fakePublishable;
     process.env.MOYASAR_SECRET_KEY = fakeSecret;
+    process.env.SESSION_SECRET = "integration-test-session-secret";
     await db.insert(subscriptionPlansTable).values({
       slug: planSlug,
       nameAr: "باقة تكامل اختبارية",
@@ -83,9 +88,13 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       "the payment-page quote reader rejects free checkouts",
     );
     const pendingSecondFreeQuote = await createAddonCheckout({ ownerId, addonType: "chalet", quantity: 2 });
+    await db.update(subscriptionAddonCheckoutIntentsTable)
+      .set({ quoteVersion: 1, autoRenewConsent: true })
+      .where(eq(subscriptionAddonCheckoutIntentsTable.id, freeQuote.checkoutId));
     const freeResult = await redeemFreeAddonCheckout({ ownerId, checkoutId: freeQuote.checkoutId });
     assert.equal(freeResult.purchase.amountHalala, 0);
     assert.equal(freeResult.purchase.quantity, 3);
+    assert.equal(freeResult.purchase.recurring, false, "a quote without recorded consent remains one-time");
     const repeatedFreeResult = await redeemFreeAddonCheckout({ ownerId, checkoutId: freeQuote.checkoutId });
     assert.equal(repeatedFreeResult.purchase.id, freeResult.purchase.id);
 
@@ -112,23 +121,36 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
 
     // Add-ons can be purchased proactively, and quote totals are unit price
     // multiplied by the requested quantity.
-    const paidQuote = await createAddonCheckout({ ownerId, addonType: "service", quantity: 3 });
+    await assert.rejects(
+      createAddonCheckout({ ownerId, addonType: "service", quantity: 3 }),
+      (error: unknown) => error instanceof SubscriptionAddonCheckoutError && error.statusCode === 400,
+      "a new paid recurring add-on quote requires explicit consent",
+    );
+    const paidQuote = await createAddonCheckout({
+      ownerId, addonType: "service", quantity: 3, autoRenewConsent: true,
+    });
+    const expectedPaidAmount = proratedAddonAmountHalala(
+      5000, 3,
+      Date.parse(paidQuote.periodEndAt) - Date.parse(paidQuote.periodStartAt),
+      paidQuote.cycleDays,
+    );
     await db.update(subscriptionPlansTable).set({ extraServicePrice: "51.25" })
       .where(eq(subscriptionPlansTable.slug, planSlug));
-    assert.deepEqual(await readAddonCheckoutQuote({ ownerId, checkoutId: paidQuote.checkoutId }), {
-      checkoutId: paidQuote.checkoutId,
-      addonType: "service",
-      quantity: 3,
-      amountHalala: 15000,
-      unitPriceHalala: 5000,
-      publishableKey: fakePublishable,
-    }, "reading an existing quote returns its reserved price instead of repricing");
+    const rereadPaidQuote = await readAddonCheckoutQuote({ ownerId, checkoutId: paidQuote.checkoutId });
+    assert.equal(rereadPaidQuote.amountHalala, expectedPaidAmount);
+    assert.equal(rereadPaidQuote.unitPriceHalala, 5000);
+    assert.equal(rereadPaidQuote.autoRenewConsent, true);
+    assert.equal(rereadPaidQuote.recurring, true);
+    assert.equal(rereadPaidQuote.publishableKey, fakePublishable);
+    assert.equal(rereadPaidQuote.nextChargeHalala, paidQuote.nextChargeHalala);
     await assert.rejects(
       readAddonCheckoutQuote({ ownerId: otherOwnerId, checkoutId: paidQuote.checkoutId }),
       (error: unknown) => error instanceof SubscriptionAddonCheckoutError && error.statusCode === 404,
       "another account cannot read this quote",
     );
-    const expiredQuote = await createAddonCheckout({ ownerId, addonType: "service", quantity: 4 });
+    const expiredQuote = await createAddonCheckout({
+      ownerId, addonType: "service", quantity: 4, autoRenewConsent: true,
+    });
     await db.update(subscriptionAddonCheckoutIntentsTable)
       .set({ expiresAt: new Date(Date.now() - 1000) })
       .where(eq(subscriptionAddonCheckoutIntentsTable.id, expiredQuote.checkoutId));
@@ -139,13 +161,22 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
     );
     const editedServicePrice = await ownerPlanAccess(ownerId);
     assert.equal(editedServicePrice.extraServicePrice, "51.25");
-    const differentQuantityQuote = await createAddonCheckout({ ownerId, addonType: "service", quantity: 2 });
-    const reusedPaidQuote = await createAddonCheckout({ ownerId, addonType: "service", quantity: 3 });
+    const differentQuantityQuote = await createAddonCheckout({
+      ownerId, addonType: "service", quantity: 2, autoRenewConsent: true,
+    });
+    const expectedDifferentAmount = proratedAddonAmountHalala(
+      5125, 2,
+      Date.parse(differentQuantityQuote.periodEndAt) - Date.parse(differentQuantityQuote.periodStartAt),
+      differentQuantityQuote.cycleDays,
+    );
+    const reusedPaidQuote = await createAddonCheckout({
+      ownerId, addonType: "service", quantity: 3, autoRenewConsent: true,
+    });
     assert.equal((await ownerPlanAccess(ownerId)).scope, "property", "service slots may be added without buying a full plan");
-    assert.equal(paidQuote.amountHalala, 15000);
+    assert.equal(paidQuote.amountHalala, expectedPaidAmount);
     assert.equal(paidQuote.quantity, 3);
     assert.equal(paidQuote.unitPriceHalala, 5000);
-    assert.equal(differentQuantityQuote.amountHalala, 10250);
+    assert.equal(differentQuantityQuote.amountHalala, expectedDifferentAmount);
     assert.equal(differentQuantityQuote.quantity, 2);
     assert.notEqual(differentQuantityQuote.checkoutId, paidQuote.checkoutId);
     assert.equal(reusedPaidQuote.checkoutId, paidQuote.checkoutId, "an open quote is reused, not double-sold");
@@ -165,7 +196,8 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       amount: paidQuote.amountHalala,
       currency: "SAR",
       description: `اختبار تكامل [${paidQuote.checkoutId}]`,
-      created_at: paidAt,
+      created_at: new Date().toISOString(),
+      source: { token: "test-moyasar-token" },
     };
     globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
       fetchCalls += 1;
@@ -179,6 +211,43 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
         headers: { "content-type": "application/json" },
       });
     }) as typeof fetch;
+
+    const staleQuote = await createAddonCheckout({
+      ownerId, addonType: "service", quantity: 4, autoRenewConsent: true,
+    });
+    const [originalSubscription] = await db.select().from(ownerSubscriptionsTable)
+      .where(eq(ownerSubscriptionsTable.ownerId, ownerId)).limit(1);
+    assert.ok(originalSubscription?.expiresAt);
+    await db.update(ownerSubscriptionsTable)
+      .set({ expiresAt: new Date(originalSubscription.expiresAt.getTime() + 1) })
+      .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+    const stalePaymentId = `synthetic_stale_${suffix}`;
+    providerReply = {
+      id: stalePaymentId,
+      status: "paid",
+      amount: staleQuote.amountHalala,
+      currency: "SAR",
+      description: `stale quote [${staleQuote.checkoutId}]`,
+      created_at: paidAt,
+      source: { token: "test-moyasar-token" },
+    };
+    await assert.rejects(
+      confirmAddonCheckout({ ownerId, checkoutId: staleQuote.checkoutId, paymentId: stalePaymentId }),
+      (error: unknown) => error instanceof SubscriptionAddonCheckoutError && error.statusCode === 409,
+      "a quote cannot confirm after the underlying base expiry changes",
+    );
+    await db.update(ownerSubscriptionsTable)
+      .set({ expiresAt: originalSubscription.expiresAt })
+      .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+    providerReply = {
+      id: paymentId,
+      status: "paid",
+      amount: paidQuote.amountHalala,
+      currency: "SAR",
+      description: `اختبار تكامل [${paidQuote.checkoutId}]`,
+      created_at: paidAt,
+      source: { token: "test-moyasar-token" },
+    };
 
     // Every material field verified from the provider response is exercised
     // with a rejected response before the successful mocked response.
@@ -212,7 +281,7 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
     );
     assert.equal(paidResult.purchase.amountHalala, paidQuote.amountHalala);
     assert.equal(paidResult.purchase.quantity, 3);
-    assert.equal(paidResult.invoice.amount, 150);
+    assert.equal(paidResult.invoice.amount, expectedPaidAmount / 100);
     assert.equal(paidResult.invoice.currency, "SAR");
 
     // Editing the current catalogue price after quoting cannot alter the
@@ -223,9 +292,9 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       ownerId, checkoutId: paidQuote.checkoutId, paymentId,
     });
     assert.equal(repeatedPaidResult.purchase.id, paidResult.purchase.id);
-    assert.equal(repeatedPaidResult.purchase.amountHalala, 15000);
+    assert.equal(repeatedPaidResult.purchase.amountHalala, expectedPaidAmount);
     assert.equal(repeatedPaidResult.purchase.quantity, 3);
-    assert.equal(fetchCalls, 4, "three rejected provider responses, then one successful response; retry is local");
+    assert.equal(fetchCalls, 5, "three rejected provider responses and two verification requests; retry is local");
 
     const secondPaymentId = `synthetic_second_${suffix}`;
     providerReply = {
@@ -235,12 +304,13 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       currency: "SAR",
       description: `شراء خدمة اختبارية [${differentQuantityQuote.checkoutId}]`,
       created_at: paidAt,
+      source: { token: "test-moyasar-token" },
     };
     const secondPaidResult = await confirmAddonCheckout({
       ownerId, checkoutId: differentQuantityQuote.checkoutId, paymentId: secondPaymentId,
     });
     assert.equal(secondPaidResult.purchase.quantity, 2);
-    assert.equal(secondPaidResult.purchase.amountHalala, 10250);
+    assert.equal(secondPaidResult.purchase.amountHalala, expectedDifferentAmount);
 
     // A completed purchase does not block a new purchase; the new quote picks
     // up the current catalogue price and grants its full requested quantity.
@@ -248,8 +318,15 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
     assert.equal(afterPaid.purchasedServiceSlots, 5);
     assert.equal(afterPaid.serviceLimit, 5);
     assert.equal(afterPaid.extraServicePrice, "99.00");
-    const repurchaseQuote = await createAddonCheckout({ ownerId, addonType: "service", quantity: 1 });
-    assert.equal(repurchaseQuote.amountHalala, 9900);
+    const repurchaseQuote = await createAddonCheckout({
+      ownerId, addonType: "service", quantity: 1, autoRenewConsent: true,
+    });
+    const expectedRepurchaseAmount = proratedAddonAmountHalala(
+      9900, 1,
+      Date.parse(repurchaseQuote.periodEndAt) - Date.parse(repurchaseQuote.periodStartAt),
+      repurchaseQuote.cycleDays,
+    );
+    assert.equal(repurchaseQuote.amountHalala, expectedRepurchaseAmount);
     assert.equal(repurchaseQuote.unitPriceHalala, 9900);
     const repurchasePaymentId = `synthetic_repurchase_${suffix}`;
     providerReply = {
@@ -259,6 +336,7 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       currency: "SAR",
       description: `شراء خدمة اختبارية [${repurchaseQuote.checkoutId}]`,
       created_at: paidAt,
+      source: { token: "test-moyasar-token" },
     };
     const repurchase = await confirmAddonCheckout({
       ownerId, checkoutId: repurchaseQuote.checkoutId, paymentId: repurchasePaymentId,
@@ -270,11 +348,14 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
     globalThis.fetch = originalFetch;
     restoreEnv("MOYASAR_PUBLISHABLE_KEY", oldPublishable);
     restoreEnv("MOYASAR_SECRET_KEY", oldSecret);
+    if (oldSessionSecret === undefined) delete process.env.SESSION_SECRET;
+    else process.env.SESSION_SECRET = oldSessionSecret;
 
     // Every cleanup predicate is scoped to the synthetic UUID-backed owner or
     // plan created by this test; no unrelated account/data is touched.
     await db.delete(subscriptionPaymentsTable).where(eq(subscriptionPaymentsTable.ownerId, ownerId));
     await db.delete(subscriptionAddonPurchasesTable).where(eq(subscriptionAddonPurchasesTable.ownerId, ownerId));
+    await db.delete(ownerBillingProfilesTable).where(eq(ownerBillingProfilesTable.ownerId, ownerId));
     await db.delete(subscriptionAddonCheckoutIntentsTable).where(eq(subscriptionAddonCheckoutIntentsTable.ownerId, ownerId));
     await db.delete(ownerSubscriptionsTable).where(eq(ownerSubscriptionsTable.ownerId, ownerId));
     await db.delete(subscriptionPlansTable).where(and(

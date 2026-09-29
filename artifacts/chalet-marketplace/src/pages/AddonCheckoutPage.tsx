@@ -50,11 +50,22 @@ export default function AddonCheckoutPage() {
       if (data.checkoutId !== checkoutId || data.addonType !== pending?.addonType ||
           data.quantity !== pending.quantity || !Number.isSafeInteger(data.amountHalala) ||
           data.amountHalala <= 0 || !Number.isSafeInteger(data.unitPriceHalala) ||
-          data.unitPriceHalala * data.quantity !== data.amountHalala ||
           typeof data.publishableKey !== "string" || !data.publishableKey) {
         throw new Error("تعذّر التحقق من تفاصيل طلب الدفع؛ لم تبدأ عملية دفع.");
       }
-      return data as AddonQuote;
+      if (pending?.consentToRecurring === true &&
+          (data.recurring !== true || data.canSavePaymentMethod !== true ||
+            !Number.isSafeInteger(data.nextChargeHalala) || typeof data.nextBillingAt !== "string" ||
+            typeof (data.periodEnd ?? data.periodEndAt) !== "string" ||
+            !Number.isFinite(data.remainingDays) ||
+            !Number.isFinite(data.billingDays ?? data.cycleDays))) {
+        throw new Error("لم يؤكد الخادم مبلغ دورة التجديد وموعدها والفترة النسبية أو إمكانية حفظ وسيلة الدفع؛ لم يبدأ الدفع.");
+      }
+      return {
+        ...data,
+        periodEnd: data.periodEnd ?? data.periodEndAt,
+        billingDays: data.billingDays ?? data.cycleDays,
+      } as AddonQuote;
     },
     enabled: !!ownerId && !!pending && !isGatewayReturn && !inlinePaymentId && completedQuantity === null,
     retry: false,
@@ -124,7 +135,10 @@ export default function AddonCheckoutPage() {
         }
         return false;
       },
-      supported_networks: ["mada", "visaMastercard", "stcpay", "applepay"],
+      supported_networks: pending.consentToRecurring === true
+        ? ["mada", "visaMastercard"]
+        : ["mada", "visaMastercard", "stcpay", "applepay"],
+      ...(pending.consentToRecurring === true ? { credit_card: { save_card: true } } : {}),
       language: "ar",
     });
     return () => { container.innerHTML = ""; };
@@ -167,13 +181,28 @@ export default function AddonCheckoutPage() {
                     <p className="font-semibold">{pending.quantity?.toLocaleString("ar-SA")} × {label}</p>
                     {quote && (
                       <>
-                        <p className="mt-1 text-sm text-muted-foreground">سعر الوحدة: {(quote.unitPriceHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س</p>
+                        <p className="mt-1 text-sm text-muted-foreground">السعر المرجعي الكامل للوحدة لكل 30 يوماً: {(quote.unitPriceHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س</p>
                         <p className="mt-2 text-xl font-bold text-primary" data-testid="text-addon-checkout-total">
-                          الإجمالي: {(quote.amountHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س
+                          المستحق الآن للفترة المتبقية: {(quote.amountHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س
                         </p>
+                        {quote.remainingDays != null && quote.billingDays != null && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            محسوباً عن {quote.remainingDays} من {quote.billingDays} يوماً حتى نهاية الفترة {quote.periodEnd ? new Date(quote.periodEnd).toLocaleDateString("ar-SA") : "الحالية"}.
+                          </p>
+                        )}
+                        {pending.consentToRecurring === true && quote.nextChargeHalala != null && (
+                          <>
+                            <p className="mt-2 font-semibold">إجمالي الفاتورة الموحدة {quote.billingDays === 30 ? "عند التجديد الشهري" : `لدورة التجديد (${quote.billingDays} يوم)`}: {(quote.nextChargeHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س</p>
+                            {quote.nextBillingAt && <p className="mt-1 text-xs text-muted-foreground">موعد التجديد التالي: {new Date(quote.nextBillingAt).toLocaleDateString("ar-SA")}</p>}
+                          </>
+                        )}
                       </>
                     )}
-                    <p className="mt-1 text-xs text-muted-foreground">دفعة واحدة — لا يوجد تجديد تلقائي</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {pending.consentToRecurring === true
+                        ? "بموافقتك، يُحفظ أسلوب الدفع وتُضم الإضافة إلى فاتورة تجديد الاشتراك الأساسية. لن يبدأ التحصيل الدوري ما لم يؤكده الخادم."
+                        : "طلب دفع سابق غير متكرر؛ لا تُحفظ وسيلة الدفع ولا يُفعّل التجديد التلقائي."}
+                    </p>
                   </div>}
                   {!isGatewayReturn && !inlinePaymentId && pending && (
                     <>

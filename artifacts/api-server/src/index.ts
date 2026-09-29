@@ -5,6 +5,8 @@ import { seedSubscriptionPlansOnce } from "./lib/subscription-defaults";
 import { runSubscriptionExpiryReminders } from "./lib/subscription-reminders";
 import { startLongPauseAlertCheck } from "./routes/admin";
 import { runSubscriptionExpiryJob } from "./lib/subscription-expiry";
+import { runSubscriptionRenewalJob } from "./lib/subscription-renewals";
+import { runSubscriptionPaymentReconciliationJob } from "./lib/subscription-payment-reconciliation";
 import { db } from "@workspace/db";
 import { ownerBookingsTable, ownerNotificationsTable } from "@workspace/db/schema";
 import { eq, and, isNull, like } from "drizzle-orm";
@@ -100,6 +102,22 @@ app.listen(port, async (err) => {
   };
   void checkSubscriptions();
   setInterval(() => { void checkSubscriptions(); }, 60 * 60 * 1000);
+
+  // Unified token renewals are idempotent in the database and with Moyasar given_id.
+  void runSubscriptionRenewalJob();
+  setInterval(() => { void runSubscriptionRenewalJob(); }, 15 * 60 * 1000);
+
+  // Captured checkout payments with stale quotes remain queued until refund identity
+  // is verified or an operational manual-review state is reached.
+  const reconcileSubscriptionPayments = async () => {
+    try {
+      await runSubscriptionPaymentReconciliationJob();
+    } catch (error) {
+      logger.error({ err: error }, "Failed to reconcile captured subscription payments");
+    }
+  };
+  void reconcileSubscriptionPayments();
+  setInterval(() => { void reconcileSubscriptionPayments(); }, 5 * 60 * 1000);
 
   // Check for long-paused chalets on startup and every hour
   startLongPauseAlertCheck();

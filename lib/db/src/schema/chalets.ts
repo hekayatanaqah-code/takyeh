@@ -457,6 +457,9 @@ export const ownerSubscriptionsTable = pgTable("owner_subscriptions", {
   plan: text("plan").notNull().default("monthly"),
   status: text("status").notNull().default("active"),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
+  billingCycleDays: integer("billing_cycle_days"),
+  renewalPriceHalala: integer("renewal_price_halala"),
+  autoRenewEnabled: boolean("auto_renew_enabled").notNull().default(false),
   paymentStatus: text("payment_status").notNull().default("paid"),
   termsSnapshot: jsonb("terms_snapshot").$type<SubscriptionTerms>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -510,6 +513,26 @@ export const subscriptionCheckoutIntentsTable = pgTable("subscription_checkout_i
   planLabel: text("plan_label").notNull(),
   termsSnapshot: jsonb("terms_snapshot").$type<SubscriptionTerms>(),
   discountCode: text("discount_code"),
+  invoiceLines: jsonb("invoice_lines").$type<Array<{
+    kind: "base" | "addon";
+    label: string;
+    amountHalala: number;
+    addonPurchaseId?: number;
+    quantity?: number;
+    unitPriceHalala?: number;
+    periodStartAt?: string;
+    periodEndAt?: string;
+  }>>().notNull().default([]),
+  quotedBaseExpiresAt: timestamp("quoted_base_expires_at", { withTimezone: true }),
+  recurringAddonSnapshot: jsonb("recurring_addon_snapshot").$type<Array<{
+    id: number;
+    quantity: number;
+    monthlyUnitPriceHalala: number;
+    paidThroughAt: string | null;
+    cancelAtPeriodEnd: boolean;
+    revision: number;
+  }>>().notNull().default([]),
+  autoRenewConsent: boolean("auto_renew_consent").notNull().default(false),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   consumedAt: timestamp("consumed_at", { withTimezone: true }),
 });
@@ -530,6 +553,17 @@ export const subscriptionAddonCheckoutIntentsTable = pgTable("subscription_addon
   addonType: text("addon_type").$type<"chalet" | "service">().notNull(),
   quantity: integer("quantity").notNull().default(1),
   amountHalala: integer("amount_halala").notNull(),
+  monthlyUnitPriceHalala: integer("monthly_unit_price_halala").notNull().default(0),
+  nextChargeHalala: integer("next_charge_halala").notNull().default(0),
+  baseMonthlyHalala: integer("base_monthly_halala").notNull().default(0),
+  remainingDays: integer("remaining_days").notNull().default(0),
+  nextBillingAt: timestamp("next_billing_at", { withTimezone: true }),
+  cycleDays: integer("cycle_days").notNull().default(30),
+  quotedBaseExpiresAt: timestamp("quoted_base_expires_at", { withTimezone: true }),
+  periodStartAt: timestamp("period_start_at", { withTimezone: true }),
+  periodEndAt: timestamp("period_end_at", { withTimezone: true }),
+  quoteVersion: integer("quote_version").notNull().default(1),
+  autoRenewConsent: boolean("auto_renew_consent").notNull().default(false),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   consumedAt: timestamp("consumed_at", { withTimezone: true }),
 });
@@ -542,8 +576,94 @@ export const subscriptionAddonPurchasesTable = pgTable("subscription_addon_purch
   intentId: text("intent_id").notNull().unique(),
   quantity: integer("quantity").notNull().default(1),
   amountHalala: integer("amount_halala").notNull(),
+  recurring: boolean("recurring").notNull().default(false),
+  monthlyUnitPriceHalala: integer("monthly_unit_price_halala").notNull().default(0),
+  periodStartAt: timestamp("period_start_at", { withTimezone: true }),
+  paidThroughAt: timestamp("paid_through_at", { withTimezone: true }),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  revision: integer("revision").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const subscriptionPaymentReconciliationsTable = pgTable("subscription_payment_reconciliations", {
+  id: serial("id").primaryKey(),
+  paymentId: text("payment_id").notNull().unique(),
+  ownerId: text("owner_id").notNull(),
+  intentId: text("intent_id").notNull(),
+  amountHalala: integer("amount_halala").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("required"),
+  refundId: text("refund_id"),
+  refundEligible: boolean("refund_eligible").notNull().default(true),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  refundRequestedAt: timestamp("refund_requested_at", { withTimezone: true }),
+  refundAttemptNumber: integer("refund_attempt_number").notNull().default(0),
+  refundAttemptKey: text("refund_attempt_key"),
+  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const ownerBillingProfilesTable = pgTable("owner_billing_profiles", {
+  ownerId: text("owner_id").primaryKey(),
+  encryptedPaymentToken: text("encrypted_payment_token"),
+  tokenPaymentId: text("token_payment_id"),
+  autoRenewEnabled: boolean("auto_renew_enabled").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const subscriptionRenewalInvoicesTable = pgTable("subscription_renewal_invoices", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  periodStartAt: timestamp("period_start_at", { withTimezone: true }).notNull(),
+  periodEndAt: timestamp("period_end_at", { withTimezone: true }).notNull(),
+  givenId: text("given_id").notNull().unique(),
+  basePlan: text("base_plan").notNull(),
+  cycleDays: integer("cycle_days").notNull(),
+  basePriceHalala: integer("base_price_halala").notNull(),
+  amountHalala: integer("amount_halala").notNull(),
+  lineItems: jsonb("line_items").$type<Array<{
+    kind: "base" | "addon";
+    label: string;
+    amountHalala: number;
+    addonPurchaseId?: number;
+    quantity?: number;
+    unitPriceHalala?: number;
+    periodStartAt?: string;
+    periodEndAt?: string;
+  }>>().notNull(),
+  status: text("status").notNull().default("pending"),
+  paymentId: text("payment_id"),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+}, (table) => ({
+  ownerPeriodUnique: uniqueIndex("subscription_renewal_owner_period_unique").on(table.ownerId, table.periodStartAt),
+  dueIdx: index("subscription_renewal_due_idx").on(table.status, table.nextAttemptAt),
+}));
+
+export const subscriptionRenewalAttemptsTable = pgTable("subscription_renewal_attempts", {
+  id: serial("id").primaryKey(),
+  invoiceId: integer("invoice_id").notNull(),
+  attemptNumber: integer("attempt_number").notNull(),
+  givenId: text("given_id").notNull().unique(),
+  paymentId: text("payment_id"),
+  status: text("status").notNull().default("pending"),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  invoiceAttemptUnique: uniqueIndex("subscription_renewal_invoice_attempt_unique").on(table.invoiceId, table.attemptNumber),
+  attemptDueIdx: index("subscription_renewal_attempt_due_idx").on(table.status, table.nextAttemptAt),
+}));
+
 
 export const subscriptionGrantAuditTable = pgTable("subscription_grant_audit", {
   id: serial("id").primaryKey(),

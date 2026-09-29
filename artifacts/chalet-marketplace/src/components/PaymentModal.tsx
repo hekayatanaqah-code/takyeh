@@ -25,11 +25,14 @@ interface Plan {
   serviceLimit?: number | null;
   trialDays?: number;
   features?: string[];
+  recurringConfigured?: boolean;
+  canSavePaymentMethod?: boolean;
 }
 
 interface PendingSubscriptionCheckout {
   checkoutId: string;
   plan: string;
+  consentToRecurring?: boolean;
 }
 
 const PENDING_SUBSCRIPTION_KEY = "subscription-payment-pending:v1";
@@ -41,7 +44,11 @@ function readPendingSubscriptionCheckout(): PendingSubscriptionCheckout | null {
     const value = JSON.parse(raw);
     if (typeof value?.checkoutId !== "string" || !value.checkoutId ||
         typeof value?.plan !== "string" || !value.plan) return null;
-    return { checkoutId: value.checkoutId, plan: value.plan };
+    return {
+      checkoutId: value.checkoutId,
+      plan: value.plan,
+      consentToRecurring: value.consentToRecurring === true,
+    };
   } catch {
     return null;
   }
@@ -97,6 +104,78 @@ interface Invoice {
   paidAt: string;
   expiresAt: string;
   ownerName: string;
+  lines?: Array<{ description?: string; label?: string; quantity?: number; amount?: number; amountHalala?: number }>;
+  lineItems?: Array<{ description?: string; label?: string; quantity?: number; amount?: number; amountHalala?: number }>;
+  nextChargeHalala?: number;
+  nextBillingAt?: string | null;
+  periodEnd?: string | null;
+  recurring?: boolean;
+  cycleDays?: number;
+}
+
+interface CheckoutLine {
+  description?: string;
+  label?: string;
+  quantity?: number;
+  amountHalala?: number;
+  amount?: number;
+}
+
+interface PlanQuote {
+  checkoutId?: string;
+  amountHalala: number;
+  discountHalala: number;
+  label: string;
+  days: number;
+  lines: CheckoutLine[];
+  nextChargeHalala?: number;
+  nextBillingAt?: string | null;
+  periodEnd?: string | null;
+  recurring?: boolean;
+  recurringPreview?: boolean;
+  recurringConfigured?: boolean;
+  canSavePaymentMethod?: boolean;
+  promoCode: string;
+}
+
+function normalizePlanQuote(data: any, fallbackPlan: Plan, promoCode: string, isPreview = false): PlanQuote {
+  const lines = Array.isArray(data.lines) ? data.lines
+    : Array.isArray(data.lineItems) ? data.lineItems : [];
+  return {
+    ...(typeof data.checkoutId === "string" ? { checkoutId: data.checkoutId } : {}),
+    amountHalala: Number(data.amountHalala),
+    discountHalala: Number(data.discountHalala ?? 0),
+    label: String(data.label ?? fallbackPlan.label),
+    days: Number(data.days ?? fallbackPlan.days),
+    lines,
+    nextChargeHalala: Number.isSafeInteger(data.nextChargeHalala) ? Number(data.nextChargeHalala) : undefined,
+    nextBillingAt: typeof data.nextBillingAt === "string" ? data.nextBillingAt : null,
+    periodEnd: typeof data.periodEnd === "string" ? data.periodEnd : null,
+    recurring: data.recurring === true,
+    recurringPreview: isPreview || data.recurringPreview === true || data.recurring === true,
+    recurringConfigured: data.recurringConfigured === true,
+    canSavePaymentMethod: data.canSavePaymentMethod === true,
+    promoCode,
+  };
+}
+
+function comparablePlanQuote(quote: PlanQuote) {
+  return {
+    amountHalala: quote.amountHalala,
+    discountHalala: quote.discountHalala,
+    label: quote.label,
+    days: quote.days,
+    lines: quote.lines.map((line) => ({
+      label: line.label ?? line.description ?? "",
+      quantity: line.quantity ?? 1,
+      amountHalala: line.amountHalala ?? (line.amount != null ? Math.round(line.amount * 100) : null),
+    })),
+    nextChargeHalala: quote.nextChargeHalala ?? null,
+    nextBillingAt: quote.nextBillingAt ? new Date(quote.nextBillingAt).toLocaleDateString("ar-SA") : null,
+    periodEnd: quote.periodEnd ? new Date(quote.periodEnd).toLocaleDateString("ar-SA") : null,
+    recurringConfigured: quote.recurringConfigured === true,
+    canSavePaymentMethod: quote.canSavePaymentMethod === true,
+  };
 }
 
 /* ── Invoice PDF generator (pure JS / canvas) ── */
@@ -107,7 +186,18 @@ function downloadInvoice(inv: Invoice) {
     `رقم الدفعة: ${inv.paymentId}`,
     `الاسم: ${inv.ownerName}`,
     `الخطة: ${inv.label}`,
+    ...(inv.lines ?? inv.lineItems ?? []).map((line) => {
+      const description = line.description ?? line.label ?? "بند الاشتراك";
+      const amount = line.amountHalala != null
+        ? `${(line.amountHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ${inv.currency}`
+        : line.amount != null ? `${line.amount} ${inv.currency}` : "";
+      return `${line.quantity && line.quantity > 1 ? `${line.quantity} × ` : ""}${description}${amount ? `: ${amount}` : ""}`;
+    }),
     `المبلغ: ${inv.amount} ${inv.currency}`,
+    ...(inv.recurring && inv.nextChargeHalala != null
+      ? [`رسوم ${inv.cycleDays === 30 ? "الدورة الشهرية" : `الدورة (${inv.cycleDays ?? "—"} يوم)`} التالية: ${(inv.nextChargeHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ${inv.currency}`]
+      : []),
+    ...(inv.nextBillingAt ? [`موعد التجديد التالي: ${new Date(inv.nextBillingAt).toLocaleDateString("ar-SA")}`] : []),
     `تاريخ الدفع: ${new Date(inv.paidAt).toLocaleDateString("ar-SA")}`,
     `صالح حتى: ${new Date(inv.expiresAt).toLocaleDateString("ar-SA")}`,
     ``,
@@ -193,11 +283,23 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
     discountHalala: number;
     label: string;
     days: number;
+    lines?: CheckoutLine[];
+    nextChargeHalala?: number;
+    nextBillingAt?: string | null;
+    periodEnd?: string | null;
+    recurring?: boolean;
+    canSavePaymentMethod?: boolean;
+    consentToRecurring: boolean;
   } | null>(null);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [promoCode, setPromoCode] = useState("");
+  const [consentToRecurring, setConsentToRecurring] = useState(false);
+  const [planQuote, setPlanQuote] = useState<PlanQuote | null>(null);
+  const [planQuoteLoading, setPlanQuoteLoading] = useState(false);
+  const [planPreviewRevision, setPlanPreviewRevision] = useState(0);
+  const [activationWithoutSavedCard, setActivationWithoutSavedCard] = useState(false);
   const [pendingCheckout, setPendingCheckout] = useState<PendingSubscriptionCheckout | null>(() => readPendingSubscriptionCheckout());
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [returnPaymentId, setReturnPaymentId] = useState<string | null>(null);
@@ -221,9 +323,60 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
       setPayError(null);
       setPaying(false);
       setPromoCode("");
+      setConsentToRecurring(false);
+      setPlanQuote(null);
+      setPlanQuoteLoading(false);
+      setActivationWithoutSavedCard(false);
       moyasarInstance.current = null;
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !selectedPlan) {
+      setPlanQuoteLoading(false);
+      return;
+    }
+    let active = true;
+    const requestedPlan = selectedPlan;
+    const requestedPromoCode = promoCode.trim();
+    setPlanQuoteLoading(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await apiFetch("/owner/subscription/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            plan: requestedPlan.id,
+            ...(requestedPromoCode ? { promoCode: requestedPromoCode } : {}),
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error ?? "تعذّر تحميل عرض الخطة");
+        const quote = normalizePlanQuote(data, requestedPlan, requestedPromoCode, true);
+        if (!Number.isSafeInteger(quote.amountHalala) || quote.amountHalala < 0 ||
+            !Number.isSafeInteger(quote.discountHalala) || quote.discountHalala < 0 ||
+            !Number.isSafeInteger(quote.days) || quote.days < 1 ||
+            !quote.lines.every((line) => line.amountHalala == null || Number.isSafeInteger(line.amountHalala))) {
+          throw new Error("استجابة عرض الخطة غير صالحة");
+        }
+        if (active) {
+          setPlanQuote(quote);
+          setPayError(null);
+        }
+      } catch (cause) {
+        if (active) {
+          setPlanQuote(null);
+          setPayError(cause instanceof Error ? cause.message : "تعذّر تحميل عرض الخطة");
+        }
+      } finally {
+        if (active) setPlanQuoteLoading(false);
+      }
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [open, selectedPlan, promoCode, planPreviewRevision]);
 
   /* Confirm payment mutation */
   const confirmMutation = useMutation({
@@ -240,7 +393,10 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
     onSuccess: (data, variables) => {
       clearPendingSubscriptionCheckout(variables.checkoutId);
       setPendingCheckout((current) => current?.checkoutId === variables.checkoutId ? null : current);
-      setInvoice(data.invoice);
+      setInvoice({
+        ...data.invoice,
+        cycleDays: Number(data.subscription?.billingCycleDays ?? data.invoice.cycleDays ?? selectedPlan?.days ?? 30),
+      });
       setStep("success");
       setPaying(false);
       setPayError(null);
@@ -274,7 +430,10 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
       return data as { subscription: any; invoice: Invoice };
     },
     onSuccess: (data) => {
-      setInvoice(data.invoice);
+      setInvoice({
+        ...data.invoice,
+        cycleDays: Number(data.subscription?.billingCycleDays ?? data.invoice.cycleDays ?? selectedPlan?.days ?? 30),
+      });
       setStep("success");
       setPaying(false);
       qc.invalidateQueries({ queryKey: ["owner", "subscription"] });
@@ -356,7 +515,10 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
         }
         return false; // prevent default redirect
       },
-      supported_networks: ["mada", "visaMastercard", "stcpay", "applepay"],
+      supported_networks: initiateData.consentToRecurring
+        ? ["mada", "visaMastercard"]
+        : ["mada", "visaMastercard", "stcpay", "applepay"],
+      ...(initiateData.consentToRecurring ? { credit_card: { save_card: true } } : {}),
       language: "ar",
     });
 
@@ -367,11 +529,38 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
   }, [step, scriptReady, initiateData]);
 
   /* Step 1: Select a plan */
-  async function handleSelectPlan(p: Plan) {
+  function handleSelectPlan(p: Plan) {
+    setSelectedPlan(p);
+    setConsentToRecurring(false);
+    setPlanQuote(null);
+    setPayError(null);
+    setActivationWithoutSavedCard(false);
+    setPlanQuoteLoading(true);
+    setPlanPreviewRevision((revision) => revision + 1);
+  }
+
+  async function handleContinueWithPlan() {
+    const p = selectedPlan;
+    if (!p) return;
+    if (planQuoteLoading || !planQuote || planQuote.promoCode !== promoCode.trim()) {
+      setPayError("انتظر حتى يكتمل عرض السعر الحالي قبل المتابعة.");
+      return;
+    }
+    if (p.price > 0 && (!planQuote.recurringPreview ||
+        !planQuote.recurringConfigured || !planQuote.canSavePaymentMethod ||
+        planQuote.nextChargeHalala == null || !planQuote.nextBillingAt)) {
+      setPayError("لم يؤكد الخادم مبلغ الفاتورة التالية أو موعدها أو إمكانية حفظ وسيلة الدفع؛ لم يبدأ الدفع.");
+      return;
+    }
+    if (p.price > 0 && !consentToRecurring) {
+      setPayError(`للمتابعة إلى دفع دورة التجديد (${planQuote?.days ?? p.days} يوم)، يجب تأكيد موافقتك الصريحة أولاً.`);
+      return;
+    }
     const existingPending = readPendingSubscriptionCheckout();
     if (existingPending) {
       setPendingCheckout(existingPending);
       setPayError("توجد عملية اشتراك سابقة قيد التأكيد؛ لن نبدأ عملية دفع جديدة قبل حسمها.");
+      setConsentToRecurring(false);
       return;
     }
     setSelectedPlan(p);
@@ -381,33 +570,55 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
       const r = await apiFetch("/owner/subscription/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: p.id, ...(promoCode.trim() ? { promoCode: promoCode.trim() } : {}) }),
+        body: JSON.stringify({
+          plan: p.id,
+          autoRenewConsent: p.price > 0 && consentToRecurring,
+          ...(promoCode.trim() ? { promoCode: promoCode.trim() } : {}),
+        }),
       });
       const data = await r.json();
       if (!r.ok) {
         setPayError(data.error ?? "تعذّر التحقق من رمز الخصم");
+        setConsentToRecurring(false);
+        setInitiateData(null);
         return;
       }
+      const finalQuote = normalizePlanQuote(data, p, promoCode.trim());
       const quote = {
-        checkoutId: data.checkoutId as string,
+        ...finalQuote,
+        checkoutId: String(data.checkoutId ?? ""),
         publishableKey: data.publishableKey as string,
-        amountHalala: Number(data.amountHalala),
-        discountHalala: Number(data.discountHalala ?? 0),
-        label: String(data.label ?? p.label),
-        days: Number(data.days ?? p.days),
       };
-      setInitiateData(quote);
-      if (!quote.checkoutId || !Number.isInteger(quote.amountHalala) || quote.amountHalala < 0) {
+      if (!quote.checkoutId || !Number.isSafeInteger(quote.amountHalala) || quote.amountHalala < 0) {
         setPayError("تعذّر إعداد مبلغ الدفع. حاول مرة أخرى.");
+        setConsentToRecurring(false);
+        setInitiateData(null);
+        return;
+      }
+      if (JSON.stringify(comparablePlanQuote(planQuote)) !== JSON.stringify(comparablePlanQuote(finalQuote))) {
+        setPlanQuote({ ...finalQuote, checkoutId: undefined });
+        setConsentToRecurring(false);
+        setInitiateData(null);
+        setPayError("تغيّر السعر أو بنود الفاتورة أو موعدها أثناء التأكيد. راجع العرض المحدّث وأكد موافقتك مجدداً قبل المتابعة.");
         return;
       }
       if (quote.amountHalala === 0) {
+        setActivationWithoutSavedCard(true);
+        setConsentToRecurring(false);
         redeemMutation.mutate({ checkoutId: quote.checkoutId });
         return;
       }
-      const pending = { checkoutId: quote.checkoutId, plan: p.id };
+      if (!quote.recurring || !data.recurringConfigured || !quote.canSavePaymentMethod ||
+          quote.nextChargeHalala == null || !quote.nextBillingAt) {
+        setPayError("تعذّر تأكيد مبلغ التجديد وموعده أو حفظ وسيلة الدفع؛ لم يبدأ الدفع.");
+        setConsentToRecurring(false);
+        return;
+      }
+      setInitiateData({ ...quote, consentToRecurring });
+      const pending = { checkoutId: quote.checkoutId, plan: p.id, consentToRecurring };
       if (!savePendingSubscriptionCheckout(pending)) {
         setInitiateData(null);
+        setConsentToRecurring(false);
         setPayError("تعذّر حفظ عملية الاشتراك بأمان في هذه الجلسة؛ لم يبدأ الدفع. يرجى تفعيل التخزين المؤقت أو المحاولة من متصفح آخر.");
         return;
       }
@@ -415,6 +626,9 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
       setStep("pay");
     } catch {
       setPayError("تعذّر الاتصال بخدمة الدفع. حاول مرة أخرى.");
+      setConsentToRecurring(false);
+      setInitiateData(null);
+      setPendingCheckout(null);
     } finally {
       setPaying(false);
     }
@@ -422,6 +636,11 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
 
   const formatPrice = (halala: number) =>
     `${(halala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
+  const cycleLabel = (days: number) => days === 30 ? "شهرياً" : `لكل دورة (${days} يوم)`;
+  const selectedRecurringReady = !!planQuote && planQuote.recurringPreview === true &&
+    planQuote.recurringConfigured === true && planQuote.canSavePaymentMethod === true &&
+    planQuote.nextChargeHalala != null && !!planQuote.nextBillingAt &&
+    planQuote.promoCode === promoCode.trim() && !planQuoteLoading;
 
   const closeModal = () => {
     if (paying || confirmMutation.isPending || redeemMutation.isPending) return;
@@ -493,7 +712,13 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                 id="subscription-promo-code"
                 data-testid="input-subscription-promo-code"
                 value={promoCode}
-                onChange={(event) => setPromoCode(event.target.value)}
+                onChange={(event) => {
+                  setPromoCode(event.target.value);
+                  setPlanQuote(null);
+                  setConsentToRecurring(false);
+                  setPayError(null);
+                  if (selectedPlan) setPlanQuoteLoading(true);
+                }}
                 placeholder="أدخل رمز الخصم"
                 autoComplete="off"
                 className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
@@ -521,8 +746,8 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                 return (
                   <button
                     key={p.id}
-                    onClick={() => !paying && !redeemMutation.isPending && !pendingCheckout && handleSelectPlan(p)}
-                    disabled={paying || redeemMutation.isPending || !!pendingCheckout}
+                    onClick={() => !paying && !planQuoteLoading && !redeemMutation.isPending && !pendingCheckout && handleSelectPlan(p)}
+                    disabled={paying || planQuoteLoading || redeemMutation.isPending || !!pendingCheckout}
                     className={`w-full text-start rounded-2xl border-2 p-4 flex items-center gap-3 transition-all cursor-pointer hover:border-primary/70 hover:bg-primary/5 disabled:opacity-60 disabled:cursor-default ${
                       isCurrent ? "border-primary bg-primary/5" : "border-border"
                     }`}
@@ -555,6 +780,98 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                   </button>
                 );
               })}
+              {selectedPlan && (
+                <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+                  <p className="font-semibold">عرض التجديد الموحد — {selectedPlan.label}</p>
+                  {planQuoteLoading && (
+                    <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" /> جارٍ احتساب الفاتورة من الخادم...
+                    </p>
+                  )}
+                  {planQuote && (
+                    <>
+                      <div className="space-y-1 text-sm">
+                        {planQuote.lines.map((line, index) => (
+                          <div key={`${line.label ?? line.description ?? "quote-line"}-${index}`} className="flex justify-between gap-3">
+                            <span>{line.quantity && line.quantity > 1 ? `${line.quantity} × ` : ""}{line.label ?? line.description ?? "بند الاشتراك"}</span>
+                            <span>{line.amountHalala != null ? formatPrice(line.amountHalala) : "—"}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between gap-3 border-t border-primary/20 pt-2">
+                          <span>المستحق الآن حسب عرض الخادم</span>
+                          <span className="font-semibold">{formatPrice(planQuote.amountHalala)}</span>
+                        </div>
+                        {planQuote.discountHalala > 0 && (
+                          <div className="flex justify-between gap-3 text-green-700">
+                            <span>الخصم المعتمد</span>
+                            <span>{formatPrice(planQuote.discountHalala)}</span>
+                          </div>
+                        )}
+                        {planQuote.nextChargeHalala != null && (
+                          <div className="flex justify-between gap-3 font-bold">
+                            <span>إجمالي التجديد {cycleLabel(planQuote.days)}</span>
+                            <span>{formatPrice(planQuote.nextChargeHalala)}</span>
+                          </div>
+                        )}
+                      </div>
+                      {planQuote.nextBillingAt && (
+                        <p className="text-xs text-muted-foreground">موعد التجديد التالي: {new Date(planQuote.nextBillingAt).toLocaleDateString("ar-SA")}</p>
+                      )}
+                      {planQuote.periodEnd && (
+                        <p className="text-xs text-muted-foreground">نهاية الفترة: {new Date(planQuote.periodEnd).toLocaleDateString("ar-SA")}</p>
+                      )}
+                    </>
+                  )}
+                  {selectedPlan.price > 0 && (
+                    planQuote && selectedRecurringReady ? <>
+                      <label className="flex items-start gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          data-testid="checkbox-subscription-recurring-consent"
+                          checked={consentToRecurring}
+                          disabled={paying || !!pendingCheckout || planQuoteLoading || planQuote.promoCode !== promoCode.trim()}
+                          onChange={(event) => setConsentToRecurring(event.target.checked)}
+                          className="mt-1"
+                        />
+                        <span>
+                          أوافق صراحةً على حفظ وسيلة الدفع وتجديد بنود الفاتورة أعلاه بمبلغ إجمالي {formatPrice(planQuote.nextChargeHalala!)} {cycleLabel(planQuote.days)} ضمن فاتورة واحدة في الموعد الموضح. يتم التجديد فقط بعد نجاح حفظ البطاقة وتأكيد النظام.
+                        </span>
+                      </label>
+                      <Button
+                        className="w-full"
+                        data-testid="button-continue-subscription-checkout"
+                        onClick={handleContinueWithPlan}
+                        disabled={!consentToRecurring || paying || planQuoteLoading ||
+                          planQuote.promoCode !== promoCode.trim() || !!pendingCheckout || redeemMutation.isPending}
+                      >
+                        متابعة إلى الدفع
+                      </Button>
+                    </> : (
+                      <div className="space-y-2">
+                        <p className="text-sm text-amber-700 dark:text-amber-300">
+                          {planQuoteLoading
+                            ? "جارٍ تحميل عرض السعر قبل الموافقة."
+                              : !planQuote
+                                ? payError ?? "تعذّر تحميل عرض الخادم؛ تحقق من رمز الخصم وحاول مجدداً."
+                              : "التجديد الموحد أو حفظ وسيلة الدفع غير مهيأ حالياً. لن يبدأ الدفع قبل إعداد ذلك."}
+                        </p>
+                        {planQuote && <Button className="w-full" disabled>الدفع غير متاح حالياً</Button>}
+                      </div>
+                    )
+                  )}
+                  {selectedPlan.price === 0 && (
+                    <Button
+                      className="w-full"
+                      data-testid="button-activate-free-subscription"
+                      onClick={handleContinueWithPlan}
+                      disabled={paying || planQuoteLoading || !planQuote ||
+                        planQuote.promoCode !== promoCode.trim() || !!pendingCheckout || redeemMutation.isPending}
+                    >
+                      تفعيل الخطة المجانية
+                    </Button>
+                  )}
+                </div>
+              )}
               {payError && (
                 <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 rounded-xl p-3 mt-1">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -577,7 +894,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                 <span className="font-semibold">{initiateData?.label ?? selectedPlan.label}</span>
                 {" — "}
                 <span className="font-black text-foreground">
-                  {initiateData ? formatPrice(initiateData.amountHalala) : "جارٍ احتساب المبلغ"}
+                  {initiateData ? `المستحق الآن: ${formatPrice(initiateData.amountHalala)}` : "جارٍ احتساب المبلغ"}
                 </span>
                 {initiateData && initiateData.discountHalala > 0 && (
                   <span className="ms-2 text-xs text-muted-foreground line-through">
@@ -590,6 +907,34 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
             </DialogHeader>
 
             <div className="p-5 space-y-4 overflow-y-auto flex-1" style={{ paddingBottom: '100px' }}>
+              {initiateData && (
+                <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm" data-testid="summary-subscription-checkout">
+                  <p className="font-bold">فاتورة الاشتراك الموحدة</p>
+                  {initiateData.lines?.length ? (
+                    <div className="mt-2 space-y-1">
+                      {initiateData.lines.map((line, index) => (
+                        <div key={`${line.label ?? line.description ?? "line"}-${index}`} className="flex justify-between gap-3">
+                          <span>{line.quantity && line.quantity > 1 ? `${line.quantity} × ` : ""}{line.label ?? line.description ?? "بند الاشتراك"}</span>
+                          <span>{line.amountHalala != null ? formatPrice(line.amountHalala) : line.amount != null ? `${line.amount.toLocaleString("ar-SA")} ر.س` : "—"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">لم يرسل الخادم تفاصيل بنود الفاتورة؛ مبلغ الدفع المؤكد أعلاه هو المرجع.</p>
+                  )}
+                  <p className="mt-2 font-semibold">المستحق الآن: {formatPrice(initiateData.amountHalala)}</p>
+                  {initiateData.recurring && initiateData.nextChargeHalala != null && (
+                    <p className="mt-1">إجمالي الفاتورة عند التجديد {cycleLabel(initiateData.days)}: {formatPrice(initiateData.nextChargeHalala)}</p>
+                  )}
+                  {initiateData.nextBillingAt && (
+                    <p className="mt-1 text-xs text-muted-foreground">موعد التجديد التالي: {new Date(initiateData.nextBillingAt).toLocaleDateString("ar-SA")}</p>
+                  )}
+                  {initiateData.periodEnd && (
+                    <p className="mt-1 text-xs text-muted-foreground">نهاية الفترة الحالية: {new Date(initiateData.periodEnd).toLocaleDateString("ar-SA")}</p>
+                  )}
+                  <p className="mt-2 text-xs text-muted-foreground">لن يُفعّل التجديد ما لم تُحفظ وسيلة الدفع وتُؤكد صلاحيتها من النظام.</p>
+                </div>
+              )}
               {/* Moyasar form mount point */}
               {initiateData?.amountHalala !== 0 && !scriptReady && (
                 <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
@@ -658,6 +1003,31 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                 <span className="text-muted-foreground">الخطة</span>
                 <span className="font-semibold">{invoice.label}</span>
               </div>
+              {(invoice.lines ?? invoice.lineItems)?.length ? (
+                <div className="w-full rounded-2xl border border-border p-4 text-sm text-start space-y-2">
+                  <p className="font-bold">بنود الفاتورة الموحدة</p>
+                  {(invoice.lines ?? invoice.lineItems)!.map((line, index) => (
+                    <div key={`${line.label ?? line.description ?? "invoice-line"}-${index}`} className="flex justify-between gap-3">
+                      <span>{line.quantity && line.quantity > 1 ? `${line.quantity} × ` : ""}{line.label ?? line.description ?? "بند الاشتراك"}</span>
+                      <span>{line.amountHalala != null ? formatPrice(line.amountHalala) : line.amount != null ? `${line.amount.toLocaleString("ar-SA")} ${invoice.currency}` : "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {invoice.recurring && (
+                <div className="w-full rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-start text-green-900 dark:border-green-900 dark:bg-green-950/30 dark:text-green-100">
+                  <p className="font-semibold">التجديد {cycleLabel(invoice.cycleDays ?? selectedPlan?.days ?? 30)}</p>
+                  {invoice.nextChargeHalala != null
+                    ? <p className="mt-1">إجمالي رسوم الدورة التالية: {formatPrice(invoice.nextChargeHalala)}</p>
+                    : <p className="mt-1">لم يرسل الخادم مبلغ التجديد التالي.</p>}
+                  {invoice.nextBillingAt && <p className="mt-1">موعد التجديد التالي: {new Date(invoice.nextBillingAt).toLocaleDateString("ar-SA")}</p>}
+                </div>
+              )}
+              {activationWithoutSavedCard && (
+                <p role="status" className="w-full rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                  تم التفعيل دون تحصيل بطاقة؛ لم تُحفظ وسيلة دفع ولم يُفعّل التجديد التلقائي.
+                </p>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">المبلغ المدفوع</span>
                   <span className="font-bold text-green-700">{invoice.amount.toLocaleString("ar-SA")} {invoice.currency}</span>

@@ -7,7 +7,7 @@ import {
   chaletSubmissionsTable,
   serviceProviderSubmissionsTable,
 } from "@workspace/db/schema";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 const DEFAULT_TRIAL_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -87,6 +87,7 @@ export async function getOrStartOwnerSubscription(ownerId: string) {
     status: trialState.status,
     paymentStatus: "free",
     expiresAt: trialState.expiresAt,
+    billingCycleDays: trialDays,
   }).onConflictDoNothing().returning();
   if (created) return created;
   const [concurrent] = await db.select().from(ownerSubscriptionsTable)
@@ -106,20 +107,28 @@ export async function ownerPlanAccess(ownerId: string) {
     .where(eq(subscriptionPlansTable.slug, sub.plan)).limit(1);
   const terms = sub.termsSnapshot ?? configured;
   const keys = await subscriptionOwnerKeys(ownerId);
-  const [chalets, services, chaletSlots, serviceSlots] = await Promise.all([
+  const [chalets, services, addonPurchases] = await Promise.all([
     db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
       .where(and(inArray(chaletSubmissionsTable.ownerId, keys), ne(chaletSubmissionsTable.status, "rejected"))),
     db.select({ id: serviceProviderSubmissionsTable.id }).from(serviceProviderSubmissionsTable)
       .where(and(inArray(serviceProviderSubmissionsTable.ownerId, keys), ne(serviceProviderSubmissionsTable.status, "rejected"))),
-    db.select({ value: sql<number>`coalesce(sum(${subscriptionAddonPurchasesTable.quantity}), 0)` }).from(subscriptionAddonPurchasesTable)
-      .where(and(inArray(subscriptionAddonPurchasesTable.ownerId, keys), eq(subscriptionAddonPurchasesTable.addonType, "chalet"))),
-    db.select({ value: sql<number>`coalesce(sum(${subscriptionAddonPurchasesTable.quantity}), 0)` }).from(subscriptionAddonPurchasesTable)
-      .where(and(inArray(subscriptionAddonPurchasesTable.ownerId, keys), eq(subscriptionAddonPurchasesTable.addonType, "service"))),
+    db.select().from(subscriptionAddonPurchasesTable)
+      .where(inArray(subscriptionAddonPurchasesTable.ownerId, keys)),
   ]);
   const baseChaletLimit = terms ? (terms.chaletLimit ?? 999) : legacy.chalets;
   const baseServiceLimit = terms ? (terms.serviceLimit ?? 999) : legacy.services;
-  const purchasedChaletSlots = Number(chaletSlots[0]?.value ?? 0);
-  const purchasedServiceSlots = Number(serviceSlots[0]?.value ?? 0);
+  const now = new Date();
+  // Historical one-time purchases are grandfathered for their lifetime. New
+  // recurring rows contribute capacity only while their paid period is live.
+  const livePurchases = addonPurchases.filter((purchase) =>
+    !purchase.recurring || (!!purchase.paidThroughAt && purchase.paidThroughAt > now),
+  );
+  const purchasedChaletSlots = livePurchases
+    .filter((purchase) => purchase.addonType === "chalet")
+    .reduce((sum, purchase) => sum + purchase.quantity, 0);
+  const purchasedServiceSlots = livePurchases
+    .filter((purchase) => purchase.addonType === "service")
+    .reduce((sum, purchase) => sum + purchase.quantity, 0);
   return {
     subscription: sub,
     active: isSubscriptionActive(sub),

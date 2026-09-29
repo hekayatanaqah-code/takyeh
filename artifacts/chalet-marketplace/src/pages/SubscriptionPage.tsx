@@ -1,9 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import {
-  CreditCard, ArrowRight, CheckCircle2, Clock, AlertTriangle,
+  CreditCard, ArrowRight, CheckCircle2, Clock, AlertTriangle, Loader2,
   Building2, Star, Zap, Crown, Package, RefreshCw, MessageCircle,
   CalendarDays, ShieldCheck, TrendingUp,
 } from "lucide-react";
@@ -15,8 +15,24 @@ import { AddonPaymentModal } from "@/components/AddonPaymentModal";
 import { formatDualDate } from "@/lib/hijri";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-async function apiFetch(path: string) {
-  return fetch(`${BASE}/api${path}`, { credentials: "include" });
+async function apiFetch(path: string, options?: RequestInit) {
+  return fetch(`${BASE}/api${path}`, { credentials: "include", ...options });
+}
+
+interface SubscriptionAddon {
+  id: number;
+  addonType: "chalet" | "service";
+  quantity: number;
+  recurring: boolean;
+  grandfathered?: boolean;
+  monthlyUnitPriceHalala: number;
+  paidThroughAt: string | null;
+  cancelAtPeriodEnd: boolean;
+  active?: boolean;
+}
+
+function formatHalala(halala: number) {
+  return `${(halala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
 }
 
 function expiryInBothCalendars(iso: string): string {
@@ -87,6 +103,13 @@ export default function SubscriptionPage() {
     id: number | null; plan: string; status: string; expiresAt: string | null;
     paymentStatus: string; createdAt: string;
     planDetails?: { nameAr: string; features: string[]; scope: string | null } | null;
+    recurring?: boolean;
+    savedPaymentMethodAvailable?: boolean;
+    nextBillingAt?: string | null;
+    nextChargeHalala?: number;
+    autoRenewEnabled?: boolean;
+    autoRenewAvailable?: boolean;
+    billingCycleDays?: number | null;
   } | null>({
     queryKey: ["owner", "subscription"],
     queryFn: async () => {
@@ -103,6 +126,8 @@ export default function SubscriptionPage() {
     baseChaletLimit?: number; baseServiceLimit?: number;
     purchasedChaletSlots?: number; purchasedServiceSlots?: number;
     extraChaletPrice?: number | string | null; extraServicePrice?: number | string | null;
+    recurringConfigured?: boolean; canSavePaymentMethod?: boolean;
+    baseMonthlyHalala?: number;
   }>({
     queryKey: ["owner", "plan-limits"],
     queryFn: async () => {
@@ -114,6 +139,49 @@ export default function SubscriptionPage() {
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
+  });
+  const queryClient = useQueryClient();
+  const addonsQuery = useQuery<SubscriptionAddon[]>({
+    queryKey: ["owner", "subscription-addons"],
+    queryFn: async () => {
+      const response = await apiFetch("/owner/subscription/addons");
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "تعذّر تحميل الإضافات");
+      if (!Array.isArray(data)) throw new Error("استجابة الإضافات غير صالحة");
+      return data as SubscriptionAddon[];
+    },
+    enabled: isAuthenticated,
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+  const cancelAddonMutation = useMutation({
+    mutationFn: async (purchaseId: number) => {
+      const response = await apiFetch(`/owner/subscription/addons/${purchaseId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "تعذّر إلغاء تجديد الإضافة");
+      return data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["owner", "subscription-addons"] });
+      void queryClient.invalidateQueries({ queryKey: ["owner", "subscription"] });
+      void queryClient.invalidateQueries({ queryKey: ["owner", "plan-limits"] });
+    },
+  });
+  const cancelAutoRenewMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiFetch("/owner/subscription/auto-renew/cancel", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "تعذّر إيقاف تجديد الاشتراك");
+      return data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["owner", "subscription"] });
+      void queryClient.invalidateQueries({ queryKey: ["owner", "plan-limits"] });
+    },
   });
 
   useEffect(() => {
@@ -153,6 +221,17 @@ export default function SubscriptionPage() {
   const serviceBase = planLimits?.baseServiceLimit ?? planLimits?.serviceLimit ?? 1;
   const chaletAddons = planLimits?.purchasedChaletSlots ?? Math.max(0, (planLimits?.chaletLimit ?? 1) - chaletBase);
   const serviceAddons = planLimits?.purchasedServiceSlots ?? Math.max(0, (planLimits?.serviceLimit ?? 1) - serviceBase);
+  const billingCycleDays = Number.isSafeInteger(sub?.billingCycleDays) && (sub?.billingCycleDays ?? 0) > 0
+    ? sub!.billingCycleDays!
+    : null;
+  const billingCycleLabel = billingCycleDays === 30 ? "شهرياً"
+    : billingCycleDays != null ? `لكل دورة (${billingCycleDays} يوم)` : "لكل دورة";
+  const addonPricePerCycle = (price: number | string) =>
+    billingCycleDays == null ? "—" :
+      (Math.round(Number(price) * 100 * billingCycleDays / 30) / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const addonRecurringReady = planLimits?.recurringConfigured === true &&
+    planLimits.canSavePaymentMethod === true &&
+    Number.isSafeInteger(planLimits.baseMonthlyHalala) && billingCycleDays != null;
 
   const paymentCls =
     sub?.paymentStatus === "paid"    ? "text-green-600"
@@ -234,16 +313,16 @@ export default function SubscriptionPage() {
           )}
         </motion.div>
 
-        {sub?.status === "expired" && (
+        {(sub?.status === "expired" || (plan === "trial" && days !== null && days <= 0)) && (
           <div className="mb-6 rounded-2xl border border-red-300 bg-red-50 p-5 text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200" role="alert" data-testid="status-subscription-expired">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="font-bold">انتهى اشتراكك وتوقفت إتاحة عقاراتك وخدماتك للعملاء</p>
-                <p className="mt-1 text-sm">جدّد الآن لاستعادة ظهورها ومتابعة استقبال الحجوزات.</p>
+                <p className="font-bold">{plan === "trial" ? "انتهت تجربتك المجانية" : "انتهى اشتراكك وتوقفت إتاحة عقاراتك وخدماتك للعملاء"}</p>
+                <p className="mt-1 text-sm">{plan === "trial" ? "اختر خطة مدفوعة للمتابعة؛ لن يتم تمديد التجربة تلقائياً." : "جدّد الآن لاستعادة ظهورها ومتابعة استقبال الحجوزات."}</p>
               </div>
               <Button className="shrink-0 gap-2" onClick={() => setShowPayment(true)} data-testid="button-renew-expired-subscription">
                 <CreditCard className="w-4 h-4" />
-                جدّد الاشتراك الآن
+                {plan === "trial" ? "اختر خطة مدفوعة" : "جدّد الاشتراك الآن"}
               </Button>
             </div>
           </div>
@@ -275,15 +354,93 @@ export default function SubscriptionPage() {
           />
         </div>
 
+        <section className="mb-6 rounded-2xl border border-border bg-card p-5" aria-labelledby="subscription-addons-heading">
+          <h2 id="subscription-addons-heading" className="mb-3 flex items-center gap-2 font-bold">
+            <Package className="h-4 w-4 text-primary" />
+            الإضافات والرسوم الدورية
+          </h2>
+          {addonsQuery.isPending && (
+            <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل الإضافات...
+            </p>
+          )}
+          {addonsQuery.isError && (
+            <p role="alert" className="text-sm text-destructive">{(addonsQuery.error as Error).message}</p>
+          )}
+          {addonsQuery.isSuccess && addonsQuery.data.length === 0 && (
+            <p className="text-sm text-muted-foreground">لا توجد إضافات على اشتراكك حالياً.</p>
+          )}
+          {addonsQuery.data && addonsQuery.data.length > 0 && (
+            <div className="space-y-3">
+              {addonsQuery.data.map((addon) => {
+                const isChalet = addon.addonType === "chalet";
+                const cycleAmount = billingCycleDays == null
+                  ? null
+                  : Math.round(addon.monthlyUnitPriceHalala * addon.quantity * billingCycleDays / 30);
+                const paidThrough = addon.paidThroughAt
+                  ? new Date(addon.paidThroughAt).toLocaleDateString("ar-SA")
+                  : "غير محدد";
+                return (
+                  <article key={addon.id} data-testid={`card-subscription-addon-${addon.id}`} className="rounded-xl border border-border p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="space-y-1 text-sm">
+                        <p className="font-semibold">
+                          {isChalet ? "عقارات إضافية" : "خدمات إضافية"} · {addon.quantity.toLocaleString("ar-SA")}
+                        </p>
+                        <p className="text-muted-foreground">
+                          {addon.recurring
+                            ? cycleAmount == null
+                              ? `سعر مرجعي ${formatHalala(addon.monthlyUnitPriceHalala)} لكل 30 يوماً؛ مبلغ الدورة غير متوفر`
+                              : `${formatHalala(cycleAmount)} ${billingCycleLabel} — ${addon.quantity.toLocaleString("ar-SA")} × ${formatHalala(Math.round(addon.monthlyUnitPriceHalala * (billingCycleDays ?? 30) / 30))} لكل وحدة`
+                            : "إضافة تاريخية لمرة واحدة — محفوظة مدى الحياة ولا تدخل في الفواتير الدورية"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {addon.recurring
+                            ? addon.active === false ? `انتهت الفترة المدفوعة في: ${paidThrough}` : `مدفوعة حتى: ${paidThrough}`
+                            : "لا يوجد تاريخ انتهاء"}
+                          {addon.recurring && addon.cancelAtPeriodEnd ? " · سيتوقف التجديد عند نهاية الفترة المدفوعة" : ""}
+                        </p>
+                      </div>
+                      {addon.recurring && addon.active !== false && !addon.cancelAtPeriodEnd && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid={`button-cancel-addon-${addon.id}`}
+                          disabled={cancelAddonMutation.isPending}
+                          onClick={() => {
+                            const confirmed = window.confirm(
+                              `هل تريد إيقاف تجديد ${isChalet ? "العقارات الإضافية" : "الخدمات الإضافية"}؟ ستبقى السعة متاحة حتى ${paidThrough}.`,
+                            );
+                            if (confirmed) cancelAddonMutation.mutate(addon.id);
+                          }}
+                        >
+                          {cancelAddonMutation.isPending && cancelAddonMutation.variables === addon.id
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : "إيقاف التجديد"}
+                        </Button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+          {cancelAddonMutation.isError && (
+            <p role="alert" className="mt-3 text-sm text-destructive">{cancelAddonMutation.error.message}</p>
+          )}
+        </section>
+
         {planLimits?.active && (
           <div className="mb-6 grid gap-3 sm:grid-cols-2">
             {planLimits.extraChaletPrice != null && (
               <div className="rounded-2xl border border-border bg-card p-4">
                 <p className="font-semibold">أضف عقارات إلى خطتك</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {Number(planLimits.extraChaletPrice).toLocaleString("ar-SA")} ر.س لكل عقار إضافي، دفعة واحدة. اختر العدد قبل الدفع.
+                  {addonRecurringReady
+                    ? `${addonPricePerCycle(planLimits.extraChaletPrice)} ر.س ${billingCycleLabel} لكل عقار إضافي؛ يُحتسب المبلغ الأولي نسبياً حتى نهاية الفترة، ثم يُضم التجديد إلى فاتورة الخطة.`
+                    : "الشراء والتجديد الدوري للإضافات غير مهيأ حالياً أو لا توجد وسيلة دفع قابلة للحفظ."}
                 </p>
-                <Button className="mt-3 w-full gap-2" variant="outline" onClick={() => setAddonType("chalet")}>
+                <Button className="mt-3 w-full gap-2" variant="outline" disabled={!addonRecurringReady} onClick={() => setAddonType("chalet")}>
                   <Building2 className="h-4 w-4" />
                   طلب عقارات إضافية
                 </Button>
@@ -293,9 +450,11 @@ export default function SubscriptionPage() {
               <div className="rounded-2xl border border-border bg-card p-4">
                 <p className="font-semibold">أضف خدمات إلى خطتك</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {Number(planLimits.extraServicePrice).toLocaleString("ar-SA")} ر.س لكل خدمة إضافية، دفعة واحدة. اختر العدد قبل الدفع.
+                  {addonRecurringReady
+                    ? `${addonPricePerCycle(planLimits.extraServicePrice)} ر.س ${billingCycleLabel} لكل خدمة إضافية؛ يُحتسب المبلغ الأولي نسبياً حتى نهاية الفترة، ثم يُضم التجديد إلى فاتورة الخطة.`
+                    : "الشراء والتجديد الدوري للإضافات غير مهيأ حالياً أو لا توجد وسيلة دفع قابلة للحفظ."}
                 </p>
-                <Button className="mt-3 w-full gap-2" variant="outline" onClick={() => setAddonType("service")}>
+                <Button className="mt-3 w-full gap-2" variant="outline" disabled={!addonRecurringReady} onClick={() => setAddonType("service")}>
                   <Star className="h-4 w-4" />
                   طلب خدمات إضافية
                 </Button>
@@ -362,7 +521,54 @@ export default function SubscriptionPage() {
             <dd className={`font-semibold text-end ${paymentCls}`}>
               {paymentLabel[sub?.paymentStatus ?? "pending"] ?? "—"}
             </dd>
+            {(sub?.recurring === true || sub?.autoRenewAvailable === true ||
+              sub?.nextChargeHalala != null || sub?.nextBillingAt != null) && (
+              <>
+                <dt className="text-muted-foreground">حالة التجديد التلقائي</dt>
+                <dd className="font-semibold text-end">
+                  {sub.autoRenewEnabled === true && sub.savedPaymentMethodAvailable === true
+                    ? "مفعل مع وسيلة دفع محفوظة"
+                    : "غير مفعل"}
+                </dd>
+                {sub.nextBillingAt && (
+                  <>
+                    <dt className="text-muted-foreground">{billingCycleDays === 30 ? "موعد التجديد الشهري" : billingCycleDays != null ? `موعد الدورة التالية (${billingCycleDays} يوم)` : "موعد الدورة التالية"}</dt>
+                    <dd className="font-semibold text-end">{new Date(sub.nextBillingAt).toLocaleDateString("ar-SA")}</dd>
+                  </>
+                )}
+                {sub.nextChargeHalala != null && (
+                  <>
+                    <dt className="text-muted-foreground">{billingCycleDays === 30 ? "إجمالي الفاتورة الشهرية التالية" : billingCycleDays != null ? `إجمالي الفاتورة للدورة (${billingCycleDays} يوم)` : "إجمالي الفاتورة للدورة التالية"}</dt>
+                    <dd className="font-semibold text-end">{formatHalala(sub.nextChargeHalala)}</dd>
+                  </>
+                )}
+              </>
+            )}
           </dl>
+          {sub?.autoRenewEnabled !== true && (sub?.nextChargeHalala != null || sub?.nextBillingAt) && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              المبلغ والموعد المعروضان تقديريان للدورة التالية؛ لن يحدث تحصيل تلقائي ما دام التجديد غير مفعل.
+            </p>
+          )}
+          {sub?.autoRenewEnabled === true && (
+            <div className="mt-4 space-y-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={cancelAutoRenewMutation.isPending}
+                onClick={() => {
+                  if (window.confirm("هل تريد إيقاف التجديد التلقائي للباقة والإضافات؟ ستظل السعة متاحة حتى نهاية الفترة المدفوعة.")) {
+                    cancelAutoRenewMutation.mutate();
+                  }
+                }}
+              >
+                {cancelAutoRenewMutation.isPending ? "جارٍ الإيقاف..." : "إيقاف التجديد التلقائي للباقة والإضافات"}
+              </Button>
+              {cancelAutoRenewMutation.isError && (
+                <p role="alert" className="text-sm text-destructive">{cancelAutoRenewMutation.error.message}</p>
+              )}
+            </div>
+          )}
         </motion.div>
 
         {/* ── Action buttons ── */}

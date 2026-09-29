@@ -15,6 +15,11 @@ import {
   salaryLogsTable,
   ownerReportArchiveTable,
   subscriptionPlansTable,
+  subscriptionAddonPurchasesTable,
+  ownerBillingProfilesTable,
+  subscriptionRenewalInvoicesTable,
+  subscriptionRenewalAttemptsTable,
+  subscriptionCheckoutIntentsTable,
   reviewInvitationsTable,
   reviewsTable,
   ownerNotificationsTable,
@@ -35,18 +40,19 @@ import {
   ownerCustomersTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
-import { eq, and, ne, inArray, gte, lte, sql, desc, isNull, isNotNull, or, type SQL } from "drizzle-orm";
+import { eq, and, ne, inArray, gte, gt, lte, sql, desc, isNull, isNotNull, or, type SQL } from "drizzle-orm";
 import { randomBytes, createHash, randomInt } from "crypto";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { sendOtpEmail, sendReportEmail } from "../lib/email";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
-import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess } from "../lib/subscription-access";
+import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess, subscriptionOwnerKeys } from "../lib/subscription-access";
 import { getReminderPreview } from "../lib/subscription-reminder-preview";
-import { createSubscriptionCheckout, confirmSubscriptionCheckout, redeemFreeSubscriptionCheckout, SubscriptionCheckoutError } from "../lib/subscription-checkout";
+import { createSubscriptionCheckout, previewSubscriptionCheckout, confirmSubscriptionCheckout, redeemFreeSubscriptionCheckout, SubscriptionCheckoutError } from "../lib/subscription-checkout";
 import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
-import { createAddonCheckout, readAddonCheckoutQuote, confirmAddonCheckout, redeemFreeAddonCheckout, SubscriptionAddonCheckoutError } from "../lib/subscription-addon-checkout";
+import { createAddonCheckout, previewAddonCheckout, readAddonCheckoutQuote, confirmAddonCheckout, redeemFreeAddonCheckout, SubscriptionAddonCheckoutError } from "../lib/subscription-addon-checkout";
+import { getSubscriptionBillingReadiness } from "../lib/subscription-renewals";
 
 const router = Router();
 
@@ -2746,6 +2752,7 @@ router.delete("/seasons/:id", async (req, res) => {
 router.get("/plan-limits", async (req, res) => {
   const ownerId = req.user!.id;
   const access = await ownerPlanAccess(ownerId);
+  const billing = await getSubscriptionBillingReadiness(access.subscription.ownerId);
   return res.json({
     plan: access.subscription.plan,
     active: access.active,
@@ -2760,6 +2767,9 @@ router.get("/plan-limits", async (req, res) => {
     serviceCount: access.serviceCount,
     extraChaletPrice: access.extraChaletPrice,
     extraServicePrice: access.extraServicePrice,
+    ...billing,
+    recurringConfigured: billing.autoRenewAvailable,
+    canSavePaymentMethod: billing.autoRenewAvailable,
   });
 });
 
@@ -2920,10 +2930,41 @@ router.get("/plans", async (_req, res) => {
 });
 
 /* POST /owner/subscription/initiate — create a Moyasar payment and return payment_id + form data */
+router.post("/subscription/preview", async (req, res) => {
+  const parsed = z.object({
+    plan: z.string().min(1).max(100),
+    promoCode: z.string().max(100).optional(),
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "بيانات معاينة الاشتراك غير صالحة" });
+  try {
+    return res.json(await previewSubscriptionCheckout({
+      ownerId: req.user!.id,
+      plan: parsed.data.plan,
+      promoCode: parsed.data.promoCode,
+    }));
+  } catch (error) {
+    if (error instanceof SubscriptionCheckoutError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    throw error;
+  }
+});
+
 router.post("/subscription/initiate", async (req, res) => {
   try {
-    const { plan, promoCode } = req.body ?? {};
-    return res.json(await createSubscriptionCheckout({ ownerId: req.user!.id, plan, promoCode }));
+    const { plan, promoCode, autoRenewConsent } = req.body ?? {};
+    if (autoRenewConsent !== undefined && typeof autoRenewConsent !== "boolean") {
+      return res.status(400).json({ error: "موافقة التجديد التلقائي يجب أن تكون قيمة منطقية" });
+    }
+    const checkout = await createSubscriptionCheckout({
+      ownerId: req.user!.id, plan, promoCode, autoRenewConsent: autoRenewConsent === true,
+    });
+    return res.json({
+      ...checkout,
+      autoRenewConsent: autoRenewConsent === true,
+      saveCard: autoRenewConsent === true,
+      autoRenewAvailable: checkout.canSavePaymentMethod,
+    });
   } catch (error) {
     if (error instanceof SubscriptionCheckoutError) return res.status(error.statusCode).json({ error: error.message });
     throw error;
@@ -2954,18 +2995,47 @@ router.post("/subscription/addons/initiate", async (req, res) => {
   const parsed = z.object({
     addonType: z.enum(["chalet", "service"]),
     quantity: z.number().int().min(1).max(50).default(1),
+    autoRenewConsent: z.boolean().optional().default(false),
   }).safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "نوع الإضافة غير صالح، ويجب أن تكون الكمية عدداً صحيحاً بين 1 و50" });
   }
   try {
-    return res.json(await createAddonCheckout({
+    const checkout = await createAddonCheckout({
+      ownerId: req.user!.id,
+      addonType: parsed.data.addonType,
+      quantity: parsed.data.quantity,
+      autoRenewConsent: parsed.data.autoRenewConsent,
+    });
+    return res.json({
+      ...checkout,
+      saveCard: parsed.data.autoRenewConsent,
+      autoRenewAvailable: checkout.canSavePaymentMethod,
+    });
+  } catch (error) {
+    if (error instanceof SubscriptionAddonCheckoutError) return res.status(error.statusCode).json({ error: error.message });
+    throw error;
+  }
+});
+
+router.post("/subscription/addons/preview", async (req, res) => {
+  const parsed = z.object({
+    addonType: z.enum(["chalet", "service"]),
+    quantity: z.number().int().min(1).max(50).default(1),
+  }).safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "نوع الإضافة غير صالح، ويجب أن تكون الكمية عدداً صحيحاً بين 1 و50" });
+  }
+  try {
+    return res.json(await previewAddonCheckout({
       ownerId: req.user!.id,
       addonType: parsed.data.addonType,
       quantity: parsed.data.quantity,
     }));
   } catch (error) {
-    if (error instanceof SubscriptionAddonCheckoutError) return res.status(error.statusCode).json({ error: error.message });
+    if (error instanceof SubscriptionAddonCheckoutError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
     throw error;
   }
 });
@@ -3004,9 +3074,143 @@ router.post("/subscription/addons/redeem", async (req, res) => {
   }
 });
 
+router.get("/subscription/addons", async (req, res) => {
+  const ownerKeys = await subscriptionOwnerKeys(req.user!.id);
+  const purchases = await db.select().from(subscriptionAddonPurchasesTable)
+    .where(inArray(subscriptionAddonPurchasesTable.ownerId, ownerKeys));
+  const now = new Date();
+  return res.json(purchases.map((purchase) => ({
+    id: purchase.id,
+    addonType: purchase.addonType,
+    quantity: purchase.quantity,
+    recurring: purchase.recurring,
+    grandfathered: !purchase.recurring,
+    monthlyUnitPriceHalala: purchase.monthlyUnitPriceHalala,
+    paidThroughAt: purchase.paidThroughAt,
+    cancelAtPeriodEnd: purchase.cancelAtPeriodEnd,
+    active: !purchase.recurring || (!!purchase.paidThroughAt && purchase.paidThroughAt > now),
+  })));
+});
+
+router.post("/subscription/addons/:purchaseId/cancel", async (req, res) => {
+  const purchaseId = Number(req.params.purchaseId);
+  if (!Number.isSafeInteger(purchaseId) || purchaseId < 1) {
+    return res.status(400).json({ error: "معرّف الإضافة غير صالح" });
+  }
+  const ownerKeys = await subscriptionOwnerKeys(req.user!.id);
+  const result = await db.transaction(async (tx) => {
+    const [subscription] = await tx.select().from(ownerSubscriptionsTable)
+      .where(inArray(ownerSubscriptionsTable.ownerId, ownerKeys))
+      .for("update").limit(1);
+    const [purchase] = await tx.select().from(subscriptionAddonPurchasesTable)
+      .where(and(
+        eq(subscriptionAddonPurchasesTable.id, purchaseId),
+        inArray(subscriptionAddonPurchasesTable.ownerId, ownerKeys),
+      )).for("update").limit(1);
+    if (!purchase) return { kind: "missing" as const };
+    if (!purchase.recurring) return { kind: "legacy" as const };
+    if (purchase.cancelAtPeriodEnd) return { kind: "cancelled" as const, purchase };
+    if (!subscription) return { kind: "missing" as const };
+
+    // All quote creation, invoice claiming, and cancellation serialize on the
+    // subscription row. Once a renewal snapshot or attempt exists, don't mutate it.
+    const [openInvoice] = await tx.select({ id: subscriptionRenewalInvoicesTable.id })
+      .from(subscriptionRenewalInvoicesTable)
+      .where(and(
+        eq(subscriptionRenewalInvoicesTable.ownerId, subscription.ownerId),
+        inArray(subscriptionRenewalInvoicesTable.status, ["pending", "processing", "failed"]),
+      )).limit(1);
+    if (openInvoice) return { kind: "open-invoice" as const };
+
+    const intents = await tx.select({
+      id: subscriptionCheckoutIntentsTable.id,
+      recurringAddonSnapshot: subscriptionCheckoutIntentsTable.recurringAddonSnapshot,
+      invoiceLines: subscriptionCheckoutIntentsTable.invoiceLines,
+    }).from(subscriptionCheckoutIntentsTable)
+      .where(and(
+        inArray(subscriptionCheckoutIntentsTable.ownerId, ownerKeys),
+        isNull(subscriptionCheckoutIntentsTable.consumedAt),
+        gt(subscriptionCheckoutIntentsTable.expiresAt, new Date()),
+      ));
+    const hasManualSnapshot = intents.some((intent) =>
+      (intent.recurringAddonSnapshot ?? []).some((line) => line.id === purchase.id) ||
+      (intent.invoiceLines ?? []).some((line) => line.addonPurchaseId === purchase.id),
+    );
+    if (hasManualSnapshot) return { kind: "open-checkout" as const };
+
+    const [updated] = await tx.update(subscriptionAddonPurchasesTable)
+      .set({
+        cancelAtPeriodEnd: true,
+        revision: sql`${subscriptionAddonPurchasesTable.revision} + 1`,
+      })
+      .where(and(
+        eq(subscriptionAddonPurchasesTable.id, purchase.id),
+        inArray(subscriptionAddonPurchasesTable.ownerId, ownerKeys),
+      )).returning();
+    return updated ? { kind: "updated" as const, purchase: updated } : { kind: "missing" as const };
+  });
+  if (result.kind === "missing") return res.status(404).json({ error: "الإضافة غير موجودة" });
+  if (result.kind === "legacy") return res.status(409).json({ error: "هذه إضافة تاريخية مدى الحياة ولا تتجدد" });
+  if (result.kind === "open-invoice" || result.kind === "open-checkout") {
+    return res.status(409).json({ error: "توجد فاتورة أو عملية دفع دورية مفتوحة؛ لا يمكن تغيير الإضافة الآن" });
+  }
+  const updated = result.purchase;
+  return res.json({
+    id: updated.id,
+    cancelAtPeriodEnd: updated.cancelAtPeriodEnd,
+    paidThroughAt: updated.paidThroughAt,
+  });
+});
+
+router.post("/subscription/auto-renew/cancel", async (req, res) => {
+  const ownerKeys = await subscriptionOwnerKeys(req.user!.id);
+  const [subscription] = await db.select().from(ownerSubscriptionsTable)
+    .where(inArray(ownerSubscriptionsTable.ownerId, ownerKeys)).limit(1);
+  if (!subscription) return res.status(404).json({ error: "الاشتراك غير موجود" });
+  const result = await db.transaction(async (tx) => {
+    const [lockedSubscription] = await tx.select().from(ownerSubscriptionsTable)
+      .where(eq(ownerSubscriptionsTable.ownerId, subscription.ownerId)).for("update").limit(1);
+    const [profile] = await tx.select().from(ownerBillingProfilesTable)
+      .where(eq(ownerBillingProfilesTable.ownerId, subscription.ownerId)).for("update").limit(1);
+    const [invoice] = await tx.select().from(subscriptionRenewalInvoicesTable)
+      .where(and(
+        eq(subscriptionRenewalInvoicesTable.ownerId, subscription.ownerId),
+        inArray(subscriptionRenewalInvoicesTable.status, ["pending", "processing", "failed"]),
+      )).orderBy(desc(subscriptionRenewalInvoicesTable.createdAt)).limit(1);
+    if (invoice) {
+      const [attempt] = await tx.select().from(subscriptionRenewalAttemptsTable)
+        .where(eq(subscriptionRenewalAttemptsTable.invoiceId, invoice.id))
+        .orderBy(desc(subscriptionRenewalAttemptsTable.attemptNumber)).limit(1);
+      if (attempt && attempt.status !== "failed") return { blocked: true as const };
+      await tx.update(subscriptionRenewalInvoicesTable)
+        .set({ status: "cancelled", lastError: "Owner disabled automatic renewal" })
+        .where(eq(subscriptionRenewalInvoicesTable.id, invoice.id));
+    }
+    if (lockedSubscription) {
+      await tx.update(ownerSubscriptionsTable)
+        .set({ autoRenewEnabled: false })
+        .where(eq(ownerSubscriptionsTable.ownerId, lockedSubscription.ownerId));
+    }
+    if (profile) {
+      await tx.update(ownerBillingProfilesTable)
+        .set({ autoRenewEnabled: false, updatedAt: new Date() })
+        .where(eq(ownerBillingProfilesTable.ownerId, profile.ownerId));
+    }
+    return { blocked: false as const };
+  });
+  if (result.blocked) {
+    return res.status(409).json({ error: "يوجد تحصيل قيد المعالجة؛ أعد المحاولة بعد اكتماله" });
+  }
+  return res.json({
+    autoRenewEnabled: false,
+    expiresAt: subscription.expiresAt,
+  });
+});
+
 router.get("/subscription", async (req, res) => {
   const ownerId = req.user!.id;
   const sub = await getOrStartOwnerSubscription(ownerId);
+  const billing = await getSubscriptionBillingReadiness(sub.ownerId);
   // Only the dashboard explicitly opts in to the visual preview. Billing and
   // checkout readers of this endpoint always receive the real subscription.
   const preview = req.query.reminderPreview === "1"
@@ -3029,6 +3233,8 @@ router.get("/subscription", async (req, res) => {
     status: preview ? "active" : isSubscriptionActive(sub) ? sub.status : "expired",
     expiresAt: preview ? preview.expiresAt : sub.expiresAt,
     daysLeft: preview ? preview.milestone : calcDaysLeft(sub.expiresAt),
+    ...billing,
+    autoRenewEnabled: billing.autoRenewEnabled,
     ...(preview ? { reminderPreviewMilestone: preview.milestone } : {}),
   });
 });

@@ -27,12 +27,42 @@ export interface AddonQuote {
   quantity: number;
   publishableKey: string;
   addonType: "chalet" | "service";
+  nextChargeHalala?: number;
+  nextBillingAt?: string | null;
+  periodEnd?: string | null;
+  periodEndAt?: string | null;
+  periodStartAt?: string | null;
+  cycleDays?: number;
+  remainingDays?: number;
+  billingDays?: number;
+  recurring?: boolean;
+  savedPaymentMethodAvailable?: boolean;
+  canSavePaymentMethod?: boolean;
+  recurringConfigured?: boolean;
+  baseMonthlyHalala?: number;
+}
+
+interface AddonPreview {
+  addonType: "chalet" | "service";
+  quantity: number;
+  amountHalala: number;
+  monthlyUnitPriceHalala: number;
+  remainingDays: number;
+  cycleDays: number;
+  billingDays: number;
+  periodEndAt: string;
+  nextBillingAt: string | null;
+  nextChargeHalala: number | null;
+  baseMonthlyHalala: number;
+  recurringConfigured: boolean;
+  canSavePaymentMethod: boolean;
 }
 
 export interface PendingCheckout {
   checkoutId: string;
   addonType: "chalet" | "service";
   quantity?: number;
+  consentToRecurring?: boolean;
 }
 
 interface ReturnAttempt extends PendingCheckout {
@@ -41,6 +71,19 @@ interface ReturnAttempt extends PendingCheckout {
 }
 
 type Step = "quote" | "success";
+
+function normalizeDigits(value: string) {
+  return value
+    .replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0));
+}
+
+function parseQuantity(value: string): number | null {
+  const digits = normalizeDigits(value).replace(/\D/g, "");
+  if (!digits) return null;
+  const parsed = Number(digits);
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 50 ? parsed : null;
+}
 
 function pendingStorageKey(ownerId: string, addonType: PendingCheckout["addonType"]) {
   return `addon-payment-pending:v2:${ownerId}:${addonType}`;
@@ -57,6 +100,7 @@ export function readPendingCheckouts(ownerId: string, addonType: PendingCheckout
         checkoutId: value.checkoutId,
         addonType,
         quantity: Number.isInteger(value.quantity) && value.quantity >= 1 ? value.quantity : 1,
+        consentToRecurring: value.consentToRecurring === true,
       }));
   } catch {
     return [];
@@ -159,6 +203,9 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
     chaletLimit: number;
     serviceCount: number;
     serviceLimit: number;
+    baseMonthlyHalala?: number;
+    recurringConfigured?: boolean;
+    canSavePaymentMethod?: boolean;
   }>({
     queryKey: ["owner", "plan-limits"],
     queryFn: async () => {
@@ -172,7 +219,8 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
   });
   const [step, setStep] = useState<Step>("quote");
   const [selectedType, setSelectedType] = useState<"chalet" | "service">(addonType);
-  const [quantity, setQuantity] = useState(1);
+  const [quantityInput, setQuantityInput] = useState("1");
+  const [consentToRecurring, setConsentToRecurring] = useState(false);
   const [completedQuantity, setCompletedQuantity] = useState(1);
   const [completedType, setCompletedType] = useState<"chalet" | "service">(addonType);
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +229,8 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
   const [returnNotice, setReturnNotice] = useState<string | null>(null);
   const handledReturnRef = useRef<string | null>(null);
 
-  const activeAddonType = returnAttempt?.addonType ?? selectedType;
+  const activeAddonType = returnAttempt?.addonType ?? (selectableType ? selectedType : addonType);
+  const quantity = parseQuantity(quantityInput);
   const label = activeAddonType === "chalet" ? "عقار إضافي" : "خدمة إضافية";
   const listedPrice = activeAddonType === "chalet" ? currentLimits?.extraChaletPrice : currentLimits?.extraServicePrice;
   const numericPrice = listedPrice == null ? null : Number(listedPrice);
@@ -190,6 +239,61 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
     (activeAddonType === "chalet"
       ? currentLimits.chaletCount < currentLimits.chaletLimit
       : currentLimits.serviceCount < currentLimits.serviceLimit);
+  const previewQuery = useQuery<AddonPreview>({
+    queryKey: ["owner", "subscription-addon-preview", activeAddonType, quantity],
+    queryFn: async () => {
+      if (quantity == null) throw new Error("أدخل كمية صحيحة لعرض السعر");
+      const response = await apiFetch("/owner/subscription/addons/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addonType: activeAddonType, quantity }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "تعذّر احتساب عرض الإضافة");
+      const preview: AddonPreview = {
+        addonType: data.addonType == null ? activeAddonType : data.addonType,
+        quantity: data.quantity == null ? quantity : Number(data.quantity),
+        amountHalala: Number(data.amountHalala),
+        monthlyUnitPriceHalala: Number(data.monthlyUnitPriceHalala),
+        remainingDays: Number(data.remainingDays),
+        cycleDays: Number(data.cycleDays),
+        billingDays: Number(data.billingDays),
+        periodEndAt: String(data.periodEndAt ?? ""),
+        nextBillingAt: typeof data.nextBillingAt === "string" ? data.nextBillingAt : null,
+        nextChargeHalala: Number.isSafeInteger(data.nextChargeHalala) ? Number(data.nextChargeHalala) : null,
+        baseMonthlyHalala: Number(data.baseMonthlyHalala),
+        recurringConfigured: data.recurringConfigured === true,
+        canSavePaymentMethod: data.canSavePaymentMethod === true,
+      };
+      const endDate = new Date(preview.periodEndAt);
+      if (preview.addonType !== activeAddonType || preview.quantity !== quantity ||
+          !Number.isSafeInteger(preview.amountHalala) || preview.amountHalala < 0 ||
+          !Number.isSafeInteger(preview.monthlyUnitPriceHalala) || preview.monthlyUnitPriceHalala < 0 ||
+          !Number.isSafeInteger(preview.remainingDays) || preview.remainingDays < 0 ||
+          !Number.isSafeInteger(preview.cycleDays) || preview.cycleDays < 1 ||
+          !Number.isSafeInteger(preview.billingDays) || preview.billingDays < 1 ||
+          Number.isNaN(endDate.getTime()) ||
+          !Number.isSafeInteger(preview.baseMonthlyHalala) || preview.baseMonthlyHalala < 0 ||
+          (preview.nextChargeHalala != null && (!Number.isSafeInteger(preview.nextChargeHalala) || preview.nextChargeHalala < 0))) {
+        throw new Error("استجابة عرض الإضافة غير صالحة");
+      }
+      return preview;
+    },
+    enabled: open && !returnAttempt && !returnNotice && quantity != null,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+  const preview = previewQuery.data;
+  const previewValid = !!preview && preview.addonType === activeAddonType &&
+    preview.quantity === quantity && !previewQuery.isFetching;
+  const recurringPreviewValid = previewValid && preview!.amountHalala > 0 &&
+    preview!.recurringConfigured && preview!.canSavePaymentMethod &&
+    preview!.nextChargeHalala != null &&
+    !!preview!.nextBillingAt && !Number.isNaN(new Date(preview!.nextBillingAt).getTime());
+  const freePreviewValid = previewValid && preview!.amountHalala === 0;
+  const canProceedWithQuote = freePreviewValid || recurringPreviewValid;
 
   function refreshOwnerData() {
     for (const queryKey of [
@@ -266,10 +370,20 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
 
   const quoteMutation = useMutation({
     mutationFn: async ({ quantity: requestedQuantity, addonType: requestedType }: { quantity: number; addonType: "chalet" | "service" }) => {
+      if (!previewValid || !preview || requestedQuantity !== preview.quantity ||
+          requestedType !== preview.addonType || !canProceedWithQuote ||
+          (preview.amountHalala > 0 && !consentToRecurring)) {
+        throw new Error("اعرض عرض السعر الكامل وأكد موافقتك قبل بدء الدفع");
+      }
       const response = await apiFetch("/owner/subscription/addons/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addonType: requestedType, quantity: requestedQuantity }),
+        body: JSON.stringify({
+          addonType: requestedType,
+          quantity: requestedQuantity,
+          consentToRecurring,
+          autoRenewConsent: consentToRecurring,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "تعذّر احتساب سعر الإضافة");
@@ -280,16 +394,35 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
         quantity: Number(data.quantity),
         publishableKey: String(data.publishableKey ?? ""),
         addonType: data.addonType,
+        nextChargeHalala: Number.isSafeInteger(data.nextChargeHalala) ? Number(data.nextChargeHalala) : undefined,
+        nextBillingAt: typeof data.nextBillingAt === "string" ? data.nextBillingAt : null,
+        periodEnd: typeof data.periodEnd === "string" ? data.periodEnd :
+          typeof data.periodEndAt === "string" ? data.periodEndAt : null,
+        periodEndAt: typeof data.periodEndAt === "string" ? data.periodEndAt : null,
+        periodStartAt: typeof data.periodStartAt === "string" ? data.periodStartAt : null,
+        cycleDays: Number.isSafeInteger(data.cycleDays) ? Number(data.cycleDays) : undefined,
+        remainingDays: Number.isFinite(data.remainingDays) ? Number(data.remainingDays) : undefined,
+        billingDays: Number.isFinite(data.billingDays) ? Number(data.billingDays) : undefined,
+        recurring: data.recurring === true,
+        savedPaymentMethodAvailable: data.savedPaymentMethodAvailable === true,
+        canSavePaymentMethod: data.canSavePaymentMethod === true,
+        recurringConfigured: data.recurringConfigured === true,
+        baseMonthlyHalala: Number.isSafeInteger(data.baseMonthlyHalala) ? Number(data.baseMonthlyHalala) : undefined,
       };
       if (!nextQuote.checkoutId || !Number.isSafeInteger(nextQuote.amountHalala) ||
           nextQuote.amountHalala < 0 || nextQuote.addonType !== requestedType ||
           !Number.isSafeInteger(nextQuote.unitPriceHalala) || nextQuote.unitPriceHalala < 0 ||
-          nextQuote.quantity !== requestedQuantity ||
-          nextQuote.amountHalala !== nextQuote.unitPriceHalala * nextQuote.quantity) {
+          nextQuote.quantity !== requestedQuantity) {
         throw new Error("تعذّر التحقق من عرض سعر الإضافة");
       }
       if (nextQuote.amountHalala > 0 && !nextQuote.publishableKey) {
         throw new Error("بوابة الدفع غير مهيأة لإتمام شراء الإضافة");
+      }
+      if (nextQuote.amountHalala > 0 &&
+          (!consentToRecurring || !nextQuote.recurring || !nextQuote.canSavePaymentMethod ||
+            nextQuote.nextChargeHalala == null || !nextQuote.nextBillingAt ||
+            !nextQuote.periodEnd || nextQuote.remainingDays == null || nextQuote.billingDays == null)) {
+        throw new Error("تعذّر تأكيد مبلغ التجديد أو موعده والفترة النسبية أو حفظ وسيلة الدفع؛ لم يبدأ الدفع.");
       }
       return nextQuote;
     },
@@ -299,7 +432,12 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
         redeemMutation.mutate({ checkoutId: nextQuote.checkoutId, addonType: nextQuote.addonType, quantity: nextQuote.quantity });
         return;
       }
-      const pending = { checkoutId: nextQuote.checkoutId, addonType: nextQuote.addonType, quantity: nextQuote.quantity };
+      const pending = {
+        checkoutId: nextQuote.checkoutId,
+        addonType: nextQuote.addonType,
+        quantity: nextQuote.quantity,
+        consentToRecurring,
+      };
       if (!ownerId || !savePendingCheckout(ownerId, pending)) {
         setError("تعذّر حفظ عملية الدفع بأمان في هذه الجلسة؛ لم يتم بدء الدفع. يرجى تفعيل التخزين المؤقت أو المحاولة من متصفح آخر.");
         return;
@@ -316,11 +454,15 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
     if (open) {
       setStep("quote");
       setSelectedType(addonType);
-      setQuantity(1);
+      setQuantityInput("1");
+      setConsentToRecurring(false);
       setError(null);
       return;
     }
     setStep("quote");
+    setSelectedType(addonType);
+    setQuantityInput("1");
+    setConsentToRecurring(false);
     setError(null);
   }, [open, addonType, ownerId]);
 
@@ -375,8 +517,6 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
     });
   }, [addonType, ownerId]);
 
-  const estimatedTotal = validPrice ?
-    (numericPrice * quantity).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null;
   const purchaseBlocked = !!returnAttempt || !!returnNotice;
   const closeModal = () => {
     if (isBusy) return;
@@ -412,7 +552,7 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                  طلب {activeAddonType === "chalet" ? "عقارات إضافية" : "خدمات إضافية"}
               </DialogTitle>
               <DialogDescription id="addon-payment-description">
-                 اختر عدد الإضافات المطلوبة؛ تُضاف كلها إلى حسابك الحالي برسوم لمرة واحدة وبدون تجديد تلقائي.
+                 سيظهر المبلغ النسبي المستحق الآن ومبلغ وموعد التجديد الكاملين من الخادم قبل طلب موافقتك أو بدء الدفع.
               </DialogDescription>
             </DialogHeader>
 
@@ -430,9 +570,13 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                                className="h-auto min-h-16 flex-col gap-1 whitespace-normal px-2 py-2 text-xs"
                                disabled={isBusy}
                                aria-pressed={activeAddonType === type}
-                               onClick={() => { setSelectedType(type); setError(null); }}>
+                                onClick={() => {
+                                  setSelectedType(type);
+                                  setConsentToRecurring(false);
+                                  setError(null);
+                                }}>
                                <span>{type === "chalet" ? "عقارات إضافية" : "خدمات إضافية"}</span>
-                                <span>{isPriceLoading && !currentLimits ? "جارٍ تحميل السعر..." : typePrice == null ? currentLimits?.plan === "trial" ? "لم يُحدّد سعر التجربة بعد" : "غير متاح في خطتك" : `${Number(typePrice).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س للوحدة`}</span>
+                                 <span>{isPriceLoading && !currentLimits ? "جارٍ تحميل السعر..." : typePrice == null ? currentLimits?.plan === "trial" ? "لم يُحدّد سعر التجربة بعد" : "غير متاح في خطتك" : `${Number(typePrice).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س للوحدة / 30 يوماً`}</span>
                              </Button>
                            );
                          })}
@@ -446,21 +590,72 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                      <label htmlFor="addon-quantity" className="mt-4 block font-semibold text-foreground">
                        عدد {activeAddonType === "chalet" ? "العقارات الإضافية" : "الخدمات الإضافية"}
                      </label>
-                      <input id="addon-quantity" data-testid="input-addon-quantity" type="number" min={1} max={50} step={1} inputMode="numeric"
-                       value={quantity} disabled={isBusy}
-                       onChange={(event) => setQuantity(Math.min(50, Math.max(1, Math.trunc(Number(event.target.value) || 1))))}
+                      <input id="addon-quantity" data-testid="input-addon-quantity" type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" maxLength={2}
+                       value={quantityInput} disabled={isBusy}
+                       onChange={(event) => {
+                         setQuantityInput(normalizeDigits(event.target.value).replace(/\D/g, "").slice(0, 2));
+                         setConsentToRecurring(false);
+                         setError(null);
+                       }}
                        className="mt-1 w-24 rounded-md border border-input bg-background px-3 py-2 text-foreground"
                      />
-                     {validPrice ? (
+                       {quantity == null && (
+                         <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">أدخل عدداً صحيحاً من 1 إلى 50 لاحتساب عرض السعر.</p>
+                       )}
+                       {quantity != null && previewQuery.isPending && (
+                         <p role="status" className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                           <Loader2 className="h-4 w-4 animate-spin" /> جارٍ جلب عرض السعر الدقيق...
+                         </p>
+                       )}
+                       {previewQuery.isError && quantity != null && (
+                         <p role="alert" className="mt-3 text-sm text-destructive">{(previewQuery.error as Error).message}</p>
+                       )}
+                       {previewValid && preview && (
                        <div className="mt-3 rounded-lg border border-primary/20 bg-background p-3 text-foreground">
-                         <p>سعر الوحدة: {numericPrice.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</p>
-                         <p className="mt-1 font-bold">الإجمالي التقديري: {quantity.toLocaleString("ar-SA")} × {numericPrice.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} = {estimatedTotal} ر.س</p>
-                         <p className="mt-1 text-xs text-muted-foreground">يؤكد الخادم السعر النهائي قبل فتح الدفع.</p>
+                             <p>السعر المرجعي للوحدة لكل 30 يوماً: {(preview.monthlyUnitPriceHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</p>
+                             <p className="mt-2 font-bold">المستحق الآن للفترة المتبقية: {(preview.amountHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</p>
+                             <p className="mt-1 text-xs text-muted-foreground">
+                               محسوباً عن {preview.remainingDays} من {preview.billingDays} يوماً حتى نهاية الفترة {new Date(preview.periodEndAt).toLocaleDateString("ar-SA")}.
+                             </p>
+                             {preview.nextChargeHalala != null && (
+                               <p className="mt-2 font-semibold">
+                                 {currentLimits?.plan === "trial" ? "رسوم الإضافات المتوقعة للدورة التالية" : `إجمالي الفاتورة الكاملة التالية ${preview.billingDays === 30 ? "شهرياً" : `لكل دورة (${preview.billingDays} يوم)`}`}: {(preview.nextChargeHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س
+                               </p>
+                             )}
+                             {preview.nextBillingAt && (
+                               <p className="mt-1 text-xs text-muted-foreground">{currentLimits?.plan === "trial" ? "تنتهي التجربة في" : "موعد التجديد التالي"}: {new Date(preview.nextBillingAt).toLocaleDateString("ar-SA")}</p>
+                             )}
+                             {currentLimits?.plan === "trial" ? (
+                               <p className="mt-1 text-xs text-muted-foreground">لا تُخصم رسوم تجديد عند نهاية التجربة تلقائياً. اختر باقة مدفوعة أولاً؛ سيضاف سعرها إلى رسوم الإضافات في فاتورة واحدة قبل الدفع.</p>
+                             ) : (
+                               <p className="mt-1 text-xs text-muted-foreground">الاشتراك الأساسي المرجعي لكل 30 يوماً: {(preview.baseMonthlyHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</p>
+                             )}
+                           {preview.amountHalala > 0 && recurringPreviewValid && (
+                            <label className="mt-3 flex items-start gap-2 text-sm">
+                              <input
+                                type="checkbox"
+                                data-testid="checkbox-addon-recurring-consent"
+                                checked={consentToRecurring}
+                                 disabled={isBusy || previewQuery.isFetching}
+                                onChange={(event) => setConsentToRecurring(event.target.checked)}
+                                className="mt-1"
+                              />
+                              <span>
+                                 {currentLimits?.plan === "trial"
+                                   ? `أوافق على حفظ وسيلة الدفع لتجديد الإضافات بمبلغ ${(preview.nextChargeHalala! / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س لكل دورة بعد اختياري باقة مدفوعة؛ سيُعرض سعر الباقة والإجمالي قبل الدفع، ولن يُخصم تجديد عند نهاية التجربة تلقائياً.`
+                                   : `أوافق صراحةً على حفظ وسيلة الدفع وتجديد الإضافة مع الاشتراك الأساسي بإجمالي ${(preview.nextChargeHalala! / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س ${preview.billingDays === 30 ? "شهرياً" : `لكل دورة (${preview.billingDays} يوم)`} في موعد التجديد الموضح أعلاه.`}
+                              </span>
+                            </label>
+                          )}
+                           {preview.amountHalala > 0 && !recurringPreviewValid && (
+                             <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">التجديد أو حفظ وسيلة الدفع غير مهيأ؛ لن يبدأ الدفع أو يُطلب منك الموافقة.</p>
+                           )}
                        </div>
-                    ) : (
-                        <p className="mt-2 text-xs">{isPriceLoading ? "جارٍ تحميل سعر الإضافة..." : isPriceError ? "تعذّر تحميل سعر الإضافة. أعد فتح النافذة للمحاولة." : currentLimits?.plan === "trial" ? "لم يحدّد المشرف سعر هذه الإضافة أثناء التجربة المجانية بعد. يمكنك الشراء فور تحديده." : "هذه الإضافة غير متاحة للشراء في خطتك الحالية."}</p>
                     )}
-                     {freeCapacityAvailable && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">يمكنك تفعيل الإضافات المجانية بعد استخدام السعة المتاحة في خطتك.</p>}
+                       {!validPrice && !isPriceLoading && (
+                         <p className="mt-2 text-xs">{isPriceError ? "تعذّر تحميل سعر الإضافة." : currentLimits?.plan === "trial" ? "لم يحدّد المشرف سعر هذه الإضافة أثناء التجربة المجانية بعد." : "هذه الإضافة غير متاحة للشراء في خطتك الحالية."}</p>
+                      )}
+                      {freeCapacityAvailable && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">يمكنك تفعيل الإضافات المجانية بعد استخدام السعة المتاحة في خطتك.</p>}
                   </div>
                   <p className="flex items-start gap-2 text-xs text-muted-foreground">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
@@ -529,9 +724,15 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
 
               {step === "quote" && !purchaseBlocked && (
                 <div className="flex gap-2">
-                    <Button data-testid="button-request-addon-quote" className="flex-1 gap-2" onClick={() => quoteMutation.mutate({ quantity, addonType: activeAddonType })} disabled={isBusy || !validPrice || isPriceLoading || freeCapacityAvailable}>
+                     <Button
+                       data-testid="button-request-addon-quote"
+                       className="flex-1 gap-2"
+                       onClick={() => quantity != null && quoteMutation.mutate({ quantity, addonType: activeAddonType })}
+                       disabled={isBusy || previewQuery.isFetching || !quantity || !previewValid || !canProceedWithQuote ||
+                         freeCapacityAvailable || (!!preview && preview.amountHalala > 0 && !consentToRecurring)}
+                     >
                     {quoteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                      {numericPrice === 0 && validPrice ? "تفعيل الإضافات مجاناً" : "المتابعة إلى الدفع"}
+                       {previewValid && preview?.amountHalala === 0 ? "تفعيل الإضافات مجاناً" : "المتابعة إلى الدفع"}
                   </Button>
                   <Button variant="outline" onClick={closeModal} disabled={isBusy}>إلغاء</Button>
                 </div>
