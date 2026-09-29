@@ -111,6 +111,9 @@ export default function SubscriptionPage() {
       return r.json();
     },
     enabled: isAuthenticated,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {

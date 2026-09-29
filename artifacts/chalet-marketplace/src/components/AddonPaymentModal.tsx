@@ -152,6 +152,7 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
   const ownerId = user?.id ?? "";
   const queryClient = useQueryClient();
   const { data: currentLimits, isLoading: isPriceLoading, isError: isPriceError } = useQuery<{
+    plan: string;
     extraChaletPrice: number | string | null;
     extraServicePrice: number | string | null;
     chaletCount: number;
@@ -431,7 +432,7 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                                aria-pressed={activeAddonType === type}
                                onClick={() => { setSelectedType(type); setError(null); }}>
                                <span>{type === "chalet" ? "عقارات إضافية" : "خدمات إضافية"}</span>
-                               <span>{isPriceLoading && !currentLimits ? "جارٍ تحميل السعر..." : typePrice == null ? "غير متاح في خطتك" : `${Number(typePrice).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س للوحدة`}</span>
+                                <span>{isPriceLoading && !currentLimits ? "جارٍ تحميل السعر..." : typePrice == null ? currentLimits?.plan === "trial" ? "لم يُحدّد سعر التجربة بعد" : "غير متاح في خطتك" : `${Number(typePrice).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س للوحدة`}</span>
                              </Button>
                            );
                          })}
@@ -457,7 +458,7 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                          <p className="mt-1 text-xs text-muted-foreground">يؤكد الخادم السعر النهائي قبل فتح الدفع.</p>
                        </div>
                     ) : (
-                       <p className="mt-2 text-xs">{isPriceLoading ? "جارٍ تحميل سعر الإضافة..." : isPriceError ? "تعذّر تحميل سعر الإضافة. أعد فتح النافذة للمحاولة." : "هذه الإضافة غير متاحة للشراء في خطتك الحالية."}</p>
+                        <p className="mt-2 text-xs">{isPriceLoading ? "جارٍ تحميل سعر الإضافة..." : isPriceError ? "تعذّر تحميل سعر الإضافة. أعد فتح النافذة للمحاولة." : currentLimits?.plan === "trial" ? "لم يحدّد المشرف سعر هذه الإضافة أثناء التجربة المجانية بعد. يمكنك الشراء فور تحديده." : "هذه الإضافة غير متاحة للشراء في خطتك الحالية."}</p>
                     )}
                      {freeCapacityAvailable && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">يمكنك تفعيل الإضافات المجانية بعد استخدام السعة المتاحة في خطتك.</p>}
                   </div>

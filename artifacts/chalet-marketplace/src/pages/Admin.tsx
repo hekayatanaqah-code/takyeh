@@ -5219,6 +5219,8 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
     setShowForm(true);
   }
 
+  const editingTrialPlan = editId != null && plans.some((plan) => plan.id === editId && plan.slug === "trial");
+
   function parseAddonPrice(value: string, label: string): number | null {
     const normalized = fromAr(value).trim().replace(/\u066b/g, ".");
     if (!normalized) return null;
@@ -5268,6 +5270,7 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
         return;
       }
       await qc.invalidateQueries({ queryKey: ["admin", "plans"] });
+      await qc.invalidateQueries({ queryKey: ["owner", "plan-limits"] });
       setShowForm(false);
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذّر حفظ الخطة. حاول مرة أخرى.");
@@ -5391,14 +5394,14 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                 <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-700 pt-3 text-xs">
                   <span className="rounded-md bg-slate-700/70 px-2.5 py-1 text-slate-200">
                     عقار إضافي: <strong className="text-amber-300">{p.extraChaletPrice == null
-                      ? "غير متاح"
+                      ? p.slug === "trial" ? "حدّد السعر لتفعيل الشراء" : "غير متاح"
                       : Number(p.extraChaletPrice) === 0
                         ? "مجاناً"
                         : `${toAr(Number(p.extraChaletPrice).toLocaleString("en-US", { maximumFractionDigits: 2 }))} ر.س`}</strong>
                   </span>
                   <span className="rounded-md bg-slate-700/70 px-2.5 py-1 text-slate-200">
                     خدمة إضافية: <strong className="text-amber-300">{p.extraServicePrice == null
-                      ? "غير متاحة"
+                      ? p.slug === "trial" ? "حدّد السعر لتفعيل الشراء" : "غير متاحة"
                       : Number(p.extraServicePrice) === 0
                         ? "مجاناً"
                         : `${toAr(Number(p.extraServicePrice).toLocaleString("en-US", { maximumFractionDigits: 2 }))} ر.س`}</strong>
@@ -5523,8 +5526,12 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                 </div>
               </div>
               <div className="rounded-lg border border-amber-700/40 bg-amber-950/20 p-3">
-                <p className="mb-2 text-sm font-semibold text-amber-200">تسعير الإضافات لهذه الباقة</p>
-                <p className="mb-3 text-xs text-slate-400">اختياري لكل نوع: اترك السعر فارغاً لتعطيل شراء الإضافة، أو أدخل ٠ لتفعيلها مجاناً. السعر المدفوع يُحصّل مرة واحدة لكل إضافة، دون تغيير سعر الاشتراك.</p>
+                <p className="mb-2 text-sm font-semibold text-amber-200">{editingTrialPlan ? "أسعار الإضافات أثناء التجربة المجانية" : "تسعير الإضافات لهذه الباقة"}</p>
+                <p className="mb-3 text-xs text-slate-400">
+                  {editingTrialPlan
+                    ? "حدّد سعر العقار والخدمة بشكل مستقل. يستطيع المالك شراء الإضافات خلال التجربة فور حفظ السعر، وتُفتح السعة بعد تأكيد الدفع دون انتظار انتهاء التجربة. اترك حقل نوعٍ فارغاً لإيقاف شرائه."
+                    : "اختياري لكل نوع: اترك السعر فارغاً لتعطيل شراء الإضافة، أو أدخل ٠ لتفعيلها مجاناً. السعر المدفوع يُحصّل مرة واحدة لكل إضافة، دون تغيير سعر الاشتراك."}
+                </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="plan-extra-chalet-price" className="text-xs text-slate-200 mb-1 block">سعر العقار الإضافي (ر.س) — اختياري</label>

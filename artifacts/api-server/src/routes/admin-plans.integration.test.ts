@@ -49,7 +49,10 @@ test("plan identifiers are derived from Arabic names, unique and stable when ren
     const response = await fetch(`${baseUrl}/api/admin/plans`, {
       method: "POST",
       headers: headers(),
-      body: JSON.stringify({ nameAr, price: 99, durationDays: 90, features: [] }),
+      body: JSON.stringify({
+        nameAr, price: 99, durationDays: 90, features: [],
+        scope: "full", chaletLimit: 1, serviceLimit: 1,
+      }),
     });
     assert.equal(response.status, 200);
     const plan = await response.json() as { id: number; slug: string };
@@ -71,4 +74,39 @@ test("plan identifiers are derived from Arabic names, unique and stable when ren
   const edited = await updated.json() as { slug: string; nameAr: string };
   assert.equal(edited.slug, first.slug);
   assert.equal(edited.nameAr, "اسم جديد");
+});
+
+test("trial plan add-on prices are editable independently and visible in the plan catalog", async () => {
+  const response = await fetch(`${baseUrl}/api/admin/plans`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({
+      nameAr: `تجربة اختبارية ${randomUUID().slice(0, 8)}`,
+      price: 0, durationDays: 30, trialDays: 30, features: [],
+      scope: "full", chaletLimit: 1, serviceLimit: 1,
+      extraChaletPrice: 35, extraServicePrice: 20, isActive: false,
+    }),
+  });
+  assert.equal(response.status, 200);
+  const created = await response.json() as { id: number; extraChaletPrice: string; extraServicePrice: string };
+  ids.push(created.id);
+  assert.equal(Number(created.extraChaletPrice), 35);
+  assert.equal(Number(created.extraServicePrice), 20);
+
+  const update = await fetch(`${baseUrl}/api/admin/plans/${created.id}`, {
+    method: "PUT",
+    headers: headers(),
+    body: JSON.stringify({ extraChaletPrice: 47.5, extraServicePrice: 25 }),
+  });
+  assert.equal(update.status, 200);
+  const saved = await update.json() as { extraChaletPrice: string; extraServicePrice: string };
+  assert.equal(Number(saved.extraChaletPrice), 47.5);
+  assert.equal(Number(saved.extraServicePrice), 25);
+
+  const listed = await fetch(`${baseUrl}/api/admin/plans`, { headers: headers() });
+  assert.equal(listed.status, 200);
+  const catalog = await listed.json() as Array<{ id: number; extraChaletPrice: string; extraServicePrice: string }>;
+  const plan = catalog.find((item) => item.id === created.id);
+  assert.equal(Number(plan?.extraChaletPrice), 47.5);
+  assert.equal(Number(plan?.extraServicePrice), 25);
 });

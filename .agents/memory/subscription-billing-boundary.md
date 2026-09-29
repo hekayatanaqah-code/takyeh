@@ -15,6 +15,12 @@ An active property-only subscription can purchase a service slot, and an active 
 
 **How to apply:** Treat the add-on as a separate, owner-scoped purchase counted toward effective capacity regardless of base plan category. Keep the base subscription intact and avoid rewriting configured prices on later starts.
 
+Trial add-on prices are set by the administrator for each type; do not infer them from paid plans or invent a default charge when no amount has been supplied.
+
+**Why:** The user declined to choose fixed trial prices and instead requested editable prices in the subscription-plan administration screen. A guessed charge would be a billing decision they did not make.
+
+**How to apply:** Permit an active trial to buy as soon as its per-type price is configured. When unset, explain that the administrator has not priced the add-on yet; never silently replace an intentionally empty price with a seed.
+
 For legacy accounts with published inventory but no subscription record, a single persisted trial prevents the new system from silently removing active listings on rollout. An already-recorded expired or inactive subscription is not a missing trial and must not be reset.
 
 **Why:** Absence of a row in the old system did not prove that an owner had used a trial; an existing expired row does prove previous entitlement and should remain expired.

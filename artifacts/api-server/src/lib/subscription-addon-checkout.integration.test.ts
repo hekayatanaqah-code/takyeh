@@ -53,7 +53,7 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       nameAr: "باقة تكامل اختبارية",
       price: "0.00",
       durationDays: 30,
-      trialDays: 0,
+      trialDays: 30,
       features: ["اختبار معزول"],
       scope: "property",
       chaletLimit: 0,
@@ -67,7 +67,7 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       ownerId,
       plan: planSlug,
       status: "active",
-      paymentStatus: "manual",
+      paymentStatus: "free",
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     });
 
