@@ -21218,7 +21218,7 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
       <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-muted/30">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 border-b border-border bg-muted/30">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
               <Bell className="w-4 h-4 text-amber-600 dark:text-amber-400" />
@@ -21230,13 +21230,16 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
               )}
             </div>
           </div>
-          {unread.length > 0 && (
-            <Button size="sm" variant="default" className="h-8 gap-1.5 text-xs px-3"
-              onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}>
-              {markAllRead.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-              تحديد الكل كمقروء
-            </Button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <SectionGuideButton sectionKey="notifications" />
+            {unread.length > 0 && (
+              <Button size="sm" variant="default" className="h-8 gap-1.5 text-xs px-3"
+                onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}>
+                {markAllRead.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                تحديد الكل كمقروء
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Filter tabs */}
@@ -27602,7 +27605,7 @@ function OwnerSupportTab() {
   return (
     <div className="max-w-2xl mx-auto space-y-5 py-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
             <MessageSquare className="w-5 h-5 text-primary" />
@@ -27612,14 +27615,17 @@ function OwnerSupportTab() {
             <p className="text-xs text-muted-foreground">أرسل طلبك التقني أو اقتراحك مباشرةً لفريق تكية</p>
           </div>
         </div>
-        <Button
-          size="sm"
-          onClick={() => { setShowForm(!showForm); setSubmitted(false); setSubject(""); setMessage(""); setError(""); }}
-          className="gap-1.5"
-        >
-          <Send className="w-3.5 h-3.5" />
-          طلب جديد
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <SectionGuideButton sectionKey="support" />
+          <Button
+            size="sm"
+            onClick={() => { setShowForm(!showForm); setSubmitted(false); setSubject(""); setMessage(""); setError(""); }}
+            className="gap-1.5"
+          >
+            <Send className="w-3.5 h-3.5" />
+            طلب جديد
+          </Button>
+        </div>
       </div>
 
       {/* Unread notification */}

@@ -1310,22 +1310,24 @@ interface OwnerSupportRequest {
 }
 
 const GUIDE_SECTIONS = [
-  { key: "dashboard",        label: "لوحة الرئيسية" },
-  { key: "calendar",         label: "التقويم والحجوزات" },
-  { key: "revenues",         label: "الإيرادات" },
-  { key: "expenses",         label: "المصروفات" },
-  { key: "employees",        label: "الموظفون" },
-  { key: "reports",          label: "التقارير المالية" },
-  { key: "transactions",     label: "سجل المعاملات المالية" },
-  { key: "ledger",           label: "سجل الحساب البنكي" },
-  { key: "chalets",          label: "إدارة الشاليهات" },
-  { key: "services",         label: "الخدمات والمرافق" },
-  { key: "customers",        label: "العملاء" },
+  { key: "dashboard",        label: "الصفحة الرئيسية" },
+  { key: "chalets",          label: "عقاراتي" },
   { key: "seasons",          label: "المواسم والأعياد" },
   { key: "reviews",          label: "التقييمات" },
+  { key: "calendar",         label: "التقويم والحجوزات" },
   { key: "deposits",         label: "إدارة التأمينات" },
-  { key: "digitalContracts", label: "العقود الرقمية" },
+  { key: "customers",        label: "قاعدة العملاء" },
+  { key: "services",         label: "إدارة الخدمات والمرافق" },
   { key: "messageSettings",  label: "إعدادات الرسائل الآلية" },
+  { key: "digitalContracts", label: "العقود الرقمية" },
+  { key: "revenues",         label: "الإيرادات" },
+  { key: "ledger",           label: "سجل الحساب البنكي" },
+  { key: "expenses",         label: "المصروفات" },
+  { key: "employees",        label: "الموظفون" },
+  { key: "notifications",    label: "الإشعارات" },
+  { key: "reports",          label: "التقارير المالية" },
+  { key: "support",          label: "مركز الدعم" },
+  { key: "transactions",     label: "سجل المعاملات المالية" },
 ] as const;
 
 function getYouTubeEmbedUrl(url: string): string | null {
@@ -1462,15 +1464,16 @@ function SectionGuidesAdminTab() {
   return (
     <div className="space-y-5 p-1">
       {/* Header */}
-      <div className="flex items-start gap-3 pb-1 border-b border-border">
-        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-          <BookOpen className="w-4.5 h-4.5 text-primary" />
+      <div className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-slate-800 p-4 sm:p-5">
+        <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
+          <BookOpen className="w-5 h-5 text-amber-300" />
         </div>
-        <div>
-          <h2 className="text-base font-bold text-foreground">إدارة شروحات الأقسام</h2>
-          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-            أضف فيديوهات الشرح برفع ملف مباشر أو باستخدام رابط يوتيوب — ويمكن إضافة أكثر من فيديو للقسم الواحد.
-            سيظهر للمالك زر <span className="font-semibold text-primary">شروحات القسم</span> تلقائياً.
+        <div className="min-w-0">
+          <h2 className="text-lg sm:text-xl font-bold text-white">إدارة شروحات الأقسام</h2>
+          <p className="mt-2 text-sm sm:text-base leading-7 text-slate-200">
+            اختر القسم المناسب، واضغط «إضافة فيديو»، ثم اكتب عنوان الشرح والصق <span className="font-bold text-amber-300">رابط يوتيوب</span> واحفظه.
+            يمكنك أيضاً رفع ملف فيديو مباشرةً وإضافة أكثر من شرح للقسم الواحد.
+            بعد الحفظ يظهر زر <span className="font-bold text-amber-300">شروحات القسم</span> للمالك داخل القسم نفسه.
           </p>
         </div>
       </div>
