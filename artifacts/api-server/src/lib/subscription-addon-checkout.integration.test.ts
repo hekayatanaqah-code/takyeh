@@ -13,6 +13,7 @@ import {
 import {
   confirmAddonCheckout,
   createAddonCheckout,
+  readAddonCheckoutQuote,
   redeemFreeAddonCheckout,
   SubscriptionAddonCheckoutError,
 } from "./subscription-addon-checkout";
@@ -76,6 +77,11 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
     assert.equal(freeQuote.amountHalala, 0);
     assert.equal(freeQuote.quantity, 3);
     assert.equal(freeQuote.unitPriceHalala, 0);
+    await assert.rejects(
+      readAddonCheckoutQuote({ ownerId, checkoutId: freeQuote.checkoutId }),
+      (error: unknown) => error instanceof SubscriptionAddonCheckoutError,
+      "the payment-page quote reader rejects free checkouts",
+    );
     const pendingSecondFreeQuote = await createAddonCheckout({ ownerId, addonType: "chalet", quantity: 2 });
     const freeResult = await redeemFreeAddonCheckout({ ownerId, checkoutId: freeQuote.checkoutId });
     assert.equal(freeResult.purchase.amountHalala, 0);
@@ -109,6 +115,28 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
     const paidQuote = await createAddonCheckout({ ownerId, addonType: "service", quantity: 3 });
     await db.update(subscriptionPlansTable).set({ extraServicePrice: "51.25" })
       .where(eq(subscriptionPlansTable.slug, planSlug));
+    assert.deepEqual(await readAddonCheckoutQuote({ ownerId, checkoutId: paidQuote.checkoutId }), {
+      checkoutId: paidQuote.checkoutId,
+      addonType: "service",
+      quantity: 3,
+      amountHalala: 15000,
+      unitPriceHalala: 5000,
+      publishableKey: fakePublishable,
+    }, "reading an existing quote returns its reserved price instead of repricing");
+    await assert.rejects(
+      readAddonCheckoutQuote({ ownerId: otherOwnerId, checkoutId: paidQuote.checkoutId }),
+      (error: unknown) => error instanceof SubscriptionAddonCheckoutError && error.statusCode === 404,
+      "another account cannot read this quote",
+    );
+    const expiredQuote = await createAddonCheckout({ ownerId, addonType: "service", quantity: 4 });
+    await db.update(subscriptionAddonCheckoutIntentsTable)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(subscriptionAddonCheckoutIntentsTable.id, expiredQuote.checkoutId));
+    await assert.rejects(
+      readAddonCheckoutQuote({ ownerId, checkoutId: expiredQuote.checkoutId }),
+      (error: unknown) => error instanceof SubscriptionAddonCheckoutError && error.statusCode === 410,
+      "expired quotes are unavailable to the payment page",
+    );
     const editedServicePrice = await ownerPlanAccess(ownerId);
     assert.equal(editedServicePrice.extraServicePrice, "51.25");
     const differentQuantityQuote = await createAddonCheckout({ ownerId, addonType: "service", quantity: 2 });
@@ -177,6 +205,11 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
     const paidResult = await confirmAddonCheckout({
       ownerId, checkoutId: paidQuote.checkoutId, paymentId,
     });
+    await assert.rejects(
+      readAddonCheckoutQuote({ ownerId, checkoutId: paidQuote.checkoutId }),
+      (error: unknown) => error instanceof SubscriptionAddonCheckoutError && error.statusCode === 409,
+      "consumed quotes cannot be read as pending payment quotes",
+    );
     assert.equal(paidResult.purchase.amountHalala, paidQuote.amountHalala);
     assert.equal(paidResult.purchase.quantity, 3);
     assert.equal(paidResult.invoice.amount, 150);

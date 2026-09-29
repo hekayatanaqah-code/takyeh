@@ -46,7 +46,7 @@ import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess } fr
 import { getReminderPreview } from "../lib/subscription-reminder-preview";
 import { createSubscriptionCheckout, confirmSubscriptionCheckout, redeemFreeSubscriptionCheckout, SubscriptionCheckoutError } from "../lib/subscription-checkout";
 import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
-import { createAddonCheckout, confirmAddonCheckout, redeemFreeAddonCheckout, SubscriptionAddonCheckoutError } from "../lib/subscription-addon-checkout";
+import { createAddonCheckout, readAddonCheckoutQuote, confirmAddonCheckout, redeemFreeAddonCheckout, SubscriptionAddonCheckoutError } from "../lib/subscription-addon-checkout";
 
 const router = Router();
 
@@ -2961,6 +2961,18 @@ router.post("/subscription/addons/initiate", async (req, res) => {
       ownerId: req.user!.id,
       addonType: parsed.data.addonType,
       quantity: parsed.data.quantity,
+    }));
+  } catch (error) {
+    if (error instanceof SubscriptionAddonCheckoutError) return res.status(error.statusCode).json({ error: error.message });
+    throw error;
+  }
+});
+
+router.get("/subscription/addons/checkouts/:checkoutId", async (req, res) => {
+  try {
+    return res.json(await readAddonCheckoutQuote({
+      ownerId: req.user!.id,
+      checkoutId: req.params.checkoutId,
     }));
   } catch (error) {
     if (error instanceof SubscriptionAddonCheckoutError) return res.status(error.statusCode).json({ error: error.message });

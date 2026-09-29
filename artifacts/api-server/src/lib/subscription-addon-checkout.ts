@@ -194,6 +194,55 @@ export async function createAddonCheckout(input: {
   };
 }
 
+export async function readAddonCheckoutQuote(input: {
+  ownerId: string;
+  checkoutId: string;
+}): Promise<{
+  checkoutId: string;
+  addonType: SubscriptionAddonType;
+  quantity: number;
+  amountHalala: number;
+  unitPriceHalala: number;
+  publishableKey: string;
+}> {
+  if (typeof input.ownerId !== "string" || !input.ownerId) {
+    throw new SubscriptionAddonCheckoutError("سجّل الدخول أولاً", 401);
+  }
+  validateCheckoutId(input.checkoutId);
+
+  const [intent] = await db.select().from(subscriptionAddonCheckoutIntentsTable)
+    .where(eq(subscriptionAddonCheckoutIntentsTable.id, input.checkoutId)).limit(1);
+  const ownerKeys = await subscriptionOwnerKeys(input.ownerId);
+  if (!intent || !ownerKeys.includes(intent.ownerId)) {
+    throw new SubscriptionAddonCheckoutError("طلب الدفع غير موجود أو لا يخص هذا الحساب", 404);
+  }
+  if (intent.consumedAt) {
+    throw new SubscriptionAddonCheckoutError("سبق استخدام طلب الدفع هذا", 409);
+  }
+  if (intent.expiresAt <= new Date()) {
+    throw new SubscriptionAddonCheckoutError("انتهت صلاحية طلب الدفع؛ ابدأ عملية دفع جديدة", 410);
+  }
+  if (intent.amountHalala <= 0) {
+    throw new SubscriptionAddonCheckoutError("استخدم التفعيل المباشر لإتمام هذه الإضافة المجانية");
+  }
+  validateAddonType(intent.addonType);
+  validateQuantity(intent.quantity);
+
+  const publishableKey = process.env.MOYASAR_PUBLISHABLE_KEY;
+  if (!publishableKey) {
+    throw new SubscriptionAddonCheckoutError("بوابة الدفع غير مهيأة لإتمام الدفع", 503);
+  }
+
+  return {
+    checkoutId: intent.id,
+    addonType: intent.addonType,
+    quantity: intent.quantity,
+    amountHalala: intent.amountHalala,
+    unitPriceHalala: intent.amountHalala / intent.quantity,
+    publishableKey,
+  };
+}
+
 async function finalizeAddonCheckout(input: {
   ownerId: string;
   checkoutId: string;

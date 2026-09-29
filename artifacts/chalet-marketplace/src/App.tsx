@@ -23,6 +23,7 @@ import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import ContactUs from "./pages/ContactUs";
 import SubscriptionPage from "./pages/SubscriptionPage";
+import AddonCheckoutPage from "./pages/AddonCheckoutPage";
 import RatePage from "./pages/RatePage";
 import ContractPage from "./pages/ContractPage";
 import ServiceContractPage from "./pages/ServiceContractPage";
@@ -88,6 +89,9 @@ function Router() {
       <Route path="/providers/:id" component={ProviderDetail} />
       <Route path="/subscription">
         {() => <ProtectedRoute component={SubscriptionPage} returnTo="/subscription" />}
+      </Route>
+      <Route path="/addon-payment">
+        {() => <ProtectedRoute component={AddonCheckoutPage} returnTo={`/addon-payment${window.location.search}`} />}
       </Route>
       <Route path="/login" component={Login} />
       <Route path="/staff-login" component={Login} />

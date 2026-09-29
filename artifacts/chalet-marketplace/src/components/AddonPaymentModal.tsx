@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
 import { AlertTriangle, Building2, CheckCircle2, CreditCard, Loader2, Plus, ShieldCheck, Star } from "lucide-react";
@@ -19,7 +20,7 @@ interface AddonPaymentModalProps {
   selectableType?: boolean;
 }
 
-interface AddonQuote {
+export interface AddonQuote {
   checkoutId: string;
   amountHalala: number;
   unitPriceHalala: number;
@@ -28,7 +29,7 @@ interface AddonQuote {
   addonType: "chalet" | "service";
 }
 
-interface PendingCheckout {
+export interface PendingCheckout {
   checkoutId: string;
   addonType: "chalet" | "service";
   quantity?: number;
@@ -39,13 +40,13 @@ interface ReturnAttempt extends PendingCheckout {
   status: string | null;
 }
 
-type Step = "quote" | "pay" | "success";
+type Step = "quote" | "success";
 
 function pendingStorageKey(ownerId: string, addonType: PendingCheckout["addonType"]) {
   return `addon-payment-pending:v2:${ownerId}:${addonType}`;
 }
 
-function readPendingCheckouts(ownerId: string, addonType: PendingCheckout["addonType"]): PendingCheckout[] {
+export function readPendingCheckouts(ownerId: string, addonType: PendingCheckout["addonType"]): PendingCheckout[] {
   try {
     const raw = window.sessionStorage.getItem(pendingStorageKey(ownerId, addonType));
     const values = raw ? JSON.parse(raw) : [];
@@ -73,7 +74,7 @@ function savePendingCheckout(ownerId: string, checkout: PendingCheckout): boolea
   }
 }
 
-function clearPendingCheckout(ownerId: string, checkout: PendingCheckout) {
+export function clearPendingCheckout(ownerId: string, checkout: PendingCheckout) {
   try {
     const remaining = readPendingCheckouts(ownerId, checkout.addonType)
       .filter((pending) => pending.checkoutId !== checkout.checkoutId);
@@ -105,7 +106,7 @@ function clearPaymentReturnParams() {
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
-function useMoyasarScript() {
+export function useMoyasarScript() {
   const [ready, setReady] = useState(() => !!(window as any).Moyasar);
   const [failed, setFailed] = useState(false);
 
@@ -147,6 +148,7 @@ function useMoyasarScript() {
 
 export function AddonPaymentModal({ open, onClose, addonType, selectableType = false }: AddonPaymentModalProps) {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const ownerId = user?.id ?? "";
   const queryClient = useQueryClient();
   const { data: currentLimits, isLoading: isPriceLoading, isError: isPriceError } = useQuery<{
@@ -167,17 +169,12 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
     staleTime: 0,
     refetchOnMount: "always",
   });
-  const { ready: scriptReady, failed: scriptFailed } = useMoyasarScript();
-  const formContainerRef = useRef<HTMLDivElement>(null);
-  const checkoutRef = useRef<any>(null);
   const [step, setStep] = useState<Step>("quote");
   const [selectedType, setSelectedType] = useState<"chalet" | "service">(addonType);
   const [quantity, setQuantity] = useState(1);
   const [completedQuantity, setCompletedQuantity] = useState(1);
   const [completedType, setCompletedType] = useState<"chalet" | "service">(addonType);
-  const [quote, setQuote] = useState<AddonQuote | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [completed, setCompleted] = useState(false);
   const [returnAttempt, setReturnAttempt] = useState<ReturnAttempt | null>(null);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
   const [returnNotice, setReturnNotice] = useState<string | null>(null);
@@ -212,7 +209,6 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
   const handleSuccess = (purchasedQuantity: number, purchasedType: "chalet" | "service") => {
     setCompletedQuantity(purchasedQuantity);
     setCompletedType(purchasedType);
-    setCompleted(true);
     setError(null);
     setStep("success");
     refreshOwnerData();
@@ -297,7 +293,6 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
       return nextQuote;
     },
     onSuccess: (nextQuote) => {
-      setQuote(nextQuote);
       setError(null);
       if (nextQuote.amountHalala === 0) {
         redeemMutation.mutate({ checkoutId: nextQuote.checkoutId, addonType: nextQuote.addonType, quantity: nextQuote.quantity });
@@ -305,12 +300,11 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
       }
       const pending = { checkoutId: nextQuote.checkoutId, addonType: nextQuote.addonType, quantity: nextQuote.quantity };
       if (!ownerId || !savePendingCheckout(ownerId, pending)) {
-        setQuote(null);
         setError("تعذّر حفظ عملية الدفع بأمان في هذه الجلسة؛ لم يتم بدء الدفع. يرجى تفعيل التخزين المؤقت أو المحاولة من متصفح آخر.");
         return;
       }
       setReturnNotice(null);
-      setStep("pay");
+      navigate(`/addon-payment?addon_checkout=${encodeURIComponent(nextQuote.checkoutId)}`);
     },
     onError: (cause: Error) => setError(cause.message),
   });
@@ -318,62 +312,15 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
   const isBusy = quoteMutation.isPending || redeemMutation.isPending || confirmMutation.isPending;
 
   useEffect(() => {
-    if (!open || step !== "pay" || !scriptReady || !quote || !formContainerRef.current) return;
-    const Moyasar = (window as any).Moyasar;
-    if (!Moyasar) return;
-
-    const container = formContainerRef.current;
-    container.innerHTML = "";
-    checkoutRef.current = Moyasar.init({
-      element: container,
-      amount: quote.amountHalala,
-      currency: "SAR",
-      description: `شراء ${label} — حكاية أناقة [${quote.checkoutId}]`,
-      publishable_api_key: quote.publishableKey,
-      callback_url: (() => {
-        const url = new URL(window.location.href);
-        url.searchParams.set("checkout_flow", "addon");
-        url.searchParams.set("addon_checkout", quote.checkoutId);
-        return url.toString();
-      })(),
-      on_completed: (payment: { id: string; status: string }) => {
-        if (payment.status === "paid") {
-          confirmMutation.mutate({
-            paymentId: payment.id,
-            checkoutId: quote.checkoutId,
-            addonType: quote.addonType,
-            quantity: quote.quantity,
-            isRedirectReturn: false,
-          });
-        }
-        else setError(`لم يكتمل الدفع. الحالة: ${payment.status}`);
-        return false;
-      },
-      supported_networks: ["mada", "visaMastercard", "stcpay", "applepay"],
-      language: "ar",
-    });
-
-    return () => {
-      container.innerHTML = "";
-      checkoutRef.current = null;
-    };
-  }, [open, step, scriptReady, quote?.checkoutId, quote?.amountHalala, quote?.publishableKey, label]);
-
-  useEffect(() => {
     if (open) {
       setStep("quote");
       setSelectedType(addonType);
       setQuantity(1);
-      setQuote(null);
       setError(null);
-      setCompleted(false);
       return;
     }
     setStep("quote");
-    setQuote(null);
     setError(null);
-    setCompleted(false);
-    checkoutRef.current = null;
   }, [open, addonType, ownerId]);
 
   useEffect(() => {
@@ -398,7 +345,6 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
     handledReturnRef.current = attemptKey;
     setReturnDialogOpen(true);
     setStep("quote");
-    setQuote(null);
 
     if (!pending) {
       setReturnAttempt(null);
@@ -428,9 +374,6 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
     });
   }, [addonType, ownerId]);
 
-  const amountLabel = quote
-    ? (quote.amountHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : null;
   const estimatedTotal = validPrice ?
     (numericPrice * quantity).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null;
   const purchaseBlocked = !!returnAttempt || !!returnNotice;
@@ -486,7 +429,7 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                                className="h-auto min-h-16 flex-col gap-1 whitespace-normal px-2 py-2 text-xs"
                                disabled={isBusy}
                                aria-pressed={activeAddonType === type}
-                               onClick={() => { setSelectedType(type); setQuote(null); setError(null); }}>
+                               onClick={() => { setSelectedType(type); setError(null); }}>
                                <span>{type === "chalet" ? "عقارات إضافية" : "خدمات إضافية"}</span>
                                <span>{isPriceLoading && !currentLimits ? "جارٍ تحميل السعر..." : typePrice == null ? "غير متاح في خطتك" : `${Number(typePrice).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س للوحدة`}</span>
                              </Button>
@@ -507,9 +450,7 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                        onChange={(event) => setQuantity(Math.min(50, Math.max(1, Math.trunc(Number(event.target.value) || 1))))}
                        className="mt-1 w-24 rounded-md border border-input bg-background px-3 py-2 text-foreground"
                      />
-                    {quote ? (
-                      <p className="mt-2 font-bold text-foreground">السعر النهائي: {amountLabel} ر.س — لمرة واحدة</p>
-                     ) : validPrice ? (
+                     {validPrice ? (
                        <div className="mt-3 rounded-lg border border-primary/20 bg-background p-3 text-foreground">
                          <p>سعر الوحدة: {numericPrice.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</p>
                          <p className="mt-1 font-bold">الإجمالي التقديري: {quantity.toLocaleString("ar-SA")} × {numericPrice.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} = {estimatedTotal} ر.س</p>
@@ -571,27 +512,6 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                 )
               )}
 
-              {step === "pay" && (
-                <>
-                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                     <p className="font-semibold text-foreground">{quote?.quantity.toLocaleString("ar-SA")} × {label}</p>
-                     <p className="text-xs text-muted-foreground">سعر الوحدة: {quote ? (quote.unitPriceHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 }) : "—"} ر.س</p>
-                    <p className="mt-1 text-xl font-black text-primary">{amountLabel} ر.س</p>
-                    <p className="text-xs text-muted-foreground">رسوم لمرة واحدة — لا يوجد تجديد تلقائي</p>
-                  </div>
-                  {!scriptReady && !scriptFailed && (
-                    <div role="status" className="flex items-center justify-center gap-2 py-5 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      جارٍ تحميل بوابة الدفع...
-                    </div>
-                  )}
-                  {scriptFailed && (
-                    <p className="text-sm text-red-600" role="alert">تعذّر تحميل بوابة الدفع. أعد المحاولة لاحقاً.</p>
-                  )}
-                  <div ref={formContainerRef} />
-                </>
-              )}
-
               {error && (
                 <div role="alert" className="flex items-start gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -610,17 +530,12 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                 <div className="flex gap-2">
                     <Button data-testid="button-request-addon-quote" className="flex-1 gap-2" onClick={() => quoteMutation.mutate({ quantity, addonType: activeAddonType })} disabled={isBusy || !validPrice || isPriceLoading || freeCapacityAvailable}>
                     {quoteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                     {numericPrice === 0 && validPrice ? "تفعيل الإضافات مجاناً" : "احتساب السعر والمتابعة"}
+                      {numericPrice === 0 && validPrice ? "تفعيل الإضافات مجاناً" : "المتابعة إلى الدفع"}
                   </Button>
                   <Button variant="outline" onClick={closeModal} disabled={isBusy}>إلغاء</Button>
                 </div>
               )}
 
-              {step === "pay" && (
-                <Button variant="outline" className="w-full" onClick={() => { setStep("quote"); setQuote(null); setError(null); }} disabled={isBusy}>
-                  الرجوع
-                </Button>
-              )}
             </div>
           </>
         )}
