@@ -1524,13 +1524,16 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { 
       >
         <Home className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-foreground mb-2">لا توجد عقارات بعد</h3>
-        <p className="text-muted-foreground mb-6">ابدأ بإضافة عقارك الأول للمراجعة والنشر</p>
-        <Link href={planLimits?.active === false ? "/subscription" : "/add-chalet"}>
-          <Button>
-            {planLimits?.active === false ? <Lock className="w-4 h-4 me-2" /> : <Plus className="w-4 h-4 me-2" />}
-            {planLimits?.active === false ? "جدّد الاشتراك لإضافة عقار" : "إضافة عقار جديد"}
-          </Button>
-        </Link>
+        <p className="text-muted-foreground mb-6">
+          {planLimits?.active === false
+            ? "جدّد اشتراكك قبل إضافة عقارك الأول."
+            : "ابدأ بإضافة عقارك الأول من زر «إضافة عقار أو خدمة» أعلى الصفحة للمراجعة والنشر."}
+        </p>
+        {planLimits?.active === false && (
+          <Link href="/subscription">
+            <Button><Lock className="w-4 h-4 me-2" />جدّد الاشتراك لإضافة عقار</Button>
+          </Link>
+        )}
       </motion.div>
     );
   }
@@ -1564,12 +1567,6 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { 
                 </Link>
               ) : (
                 <>
-                  {planLimits.extraChaletPrice != null && (
-                    <Button size="sm" variant="default" className="rounded-xl shrink-0 text-xs h-8" onClick={onRequestAddon}>
-                      <Plus className="w-3.5 h-3.5 me-1" />
-                      طلب عقارات إضافية · {toAr(Number(planLimits.extraChaletPrice))} ر.س للوحدة
-                    </Button>
-                  )}
                   <Button size="sm" variant="outline" className="rounded-xl shrink-0 text-xs h-8" onClick={() => setShowUpgrade(true)}>
                     <Zap className="w-3.5 h-3.5 me-1" />
                     ترقية الخطة
@@ -9025,13 +9022,7 @@ function ServiceSubmissionsTab({
       >
         <Briefcase className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-foreground mb-2">لا توجد خدمات بعد</h3>
-        <p className="text-muted-foreground mb-6">سجّل خدمتك الأولى وابدأ في استقبال الطلبات والوصول لعملائك</p>
-        <Link href="/add-service-provider">
-          <Button>
-            <Plus className="w-4 h-4 me-2" />
-            إضافة خدمة
-          </Button>
-        </Link>
+        <p className="text-muted-foreground">سجّل خدمتك الأولى من زر «إضافة عقار أو خدمة» أعلى الصفحة وابدأ في استقبال الطلبات.</p>
       </motion.div>
     );
   }
@@ -25763,40 +25754,41 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             {!actAsStaff && !isImpersonating && (
-              <>
-                {canSeeChalets && !headerAtChaletLimit && (
-                  <Link href="/add-chalet">
-                    <Button variant={activeDashMode === "chalets" ? "default" : "outline"} className="rounded-xl font-semibold text-sm">
+              (canSeeChalets || canSeeServices) && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button data-testid="button-add-property-or-service-capacity" className="rounded-xl font-semibold text-sm">
                       <Plus className="w-4 h-4 me-1.5" />
-                      إضافة عقار
+                      إضافة عقار أو خدمة
+                      <ChevronDown className="w-4 h-4 ms-1.5" />
                     </Button>
-                  </Link>
-                )}
-                {canSeeServices && !atServiceLimit && (
-                  <Link href="/add-service-provider">
-                    <Button variant={activeDashMode === "services" ? "default" : "outline"} className="rounded-xl font-semibold text-sm">
-                      <Plus className="w-4 h-4 me-1.5" />
-                      إضافة خدمة
-                    </Button>
-                  </Link>
-                )}
-                {((canSeeChalets && headerAtChaletLimit && activeDashMode !== "chalets") || (canSeeServices && atServiceLimit)) && (
-                  planLimits?.active === false ? (
-                    <Button data-testid="button-renew-subscription" className="rounded-xl font-semibold text-sm" onClick={() => navigate("/subscription")}>
-                      <Lock className="w-4 h-4 me-1.5 text-amber-500" />
-                      تجديد الاشتراك
-                    </Button>
-                  ) : (
-                    <Button data-testid="button-add-property-or-service-capacity"
-                      variant="default"
-                      className="rounded-xl font-semibold text-sm"
-                      onClick={() => setShowHeaderAddon(canSeeChalets && headerAtChaletLimit && activeDashMode !== "chalets" ? "chalet" : "service")}>
-                      <Lock className="w-4 h-4 me-1.5 text-amber-500" />
-                      {canSeeChalets && headerAtChaletLimit && activeDashMode !== "chalets" ? "طلب عقار إضافي" : "طلب خدمة إضافية"}
-                    </Button>
-                  )
-                )}
-              </>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52" style={{ direction: "rtl" }}>
+                    {canSeeChalets && (
+                      <DropdownMenuItem
+                        data-testid="menu-add-chalet"
+                        className="cursor-pointer"
+                        onSelect={() => planLimits?.active === false
+                          ? navigate("/subscription")
+                          : headerAtChaletLimit ? setShowHeaderAddon("chalet") : navigate("/add-chalet")}
+                      >
+                        {headerAtChaletLimit && planLimits?.active !== false ? "طلب سعة لعقار إضافي" : "إضافة عقار"}
+                      </DropdownMenuItem>
+                    )}
+                    {canSeeServices && (
+                      <DropdownMenuItem
+                        data-testid="menu-add-service"
+                        className="cursor-pointer"
+                        onSelect={() => planLimits?.active === false
+                          ? navigate("/subscription")
+                          : atServiceLimit ? setShowHeaderAddon("service") : navigate("/add-service-provider")}
+                      >
+                        {atServiceLimit && planLimits?.active !== false ? "طلب سعة لخدمة إضافية" : "إضافة خدمة"}
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )
             )}
             {!actAsStaff && !isImpersonating ? (
               <DropdownMenu>
