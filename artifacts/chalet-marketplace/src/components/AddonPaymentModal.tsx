@@ -591,7 +591,7 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                        عدد {activeAddonType === "chalet" ? "العقارات الإضافية" : "الخدمات الإضافية"}
                      </label>
                       <input id="addon-quantity" data-testid="input-addon-quantity" type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" maxLength={2}
-                       value={quantityInput} disabled={isBusy}
+                       value={quantityInput.replace(/\d/g, (digit) => "٠١٢٣٤٥٦٧٨٩"[Number(digit)])} disabled={isBusy}
                        onChange={(event) => {
                          setQuantityInput(normalizeDigits(event.target.value).replace(/\D/g, "").slice(0, 2));
                          setConsentToRecurring(false);

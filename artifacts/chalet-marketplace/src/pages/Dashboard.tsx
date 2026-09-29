@@ -25780,7 +25780,7 @@ export default function Dashboard() {
                     </Button>
                   </Link>
                 )}
-                {(canSeeChalets || canSeeServices) && (headerAtChaletLimit || atServiceLimit || (planLimits?.active && (planLimits.extraChaletPrice != null || planLimits.extraServicePrice != null))) && (
+                {((canSeeChalets && headerAtChaletLimit && activeDashMode !== "chalets") || (canSeeServices && atServiceLimit)) && (
                   planLimits?.active === false ? (
                     <Button data-testid="button-renew-subscription" className="rounded-xl font-semibold text-sm" onClick={() => navigate("/subscription")}>
                       <Lock className="w-4 h-4 me-1.5 text-amber-500" />
@@ -25788,11 +25788,11 @@ export default function Dashboard() {
                     </Button>
                   ) : (
                     <Button data-testid="button-add-property-or-service-capacity"
-                      variant={headerAtChaletLimit || atServiceLimit ? "default" : "outline"}
+                      variant="default"
                       className="rounded-xl font-semibold text-sm"
-                      onClick={() => setShowHeaderAddon(canSeeChalets && headerAtChaletLimit ? "chalet" : canSeeServices && atServiceLimit ? "service" : planLimits?.extraChaletPrice != null ? "chalet" : "service")}>
-                      {headerAtChaletLimit || atServiceLimit ? <Lock className="w-4 h-4 me-1.5 text-amber-500" /> : <Plus className="w-4 h-4 me-1.5" />}
-                      إضافة عقار أو خدمة
+                      onClick={() => setShowHeaderAddon(canSeeChalets && headerAtChaletLimit && activeDashMode !== "chalets" ? "chalet" : "service")}>
+                      <Lock className="w-4 h-4 me-1.5 text-amber-500" />
+                      {canSeeChalets && headerAtChaletLimit && activeDashMode !== "chalets" ? "طلب عقار إضافي" : "طلب خدمة إضافية"}
                     </Button>
                   )
                 )}
