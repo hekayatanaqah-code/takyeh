@@ -2383,6 +2383,16 @@ router.put("/plans/:id", async (req, res) => {
   const id = Number(req.params.id);
   const parsed = PlanSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const [currentPlan] = await db.select({
+    slug: subscriptionPlansTable.slug,
+  }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id)).limit(1);
+  if (!currentPlan) return res.status(404).json({ error: "الخطة غير موجودة" });
+  if (currentPlan.slug === "trial" &&
+      ((parsed.data.price !== undefined && parsed.data.price !== 0) ||
+       (parsed.data.durationDays !== undefined && parsed.data.durationDays !== 30) ||
+       (parsed.data.trialDays !== undefined && parsed.data.trialDays !== 30))) {
+    return res.status(400).json({ error: "مدة وسعر الخطة التجريبية ثابتان: مجانية لمدة 30 يوماً" });
+  }
   const { price, extraChaletPrice, extraServicePrice, ...rest } = parsed.data;
   const [plan] = await db
     .update(subscriptionPlansTable)
@@ -2404,6 +2414,11 @@ router.put("/plans/:id", async (req, res) => {
 
 router.delete("/plans/:id", async (req, res) => {
   const id = Number(req.params.id);
+  const [plan] = await db.select({ slug: subscriptionPlansTable.slug })
+    .from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id)).limit(1);
+  if (plan?.slug === "trial") {
+    return res.status(409).json({ error: "لا يمكن حذف الخطة التجريبية" });
+  }
   await db.delete(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, id));
   return res.json({ ok: true });
 });

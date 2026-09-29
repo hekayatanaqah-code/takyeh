@@ -2902,7 +2902,9 @@ router.get("/plans", async (_req, res) => {
     .from(subscriptionPlansTable)
     .orderBy(subscriptionPlansTable.sortOrder, subscriptionPlansTable.id);
 
-  return res.json(dbPlans.filter((p) => p.isActive && !isArchivedSubscriptionPlan(p)).map((p) => ({
+  return res.json(dbPlans.filter((p) =>
+    p.slug !== "trial" && p.isActive && !isArchivedSubscriptionPlan(p),
+  ).map((p) => ({
     id: p.slug,
     label: p.nameAr,
     price: Number(p.price),

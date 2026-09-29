@@ -12,6 +12,16 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 const DEFAULT_TRIAL_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export function initialTrialSubscriptionState(
+  enabled: boolean,
+  trialDays = DEFAULT_TRIAL_DAYS,
+  now = new Date(),
+) {
+  return enabled
+    ? { status: "active", expiresAt: new Date(now.getTime() + trialDays * DAY_MS) }
+    : { status: "expired", expiresAt: now };
+}
+
 const LEGACY_LIMITS: Record<string, { chalets: number; services: number; scope: "property" | "full" }> = {
   trial: { chalets: 1, services: 1, scope: "full" },
   chalet_basic: { chalets: 1, services: 0, scope: "property" },
@@ -64,15 +74,19 @@ export async function getOrStartOwnerSubscription(ownerId: string) {
 
   // Older owner accounts without a subscription receive one persisted trial, not a new
   // 30-day trial on each page load. New accounts begin on their first authenticated visit.
-  const [trialPlan] = await db.select({ trialDays: subscriptionPlansTable.trialDays })
+  const [trialPlan] = await db.select({
+    trialDays: subscriptionPlansTable.trialDays,
+    isActive: subscriptionPlansTable.isActive,
+  })
     .from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, "trial")).limit(1);
   const trialDays = trialPlan?.trialDays ?? DEFAULT_TRIAL_DAYS;
+  const trialState = initialTrialSubscriptionState(trialPlan?.isActive ?? false, trialDays);
   const [created] = await db.insert(ownerSubscriptionsTable).values({
     ownerId: keys.at(-1)!,
     plan: "trial",
-    status: trialDays > 0 ? "active" : "expired",
+    status: trialState.status,
     paymentStatus: "free",
-    expiresAt: new Date(Date.now() + trialDays * DAY_MS),
+    expiresAt: trialState.expiresAt,
   }).onConflictDoNothing().returning();
   if (created) return created;
   const [concurrent] = await db.select().from(ownerSubscriptionsTable)

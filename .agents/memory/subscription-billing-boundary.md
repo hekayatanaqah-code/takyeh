@@ -27,6 +27,12 @@ For legacy accounts with published inventory but no subscription record, a singl
 
 **How to apply:** When migrating or joining owner identities, check all linked aliases before issuing a trial; a linked paid subscription takes precedence over a second trial.
 
+The fixed free plan's administrator toggle controls only grants to owners who do not yet have a subscription. Disabling it does not revoke an existing trial, and re-enabling it does not retroactively grant one to an owner who registered while it was off. An enabled trial must never become a selectable checkout plan.
+
+**Why:** Existing owners should retain promised access, while letting anyone select the free plan again would bypass the one-time trial limit.
+
+**How to apply:** Persist a non-active subscription for owners who arrive while grants are off, and keep the free plan separate from the paid-plan catalog and checkout even when its grant toggle is on.
+
 Removing obsolete plans from the catalog is different from deleting historic billing evidence. Old plans with no references may be deleted once; those referenced by an owner subscription, checkout quote, or payment must be archived and hidden from selection instead.
 
 **Why:** A clean administrator list must not erase the terms or identity needed to interpret an older customer's subscription and payment.

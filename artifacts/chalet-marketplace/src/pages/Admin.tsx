@@ -5180,6 +5180,8 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [featuresInput, setFeaturesInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [planActionError, setPlanActionError] = useState<string | null>(null);
+  const [togglingPlanId, setTogglingPlanId] = useState<number | null>(null);
 
   const { data: plans = [], isLoading } = useQuery<Plan[]>({
     queryKey: ["admin", "plans"],
@@ -5286,12 +5288,24 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   }
 
   async function toggleActive(p: Plan) {
-    await adminFetch(`/plans/${p.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive: !p.isActive }),
-    });
-    await qc.invalidateQueries({ queryKey: ["admin", "plans"] });
+    setPlanActionError(null);
+    setTogglingPlanId(p.id);
+    try {
+      const response = await adminFetch(`/plans/${p.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !p.isActive }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error ?? "تعذّر تغيير حالة الخطة");
+      }
+      await qc.invalidateQueries({ queryKey: ["admin", "plans"] });
+    } catch (cause) {
+      setPlanActionError(cause instanceof Error ? cause.message : "تعذّر تغيير حالة الخطة");
+    } finally {
+      setTogglingPlanId(null);
+    }
   }
 
   const deletePlan = plans.find((p) => p.id === deleteId);
@@ -5314,7 +5328,7 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
             إدارة خطط الاشتراك
           </h2>
           <p className="text-slate-400 text-sm mt-1">
-            الخطط المُفعّلة ستظهر للملاك في صفحة الاشتراك وتُستخدم في الدفع
+            خطة التجربة المجانية تُمنح تلقائياً للمالك الجديد لمدة ٣٠ يوماً عند تفعيلها؛ باقي الخطط المفعّلة تظهر للملاك للاشتراك.
           </p>
         </div>
         <Button
@@ -5327,6 +5341,7 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       </div>
 
       {isSuperAdmin && <ExpiringSubscriptionsPanel />}
+      {planActionError && <p role="alert" className="mb-4 rounded-lg border border-red-700 bg-red-950/50 p-3 text-sm text-red-300">{planActionError}</p>}
 
       {/* Plans list */}
       {isLoading ? (
@@ -5341,7 +5356,7 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
         </div>
       ) : (
         <div className="grid gap-3">
-          {plans.map((p) => (
+          {[...plans].sort((a, b) => Number(b.slug === "trial") - Number(a.slug === "trial")).map((p) => (
             <div
               key={p.id}
               className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex items-start gap-4"
@@ -5350,7 +5365,13 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
               <button
                 onClick={() => toggleActive(p)}
                 className="mt-0.5 shrink-0"
-                title={p.isActive ? "إلغاء التفعيل" : "تفعيل"}
+                disabled={togglingPlanId !== null}
+                aria-label={p.slug === "trial"
+                  ? p.isActive ? "إيقاف منح التجربة للملاك الجدد" : "تفعيل منح التجربة للملاك الجدد"
+                  : p.isActive ? "إلغاء تفعيل الخطة" : "تفعيل الخطة"}
+                title={p.slug === "trial"
+                  ? p.isActive ? "إيقاف منح التجربة للملاك الجدد" : "تفعيل منح التجربة للملاك الجدد"
+                  : p.isActive ? "إلغاء التفعيل" : "تفعيل"}
               >
                 {p.isActive ? (
                   <ToggleRight className="w-7 h-7 text-green-400" />
@@ -5363,12 +5384,20 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <span className="font-bold text-white text-base">{p.nameAr}</span>
+                  {p.slug === "trial" && (
+                    <span className="text-xs font-semibold text-blue-300 bg-blue-900/40 px-2 py-0.5 rounded-full">الخطة المجانية الثابتة</span>
+                  )}
                   {p.isActive ? (
-                    <span className="text-xs font-semibold text-green-400 bg-green-900/30 px-2 py-0.5 rounded-full">مُفعّل</span>
+                    <span className="text-xs font-semibold text-green-400 bg-green-900/30 px-2 py-0.5 rounded-full">{p.slug === "trial" ? "تُمنح للملاك الجدد" : "مُفعّل"}</span>
                   ) : (
-                    <span className="text-xs font-semibold text-slate-500 bg-slate-700 px-2 py-0.5 rounded-full">معطّل</span>
+                    <span className="text-xs font-semibold text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full">{p.slug === "trial" ? "متوقفة للملاك الجدد" : "معطّل"}</span>
                   )}
                 </div>
+                {p.slug === "trial" && (
+                  <p className="mb-2 text-xs text-blue-200">
+                    تفعيلها أو إيقافها يخصّ الملاك الجدد فقط؛ لا تتغير التجارب الممنوحة سابقاً، ولا تظهر الخطة ضمن خيارات الاشتراك المتكرر.
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-4 text-sm text-slate-300">
                   <span>
                     <span className="text-amber-400 font-bold">{toAr(Number(p.price).toLocaleString())}</span>
@@ -5431,13 +5460,15 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                 >
                   <Edit2 className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={() => setDeleteId(p.id)}
-                  className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-                  title="حذف"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {p.slug !== "trial" && (
+                  <button
+                    onClick={() => setDeleteId(p.id)}
+                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                    title="حذف"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -5457,11 +5488,16 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
           <DialogHeader className="shrink-0">
             <DialogTitle className="text-white flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-amber-400" />
-              {editId ? "تعديل الخطة" : "إضافة خطة جديدة"}
+              {editingTrialPlan ? "إعدادات الخطة المجانية الثابتة" : editId ? "تعديل الخطة" : "إضافة خطة جديدة"}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 mt-2 overflow-y-auto flex-1" style={{ paddingBottom: '100px' }}>
+            {editingTrialPlan && (
+              <p className="rounded-lg border border-blue-800 bg-blue-950/40 p-3 text-xs text-blue-200">
+                الخطة مجانية لمدة ٣٠ يوماً لكل مالك جديد عند تفعيلها. سعر الخطة ومدتها ثابتان؛ يمكنك تعديل أسعار الإضافات وخصائص الخطة، وإيقاف منحها من زر البطاقة.
+              </p>
+            )}
             <div>
               <label className="text-xs text-slate-400 mb-1 block">اسم الخطة *</label>
               <Input
@@ -5572,6 +5608,7 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                   placeholder="٩٩"
                   value={toAr(form.price)}
                   onChange={(e) => setForm({ ...form, price: fromAr(e.target.value) })}
+                  disabled={editingTrialPlan}
                   className="bg-slate-800 border-slate-600 text-white"
                 />
               </div>
@@ -5583,6 +5620,7 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                   placeholder="٣٠"
                   value={toAr(String(form.durationDays))}
                   onChange={(e) => setForm({ ...form, durationDays: Number(fromAr(e.target.value)) || 0 })}
+                  disabled={editingTrialPlan}
                   className="bg-slate-800 border-slate-600 text-white"
                 />
               </div>
@@ -5594,6 +5632,7 @@ function PlansTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                   placeholder="٠"
                   value={toAr(String(form.trialDays))}
                   onChange={(e) => setForm({ ...form, trialDays: Number(fromAr(e.target.value)) || 0 })}
+                  disabled={editingTrialPlan}
                   className="bg-slate-800 border-slate-600 text-white"
                 />
               </div>

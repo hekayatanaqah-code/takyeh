@@ -5,7 +5,7 @@ import { after, before, test } from "node:test";
 import { eq } from "drizzle-orm";
 import app from "../app";
 import { createSession } from "../lib/auth";
-import { db, pool, sessionsTable } from "@workspace/db";
+import { db, pool, sessionsTable, subscriptionPlansTable } from "@workspace/db";
 
 let server: Server;
 let baseUrl: string;
@@ -109,4 +109,41 @@ test("trial plan add-on prices are editable independently and visible in the pla
   const plan = catalog.find((item) => item.id === created.id);
   assert.equal(Number(plan?.extraChaletPrice), 47.5);
   assert.equal(Number(plan?.extraServicePrice), 25);
+});
+
+test("fixed trial terms cannot be repriced, resized, or deleted by an administrator", async () => {
+  const [trial] = await db.select({ id: subscriptionPlansTable.id })
+    .from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, "trial")).limit(1);
+  assert.ok(trial, "the seeded fixed trial plan should exist");
+
+  for (const changes of [
+    { price: 1 },
+    { durationDays: 31 },
+    { trialDays: 29 },
+  ]) {
+    const response = await fetch(`${baseUrl}/api/admin/plans/${trial.id}`, {
+      method: "PUT",
+      headers: headers(),
+      body: JSON.stringify(changes),
+    });
+    assert.equal(response.status, 400);
+  }
+
+  const deleted = await fetch(`${baseUrl}/api/admin/plans/${trial.id}`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  assert.equal(deleted.status, 409);
+
+  const catalog = await fetch(`${baseUrl}/api/owner/plans`, { headers: headers() });
+  assert.equal(catalog.status, 200);
+  const purchasable = await catalog.json() as Array<{ id: string }>;
+  assert.ok(!purchasable.some((plan) => plan.id === "trial"));
+
+  const retryTrial = await fetch(`${baseUrl}/api/owner/subscription/initiate`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ plan: "trial" }),
+  });
+  assert.equal(retryTrial.status, 400);
 });

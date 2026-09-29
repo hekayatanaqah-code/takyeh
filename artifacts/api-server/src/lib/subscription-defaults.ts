@@ -36,7 +36,7 @@ const DEFAULT_PLANS = [
     scope: "full", chaletLimit: 1, serviceLimit: 1,
     extraChaletPrice: null, extraServicePrice: null,
     features: ["جميع أقسام المنصة", "عقار واحد", "خدمة واحدة"],
-    isActive: false, sortOrder: 0,
+    isActive: true, sortOrder: 0,
   },
 ];
 
@@ -52,6 +52,30 @@ export async function seedSubscriptionPlansOnce() {
       }
       await tx.insert(siteSettingsTable)
         .values({ key: "subscription_plan_defaults_seeded", value: "1" })
+        .onConflictDoNothing({ target: siteSettingsTable.key });
+    }
+
+    // Keep the grantable trial row present, even when the original catalog seed
+    // marker predates it or an administrator has disabled the plan.
+    const trialPlan = DEFAULT_PLANS.find((plan) => plan.slug === "trial");
+    if (trialPlan) {
+      await tx.insert(subscriptionPlansTable).values(trialPlan)
+        .onConflictDoNothing({ target: subscriptionPlansTable.slug });
+    }
+
+    // One-time migration for the fixed 30-day, free trial. Do not touch
+    // administrator-managed add-on prices, or reset later admin toggles/edits.
+    const [trialTermsMarker] = await tx.select({ key: siteSettingsTable.key })
+      .from(siteSettingsTable).where(eq(siteSettingsTable.key, "fixed_trial_terms_migrated"));
+    if (!trialTermsMarker) {
+      await tx.update(subscriptionPlansTable).set({
+        price: "0.00",
+        durationDays: 30,
+        trialDays: 30,
+        isActive: true,
+      }).where(eq(subscriptionPlansTable.slug, "trial"));
+      await tx.insert(siteSettingsTable)
+        .values({ key: "fixed_trial_terms_migrated", value: "1" })
         .onConflictDoNothing({ target: siteSettingsTable.key });
     }
 

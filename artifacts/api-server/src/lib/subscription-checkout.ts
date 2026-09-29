@@ -65,7 +65,8 @@ async function resolveActivePlan(plan: string): Promise<ResolvedPlan> {
   }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, plan)).limit(1);
 
   if (!configured) throw new SubscriptionCheckoutError("الباقة المطلوبة غير موجودة");
-  if (!configured.isActive || isArchivedSubscriptionPlan({ slug: configured.slug, nameAr: configured.nameAr })) {
+  if (configured.slug === "trial" || !configured.isActive ||
+      isArchivedSubscriptionPlan({ slug: configured.slug, nameAr: configured.nameAr })) {
     throw new SubscriptionCheckoutError("هذه الباقة غير متاحة حالياً");
   }
   const price = Number(configured.price);
