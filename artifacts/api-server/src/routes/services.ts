@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { ownerAccountLinksTable, ownerSubscriptionsTable } from "@workspace/db/schema";
 import { inArray, or, sql } from "drizzle-orm";
-import { isSubscriptionActive } from "../lib/subscription-access";
+import { activeOwnersWithFreeAccess, isSubscriptionActive } from "../lib/subscription-access";
 
 const router = Router();
 
@@ -96,7 +96,9 @@ async function activeOwnerIds(ownerIds: string[]) {
   const activeKeys = new Set(
     subscriptions.filter((subscription) => isSubscriptionActive(subscription)).map((subscription) => subscription.ownerId),
   );
+  const activeFreeAccess = await activeOwnersWithFreeAccess(keysByOwner);
   return new Set(owners.filter((ownerId) =>
+    activeFreeAccess.has(ownerId) ||
     [...(keysByOwner.get(ownerId) ?? [])].some((key) => activeKeys.has(key)),
   ));
 }

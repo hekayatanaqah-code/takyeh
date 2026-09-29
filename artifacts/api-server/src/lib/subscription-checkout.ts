@@ -3,6 +3,7 @@ import { and, count, desc, eq, gt, inArray, isNull, notLike, sql } from "drizzle
 import { db } from "@workspace/db";
 import {
   ownerSubscriptionsTable,
+  ownerFreeAccessGrantsTable,
   subscriptionCheckoutIntentsTable,
   subscriptionPaymentsTable,
   subscriptionPaymentReconciliationsTable,
@@ -20,6 +21,9 @@ import {
   initialTrialSubscriptionState,
   preferredOwnerSubscription,
   subscriptionOwnerKeys,
+  getOwnerFreeAccess,
+  isOwnerFreeAccessGrantActive,
+  latestOwnerFreeAccess,
 } from "./subscription-access";
 import { isArchivedSubscriptionPlan } from "./subscription-defaults";
 import {
@@ -46,8 +50,11 @@ export class SubscriptionCheckoutError extends Error {
 }
 
 class StaleSubscriptionCheckoutError extends SubscriptionCheckoutError {
-  constructor() {
-    super("تغيّر الاشتراك أو الإضافات بعد إنشاء الفاتورة", 409);
+  constructor(
+    message = "تغيّر الاشتراك أو الإضافات بعد إنشاء الفاتورة",
+    readonly refundEligible = true,
+  ) {
+    super(message, 409);
     this.name = "StaleSubscriptionCheckoutError";
   }
 }
@@ -299,6 +306,9 @@ export async function createSubscriptionCheckout(input: {
   baseMonthlyHalala: number;
 }> {
   if (!input.ownerId) throw new SubscriptionCheckoutError("يجب تسجيل الدخول أولاً", 401);
+  if ((await getOwnerFreeAccess(input.ownerId))?.active) {
+    throw new SubscriptionCheckoutError("لديك وصول مجاني كامل حالياً؛ لا يلزم شراء اشتراك", 409);
+  }
   if (input.autoRenewConsent && !canSaveCardPayment()) {
     throw new SubscriptionCheckoutError("حفظ وسيلة الدفع مشفرًا غير مهيأ حالياً", 503);
   }
@@ -319,6 +329,16 @@ export async function createSubscriptionCheckout(input: {
       .where(eq(ownerSubscriptionsTable.ownerId, ownerSubscription.ownerId))
       .for("update").limit(1);
     if (!lockedSubscription) throw new SubscriptionCheckoutError("تعذّر العثور على الاشتراك", 409);
+    const activeGrants = await tx.select({
+      id: ownerFreeAccessGrantsTable.id,
+      expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+      createdAt: ownerFreeAccessGrantsTable.createdAt,
+    }).from(ownerFreeAccessGrantsTable)
+      .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
+    const latestGrant = latestOwnerFreeAccess(activeGrants);
+    if (isOwnerFreeAccessGrantActive(latestGrant, now)) {
+      throw new SubscriptionCheckoutError("لديك وصول مجاني كامل حالياً؛ لا يلزم شراء اشتراك", 409);
+    }
     if (lockedSubscription.expiresAt) {
       const [existingRenewalInvoice] = await tx.select()
         .from(subscriptionRenewalInvoicesTable)
@@ -583,6 +603,7 @@ async function finalizeCheckout(input: {
   paymentId: string;
   paidAmountHalala: number;
   paidAt: Date;
+  paidAtKnown: boolean;
   allowExpiredIntent: boolean;
   paymentToken?: string;
 }): Promise<CompletedCheckout> {
@@ -596,6 +617,16 @@ async function finalizeCheckout(input: {
 
   try {
     return await db.transaction(async (tx) => {
+      const [intentPreviewInTransaction] = await tx.select()
+        .from(subscriptionCheckoutIntentsTable)
+        .where(eq(subscriptionCheckoutIntentsTable.id, input.checkoutId))
+        .limit(1);
+      if (!intentPreviewInTransaction || !ownerKeys.includes(intentPreviewInTransaction.ownerId)) {
+        throw new SubscriptionCheckoutError("طلب الدفع غير موجود أو لا يخص هذا الحساب", 404);
+      }
+      await tx.select({ ownerId: ownerSubscriptionsTable.ownerId }).from(ownerSubscriptionsTable)
+        .where(eq(ownerSubscriptionsTable.ownerId, intentPreviewInTransaction.ownerId))
+        .for("update").limit(1);
       const [intent] = await tx.select().from(subscriptionCheckoutIntentsTable)
         .where(eq(subscriptionCheckoutIntentsTable.id, input.checkoutId))
         .for("update")
@@ -629,6 +660,31 @@ async function finalizeCheckout(input: {
         };
       }
 
+      if (input.paidAmountHalala > 0 && intent.freeAccessBlockedAt &&
+          (!input.paidAtKnown || input.paidAt > intent.freeAccessBlockedAt)) {
+        throw new StaleSubscriptionCheckoutError(
+          input.paidAtKnown
+            ? "تم منح وصول مجاني بعد تحصيل هذا الاشتراك؛ يجب رد المبلغ أو مراجعته"
+            : "تعذّر التحقق من وقت الدفع بعد منح وصول مجاني؛ يجب مراجعة المبلغ دون تفعيل الاشتراك",
+          input.paidAtKnown,
+        );
+      }
+
+      if (intent.amountHalala === 0) {
+        if (intent.freeAccessBlockedAt) {
+          throw new SubscriptionCheckoutError("تم منحك وصولاً مجانياً كاملاً؛ لا حاجة لاسترداد هذا الطلب", 409);
+        }
+        const grants = await tx.select({
+          id: ownerFreeAccessGrantsTable.id,
+          expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+          createdAt: ownerFreeAccessGrantsTable.createdAt,
+        }).from(ownerFreeAccessGrantsTable)
+          .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
+        if (isOwnerFreeAccessGrantActive(latestOwnerFreeAccess(grants))) {
+          throw new SubscriptionCheckoutError("لديك وصول مجاني كامل حالياً؛ لا حاجة لاسترداد طلب مجاني", 409);
+        }
+      }
+
       if (intent.amountHalala === 0) {
         // Lock every linked identity in a deterministic order so distinct free
         // checkout intents for the same account cannot both pass the lifetime check.
@@ -656,7 +712,7 @@ async function finalizeCheckout(input: {
       if (intent.expiresAt <= new Date() &&
           (!input.allowExpiredIntent || input.paidAt > intent.expiresAt)) {
         if (input.paidAmountHalala > 0 && input.allowExpiredIntent) {
-          throw new StaleSubscriptionCheckoutError();
+          throw new StaleSubscriptionCheckoutError(undefined, input.paidAtKnown);
         }
         throw new SubscriptionCheckoutError("انتهت صلاحية طلب الدفع؛ ابدأ عملية دفع جديدة", 410);
       }
@@ -675,7 +731,7 @@ async function finalizeCheckout(input: {
         quotedAddons: intent.recurringAddonSnapshot ?? [],
         currentAddons: currentAddonSnapshot,
       })) {
-        throw new StaleSubscriptionCheckoutError();
+        throw new StaleSubscriptionCheckoutError(undefined, input.paidAtKnown);
       }
       if (intent.discountCode) {
         // The subscription row is locked before the promo row, matching quote creation.
@@ -691,13 +747,22 @@ async function finalizeCheckout(input: {
         .where(eq(ownerBillingProfilesTable.ownerId, intent.ownerId))
         .for("update")
         .limit(1);
+      const existingFreeGrants = await tx.select({
+        id: ownerFreeAccessGrantsTable.id,
+        expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+        createdAt: ownerFreeAccessGrantsTable.createdAt,
+      }).from(ownerFreeAccessGrantsTable)
+        .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
+      const latestFreeGrant = latestOwnerFreeAccess(existingFreeGrants);
+      const freeAccessActive = isOwnerFreeAccessGrantActive(latestFreeGrant, now);
+      const renewalBlockedByGrant = !!intent.freeAccessBlockedAt || freeAccessActive;
       const encryptedPaymentToken = intent.autoRenewConsent && input.paymentToken
         ? encryptMoyasarToken(input.paymentToken) : null;
       const selectedToken = encryptedPaymentToken ?? existingBillingProfile?.encryptedPaymentToken ?? null;
       const tokenIsUsable = !!selectedToken && !!decryptMoyasarToken(selectedToken);
       const consentEnablesRenewal = intent.autoRenewConsent &&
         intent.listPriceHalala > 0 && tokenIsUsable;
-      const autoRenewEnabled = intent.listPriceHalala > 0 && (
+      const autoRenewEnabled = !renewalBlockedByGrant && intent.listPriceHalala > 0 && (
         consentEnablesRenewal ||
         existingBillingProfile?.autoRenewEnabled === true ||
         existingSubscription?.autoRenewEnabled === true
@@ -800,7 +865,8 @@ async function finalizeCheckout(input: {
           ownerId: previewIntent.ownerId,
           paymentId: input.paymentId,
           amountHalala: input.paidAmountHalala,
-          reason: "Paid checkout quote no longer matches the current subscription or recurring add-ons",
+          reason: error.message,
+          tryRefund: error.refundEligible,
         });
         if (status === "refunded") {
           throw new SubscriptionCheckoutError("تغيّرت الفاتورة بعد الدفع؛ تم رد المبلغ ولم يتم تفعيل اشتراك غير مطابق", 409);
@@ -909,6 +975,7 @@ export async function confirmSubscriptionCheckout(input: {
     paymentId: input.paymentId,
     paidAmountHalala: payment.amount!,
     paidAt,
+    paidAtKnown: !!payment.created_at,
     allowExpiredIntent: true,
     paymentToken: typeof payment.source?.token === "string" ? payment.source.token : undefined,
   });
@@ -937,6 +1004,7 @@ export async function redeemFreeSubscriptionCheckout(input: {
     paymentId: `free:${input.checkoutId}`,
     paidAmountHalala: 0,
     paidAt: new Date(),
+    paidAtKnown: true,
     allowExpiredIntent: false,
   });
 }

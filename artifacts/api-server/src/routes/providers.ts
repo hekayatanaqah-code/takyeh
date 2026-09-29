@@ -22,7 +22,7 @@ import { z } from "zod";
 import { randomBytes } from "crypto";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
-import { isSubscriptionActive, ownerPlanAccess, preferredOwnerSubscription } from "../lib/subscription-access";
+import { activeOwnersWithFreeAccess, isSubscriptionActive, ownerPlanAccess, preferredOwnerSubscription } from "../lib/subscription-access";
 
 const router = Router();
 const ALL_KINGDOM_COVERAGE = "جميع مناطق المملكة";
@@ -57,7 +57,9 @@ async function activeInventoryOwnerIds(ownerIds: Array<string | null | undefined
     expiresAt: ownerSubscriptionsTable.expiresAt,
     paymentStatus: ownerSubscriptionsTable.paymentStatus,
   }).from(ownerSubscriptionsTable).where(inArray(ownerSubscriptionsTable.ownerId, subscriptionKeys));
+  const activeFreeAccess = await activeOwnersWithFreeAccess(keysByOwner);
   return new Set(owners.filter((ownerId) =>
+    activeFreeAccess.has(ownerId) ||
     isSubscriptionActive(preferredOwnerSubscription(
       subscriptions.filter((subscription) => keysByOwner.get(ownerId)?.has(subscription.ownerId)),
     ) ?? { status: "expired", expiresAt: null }),
@@ -323,7 +325,7 @@ router.post("/submit", requireAuth, async (req: any, res) => {
 
   const data = parsed.data;
   const access = await ownerPlanAccess(req.user.id);
-  if (!isSubscriptionActive(access.subscription)) {
+  if (!access.active) {
     return res.status(403).json({ error: "انتهى اشتراكك. جدّده لإضافة خدمة جديدة.", upgradeRequired: true });
   }
   if (access.serviceCount >= access.serviceLimit) {
@@ -411,7 +413,7 @@ router.post("/submit", requireAuth, async (req: any, res) => {
   const [row] = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(731206, hashtext(${access.subscription.ownerId}))`);
     const currentAccess = await ownerPlanAccess(req.user.id);
-    if (!isSubscriptionActive(currentAccess.subscription) ||
+    if (!currentAccess.active ||
         currentAccess.serviceCount >= currentAccess.serviceLimit) return [null];
     return tx.insert(serviceProviderSubmissionsTable).values(values).returning();
   });
@@ -878,7 +880,7 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
   const [provider] = await db.select().from(serviceProvidersTable).where(eq(serviceProvidersTable.id, providerId)).limit(1);
   if (!provider || provider.ownerId !== req.user.id) return res.status(404).json({ error: "المزود غير موجود" });
   const access = await ownerPlanAccess(req.user.id);
-  if (!isSubscriptionActive(access.subscription)) {
+  if (!access.active) {
     return res.status(403).json({ error: "انتهى اشتراكك. جدّده لإضافة مواعيد جديدة.", upgradeRequired: true });
   }
 

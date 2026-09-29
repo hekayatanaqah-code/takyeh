@@ -5,6 +5,41 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type OwnerFreeAccessGrantInputDuration =
+  (typeof OwnerFreeAccessGrantInputDuration)[keyof typeof OwnerFreeAccessGrantInputDuration];
+
+export const OwnerFreeAccessGrantInputDuration = {
+  unlimited: "unlimited",
+  fixed: "fixed",
+} as const;
+
+export interface OwnerFreeAccessGrantInput {
+  duration: OwnerFreeAccessGrantInputDuration;
+  /**
+   * Required when duration is fixed; omitted for unlimited access.
+   * @minimum 1
+   * @maximum 3650
+   */
+  days?: number;
+  /**
+   * @minLength 5
+   * @maxLength 500
+   */
+  reason: string;
+}
+
+export interface OwnerFreeAccess {
+  active: boolean;
+  /** @nullable */
+  expiresAt: string | null;
+  reason: string;
+  createdAt: string;
+}
+
+export interface OwnerFreeAccessGrantResponse {
+  freeAccess: OwnerFreeAccess;
+}
+
 export interface HealthStatus {
   status: string;
 }

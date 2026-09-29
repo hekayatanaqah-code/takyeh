@@ -122,6 +122,32 @@ export const GetChaletByIdResponse = zod.object({
 });
 
 /**
+ * @summary Grant an owner free full access
+ */
+export const GrantOwnerFreeAccessParams = zod.object({
+  ownerId: zod.coerce.string(),
+});
+
+export const grantOwnerFreeAccessBodyDaysMax = 3650;
+
+export const grantOwnerFreeAccessBodyReasonMin = 5;
+export const grantOwnerFreeAccessBodyReasonMax = 500;
+
+export const GrantOwnerFreeAccessBody = zod.object({
+  duration: zod.enum(["unlimited", "fixed"]),
+  days: zod
+    .number()
+    .min(1)
+    .max(grantOwnerFreeAccessBodyDaysMax)
+    .optional()
+    .describe("Required when duration is fixed; omitted for unlimited access."),
+  reason: zod
+    .string()
+    .min(grantOwnerFreeAccessBodyReasonMin)
+    .max(grantOwnerFreeAccessBodyReasonMax),
+});
+
+/**
  * @summary Get the currently authenticated user
  */
 export const GetCurrentAuthUserHeader = zod.object({

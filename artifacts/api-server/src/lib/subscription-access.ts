@@ -2,6 +2,7 @@ import { db } from "@workspace/db";
 import {
   ownerAccountLinksTable,
   ownerSubscriptionsTable,
+  ownerFreeAccessGrantsTable,
   subscriptionPlansTable,
   subscriptionAddonPurchasesTable,
   chaletSubmissionsTable,
@@ -48,6 +49,77 @@ export async function subscriptionOwnerKeys(ownerId: string) {
     if (link) keys.push(`owner_${link.applicationId}`);
   }
   return keys;
+}
+
+export type OwnerFreeAccess = {
+  active: boolean;
+  expiresAt: Date | null;
+  reason: string;
+  createdAt: Date;
+};
+
+export function latestOwnerFreeAccess<T extends {
+  id: number;
+  expiresAt: Date | null;
+  createdAt: Date;
+}>(grants: T[]): T | undefined {
+  return [...grants].sort((a, b) =>
+    b.createdAt.getTime() - a.createdAt.getTime() || b.id - a.id,
+  )[0];
+}
+
+export function latestOwnerFreeAccessForKeys<T extends {
+  ownerId: string;
+  id: number;
+  expiresAt: Date | null;
+  createdAt: Date;
+}>(grants: T[], ownerKeys: string[]): T | undefined {
+  const keys = new Set(ownerKeys);
+  return latestOwnerFreeAccess(grants.filter((grant) => keys.has(grant.ownerId)));
+}
+
+export function isOwnerFreeAccessGrantActive(
+  grant: { expiresAt: Date | null } | undefined,
+  now = new Date(),
+) {
+  return !!grant && (grant.expiresAt === null || grant.expiresAt.getTime() > now.getTime());
+}
+
+export async function getOwnerFreeAccess(ownerId: string, now = new Date()): Promise<OwnerFreeAccess | null> {
+  const keys = await subscriptionOwnerKeys(ownerId);
+  const grants = await db.select({
+    id: ownerFreeAccessGrantsTable.id,
+    expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+    createdAt: ownerFreeAccessGrantsTable.createdAt,
+    reason: ownerFreeAccessGrantsTable.reason,
+  }).from(ownerFreeAccessGrantsTable)
+    .where(inArray(ownerFreeAccessGrantsTable.ownerId, keys));
+  const latest = latestOwnerFreeAccess(grants);
+  return latest ? {
+    active: isOwnerFreeAccessGrantActive(latest, now),
+    expiresAt: latest.expiresAt,
+    reason: latest.reason,
+    createdAt: latest.createdAt,
+  } : null;
+}
+
+export async function activeOwnersWithFreeAccess(
+  ownerKeysByOwner: Map<string, Set<string>>,
+  now = new Date(),
+) {
+  const uniqueIds = [...new Set([...ownerKeysByOwner.values()].flatMap((keys) => [...keys]))];
+  if (uniqueIds.length === 0) return new Set<string>();
+  const grants = await db.select({
+    id: ownerFreeAccessGrantsTable.id,
+    ownerId: ownerFreeAccessGrantsTable.ownerId,
+    expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+    createdAt: ownerFreeAccessGrantsTable.createdAt,
+  }).from(ownerFreeAccessGrantsTable)
+    .where(inArray(ownerFreeAccessGrantsTable.ownerId, uniqueIds));
+  return new Set([...ownerKeysByOwner].flatMap(([ownerId, keys]) => {
+    const latest = latestOwnerFreeAccessForKeys(grants, [...keys]);
+    return isOwnerFreeAccessGrantActive(latest, now) ? [ownerId] : [];
+  }));
 }
 
 export function preferredOwnerSubscription<T extends {
@@ -102,6 +174,7 @@ export function isSubscriptionActive(sub: { status: string; expiresAt: Date | nu
 
 export async function ownerPlanAccess(ownerId: string) {
   const sub = await getOrStartOwnerSubscription(ownerId);
+  const freeAccess = await getOwnerFreeAccess(ownerId);
   const legacy = LEGACY_LIMITS[sub.plan] ?? { chalets: 1, services: 1, scope: "full" as const };
   const [configured] = await db.select().from(subscriptionPlansTable)
     .where(eq(subscriptionPlansTable.slug, sub.plan)).limit(1);
@@ -115,8 +188,8 @@ export async function ownerPlanAccess(ownerId: string) {
     db.select().from(subscriptionAddonPurchasesTable)
       .where(inArray(subscriptionAddonPurchasesTable.ownerId, keys)),
   ]);
-  const baseChaletLimit = terms ? (terms.chaletLimit ?? 999) : legacy.chalets;
-  const baseServiceLimit = terms ? (terms.serviceLimit ?? 999) : legacy.services;
+  const baseChaletLimit = freeAccess?.active ? 999 : terms ? (terms.chaletLimit ?? 999) : legacy.chalets;
+  const baseServiceLimit = freeAccess?.active ? 999 : terms ? (terms.serviceLimit ?? 999) : legacy.services;
   const now = new Date();
   // Historical one-time purchases are grandfathered for their lifetime. New
   // recurring rows contribute capacity only while their paid period is live.
@@ -131,8 +204,9 @@ export async function ownerPlanAccess(ownerId: string) {
     .reduce((sum, purchase) => sum + purchase.quantity, 0);
   return {
     subscription: sub,
-    active: isSubscriptionActive(sub),
-    scope: sub.plan === "trial" ? "full" as const : (terms?.scope ?? legacy.scope),
+    active: !!freeAccess?.active || isSubscriptionActive(sub),
+    freeAccess,
+    scope: freeAccess?.active ? "full" as const : sub.plan === "trial" ? "full" as const : (terms?.scope ?? legacy.scope),
     chaletLimit: baseChaletLimit + purchasedChaletSlots,
     serviceLimit: baseServiceLimit + purchasedServiceSlots,
     baseChaletLimit,

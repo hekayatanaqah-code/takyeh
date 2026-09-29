@@ -38,3 +38,9 @@ Removing obsolete plans from the catalog is different from deleting historic bil
 **Why:** A clean administrator list must not erase the terms or identity needed to interpret an older customer's subscription and payment.
 
 **How to apply:** Keep current purchasable and grantable catalogs free of legacy plans while retaining referenced records for entitlement lookup and audit history. Do not re-seed the removed plans at startup.
+
+Superadmin-granted full free access is an independent entitlement, never a replacement for the owner's paid subscription. Granting it permanently stops paid auto-renewal; expiration must not restart charging automatically.
+
+**Why:** The user explicitly chose to stop paid renewal and not resume it automatically for owners given exceptional free access, while preserving paid subscription and payment history.
+
+**How to apply:** Resolve grants across owner aliases, evaluate their own expiry for access, keep the prior billing record intact, block new charges while a grant is active, and require a separate explicit action before any paid renewal resumes.

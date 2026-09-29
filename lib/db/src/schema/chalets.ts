@@ -468,6 +468,19 @@ export const ownerSubscriptionsTable = pgTable("owner_subscriptions", {
 }));
 export type OwnerSubscription = typeof ownerSubscriptionsTable.$inferSelect;
 
+/* Append-only superadmin full-access grants; the newest grant per owner wins. */
+export const ownerFreeAccessGrantsTable = pgTable("owner_free_access_grants", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  actorId: text("actor_id").notNull(),
+  reason: text("reason").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  ownerCreatedIdx: index("owner_free_access_grants_owner_created_idx").on(table.ownerId, table.createdAt, table.id),
+}));
+export type OwnerFreeAccessGrant = typeof ownerFreeAccessGrantsTable.$inferSelect;
+
 /* ── Subscription Plans (admin-managed) ─────────────────── */
 export const subscriptionPlansTable = pgTable("subscription_plans", {
   id: serial("id").primaryKey(),
@@ -535,6 +548,7 @@ export const subscriptionCheckoutIntentsTable = pgTable("subscription_checkout_i
   autoRenewConsent: boolean("auto_renew_consent").notNull().default(false),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  freeAccessBlockedAt: timestamp("free_access_blocked_at", { withTimezone: true }),
 });
 
 export const subscriptionPaymentsTable = pgTable("subscription_payments", {
@@ -566,6 +580,7 @@ export const subscriptionAddonCheckoutIntentsTable = pgTable("subscription_addon
   autoRenewConsent: boolean("auto_renew_consent").notNull().default(false),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  freeAccessBlockedAt: timestamp("free_access_blocked_at", { withTimezone: true }),
 });
 
 export const subscriptionAddonPurchasesTable = pgTable("subscription_addon_purchases", {

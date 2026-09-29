@@ -18,6 +18,8 @@ tags:
     description: Browser and mobile authentication endpoints.
   - name: storage
     description: Object storage operations
+  - name: admin
+    description: Superadmin owner management operations
 paths:
   /healthz:
     get:
@@ -90,6 +92,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/owners/{ownerId}/free-access:
+    post:
+      operationId: grantOwnerFreeAccess
+      tags: [admin]
+      summary: Grant an owner free full access
+      parameters:
+        - name: ownerId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OwnerFreeAccessGrantInput"
+      responses:
+        "201":
+          description: Free full access granted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnerFreeAccessGrantResponse"
+        "400":
+          description: Invalid grant request
+        "403":
+          description: Superadmin access required
+        "404":
+          description: Owner not found
 
   /auth/user:
     get:
@@ -221,6 +254,46 @@ components:
       schema:
         type: string
   schemas:
+    OwnerFreeAccessGrantInput:
+      type: object
+      additionalProperties: false
+      properties:
+        duration:
+          type: string
+          enum: [unlimited, fixed]
+        days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          description: Required when duration is fixed; omitted for unlimited access.
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 500
+      required: [duration, reason]
+
+    OwnerFreeAccessGrantResponse:
+      type: object
+      properties:
+        freeAccess:
+          $ref: "#/components/schemas/OwnerFreeAccess"
+      required: [freeAccess]
+
+    OwnerFreeAccess:
+      type: object
+      properties:
+        active:
+          type: boolean
+        expiresAt:
+          type: [string, "null"]
+          format: date-time
+        reason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [active, expiresAt, reason, createdAt]
+
     HealthStatus:
       type: object
       properties:

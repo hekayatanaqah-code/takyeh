@@ -25,6 +25,8 @@ import type {
   ErrorResponse,
   GetChaletsParams,
   HealthStatus,
+  OwnerFreeAccessGrantInput,
+  OwnerFreeAccessGrantResponse,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
   SubmissionResponse,
@@ -297,6 +299,97 @@ export function useGetChaletById<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Grant an owner free full access
+ */
+export const getGrantOwnerFreeAccessUrl = (ownerId: string) => {
+  return `/api/admin/owners/${ownerId}/free-access`;
+};
+
+export const grantOwnerFreeAccess = async (
+  ownerId: string,
+  ownerFreeAccessGrantInput: OwnerFreeAccessGrantInput,
+  options?: RequestInit,
+): Promise<OwnerFreeAccessGrantResponse> => {
+  return customFetch<OwnerFreeAccessGrantResponse>(
+    getGrantOwnerFreeAccessUrl(ownerId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(ownerFreeAccessGrantInput),
+    },
+  );
+};
+
+export const getGrantOwnerFreeAccessMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof grantOwnerFreeAccess>>,
+    TError,
+    { ownerId: string; data: BodyType<OwnerFreeAccessGrantInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof grantOwnerFreeAccess>>,
+  TError,
+  { ownerId: string; data: BodyType<OwnerFreeAccessGrantInput> },
+  TContext
+> => {
+  const mutationKey = ["grantOwnerFreeAccess"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof grantOwnerFreeAccess>>,
+    { ownerId: string; data: BodyType<OwnerFreeAccessGrantInput> }
+  > = (props) => {
+    const { ownerId, data } = props ?? {};
+
+    return grantOwnerFreeAccess(ownerId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GrantOwnerFreeAccessMutationResult = NonNullable<
+  Awaited<ReturnType<typeof grantOwnerFreeAccess>>
+>;
+export type GrantOwnerFreeAccessMutationBody =
+  BodyType<OwnerFreeAccessGrantInput>;
+export type GrantOwnerFreeAccessMutationError = ErrorType<void>;
+
+/**
+ * @summary Grant an owner free full access
+ */
+export const useGrantOwnerFreeAccess = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof grantOwnerFreeAccess>>,
+    TError,
+    { ownerId: string; data: BodyType<OwnerFreeAccessGrantInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof grantOwnerFreeAccess>>,
+  TError,
+  { ownerId: string; data: BodyType<OwnerFreeAccessGrantInput> },
+  TContext
+> => {
+  return useMutation(getGrantOwnerFreeAccessMutationOptions(options));
+};
 
 /**
  * @summary Get the currently authenticated user

@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   ownerSubscriptionsTable,
   ownerBillingProfilesTable,
+  ownerFreeAccessGrantsTable,
   subscriptionAddonCheckoutIntentsTable,
   subscriptionAddonPurchasesTable,
+  subscriptionPaymentReconciliationsTable,
   subscriptionPaymentsTable,
   subscriptionPlansTable,
+  subscriptionRenewalAttemptsTable,
+  subscriptionRenewalInvoicesTable,
 } from "@workspace/db/schema";
 import {
   confirmAddonCheckout,
@@ -20,6 +24,7 @@ import {
 } from "./subscription-addon-checkout";
 import { ownerPlanAccess } from "./subscription-access";
 import { proratedAddonAmountHalala } from "./subscription-billing-math";
+import { runSubscriptionRenewalJob } from "./subscription-renewals";
 
 test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }, async () => {
   const suffix = randomUUID();
@@ -39,9 +44,11 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
     currency: string;
     description: string;
     created_at: string;
+    given_id?: string;
     source?: { token?: string };
   } | null = null;
   let fetchCalls = 0;
+  let providerChargePosts = 0;
   let rejectedByUnexpectedFetch = false;
 
   const restoreEnv = (key: "MOYASAR_PUBLISHABLE_KEY" | "MOYASAR_SECRET_KEY", value: string | undefined) => {
@@ -205,6 +212,16 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       const authorization = new Headers(init?.headers).get("Authorization");
       assert.equal(authorization, `Basic ${Buffer.from(`${fakeSecret}:`).toString("base64")}`);
       if (rejectedByUnexpectedFetch) throw new Error("a retry should be served idempotently without a provider request");
+      if (String(input).endsWith("/refund")) {
+        if (!providerReply) throw new Error("test attempted to refund without a captured payment");
+        return new Response(JSON.stringify({
+          id: `fake_refund_${providerReply.id}`,
+          payment_id: providerReply.id,
+          amount: providerReply.amount,
+          status: "refunded",
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (init?.method === "POST") providerChargePosts += 1;
       if (!providerReply) throw new Error("test attempted an unexpected provider request");
       return new Response(JSON.stringify(providerReply), {
         status: 200,
@@ -343,6 +360,171 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
     });
     assert.equal(repurchase.purchase.quantity, 1);
     assert.equal((await ownerPlanAccess(ownerId)).purchasedServiceSlots, 6);
+
+    const pendingFreeQuote = pendingSecondFreeQuote;
+    const pendingPaidQuote = await createAddonCheckout({
+      ownerId, addonType: "service", quantity: 1, autoRenewConsent: true,
+    });
+    const pendingPaidAfterGrantQuote = await createAddonCheckout({
+      ownerId, addonType: "service", quantity: 2, autoRenewConsent: true,
+    });
+    await db.update(ownerSubscriptionsTable)
+      .set({ autoRenewEnabled: true, paymentStatus: "paid" })
+      .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+    await db.update(ownerBillingProfilesTable)
+      .set({ autoRenewEnabled: true })
+      .where(eq(ownerBillingProfilesTable.ownerId, ownerId));
+    const [subscriptionForRenewal] = await db.select().from(ownerSubscriptionsTable)
+      .where(eq(ownerSubscriptionsTable.ownerId, ownerId)).limit(1);
+    assert.ok(subscriptionForRenewal?.expiresAt);
+    const [pendingRenewalInvoice] = await db.insert(subscriptionRenewalInvoicesTable).values({
+      ownerId,
+      periodStartAt: subscriptionForRenewal.expiresAt,
+      periodEndAt: new Date(subscriptionForRenewal.expiresAt.getTime() + 30 * 24 * 60 * 60 * 1000),
+      givenId: `renewal_grant_${suffix}`,
+      basePlan: planSlug,
+      cycleDays: 30,
+      basePriceHalala: 5000,
+      amountHalala: 5000,
+      lineItems: [{ kind: "base", label: "Test plan", amountHalala: 5000 }],
+      status: "pending",
+      nextAttemptAt: new Date(Date.now() - 1000),
+    }).returning();
+    assert.ok(pendingRenewalInvoice);
+    let grantAt: Date | undefined;
+    const fetchCallsBeforeRenewal = fetchCalls;
+    await runSubscriptionRenewalJob(new Date(), {
+      beforeProviderDispatch: async (invoiceId) => {
+        if (invoiceId !== pendingRenewalInvoice.id) return;
+        grantAt = new Date();
+        await db.transaction(async (tx) => {
+          await tx.select({ ownerId: ownerSubscriptionsTable.ownerId }).from(ownerSubscriptionsTable)
+            .where(eq(ownerSubscriptionsTable.ownerId, ownerId)).for("update").limit(1);
+          await tx.insert(ownerFreeAccessGrantsTable).values({
+            ownerId,
+            actorId: `integration_${suffix}`,
+            reason: "Regression test grant committed after renewal authorization",
+            expiresAt: new Date(grantAt!.getTime() + 24 * 60 * 60 * 1000),
+            createdAt: grantAt!,
+          });
+          await tx.update(subscriptionAddonCheckoutIntentsTable)
+            .set({ freeAccessBlockedAt: grantAt!, expiresAt: grantAt! })
+            .where(and(
+              eq(subscriptionAddonCheckoutIntentsTable.ownerId, ownerId),
+              isNull(subscriptionAddonCheckoutIntentsTable.consumedAt),
+            ));
+          await tx.update(ownerSubscriptionsTable)
+            .set({ autoRenewEnabled: false })
+            .where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+          await tx.update(ownerBillingProfilesTable)
+            .set({ autoRenewEnabled: false })
+            .where(eq(ownerBillingProfilesTable.ownerId, ownerId));
+        });
+      },
+    });
+    assert.ok(grantAt, "the dispatch authorization reaches the test race hook");
+    const [renewalAfterGrant] = await db.select().from(subscriptionRenewalInvoicesTable)
+      .where(eq(subscriptionRenewalInvoicesTable.id, pendingRenewalInvoice.id)).limit(1);
+    const [attemptAfterGrant] = await db.select().from(subscriptionRenewalAttemptsTable)
+      .where(eq(subscriptionRenewalAttemptsTable.invoiceId, pendingRenewalInvoice.id)).limit(1);
+    assert.equal(renewalAfterGrant?.status, "cancelled");
+    assert.equal(attemptAfterGrant?.status, "cancelled");
+    assert.equal(fetchCalls, fetchCallsBeforeRenewal, "a grant committed after dispatch authorization blocks the provider POST");
+    const renewalPaidId = `renewal_paid_after_grant_${suffix}`;
+    providerReply = {
+      id: renewalPaidId,
+      status: "paid",
+      amount: 5000,
+      currency: "SAR",
+      description: `Unified subscription renewal invoice ${pendingRenewalInvoice.id} (renewal:${pendingRenewalInvoice.id})`,
+      created_at: new Date(grantAt!.getTime() + 1000).toISOString(),
+    };
+    const [dispatchedRenewalAttempt] = await db.select().from(subscriptionRenewalAttemptsTable)
+      .where(eq(subscriptionRenewalAttemptsTable.invoiceId, pendingRenewalInvoice.id)).limit(1);
+    assert.ok(dispatchedRenewalAttempt);
+    await db.update(subscriptionRenewalAttemptsTable).set({
+      status: "dispatched",
+      paymentId: renewalPaidId,
+      nextAttemptAt: new Date(Date.now() - 1000),
+    }).where(eq(subscriptionRenewalAttemptsTable.id, dispatchedRenewalAttempt.id));
+    await db.update(subscriptionRenewalInvoicesTable).set({
+      status: "processing",
+      paymentId: renewalPaidId,
+      nextAttemptAt: new Date(Date.now() - 1000),
+    }).where(eq(subscriptionRenewalInvoicesTable.id, pendingRenewalInvoice.id));
+    const subscriptionExpiryBeforeReconciliation = subscriptionForRenewal!.expiresAt!.getTime();
+    const chargePostsBeforeReconciliation = providerChargePosts;
+    await runSubscriptionRenewalJob();
+    assert.equal(providerChargePosts, chargePostsBeforeReconciliation,
+      "a grant-active in-flight renewal is reconciled by GET and never posts a new charge");
+    const [renewalReconciliation] = await db.select().from(subscriptionPaymentReconciliationsTable)
+      .where(eq(subscriptionPaymentReconciliationsTable.paymentId, renewalPaidId)).limit(1);
+    assert.equal(renewalReconciliation?.status, "refunded");
+    const [renewalAfterPaymentReconciliation] = await db.select().from(subscriptionRenewalInvoicesTable)
+      .where(eq(subscriptionRenewalInvoicesTable.id, pendingRenewalInvoice.id)).limit(1);
+    assert.equal(renewalAfterPaymentReconciliation?.status, "cancelled");
+    const [subscriptionAfterRenewalReconciliation] = await db.select().from(ownerSubscriptionsTable)
+      .where(eq(ownerSubscriptionsTable.ownerId, ownerId)).limit(1);
+    assert.equal(subscriptionAfterRenewalReconciliation?.expiresAt?.getTime(), subscriptionExpiryBeforeReconciliation,
+      "a post-grant renewal payment does not activate or extend the subscription");
+    await assert.rejects(
+      createAddonCheckout({ ownerId, addonType: "service", quantity: 1, autoRenewConsent: true }),
+      (error: unknown) => error instanceof SubscriptionAddonCheckoutError && error.statusCode === 409,
+      "a grant blocks new add-on checkout quotes",
+    );
+    await assert.rejects(
+      redeemFreeAddonCheckout({ ownerId, checkoutId: pendingFreeQuote.checkoutId }),
+      (error: unknown) => error instanceof SubscriptionAddonCheckoutError && error.statusCode === 409,
+      "a grant blocks finalizing a pre-grant unpaid add-on intent",
+    );
+    const paidBeforeGrantId = `synthetic_before_grant_${suffix}`;
+    providerReply = {
+      id: paidBeforeGrantId,
+      status: "paid",
+      amount: pendingPaidQuote.amountHalala,
+      currency: "SAR",
+      description: `paid add-on captured before grant [${pendingPaidQuote.checkoutId}]`,
+      created_at: new Date(grantAt!.getTime() - 1000).toISOString(),
+      source: { token: "test-moyasar-token" },
+    };
+    const paidBeforeGrant = await confirmAddonCheckout({
+      ownerId, checkoutId: pendingPaidQuote.checkoutId, paymentId: paidBeforeGrantId,
+    });
+    assert.equal(paidBeforeGrant.purchase.paymentId, paidBeforeGrantId);
+    assert.equal(paidBeforeGrant.purchase.recurring, false,
+      "a pre-grant payment may be honored without restoring add-on renewal");
+    const paidAfterGrantId = `synthetic_after_grant_${suffix}`;
+    providerReply = {
+      id: paidAfterGrantId,
+      status: "paid",
+      amount: pendingPaidAfterGrantQuote.amountHalala,
+      currency: "SAR",
+      description: `paid add-on captured after grant [${pendingPaidAfterGrantQuote.checkoutId}]`,
+      created_at: new Date(grantAt!.getTime() + 1000).toISOString(),
+      source: { token: "test-moyasar-token" },
+    };
+    await assert.rejects(
+      confirmAddonCheckout({
+        ownerId, checkoutId: pendingPaidAfterGrantQuote.checkoutId, paymentId: paidAfterGrantId,
+      }),
+      (error: unknown) => error instanceof SubscriptionAddonCheckoutError &&
+        error.statusCode === 409 && error.message.includes("تم رد المبلغ"),
+      "a captured payment after the grant is refunded/reconciled and never activates an add-on",
+    );
+    assert.ok(await db.select().from(subscriptionPaymentsTable)
+      .where(eq(subscriptionPaymentsTable.paymentId, paidBeforeGrantId)).then((rows) => rows[0]),
+    "a payment captured before the grant may still be honored");
+    assert.equal((await db.select().from(subscriptionAddonPurchasesTable)
+      .where(eq(subscriptionAddonPurchasesTable.intentId, pendingPaidAfterGrantQuote.checkoutId))).length, 0);
+    const [postGrantReconciliation] = await db.select().from(subscriptionPaymentReconciliationsTable)
+      .where(eq(subscriptionPaymentReconciliationsTable.paymentId, paidAfterGrantId)).limit(1);
+    assert.equal(postGrantReconciliation?.status, "refunded");
+    const [subscriptionAfterGrantPayment] = await db.select().from(ownerSubscriptionsTable)
+      .where(eq(ownerSubscriptionsTable.ownerId, ownerId)).limit(1);
+    const [billingProfileAfterGrantPayment] = await db.select().from(ownerBillingProfilesTable)
+      .where(eq(ownerBillingProfilesTable.ownerId, ownerId)).limit(1);
+    assert.equal(subscriptionAfterGrantPayment?.autoRenewEnabled, false);
+    assert.equal(billingProfileAfterGrantPayment?.autoRenewEnabled, false);
     assert.equal(process.env.MOYASAR_PUBLISHABLE_KEY, fakePublishable);
   } finally {
     globalThis.fetch = originalFetch;
@@ -353,9 +535,19 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
 
     // Every cleanup predicate is scoped to the synthetic UUID-backed owner or
     // plan created by this test; no unrelated account/data is touched.
+    await db.delete(subscriptionPaymentReconciliationsTable)
+      .where(eq(subscriptionPaymentReconciliationsTable.ownerId, ownerId));
     await db.delete(subscriptionPaymentsTable).where(eq(subscriptionPaymentsTable.ownerId, ownerId));
     await db.delete(subscriptionAddonPurchasesTable).where(eq(subscriptionAddonPurchasesTable.ownerId, ownerId));
+    await db.delete(ownerFreeAccessGrantsTable).where(eq(ownerFreeAccessGrantsTable.ownerId, ownerId));
     await db.delete(ownerBillingProfilesTable).where(eq(ownerBillingProfilesTable.ownerId, ownerId));
+    await db.delete(subscriptionRenewalAttemptsTable).where(inArray(
+      subscriptionRenewalAttemptsTable.invoiceId,
+      db.select({ id: subscriptionRenewalInvoicesTable.id })
+        .from(subscriptionRenewalInvoicesTable)
+        .where(eq(subscriptionRenewalInvoicesTable.ownerId, ownerId)),
+    ));
+    await db.delete(subscriptionRenewalInvoicesTable).where(eq(subscriptionRenewalInvoicesTable.ownerId, ownerId));
     await db.delete(subscriptionAddonCheckoutIntentsTable).where(eq(subscriptionAddonCheckoutIntentsTable.ownerId, ownerId));
     await db.delete(ownerSubscriptionsTable).where(eq(ownerSubscriptionsTable.ownerId, ownerId));
     await db.delete(subscriptionPlansTable).where(and(

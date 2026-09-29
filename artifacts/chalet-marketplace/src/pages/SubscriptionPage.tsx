@@ -31,6 +31,13 @@ interface SubscriptionAddon {
   active?: boolean;
 }
 
+interface FreeAccess {
+  active: boolean;
+  expiresAt: string | null;
+  reason: string;
+  createdAt: string;
+}
+
 function formatHalala(halala: number) {
   return `${(halala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
 }
@@ -110,6 +117,7 @@ export default function SubscriptionPage() {
     autoRenewEnabled?: boolean;
     autoRenewAvailable?: boolean;
     billingCycleDays?: number | null;
+    freeAccess?: FreeAccess | null;
   } | null>({
     queryKey: ["owner", "subscription"],
     queryFn: async () => {
@@ -118,6 +126,9 @@ export default function SubscriptionPage() {
       return r.json();
     },
     enabled: isAuthenticated,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const { data: planLimits, isLoading: planLimitsLoading } = useQuery<{
@@ -128,6 +139,7 @@ export default function SubscriptionPage() {
     extraChaletPrice?: number | string | null; extraServicePrice?: number | string | null;
     recurringConfigured?: boolean; canSavePaymentMethod?: boolean;
     baseMonthlyHalala?: number;
+    freeAccess?: FreeAccess | null;
   }>({
     queryKey: ["owner", "plan-limits"],
     queryFn: async () => {
@@ -189,10 +201,11 @@ export default function SubscriptionPage() {
     if (requestedAddon !== "chalet" && requestedAddon !== "service") return;
     if (planLimitsLoading || !planLimits) return;
 
-    const isEligible = planLimits.active === true && (requestedAddon === "chalet"
+    const isEligible = !planLimits.freeAccess?.active && planLimits.active === true && (requestedAddon === "chalet"
       ? planLimits.extraChaletPrice != null
       : planLimits.extraServicePrice != null);
     if (isEligible) setAddonType(requestedAddon);
+    else setAddonType(null);
     navigate("/subscription", { replace: true });
   }, [search, planLimits, planLimitsLoading, navigate]);
 
@@ -205,14 +218,24 @@ export default function SubscriptionPage() {
   }
 
   const plan = sub?.plan ?? "trial";
+  const freeAccess = sub?.freeAccess?.active
+    ? sub.freeAccess
+    : planLimits?.freeAccess?.active ? planLimits.freeAccess : null;
+  const hasFreeAccess = freeAccess?.active === true;
   const fallbackMeta = PLAN_META[plan] ?? UNKNOWN_PLAN_META;
   const meta = {
     ...fallbackMeta,
     label: sub?.planDetails?.nameAr ?? fallbackMeta.label,
     features: sub?.planDetails?.features ?? fallbackMeta.features,
   };
-  const statusInfo = STATUS_MAP[sub?.status ?? "active"] ?? STATUS_MAP.active;
+  const displayedFeatures = hasFreeAccess
+    ? ["كامل صلاحيات إدارة العقارات والخدمات", "لا توجد رسوم أو دفعات مطلوبة أثناء المنحة"]
+    : meta.features;
+  const statusInfo = hasFreeAccess
+    ? { label: "مجاني بالكامل", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200", icon: <CheckCircle2 className="w-3.5 h-3.5" /> }
+    : STATUS_MAP[sub?.status ?? "active"] ?? STATUS_MAP.active;
   const days = daysUntil(sub?.expiresAt ?? null);
+  const entitlementDays = hasFreeAccess ? daysUntil(freeAccess?.expiresAt ?? null) : days;
   const chaletUsed = planLimits?.chaletCount ?? 0;
   const chaletMax = planLimits?.chaletLimit === Infinity ? "∞" : (planLimits?.chaletLimit ?? 1);
   const serviceMax = planLimits?.serviceLimit === Infinity ? "∞" : (planLimits?.serviceLimit ?? 1);
@@ -233,8 +256,9 @@ export default function SubscriptionPage() {
     planLimits.canSavePaymentMethod === true &&
     Number.isSafeInteger(planLimits.baseMonthlyHalala) && billingCycleDays != null;
 
-  const paymentCls =
-    sub?.paymentStatus === "paid"    ? "text-green-600"
+  const paymentCls = hasFreeAccess
+    ? "text-emerald-700 dark:text-emerald-300"
+    : sub?.paymentStatus === "paid" ? "text-green-600"
     : sub?.paymentStatus === "overdue" ? "text-red-600"
     : "text-amber-600";
 
@@ -263,22 +287,25 @@ export default function SubscriptionPage() {
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`bg-gradient-to-br ${meta.color} rounded-3xl p-6 text-white mb-6 shadow-md`}
+          className={`bg-gradient-to-br ${hasFreeAccess ? "from-emerald-700 to-green-600" : meta.color} rounded-3xl p-6 text-white mb-6 shadow-md`}
         >
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <div className="flex items-center gap-2 mb-1 opacity-90">
                 {meta.icon}
-                <span className="text-sm font-medium">الخطة الحالية</span>
+                <span className="text-sm font-medium">{hasFreeAccess ? "الاستحقاق الحالي" : "الخطة الحالية"}</span>
               </div>
-              <p className="text-3xl font-bold">{meta.label}</p>
+              <p className="text-3xl font-bold">{hasFreeAccess ? "حساب مجاني شامل" : meta.label}</p>
+              {hasFreeAccess && <p className="mt-1 text-sm font-medium text-white/90">كامل الصلاحيات دون أي رسوم أو دفع</p>}
               <div className={`inline-flex items-center gap-1.5 mt-3 text-xs font-semibold px-3 py-1 rounded-full bg-white/20`}>
                 {statusInfo.icon}
                 {statusInfo.label}
               </div>
             </div>
             <div className="text-end">
-              {days !== null ? (
+              {hasFreeAccess ? (
+                <p className="text-2xl font-bold opacity-90">{freeAccess?.expiresAt ? "محددة المدة" : "مفتوحة"}</p>
+              ) : days !== null ? (
                 <>
                   <p className={`text-5xl font-black ${days < 7 ? "text-red-200" : "text-white"}`}>{Math.max(0, days)}</p>
                   <p className="text-sm opacity-80 mt-0.5">يوم متبقي</p>
@@ -290,11 +317,14 @@ export default function SubscriptionPage() {
           </div>
 
           {/* Progress bar */}
-          {days !== null && sub?.createdAt && (
+          {((hasFreeAccess && entitlementDays !== null && freeAccess?.createdAt) || (!hasFreeAccess && days !== null && sub?.createdAt)) && (
             <div className="mt-5">
               {(() => {
-                const totalMs = new Date(sub.expiresAt!).getTime() - new Date(sub.createdAt).getTime();
-                const elapsedMs = Date.now() - new Date(sub.createdAt).getTime();
+                const expiresAt = hasFreeAccess ? freeAccess?.expiresAt : sub?.expiresAt;
+                const createdAt = hasFreeAccess ? freeAccess?.createdAt : sub?.createdAt;
+                if (!expiresAt || !createdAt) return null;
+                const totalMs = new Date(expiresAt).getTime() - new Date(createdAt).getTime();
+                const elapsedMs = Date.now() - new Date(createdAt).getTime();
                 const pct = Math.min(100, Math.max(0, (elapsedMs / totalMs) * 100));
                 return (
                   <div className="h-2 bg-white/20 rounded-full overflow-hidden">
@@ -306,14 +336,25 @@ export default function SubscriptionPage() {
                 );
               })()}
               <div className="flex justify-between text-xs opacity-70 mt-1">
-                <span>بدأ: {new Date(sub.createdAt).toLocaleDateString("ar-SA")}</span>
-                <span>ينتهي: {sub.expiresAt ? expiryInBothCalendars(sub.expiresAt) : "—"}</span>
+                <span>بدأ: {new Date((hasFreeAccess ? freeAccess?.createdAt : sub?.createdAt)!).toLocaleDateString("ar-SA")}</span>
+                <span>{hasFreeAccess ? "تنتهي الصلاحية" : "ينتهي الاشتراك"}: {expiryInBothCalendars((hasFreeAccess ? freeAccess?.expiresAt : sub?.expiresAt)!)}</span>
               </div>
             </div>
           )}
         </motion.div>
 
-        {(sub?.status === "expired" || (plan === "trial" && days !== null && days <= 0)) && (
+        {hasFreeAccess && (
+          <div className="mb-6 rounded-2xl border border-emerald-300 bg-emerald-50 p-5 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100" data-testid="status-free-access-entitlement">
+            <p className="font-bold">حسابك يتمتع بكامل الصلاحيات مجاناً — لا يلزم أي دفع.</p>
+            <p className="mt-1 text-sm">
+              {freeAccess?.expiresAt ? `تنتهي المنحة في ${expiryInBothCalendars(freeAccess.expiresAt)}.` : "المنحة مفتوحة بلا تاريخ انتهاء."}
+              {" "}تم إيقاف التجديد التلقائي المدفوع.
+            </p>
+            {freeAccess?.reason && <p className="mt-2 text-sm">سبب المنح: {freeAccess.reason}</p>}
+          </div>
+        )}
+
+        {!hasFreeAccess && (sub?.status === "expired" || (plan === "trial" && days !== null && days <= 0)) && (
           <div className="mb-6 rounded-2xl border border-red-300 bg-red-50 p-5 text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200" role="alert" data-testid="status-subscription-expired">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -346,19 +387,24 @@ export default function SubscriptionPage() {
           />
           <SummaryCard
             icon={<ShieldCheck className="w-5 h-5 text-green-500" />}
-            label="حالة الدفع"
-            value={paymentLabel[sub?.paymentStatus ?? "pending"] ?? "—"}
+            label={hasFreeAccess ? "الاستحقاق" : "حالة الدفع"}
+            value={hasFreeAccess ? "مجاني بالكامل" : paymentLabel[sub?.paymentStatus ?? "pending"] ?? "—"}
             sub=""
             bg="bg-green-50 dark:bg-green-900/20"
-            valueCls={paymentCls}
+            valueCls={hasFreeAccess ? "text-emerald-700 dark:text-emerald-300" : paymentCls}
           />
         </div>
 
         <section className="mb-6 rounded-2xl border border-border bg-card p-5" aria-labelledby="subscription-addons-heading">
           <h2 id="subscription-addons-heading" className="mb-3 flex items-center gap-2 font-bold">
             <Package className="h-4 w-4 text-primary" />
-            الإضافات والرسوم الدورية
+            الإضافات وسجل السعة المدفوعة
           </h2>
+          {hasFreeAccess && (
+            <p className="mb-3 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+              سجلات الإضافات المدفوعة السابقة محفوظة للرجوع إليها؛ لا توجد مشتريات أو رسوم دورية مطلوبة خلال صلاحيتك المجانية.
+            </p>
+          )}
           {addonsQuery.isPending && (
             <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل الإضافات...
@@ -388,20 +434,26 @@ export default function SubscriptionPage() {
                           {isChalet ? "عقارات إضافية" : "خدمات إضافية"} · {addon.quantity.toLocaleString("ar-SA")}
                         </p>
                         <p className="text-muted-foreground">
-                          {addon.recurring
+                          {hasFreeAccess
+                            ? addon.recurring
+                              ? `إضافة مدفوعة دورية محفوظة في السجل — ${formatHalala(addon.monthlyUnitPriceHalala)} لكل وحدة لكل ٣٠ يوماً`
+                              : "إضافة مدفوعة لمرة واحدة — محفوظة في السجل"
+                            : addon.recurring
                             ? cycleAmount == null
                               ? `سعر مرجعي ${formatHalala(addon.monthlyUnitPriceHalala)} لكل 30 يوماً؛ مبلغ الدورة غير متوفر`
                               : `${formatHalala(cycleAmount)} ${billingCycleLabel} — ${addon.quantity.toLocaleString("ar-SA")} × ${formatHalala(Math.round(addon.monthlyUnitPriceHalala * (billingCycleDays ?? 30) / 30))} لكل وحدة`
                             : "إضافة تاريخية لمرة واحدة — محفوظة مدى الحياة ولا تدخل في الفواتير الدورية"}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {addon.recurring
+                          {hasFreeAccess
+                            ? "سجل تاريخي محفوظ — لا تجديد تلقائي أثناء المنحة المجانية"
+                            : addon.recurring
                             ? addon.active === false ? `انتهت الفترة المدفوعة في: ${paidThrough}` : `مدفوعة حتى: ${paidThrough}`
                             : "لا يوجد تاريخ انتهاء"}
-                          {addon.recurring && addon.cancelAtPeriodEnd ? " · سيتوقف التجديد عند نهاية الفترة المدفوعة" : ""}
+                          {!hasFreeAccess && addon.recurring && addon.cancelAtPeriodEnd ? " · سيتوقف التجديد عند نهاية الفترة المدفوعة" : ""}
                         </p>
                       </div>
-                      {addon.recurring && addon.active !== false && !addon.cancelAtPeriodEnd && (
+                      {!hasFreeAccess && addon.recurring && addon.active !== false && !addon.cancelAtPeriodEnd && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -430,7 +482,7 @@ export default function SubscriptionPage() {
           )}
         </section>
 
-        {planLimits?.active && (
+        {planLimits?.active && !hasFreeAccess && (
           <div className="mb-6 grid gap-3 sm:grid-cols-2">
             {planLimits.extraChaletPrice != null && (
               <div className="rounded-2xl border border-border bg-card p-4">
@@ -472,10 +524,10 @@ export default function SubscriptionPage() {
         >
           <h2 className="font-bold text-foreground mb-3 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-primary" />
-            مميزات خطتك الحالية
+            {hasFreeAccess ? "مزايا الاستحقاق المجاني الكامل" : "مميزات خطتك الحالية"}
           </h2>
           <ul className="space-y-2">
-            {meta.features.map((f, i) => (
+            {displayedFeatures.map((f, i) => (
               <li key={i} className="flex items-center gap-2 text-sm text-foreground">
                 <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
                 {f}
@@ -497,7 +549,7 @@ export default function SubscriptionPage() {
           </h2>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <dt className="text-muted-foreground">الخطة</dt>
-            <dd className="font-semibold text-foreground text-end">{meta.label}</dd>
+            <dd className="font-semibold text-foreground text-end">{hasFreeAccess ? "حساب مجاني شامل" : meta.label}</dd>
 
             <dt className="text-muted-foreground">الحالة</dt>
             <dd className="text-end">
@@ -509,19 +561,28 @@ export default function SubscriptionPage() {
 
             <dt className="text-muted-foreground">تاريخ الانتهاء</dt>
             <dd className="font-semibold text-foreground text-end">
-              {sub?.expiresAt ? expiryInBothCalendars(sub.expiresAt) : "غير محدد"}
+              {hasFreeAccess
+                ? freeAccess?.expiresAt ? expiryInBothCalendars(freeAccess.expiresAt) : "مفتوحة"
+                : sub?.expiresAt ? expiryInBothCalendars(sub.expiresAt) : "غير محدد"}
             </dd>
 
             <dt className="text-muted-foreground">الأيام المتبقية</dt>
             <dd className={`font-bold text-end ${(days ?? 99) < 7 ? "text-red-600" : "text-foreground"}`}>
-              {days !== null ? `${Math.max(0, days)} يوم` : "—"}
+              {hasFreeAccess
+                ? entitlementDays !== null ? `${Math.max(0, entitlementDays)} يوم` : "مفتوحة"
+                : days !== null ? `${Math.max(0, days)} يوم` : "—"}
             </dd>
 
             <dt className="text-muted-foreground">حالة الدفع</dt>
             <dd className={`font-semibold text-end ${paymentCls}`}>
-              {paymentLabel[sub?.paymentStatus ?? "pending"] ?? "—"}
+              {hasFreeAccess ? "لا يلزم الدفع" : paymentLabel[sub?.paymentStatus ?? "pending"] ?? "—"}
             </dd>
-            {(sub?.recurring === true || sub?.autoRenewAvailable === true ||
+            {hasFreeAccess ? (
+              <>
+                <dt className="text-muted-foreground">التجديد التلقائي</dt>
+                <dd className="font-semibold text-end text-emerald-700 dark:text-emerald-300">تم إيقافه مع المنحة المجانية</dd>
+              </>
+            ) : (sub?.recurring === true || sub?.autoRenewAvailable === true ||
               sub?.nextChargeHalala != null || sub?.nextBillingAt != null) && (
               <>
                 <dt className="text-muted-foreground">حالة التجديد التلقائي</dt>
@@ -545,12 +606,12 @@ export default function SubscriptionPage() {
               </>
             )}
           </dl>
-          {sub?.autoRenewEnabled !== true && (sub?.nextChargeHalala != null || sub?.nextBillingAt) && (
+          {!hasFreeAccess && sub?.autoRenewEnabled !== true && (sub?.nextChargeHalala != null || sub?.nextBillingAt) && (
             <p className="mt-3 text-xs text-muted-foreground">
               المبلغ والموعد المعروضان تقديريان للدورة التالية؛ لن يحدث تحصيل تلقائي ما دام التجديد غير مفعل.
             </p>
           )}
-          {sub?.autoRenewEnabled === true && (
+          {!hasFreeAccess && sub?.autoRenewEnabled === true && (
             <div className="mt-4 space-y-2">
               <Button
                 type="button"
@@ -571,8 +632,28 @@ export default function SubscriptionPage() {
           )}
         </motion.div>
 
+        {hasFreeAccess && sub && sub.plan !== "trial" && (
+          <section className="mb-6 rounded-2xl border border-border bg-card p-5" data-testid="section-retained-paid-subscription-history">
+            <h2 className="font-bold text-foreground mb-2 flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-muted-foreground" />
+              سجل الاشتراك المدفوع المحفوظ
+            </h2>
+            <p className="mb-3 text-sm text-muted-foreground">
+              هذا سجل الاشتراك السابق فقط، وليس الاستحقاق الحالي. بقي محفوظاً ولم يُحذف؛ صلاحيتك الحالية مجانية بالكامل والتجديد التلقائي متوقف.
+            </p>
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              <dt className="text-muted-foreground">الخطة المسجلة</dt>
+              <dd className="font-semibold text-end">{sub.planDetails?.nameAr ?? (PLAN_META[sub.plan]?.label ?? sub.plan)}</dd>
+              <dt className="text-muted-foreground">الحالة المسجلة</dt>
+              <dd className="text-end">{STATUS_MAP[sub.status]?.label ?? sub.status}</dd>
+              <dt className="text-muted-foreground">تاريخ الانتهاء المسجل</dt>
+              <dd className="text-end">{sub.expiresAt ? expiryInBothCalendars(sub.expiresAt) : "غير محدد"}</dd>
+            </dl>
+          </section>
+        )}
+
         {/* ── Action buttons ── */}
-        <motion.div
+        {!hasFreeAccess && <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
@@ -615,20 +696,20 @@ export default function SubscriptionPage() {
             <RefreshCw className="w-4 h-4" />
             العودة للوحة
           </Button>
-        </motion.div>
+        </motion.div>}
 
       </div>
 
-      <PaymentModal
+      {!hasFreeAccess && <PaymentModal
         open={showPayment}
         onClose={() => setShowPayment(false)}
         currentPlan={plan}
-      />
-      <AddonPaymentModal
+      />}
+      {!hasFreeAccess && <AddonPaymentModal
         open={addonType !== null}
         onClose={() => setAddonType(null)}
         addonType={addonType ?? "chalet"}
-      />
+      />}
     </div>
   );
 }

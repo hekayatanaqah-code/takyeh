@@ -204,6 +204,12 @@ interface Owner {
   createdAt: string | null;
   expiresAt: string | null;
   subscriptionStatus: string;
+  freeAccess?: {
+    active: boolean;
+    expiresAt: string | null;
+    reason: string;
+    createdAt: string;
+  } | null;
 }
 
 interface Service {
@@ -1605,6 +1611,12 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [grantExpiryDate, setGrantExpiryDate] = useState("");
   const [grantReason, setGrantReason] = useState("");
   const [grantError, setGrantError] = useState<string | null>(null);
+  const [freeAccessOwner, setFreeAccessOwner] = useState<{ id: string; name: string } | null>(null);
+  const [freeAccessDuration, setFreeAccessDuration] = useState<"unlimited" | "fixed">("unlimited");
+  const [freeAccessDays, setFreeAccessDays] = useState("30");
+  const [freeAccessReason, setFreeAccessReason] = useState("");
+  const [freeAccessError, setFreeAccessError] = useState<string | null>(null);
+  const freeAccessSubmitting = useRef(false);
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -1657,6 +1669,41 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       toast({ title: "تم تحديث الاشتراك", description: "ستظهر العقارات والخدمات المفعّلة تلقائياً؛ تبقى المعطّلة يدوياً كما هي." });
     },
     onError: (error: Error) => setGrantError(error.message),
+  });
+
+  const grantFreeAccess = useMutation({
+    mutationFn: async () => {
+      if (!freeAccessOwner) throw new Error("اختر حساباً أولاً");
+      const reason = freeAccessReason.trim();
+      const days = Number(fromAr(freeAccessDays));
+      if (reason.length < 5 || reason.length > 500) throw new Error("يجب أن يكون السبب بين ٥ و٥٠٠ حرف");
+      if (freeAccessDuration === "fixed" && (!Number.isInteger(days) || days < 1 || days > 3650)) {
+        throw new Error("مدة الحساب المجاني يجب أن تكون بين يوم واحد و٣٦٥٠ يوماً");
+      }
+      const r = await adminFetch(`/owners/${encodeURIComponent(freeAccessOwner.id)}/free-access`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          duration: freeAccessDuration,
+          ...(freeAccessDuration === "fixed" ? { days } : {}),
+          reason,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error ?? "تعذّر منح الحساب المجاني");
+      return data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "owners"] });
+      setFreeAccessOwner(null);
+      setFreeAccessReason("");
+      setFreeAccessDays("30");
+      setFreeAccessDuration("unlimited");
+      setFreeAccessError(null);
+      toast({ title: "تم منح الحساب المجاني", description: "تم تحديث صلاحية الحساب." });
+    },
+    onError: (error: Error) => setFreeAccessError(error.message),
+    onSettled: () => { freeAccessSubmitting.current = false; },
   });
 
   /* ── Fetch catalogs ── */
@@ -2232,29 +2279,60 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                         ينتهي {fmtDate(owner.expiresAt)}
                       </span>
                     )}
+                    {owner.freeAccess && (
+                      <div className="mt-1 rounded border border-emerald-700/50 bg-emerald-950/20 px-2 py-1" data-testid={`status-free-access-${owner.ownerId}`}>
+                        <span className={`text-[11px] font-semibold ${owner.freeAccess.active ? "text-emerald-300" : "text-slate-400"}`}>
+                          {owner.freeAccess.active ? "حساب مجاني نشط" : "منحة مجانية غير نشطة"}
+                          <span className="mr-1 font-normal">
+                            — {owner.freeAccess.expiresAt ? `الانتهاء ${fmtDate(owner.freeAccess.expiresAt)}` : "مفتوحة"}
+                          </span>
+                        </span>
+                        <p className="mt-0.5 text-[10px] text-slate-400" data-testid={`text-free-access-reason-${owner.ownerId}`}>
+                          السبب: {owner.freeAccess.reason}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </TableCell>
 
                 <TableCell>
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex flex-wrap items-center justify-end gap-1">
                     {isSuperAdmin && (
-                      <Button
-                        data-testid={`button-grant-subscription-${owner.ownerId}`}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setGrantOwner({ id: owner.ownerId, name: owner.ownerName });
-                          setGrantPlan("");
-                          setGrantDays("30");
-                          setGrantExpiryDate("");
-                          setGrantReason("");
-                          setGrantError(null);
-                        }}
-                        className="h-8 border-amber-700 text-amber-300 hover:bg-amber-900/20"
-                      >
-                        <Calendar className="ml-1 h-4 w-4" />
-                        تمديد الاشتراك
-                      </Button>
+                      <>
+                        <Button
+                          data-testid={`button-grant-subscription-${owner.ownerId}`}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setGrantOwner({ id: owner.ownerId, name: owner.ownerName });
+                            setGrantPlan("");
+                            setGrantDays("30");
+                            setGrantExpiryDate("");
+                            setGrantReason("");
+                            setGrantError(null);
+                          }}
+                          className="h-8 border-amber-700 text-amber-300 hover:bg-amber-900/20"
+                        >
+                          <Calendar className="ml-1 h-4 w-4" />
+                          تمديد الاشتراك
+                        </Button>
+                        <Button
+                          data-testid={`button-grant-free-access-${owner.ownerId}`}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setFreeAccessOwner({ id: owner.ownerId, name: owner.ownerName });
+                            setFreeAccessDuration("unlimited");
+                            setFreeAccessDays("30");
+                            setFreeAccessReason("");
+                            setFreeAccessError(null);
+                          }}
+                          className="h-8 border-emerald-700 text-emerald-300 hover:bg-emerald-900/20"
+                        >
+                          <ShieldCheck className="ml-1 h-4 w-4" />
+                          منح حساب مجاني
+                        </Button>
+                      </>
                     )}
                     <Button variant="ghost" size="sm" onClick={() => setArchiveOwner({ id: owner.ownerId, name: owner.ownerName })}
                       className={`relative h-8 text-xs hover:bg-slate-700 ${owner.hasMessages ? "text-amber-400 hover:text-amber-300" : "text-slate-400 hover:text-amber-400"}`}
@@ -2424,6 +2502,127 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                   variant="outline"
                   onClick={() => setGrantOwner(null)}
                   disabled={grantSubscription.isPending}
+                  className="border-slate-600 text-slate-300"
+                >
+                  إلغاء
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {isSuperAdmin && freeAccessOwner && (
+        <Dialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open && !grantFreeAccess.isPending) setFreeAccessOwner(null);
+          }}
+        >
+          <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-white" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-emerald-400" />
+                منح حساب مجاني — {freeAccessOwner.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {(() => {
+                const currentGrant = owners.find((owner) => owner.ownerId === freeAccessOwner.id)?.freeAccess;
+                return (
+                  <div className="rounded-lg border border-slate-700 bg-slate-800/70 p-3" data-testid={`dialog-free-access-status-${freeAccessOwner.id}`}>
+                    <p className={`text-sm font-semibold ${currentGrant?.active ? "text-emerald-300" : "text-slate-300"}`}>
+                      {currentGrant
+                        ? currentGrant.active ? "حالة المنحة الحالية: نشطة" : "حالة المنحة الحالية: غير نشطة"
+                        : "لا توجد منحة حساب مجاني محفوظة"}
+                    </p>
+                    {currentGrant && (
+                      <>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {currentGrant.expiresAt ? `تاريخ الانتهاء: ${fmtDate(currentGrant.expiresAt)}` : "تاريخ الانتهاء: مفتوحة"}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-300" data-testid={`dialog-free-access-reason-${freeAccessOwner.id}`}>
+                          السبب المحفوظ: {currentGrant.reason}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+              <div>
+                <label className="mb-1 block text-xs text-slate-400" htmlFor="free-access-duration">مدة الحساب المجاني</label>
+                <Select
+                  value={freeAccessDuration}
+                  onValueChange={(value) => setFreeAccessDuration(value as "unlimited" | "fixed")}
+                >
+                  <SelectTrigger id="free-access-duration" data-testid="select-free-access-duration" className="bg-slate-800 border-slate-600 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent dir="rtl">
+                    <SelectItem value="unlimited">مفتوحة بلا تاريخ انتهاء</SelectItem>
+                    <SelectItem value="fixed">مدة محددة بالأيام</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {freeAccessDuration === "fixed" && (
+                <div>
+                  <label className="mb-1 block text-xs text-slate-400" htmlFor="free-access-days">عدد الأيام (١–٣٦٥٠)</label>
+                  <Input
+                    id="free-access-days"
+                    data-testid="input-free-access-days"
+                    type="text"
+                    inputMode="numeric"
+                    value={toAr(freeAccessDays)}
+                    onChange={(event) => setFreeAccessDays(fromAr(event.target.value))}
+                    className="bg-slate-800 border-slate-600 text-white"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="mb-1 block text-xs text-slate-400" htmlFor="free-access-reason">سبب المنح (مطلوب، ٥–٥٠٠ حرف)</label>
+                <Textarea
+                  id="free-access-reason"
+                  data-testid="input-free-access-reason"
+                  value={freeAccessReason}
+                  onChange={(event) => setFreeAccessReason(event.target.value)}
+                  maxLength={500}
+                  placeholder="اكتب سبب منح الحساب المجاني"
+                  className="bg-slate-800 border-slate-600 text-white"
+                />
+              </div>
+              <div className="rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-xs leading-6 text-amber-200" data-testid="warning-free-access-impact">
+                <p className="font-bold">تنبيه مهم: عند منح الحساب المجاني سيتوقف التجديد التلقائي للاشتراك المدفوع نهائياً.</p>
+                <p>يبقى سجل الاشتراك المدفوع السابق محفوظاً ولا يُحذف.</p>
+              </div>
+              {freeAccessError && <p className="text-sm text-red-400" role="alert" data-testid="status-free-access-error">{freeAccessError}</p>}
+              <div className="flex gap-2">
+                <Button
+                  data-testid="button-confirm-free-access"
+                  onClick={() => {
+                    if (freeAccessSubmitting.current || grantFreeAccess.isPending) return;
+                    freeAccessSubmitting.current = true;
+                    setFreeAccessError(null);
+                    grantFreeAccess.mutate();
+                  }}
+                  disabled={
+                    grantFreeAccess.isPending ||
+                    freeAccessReason.trim().length < 5 ||
+                    freeAccessReason.trim().length > 500 ||
+                    (freeAccessDuration === "fixed" &&
+                      (!Number.isInteger(Number(fromAr(freeAccessDays))) ||
+                        Number(fromAr(freeAccessDays)) < 1 ||
+                        Number(fromAr(freeAccessDays)) > 3650))
+                  }
+                  className="flex-1 bg-emerald-700 text-white hover:bg-emerald-600"
+                >
+                  {grantFreeAccess.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                  تأكيد منح الحساب المجاني
+                </Button>
+                <Button
+                  data-testid="button-cancel-free-access"
+                  variant="outline"
+                  onClick={() => setFreeAccessOwner(null)}
+                  disabled={grantFreeAccess.isPending}
                   className="border-slate-600 text-slate-300"
                 >
                   إلغاء

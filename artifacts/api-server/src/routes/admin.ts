@@ -29,8 +29,13 @@ import {
   ownerExpensesTable,
   customerNotesTable,
   ownerSubscriptionsTable,
+  ownerFreeAccessGrantsTable,
+  ownerBillingProfilesTable,
   subscriptionPromoCodesTable,
   subscriptionCheckoutIntentsTable,
+  subscriptionAddonCheckoutIntentsTable,
+  subscriptionRenewalInvoicesTable,
+  subscriptionRenewalAttemptsTable,
   subscriptionGrantAuditTable,
   contactInquiriesTable,
   ownerTempSessionsTable,
@@ -47,7 +52,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { extractCoordsFromMapsUrl } from "../lib/extractMapCoords";
 import { logger } from "../lib/logger";
-import { getOrStartOwnerSubscription } from "../lib/subscription-access";
+import { getOrStartOwnerSubscription, subscriptionOwnerKeys } from "../lib/subscription-access";
 import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
 import { REMINDER_PREVIEW_PREFIX, getReminderPreview, parseReminderPreview } from "../lib/subscription-reminder-preview";
 
@@ -975,6 +980,16 @@ router.get("/owners", async (_req, res) => {
     const ownerId = ownerAliases.get(s.owner_id) ?? s.owner_id;
     subsByOwnerId.set(ownerId, { expiresAt: s.expires_at ?? null, subscriptionStatus: s.status ?? "" });
   }
+  const grantRows = await db.select().from(ownerFreeAccessGrantsTable);
+  const grantsByOwnerId = new Map<string, typeof grantRows[number]>();
+  for (const grant of grantRows) {
+    const ownerId = ownerAliases.get(grant.ownerId) ?? grant.ownerId;
+    const prior = grantsByOwnerId.get(ownerId);
+    if (!prior || grant.createdAt > prior.createdAt ||
+        (grant.createdAt.getTime() === prior.createdAt.getTime() && grant.id > prior.id)) {
+      grantsByOwnerId.set(ownerId, grant);
+    }
+  }
 
   const supportData = await db.execute<{ owner_id: string; message_count: string }>(
     sql`SELECT owner_id, COUNT(*)::text AS message_count
@@ -1061,6 +1076,10 @@ router.get("/owners", async (_req, res) => {
     if (deletedOwnerIds.has(ownerId)) continue;
     ensureOwner(ownerId, a.phone ?? "", a.created_at ?? null);
   }
+  for (const grant of grantRows) {
+    const ownerId = ownerAliases.get(grant.ownerId) ?? grant.ownerId;
+    if (!deletedOwnerIds.has(ownerId)) ensureOwner(ownerId);
+  }
 
   const countCategories = (assets: OwnerAsset[]) => {
     const counts = new Map<string, number>();
@@ -1071,6 +1090,7 @@ router.get("/owners", async (_req, res) => {
   const result = Array.from(owners.values()).map((owner) => {
     const app = appByOwnerId.get(owner.ownerId);
     const subscription = subsByOwnerId.get(owner.ownerId);
+    const latestFreeAccess = grantsByOwnerId.get(owner.ownerId);
     const primaryProperty = owner.properties[0];
     const primaryService = owner.services[0];
     const propertyCount = owner.properties.length;
@@ -1113,6 +1133,12 @@ router.get("/owners", async (_req, res) => {
       createdAt: app?.createdAt || owner.createdAt,
       expiresAt: subscription?.expiresAt ?? null,
       subscriptionStatus: subscription?.subscriptionStatus ?? "",
+      freeAccess: latestFreeAccess ? {
+        active: latestFreeAccess.expiresAt === null || latestFreeAccess.expiresAt > new Date(),
+        expiresAt: latestFreeAccess.expiresAt,
+        reason: latestFreeAccess.reason,
+        createdAt: latestFreeAccess.createdAt,
+      } : null,
     };
   }).sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 
@@ -2546,6 +2572,158 @@ router.delete("/promo-codes/:id", requireSuperAdmin, async (req, res) => {
     .where(eq(subscriptionPromoCodesTable.id, promo.id))
     .returning();
   res.json({ ...deactivated, deactivatedInsteadOfDeleted: true });
+});
+
+const FreeAccessGrantBody = z.object({
+  duration: z.enum(["unlimited", "fixed"]),
+  days: z.number().int().min(1).max(3650).optional(),
+  reason: z.string().trim().min(5).max(500),
+}).strict().superRefine((grant, ctx) => {
+  if (grant.duration === "fixed" && grant.days === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["days"],
+      message: "مدة الوصول المحدود مطلوبة",
+    });
+  }
+  if (grant.duration === "unlimited" && grant.days !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["days"],
+      message: "لا تُرسل مدة مع الوصول غير المحدود",
+    });
+  }
+});
+
+router.post("/owners/:ownerId/free-access", requireSuperAdmin, async (req, res): Promise<void> => {
+  const parsedOwnerId = z.string().trim().min(1).max(200).regex(/^[A-Za-z0-9_:-]+$/)
+    .safeParse(Array.isArray(req.params.ownerId) ? req.params.ownerId[0] : req.params.ownerId);
+  const body = FreeAccessGrantBody.safeParse(req.body);
+  if (!parsedOwnerId.success || !body.success) {
+    res.status(400).json({ error: "تحقّق من حساب المالك ومدة الوصول وسبب المنح" });
+    return;
+  }
+
+  const ownerId = parsedOwnerId.data;
+  const knownOwner = await db.execute<{ owner_id: string }>(sql`
+    SELECT owner_id FROM (
+      SELECT COALESCE(oal.user_id, 'owner_' || oa.id::text) AS owner_id
+      FROM owner_applications oa
+      LEFT JOIN owner_account_links oal ON oal.owner_application_id = oa.id
+      WHERE oa.deleted_at IS NULL
+      UNION
+      SELECT 'owner_' || id::text AS owner_id
+      FROM owner_applications WHERE deleted_at IS NULL
+      UNION
+      SELECT owner_id FROM chalet_submissions
+      UNION
+      SELECT owner_id FROM service_provider_submissions
+      UNION
+      SELECT user_id AS owner_id FROM owner_account_links
+    ) AS known_owners WHERE owner_id = ${ownerId} LIMIT 1
+  `);
+  if (knownOwner.rows.length === 0) {
+    res.status(404).json({ error: "لم يتم العثور على حساب المالك" });
+    return;
+  }
+
+  const actorId = String(req.adminStaff?.id ?? req.user?.id ?? "").trim();
+  if (!actorId) {
+    res.status(403).json({ error: "تعذّر التحقق من هوية المشرف" });
+    return;
+  }
+  const ownerKeys = await subscriptionOwnerKeys(ownerId);
+  // Ensure a stable row exists, then serialize grant creation with checkout
+  // quoting, finalization, and renewal claim/dispatch on the same owner lock.
+  await getOrStartOwnerSubscription(ownerId);
+  const [grant] = await db.transaction(async (tx) => {
+    await tx.select({ ownerId: ownerSubscriptionsTable.ownerId }).from(ownerSubscriptionsTable)
+      .where(inArray(ownerSubscriptionsTable.ownerId, ownerKeys))
+      .orderBy(ownerSubscriptionsTable.ownerId)
+      .for("update");
+    const now = new Date();
+    const expiresAt = body.data.duration === "unlimited"
+      ? null
+      : new Date(now.getTime() + body.data.days! * 86_400_000);
+    const [created] = await tx.insert(ownerFreeAccessGrantsTable).values({
+      ownerId,
+      actorId,
+      reason: body.data.reason,
+      expiresAt,
+      createdAt: now,
+    }).returning();
+    await tx.update(subscriptionCheckoutIntentsTable)
+      .set({
+        freeAccessBlockedAt: sql`COALESCE(${subscriptionCheckoutIntentsTable.freeAccessBlockedAt}, ${now})`,
+        expiresAt: sql`LEAST(${subscriptionCheckoutIntentsTable.expiresAt}, ${now})`,
+      })
+      .where(and(
+        inArray(subscriptionCheckoutIntentsTable.ownerId, ownerKeys),
+        isNull(subscriptionCheckoutIntentsTable.consumedAt),
+      ));
+    await tx.update(subscriptionAddonCheckoutIntentsTable)
+      .set({
+        freeAccessBlockedAt: sql`COALESCE(${subscriptionAddonCheckoutIntentsTable.freeAccessBlockedAt}, ${now})`,
+        expiresAt: sql`LEAST(${subscriptionAddonCheckoutIntentsTable.expiresAt}, ${now})`,
+      })
+      .where(and(
+        inArray(subscriptionAddonCheckoutIntentsTable.ownerId, ownerKeys),
+        isNull(subscriptionAddonCheckoutIntentsTable.consumedAt),
+      ));
+    const pendingInvoices = await tx.select({ id: subscriptionRenewalInvoicesTable.id })
+      .from(subscriptionRenewalInvoicesTable)
+      .where(and(
+        inArray(subscriptionRenewalInvoicesTable.ownerId, ownerKeys),
+        inArray(subscriptionRenewalInvoicesTable.status, ["pending", "processing", "failed"]),
+      ))
+      .orderBy(subscriptionRenewalInvoicesTable.id)
+      .for("update");
+    for (const invoice of pendingInvoices) {
+      const attempts = await tx.select().from(subscriptionRenewalAttemptsTable)
+        .where(eq(subscriptionRenewalAttemptsTable.invoiceId, invoice.id))
+        .orderBy(subscriptionRenewalAttemptsTable.attemptNumber)
+        .for("update");
+      const mayHaveReachedProvider = attempts.some((attempt) =>
+        ["processing", "dispatching", "dispatched", "initiated", "reconciling"].includes(attempt.status) ||
+        !!attempt.paymentId,
+      );
+      for (const attempt of attempts) {
+        const mayHaveReachedProvider = ["processing", "dispatching", "dispatched", "initiated", "reconciling"]
+          .includes(attempt.status) || !!attempt.paymentId;
+        await tx.update(subscriptionRenewalAttemptsTable)
+          .set({
+            status: mayHaveReachedProvider ? "reconciling" : "cancelled",
+            lastError: mayHaveReachedProvider
+              ? "Free access active; check provider state by payment ID or idempotency key without charging"
+              : "Owner has active superadmin free access",
+            updatedAt: now,
+          })
+          .where(eq(subscriptionRenewalAttemptsTable.id, attempt.id));
+      }
+      await tx.update(subscriptionRenewalInvoicesTable)
+        .set({
+          status: mayHaveReachedProvider ? "processing" : "cancelled",
+          nextAttemptAt: now,
+          lastError: "Owner has active superadmin free access",
+        })
+        .where(eq(subscriptionRenewalInvoicesTable.id, invoice.id));
+    }
+    await tx.update(ownerSubscriptionsTable)
+      .set({ autoRenewEnabled: false })
+      .where(inArray(ownerSubscriptionsTable.ownerId, ownerKeys));
+    await tx.update(ownerBillingProfilesTable)
+      .set({ autoRenewEnabled: false, updatedAt: now })
+      .where(inArray(ownerBillingProfilesTable.ownerId, ownerKeys));
+    return [created];
+  });
+  res.status(201).json({
+    freeAccess: {
+      active: true,
+      expiresAt: grant.expiresAt,
+      reason: grant.reason,
+      createdAt: grant.createdAt,
+    },
+  });
 });
 
 const ManualGrantBody = z.object({

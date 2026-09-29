@@ -3,13 +3,21 @@ import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   ownerSubscriptionsTable,
+  ownerFreeAccessGrantsTable,
   subscriptionAddonCheckoutIntentsTable,
   subscriptionAddonPurchasesTable,
+  subscriptionPaymentReconciliationsTable,
   subscriptionPaymentsTable,
   subscriptionPlansTable,
   ownerBillingProfilesTable,
 } from "@workspace/db/schema";
-import { isSubscriptionActive, ownerPlanAccess, subscriptionOwnerKeys } from "./subscription-access";
+import {
+  isOwnerFreeAccessGrantActive,
+  isSubscriptionActive,
+  latestOwnerFreeAccess,
+  ownerPlanAccess,
+  subscriptionOwnerKeys,
+} from "./subscription-access";
 import {
   decryptMoyasarToken,
   encryptMoyasarToken,
@@ -19,6 +27,7 @@ import {
   addonPurchaseBillingTerms,
   quoteAddonCheckout,
 } from "./subscription-billing-math";
+import { retrySubscriptionPaymentReconciliation } from "./subscription-payment-reconciliation";
 
 const INTENT_TTL_MS = 30 * 60 * 1000;
 const MAX_HALALA_AMOUNT = 2_147_483_647;
@@ -27,6 +36,15 @@ export class SubscriptionAddonCheckoutError extends Error {
   constructor(message: string, readonly statusCode = 400) {
     super(message);
     this.name = "SubscriptionAddonCheckoutError";
+  }
+}
+
+class StaleAddonCheckoutPaymentError extends Error {
+  constructor(readonly refundEligible = true) {
+    super(refundEligible
+      ? "A provider-confirmed add-on payment was captured after a free-access grant"
+      : "A provider-confirmed add-on payment has no verifiable timestamp while free access exists");
+    this.name = "StaleAddonCheckoutPaymentError";
   }
 }
 
@@ -47,6 +65,37 @@ interface AddonInvoice {
 interface CompletedAddonCheckout {
   purchase: typeof subscriptionAddonPurchasesTable.$inferSelect;
   invoice: AddonInvoice;
+}
+
+async function recordAndRefundStaleAddonCheckout(input: {
+  checkoutId: string;
+  ownerId: string;
+  paymentId: string;
+  amountHalala: number;
+  refundEligible: boolean;
+}): Promise<string> {
+  const [reconciliation] = await db.insert(subscriptionPaymentReconciliationsTable).values({
+    paymentId: input.paymentId,
+    ownerId: input.ownerId,
+    intentId: input.checkoutId,
+    amountHalala: input.amountHalala,
+    reason: input.refundEligible
+      ? "A provider-confirmed add-on payment was captured after a superadmin free-access grant; do not activate the purchase"
+      : "A provider-confirmed add-on payment has no verifiable timestamp while free access exists; do not activate without review",
+    status: "required",
+    refundEligible: input.refundEligible,
+  }).onConflictDoNothing().returning();
+  await db.update(subscriptionAddonCheckoutIntentsTable)
+    .set({ consumedAt: new Date() })
+    .where(and(
+      eq(subscriptionAddonCheckoutIntentsTable.id, input.checkoutId),
+      isNull(subscriptionAddonCheckoutIntentsTable.consumedAt),
+    ));
+  if (reconciliation) return retrySubscriptionPaymentReconciliation(reconciliation.id);
+  const [existing] = await db.select({ id: subscriptionPaymentReconciliationsTable.id })
+    .from(subscriptionPaymentReconciliationsTable)
+    .where(eq(subscriptionPaymentReconciliationsTable.paymentId, input.paymentId)).limit(1);
+  return existing ? retrySubscriptionPaymentReconciliation(existing.id) : "required";
 }
 
 function validateAddonType(addonType: unknown): asserts addonType is SubscriptionAddonType {
@@ -143,6 +192,9 @@ async function readAddonQuoteContext(input: {
   addonType: SubscriptionAddonType;
 }): Promise<AddonQuoteContext> {
   const access = await ownerPlanAccess(input.ownerId);
+  if (access.freeAccess?.active) {
+    throw new SubscriptionAddonCheckoutError("لديك وصول مجاني كامل حالياً؛ لا يلزم شراء إضافات", 409);
+  }
   const configuredPrice = input.addonType === "chalet"
     ? access.extraChaletPrice
     : access.extraServicePrice;
@@ -298,9 +350,21 @@ export async function createAddonCheckout(input: {
     if (!lockedSubscription || !isSubscriptionActive(lockedSubscription) || !lockedSubscription.expiresAt) {
       throw new SubscriptionAddonCheckoutError("انتهى اشتراكك. جدّده قبل شراء الإضافات.", 403);
     }
-    const freshAccess = await ownerPlanAccess(input.ownerId);
-    const access = { ...freshAccess, subscription: lockedSubscription };
     const linkedOwnerIds = await subscriptionOwnerKeys(input.ownerId);
+    const freeGrants = await tx.select({
+      id: ownerFreeAccessGrantsTable.id,
+      expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+      createdAt: ownerFreeAccessGrantsTable.createdAt,
+    }).from(ownerFreeAccessGrantsTable)
+      .where(inArray(ownerFreeAccessGrantsTable.ownerId, linkedOwnerIds));
+    if (isOwnerFreeAccessGrantActive(latestOwnerFreeAccess(freeGrants))) {
+      throw new SubscriptionAddonCheckoutError("لديك وصول مجاني كامل حالياً؛ لا يلزم شراء إضافات", 409);
+    }
+    const freshAccess = await ownerPlanAccess(input.ownerId);
+    if (freshAccess.freeAccess?.active) {
+      throw new SubscriptionAddonCheckoutError("لديك وصول مجاني كامل حالياً؛ لا يلزم شراء إضافات", 409);
+    }
+    const access = { ...freshAccess, subscription: lockedSubscription };
     const existingRecurringAddons = await tx.select().from(subscriptionAddonPurchasesTable)
       .where(inArray(subscriptionAddonPurchasesTable.ownerId, linkedOwnerIds));
     const cycleDays = lockedSubscription.billingCycleDays ?? context.cycleDays;
@@ -502,6 +566,7 @@ async function finalizeAddonCheckout(input: {
   paymentId: string;
   paidAmountHalala: number;
   paidAt: Date;
+  paidAtKnown: boolean;
   allowPaidBeforeExpiry: boolean;
   paymentToken?: string;
 }): Promise<CompletedAddonCheckout> {
@@ -514,6 +579,10 @@ async function finalizeAddonCheckout(input: {
 
   try {
     return await db.transaction(async (tx) => {
+      const [lockedSubscription] = await tx.select().from(ownerSubscriptionsTable)
+        .where(eq(ownerSubscriptionsTable.ownerId, previewIntent.ownerId))
+        .for("update")
+        .limit(1);
       const [intent] = await tx.select().from(subscriptionAddonCheckoutIntentsTable)
         .where(eq(subscriptionAddonCheckoutIntentsTable.id, input.checkoutId))
         .for("update")
@@ -532,6 +601,21 @@ async function finalizeAddonCheckout(input: {
         return { purchase: existingPurchase, invoice: buildInvoice(existingPurchase) };
       }
 
+      if (intent.amountHalala === 0) {
+        if (intent.freeAccessBlockedAt) {
+          throw new SubscriptionAddonCheckoutError("تم منحك وصولاً مجانياً كاملاً؛ لا حاجة لاسترداد هذا الطلب", 409);
+        }
+        const freeGrants = await tx.select({
+          id: ownerFreeAccessGrantsTable.id,
+          expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+          createdAt: ownerFreeAccessGrantsTable.createdAt,
+        }).from(ownerFreeAccessGrantsTable)
+          .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
+        if (isOwnerFreeAccessGrantActive(latestOwnerFreeAccess(freeGrants))) {
+          throw new SubscriptionAddonCheckoutError("لديك وصول مجاني كامل حالياً؛ لا حاجة لاسترداد الإضافة", 409);
+        }
+      }
+
       const [paymentUse] = await tx.select().from(subscriptionPaymentsTable)
         .where(eq(subscriptionPaymentsTable.paymentId, input.paymentId)).limit(1);
       if (paymentUse) throw new SubscriptionAddonCheckoutError("سبق استخدام عملية الدفع هذه", 409);
@@ -539,15 +623,27 @@ async function finalizeAddonCheckout(input: {
       if (intent.amountHalala !== input.paidAmountHalala) {
         throw new SubscriptionAddonCheckoutError("المبلغ المدفوع لا يتطابق مع طلب الإضافة");
       }
+      const grantRows = await tx.select({
+        id: ownerFreeAccessGrantsTable.id,
+        expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+        createdAt: ownerFreeAccessGrantsTable.createdAt,
+      }).from(ownerFreeAccessGrantsTable)
+        .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
+      const latestGrant = latestOwnerFreeAccess(grantRows);
+      const grantCutoff = intent.freeAccessBlockedAt ??
+        (isOwnerFreeAccessGrantActive(latestGrant, input.paidAt) ? latestGrant?.createdAt : undefined);
+      if (intent.amountHalala > 0 && grantCutoff &&
+          (!input.paidAtKnown || input.paidAt > grantCutoff)) {
+        throw new StaleAddonCheckoutPaymentError(input.paidAtKnown);
+      }
       if (intent.expiresAt <= new Date() &&
           (!input.allowPaidBeforeExpiry || input.paidAt > intent.expiresAt)) {
-        throw new SubscriptionAddonCheckoutError("انتهت صلاحية طلب الدفع؛ ابدأ عملية دفع جديدة", 410);
+        if (!(grantCutoff && input.paidAmountHalala > 0 && input.paidAt <= grantCutoff)) {
+          throw new SubscriptionAddonCheckoutError("انتهت صلاحية طلب الدفع؛ ابدأ عملية دفع جديدة", 410);
+        }
       }
 
-      const [subscription] = await tx.select().from(ownerSubscriptionsTable)
-        .where(eq(ownerSubscriptionsTable.ownerId, intent.ownerId))
-        .for("update")
-        .limit(1);
+      const subscription = lockedSubscription;
       if (!subscription || (input.paidAmountHalala === 0 && !isSubscriptionActive(subscription))) {
         throw new SubscriptionAddonCheckoutError("انتهى اشتراكك؛ جدّده قبل تفعيل الإضافة المجانية.", 403);
       }
@@ -567,6 +663,8 @@ async function finalizeAddonCheckout(input: {
         monthlyUnitPriceHalala: intent.monthlyUnitPriceHalala,
         paidThroughAt: intent.periodEndAt,
       });
+      const recurring = !intent.freeAccessBlockedAt &&
+        !isOwnerFreeAccessGrantActive(latestGrant) && billingTerms.recurring;
       const [purchase] = await tx.insert(subscriptionAddonPurchasesTable).values({
         ownerId: intent.ownerId,
         addonType: intent.addonType,
@@ -574,7 +672,7 @@ async function finalizeAddonCheckout(input: {
         intentId: intent.id,
         quantity: intent.quantity,
         amountHalala: intent.amountHalala,
-        recurring: billingTerms.recurring,
+        recurring,
         monthlyUnitPriceHalala: billingTerms.monthlyUnitPriceHalala,
         periodStartAt: intent.periodStartAt,
         paidThroughAt: billingTerms.paidThroughAt,
@@ -618,6 +716,19 @@ async function finalizeAddonCheckout(input: {
   } catch (error) {
     const completed = await readCompletedAddonCheckout(input.ownerId, input.checkoutId, input.paymentId);
     if (completed) return completed;
+    if (error instanceof StaleAddonCheckoutPaymentError) {
+      const status = await recordAndRefundStaleAddonCheckout({
+        checkoutId: input.checkoutId,
+        ownerId: previewIntent.ownerId,
+        paymentId: input.paymentId,
+        amountHalala: input.paidAmountHalala,
+        refundEligible: error.refundEligible,
+      });
+      if (status === "refunded") {
+        throw new SubscriptionAddonCheckoutError("تم منح وصول مجاني بعد الدفع؛ تم رد المبلغ ولم يتم تفعيل الإضافة", 409);
+      }
+      throw new SubscriptionAddonCheckoutError("تم منح وصول مجاني بعد الدفع؛ سُجلت العملية للاسترداد أو المراجعة ولم يتم تفعيل الإضافة", 409);
+    }
     throw error;
   }
 }
@@ -690,14 +801,16 @@ export async function confirmAddonCheckout(input: {
     throw new SubscriptionAddonCheckoutError("عملية الدفع غير مرتبطة بطلب الإضافة هذا", 403);
   }
 
-  const paidAt = payment.created_at ? new Date(payment.created_at) : new Date();
-  if (Number.isNaN(paidAt.getTime())) throw new SubscriptionAddonCheckoutError("تاريخ الدفع غير صالح");
+  const createdAt = payment.created_at ? new Date(payment.created_at) : null;
+  const paidAtKnown = !!createdAt && !Number.isNaN(createdAt.getTime());
+  const paidAt = paidAtKnown ? createdAt! : new Date();
   return finalizeAddonCheckout({
     ownerId: input.ownerId,
     checkoutId: input.checkoutId,
     paymentId: input.paymentId,
     paidAmountHalala: payment.amount,
     paidAt,
+    paidAtKnown,
     allowPaidBeforeExpiry: true,
     paymentToken: typeof payment.source?.token === "string" ? payment.source.token : undefined,
   });
@@ -726,6 +839,7 @@ export async function redeemFreeAddonCheckout(input: {
     paymentId: `free-addon:${input.checkoutId}`,
     paidAmountHalala: 0,
     paidAt: new Date(),
+    paidAtKnown: true,
     allowPaidBeforeExpiry: false,
   });
 }

@@ -445,6 +445,7 @@ function UpgradePlanDialog({
   context,
   active,
   extraPrice,
+  freeAccess = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -452,6 +453,7 @@ function UpgradePlanDialog({
   context: "chalet" | "service";
   active?: boolean;
   extraPrice?: number | string | null;
+  freeAccess?: boolean;
 }) {
   const [, navigate] = useLocation();
   return (
@@ -463,12 +465,14 @@ function UpgradePlanDialog({
             خيارات السعة والاشتراك
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            {context === "chalet"
+            {freeAccess
+              ? "حسابك يتمتع بصلاحية مجانية كاملة؛ إذا واجهت مشكلة في السعة فتواصل مع الدعم."
+              : context === "chalet"
               ? "لقد وصلت إلى الحد الأقصى من العقارات في خطتك الحالية. يمكنك إضافة سعة إلى اشتراكك أو اختيار خطة أعلى."
               : "لقد وصلت إلى الحد الأقصى من الخدمات. يمكنك إضافة سعة إلى اشتراكك أو اختيار خطة أعلى."}
           </DialogDescription>
         </DialogHeader>
-        {active && extraPrice != null && (
+        {!freeAccess && active && extraPrice != null && (
           <div className="flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-bold text-foreground">
@@ -489,9 +493,11 @@ function UpgradePlanDialog({
             </Button>
           </div>
         )}
-        <Button variant="outline" className="w-full mt-4" onClick={() => { onClose(); navigate("/subscription"); }}>
-          عرض الباقات والأسعار الحالية
-        </Button>
+        {!freeAccess && (
+          <Button variant="outline" className="w-full mt-4" onClick={() => { onClose(); navigate("/subscription"); }}>
+            عرض الباقات والأسعار الحالية
+          </Button>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -1525,11 +1531,13 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { 
         <Home className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-foreground mb-2">لا توجد عقارات بعد</h3>
         <p className="text-muted-foreground mb-6">
-          {planLimits?.active === false
+          {planLimits?.freeAccess?.active
+            ? "حسابك يتمتع بصلاحية مجانية كاملة."
+            : planLimits?.active === false
             ? "جدّد اشتراكك قبل إضافة عقارك الأول."
             : "ابدأ بإضافة عقارك الأول من زر «إضافة عقار أو خدمة» أعلى الصفحة للمراجعة والنشر."}
         </p>
-        {planLimits?.active === false && (
+        {planLimits?.active === false && !planLimits?.freeAccess?.active && (
           <Link href="/subscription">
             <Button><Lock className="w-4 h-4 me-2" />جدّد الاشتراك لإضافة عقار</Button>
           </Link>
@@ -1558,7 +1566,9 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { 
           </div>
           {atChaletLimit && (
             <div className="flex flex-wrap items-center gap-2">
-              {planLimits.active === false ? (
+              {planLimits.freeAccess?.active ? (
+                <span className="text-xs text-emerald-700 dark:text-emerald-300">صلاحية مجانية كاملة — لا توجد مشتريات مدفوعة مطلوبة</span>
+              ) : planLimits.active === false ? (
                 <Link href="/subscription">
                   <Button size="sm" variant="default" className="rounded-xl shrink-0 text-xs h-8">
                     <Zap className="w-3.5 h-3.5 me-1" />
@@ -1584,6 +1594,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { 
         context="chalet"
         active={planLimits?.active}
         extraPrice={planLimits?.extraChaletPrice}
+        freeAccess={!!planLimits?.freeAccess?.active}
       />
       <BlockDatesDialog
         open={!!blockTarget}
@@ -25017,6 +25028,12 @@ type DashboardSubscription = {
   expiresAt: string | null;
   paymentStatus: string;
   reminderPreviewMilestone?: 3 | 0;
+  freeAccess?: {
+    active: boolean;
+    expiresAt: string | null;
+    reason: string;
+    createdAt: string;
+  } | null;
 };
 
 function subscriptionDaysRemaining(subscription: DashboardSubscription): number | null {
@@ -25045,6 +25062,7 @@ type OwnerPlanLimits = {
   serviceCount: number;
   extraChaletPrice?: number | string | null;
   extraServicePrice?: number | string | null;
+  freeAccess?: DashboardSubscription["freeAccess"];
 };
 
 function SubscriptionAccountBanner({
@@ -25073,24 +25091,48 @@ function SubscriptionAccountBanner({
       type="button"
       onClick={onManage}
       className={`mb-5 w-full border rounded-2xl px-4 sm:px-5 py-3 flex items-center gap-3 flex-wrap text-sm transition-colors text-start cursor-pointer ${
-        subscription.status === "expired"
-          ? "bg-red-50 border-red-300 text-red-800 dark:bg-red-950/30 dark:border-red-800 dark:text-red-200"
-          : "bg-card border-border hover:bg-accent/40"
+        subscription.freeAccess?.active
+          ? "bg-emerald-50 border-emerald-300 text-emerald-950 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-100"
+          : subscription.status === "expired"
+            ? "bg-red-50 border-red-300 text-red-800 dark:bg-red-950/30 dark:border-red-800 dark:text-red-200"
+            : "bg-card border-border hover:bg-accent/40"
       }`}
     >
-      <CreditCard className="w-4 h-4 text-primary shrink-0" />
-      <span className="font-semibold">{subscription.status === "expired" ? "انتهى اشتراكك" : "حسابي والاشتراك"}</span>
-      <span className="font-medium text-muted-foreground">{planLabels[subscription.plan] ?? subscription.plan}</span>
-      <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${statusCls[subscription.status] ?? "bg-muted text-muted-foreground"}`}>
-        {{ active: "نشط ✓", trial: "تجريبي", expired: "منتهي", suspended: "موقوف" }[subscription.status] ?? subscription.status}
+      <CreditCard className={`w-4 h-4 shrink-0 ${subscription.freeAccess?.active ? "text-emerald-700 dark:text-emerald-300" : "text-primary"}`} />
+      <span className="font-semibold">
+        {subscription.freeAccess?.active ? "صلاحية مجانية كاملة" : subscription.status === "expired" ? "انتهى اشتراكك" : "حسابي والاشتراك"}
       </span>
-      {days !== null && (
+      <span className="font-medium text-muted-foreground">
+        {subscription.freeAccess?.active ? "كامل المزايا — دون دفع" : planLabels[subscription.plan] ?? subscription.plan}
+      </span>
+      <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+        subscription.freeAccess?.active
+          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+          : statusCls[subscription.status] ?? "bg-muted text-muted-foreground"
+      }`}>
+        {subscription.freeAccess?.active
+          ? "مجاني بالكامل ✓"
+          : ({ active: "نشط ✓", trial: "تجريبي", expired: "منتهي", suspended: "موقوف" }[subscription.status] ?? subscription.status)}
+      </span>
+      {subscription.freeAccess?.active ? (
+        <span className="text-xs font-medium text-emerald-800 dark:text-emerald-200">
+          {subscription.freeAccess.expiresAt
+            ? `الصلاحية حتى ${new Date(subscription.freeAccess.expiresAt).toLocaleDateString("ar-SA")}`
+            : "الصلاحية مفتوحة"}
+        </span>
+      ) : days !== null && (
         <span className={`text-xs font-medium ${days < 7 ? "text-red-600" : "text-muted-foreground"}`}>
           {subscription.status === "expired" ? "جدّد الآن لمواصلة استقبال الحجوزات" : `${toArN(Math.max(0, days))} يوم متبقي`}
         </span>
       )}
+      {subscription.freeAccess?.active && (
+        <span className="text-xs font-medium text-emerald-800 dark:text-emerald-200">
+          التجديد التلقائي المدفوع متوقف
+          {subscription.freeAccess.reason ? ` · السبب: ${subscription.freeAccess.reason}` : ""}
+        </span>
+      )}
       <span className="sm:ms-auto flex items-center gap-1.5 text-xs font-semibold text-primary">
-        {subscription.status === "expired" ? "تجديد الاشتراك" : "إدارة"}
+        {subscription.freeAccess?.active ? "عرض التفاصيل" : subscription.status === "expired" ? "تجديد الاشتراك" : "إدارة"}
         <ExternalLink className="w-3.5 h-3.5" />
       </span>
     </button>
@@ -25276,6 +25318,14 @@ export default function Dashboard() {
     refetchInterval: (query) =>
       (query.state.data as DashboardSubscription | null)?.reminderPreviewMilestone !== undefined ? 30_000 : false,
   });
+  const freeAccess = subscription?.freeAccess?.active
+    ? subscription.freeAccess
+    : planLimits?.freeAccess?.active ? planLimits.freeAccess : null;
+  const dashboardSubscription: DashboardSubscription | null = subscription
+    ? { ...subscription, freeAccess }
+    : freeAccess
+      ? { plan: "trial", status: "active", expiresAt: null, paymentStatus: "paid", freeAccess }
+      : null;
 
   /* Render only modules granted by the current subscription. The property-only
      package keeps bookings and property management available. */
@@ -25653,7 +25703,7 @@ export default function Dashboard() {
         </div>
       )}
       <Navbar />
-      {!actAsStaff && subscription && isSubscriptionExpiryWarning(subscription)
+      {!actAsStaff && !freeAccess && subscription && isSubscriptionExpiryWarning(subscription)
         && (subscription.reminderPreviewMilestone !== undefined || (!isStaff && !isImpersonating)) && (() => {
         const isPreview = subscription.reminderPreviewMilestone !== undefined;
         const daysRemaining = subscriptionDaysRemaining(subscription);
@@ -25772,7 +25822,7 @@ export default function Dashboard() {
                           ? navigate("/subscription")
                           : headerAtChaletLimit ? setShowHeaderAddon("chalet") : navigate("/add-chalet")}
                       >
-                        {headerAtChaletLimit && planLimits?.active !== false ? "طلب سعة لعقار إضافي" : "إضافة عقار"}
+                        {headerAtChaletLimit && planLimits?.active !== false && !freeAccess ? "طلب سعة لعقار إضافي" : "إضافة عقار"}
                       </DropdownMenuItem>
                     )}
                     {canSeeServices && (
@@ -25783,7 +25833,7 @@ export default function Dashboard() {
                           ? navigate("/subscription")
                           : atServiceLimit ? setShowHeaderAddon("service") : navigate("/add-service-provider")}
                       >
-                        {atServiceLimit && planLimits?.active !== false ? "طلب سعة لخدمة إضافية" : "إضافة خدمة"}
+                        {atServiceLimit && planLimits?.active !== false && !freeAccess ? "طلب سعة لخدمة إضافية" : "إضافة خدمة"}
                       </DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
@@ -25843,8 +25893,17 @@ export default function Dashboard() {
             )}
           </div>
         </motion.div>
+        <UpgradePlanDialog
+          open={showHeaderAddon !== null && !!freeAccess}
+          onClose={() => setShowHeaderAddon(null)}
+          onRequestAddon={() => {}}
+          context={showHeaderAddon ?? "chalet"}
+          active={planLimits?.active}
+          extraPrice={showHeaderAddon === "service" ? planLimits?.extraServicePrice : planLimits?.extraChaletPrice}
+          freeAccess
+        />
         <AddonPaymentModal
-          open={showHeaderAddon !== null}
+          open={showHeaderAddon !== null && !freeAccess}
           onClose={() => setShowHeaderAddon(null)}
           addonType={showHeaderAddon ?? "chalet"}
           selectableType
@@ -25935,8 +25994,8 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-5"
           >
-            {subscription && !isSubscriptionExpiryWarning(subscription) && (
-              <SubscriptionAccountBanner subscription={subscription} onManage={() => navigate("/subscription")} />
+            {dashboardSubscription && (freeAccess || !isSubscriptionExpiryWarning(dashboardSubscription)) && (
+              <SubscriptionAccountBanner subscription={dashboardSubscription} onManage={() => navigate("/subscription")} />
             )}
 
             {/* Header */}
@@ -26266,8 +26325,8 @@ export default function Dashboard() {
           <>
 
         {/* Subscription / Account Settings — clickable banner */}
-        {subscription && !isSubscriptionExpiryWarning(subscription) && (
-          <SubscriptionAccountBanner subscription={subscription} onManage={() => navigate("/subscription")} />
+        {dashboardSubscription && (freeAccess || !isSubscriptionExpiryWarning(dashboardSubscription)) && (
+          <SubscriptionAccountBanner subscription={dashboardSubscription} onManage={() => navigate("/subscription")} />
         )}
 
         {/* Notification Settings — owner only */}

@@ -10,7 +10,7 @@ import {
   ownerSubscriptionsTable,
 } from "@workspace/db/schema";
 import { eq, lte, gte, and, sql, inArray, isNull, or, type SQL } from "drizzle-orm";
-import { isSubscriptionActive, preferredOwnerSubscription } from "../lib/subscription-access";
+import { activeOwnersWithFreeAccess, isSubscriptionActive, preferredOwnerSubscription } from "../lib/subscription-access";
 import {
   GetChaletsQueryParams,
   GetChaletByIdParams,
@@ -50,7 +50,9 @@ async function activeInventoryOwnerIds(ownerIds: Array<string | null | undefined
     expiresAt: ownerSubscriptionsTable.expiresAt,
     paymentStatus: ownerSubscriptionsTable.paymentStatus,
   }).from(ownerSubscriptionsTable).where(inArray(ownerSubscriptionsTable.ownerId, subscriptionKeys));
+  const activeFreeAccess = await activeOwnersWithFreeAccess(keysByOwner);
   return new Set(owners.filter((ownerId) =>
+    activeFreeAccess.has(ownerId) ||
     isSubscriptionActive(preferredOwnerSubscription(
       subscriptions.filter((subscription) => keysByOwner.get(ownerId)?.has(subscription.ownerId)),
     ) ?? { status: "expired", expiresAt: null }),

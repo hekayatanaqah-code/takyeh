@@ -47,7 +47,7 @@ import type { Request, Response, NextFunction } from "express";
 import { sendOtpEmail, sendReportEmail } from "../lib/email";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
-import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess, subscriptionOwnerKeys } from "../lib/subscription-access";
+import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess, subscriptionOwnerKeys, getOwnerFreeAccess } from "../lib/subscription-access";
 import { getReminderPreview } from "../lib/subscription-reminder-preview";
 import { createSubscriptionCheckout, previewSubscriptionCheckout, confirmSubscriptionCheckout, redeemFreeSubscriptionCheckout, SubscriptionCheckoutError } from "../lib/subscription-checkout";
 import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
@@ -1466,8 +1466,8 @@ router.get("/bookings/cancelled", async (req, res) => {
 router.post("/bookings", async (req, res) => {
   console.log("[POST /owner/bookings] raw body:", JSON.stringify(req.body));
   const ownerId = req.user!.id;
-  const subscription = await getOrStartOwnerSubscription(ownerId);
-  if (!isSubscriptionActive(subscription)) {
+  const access = await ownerPlanAccess(ownerId);
+  if (!access.active) {
     return res.status(403).json({ error: "انتهى اشتراكك. جدّده لاستقبال حجوزات جديدة.", upgradeRequired: true });
   }
   const body = z.object({
@@ -2136,7 +2136,7 @@ router.patch("/chalets/:id/toggle-active", async (req, res) => {
   const [chalet] = await db.select({ id: chaletsTable.id, submissionId: chaletsTable.submissionId, isActive: chaletsTable.isActive })
     .from(chaletsTable).where(eq(chaletsTable.id, chaletId)).limit(1);
   if (!chalet) return res.status(404).json({ error: "الشاليه غير موجود" });
-  if (!chalet.isActive && !isSubscriptionActive(await getOrStartOwnerSubscription(ownerId))) {
+  if (!chalet.isActive && !(await ownerPlanAccess(ownerId)).active) {
     return res.status(403).json({ error: "جدّد اشتراكك لتفعيل العقار", upgradeRequired: true });
   }
 
@@ -2756,6 +2756,7 @@ router.get("/plan-limits", async (req, res) => {
   return res.json({
     plan: access.subscription.plan,
     active: access.active,
+    freeAccess: access.freeAccess,
     scope: access.scope,
     chaletLimit: access.chaletLimit,
     serviceLimit: access.serviceLimit,
@@ -3210,6 +3211,7 @@ router.post("/subscription/auto-renew/cancel", async (req, res) => {
 router.get("/subscription", async (req, res) => {
   const ownerId = req.user!.id;
   const sub = await getOrStartOwnerSubscription(ownerId);
+  const freeAccess = await getOwnerFreeAccess(ownerId);
   const billing = await getSubscriptionBillingReadiness(sub.ownerId);
   // Only the dashboard explicitly opts in to the visual preview. Billing and
   // checkout readers of this endpoint always receive the real subscription.
@@ -3230,9 +3232,15 @@ router.get("/subscription", async (req, res) => {
   return res.json({
     ...sub,
     planDetails: sub.termsSnapshot ?? planDetails ?? null,
-    status: preview ? "active" : isSubscriptionActive(sub) ? sub.status : "expired",
-    expiresAt: preview ? preview.expiresAt : sub.expiresAt,
-    daysLeft: preview ? preview.milestone : calcDaysLeft(sub.expiresAt),
+    status: preview || freeAccess?.active ? "active" : isSubscriptionActive(sub) ? sub.status : "expired",
+    expiresAt: preview ? preview.expiresAt : freeAccess?.active ? freeAccess.expiresAt : sub.expiresAt,
+    paidExpiresAt: sub.expiresAt,
+    daysLeft: preview
+      ? preview.milestone
+      : freeAccess?.active
+        ? freeAccess.expiresAt ? calcDaysLeft(freeAccess.expiresAt) : null
+        : calcDaysLeft(sub.expiresAt),
+    freeAccess,
     ...billing,
     autoRenewEnabled: billing.autoRenewEnabled,
     ...(preview ? { reminderPreviewMilestone: preview.milestone } : {}),

@@ -5,7 +5,7 @@ import { CreateSubmissionBody } from "@workspace/api-zod";
 import { eq, and, ne, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { sendAdminNewSubmissionEmail } from "../lib/email";
-import { isSubscriptionActive, ownerPlanAccess } from "../lib/subscription-access";
+import { ownerPlanAccess } from "../lib/subscription-access";
 
 const SubmissionBodyStrict = CreateSubmissionBody.extend({
   nameAr: z.string().trim().min(2, "اسم الشاليه مطلوب (حرفان على الأقل)"),
@@ -223,7 +223,7 @@ router.post("/", async (req, res) => {
 
   const ownerAccess = ownerId ? await ownerPlanAccess(ownerId) : null;
   if (ownerAccess) {
-    if (!isSubscriptionActive(ownerAccess.subscription)) {
+    if (!ownerAccess.active) {
       return res.status(403).json({ error: "انتهى اشتراكك. جدّده لإضافة عقار جديد.", upgradeRequired: true });
     }
     if (ownerAccess.chaletCount >= ownerAccess.chaletLimit) {
@@ -318,7 +318,7 @@ router.post("/", async (req, res) => {
   const [submission] = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${ownerAccess!.subscription.ownerId}))`);
     const currentAccess = await ownerPlanAccess(ownerId!);
-    if (!isSubscriptionActive(currentAccess.subscription) ||
+    if (!currentAccess.active ||
         currentAccess.chaletCount >= currentAccess.chaletLimit) return [null];
     return tx.insert(chaletSubmissionsTable)
     .values({
