@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Loader2, Send, Megaphone, History, RefreshCw } from "lucide-react";
+import { Loader2, Send, Megaphone, History, RefreshCw, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Audience = "all" | "active" | "providers";
 type Channel = "inApp" | "inbox" | "email" | "whatsapp";
@@ -23,6 +25,12 @@ interface BroadcastRow {
   channels: Channel[];
   createdAt: string;
   counts: Record<string, unknown>;
+}
+
+interface Recipient {
+  key: string;
+  name: string;
+  channels: Channel[];
 }
 
 const CHANNELS: Array<{ id: Channel; label: string }> = [
@@ -86,7 +94,7 @@ function hasDeliveryFailures(counts: unknown): boolean {
   );
 }
 
-export function BroadcastTab() {
+export function BroadcastTab({ onNavigate }: { onNavigate?: (tab: "broadcastSettings") => void }) {
   const [audience, setAudience] = useState<Audience>("all");
   const [preview, setPreview] = useState<Preview>(blankPreview);
   const [previewLoading, setPreviewLoading] = useState(true);
@@ -97,6 +105,11 @@ export function BroadcastTab() {
   const [body, setBody] = useState("");
   const [channels, setChannels] = useState<Channel[]>([]);
   const [sending, setSending] = useState(false);
+  const [recipientsOpen, setRecipientsOpen] = useState(false);
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [recipientTotal, setRecipientTotal] = useState(0);
+  const [recipientsLoading, setRecipientsLoading] = useState(false);
+  const [recipientsError, setRecipientsError] = useState("");
   const [resultMessage, setResultMessage] = useState("");
   const [resultCounts, setResultCounts] = useState<unknown>(null);
   const [sendError, setSendError] = useState("");
@@ -181,8 +194,40 @@ export function BroadcastTab() {
     setResultCounts(null);
   }
 
+  async function previewRecipients() {
+    setRecipientsOpen(true);
+    setRecipientsLoading(true);
+    setRecipientsError("");
+    setRecipients([]);
+    setRecipientTotal(0);
+    try {
+      const selectedChannels = [...channels].sort();
+      const query = new URLSearchParams({
+        audience,
+        channels: selectedChannels.join(","),
+      });
+      const response = await apiFetch(`/admin/broadcast/recipients?${query.toString()}`);
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error ?? "تعذر تحميل قائمة المستلمين");
+      const channelIds = new Set(CHANNELS.map(({ id }) => id));
+      const rows = Array.isArray(data?.recipients) ? data.recipients : [];
+      setRecipients(rows.map((recipient: Recipient) => ({
+        key: String(recipient.key),
+        name: String(recipient.name ?? ""),
+        channels: Array.isArray(recipient.channels)
+          ? recipient.channels.filter((channel): channel is Channel => channelIds.has(channel))
+          : [],
+      })));
+      setRecipientTotal(Number(data?.total) || 0);
+    } catch (error) {
+      setRecipientsError(error instanceof Error ? error.message : "تعذر تحميل قائمة المستلمين");
+    } finally {
+      setRecipientsLoading(false);
+    }
+  }
+
   async function sendBroadcast() {
-    if (!title.trim() || !body.trim() || !channels.length || sending) return;
+    if (!recipientsOpen || recipientsLoading || recipientsError || previewLoading || !title.trim() || !body.trim() || !channels.length || channels.some((channel) => !preview.readiness[channel]) || sending) return;
     const key = attempt?.signature === signature ? attempt.key : crypto.randomUUID();
     setAttempt({ signature, key });
     setSending(true);
@@ -206,6 +251,7 @@ export function BroadcastTab() {
       } else {
         setResultMessage("تم تسجيل التعميم. راجع حالة كل قناة أدناه.");
       }
+      setRecipientsOpen(false);
       setAttempt(null);
       await loadHistory();
     } catch (error) {
@@ -217,12 +263,15 @@ export function BroadcastTab() {
 
   return (
     <div className="space-y-6" dir="rtl">
-      <header className="flex items-center gap-3">
+      <header className="flex flex-wrap items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-300"><Megaphone className="h-5 w-5" /></span>
-        <div>
+        <div className="flex-1">
           <h1 className="text-xl font-bold text-white">التعميمات</h1>
           <p className="text-sm text-slate-400">إرسال رسائل للملاك ومقدمي الخدمات ومراجعة جاهزية القنوات.</p>
         </div>
+        {onNavigate && <Button variant="outline" size="sm" onClick={() => onNavigate("broadcastSettings")} className="gap-2">
+          <Settings className="h-4 w-4" /> إعدادات قنوات الإرسال
+        </Button>}
       </header>
 
       <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5 space-y-5">
@@ -270,22 +319,61 @@ export function BroadcastTab() {
           <div className="grid gap-2 sm:grid-cols-2">
             {CHANNELS.map(({ id, label }) => {
               const ready = preview.readiness[id] && !previewLoading;
-              return <label key={id} className={`flex items-center justify-between rounded-xl border px-4 py-3 ${ready ? "cursor-pointer border-slate-700 bg-slate-950/60" : "cursor-not-allowed border-slate-800 bg-slate-950/30 opacity-50"}`}>
-                <span className="text-sm text-slate-200">{label}{ready && <span className="mr-2 text-xs text-slate-400">({expectedByChannel(id).toLocaleString("ar-SA")} متوقع)</span>}</span>
-                <input type="checkbox" checked={channels.includes(id)} disabled={!ready} onChange={() => toggleChannel(id)} className="h-4 w-4 accent-amber-400" />
-              </label>;
+              return <div key={id} className={`flex items-center justify-between rounded-xl border px-4 py-3 ${ready ? "border-slate-700 bg-slate-950/60" : "border-slate-800 bg-slate-950/30 opacity-60"}`}>
+                <label htmlFor={`broadcast-channel-${id}`} className={`text-sm text-slate-200 ${ready ? "cursor-pointer" : "cursor-not-allowed"}`}>
+                  {label}{ready && <span className="mr-2 text-xs text-slate-400">({expectedByChannel(id).toLocaleString("ar-SA")} متوقع)</span>}
+                </label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={ready ? undefined : 0} aria-label={ready ? undefined : `${label}: يتطلب إعداد القناة قبل استخدامها`} className={`inline-flex ${ready ? "" : "cursor-not-allowed rounded-sm focus:outline-none focus:ring-2 focus:ring-amber-400"}`}>
+                      <input id={`broadcast-channel-${id}`} data-testid={`checkbox-broadcast-channel-${id}`} type="checkbox" checked={channels.includes(id)} disabled={!ready} onChange={() => toggleChannel(id)} className="h-4 w-4 accent-amber-400" />
+                    </span>
+                  </TooltipTrigger>
+                  {!ready && <TooltipContent side="top"><p>تتطلب هذه القناة إعدادها قبل استخدامها.</p></TooltipContent>}
+                </Tooltip>
+              </div>;
             })}
           </div>
         </fieldset>
-        {sendError && <p role="alert" className="text-sm text-red-300">{sendError}</p>}
         {resultMessage && <div role="status" className="rounded-xl border border-slate-700 bg-slate-950/60 p-4 text-sm text-slate-200 space-y-2">
           <p>{resultMessage}</p>
           {resultCounts != null && <p className="text-slate-300">نتائج القنوات: {formatCounts(resultCounts)}</p>}
         </div>}
-        <Button onClick={() => void sendBroadcast()} disabled={sending || previewLoading || !title.trim() || !body.trim() || !channels.length} className="gap-2">
-          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} إرسال التعميم
+        <Button onClick={() => void previewRecipients()} disabled={recipientsLoading || sending} className="gap-2" data-testid="button-preview-recipients">
+          {recipientsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          معاينة المستلمين ({preview.total.toLocaleString("ar-SA")})
         </Button>
       </section>
+
+      <Dialog open={recipientsOpen} onOpenChange={setRecipientsOpen}>
+        <DialogContent className="border-slate-700 bg-slate-900 text-white" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>معاينة مستلمي التعميم</DialogTitle>
+            <DialogDescription className="text-slate-300">
+              {recipientsLoading ? "جارٍ تحميل المستلمين…" : `عدد المستلمين: ${recipientTotal.toLocaleString("ar-SA")}`}
+              {" "}قد يتغير العدد قبل إرسال التعميم.
+            </DialogDescription>
+          </DialogHeader>
+          {sendError && <p role="alert" className="text-sm text-red-300">{sendError}</p>}
+          {recipientsError && <p role="alert" className="text-sm text-red-300">{recipientsError}</p>}
+          {recipientsLoading && <div role="status" className="flex items-center gap-2 text-sm text-slate-300"><Loader2 className="h-4 w-4 animate-spin" /> جارٍ تحميل قائمة المستلمين…</div>}
+          {!recipientsLoading && !recipientsError && !recipients.length && <p className="text-sm text-slate-300">لا يوجد مستلمون في هذه المعاينة.</p>}
+          {!recipientsLoading && !recipientsError && recipients.length > 0 && <ul aria-label="قائمة المستلمين" className="max-h-72 space-y-2 overflow-y-auto rounded-lg border border-slate-700 p-3">
+            {recipients.map((recipient) => <li key={recipient.key} className="flex flex-wrap items-start justify-between gap-2 border-b border-slate-800 pb-2 last:border-0 last:pb-0">
+              <span className="text-sm text-white">{recipient.name || recipient.key}</span>
+              <span className="text-xs text-slate-400">
+                {recipient.channels.map((channel) => CHANNELS.find(({ id }) => id === channel)?.label ?? channel).join("، ") || "لا توجد قناة محددة"}
+              </span>
+            </li>)}
+          </ul>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecipientsOpen(false)} disabled={sending}>إلغاء</Button>
+            <Button onClick={() => void sendBroadcast()} disabled={sending || recipientsLoading || previewLoading || Boolean(recipientsError) || !channels.length || channels.some((channel) => !preview.readiness[channel]) || !title.trim() || !body.trim()} className="gap-2" data-testid="button-confirm-broadcast">
+              {sending && <Loader2 className="h-4 w-4 animate-spin" />} تأكيد وإرسال
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <section className="rounded-2xl border border-slate-700 bg-slate-900/70 p-5 space-y-4">
         <div className="flex items-center gap-2 text-white"><History className="h-4 w-4 text-amber-300" /><h2 className="font-bold">سجل التعميمات</h2></div>

@@ -2,6 +2,16 @@ import { z } from "zod";
 
 export type BroadcastChannel = "inApp" | "inbox" | "email" | "whatsapp";
 export type BroadcastPreferences = Record<BroadcastChannel, boolean>;
+export const broadcastChannels: BroadcastChannel[] = ["inApp", "inbox", "email", "whatsapp"];
+
+export function optedInBroadcastChannels(
+  preferences: BroadcastPreferences,
+  selected?: readonly BroadcastChannel[],
+): BroadcastChannel[] {
+  return broadcastChannels.filter(channel =>
+    (selected === undefined || selected.includes(channel)) && preferences[channel],
+  );
+}
 
 export function defaultBroadcastPreferences(): BroadcastPreferences {
   return { inApp: true, inbox: false, email: false, whatsapp: false };

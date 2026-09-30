@@ -124,6 +124,45 @@ paths:
         "404":
           description: Owner not found
 
+  /admin/broadcast/recipients:
+    get:
+      operationId: getAdminBroadcastRecipients
+      tags: [admin]
+      summary: List eligible broadcast recipients
+      description: Returns display names and opted-in channels without private contact details.
+      parameters:
+        - name: audience
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [all, active, providers]
+        - name: channels
+          in: query
+          required: false
+          description: Optional comma-separated channel selection.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Eligible recipients, bounded to 5000 records and a 1 MiB response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBroadcastRecipientsResponse"
+        "400":
+          description: Invalid audience or channel selection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Audience or response exceeds the supported limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/user:
     get:
       tags: [Auth]
@@ -254,6 +293,33 @@ components:
       schema:
         type: string
   schemas:
+    AdminBroadcastRecipient:
+      type: object
+      properties:
+        key:
+          type: string
+          description: Opaque response-local identifier; not an account or contact identifier.
+        name:
+          type: string
+          description: Display name from the verified owner/application account.
+        channels:
+          type: array
+          items:
+            type: string
+            enum: [inApp, inbox, email, whatsapp]
+      required: [key, name, channels]
+
+    AdminBroadcastRecipientsResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        recipients:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminBroadcastRecipient"
+      required: [total, recipients]
+
     OwnerFreeAccessGrantInput:
       type: object
       additionalProperties: false

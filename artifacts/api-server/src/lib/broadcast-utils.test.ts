@@ -8,6 +8,7 @@ import {
   mergeBroadcastPreferences,
   normalizeE164Phone,
   ownerIdentityAliases,
+  optedInBroadcastChannels,
   recipientKeyForAlias,
   selectAudienceOwnerIds,
 } from "./broadcast-utils";
@@ -44,6 +45,15 @@ describe("broadcast recipient and retry helpers", () => {
     assert.deepEqual(mergeBroadcastPreferences(defaultBroadcastPreferences(), { inbox: true, email: true }), {
       inApp: true, inbox: true, email: true, whatsapp: false,
     });
+  });
+
+  it("filters recipient channels by the requested selection and stored opt-ins", () => {
+    const preferences = {
+      inApp: true, inbox: true, email: false, whatsapp: true,
+    };
+    assert.deepEqual(optedInBroadcastChannels(preferences), ["inApp", "inbox", "whatsapp"]);
+    assert.deepEqual(optedInBroadcastChannels(preferences, ["email", "whatsapp"]), ["whatsapp"]);
+    assert.deepEqual(optedInBroadcastChannels(preferences, []), []);
   });
 
   it("selects all, active-subscriber, and approved-provider account sources without customer IDs", () => {

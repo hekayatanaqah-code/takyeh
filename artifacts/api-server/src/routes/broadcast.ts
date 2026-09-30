@@ -1,9 +1,22 @@
 import { Router } from "express";
-import nodemailer from "nodemailer";
 import { sql } from "drizzle-orm";
-import { db } from "@workspace/db";
+import { db, adminAuditLogsTable } from "@workspace/db";
 import { z } from "zod";
 import { logger } from "../lib/logger";
+import {
+  broadcastSmtpTransportKey,
+  createBroadcastSmtpTransport,
+  encryptBroadcastSmtpPassword,
+  loadBroadcastSmtpConfig,
+  smtpVerificationError,
+  invalidateBroadcastSmtpVerificationCache,
+  isSafeSmtpHostInput,
+  isSafeSmtpTransport,
+  resolvePublicSmtpAddresses,
+  smtpAuthenticationDestinationMatches,
+  verifyBroadcastSmtpConfig,
+  type BroadcastSmtpConfig,
+} from "../lib/broadcast-smtp-config";
 import {
   defaultBroadcastPreferences,
   deduplicateRecipients,
@@ -11,6 +24,7 @@ import {
   idempotencyPayloadMatches,
   mergeBroadcastPreferences,
   normalizeE164Phone,
+  optedInBroadcastChannels,
   recipientKeyForAlias,
   selectAudienceOwnerIds,
 } from "../lib/broadcast-utils";
@@ -24,6 +38,25 @@ const createSchema = z.object({
   audience: audienceSchema,
   channels: z.array(z.enum(channels)).min(1).max(4).refine(values => new Set(values).size === values.length, "Duplicate channels are not allowed"),
 }).strict();
+const recipientsQuerySchema = z.object({
+  audience: audienceSchema,
+  channels: z.string().transform(value => value.split(","))
+    .pipe(z.array(z.enum(channels)).min(1).max(4)
+      .refine(values => new Set(values).size === values.length, "Duplicate channels are not allowed"))
+    .optional(),
+}).strict();
+const smtpSettingsSchema = z.object({
+  host: z.string().trim().min(1).max(255).refine(isSafeSmtpHostInput, "Unsafe SMTP hostname"),
+  port: z.number().int().min(1).max(65535),
+  secure: z.boolean(),
+  username: z.string().trim().min(1).max(320),
+  fromAddress: z.string().trim().email().max(320),
+  password: z.string().max(1024).optional(),
+}).strict().refine(settings => isSafeSmtpTransport(settings.port, settings.secure), {
+  message: "SMTP must use a secure SMTP port and TLS or required STARTTLS",
+  path: ["port"],
+});
+const MAX_RECIPIENT_PREVIEW_BYTES = 1_048_576;
 
 type Channel = typeof channels[number];
 type Preferences = Record<Channel, boolean>;
@@ -42,8 +75,33 @@ type OwnerRow = {
   whatsapp_news_subscribe: boolean | null; whatsapp_subscribed_at: Date | string | null;
 };
 
-function smtpConfigured(): boolean {
-  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+async function smtpStatus() {
+  const loaded = await loadBroadcastSmtpConfig();
+  const settings = loaded.storedSettings ?? (loaded.config ? {
+    host: loaded.config.host,
+    port: loaded.config.port,
+    secure: loaded.config.secure,
+    username: loaded.config.username,
+    fromAddress: loaded.config.fromAddress,
+  } : null);
+  const config = loaded.config;
+  const ready = config ? await verifyBroadcastSmtpConfig(config) : false;
+  const email = {
+    host: settings?.host ?? null,
+    port: settings?.port ?? null,
+    secure: settings?.secure ?? false,
+    username: settings?.username ?? null,
+    fromAddress: settings?.fromAddress ?? null,
+    passwordConfigured: loaded.passwordConfigured,
+    ready,
+    source: loaded.source,
+    ...(!ready ? {
+      error: loaded.decryptionFailed
+        ? "SMTP credentials cannot be decrypted; confirm the encryption key is unchanged"
+        : config ? smtpVerificationError : "SMTP is not configured",
+    } : {}),
+  };
+  return { email, whatsapp: { ready: false as const } };
 }
 
 function escapeHtml(value: string): string {
@@ -199,10 +257,6 @@ function channelCounts(recipients: Recipient[]): Record<Channel, number> {
   };
 }
 
-function readiness() {
-  return { inApp: true, inbox: true, email: smtpConfigured(), whatsapp: false };
-}
-
 async function getDeliveryCounts(campaignId: number) {
   const result = await db.execute<{ channel: Channel; status: string; count: string }>(sql`
     SELECT channel, status, COUNT(*)::text AS count FROM broadcast_deliveries
@@ -239,24 +293,42 @@ type DeliveryJob = {
 
 let workerRunning = false;
 let smtpTransport: any = null;
+let smtpTransportKey: string | null = null;
+let smtpFromAddress: string | null = null;
 
-function getSmtpTransport(): any {
-  if (!smtpConfigured()) return null;
-  if (!smtpTransport) {
-    smtpTransport = nodemailer.createTransport({
-      host: process.env.SMTP_HOST!,
-      port: Number(process.env.SMTP_PORT ?? 587),
-      secure: process.env.SMTP_SECURE === "true",
-      auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
-      connectionTimeout: 10_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 20_000,
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 20,
-    });
+function invalidateSmtpTransport(): void {
+  smtpTransport?.close();
+  smtpTransport = null;
+  smtpTransportKey = null;
+  smtpFromAddress = null;
+}
+
+async function getSmtpTransport(): Promise<{ transport: any; fromAddress: string } | null> {
+  const loaded = await loadBroadcastSmtpConfig();
+  if (!loaded.config) {
+    invalidateSmtpTransport();
+    return null;
   }
-  return smtpTransport;
+  if (!isSafeSmtpHostInput(loaded.config.host)
+    || !isSafeSmtpTransport(loaded.config.port, loaded.config.secure)) {
+    invalidateSmtpTransport();
+    return null;
+  }
+  let address: string;
+  try {
+    [address] = await resolvePublicSmtpAddresses(loaded.config.host);
+  } catch {
+    invalidateSmtpTransport();
+    return null;
+  }
+  const key = `${broadcastSmtpTransportKey(loaded.config)}:${address}`;
+  if (smtpTransportKey !== key) {
+    invalidateSmtpTransport();
+    smtpTransport = createBroadcastSmtpTransport(loaded.config, address);
+    smtpTransportKey = key;
+    smtpFromAddress = loaded.config.fromAddress;
+  }
+  return { transport: smtpTransport, fromAddress: smtpFromAddress! };
 }
 
 async function processDelivery(job: DeliveryJob, mailer: any): Promise<void> {
@@ -298,8 +370,8 @@ async function processDelivery(job: DeliveryJob, mailer: any): Promise<void> {
       if (blockReason) {
         errorCode = blockReason;
       } else {
-      await mailer.sendMail({
-        from: `تكيّة <${process.env.SMTP_USER}>`,
+      await mailer.transport.sendMail({
+        from: `تكيّة <${mailer.fromAddress}>`,
         to: current.email!,
         subject: job.title,
         text: job.body,
@@ -402,7 +474,7 @@ async function drainBroadcastQueue(): Promise<void> {
         campaign.title, campaign.body
     `);
     const jobs = (claimed as any).rows as DeliveryJob[];
-    const mailer = getSmtpTransport();
+    const mailer = await getSmtpTransport();
     for (let index = 0; index < jobs.length; index += 5) {
       await Promise.all(jobs.slice(index, index + 5).map(job => processDelivery(job, mailer)));
     }
@@ -416,6 +488,140 @@ async function drainBroadcastQueue(): Promise<void> {
 const broadcastQueueTimer = setInterval(() => { void drainBroadcastQueue(); }, 3_000);
 broadcastQueueTimer.unref();
 
+router.get("/settings", async (_req, res): Promise<void> => {
+  try {
+    res.json(await smtpStatus());
+  } catch {
+    res.status(503).json({ error: "SMTP settings are unavailable" });
+  }
+});
+
+router.put("/settings/smtp", async (req, res): Promise<void> => {
+  const parsed = smtpSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid SMTP settings", details: parsed.error.flatten() });
+    return;
+  }
+
+  let loaded;
+  try {
+    loaded = await loadBroadcastSmtpConfig();
+  } catch {
+    res.status(503).json({ error: "SMTP settings are unavailable" });
+    return;
+  }
+  let password = parsed.data.password;
+  const previousSettings = loaded.storedSettings ?? (loaded.config ? {
+    host: loaded.config.host,
+    port: loaded.config.port,
+    secure: loaded.config.secure,
+    username: loaded.config.username,
+    fromAddress: loaded.config.fromAddress,
+  } : null);
+  if (!password) {
+    if (previousSettings && !smtpAuthenticationDestinationMatches(previousSettings, parsed.data)) {
+      res.status(400).json({ error: "A fresh SMTP password is required when the host, port, or username changes" });
+      return;
+    }
+    password = loaded.config?.password;
+    if (!password) {
+      res.status(400).json({ error: "A password is required because no usable SMTP password is configured" });
+      return;
+    }
+  }
+  const config: BroadcastSmtpConfig = { ...parsed.data, password };
+  if (!await verifyBroadcastSmtpConfig(config)) {
+    res.status(400).json({ error: smtpVerificationError });
+    return;
+  }
+  const encryptedPassword = encryptBroadcastSmtpPassword(password);
+  if (!encryptedPassword) {
+    res.status(503).json({ error: "SMTP credential encryption is unavailable; configure BROADCAST_SMTP_ENCRYPTION_KEY or SESSION_SECRET" });
+    return;
+  }
+
+  const actorId = String((req as any).adminStaff?.id ?? req.user?.id ?? "superadmin");
+  const actorName = (req as any).adminStaff?.name
+    ?? (req.user as { name?: string } | undefined)?.name
+    ?? "Superadmin";
+  try {
+    await db.transaction(async tx => {
+      await tx.execute(sql`
+        INSERT INTO broadcast_smtp_settings
+          (id, host, port, secure, username, from_address, encrypted_password, enabled, updated_by, updated_at)
+        VALUES (1, ${config.host}, ${config.port}, ${config.secure}, ${config.username},
+          ${config.fromAddress}, ${encryptedPassword}, true, ${actorId}, now())
+        ON CONFLICT (id) DO UPDATE SET host = EXCLUDED.host, port = EXCLUDED.port,
+          secure = EXCLUDED.secure, username = EXCLUDED.username, from_address = EXCLUDED.from_address,
+          encrypted_password = EXCLUDED.encrypted_password, enabled = true,
+          updated_by = EXCLUDED.updated_by, updated_at = now()
+      `);
+      await tx.insert(adminAuditLogsTable).values({
+        actorId,
+        actorName,
+        action: "put_broadcast_smtp_settings",
+        method: "PUT",
+        path: "/api/admin/broadcast/settings/smtp",
+        entity: "broadcast_smtp_settings",
+        entityId: "1",
+        metadata: { enabled: true, source: "database" },
+      });
+    });
+  } catch {
+    res.status(503).json({ error: "Unable to save SMTP settings" });
+    return;
+  }
+
+  invalidateSmtpTransport();
+  invalidateBroadcastSmtpVerificationCache();
+  res.json({
+    email: {
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      username: config.username,
+      fromAddress: config.fromAddress,
+      passwordConfigured: true,
+      ready: true,
+      source: "database",
+    },
+    whatsapp: { ready: false },
+  });
+});
+
+router.delete("/settings/smtp", async (req, res): Promise<void> => {
+  const actorId = String((req as any).adminStaff?.id ?? req.user?.id ?? "superadmin");
+  const actorName = (req as any).adminStaff?.name
+    ?? (req.user as { name?: string } | undefined)?.name
+    ?? "Superadmin";
+  try {
+    await db.transaction(async tx => {
+      await tx.execute(sql`
+        INSERT INTO broadcast_smtp_settings (id, enabled, encrypted_password, updated_by, updated_at)
+        VALUES (1, false, NULL, ${actorId}, now())
+        ON CONFLICT (id) DO UPDATE SET enabled = false, encrypted_password = NULL,
+          updated_by = EXCLUDED.updated_by, updated_at = now()
+      `);
+      await tx.insert(adminAuditLogsTable).values({
+        actorId,
+        actorName,
+        action: "delete_broadcast_smtp_settings",
+        method: "DELETE",
+        path: "/api/admin/broadcast/settings/smtp",
+        entity: "broadcast_smtp_settings",
+        entityId: "1",
+        metadata: { enabled: false },
+      });
+    });
+  } catch {
+    res.status(503).json({ error: "Unable to disable SMTP settings" });
+    return;
+  }
+  invalidateSmtpTransport();
+  invalidateBroadcastSmtpVerificationCache();
+  res.json(await smtpStatus());
+});
+
 router.get("/preview", async (req, res): Promise<void> => {
   const parsed = audienceSchema.safeParse(req.query.audience);
   if (!parsed.success) {
@@ -423,7 +629,52 @@ router.get("/preview", async (req, res): Promise<void> => {
     return;
   }
   const recipients = await getRecipients(parsed.data);
-  res.json({ total: recipients.length, byChannel: channelCounts(recipients), readiness: readiness() });
+  const smtp = await smtpStatus();
+  res.json({
+    total: recipients.length,
+    byChannel: channelCounts(recipients),
+    readiness: { inApp: true, inbox: true, email: smtp.email.ready, whatsapp: false },
+    transportErrors: smtp.email.ready ? {} : { email: smtp.email.error },
+  });
+});
+
+router.get("/recipients", async (req, res): Promise<void> => {
+  const parsed = recipientsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "audience must be all, active, or providers; channels must be a comma-separated list of valid channels" });
+    return;
+  }
+
+  const audienceRecipients = await getRecipients(parsed.data.audience);
+  if (audienceRecipients.length > 5000) {
+    res.status(413).json({ error: "Audience exceeds the 5000-recipient broadcast limit" });
+    return;
+  }
+
+  const candidates = audienceRecipients.map(recipient => ({
+    name: recipient.name?.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 160) || "Owner",
+    channels: optedInBroadcastChannels(recipient.prefs, parsed.data.channels),
+    sortKey: recipient.key,
+  })).filter(recipient => parsed.data.channels === undefined || recipient.channels.length > 0);
+  candidates.sort((left, right) => {
+    const leftName = left.name.toLowerCase();
+    const rightName = right.name.toLowerCase();
+    if (leftName < rightName) return -1;
+    if (leftName > rightName) return 1;
+    return left.sortKey < right.sortKey ? -1 : left.sortKey > right.sortKey ? 1 : 0;
+  });
+
+  const recipients = candidates.map(({ name, channels: recipientChannels }, index) => ({
+    key: `recipient-${index + 1}`,
+    name,
+    channels: recipientChannels,
+  }));
+  const response = { total: recipients.length, recipients };
+  if (Buffer.byteLength(JSON.stringify(response), "utf8") > MAX_RECIPIENT_PREVIEW_BYTES) {
+    res.status(413).json({ error: "Recipient preview exceeds the response size limit" });
+    return;
+  }
+  res.json(response);
 });
 
 router.get("/", async (_req, res): Promise<void> => {
@@ -491,9 +742,18 @@ router.post("/", async (req, res): Promise<void> => {
   const selected = data.channels as Channel[];
   const applicable = recipients.filter(recipient => selected.some(channel => recipient.prefs[channel]));
   const applicableCounts = channelCounts(applicable);
-  if (selected.includes("email") && applicableCounts.email > 0 && !smtpConfigured()) {
-    res.status(503).json({ error: "Email transport is unavailable: configure SMTP_HOST, SMTP_USER, and SMTP_PASS" });
-    return;
+  if (selected.includes("email") && applicableCounts.email > 0) {
+    let smtp: Awaited<ReturnType<typeof smtpStatus>>;
+    try {
+      smtp = await smtpStatus();
+    } catch {
+      res.status(503).json({ error: "Email transport readiness cannot be verified" });
+      return;
+    }
+    if (!smtp.email.ready) {
+      res.status(503).json({ error: smtp.email.error ?? "Email transport is unavailable" });
+      return;
+    }
   }
   if (selected.includes("whatsapp") && applicableCounts.whatsapp > 0) {
     res.status(503).json({ error: "WhatsApp delivery is unavailable: no WhatsApp transport is configured" });

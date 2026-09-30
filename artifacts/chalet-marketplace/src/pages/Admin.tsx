@@ -68,6 +68,7 @@ import { CentralSettingsTab } from "./admin/CentralSettingsTab";
 import { ContactInquiriesTab } from "./admin/ContactInquiriesTab";
 import { AuditLogsTab } from "./admin/AuditLogsTab";
 import { BroadcastTab } from "./admin/BroadcastTab";
+import { BroadcastSettingsTab } from "./admin/BroadcastSettingsTab";
 import { ChaletDetailsModal, type ChaletDetails } from "./admin/ChaletDetailsModal";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -8775,6 +8776,7 @@ const ALL_TABS = [
   { id: "adminStaff",              label: "موظفو الإدارة",         icon: Shield },
   { id: "directAdd",               label: "إضافة شاليه / مالك",   icon: Plus },
   { id: "broadcast",               label: "التعميمات",             icon: Send },
+  { id: "broadcastSettings",       label: "إعدادات قنوات الإرسال",  icon: Settings },
 ] as const;
 
 type TabId = typeof ALL_TABS[number]["id"];
@@ -8790,7 +8792,7 @@ const ADMIN_NAV_GROUPS: Array<{
   { id: "services", label: "إدارة الخدمات", icon: Wrench, tabs: ["services", "serviceSubmissions", "serviceCategories", "serviceLocations"] },
   { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "ownerInbox"] },
   { id: "staff", label: "طاقم العمل", icon: Shield, tabs: ["adminStaff"] },
-  { id: "operations", label: "العمليات", icon: Calendar, tabs: ["reviews", "waSubscribers", "globalSeasons", "broadcast"] },
+  { id: "operations", label: "العمليات", icon: Calendar, tabs: ["reviews", "waSubscribers", "globalSeasons", "broadcast", "broadcastSettings"] },
   { id: "finance", label: "المالية", icon: DollarSign, tabs: ["platformRevenue", "plans", "expenseCategories"] },
   { id: "settings", label: "الإعدادات", icon: Settings, tabs: ["siteSettings", "contactInquiries", "auditLogs"] },
 ];
@@ -10083,7 +10085,8 @@ export default function Admin() {
         {activeTab === "auditLogs" && isSuperAdmin && <AuditLogsTab />}
         {activeTab === "adminStaff" && isSuperAdmin && <AdminStaffTab isSuperAdmin={isSuperAdmin} currentUserName={displayName ?? ""} />}
         {activeTab === "directAdd" && isSuperAdmin && <DirectAddTab mode={directAddMode} />}
-        {activeTab === "broadcast" && isSuperAdmin && <BroadcastTab />}
+        {activeTab === "broadcast" && isSuperAdmin && <BroadcastTab onNavigate={(target) => setActiveTab(target)} />}
+        {activeTab === "broadcastSettings" && isSuperAdmin && <BroadcastSettingsTab onNavigate={(target) => setActiveTab(target)} />}
       </main>
     </div>
   );

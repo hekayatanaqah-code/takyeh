@@ -148,6 +148,35 @@ export const GrantOwnerFreeAccessBody = zod.object({
 });
 
 /**
+ * Returns display names and opted-in channels without private contact details.
+ * @summary List eligible broadcast recipients
+ */
+export const GetAdminBroadcastRecipientsQueryParams = zod.object({
+  audience: zod.enum(["all", "active", "providers"]),
+  channels: zod.coerce
+    .string()
+    .optional()
+    .describe("Optional comma-separated channel selection."),
+});
+
+export const GetAdminBroadcastRecipientsResponse = zod.object({
+  total: zod.number(),
+  recipients: zod.array(
+    zod.object({
+      key: zod
+        .string()
+        .describe(
+          "Opaque response-local identifier; not an account or contact identifier.",
+        ),
+      name: zod
+        .string()
+        .describe("Display name from the verified owner\/application account."),
+      channels: zod.array(zod.enum(["inApp", "inbox", "email", "whatsapp"])),
+    }),
+  ),
+});
+
+/**
  * @summary Get the currently authenticated user
  */
 export const GetCurrentAuthUserHeader = zod.object({

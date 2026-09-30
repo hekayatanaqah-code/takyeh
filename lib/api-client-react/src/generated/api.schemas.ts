@@ -5,6 +5,29 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type AdminBroadcastRecipientChannelsItem =
+  (typeof AdminBroadcastRecipientChannelsItem)[keyof typeof AdminBroadcastRecipientChannelsItem];
+
+export const AdminBroadcastRecipientChannelsItem = {
+  inApp: "inApp",
+  inbox: "inbox",
+  email: "email",
+  whatsapp: "whatsapp",
+} as const;
+
+export interface AdminBroadcastRecipient {
+  /** Opaque response-local identifier; not an account or contact identifier. */
+  key: string;
+  /** Display name from the verified owner/application account. */
+  name: string;
+  channels: AdminBroadcastRecipientChannelsItem[];
+}
+
+export interface AdminBroadcastRecipientsResponse {
+  total: number;
+  recipients: AdminBroadcastRecipient[];
+}
+
 export type OwnerFreeAccessGrantInputDuration =
   (typeof OwnerFreeAccessGrantInputDuration)[keyof typeof OwnerFreeAccessGrantInputDuration];
 
@@ -201,6 +224,23 @@ export type GetChaletsParams = {
    */
   maxPrice?: number;
 };
+
+export type GetAdminBroadcastRecipientsParams = {
+  audience: GetAdminBroadcastRecipientsAudience;
+  /**
+   * Optional comma-separated channel selection.
+   */
+  channels?: string;
+};
+
+export type GetAdminBroadcastRecipientsAudience =
+  (typeof GetAdminBroadcastRecipientsAudience)[keyof typeof GetAdminBroadcastRecipientsAudience];
+
+export const GetAdminBroadcastRecipientsAudience = {
+  all: "all",
+  active: "active",
+  providers: "providers",
+} as const;
 
 export type BeginBrowserLoginParams = {
   returnTo?: string;

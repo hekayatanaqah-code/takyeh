@@ -936,6 +936,18 @@ export const ownerBroadcastInboxTable = pgTable("owner_broadcast_inbox", {
     .on(table.campaignId, table.recipientKey),
   ownerCreatedIdx: index("owner_broadcast_inbox_owner_created_idx").on(table.ownerId, table.createdAt),
 }));
+export const broadcastSmtpSettingsTable = pgTable("broadcast_smtp_settings", {
+  id: integer("id").primaryKey(),
+  host: text("host"),
+  port: integer("port"),
+  secure: boolean("secure").notNull().default(false),
+  username: text("username"),
+  fromAddress: text("from_address"),
+  encryptedPassword: text("encrypted_password"),
+  enabled: boolean("enabled").notNull().default(true),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 /* ── Report Archive ─────────────────────────────────────────── */
 

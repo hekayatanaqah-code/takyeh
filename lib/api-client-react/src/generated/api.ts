@@ -17,12 +17,14 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AdminBroadcastRecipientsResponse,
   AuthUserEnvelope,
   BeginBrowserLoginParams,
   Chalet,
   ChaletSubmission,
   CreateSubmissionRequest,
   ErrorResponse,
+  GetAdminBroadcastRecipientsParams,
   GetChaletsParams,
   HealthStatus,
   OwnerFreeAccessGrantInput,
@@ -390,6 +392,116 @@ export const useGrantOwnerFreeAccess = <
 > => {
   return useMutation(getGrantOwnerFreeAccessMutationOptions(options));
 };
+
+/**
+ * Returns display names and opted-in channels without private contact details.
+ * @summary List eligible broadcast recipients
+ */
+export const getGetAdminBroadcastRecipientsUrl = (
+  params: GetAdminBroadcastRecipientsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/broadcast/recipients?${stringifiedParams}`
+    : `/api/admin/broadcast/recipients`;
+};
+
+export const getAdminBroadcastRecipients = async (
+  params: GetAdminBroadcastRecipientsParams,
+  options?: RequestInit,
+): Promise<AdminBroadcastRecipientsResponse> => {
+  return customFetch<AdminBroadcastRecipientsResponse>(
+    getGetAdminBroadcastRecipientsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetAdminBroadcastRecipientsQueryKey = (
+  params?: GetAdminBroadcastRecipientsParams,
+) => {
+  return [
+    `/api/admin/broadcast/recipients`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetAdminBroadcastRecipientsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminBroadcastRecipients>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: GetAdminBroadcastRecipientsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAdminBroadcastRecipients>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAdminBroadcastRecipientsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdminBroadcastRecipients>>
+  > = ({ signal }) =>
+    getAdminBroadcastRecipients(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminBroadcastRecipients>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminBroadcastRecipientsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminBroadcastRecipients>>
+>;
+export type GetAdminBroadcastRecipientsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary List eligible broadcast recipients
+ */
+
+export function useGetAdminBroadcastRecipients<
+  TData = Awaited<ReturnType<typeof getAdminBroadcastRecipients>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: GetAdminBroadcastRecipientsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAdminBroadcastRecipients>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminBroadcastRecipientsQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get the currently authenticated user

@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./adminBroadcastRecipient";
+export * from "./adminBroadcastRecipientChannelsItem";
+export * from "./adminBroadcastRecipientsResponse";
 export * from "./authorizationSessionHeaderParameter";
 export * from "./authUser";
 export * from "./authUserEnvelope";
@@ -15,6 +18,8 @@ export * from "./chaletSubmission";
 export * from "./chaletSubmissionStatus";
 export * from "./createSubmissionRequest";
 export * from "./errorResponse";
+export * from "./getAdminBroadcastRecipientsAudience";
+export * from "./getAdminBroadcastRecipientsParams";
 export * from "./getChaletsParams";
 export * from "./healthStatus";
 export * from "./ownerFreeAccess";
