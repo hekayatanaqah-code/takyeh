@@ -2691,16 +2691,27 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                 </div>
               )}
               {((offerType === "free" && freeAccessDuration === "dates") || (offerType === "discount" && discountDuration === "fixed")) && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs text-slate-400" htmlFor="offer-start">تاريخ البداية</label>
-                    <Input id="offer-start" type="date" value={offerStartDate} onChange={(event) => setOfferStartDate(event.target.value)}
-                      className="bg-slate-800 border-slate-600 text-white" />
+                    <p className="mb-1 text-xs text-slate-400">تاريخ البداية (هجري أو ميلادي)</p>
+                    <DualDatePicker
+                      value={offerStartDate}
+                      onChange={(date) => {
+                        setOfferStartDate(date);
+                        if (offerEndDate && offerEndDate < date) setOfferEndDate("");
+                      }}
+                      minDate={localDateString(new Date())}
+                      placeholder="اختر تاريخ البداية"
+                    />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-slate-400" htmlFor="offer-end">تاريخ النهاية (شامل)</label>
-                    <Input id="offer-end" type="date" min={offerStartDate || undefined} value={offerEndDate} onChange={(event) => setOfferEndDate(event.target.value)}
-                      className="bg-slate-800 border-slate-600 text-white" />
+                    <p className="mb-1 text-xs text-slate-400">تاريخ النهاية (شامل، هجري أو ميلادي)</p>
+                    <DualDatePicker
+                      value={offerEndDate}
+                      onChange={setOfferEndDate}
+                      minDate={offerStartDate || localDateString(new Date())}
+                      placeholder="اختر تاريخ النهاية"
+                    />
                   </div>
                 </div>
               )}
