@@ -16,8 +16,25 @@ interface AuditLog {
   path: string | null;
   entityType: string | null;
   entityId: string | null;
-  metadata: any;
+  metadata: Record<string, unknown> | null;
   createdAt: string;
+}
+
+const sensitiveAuditKey = /(password|hash|secret|token|payment|phone|mobile|email|personal)/i;
+
+function sanitizeAuditSnapshot(value: unknown, depth = 0): unknown {
+  if (depth > 5) return "[محتوى متداخل]";
+  if (Array.isArray(value)) return value.slice(0, 50).map((item) => sanitizeAuditSnapshot(item, depth + 1));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([key]) => !sensitiveAuditKey.test(key))
+        .slice(0, 50)
+        .map(([key, item]) => [key, sanitizeAuditSnapshot(item, depth + 1)]),
+    );
+  }
+  if (typeof value === "string") return value.slice(0, 500);
+  return value;
 }
 
 export function AuditLogsTab() {
@@ -134,6 +151,28 @@ export function AuditLogsTab() {
                         <Activity className="w-3.5 h-3.5 text-slate-500" />
                         <span className="text-slate-300 font-medium">{getActionLabel(log.action)}</span>
                       </div>
+                      {log.metadata && ("before" in log.metadata || "after" in log.metadata) && (
+                        <details className="mt-2 max-w-[420px] text-xs">
+                          <summary className="cursor-pointer text-amber-400 hover:text-amber-300">
+                            عرض تفاصيل التغيير
+                          </summary>
+                          {typeof log.metadata.targetOwnerId === "string" && (
+                            <div className="mt-2 text-slate-400">
+                              حساب المالك: <span className="font-mono text-slate-300">{log.metadata.targetOwnerId}</span>
+                            </div>
+                          )}
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            {(["before", "after"] as const).map((key) => (
+                              <div key={key} className="min-w-0 rounded border border-slate-700 bg-slate-950/60 p-2">
+                                <div className="mb-1 font-semibold text-slate-400">{key === "before" ? "قبل" : "بعد"}</div>
+                                <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-[10px] text-slate-300" dir="auto">
+                                  {JSON.stringify(sanitizeAuditSnapshot(log.metadata?.[key] ?? null), null, 2)}
+                                </pre>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {log.entityType ? (

@@ -49,6 +49,7 @@ export const ADMIN_TAB_PERMISSION: Record<string, AdminPermKey | "__superadmin__
   auditLogs:             "__superadmin__",
   adminStaff:            "__superadmin__",
   directAdd:             "__superadmin__",
+  broadcast:             "__superadmin__",
 };
 
 // Existing staff keep their pre-upgrade access until an explicit new-key choice is saved.

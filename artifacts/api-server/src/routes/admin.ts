@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import sharp from "sharp";
 import { ObjectStorageService } from "../lib/objectStorage";
+import broadcastRouter from "./broadcast";
 import { db } from "@workspace/db";
 import {
   chaletSubmissionsTable,
@@ -315,6 +316,215 @@ router.use((req, res, next) => {
   next();
 });
 
+type AdminAuditSnapshot = Record<string, unknown> | null;
+
+const auditSafeSettingValueLimits: Record<string, number> = {
+  site_display_name: 120,
+  site_title: 200,
+  logo_size: 10,
+  hero_line1: 250,
+  hero_line2: 250,
+  hero_word_color: 20,
+  hero_title: 250,
+  hero_subtitle: 500,
+  feature_1: 250,
+  feature_2: 250,
+  feature_3: 250,
+  feat_card1_title: 150,
+  feat_card1_text: 300,
+  feat_card2_title: 150,
+  feat_card2_text: 300,
+  feat_card3_title: 150,
+  feat_card3_text: 300,
+  feat_section_title: 200,
+  feat_section_desc: 300,
+  primary_color: 20,
+  svc_btn_color: 20,
+  svc_btn_label: 100,
+  copyright_text: 250,
+  footer_title: 120,
+  footer_desc: 300,
+};
+
+function adminAuditOwnerId(req: Request): string | null {
+  const segments = req.path.split("/").filter(Boolean);
+  if (segments[0] !== "owners" || segments.length !== 3
+    || !["free-access", "discount", "subscription-grant"].includes(segments[2])) return null;
+  const ownerId = segments[1];
+  return ownerId && /^[A-Za-z0-9_:-]{1,200}$/.test(ownerId) ? ownerId : null;
+}
+
+function requestedAuditSettingKeys(req: Request): string[] {
+  if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) return [];
+  return Object.keys(req.body)
+    .filter((key) => /^[A-Za-z0-9_.:-]{1,100}$/.test(key))
+    .slice(0, 100);
+}
+
+function safeAuditSettingValue(key: string, value: string): { value: string; truncated: boolean } | null {
+  const maxLength = auditSafeSettingValueLimits[key];
+  if (maxLength === undefined) return null;
+  const bounded = value.slice(0, maxLength);
+  // Public copy may still contain an accidentally pasted phone number or email.
+  const redacted = bounded
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[محجوب]")
+    .replace(/(?:\+?\d[\d\s().-]{7,}\d)/g, "[محجوب]");
+  return { value: redacted, truncated: value.length > maxLength };
+}
+
+/* These projections intentionally omit credentials, contact details, free-text
+ * reasons, payment identifiers, and all other potentially sensitive fields. */
+async function getAdminAuditSnapshot(
+  req: Request,
+  responseId?: unknown,
+  settingsBaseline?: Map<string, string | null>,
+): Promise<AdminAuditSnapshot> {
+  const path = req.path;
+  const segments = path.split("/").filter(Boolean);
+
+  if (path === "/settings" && req.method === "PATCH") {
+    const keys = requestedAuditSettingKeys(req);
+    if (keys.length === 0) return { settings: [] };
+    const rows = await db.select({ key: siteSettingsTable.key, value: siteSettingsTable.value })
+      .from(siteSettingsTable).where(inArray(siteSettingsTable.key, keys));
+    const values = new Map(rows.map((row) => [row.key, row.value]));
+    return {
+      settings: keys.map((key) => ({
+        key,
+        state: values.has(key) ? (values.get(key) ? "configured" : "empty") : "missing",
+        ...(values.has(key) && values.get(key) !== undefined
+          ? safeAuditSettingValue(key, values.get(key)!) ?? {}
+          : {}),
+        ...(settingsBaseline
+          ? { changed: (settingsBaseline.has(key) ? settingsBaseline.get(key)! : null) !== (values.has(key) ? values.get(key)! : null) }
+          : {}),
+      })),
+    };
+  }
+
+  if (segments[0] === "staff") {
+    const staffId = segments[1] && /^\d+$/.test(segments[1]) ? Number(segments[1])
+      : (typeof responseId === "number" || (typeof responseId === "string" && /^\d+$/.test(responseId)) ? Number(responseId) : null);
+    if (staffId == null || !Number.isInteger(staffId)) return null;
+    const [staff] = await db.select({
+      id: adminStaffTable.id,
+      username: adminStaffTable.username,
+      permissions: adminStaffTable.permissions,
+      isActive: adminStaffTable.isActive,
+      isSuperAdmin: adminStaffTable.isSuperAdmin,
+    }).from(adminStaffTable).where(eq(adminStaffTable.id, staffId)).limit(1);
+    return staff ?? null;
+  }
+
+  if (path === "/change-password") {
+    const staffId = req.adminStaff?.id;
+    if (staffId == null) return null;
+    const [staff] = await db.select({
+      id: adminStaffTable.id,
+      username: adminStaffTable.username,
+      isActive: adminStaffTable.isActive,
+    }).from(adminStaffTable).where(eq(adminStaffTable.id, staffId)).limit(1);
+    return staff ?? null;
+  }
+
+  if (segments[0] === "owners" && segments.length === 3) {
+    const ownerId = adminAuditOwnerId(req);
+    if (!ownerId) return null;
+    const ownerKeys = await subscriptionOwnerKeys(ownerId);
+    if (segments[2] === "free-access") {
+      const rows = await db.select({
+        id: ownerFreeAccessGrantsTable.id,
+        ownerId: ownerFreeAccessGrantsTable.ownerId,
+        actorId: ownerFreeAccessGrantsTable.actorId,
+        expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+        startDate: ownerFreeAccessGrantsTable.startDate,
+        endDate: ownerFreeAccessGrantsTable.endDate,
+        createdAt: ownerFreeAccessGrantsTable.createdAt,
+      }).from(ownerFreeAccessGrantsTable)
+        .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys))
+        .orderBy(sql`${ownerFreeAccessGrantsTable.createdAt} DESC`, sql`${ownerFreeAccessGrantsTable.id} DESC`)
+        .limit(1);
+      const [subscription] = await db.select({
+        plan: ownerSubscriptionsTable.plan,
+        status: ownerSubscriptionsTable.status,
+        expiresAt: ownerSubscriptionsTable.expiresAt,
+        autoRenewEnabled: ownerSubscriptionsTable.autoRenewEnabled,
+      }).from(ownerSubscriptionsTable).where(inArray(ownerSubscriptionsTable.ownerId, ownerKeys)).limit(1);
+      return { latestGrant: rows[0] ?? null, subscription: subscription ?? null };
+    }
+    if (segments[2] === "discount") {
+      const rows = await db.select({
+        id: ownerAccountDiscountsTable.id,
+        ownerId: ownerAccountDiscountsTable.ownerId,
+        actorId: ownerAccountDiscountsTable.actorId,
+        kind: ownerAccountDiscountsTable.kind,
+        value: ownerAccountDiscountsTable.value,
+        startDate: ownerAccountDiscountsTable.startDate,
+        endDate: ownerAccountDiscountsTable.endDate,
+        createdAt: ownerAccountDiscountsTable.createdAt,
+      }).from(ownerAccountDiscountsTable)
+        .where(inArray(ownerAccountDiscountsTable.ownerId, ownerKeys))
+        .orderBy(sql`${ownerAccountDiscountsTable.createdAt} DESC`, sql`${ownerAccountDiscountsTable.id} DESC`)
+        .limit(1);
+      return { latestDiscount: rows[0] ?? null };
+    }
+    if (segments[2] === "subscription-grant") {
+      const [subscription] = await db.select({
+        ownerId: ownerSubscriptionsTable.ownerId,
+        plan: ownerSubscriptionsTable.plan,
+        status: ownerSubscriptionsTable.status,
+        expiresAt: ownerSubscriptionsTable.expiresAt,
+        billingCycleDays: ownerSubscriptionsTable.billingCycleDays,
+        renewalPriceHalala: ownerSubscriptionsTable.renewalPriceHalala,
+        autoRenewEnabled: ownerSubscriptionsTable.autoRenewEnabled,
+        paymentStatus: ownerSubscriptionsTable.paymentStatus,
+        termsSnapshot: ownerSubscriptionsTable.termsSnapshot,
+      }).from(ownerSubscriptionsTable).where(inArray(ownerSubscriptionsTable.ownerId, ownerKeys)).limit(1);
+      return subscription ?? null;
+    }
+  }
+
+  if (segments[0] === "plans") {
+    const planId = segments[1] && /^\d+$/.test(segments[1]) ? Number(segments[1])
+      : (typeof responseId === "number" || (typeof responseId === "string" && /^\d+$/.test(responseId)) ? Number(responseId) : null);
+    if (planId == null || !Number.isInteger(planId)) return null;
+    const [plan] = await db.select({
+      id: subscriptionPlansTable.id,
+      slug: subscriptionPlansTable.slug,
+      nameAr: subscriptionPlansTable.nameAr,
+      price: subscriptionPlansTable.price,
+      durationDays: subscriptionPlansTable.durationDays,
+      trialDays: subscriptionPlansTable.trialDays,
+      features: subscriptionPlansTable.features,
+      scope: subscriptionPlansTable.scope,
+      chaletLimit: subscriptionPlansTable.chaletLimit,
+      serviceLimit: subscriptionPlansTable.serviceLimit,
+      extraChaletPrice: subscriptionPlansTable.extraChaletPrice,
+      extraServicePrice: subscriptionPlansTable.extraServicePrice,
+      isActive: subscriptionPlansTable.isActive,
+      sortOrder: subscriptionPlansTable.sortOrder,
+    }).from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, planId)).limit(1);
+    return plan ?? null;
+  }
+
+  if (segments[0] === "global-seasons") {
+    const seasonId = segments[1] && /^\d+$/.test(segments[1]) ? Number(segments[1])
+      : (typeof responseId === "number" || (typeof responseId === "string" && /^\d+$/.test(responseId)) ? Number(responseId) : null);
+    if (seasonId == null || !Number.isInteger(seasonId)) return null;
+    const [season] = await db.select({
+      id: globalSeasonsTable.id,
+      nameAr: globalSeasonsTable.nameAr,
+      startDate: globalSeasonsTable.startDate,
+      endDate: globalSeasonsTable.endDate,
+      color: globalSeasonsTable.color,
+      isActive: globalSeasonsTable.isActive,
+    }).from(globalSeasonsTable).where(eq(globalSeasonsTable.id, seasonId)).limit(1);
+    return season ?? null;
+  }
+
+  return null;
+}
+
 /* Persist a write-ahead audit record before any state-changing admin action.
  * The record is finalized before the JSON response is sent. If finalization
  * fails, the durable "started" record remains for investigation, so a
@@ -340,16 +550,43 @@ router.use(async (req, res, next) => {
       : (req.user as { name?: string } | undefined)?.name?.trim() || "المشرف العام";
     if (!actorName) throw new Error("Authenticated admin staff member has no name");
 
+    const targetOwnerId = adminAuditOwnerId(req);
+    const action = `${req.method.toLowerCase()}_${entity}`.slice(0, 255);
     const [audit] = await db.insert(adminAuditLogsTable).values({
       actorId,
       actorName: String(actorName).slice(0, 255),
-      action: `${req.method.toLowerCase()}_${entity}`.slice(0, 255),
+      action,
       method: req.method,
       path,
       entity,
       entityId: initialEntityId,
-      metadata: { source: "admin-router", status: "started" },
+      targetOwnerId,
+      metadata: { source: "admin-router", status: "started", action, targetOwnerId },
     }).returning({ id: adminAuditLogsTable.id });
+
+    let settingsBaseline: Map<string, string | null> | undefined;
+    if (req.path === "/settings" && req.method === "PATCH") {
+      const keys = requestedAuditSettingKeys(req);
+      const rows = keys.length > 0
+        ? await db.select({ key: siteSettingsTable.key, value: siteSettingsTable.value })
+          .from(siteSettingsTable).where(inArray(siteSettingsTable.key, keys))
+        : [];
+      settingsBaseline = new Map(keys.map((key) => {
+        const row = rows.find((entry) => entry.key === key);
+        return [key, row ? row.value : null] as [string, string | null];
+      }));
+    }
+    const beforeSnapshot = await getAdminAuditSnapshot(req);
+    const initialMetadata = {
+      source: "admin-router",
+      status: "started",
+      action,
+      targetOwnerId,
+      before: beforeSnapshot,
+    };
+    await db.update(adminAuditLogsTable)
+      .set({ metadata: initialMetadata })
+      .where(eq(adminAuditLogsTable.id, audit.id));
 
     const originalJson = res.json.bind(res);
     let finalized = false;
@@ -365,16 +602,23 @@ router.use(async (req, res, next) => {
         ?? (typeof responseId === "string" || typeof responseId === "number" ? responseId : null);
       const succeeded = res.statusCode >= 200 && res.statusCode < 300;
 
-      void db.update(adminAuditLogsTable)
+      void (async () => {
+        const afterSnapshot = succeeded ? await getAdminAuditSnapshot(req, responseId, settingsBaseline) : null;
+        await db.update(adminAuditLogsTable)
         .set({
           entityId: finalEntityId == null ? null : String(finalEntityId).slice(0, 100),
           metadata: {
             source: "admin-router",
             status: succeeded ? "completed" : "failed",
             statusCode: res.statusCode,
+            action,
+            targetOwnerId,
+            before: beforeSnapshot,
+            after: afterSnapshot,
           },
         })
-        .where(eq(adminAuditLogsTable.id, audit.id))
+        .where(eq(adminAuditLogsTable.id, audit.id));
+      })()
         .then(() => originalJson(body))
         .catch((err: unknown) => {
           logger.error({ err, auditId: audit.id, method: req.method, path }, "Failed to finalize admin audit log");
@@ -458,6 +702,10 @@ router.delete("/global-seasons/:id", requirePlatformSettingsAdmin, async (req, r
 });
 
 /* ── Access Check ─────────────────────────────────────────── */
+// Mounted after the write-ahead audit middleware so each campaign is attributed
+// to the authenticated superadmin before any recipient deliveries are queued.
+router.use("/broadcast", requireSuperAdmin, broadcastRouter);
+
 router.get("/access-check", (req, res) => {
   if (req.isSuperAdmin) {
     return res.json({ ok: true, role: "superAdmin", permissions: {} });

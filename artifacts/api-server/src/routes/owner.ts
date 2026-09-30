@@ -54,6 +54,7 @@ import { createSubscriptionCheckout, previewSubscriptionCheckout, confirmSubscri
 import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
 import { createAddonCheckout, previewAddonCheckout, readAddonCheckoutQuote, confirmAddonCheckout, redeemFreeAddonCheckout, SubscriptionAddonCheckoutError } from "../lib/subscription-addon-checkout";
 import { getSubscriptionBillingReadiness } from "../lib/subscription-renewals";
+import { ownerIdentityAliases } from "../lib/broadcast-utils";
 
 const router = Router();
 
@@ -570,6 +571,68 @@ async function resolveOwnerApplication(req: Request): Promise<ResolvedOwnerAppli
   return null;
 }
 
+const broadcastPreferencesSchema = z.object({
+  inApp: z.boolean().optional(),
+  inbox: z.boolean().optional(),
+  email: z.boolean().optional(),
+  whatsapp: z.boolean().optional(),
+}).strict().refine(value => Object.keys(value).length > 0, "At least one preference is required");
+
+function serializeBroadcastPreferences(row?: {
+  in_app: boolean; inbox: boolean; email: boolean; whatsapp: boolean;
+}) {
+  return row
+    ? { inApp: row.in_app, inbox: row.inbox, email: row.email, whatsapp: row.whatsapp }
+    : { inApp: true, inbox: false, email: false, whatsapp: false };
+}
+
+router.get("/broadcast-preferences", async (req, res): Promise<void> => {
+  const app = await resolveOwnerApplication(req);
+  const ownerKey = app ? `app:${app.id}` : `user:${String(req.user?.id ?? "")}`;
+  if (!req.user?.id || ownerKey === "user:") {
+    res.status(404).json({ error: "لم يتم العثور على حساب المالك" });
+    return;
+  }
+  const result = await db.execute(sql`
+    SELECT in_app, inbox, email, whatsapp
+    FROM owner_broadcast_preferences WHERE owner_key = ${ownerKey} LIMIT 1
+  `);
+  const row = ((result as any).rows as Array<{
+    in_app: boolean; inbox: boolean; email: boolean; whatsapp: boolean;
+  }>)[0];
+  res.json(serializeBroadcastPreferences(row));
+});
+
+router.patch("/broadcast-preferences", async (req, res): Promise<void> => {
+  const parsed = broadcastPreferencesSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "تفضيلات الإشعارات غير صالحة", details: parsed.error.flatten() });
+    return;
+  }
+  const app = await resolveOwnerApplication(req);
+  const ownerKey = app ? `app:${app.id}` : `user:${String(req.user?.id ?? "")}`;
+  if (!req.user?.id || ownerKey === "user:") {
+    res.status(404).json({ error: "لم يتم العثور على حساب المالك" });
+    return;
+  }
+  const pref = parsed.data;
+  const result = await db.execute(sql`
+    INSERT INTO owner_broadcast_preferences (owner_key, in_app, inbox, email, whatsapp, updated_at)
+    VALUES (${ownerKey}, ${pref.inApp ?? true}, ${pref.inbox ?? false}, ${pref.email ?? false}, ${pref.whatsapp ?? false}, now())
+    ON CONFLICT (owner_key) DO UPDATE SET
+      in_app = COALESCE(${pref.inApp ?? null}, owner_broadcast_preferences.in_app),
+      inbox = COALESCE(${pref.inbox ?? null}, owner_broadcast_preferences.inbox),
+      email = COALESCE(${pref.email ?? null}, owner_broadcast_preferences.email),
+      whatsapp = COALESCE(${pref.whatsapp ?? null}, owner_broadcast_preferences.whatsapp),
+      updated_at = now()
+    RETURNING in_app, inbox, email, whatsapp
+  `);
+  const row = ((result as any).rows as Array<{
+    in_app: boolean; inbox: boolean; email: boolean; whatsapp: boolean;
+  }>)[0];
+  res.json(serializeBroadcastPreferences(row));
+});
+
 async function resolveOwnerEmail(req: Request): Promise<string | null> {
   return (await resolveOwnerApplication(req))?.email ?? null;
 }
@@ -588,21 +651,30 @@ async function getOwnerIds(req: Request): Promise<string[]> {
   if (isPlatformAdmin(req) && !(req.user as any)?.isImpersonated) {
     return [primary];
   }
-  const ownerIds = new Set<string>([primary]);
-  if (/^owner_\d+$/.test(primary)) return [...ownerIds];
-
+  let linkedAlias: string | null = null;
   try {
-    await resolveOwnerEmail(req);
-    const r = await db.execute(
-      sql`SELECT owner_application_id
-          FROM owner_account_links
-          WHERE user_id = ${primary}
-          LIMIT 1`
-    );
-    const appId = ((r as any).rows as Array<{ owner_application_id: number }>)[0]?.owner_application_id;
-    if (appId) ownerIds.add(`owner_${appId}`);
+    const legacyOwnerMatch = /^owner_(\d+)$/.exec(primary);
+    if (legacyOwnerMatch) {
+      const applicationId = Number(legacyOwnerMatch[1]);
+      const r = await db.execute(sql`
+        SELECT user_id FROM owner_account_links
+        WHERE owner_application_id = ${applicationId} LIMIT 1
+      `);
+      const linkedUserId = ((r as any).rows as Array<{ user_id: string }>)[0]?.user_id;
+      linkedAlias = linkedUserId ?? null;
+    } else {
+      await resolveOwnerEmail(req);
+      const r = await db.execute(
+        sql`SELECT owner_application_id
+            FROM owner_account_links
+            WHERE user_id = ${primary}
+            LIMIT 1`
+      );
+      const appId = ((r as any).rows as Array<{ owner_application_id: number }>)[0]?.owner_application_id;
+      if (appId) linkedAlias = `owner_${appId}`;
+    }
   } catch { /* non-fatal */ }
-  return [...ownerIds];
+  return ownerIdentityAliases(primary, linkedAlias);
 }
 
 type OwnerBusinessType = "chalet" | "service" | "both";
@@ -1045,16 +1117,26 @@ router.post("/support-request", requireAuth, supportUpload.array("files", 10), a
 /* ── GET /owner/support-requests — list this owner's support messages ── */
 router.get("/support-requests", requireAuth, async (req, res) => {
   try {
-    const email = await resolveOwnerEmail(req);
-    const ownerId = req.user?.id ?? email ?? "unknown";
+    const ownerIds = await getOwnerIds(req);
+    const ownerIdFilter = sql.join(ownerIds.map(ownerId => sql`${ownerId}`), sql`, `);
     const result = await db.execute(
-      sql`SELECT id, owner_id, subject, message, status,
+      sql`SELECT * FROM (
+            SELECT id, owner_id, subject, message, status, source,
               CASE WHEN array_length(attachment_urls, 1) > 0 THEN attachment_urls WHEN attachment_url IS NOT NULL THEN ARRAY[attachment_url] ELSE '{}'::text[] END AS attachment_urls,
               admin_reply, admin_reply_at,
               CASE WHEN array_length(admin_attachment_urls, 1) > 0 THEN admin_attachment_urls WHEN admin_attachment_url IS NOT NULL THEN ARRAY[admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
-              is_read_by_owner, created_at
-          FROM owner_support_requests
-          WHERE owner_id = ${String(ownerId)}
+              is_read_by_owner, created_at, false AS platform_message, 'owner' AS sender
+            FROM owner_support_requests
+            WHERE owner_id IN (${ownerIdFilter}) AND source <> 'admin_broadcast'
+            UNION ALL
+            SELECT -id AS id, owner_id, subject, message, 'admin_message' AS status,
+              'admin_broadcast' AS source, '{}'::text[] AS attachment_urls,
+              NULL::text AS admin_reply, NULL::timestamptz AS admin_reply_at,
+              '{}'::text[] AS admin_attachment_urls, is_read AS is_read_by_owner,
+              created_at, true AS platform_message, 'platform' AS sender
+            FROM owner_broadcast_inbox
+            WHERE owner_id IN (${ownerIdFilter})
+          ) messages
           ORDER BY created_at DESC`
     );
     return res.json((result as any).rows);
@@ -1067,11 +1149,17 @@ router.get("/support-requests", requireAuth, async (req, res) => {
 /* ── GET /owner/support-requests/unread-count — count unread admin replies ── */
 router.get("/support-requests/unread-count", requireAuth, async (req, res) => {
   try {
-    const email = await resolveOwnerEmail(req);
-    const ownerId = req.user?.id ?? email ?? "unknown";
+    const ownerIds = await getOwnerIds(req);
+    const ownerIdFilter = sql.join(ownerIds.map(ownerId => sql`${ownerId}`), sql`, `);
     const result = await db.execute(
-      sql`SELECT COUNT(*) as count FROM owner_support_requests
-          WHERE owner_id = ${String(ownerId)} AND admin_reply IS NOT NULL AND is_read_by_owner = false`
+      sql`SELECT (
+            SELECT COUNT(*) FROM owner_support_requests
+            WHERE owner_id IN (${ownerIdFilter}) AND source <> 'admin_broadcast'
+              AND admin_reply IS NOT NULL AND is_read_by_owner = false
+          ) + (
+            SELECT COUNT(*) FROM owner_broadcast_inbox
+            WHERE owner_id IN (${ownerIdFilter}) AND is_read = false
+          ) AS count`
     );
     const count = Number(((result as any).rows)[0]?.count ?? 0);
     return res.json({ count });
@@ -1085,13 +1173,18 @@ router.get("/support-requests/unread-count", requireAuth, async (req, res) => {
 router.post("/support-requests/:id/mark-read", requireAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const email = await resolveOwnerEmail(req);
-    const ownerId = req.user?.id ?? email ?? "unknown";
-    if (!Number.isFinite(id)) return res.status(400).json({ error: "معرّف غير صحيح" });
-    await db.execute(
-      sql`UPDATE owner_support_requests SET is_read_by_owner = true
-          WHERE id = ${id} AND owner_id = ${String(ownerId)}`
-    );
+    const ownerIds = await getOwnerIds(req);
+    const ownerIdFilter = sql.join(ownerIds.map(ownerId => sql`${ownerId}`), sql`, `);
+    if (!Number.isFinite(id) || id === 0) return res.status(400).json({ error: "معرّف غير صحيح" });
+    if (id < 0) {
+      await db.execute(sql`UPDATE owner_broadcast_inbox SET is_read = true
+        WHERE id = ${Math.abs(id)} AND owner_id IN (${ownerIdFilter})`);
+    } else {
+      await db.execute(
+        sql`UPDATE owner_support_requests SET is_read_by_owner = true
+            WHERE id = ${id} AND owner_id IN (${ownerIdFilter}) AND source <> 'admin_broadcast'`
+      );
+    }
     return res.json({ ok: true });
   } catch (err) {
     console.error("[POST /owner/support-requests/:id/mark-read]", err);
@@ -4912,11 +5005,12 @@ router.delete("/reports/archive/:id", async (req, res) => {
 router.get("/notifications", async (req, res) => {
   const ownerId = (req.user as any)?.id;
   if (!ownerId) return res.status(401).json({ error: "unauthorized" });
+  const ownerIds = await getOwnerIds(req);
 
   const rows = await db
     .select()
     .from(ownerNotificationsTable)
-    .where(eq(ownerNotificationsTable.ownerId, ownerId))
+    .where(inArray(ownerNotificationsTable.ownerId, ownerIds))
     .orderBy(desc(ownerNotificationsTable.createdAt))
     .limit(50);
 
@@ -4928,11 +5022,12 @@ router.get("/notifications", async (req, res) => {
 router.patch("/notifications/read-all", async (req, res) => {
   const ownerId = (req.user as any)?.id;
   if (!ownerId) return res.status(401).json({ error: "unauthorized" });
+  const ownerIds = await getOwnerIds(req);
 
   await db
     .update(ownerNotificationsTable)
     .set({ isRead: true })
-    .where(and(eq(ownerNotificationsTable.ownerId, ownerId), eq(ownerNotificationsTable.isRead, false)));
+    .where(and(inArray(ownerNotificationsTable.ownerId, ownerIds), eq(ownerNotificationsTable.isRead, false)));
 
   return res.json({ ok: true });
 });

@@ -36,3 +36,4 @@
 - [Subscription billing boundary](subscription-billing-boundary.md) — extra slots are one-time purchases; preserve quoted terms across admin edits and legacy trials across rollout.
 - [Subscription reminder observability](subscription-reminder-observability.md) — report persisted in-app notifications and scheduler checks; never imply external message delivery.
 - [Subscription reminder previews](subscription-reminder-previews.md) — test reminders should be visibly simulated and time-limited without modifying real billing entitlements.
+- [Broadcast channel consent](broadcast-channel-consent.md) — campaigns honor independent owner channel preferences; queued external sends must recheck consent before delivery.

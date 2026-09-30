@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { randomUUID } from "node:crypto";
 import { after, before, describe, it } from "node:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import app from "../app";
 import { createSession } from "../lib/auth";
-import { db, pool, sessionsTable, ownerSupportRequestsTable } from "@workspace/db";
+import { db, pool, sessionsTable, ownerSupportRequestsTable, adminAuditLogsTable, siteSettingsTable } from "@workspace/db";
 
 let server: Server;
 let baseUrl: string;
@@ -73,6 +73,57 @@ describe("admin staff account and permissions", () => {
     assert.equal(member.personalEmail, `${username}@example.test`);
     assert.equal(member.mobile, "0501234567");
     assert.equal("passwordHash" in member, false);
+    const [createAudit] = await db.select().from(adminAuditLogsTable)
+      .where(and(
+        eq(adminAuditLogsTable.action, "post_staff"),
+        eq(adminAuditLogsTable.entityId, String(member.id)),
+      ))
+      .orderBy(adminAuditLogsTable.id);
+    assert.equal(createAudit?.action, "post_staff");
+    assert.equal(createAudit?.metadata.status, "completed");
+    assert.equal(createAudit?.targetOwnerId, null);
+    assert.equal(createAudit?.metadata.targetOwnerId, null);
+    assert.equal((createAudit?.metadata.after as Record<string, unknown>)?.username, username);
+    const createSnapshotJson = JSON.stringify(createAudit?.metadata);
+    assert.equal(createSnapshotJson?.includes(password), false);
+    assert.equal(createSnapshotJson?.includes("passwordHash"), false);
+    assert.equal(createSnapshotJson?.includes(`${username}@example.test`), false);
+    assert.equal(createSnapshotJson?.includes("0501234567"), false);
+
+    const [previousDisplayName] = await db.select().from(siteSettingsTable)
+      .where(eq(siteSettingsTable.key, "site_display_name"));
+    const changedDisplayName = `Audit ${username} audit_${username}@example.test 0501234567`;
+    try {
+      const settingsResponse = await fetch(`${baseUrl}/api/admin/settings`, {
+        method: "PATCH", headers: adminHeaders(),
+        body: JSON.stringify({ site_display_name: changedDisplayName }),
+      });
+      assert.equal(settingsResponse.status, 200);
+      const settingsAudits = await db.select().from(adminAuditLogsTable)
+        .where(and(
+          eq(adminAuditLogsTable.action, "patch_settings"),
+          eq(adminAuditLogsTable.path, "/api/admin/settings"),
+        ));
+      const settingsAudit = settingsAudits.find((row) =>
+        JSON.stringify(row.metadata).includes(`Audit ${username}`));
+      assert(settingsAudit, JSON.stringify(settingsAudits.map((row) => row.metadata)));
+      const beforeSetting = (settingsAudit.metadata.before as { settings: Array<Record<string, unknown>> }).settings[0];
+      const afterSetting = (settingsAudit.metadata.after as { settings: Array<Record<string, unknown>> }).settings[0];
+      assert.equal(beforeSetting.key, "site_display_name");
+      assert.equal(afterSetting.value, `Audit ${username} [محجوب] [محجوب]`);
+      assert.equal(afterSetting.changed, true);
+      assert.equal(JSON.stringify(settingsAudit.metadata).includes(`audit_${username}@example.test`), false);
+      assert.equal(JSON.stringify(settingsAudit.metadata).includes("0501234567"), false);
+      assert.equal(settingsAudit.targetOwnerId, null);
+    } finally {
+      if (previousDisplayName) {
+        await db.update(siteSettingsTable)
+          .set({ value: previousDisplayName.value, updatedAt: new Date() })
+          .where(eq(siteSettingsTable.key, "site_display_name"));
+      } else {
+        await db.delete(siteSettingsTable).where(eq(siteSettingsTable.key, "site_display_name"));
+      }
+    }
 
     const disabledLogin = await fetch(`${baseUrl}/api/admin-staff/login`, {
       method: "POST", headers: { "content-type": "application/json" },
@@ -87,6 +138,11 @@ describe("admin staff account and permissions", () => {
       method: "PUT", headers: adminHeaders(), body: JSON.stringify({ isActive: true }),
     });
     assert.equal(status.status, 200);
+    const [activationAudit] = await db.select().from(adminAuditLogsTable)
+      .where(eq(adminAuditLogsTable.path, `/api/admin/staff/${staffId}/status`))
+      .orderBy(adminAuditLogsTable.id);
+    assert.equal((activationAudit?.metadata.before as Record<string, unknown>)?.isActive, false);
+    assert.equal((activationAudit?.metadata.after as Record<string, unknown>)?.isActive, true);
 
     const login = await fetch(`${baseUrl}/api/admin-staff/login`, {
       method: "POST", headers: { "content-type": "application/json" },
@@ -103,6 +159,13 @@ describe("admin staff account and permissions", () => {
       body: JSON.stringify({ permissions: { serviceCatalog: true, financeSettings: false } }),
     });
     assert.equal(permissions.status, 200);
+    const [permissionsAudit] = await db.select().from(adminAuditLogsTable)
+      .where(eq(adminAuditLogsTable.path, `/api/admin/staff/${staffId}/permissions`))
+      .orderBy(adminAuditLogsTable.id);
+    assert.deepEqual((permissionsAudit?.metadata.before as Record<string, unknown>)?.permissions, {});
+    assert.deepEqual((permissionsAudit?.metadata.after as Record<string, unknown>)?.permissions, {
+      serviceCatalog: true, financeSettings: false,
+    });
     assert.equal((await fetch(`${baseUrl}/api/admin/service-regions`, { headers: { cookie } })).status, 200);
     assert.equal((await fetch(`${baseUrl}/api/admin/services`, { headers: { cookie } })).status, 403);
     assert.equal((await fetch(`${baseUrl}/api/admin/plans`, { headers: { cookie } })).status, 403);
@@ -156,15 +219,28 @@ describe("admin staff account and permissions", () => {
 
     const update = await fetch(`${baseUrl}/api/admin/staff/${staffId}/credentials`, {
       method: "PUT", headers: adminHeaders(),
-      body: JSON.stringify({ name: "الاسم المحدّث", personalEmail: `changed-${username}@example.test`, mobile: "0507654321" }),
+      body: JSON.stringify({ name: "الاسم المحدّث", username: `renamed_${username}`, personalEmail: `changed-${username}@example.test`, mobile: "0507654321", password: `${password}-updated` }),
     });
     assert.equal(update.status, 200);
     const list = await fetch(`${baseUrl}/api/admin/staff`, { headers: adminHeaders() });
-    const members = await list.json() as Array<{ id: number; name: string; personalEmail: string; mobile: string }>;
+    const members = await list.json() as Array<{ id: number; name: string; username: string; personalEmail: string; mobile: string }>;
     const member = members.find((item) => item.id === staffId);
     assert.equal(member?.name, "الاسم المحدّث");
+    assert.equal(member?.username, `renamed_${username}`);
     assert.equal(member?.personalEmail, `changed-${username}@example.test`);
     assert.equal(member?.mobile, "0507654321");
+    const [credentialAudit] = await db.select().from(adminAuditLogsTable)
+      .where(eq(adminAuditLogsTable.path, `/api/admin/staff/${staffId}/credentials`))
+      .orderBy(adminAuditLogsTable.id);
+    assert.equal(credentialAudit?.metadata.status, "completed");
+    assert.equal((credentialAudit?.metadata.before as Record<string, unknown>)?.username, username);
+    assert.equal((credentialAudit?.metadata.after as Record<string, unknown>)?.username, `renamed_${username}`);
+    assert.equal(credentialAudit?.path, `/api/admin/staff/${staffId}/credentials`);
+    const credentialSnapshotJson = JSON.stringify(credentialAudit?.metadata);
+    assert.equal(credentialSnapshotJson?.includes(password), false);
+    assert.equal(credentialSnapshotJson?.includes("passwordHash"), false);
+    assert.equal(credentialSnapshotJson?.includes(`changed-${username}@example.test`), false);
+    assert.equal(credentialSnapshotJson?.includes("0507654321"), false);
 
     // A real support reply and status change both retain the DB-backed
     // employee name in the shared audit trail.
@@ -201,5 +277,13 @@ describe("admin staff account and permissions", () => {
     });
     assert.equal(deactivate.status, 200);
     assert.equal((await fetch(`${baseUrl}/api/admin/access-check`, { headers: { cookie } })).status, 401);
+    const deleted = await fetch(`${baseUrl}/api/admin/staff/${staffId}`, { method: "DELETE", headers: adminHeaders() });
+    assert.equal(deleted.status, 200);
+    const [deleteAudit] = await db.select().from(adminAuditLogsTable)
+      .where(eq(adminAuditLogsTable.path, `/api/admin/staff/${staffId}`))
+      .orderBy(adminAuditLogsTable.id);
+    assert.equal((deleteAudit?.metadata.before as Record<string, unknown>)?.username, `renamed_${username}`);
+    assert.equal(deleteAudit?.metadata.after, null);
+    staffId = null;
   });
 });

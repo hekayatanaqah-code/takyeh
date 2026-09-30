@@ -872,9 +872,70 @@ export const ownerNotificationsTable = pgTable("owner_notifications", {
   bookingId: integer("booking_id").references(() => ownerBookingsTable.id, { onDelete: "cascade" }),
   message: text("message").notNull(),
   isRead: boolean("is_read").notNull().default(false),
+  broadcastCampaignId: integer("broadcast_campaign_id"),
+  broadcastRecipientKey: text("broadcast_recipient_key"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  broadcastRecipientUnique: uniqueIndex("owner_notifications_broadcast_recipient_uq")
+    .on(table.broadcastCampaignId, table.broadcastRecipientKey),
+}));
+export type OwnerNotification = typeof ownerNotificationsTable.$inferSelect;
+
+/* ── Superadmin broadcasts ─────────────────────────────────── */
+export const broadcastCampaignsTable = pgTable("broadcast_campaigns", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  audience: text("audience").notNull(),
+  channels: text("channels").array().notNull(),
+  idempotencyKey: text("idempotency_key").unique(),
+  createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
-export type OwnerNotification = typeof ownerNotificationsTable.$inferSelect;
+export const broadcastDeliveriesTable = pgTable("broadcast_deliveries", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => broadcastCampaignsTable.id, { onDelete: "cascade" }),
+  recipientKey: text("recipient_key").notNull(),
+  recipientOwnerId: text("recipient_owner_id").notNull(),
+  recipientEmail: text("recipient_email"),
+  recipientWhatsappPhone: text("recipient_whatsapp_phone"),
+  recipientName: text("recipient_name"),
+  channel: text("channel").notNull(),
+  status: text("status").notNull().default("pending"),
+  errorCode: text("error_code"),
+  attempts: integer("attempts").notNull().default(0),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  recipientChannelUnique: uniqueIndex("broadcast_deliveries_campaign_recipient_channel_uq")
+    .on(table.campaignId, table.recipientKey, table.channel),
+  campaignStatusIdx: index("broadcast_deliveries_campaign_status_idx").on(table.campaignId, table.status),
+  queueStatusIdx: index("broadcast_deliveries_status_id_idx").on(table.status, table.id),
+}));
+export const ownerBroadcastPreferencesTable = pgTable("owner_broadcast_preferences", {
+  ownerKey: text("owner_key").primaryKey(),
+  inApp: boolean("in_app").notNull().default(true),
+  inbox: boolean("inbox").notNull().default(false),
+  email: boolean("email").notNull().default(false),
+  whatsapp: boolean("whatsapp").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export const ownerBroadcastInboxTable = pgTable("owner_broadcast_inbox", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  ownerName: text("owner_name"),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  campaignId: integer("campaign_id").notNull().references(() => broadcastCampaignsTable.id, { onDelete: "cascade" }),
+  recipientKey: text("recipient_key").notNull(),
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  campaignRecipientUnique: uniqueIndex("owner_broadcast_inbox_campaign_recipient_uq")
+    .on(table.campaignId, table.recipientKey),
+  ownerCreatedIdx: index("owner_broadcast_inbox_owner_created_idx").on(table.ownerId, table.createdAt),
+}));
 
 /* ── Report Archive ─────────────────────────────────────────── */
 
@@ -1183,6 +1244,7 @@ export const ownerSupportRequestsTable = pgTable("owner_support_requests", {
   subject: text("subject").notNull(),
   message: text("message").notNull(),
   status: text("status").notNull().default("new"), /* new | in_progress | resolved */
+  source: text("source").notNull().default("owner_request"),
   adminReply: text("admin_reply"),
   adminReplyAt: timestamp("admin_reply_at", { withTimezone: true }),
   isReadByOwner: boolean("is_read_by_owner").notNull().default(false),

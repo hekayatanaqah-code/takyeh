@@ -27484,6 +27484,9 @@ interface OwnerSupportMsg {
   subject: string;
   message: string;
   status: string;
+  source?: string | null;
+  sender?: string | null;
+  platform_message?: boolean;
   attachment_url?: string | null;
   attachment_urls?: string[];
   admin_reply: string | null;
@@ -27498,6 +27501,7 @@ const SUPPORT_STATUS_AR: Record<string, { label: string; color: string }> = {
   new:         { label: "قيد المراجعة", color: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700/40" },
   in_progress: { label: "تم الرد",      color: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/40" },
   resolved:    { label: "مُغلق",         color: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/40" },
+  admin_message: { label: "رسالة من المنصة", color: "text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-700/40" },
 };
 
 function OwnerSupportTab() {
@@ -27613,7 +27617,11 @@ function OwnerSupportTab() {
     finally { setSubmitting(false); setUploading(false); }
   }
 
-  const unreadReplies = history.filter((m) => m.admin_reply && !m.is_read_by_owner).length;
+  const isPlatformMessage = (msg: OwnerSupportMsg) =>
+    Boolean(msg.platform_message || msg.source === "admin_broadcast" || msg.sender === "platform" || (msg.id < 0 && msg.status === "admin_message"));
+  const unreadReplies = history.filter((msg) =>
+    !msg.is_read_by_owner && (isPlatformMessage(msg) || Boolean(msg.admin_reply)),
+  ).length;
   const supportPagination = useListPagination(history, history.map(message => message.id).join("|"));
 
   return (
@@ -27647,7 +27655,7 @@ function OwnerSupportTab() {
         <div className="flex items-center gap-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/40 rounded-xl px-4 py-2.5">
           <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse shrink-0" />
           <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-            لديك {unreadReplies === 1 ? "رد جديد" : `${unreadReplies} ردود جديدة`} من فريق تكية
+            لديك {unreadReplies === 1 ? "رسالة جديدة" : `${unreadReplies} رسائل جديدة`} من فريق تكية
           </p>
         </div>
       )}
@@ -27775,12 +27783,13 @@ function OwnerSupportTab() {
           <div ref={supportPagination.tableRef} className="space-y-3 scroll-mt-4">
           {supportPagination.paginatedItems.map((msg) => {
             const isExp = expandedId === msg.id;
+            const platformMessage = isPlatformMessage(msg);
             const statusInfo = SUPPORT_STATUS_AR[msg.status] ?? { label: msg.status, color: "text-muted-foreground bg-muted border-border" };
-            const hasUnread = msg.admin_reply && !msg.is_read_by_owner;
+            const hasUnread = !msg.is_read_by_owner && (platformMessage || Boolean(msg.admin_reply));
             return (
               <div
                 key={msg.id}
-                className={`border rounded-xl overflow-hidden transition-all ${hasUnread ? "border-blue-400 dark:border-blue-600" : "border-border"}`}
+                className={`border rounded-xl overflow-hidden transition-all ${platformMessage ? "border-violet-300 dark:border-violet-700/60" : hasUnread ? "border-blue-400 dark:border-blue-600" : "border-border"}`}
               >
                 <div
                   className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/40 transition-colors"
@@ -27805,14 +27814,17 @@ function OwnerSupportTab() {
                     })()}</p>
                   </div>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0 ${statusInfo.color}`}>{statusInfo.label}</span>
-                  {msg.admin_reply && <span className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700/40 px-2 py-0.5 rounded-full shrink-0">رد متاح</span>}
+                  {platformMessage && <span className="text-[10px] bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-700/40 px-2 py-0.5 rounded-full shrink-0">المرسل: المنصة</span>}
+                  {!platformMessage && msg.admin_reply && <span className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700/40 px-2 py-0.5 rounded-full shrink-0">رد متاح</span>}
                   <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${isExp ? "rotate-180" : ""}`} />
                 </div>
                 {isExp && (
                   <div className="border-t border-border bg-muted/20 px-4 py-4 space-y-4">
                     {/* Owner message */}
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1.5 font-medium">رسالتك:</p>
+                      <p className={`text-xs mb-1.5 font-medium ${platformMessage ? "text-violet-700 dark:text-violet-300" : "text-muted-foreground"}`}>
+                        {platformMessage ? "رسالة واردة من منصة تكية:" : "رسالتك:"}
+                      </p>
                       <div className="bg-background border border-border rounded-lg p-3 text-sm text-foreground leading-relaxed whitespace-pre-wrap">{msg.message}</div>
                       {(() => {
                         const urls = msg.attachment_urls?.length ? msg.attachment_urls : msg.attachment_url ? [msg.attachment_url] : [];
@@ -27861,7 +27873,7 @@ function OwnerSupportTab() {
                         })()}
                       </div>
                     )}
-                    {!msg.admin_reply && (
+                    {!platformMessage && !msg.admin_reply && (
                       <p className="text-xs text-muted-foreground italic">لم يتم الرد بعد. سيتواصل فريق تكية معك في أقرب وقت.</p>
                     )}
                   </div>
@@ -27949,6 +27961,9 @@ function OwnerProfileTab() {
   const [waSupportEnabled, setWaSupportEnabled] = useState(false);
   const [waUnifiedPhone,   setWaUnifiedPhone]   = useState("");
   const [savingWa,         setSavingWa]         = useState(false);
+  const [broadcastPreferences, setBroadcastPreferences] = useState({ inApp: false, inbox: false, email: false, whatsapp: false });
+  const [savingBroadcastPreferences, setSavingBroadcastPreferences] = useState(false);
+  const [broadcastPreferencesError, setBroadcastPreferencesError] = useState("");
 
   /* ── Calendar preferences (seeded from DB via localStorage on load) ── */
   const [bookingsCalPrefLocal, setBookingsCalPrefLocal] = useState<"hijri" | "gregorian">(
@@ -27987,7 +28002,17 @@ function OwnerProfileTab() {
       apiFetch("/owner/notification-settings")
         .then(async (r) => r.ok ? r.json() : null)
         .catch(() => null),
-    ]).then(([mainPhone, nd]) => {
+      apiFetch("/owner/broadcast-preferences")
+        .then(async (r) => {
+          const data = await r.json().catch(() => null);
+          if (!r.ok) throw new Error(data?.error ?? "تعذّر تحميل تفضيلات التعميمات");
+          return data;
+        })
+        .catch((error) => {
+          setBroadcastPreferencesError(error instanceof Error ? error.message : "تعذّر تحميل تفضيلات التعميمات");
+          return null;
+        }),
+    ]).then(([mainPhone, nd, broadcastPrefs]) => {
       if (nd) {
         setWaReviewEnabled(nd.waEnabled ?? false);
         setWaSupportEnabled(nd.waSupportEnabled ?? false);
@@ -27996,6 +28021,14 @@ function OwnerProfileTab() {
         setWaUnifiedPhone(formatted || mainPhone || "");
       } else if (mainPhone) {
         setWaUnifiedPhone(mainPhone);
+      }
+      if (broadcastPrefs) {
+        setBroadcastPreferences({
+          inApp: !!broadcastPrefs.inApp,
+          inbox: !!broadcastPrefs.inbox,
+          email: !!broadcastPrefs.email,
+          whatsapp: !!broadcastPrefs.whatsapp,
+        });
       }
     }).finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -28034,6 +28067,33 @@ function OwnerProfileTab() {
     } catch {
       toast({ title: "خطأ", description: "تعذّر حفظ الإعدادات", variant: "destructive" });
     } finally { setSavingWa(false); }
+  }
+
+  async function saveBroadcastPreferences() {
+    setSavingBroadcastPreferences(true);
+    setBroadcastPreferencesError("");
+    try {
+      const response = await apiFetch("/owner/broadcast-preferences", {
+        method: "PATCH",
+        body: JSON.stringify(broadcastPreferences),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error ?? "تعذّر حفظ تفضيلات التعميمات");
+      if (data) {
+        setBroadcastPreferences({
+          inApp: !!data.inApp,
+          inbox: !!data.inbox,
+          email: !!data.email,
+          whatsapp: !!data.whatsapp,
+        });
+      }
+      toast({ title: "تم الحفظ ✓", description: "تم تحديث تفضيلات استقبال التعميمات" });
+    } catch (error) {
+      setBroadcastPreferencesError(error instanceof Error ? error.message : "تعذّر حفظ تفضيلات التعميمات");
+      toast({ title: "خطأ", description: "تعذّر حفظ تفضيلات التعميمات", variant: "destructive" });
+    } finally {
+      setSavingBroadcastPreferences(false);
+    }
   }
 
   /* dirty-detection */
@@ -28306,6 +28366,39 @@ function OwnerProfileTab() {
                 حفظ الإعدادات
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ══════════ Broadcast preferences ══════════ */}
+        {secureStep === "idle" && (
+          <div className="border-t border-border pt-5 space-y-4">
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-foreground">تفضيلات استقبال التعميمات</p>
+              <p className="text-xs text-muted-foreground">اختر قناة أو أكثر لاستقبال تعميمات المنصة. هذه التفضيلات مستقلة لكل قناة.</p>
+            </div>
+            {broadcastPreferencesError && <p role="alert" className="text-xs text-destructive">{broadcastPreferencesError}</p>}
+            <div className="grid gap-2 sm:grid-cols-2">
+              {([
+                ["inApp", "إشعارات داخل التطبيق"],
+                ["inbox", "صندوق الوارد"],
+                ["email", "البريد الإلكتروني"],
+                ["whatsapp", "واتساب"],
+              ] as const).map(([key, label]) => (
+                <label key={key} className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-muted/20 px-4 py-3 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={broadcastPreferences[key]}
+                    onChange={(event) => setBroadcastPreferences((current) => ({ ...current, [key]: event.target.checked }))}
+                    className="h-4 w-4 accent-primary"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <Button onClick={saveBroadcastPreferences} disabled={savingBroadcastPreferences} variant="outline" className="gap-2">
+              {savingBroadcastPreferences && <Loader2 className="h-4 w-4 animate-spin" />}
+              حفظ تفضيلات التعميمات
+            </Button>
           </div>
         )}
 
