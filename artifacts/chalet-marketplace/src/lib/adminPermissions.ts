@@ -13,7 +13,7 @@ export type AdminStaffPermissions = Partial<Record<AdminPermKey, boolean>>;
 
 export const ADMIN_PERM_LABELS: Record<AdminPermKey, { label: string; description: string; icon: string }> = {
   chaletApprovals:  { label: "طلبات العقارات والخدمات", description: "قوائم العقارات والخدمات الجديدة والموافقة عليها", icon: "" },
-  globalFinancials: { label: "الإحصائيات والتقارير", description: "عرض الإحصائيات والتقارير المالية العامة", icon: "" },
+  globalFinancials: { label: "الإحصائيات العامة", description: "عرض أعداد العقارات والخدمات والحسابات والتنبيهات؛ الأرقام المالية الكلية للمشرف العام فقط", icon: "" },
   userManagement:   { label: "إدارة المستخدمين", description: "إدارة الملاك وحساباتهم", icon: "" },
   platformSettings: { label: "العقارات والإعدادات", description: "فئات ومواقع ومرافق العقارات، المواسم، وإعدادات الموقع", icon: "" },
   supportDisputes:  { label: "الدعم والتقييمات", description: "صندوق الوارد ورسائل التواصل وتقييمات العملاء", icon: "" },

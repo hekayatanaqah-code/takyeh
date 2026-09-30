@@ -10055,12 +10055,13 @@ export default function Admin() {
       {/* Content */}
       <main className="p-6 max-w-7xl mx-auto">
         {activeTab === "overview"             && <OverviewTab
+          showFinancials={isSuperAdmin}
           onNavigate={(target) => { if (tabById[target] && (target !== "plans" || isSuperAdmin)) setActiveTab(target); }}
           canNavigate={(target) => Boolean(tabById[target]) && (target !== "plans" || isSuperAdmin)}
         />}
         {activeTab === "chalets"              && <ChaletsVerifyTab />}
         {activeTab === "submissions"          && <SubmissionsTab />}
-        {activeTab === "platformRevenue"      && <PlatformRevenueTab />}
+        {activeTab === "platformRevenue" && isSuperAdmin && <PlatformRevenueTab />}
         {activeTab === "services"             && <ServicesTab />}
         {activeTab === "serviceSubmissions"   && <ProviderSubmissionsTab />}
         {activeTab === "globalSeasons"        && <GlobalSeasonsTab />}
@@ -10077,9 +10078,9 @@ export default function Admin() {
         {activeTab === "contactInquiries"      && <ContactInquiriesTab />}
         {activeTab === "waSubscribers"         && <WaSubscribersTab />}
         {activeTab === "siteSettings"          && <CentralSettingsTab />}
-        {activeTab === "auditLogs"             && <AuditLogsTab />}
-        {activeTab === "adminStaff"          && <AdminStaffTab isSuperAdmin={isSuperAdmin} currentUserName={displayName ?? ""} />}
-        {activeTab === "directAdd"           && <DirectAddTab mode={directAddMode} />}
+        {activeTab === "auditLogs" && isSuperAdmin && <AuditLogsTab />}
+        {activeTab === "adminStaff" && isSuperAdmin && <AdminStaffTab isSuperAdmin={isSuperAdmin} currentUserName={displayName ?? ""} />}
+        {activeTab === "directAdd" && isSuperAdmin && <DirectAddTab mode={directAddMode} />}
       </main>
     </div>
   );

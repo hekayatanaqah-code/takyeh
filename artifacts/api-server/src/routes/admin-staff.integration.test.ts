@@ -5,12 +5,13 @@ import { after, before, describe, it } from "node:test";
 import { eq } from "drizzle-orm";
 import app from "../app";
 import { createSession } from "../lib/auth";
-import { db, pool, sessionsTable } from "@workspace/db";
+import { db, pool, sessionsTable, ownerSupportRequestsTable } from "@workspace/db";
 
 let server: Server;
 let baseUrl: string;
 let sessionId: string;
 let staffId: number | null = null;
+let supportRequestId: number | null = null;
 const originalAdminUserId = process.env.ADMIN_USER_ID;
 const testAdminId = `staff-management-admin-${randomUUID()}`;
 const username = `staff_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
@@ -34,6 +35,9 @@ before(async () => {
 });
 
 after(async () => {
+  if (supportRequestId) {
+    await db.delete(ownerSupportRequestsTable).where(eq(ownerSupportRequestsTable.id, supportRequestId));
+  }
   if (staffId) {
     await fetch(`${baseUrl}/api/admin/staff/${staffId}`, { method: "DELETE", headers: adminHeaders() });
   }
@@ -119,6 +123,37 @@ describe("admin staff account and permissions", () => {
     assert.equal((await fetch(`${baseUrl}/api/admin/review-chalets`, { headers: { cookie } })).status, 200);
     assert.equal((await fetch(`${baseUrl}/api/admin/chalets`, { headers: { cookie } })).status, 403);
 
+    // A statistics grant and finance-settings grant must not expose the
+    // platform budget or any revenue totals through the analytics endpoint.
+    const financialGrants = await fetch(`${baseUrl}/api/admin/staff/${staffId}/permissions`, {
+      method: "PUT", headers: adminHeaders(),
+      body: JSON.stringify({ permissions: { globalFinancials: true, financeSettings: true, supportDisputes: true } }),
+    });
+    assert.equal(financialGrants.status, 200);
+    assert.equal((await fetch(`${baseUrl}/api/admin/plans`, { headers: { cookie } })).status, 200);
+    const staffAnalytics = await fetch(`${baseUrl}/api/admin/analytics`, { headers: { cookie } });
+    assert.equal(staffAnalytics.status, 200);
+    const staffStats = await staffAnalytics.json() as Record<string, unknown>;
+    assert("marketDistribution" in staffStats);
+    for (const key of ["monthlyRevenue", "weeklyBookings", "monthlyBookings", "weeklyBookingRevenue", "monthlyBookingRevenue", "bookingTimeSeries", "weeklyPerformance", "monthlyPerformance"]) {
+      assert.equal(key in staffStats, false, `${key} must not be sent to staff`);
+    }
+    assert.equal((await fetch(`${baseUrl}/api/admin/platform-revenue`, { headers: { cookie } })).status, 403);
+    assert.equal((await fetch(`${baseUrl}/api/admin/platform-expenses`, {
+      method: "POST", headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ dateStr: "2026-01-01", category: "test", amount: 1 }),
+    })).status, 403);
+    assert.equal((await fetch(`${baseUrl}/api/admin/platform-expenses/1`, { method: "DELETE", headers: { cookie } })).status, 403);
+    assert.equal((await fetch(`${baseUrl}/api/admin/staff`, { headers: { cookie } })).status, 403);
+    assert.equal((await fetch(`${baseUrl}/api/admin/staff/${staffId}/permissions`, {
+      method: "PUT", headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ permissions: { globalFinancials: true } }),
+    })).status, 403);
+    assert.equal((await fetch(`${baseUrl}/api/admin/staff`, {
+      method: "POST", headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ name: "unauthorized", username: "unauthorized" }),
+    })).status, 403);
+
     const update = await fetch(`${baseUrl}/api/admin/staff/${staffId}/credentials`, {
       method: "PUT", headers: adminHeaders(),
       body: JSON.stringify({ name: "الاسم المحدّث", personalEmail: `changed-${username}@example.test`, mobile: "0507654321" }),
@@ -130,6 +165,36 @@ describe("admin staff account and permissions", () => {
     assert.equal(member?.name, "الاسم المحدّث");
     assert.equal(member?.personalEmail, `changed-${username}@example.test`);
     assert.equal(member?.mobile, "0507654321");
+
+    // A real support reply and status change both retain the DB-backed
+    // employee name in the shared audit trail.
+    const [supportRequest] = await db.insert(ownerSupportRequestsTable).values({
+      ownerId: `audit-test-${randomUUID()}`,
+      subject: "طلب اختبار التدقيق",
+      message: "استفسار اختبار",
+    }).returning({ id: ownerSupportRequestsTable.id });
+    supportRequestId = supportRequest.id;
+    const replyForm = new FormData();
+    replyForm.set("reply", "تم الرد على طلب الاختبار");
+    replyForm.set("actorName", "اسم مزيف");
+    assert.equal((await fetch(`${baseUrl}/api/admin/support-requests/${supportRequestId}/reply`, {
+      method: "POST", headers: { cookie }, body: replyForm,
+    })).status, 200);
+    assert.equal((await fetch(`${baseUrl}/api/admin/support-requests/${supportRequestId}/status`, {
+      method: "PATCH", headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ status: "in_progress", actorName: "اسم مزيف" }),
+    })).status, 200);
+    const [savedSupport] = await db.select().from(ownerSupportRequestsTable).where(eq(ownerSupportRequestsTable.id, supportRequestId));
+    assert.equal(savedSupport.adminReply, "تم الرد على طلب الاختبار");
+    const auditResponse = await fetch(`${baseUrl}/api/admin/audit-log?actorId=${staffId}&entityId=${supportRequestId}`, { headers: adminHeaders() });
+    assert.equal(auditResponse.status, 200);
+    const audit = await auditResponse.json() as { rows: Array<{ actorName: string; path: string; metadata: { status: string } }> };
+    for (const suffix of ["/reply", "/status"]) {
+      assert(audit.rows.some((row) =>
+        row.path === `/api/admin/support-requests/${supportRequestId}${suffix}`
+        && row.actorName === "الاسم المحدّث"
+        && row.metadata.status === "completed"));
+    }
 
     const deactivate = await fetch(`${baseUrl}/api/admin/staff/${staffId}/status`, {
       method: "PUT", headers: adminHeaders(), body: JSON.stringify({ isActive: false }),

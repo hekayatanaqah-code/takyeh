@@ -39,7 +39,8 @@ export function useAdminStaffAuth() {
       return data;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-staff", "me"] });
+      qc.removeQueries({ queryKey: ["admin"] });
+      void qc.invalidateQueries({ queryKey: ["admin-staff", "me"] });
     },
   });
 
@@ -51,7 +52,9 @@ export function useAdminStaffAuth() {
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["admin-staff", "me"] });
+      // Drop privileged responses before another account can enter this browser.
+      qc.removeQueries({ queryKey: ["admin"] });
+      qc.setQueryData(["admin-staff", "me"], null);
     },
   });
 

@@ -333,9 +333,12 @@ router.use(async (req, res, next) => {
     const actorId = req.adminStaff?.id != null
       ? String(req.adminStaff.id)
       : req.user?.id != null ? String(req.user.id) : null;
-    const actorName = req.adminStaff?.name
-      ?? (req.user as { name?: string } | undefined)?.name
-      ?? "مجهول";
+    // Staff identity comes from the authenticated DB session, never the request body.
+    // Refuse a staff mutation if it cannot be attributed to a named employee.
+    const actorName = req.adminStaff
+      ? req.adminStaff.name?.trim()
+      : (req.user as { name?: string } | undefined)?.name?.trim() || "المشرف العام";
+    if (!actorName) throw new Error("Authenticated admin staff member has no name");
 
     const [audit] = await db.insert(adminAuditLogsTable).values({
       actorId,
@@ -3386,23 +3389,11 @@ router.delete("/platform-expenses/:id", requireSuperAdmin, async (req, res) => {
 
 /* ── Admin Analytics ─────────────────────────────────────── */
 router.get("/analytics", requireGlobalFinancialsAdmin, async (_req, res) => {
-  // 1. Monthly subscription revenue — last 12 months
-  const monthlyRev = await db.execute<{ month: string; total: string }>(sql`
-    SELECT TO_CHAR(DATE_TRUNC('month', os.created_at), 'YYYY-MM') AS month,
-           SUM(sp.price) AS total
-    FROM owner_subscriptions os
-    LEFT JOIN subscription_plans sp ON sp.slug = os.plan
-    WHERE os.payment_status = 'paid'
-      AND os.created_at >= NOW() - INTERVAL '12 months'
-    GROUP BY DATE_TRUNC('month', os.created_at)
-    ORDER BY DATE_TRUNC('month', os.created_at)
-  `);
-
-  // 2. Market distribution — properties vs approved service providers
+  // Market and account counts may be shown to staff with statistics access.
   const chaletCount = await db.execute<{ count: string }>(sql`SELECT COUNT(*) as count FROM chalets`);
   const serviceCount = await db.execute<{ count: string }>(sql`SELECT COUNT(*) as count FROM service_providers`);
 
-  // 3. Geographic heatmap — bookings by city (top 10)
+  // Geographic heatmap — bookings by city (top 10)
   const geoData = await db.execute<{ city: string; count: string }>(sql`
     SELECT cs.location AS city, COUNT(b.id) AS count
     FROM owner_bookings b
@@ -3413,7 +3404,7 @@ router.get("/analytics", requireGlobalFinancialsAdmin, async (_req, res) => {
     LIMIT 10
   `);
 
-  // 4. Account status distribution
+  // Account status distribution
   const statusDist = await db.execute<{ status: string; count: string }>(sql`
     SELECT status, COUNT(*) as count FROM owner_subscriptions GROUP BY status
   `);
@@ -3423,6 +3414,37 @@ router.get("/analytics", requireGlobalFinancialsAdmin, async (_req, res) => {
     WHERE cs.owner_id IS NOT NULL
       AND cs.status = 'approved'
       AND cs.owner_id NOT IN (SELECT owner_id FROM owner_subscriptions)
+  `);
+
+  const nonFinancialAnalytics = {
+    marketDistribution: {
+      chalets: Number(chaletCount.rows[0]?.count ?? 0),
+      services: Number(serviceCount.rows[0]?.count ?? 0),
+    },
+    geographicData: geoData.rows.map(r => ({
+      city: r.city,
+      count: Number(r.count),
+    })),
+    accountStatus: [
+      ...statusDist.rows.map(r => ({ status: r.status, count: Number(r.count) })),
+      ...(Number(noSubOwners.rows[0]?.count ?? 0) > 0
+        ? [{ status: "no_sub", count: Number(noSubOwners.rows[0]?.count ?? 0) }]
+        : []),
+    ],
+  };
+  // A statistics grant (including an old one) must never expose platform-wide
+  // subscription revenue or booking revenue, even via a direct API request.
+  if (!_req.isSuperAdmin) return res.json(nonFinancialAnalytics);
+
+  const monthlyRev = await db.execute<{ month: string; total: string }>(sql`
+    SELECT TO_CHAR(DATE_TRUNC('month', os.created_at), 'YYYY-MM') AS month,
+           SUM(sp.price) AS total
+    FROM owner_subscriptions os
+    LEFT JOIN subscription_plans sp ON sp.slug = os.plan
+    WHERE os.payment_status = 'paid'
+      AND os.created_at >= NOW() - INTERVAL '12 months'
+    GROUP BY DATE_TRUNC('month', os.created_at)
+    ORDER BY DATE_TRUNC('month', os.created_at)
   `);
 
   /* Booking performance excludes cancelled records and uses the owner's
@@ -3505,24 +3527,11 @@ router.get("/analytics", requireGlobalFinancialsAdmin, async (_req, res) => {
     new Intl.DateTimeFormat("ar-SA", { month: "short", year: "numeric" }).format(new Date(`${period}-01T00:00:00Z`));
 
   return res.json({
+    ...nonFinancialAnalytics,
     monthlyRevenue: monthlyRev.rows.map(r => ({
       month: r.month,
       total: Number(r.total ?? 0),
     })),
-    marketDistribution: {
-      chalets: Number(chaletCount.rows[0]?.count ?? 0),
-      services: Number(serviceCount.rows[0]?.count ?? 0),
-    },
-    geographicData: geoData.rows.map(r => ({
-      city: r.city,
-      count: Number(r.count),
-    })),
-    accountStatus: [
-      ...statusDist.rows.map(r => ({ status: r.status, count: Number(r.count) })),
-      ...(Number(noSubOwners.rows[0]?.count ?? 0) > 0
-        ? [{ status: "no_sub", count: Number(noSubOwners.rows[0]?.count ?? 0) }]
-        : []),
-    ],
     /* New booking series; monthlyRevenue above remains subscription revenue. */
     weeklyBookings: weeklyBookingSeries,
     monthlyBookings: monthlyBookingSeries,

@@ -33,12 +33,14 @@ interface SmartAlert {
 
 type OverviewTarget = "plans" | "ownerInbox" | "contactInquiries" | "chalets" | "services" | "owners" | "platformRevenue";
 
-export function OverviewTab({ onNavigate, canNavigate }: {
+export function OverviewTab({ onNavigate, canNavigate, showFinancials }: {
   onNavigate: (target: OverviewTarget) => void;
   canNavigate: (target: OverviewTarget) => boolean;
+  showFinancials: boolean;
 }) {
   const { data: analytics, isLoading: isAnalyticsLoading, isError: isAnalyticsError } = useQuery({
-    queryKey: ["admin", "analytics"],
+    // Never reuse a super-admin financial response when switching to a staff session.
+    queryKey: ["admin", "analytics", showFinancials ? "superadmin" : "staff"],
     queryFn: async () => {
       const r = await fetch(`${API}/admin/analytics`, { credentials: "include" });
       if (!r.ok) throw new Error("failed");
@@ -144,7 +146,7 @@ export function OverviewTab({ onNavigate, canNavigate }: {
              { label: "إجمالي العقارات", value: fmtN(d.marketDistribution?.chalets ?? 0), icon: <Home className="w-4 h-4 text-amber-400" />, target: "chalets" },
              { label: "الخدمات المسجّلة", value: fmtN(d.marketDistribution?.services ?? 0), icon: <Wrench className="w-4 h-4 text-blue-400" />, target: "services" },
              { label: "الحسابات النشطة", value: fmtN(d.accountStatus?.find((s: any) => s.status === "active")?.count ?? 0), icon: <CheckCircle className="w-4 h-4 text-emerald-400" />, target: "owners" },
-             { label: "إيرادات الاشتراكات", value: `${fmtN(d.monthlyRevenue?.reduce((s: any, r: any) => s + r.total, 0) ?? 0)} ر.س`, icon: <TrendingUp className="w-4 h-4 text-amber-400" />, target: "platformRevenue" },
+              ...(showFinancials ? [{ label: "إيرادات الاشتراكات", value: `${fmtN(d.monthlyRevenue?.reduce((s: any, r: any) => s + r.total, 0) ?? 0)} ر.س`, icon: <TrendingUp className="w-4 h-4 text-amber-400" />, target: "platformRevenue" }] : []),
           ].map(k => (
              <button type="button" key={k.label} onClick={() => onNavigate(k.target as OverviewTarget)}
                disabled={!canNavigate(k.target as OverviewTarget)}
@@ -159,7 +161,7 @@ export function OverviewTab({ onNavigate, canNavigate }: {
       )}
 
       {/* Interactive Charts */}
-      {d && (
+      {d && showFinancials && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5 space-y-4">
             <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">

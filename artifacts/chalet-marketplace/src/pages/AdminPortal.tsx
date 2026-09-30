@@ -38,7 +38,10 @@ export default function AdminPortal() {
         return;
       }
 
-      qc.invalidateQueries({ queryKey: ["admin", "access-check"] });
+      // A previous administrator's cached role or revenue must never appear
+      // in the newly authenticated staff session.
+      qc.removeQueries({ queryKey: ["admin"] });
+      qc.removeQueries({ queryKey: ["admin-staff", "me"] });
       navigate(data.redirect ?? "/admin");
     } catch {
       setError("تعذّر الاتصال بالخادم");
