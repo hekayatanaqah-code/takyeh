@@ -200,10 +200,24 @@ test("preview and initiate share exact prorated and next-cycle add-on quote math
       cancelAtPeriodEnd: false,
     }],
   });
-  assert.deepEqual(quote, {
+  assert.deepEqual({
+    amountHalala: quote.amountHalala,
+    remainingDays: quote.remainingDays,
+    nextChargeHalala: quote.nextChargeHalala,
+    baseMonthlyHalala: quote.baseMonthlyHalala,
+  }, {
     amountHalala: 1200,
     remainingDays: 24,
     nextChargeHalala: 26800,
     baseMonthlyHalala: 9900,
   });
+  assert.deepEqual(quote.nextInvoiceLines.map((line) => ({
+    kind: line.kind,
+    addonPurchaseId: line.addonPurchaseId,
+    amountHalala: line.amountHalala,
+  })), [
+    { kind: "base", addonPurchaseId: undefined, amountHalala: 19800 },
+    { kind: "addon", addonPurchaseId: 17, amountHalala: 1000 },
+    { kind: "addon", addonPurchaseId: -1, amountHalala: 6000 },
+  ]);
 });

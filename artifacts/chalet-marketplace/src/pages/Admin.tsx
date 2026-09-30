@@ -207,8 +207,18 @@ interface Owner {
   freeAccess?: {
     active: boolean;
     expiresAt: string | null;
+    startDate?: string | null;
+    endDate?: string | null;
     reason: string;
     createdAt: string;
+  } | null;
+  accountDiscount?: {
+    active: boolean;
+    kind: "percent" | "fixed";
+    value: number;
+    startDate: string | null;
+    endDate: string | null;
+    reason: string;
   } | null;
 }
 
@@ -1612,8 +1622,14 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [grantReason, setGrantReason] = useState("");
   const [grantError, setGrantError] = useState<string | null>(null);
   const [freeAccessOwner, setFreeAccessOwner] = useState<{ id: string; name: string } | null>(null);
-  const [freeAccessDuration, setFreeAccessDuration] = useState<"unlimited" | "fixed">("unlimited");
+  const [offerType, setOfferType] = useState<"free" | "discount">("free");
+  const [freeAccessDuration, setFreeAccessDuration] = useState<"unlimited" | "fixed" | "dates">("unlimited");
   const [freeAccessDays, setFreeAccessDays] = useState("30");
+  const [offerStartDate, setOfferStartDate] = useState("");
+  const [offerEndDate, setOfferEndDate] = useState("");
+  const [discountDuration, setDiscountDuration] = useState<"unlimited" | "fixed">("unlimited");
+  const [discountKind, setDiscountKind] = useState<"percent" | "fixed">("percent");
+  const [discountValue, setDiscountValue] = useState("");
   const [freeAccessReason, setFreeAccessReason] = useState("");
   const [freeAccessError, setFreeAccessError] = useState<string | null>(null);
   const freeAccessSubmitting = useRef(false);
@@ -1677,20 +1693,40 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       const reason = freeAccessReason.trim();
       const days = Number(fromAr(freeAccessDays));
       if (reason.length < 5 || reason.length > 500) throw new Error("يجب أن يكون السبب بين ٥ و٥٠٠ حرف");
-      if (freeAccessDuration === "fixed" && (!Number.isInteger(days) || days < 1 || days > 3650)) {
+      if (offerType === "free" && freeAccessDuration === "fixed" && (!Number.isInteger(days) || days < 1 || days > 3650)) {
         throw new Error("مدة الحساب المجاني يجب أن تكون بين يوم واحد و٣٦٥٠ يوماً");
       }
-      const r = await adminFetch(`/owners/${encodeURIComponent(freeAccessOwner.id)}/free-access`, {
+      if ((offerType === "discount" && discountDuration === "fixed") || (offerType === "free" && freeAccessDuration === "dates")) {
+        if (!offerStartDate || !offerEndDate || offerEndDate < offerStartDate) throw new Error("حدد تاريخ بداية ونهاية صحيحين");
+      }
+      const normalizedValue = fromAr(discountValue).trim();
+      const value = discountKind === "percent" ? Number(normalizedValue) : Math.round(Number(normalizedValue) * 100);
+      if (offerType === "discount" && (
+        discountKind === "percent"
+          ? !Number.isInteger(value) || value < 1 || value > 99
+          : !/^\d+(\.\d{1,2})?$/.test(normalizedValue) || !Number.isSafeInteger(value) || value < 1
+      )) throw new Error(discountKind === "percent" ? "النسبة يجب أن تكون بين ١٪ و٩٩٪" : "أدخل قيمة خصم صحيحة بالريال (حتى منزلتين عشريتين)");
+      const isFree = offerType === "free";
+      const r = await adminFetch(`/owners/${encodeURIComponent(freeAccessOwner.id)}/${isFree ? "free-access" : "discount"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          duration: freeAccessDuration,
-          ...(freeAccessDuration === "fixed" ? { days } : {}),
-          reason,
-        }),
+        body: JSON.stringify(isFree
+          ? {
+            duration: freeAccessDuration === "dates" ? "fixed" : freeAccessDuration,
+            ...(freeAccessDuration === "fixed" ? { days } : {}),
+            ...(freeAccessDuration === "dates" ? { startDate: offerStartDate, endDate: offerEndDate } : {}),
+            reason,
+          }
+          : {
+            kind: discountKind,
+            value,
+            duration: discountDuration,
+            ...(discountDuration === "fixed" ? { startDate: offerStartDate, endDate: offerEndDate } : {}),
+            reason,
+          }),
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.error ?? "تعذّر منح الحساب المجاني");
+      if (!r.ok) throw new Error(data.error ?? "تعذّر حفظ المنحة");
       return data;
     },
     onSuccess: () => {
@@ -1699,8 +1735,12 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       setFreeAccessReason("");
       setFreeAccessDays("30");
       setFreeAccessDuration("unlimited");
+      setOfferStartDate("");
+      setOfferEndDate("");
+      setDiscountDuration("unlimited");
+      setDiscountValue("");
       setFreeAccessError(null);
-      toast({ title: "تم منح الحساب المجاني", description: "تم تحديث صلاحية الحساب." });
+      toast({ title: offerType === "free" ? "تم منح الحساب المجاني" : "تم منح الخصم الخاص", description: "سيظهر أثره على طلبات الدفع الجديدة خلال فترة سريانه." });
     },
     onError: (error: Error) => setFreeAccessError(error.message),
     onSettled: () => { freeAccessSubmitting.current = false; },
@@ -2282,14 +2322,29 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                     {owner.freeAccess && (
                       <div className="mt-1 rounded border border-emerald-700/50 bg-emerald-950/20 px-2 py-1" data-testid={`status-free-access-${owner.ownerId}`}>
                         <span className={`text-[11px] font-semibold ${owner.freeAccess.active ? "text-emerald-300" : "text-slate-400"}`}>
-                          {owner.freeAccess.active ? "حساب مجاني نشط" : "منحة مجانية غير نشطة"}
+                          {owner.freeAccess.active ? "حساب مجاني نشط" : owner.freeAccess.startDate ? "منحة مجانية مجدولة" : "منحة مجانية غير نشطة"}
                           <span className="mr-1 font-normal">
-                            — {owner.freeAccess.expiresAt ? `الانتهاء ${fmtDate(owner.freeAccess.expiresAt)}` : "مفتوحة"}
+                            — {owner.freeAccess.startDate ? `من ${owner.freeAccess.startDate} ` : ""}
+                            {owner.freeAccess.endDate ? `حتى ${owner.freeAccess.endDate}` : owner.freeAccess.expiresAt ? `الانتهاء ${fmtDate(owner.freeAccess.expiresAt)}` : "مفتوحة"}
                           </span>
                         </span>
                         <p className="mt-0.5 text-[10px] text-slate-400" data-testid={`text-free-access-reason-${owner.ownerId}`}>
                           السبب: {owner.freeAccess.reason}
                         </p>
+                      </div>
+                    )}
+                    {owner.accountDiscount && (
+                      <div className="mt-1 rounded border border-sky-700/50 bg-sky-950/20 px-2 py-1" data-testid={`status-account-discount-${owner.ownerId}`}>
+                        <span className={`text-[11px] font-semibold ${owner.accountDiscount.active ? "text-sky-300" : "text-slate-400"}`}>
+                          خصم خاص {owner.accountDiscount.active ? "نشط" : "غير نشط"} — {owner.accountDiscount.kind === "percent"
+                            ? `${toAr(owner.accountDiscount.value)}٪`
+                            : `${toAr(owner.accountDiscount.value / 100)} ر.س`}
+                        </span>
+                        <p className="text-[10px] text-slate-400">
+                          {owner.accountDiscount.startDate ? `من ${owner.accountDiscount.startDate} ` : "من الآن "}
+                          {owner.accountDiscount.endDate ? `حتى ${owner.accountDiscount.endDate}` : "دائم"}
+                        </p>
+                        <p className="text-[10px] text-slate-400">السبب: {owner.accountDiscount.reason}</p>
                       </div>
                     )}
                   </div>
@@ -2322,15 +2377,21 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                           size="sm"
                           onClick={() => {
                             setFreeAccessOwner({ id: owner.ownerId, name: owner.ownerName });
+                             setOfferType("free");
                             setFreeAccessDuration("unlimited");
                             setFreeAccessDays("30");
+                             setOfferStartDate("");
+                             setOfferEndDate("");
+                             setDiscountDuration("unlimited");
+                             setDiscountKind("percent");
+                             setDiscountValue("");
                             setFreeAccessReason("");
                             setFreeAccessError(null);
                           }}
                           className="h-8 border-emerald-700 text-emerald-300 hover:bg-emerald-900/20"
                         >
                           <ShieldCheck className="ml-1 h-4 w-4" />
-                          منح حساب مجاني
+                           منحة أو خصم
                         </Button>
                       </>
                     )}
@@ -2519,16 +2580,31 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
             if (!open && !grantFreeAccess.isPending) setFreeAccessOwner(null);
           }}
         >
-          <DialogContent className="max-w-md bg-slate-900 border-slate-700 text-white" dir="rtl">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-700 text-white" dir="rtl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-emerald-400" />
-                منح حساب مجاني — {freeAccessOwner.name}
+                منح حساب مجاني أو خصم — {freeAccessOwner.name}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label="نوع المنحة">
+                <button type="button" onClick={() => { setOfferType("free"); setFreeAccessError(null); }}
+                  aria-pressed={offerType === "free"}
+                  className={`rounded-lg border p-3 text-right text-sm font-semibold ${offerType === "free" ? "border-emerald-500 bg-emerald-900/30 text-emerald-200" : "border-slate-700 bg-slate-800 text-slate-300"}`}>
+                  مجاني بالكامل
+                  <span className="mt-1 block text-xs font-normal text-slate-400">إعفاء كامل من رسوم الاشتراك</span>
+                </button>
+                <button type="button" onClick={() => { setOfferType("discount"); setFreeAccessError(null); }}
+                  aria-pressed={offerType === "discount"}
+                  className={`rounded-lg border p-3 text-right text-sm font-semibold ${offerType === "discount" ? "border-sky-500 bg-sky-900/30 text-sky-200" : "border-slate-700 bg-slate-800 text-slate-300"}`}>
+                  خصم مخصص
+                  <span className="mt-1 block text-xs font-normal text-slate-400">على الاشتراك والإضافات الجديدة</span>
+                </button>
+              </div>
               {(() => {
                 const currentGrant = owners.find((owner) => owner.ownerId === freeAccessOwner.id)?.freeAccess;
+                const currentDiscount = owners.find((owner) => owner.ownerId === freeAccessOwner.id)?.accountDiscount;
                 return (
                   <div className="rounded-lg border border-slate-700 bg-slate-800/70 p-3" data-testid={`dialog-free-access-status-${freeAccessOwner.id}`}>
                     <p className={`text-sm font-semibold ${currentGrant?.active ? "text-emerald-300" : "text-slate-300"}`}>
@@ -2539,32 +2615,68 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                     {currentGrant && (
                       <>
                         <p className="mt-1 text-xs text-slate-400">
-                          {currentGrant.expiresAt ? `تاريخ الانتهاء: ${fmtDate(currentGrant.expiresAt)}` : "تاريخ الانتهاء: مفتوحة"}
+                          {currentGrant.startDate ? `تاريخ البداية: ${currentGrant.startDate} · ` : ""}
+                          {currentGrant.endDate ? `تاريخ الانتهاء: ${currentGrant.endDate}` : currentGrant.expiresAt ? `تاريخ الانتهاء: ${fmtDate(currentGrant.expiresAt)}` : "تاريخ الانتهاء: مفتوحة"}
                         </p>
                         <p className="mt-1 text-xs text-slate-300" data-testid={`dialog-free-access-reason-${freeAccessOwner.id}`}>
                           السبب المحفوظ: {currentGrant.reason}
                         </p>
                       </>
                     )}
+                    {currentDiscount && (
+                      <p className="mt-2 text-xs text-sky-300">
+                        الخصم المحفوظ: {currentDiscount.kind === "percent"
+                          ? `${toAr(currentDiscount.value)}٪`
+                          : `${toAr(currentDiscount.value / 100)} ر.س`} — {currentDiscount.active ? "نشط" : "غير نشط"}
+                        <span className="block text-slate-400">السبب: {currentDiscount.reason}</span>
+                      </p>
+                    )}
                   </div>
                 );
               })()}
+              {offerType === "discount" && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400" htmlFor="discount-kind">نوع الخصم</label>
+                    <Select value={discountKind} onValueChange={(value) => setDiscountKind(value as "percent" | "fixed")}>
+                      <SelectTrigger id="discount-kind" className="bg-slate-800 border-slate-600 text-white"><SelectValue /></SelectTrigger>
+                      <SelectContent dir="rtl">
+                        <SelectItem value="percent">نسبة مئوية</SelectItem>
+                        <SelectItem value="fixed">قيمة بالريال</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400" htmlFor="discount-value">{discountKind === "percent" ? "النسبة (١–٩٩٪)" : "قيمة الخصم (ر.س)"}</label>
+                    <Input id="discount-value" inputMode="decimal" value={toAr(discountValue)}
+                      onChange={(event) => setDiscountValue(fromAr(event.target.value))}
+                      placeholder={discountKind === "percent" ? "مثال: ٢٠" : "مثال: ٥٠"}
+                      className="bg-slate-800 border-slate-600 text-white" />
+                  </div>
+                </div>
+              )}
               <div>
-                <label className="mb-1 block text-xs text-slate-400" htmlFor="free-access-duration">مدة الحساب المجاني</label>
-                <Select
-                  value={freeAccessDuration}
-                  onValueChange={(value) => setFreeAccessDuration(value as "unlimited" | "fixed")}
-                >
-                  <SelectTrigger id="free-access-duration" data-testid="select-free-access-duration" className="bg-slate-800 border-slate-600 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent dir="rtl">
-                    <SelectItem value="unlimited">مفتوحة بلا تاريخ انتهاء</SelectItem>
-                    <SelectItem value="fixed">مدة محددة بالأيام</SelectItem>
-                  </SelectContent>
-                </Select>
+                <label className="mb-1 block text-xs text-slate-400" htmlFor="free-access-duration">{offerType === "free" ? "مدة الحساب المجاني" : "مدة الخصم"}</label>
+                {offerType === "free" ? (
+                  <Select value={freeAccessDuration} onValueChange={(value) => setFreeAccessDuration(value as "unlimited" | "fixed" | "dates")}>
+                    <SelectTrigger id="free-access-duration" data-testid="select-free-access-duration" className="bg-slate-800 border-slate-600 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent dir="rtl">
+                      <SelectItem value="unlimited">دائم بلا تاريخ انتهاء</SelectItem>
+                      <SelectItem value="fixed">مدة محددة بالأيام</SelectItem>
+                      <SelectItem value="dates">بين تاريخ بداية ونهاية</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Select value={discountDuration} onValueChange={(value) => setDiscountDuration(value as "unlimited" | "fixed")}>
+                    <SelectTrigger id="free-access-duration" className="bg-slate-800 border-slate-600 text-white"><SelectValue /></SelectTrigger>
+                    <SelectContent dir="rtl">
+                      <SelectItem value="unlimited">دائم من الآن</SelectItem>
+                      <SelectItem value="fixed">بين تاريخ بداية ونهاية</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
-              {freeAccessDuration === "fixed" && (
+              {offerType === "free" && freeAccessDuration === "fixed" && (
                 <div>
                   <label className="mb-1 block text-xs text-slate-400" htmlFor="free-access-days">عدد الأيام (١–٣٦٥٠)</label>
                   <Input
@@ -2578,21 +2690,36 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                   />
                 </div>
               )}
+              {((offerType === "free" && freeAccessDuration === "dates") || (offerType === "discount" && discountDuration === "fixed")) && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400" htmlFor="offer-start">تاريخ البداية</label>
+                    <Input id="offer-start" type="date" value={offerStartDate} onChange={(event) => setOfferStartDate(event.target.value)}
+                      className="bg-slate-800 border-slate-600 text-white" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-slate-400" htmlFor="offer-end">تاريخ النهاية (شامل)</label>
+                    <Input id="offer-end" type="date" min={offerStartDate || undefined} value={offerEndDate} onChange={(event) => setOfferEndDate(event.target.value)}
+                      className="bg-slate-800 border-slate-600 text-white" />
+                  </div>
+                </div>
+              )}
               <div>
-                <label className="mb-1 block text-xs text-slate-400" htmlFor="free-access-reason">سبب المنح (مطلوب، ٥–٥٠٠ حرف)</label>
+                <label className="mb-1 block text-xs text-slate-400" htmlFor="free-access-reason">سبب {offerType === "free" ? "المنح" : "الخصم"} (مطلوب، ٥–٥٠٠ حرف)</label>
                 <Textarea
                   id="free-access-reason"
                   data-testid="input-free-access-reason"
                   value={freeAccessReason}
                   onChange={(event) => setFreeAccessReason(event.target.value)}
                   maxLength={500}
-                  placeholder="اكتب سبب منح الحساب المجاني"
+                  placeholder="اكتب السبب الإداري"
                   className="bg-slate-800 border-slate-600 text-white"
                 />
               </div>
               <div className="rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-xs leading-6 text-amber-200" data-testid="warning-free-access-impact">
-                <p className="font-bold">تنبيه مهم: عند منح الحساب المجاني سيتوقف التجديد التلقائي للاشتراك المدفوع نهائياً.</p>
-                <p>يبقى سجل الاشتراك المدفوع السابق محفوظاً ولا يُحذف.</p>
+                {offerType === "free"
+                  ? <><p className="font-bold">عند تفعيل الإعفاء الكامل سيتوقف التجديد التلقائي للاشتراك المدفوع نهائياً.</p><p>يبقى سجل الاشتراك المدفوع السابق محفوظاً ولا يُحذف.</p></>
+                  : <><p className="font-bold">الخصم يشمل الاشتراك الأساسي والإضافات على طلبات الدفع الجديدة فقط.</p><p>لا يعدّل المدفوعات السابقة ولا يجتمع مع رمز خصم في الطلب نفسه. القيمة لا تجعل المبلغ صفراً.</p></>}
               </div>
               {freeAccessError && <p className="text-sm text-red-400" role="alert" data-testid="status-free-access-error">{freeAccessError}</p>}
               <div className="flex gap-2">
@@ -2608,15 +2735,22 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                     grantFreeAccess.isPending ||
                     freeAccessReason.trim().length < 5 ||
                     freeAccessReason.trim().length > 500 ||
-                    (freeAccessDuration === "fixed" &&
+                     (offerType === "free" && freeAccessDuration === "fixed" &&
                       (!Number.isInteger(Number(fromAr(freeAccessDays))) ||
                         Number(fromAr(freeAccessDays)) < 1 ||
-                        Number(fromAr(freeAccessDays)) > 3650))
+                         Number(fromAr(freeAccessDays)) > 3650)) ||
+                     (((offerType === "free" && freeAccessDuration === "dates") || (offerType === "discount" && discountDuration === "fixed")) &&
+                       (!offerStartDate || !offerEndDate || offerEndDate < offerStartDate)) ||
+                     (offerType === "discount" && (
+                       discountKind === "percent"
+                         ? !Number.isInteger(Number(fromAr(discountValue))) || Number(fromAr(discountValue)) < 1 || Number(fromAr(discountValue)) > 99
+                         : !/^\d+(\.\d{1,2})?$/.test(fromAr(discountValue)) || Number(fromAr(discountValue)) <= 0
+                     ))
                   }
                   className="flex-1 bg-emerald-700 text-white hover:bg-emerald-600"
                 >
                   {grantFreeAccess.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                  تأكيد منح الحساب المجاني
+                  {offerType === "free" ? "تأكيد منح الحساب المجاني" : "تأكيد منح الخصم الخاص"}
                 </Button>
                 <Button
                   data-testid="button-cancel-free-access"

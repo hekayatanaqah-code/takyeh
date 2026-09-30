@@ -30,6 +30,7 @@ import {
   customerNotesTable,
   ownerSubscriptionsTable,
   ownerFreeAccessGrantsTable,
+  ownerAccountDiscountsTable,
   ownerBillingProfilesTable,
   subscriptionPromoCodesTable,
   subscriptionCheckoutIntentsTable,
@@ -52,8 +53,9 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { extractCoordsFromMapsUrl } from "../lib/extractMapCoords";
 import { logger } from "../lib/logger";
-import { getOrStartOwnerSubscription, subscriptionOwnerKeys } from "../lib/subscription-access";
+import { getOrStartOwnerSubscription, latestOwnerFreeAccess, subscriptionOwnerKeys } from "../lib/subscription-access";
 import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
+import { accountDiscountView, latestDiscountForDisplay, saudiCalendarDate } from "../lib/subscription-discounts";
 import { REMINDER_PREVIEW_PREFIX, getReminderPreview, parseReminderPreview } from "../lib/subscription-reminder-preview";
 
 declare global {
@@ -982,13 +984,25 @@ router.get("/owners", async (_req, res) => {
   }
   const grantRows = await db.select().from(ownerFreeAccessGrantsTable);
   const grantsByOwnerId = new Map<string, typeof grantRows[number]>();
+  const grantsByCanonical = new Map<string, typeof grantRows>();
   for (const grant of grantRows) {
     const ownerId = ownerAliases.get(grant.ownerId) ?? grant.ownerId;
-    const prior = grantsByOwnerId.get(ownerId);
-    if (!prior || grant.createdAt > prior.createdAt ||
-        (grant.createdAt.getTime() === prior.createdAt.getTime() && grant.id > prior.id)) {
-      grantsByOwnerId.set(ownerId, grant);
-    }
+    grantsByCanonical.set(ownerId, [...(grantsByCanonical.get(ownerId) ?? []), grant]);
+  }
+  for (const [ownerId, grants] of grantsByCanonical) {
+    const latest = latestOwnerFreeAccess(grants);
+    if (latest) grantsByOwnerId.set(ownerId, latest);
+  }
+  const discountRows = await db.select().from(ownerAccountDiscountsTable);
+  const discountsByCanonical = new Map<string, typeof discountRows>();
+  for (const discount of discountRows) {
+    const ownerId = ownerAliases.get(discount.ownerId) ?? discount.ownerId;
+    discountsByCanonical.set(ownerId, [...(discountsByCanonical.get(ownerId) ?? []), discount]);
+  }
+  const discountsByOwnerId = new Map<string, typeof discountRows[number]>();
+  for (const [ownerId, discounts] of discountsByCanonical) {
+    const latest = latestDiscountForDisplay(discounts);
+    if (latest) discountsByOwnerId.set(ownerId, latest);
   }
 
   const supportData = await db.execute<{ owner_id: string; message_count: string }>(
@@ -1091,6 +1105,7 @@ router.get("/owners", async (_req, res) => {
     const app = appByOwnerId.get(owner.ownerId);
     const subscription = subsByOwnerId.get(owner.ownerId);
     const latestFreeAccess = grantsByOwnerId.get(owner.ownerId);
+    const latestDiscount = discountsByOwnerId.get(owner.ownerId);
     const primaryProperty = owner.properties[0];
     const primaryService = owner.services[0];
     const propertyCount = owner.properties.length;
@@ -1134,11 +1149,17 @@ router.get("/owners", async (_req, res) => {
       expiresAt: subscription?.expiresAt ?? null,
       subscriptionStatus: subscription?.subscriptionStatus ?? "",
       freeAccess: latestFreeAccess ? {
-        active: latestFreeAccess.expiresAt === null || latestFreeAccess.expiresAt > new Date(),
+        active: latestFreeAccess.startDate
+          ? latestFreeAccess.startDate <= saudiCalendarDate() &&
+            (!latestFreeAccess.endDate || latestFreeAccess.endDate >= saudiCalendarDate())
+          : latestFreeAccess.expiresAt === null || latestFreeAccess.expiresAt > new Date(),
         expiresAt: latestFreeAccess.expiresAt,
+        startDate: latestFreeAccess.startDate,
+        endDate: latestFreeAccess.endDate,
         reason: latestFreeAccess.reason,
         createdAt: latestFreeAccess.createdAt,
       } : null,
+      accountDiscount: accountDiscountView(latestDiscount),
     };
   }).sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 
@@ -2577,14 +2598,34 @@ router.delete("/promo-codes/:id", requireSuperAdmin, async (req, res) => {
 const FreeAccessGrantBody = z.object({
   duration: z.enum(["unlimited", "fixed"]),
   days: z.number().int().min(1).max(3650).optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   reason: z.string().trim().min(5).max(500),
 }).strict().superRefine((grant, ctx) => {
-  if (grant.duration === "fixed" && grant.days === undefined) {
+  const dateMode = grant.startDate !== undefined || grant.endDate !== undefined;
+  if (grant.duration === "fixed" && grant.days === undefined && !dateMode) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["days"],
-      message: "مدة الوصول المحدود مطلوبة",
+      message: "أدخل عدد الأيام أو تاريخي البداية والنهاية",
     });
+  }
+  if (dateMode && (!grant.startDate || !grant.endDate)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startDate"], message: "تاريخا البداية والنهاية مطلوبان معاً" });
+  }
+  for (const date of [grant.startDate, grant.endDate]) {
+    if (date) {
+      const parsed = new Date(`${date}T00:00:00Z`);
+      if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startDate"], message: "التاريخ غير صحيح" });
+      }
+    }
+  }
+  if (grant.startDate && grant.endDate && grant.endDate < grant.startDate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: "تاريخ النهاية قبل البداية" });
+  }
+  if (grant.duration === "fixed" && grant.days !== undefined && dateMode) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["days"], message: "اختر عدد الأيام أو نطاق التاريخ فقط" });
   }
   if (grant.duration === "unlimited" && grant.days !== undefined) {
     ctx.addIssue({
@@ -2592,6 +2633,9 @@ const FreeAccessGrantBody = z.object({
       path: ["days"],
       message: "لا تُرسل مدة مع الوصول غير المحدود",
     });
+  }
+  if (grant.duration === "unlimited" && dateMode) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startDate"], message: "الوصول غير المحدود لا يقبل تواريخ" });
   }
 });
 
@@ -2642,7 +2686,8 @@ router.post("/owners/:ownerId/free-access", requireSuperAdmin, async (req, res):
       .orderBy(ownerSubscriptionsTable.ownerId)
       .for("update");
     const now = new Date();
-    const expiresAt = body.data.duration === "unlimited"
+    const dateMode = !!body.data.startDate && !!body.data.endDate;
+    const expiresAt = body.data.duration === "unlimited" || dateMode
       ? null
       : new Date(now.getTime() + body.data.days! * 86_400_000);
     const [created] = await tx.insert(ownerFreeAccessGrantsTable).values({
@@ -2650,8 +2695,14 @@ router.post("/owners/:ownerId/free-access", requireSuperAdmin, async (req, res):
       actorId,
       reason: body.data.reason,
       expiresAt,
+      startDate: body.data.startDate ?? null,
+      endDate: body.data.endDate ?? null,
       createdAt: now,
     }).returning();
+    const grantActiveNow = dateMode
+      ? body.data.startDate! <= saudiCalendarDate(now) && body.data.endDate! >= saudiCalendarDate(now)
+      : body.data.duration === "unlimited" || expiresAt! > now;
+    if (!grantActiveNow) return [created];
     await tx.update(subscriptionCheckoutIntentsTable)
       .set({
         freeAccessBlockedAt: sql`COALESCE(${subscriptionCheckoutIntentsTable.freeAccessBlockedAt}, ${now})`,
@@ -2718,11 +2769,149 @@ router.post("/owners/:ownerId/free-access", requireSuperAdmin, async (req, res):
   });
   res.status(201).json({
     freeAccess: {
-      active: true,
+      active: body.data.startDate ? body.data.startDate <= saudiCalendarDate() && body.data.endDate! >= saudiCalendarDate() : true,
       expiresAt: grant.expiresAt,
+      startDate: grant.startDate,
+      endDate: grant.endDate,
       reason: grant.reason,
       createdAt: grant.createdAt,
     },
+  });
+});
+
+const AccountDiscountBody = z.object({
+  kind: z.enum(["percent", "fixed"]),
+  value: z.number().finite().positive(),
+  duration: z.enum(["unlimited", "fixed"]),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  reason: z.string().trim().min(5).max(500),
+}).strict().superRefine((discount, ctx) => {
+  if (discount.kind === "percent" && (discount.value < 1 || discount.value > 99)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message: "النسبة يجب أن تكون من 1 إلى 99" });
+  }
+  if (discount.kind === "fixed" && !Number.isSafeInteger(discount.value)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message: "المبلغ الثابت يجب أن يكون عدداً صحيحاً بالهللات" });
+  }
+  const dateMode = discount.startDate !== undefined || discount.endDate !== undefined;
+  if (discount.duration === "fixed" && (!discount.startDate || !discount.endDate)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startDate"], message: "تاريخا البداية والنهاية مطلوبان" });
+  }
+  if (discount.duration === "unlimited" && dateMode) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startDate"], message: "الخصم غير المحدود لا يقبل تواريخ" });
+  }
+  for (const dateValue of [discount.startDate, discount.endDate]) {
+    if (!dateValue) continue;
+    const parsed = new Date(`${dateValue}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== dateValue) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startDate"], message: "التاريخ غير صحيح" });
+    }
+  }
+  if (discount.startDate && discount.endDate && discount.endDate < discount.startDate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: "تاريخ النهاية قبل البداية" });
+  }
+});
+
+router.post("/owners/:ownerId/discount", requireSuperAdmin, async (req, res): Promise<void> => {
+  const parsedOwnerId = z.string().trim().min(1).max(200).regex(/^[A-Za-z0-9_:-]+$/)
+    .safeParse(Array.isArray(req.params.ownerId) ? req.params.ownerId[0] : req.params.ownerId);
+  const body = AccountDiscountBody.safeParse(req.body);
+  if (!parsedOwnerId.success || !body.success) {
+    res.status(400).json({ error: "تحقّق من بيانات الخصم وحساب المالك" });
+    return;
+  }
+  const ownerId = parsedOwnerId.data;
+  const knownOwner = await db.execute<{ owner_id: string }>(sql`
+    SELECT owner_id FROM (
+      SELECT COALESCE(oal.user_id, 'owner_' || oa.id::text) AS owner_id
+      FROM owner_applications oa
+      LEFT JOIN owner_account_links oal ON oal.owner_application_id = oa.id
+      WHERE oa.deleted_at IS NULL
+      UNION SELECT 'owner_' || id::text FROM owner_applications WHERE deleted_at IS NULL
+      UNION SELECT owner_id FROM chalet_submissions
+      UNION SELECT owner_id FROM service_provider_submissions
+      UNION SELECT user_id AS owner_id FROM owner_account_links
+    ) AS known_owners WHERE owner_id = ${ownerId} LIMIT 1
+  `);
+  if (knownOwner.rows.length === 0) {
+    res.status(404).json({ error: "لم يتم العثور على حساب المالك" });
+    return;
+  }
+  const actorId = String(req.adminStaff?.id ?? req.user?.id ?? "").trim();
+  if (!actorId) {
+    res.status(403).json({ error: "تعذّر التحقق من هوية المشرف" });
+    return;
+  }
+  const ownerKeys = await subscriptionOwnerKeys(ownerId);
+  await getOrStartOwnerSubscription(ownerId);
+  const now = new Date();
+  const created = await db.transaction(async (tx) => {
+    await tx.select({ ownerId: ownerSubscriptionsTable.ownerId }).from(ownerSubscriptionsTable)
+      .where(inArray(ownerSubscriptionsTable.ownerId, ownerKeys))
+      .orderBy(ownerSubscriptionsTable.ownerId)
+      .for("update");
+    const [discount] = await tx.insert(ownerAccountDiscountsTable).values({
+      ownerId,
+      actorId,
+      kind: body.data.kind,
+      value: String(body.data.value),
+      startDate: body.data.duration === "fixed" ? body.data.startDate! : null,
+      endDate: body.data.duration === "fixed" ? body.data.endDate! : null,
+      reason: body.data.reason,
+      createdAt: now,
+    }).returning();
+    const activeNow = (!discount.startDate || discount.startDate <= saudiCalendarDate(now)) &&
+      (!discount.endDate || discount.endDate >= saudiCalendarDate(now));
+    if (activeNow) {
+      const invoices = await tx.select().from(subscriptionRenewalInvoicesTable)
+        .where(and(
+          inArray(subscriptionRenewalInvoicesTable.ownerId, ownerKeys),
+          inArray(subscriptionRenewalInvoicesTable.status, ["pending", "processing", "failed"]),
+        ))
+        .orderBy(subscriptionRenewalInvoicesTable.id)
+        .for("update");
+      for (const invoice of invoices) {
+        const attempts = await tx.select().from(subscriptionRenewalAttemptsTable)
+          .where(eq(subscriptionRenewalAttemptsTable.invoiceId, invoice.id))
+          .orderBy(subscriptionRenewalAttemptsTable.attemptNumber)
+          .for("update");
+        const possiblyDispatched = attempts.some((attempt) =>
+          ["processing", "dispatching", "dispatched", "initiated", "reconciling"].includes(attempt.status) ||
+          !!attempt.paymentId,
+        ) || !!invoice.paymentId;
+        if (possiblyDispatched) {
+          for (const attempt of attempts) {
+            if (attempt.status === "failed" || attempt.status === "cancelled") continue;
+            await tx.update(subscriptionRenewalAttemptsTable).set({
+              status: "reconciling",
+              nextAttemptAt: now,
+              updatedAt: now,
+              lastError: "Account discount changed; reconcile by payment ID or idempotency key using GET only",
+            }).where(eq(subscriptionRenewalAttemptsTable.id, attempt.id));
+          }
+          await tx.update(subscriptionRenewalInvoicesTable).set({
+            status: "processing",
+            nextAttemptAt: now,
+            lastError: "Account discount changed; reconciling dispatched payment without issuing a new charge",
+          }).where(eq(subscriptionRenewalInvoicesTable.id, invoice.id));
+        } else {
+          await tx.update(subscriptionRenewalInvoicesTable).set({
+            status: "cancelled",
+            lastError: "Account discount updated; undispatched renewal invoice invalidated",
+          }).where(eq(subscriptionRenewalInvoicesTable.id, invoice.id));
+        }
+      }
+    }
+    return discount;
+  });
+  res.status(201).json({
+    kind: created.kind,
+    value: Number(created.value),
+    startDate: created.startDate,
+    endDate: created.endDate,
+    reason: created.reason,
+    active: (!created.startDate || created.startDate <= saudiCalendarDate(now)) &&
+      (!created.endDate || created.endDate >= saudiCalendarDate(now)),
   });
 });
 

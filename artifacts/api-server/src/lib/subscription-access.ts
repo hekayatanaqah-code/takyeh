@@ -54,16 +54,28 @@ export async function subscriptionOwnerKeys(ownerId: string) {
 export type OwnerFreeAccess = {
   active: boolean;
   expiresAt: Date | null;
+  startDate?: string | null;
+  endDate?: string | null;
   reason: string;
   createdAt: Date;
 };
+
+function saudiToday(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
 
 export function latestOwnerFreeAccess<T extends {
   id: number;
   expiresAt: Date | null;
   createdAt: Date;
-}>(grants: T[]): T | undefined {
-  return [...grants].sort((a, b) =>
+  startDate?: string | null;
+}>(grants: T[], now = new Date()): T | undefined {
+  const today = saudiToday(now);
+  return grants.filter((grant) => !grant.startDate || grant.startDate <= today).sort((a, b) =>
     b.createdAt.getTime() - a.createdAt.getTime() || b.id - a.id,
   )[0];
 }
@@ -73,16 +85,21 @@ export function latestOwnerFreeAccessForKeys<T extends {
   id: number;
   expiresAt: Date | null;
   createdAt: Date;
-}>(grants: T[], ownerKeys: string[]): T | undefined {
+  startDate?: string | null;
+}>(grants: T[], ownerKeys: string[], now = new Date()): T | undefined {
   const keys = new Set(ownerKeys);
-  return latestOwnerFreeAccess(grants.filter((grant) => keys.has(grant.ownerId)));
+  return latestOwnerFreeAccess(grants.filter((grant) => keys.has(grant.ownerId)), now);
 }
 
 export function isOwnerFreeAccessGrantActive(
-  grant: { expiresAt: Date | null } | undefined,
+  grant: { expiresAt: Date | null; startDate?: string | null; endDate?: string | null } | undefined,
   now = new Date(),
 ) {
-  return !!grant && (grant.expiresAt === null || grant.expiresAt.getTime() > now.getTime());
+  if (!grant) return false;
+  const today = saudiToday(now);
+  if (grant.startDate && grant.startDate > today) return false;
+  if (grant.endDate) return grant.endDate >= today;
+  return grant.expiresAt === null || grant.expiresAt.getTime() > now.getTime();
 }
 
 export async function getOwnerFreeAccess(ownerId: string, now = new Date()): Promise<OwnerFreeAccess | null> {
@@ -90,14 +107,18 @@ export async function getOwnerFreeAccess(ownerId: string, now = new Date()): Pro
   const grants = await db.select({
     id: ownerFreeAccessGrantsTable.id,
     expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+    startDate: ownerFreeAccessGrantsTable.startDate,
+    endDate: ownerFreeAccessGrantsTable.endDate,
     createdAt: ownerFreeAccessGrantsTable.createdAt,
     reason: ownerFreeAccessGrantsTable.reason,
   }).from(ownerFreeAccessGrantsTable)
     .where(inArray(ownerFreeAccessGrantsTable.ownerId, keys));
-  const latest = latestOwnerFreeAccess(grants);
+  const latest = latestOwnerFreeAccess(grants, now);
   return latest ? {
     active: isOwnerFreeAccessGrantActive(latest, now),
     expiresAt: latest.expiresAt,
+    startDate: latest.startDate,
+    endDate: latest.endDate,
     reason: latest.reason,
     createdAt: latest.createdAt,
   } : null;
@@ -113,11 +134,13 @@ export async function activeOwnersWithFreeAccess(
     id: ownerFreeAccessGrantsTable.id,
     ownerId: ownerFreeAccessGrantsTable.ownerId,
     expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+    startDate: ownerFreeAccessGrantsTable.startDate,
+    endDate: ownerFreeAccessGrantsTable.endDate,
     createdAt: ownerFreeAccessGrantsTable.createdAt,
   }).from(ownerFreeAccessGrantsTable)
     .where(inArray(ownerFreeAccessGrantsTable.ownerId, uniqueIds));
   return new Set([...ownerKeysByOwner].flatMap(([ownerId, keys]) => {
-    const latest = latestOwnerFreeAccessForKeys(grants, [...keys]);
+    const latest = latestOwnerFreeAccessForKeys(grants, [...keys], now);
     return isOwnerFreeAccessGrantActive(latest, now) ? [ownerId] : [];
   }));
 }

@@ -44,3 +44,9 @@ Superadmin-granted full free access is an independent entitlement, never a repla
 **Why:** The user explicitly chose to stop paid renewal and not resume it automatically for owners given exceptional free access, while preserving paid subscription and payment history.
 
 **How to apply:** Resolve grants across owner aliases, evaluate their own expiry for access, keep the prior billing record intact, block new charges while a grant is active, and require a separate explicit action before any paid renewal resumes.
+
+Account-level discounts cover both the base subscription and add-ons, but apply once to the total of each *new* quote, not retroactively to captured payments or each line separately. Keep them separate from full free access and do not combine them with promotional codes.
+
+**Why:** The user specifically chose both subscription and add-on charges for the custom discount. Applying a fixed discount separately per line would unintentionally multiply its value; repricing an already-dispatched payment would break its approved quote.
+
+**How to apply:** Snapshot the effective discount when creating checkout and renewal invoices; use inclusive Saudi-calendar bounds for dated grants, keep historical invoices and payments unchanged, and clearly disclose that existing quoted requests retain their quoted price.

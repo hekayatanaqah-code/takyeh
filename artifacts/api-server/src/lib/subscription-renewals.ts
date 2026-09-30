@@ -5,6 +5,7 @@ import {
   ownerBillingProfilesTable,
   ownerSubscriptionsTable,
   ownerFreeAccessGrantsTable,
+  ownerAccountDiscountsTable,
   subscriptionAddonPurchasesTable,
   subscriptionCheckoutIntentsTable,
   subscriptionPaymentReconciliationsTable,
@@ -21,6 +22,11 @@ import {
 } from "./subscription-access";
 import { decryptMoyasarToken, isMoyasarTokenVaultAvailable } from "./subscription-token-vault";
 import { retrySubscriptionPaymentReconciliation } from "./subscription-payment-reconciliation";
+import {
+  accountDiscountView,
+  discountInvoiceLines,
+  latestStartedDiscount,
+} from "./subscription-discounts";
 import {
   isSubscriptionRenewalDue,
   quoteUpcomingInvoice,
@@ -55,6 +61,8 @@ async function createOrReadDueInvoice(ownerId: string, now: Date) {
     const grants = await tx.select({
       id: ownerFreeAccessGrantsTable.id,
       expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+      startDate: ownerFreeAccessGrantsTable.startDate,
+      endDate: ownerFreeAccessGrantsTable.endDate,
       createdAt: ownerFreeAccessGrantsTable.createdAt,
     }).from(ownerFreeAccessGrantsTable)
       .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
@@ -86,20 +94,69 @@ async function createOrReadDueInvoice(ownerId: string, now: Date) {
         eq(subscriptionRenewalInvoicesTable.ownerId, ownerId),
         eq(subscriptionRenewalInvoicesTable.periodStartAt, periodStartAt),
       )).limit(1);
-    if (existing) return existing;
+    if (existing) {
+      if (existing.status === "cancelled" &&
+          existing.lastError?.startsWith("Account discount updated; undispatched renewal invoice invalidated")) {
+        const priorAttempts = await tx.select().from(subscriptionRenewalAttemptsTable)
+          .where(eq(subscriptionRenewalAttemptsTable.invoiceId, existing.id));
+        const safeToRequote = priorAttempts.every((attempt) =>
+          attempt.status === "failed" || (attempt.status === "cancelled" && !attempt.paymentId),
+        );
+        if (safeToRequote) {
+          const cycleDays = subscription.billingCycleDays ?? 30;
+          const addonPurchases = await tx.select().from(subscriptionAddonPurchasesTable)
+            .where(inArray(subscriptionAddonPurchasesTable.ownerId, ownerKeys));
+          const periodEndAt = new Date(periodStartAt.getTime() + cycleDays * DAY_MS);
+          const quotedLines = quoteUpcomingInvoice({
+            baseLabel: subscription.termsSnapshot?.nameAr ?? subscription.plan,
+            baseAmountHalala: subscription.renewalPriceHalala,
+            planDays: cycleDays,
+            periodStartAt,
+            recurringAddons: addonPurchases,
+          });
+          const discountRows = await tx.select().from(ownerAccountDiscountsTable)
+            .where(inArray(ownerAccountDiscountsTable.ownerId, ownerKeys));
+          const accountDiscount = accountDiscountView(latestStartedDiscount(discountRows, now), now);
+          const discounted = discountInvoiceLines(quotedLines, accountDiscount, now);
+          const amountHalala = discounted.lineItems.reduce((sum, line) => sum + line.amountHalala, 0);
+          if (amountHalala > 0 && amountHalala <= 2_147_483_647) {
+            const [updated] = await tx.update(subscriptionRenewalInvoicesTable).set({
+              givenId: randomUUID(),
+              periodEndAt,
+              cycleDays,
+              amountHalala,
+              lineItems: discounted.lineItems,
+              accountDiscountSnapshot: discounted.snapshot,
+              status: "pending",
+              paymentId: null,
+              attempts: 0,
+              nextAttemptAt: now,
+              lastError: null,
+            }).where(eq(subscriptionRenewalInvoicesTable.id, existing.id)).returning();
+            return updated ?? existing;
+          }
+        }
+      }
+      return existing;
+    }
 
     const cycleDays = subscription.billingCycleDays ?? 30;
     if (!Number.isSafeInteger(cycleDays) || cycleDays < 1) return null;
     const addonPurchases = await tx.select().from(subscriptionAddonPurchasesTable)
       .where(inArray(subscriptionAddonPurchasesTable.ownerId, ownerKeys));
     const periodEndAt = new Date(periodStartAt.getTime() + cycleDays * DAY_MS);
-    const lineItems = quoteUpcomingInvoice({
+    const quotedLines = quoteUpcomingInvoice({
       baseLabel: subscription.termsSnapshot?.nameAr ?? subscription.plan,
       baseAmountHalala: subscription.renewalPriceHalala,
       planDays: cycleDays,
       periodStartAt,
       recurringAddons: addonPurchases,
     });
+    const discountRows = await tx.select().from(ownerAccountDiscountsTable)
+      .where(inArray(ownerAccountDiscountsTable.ownerId, ownerKeys));
+    const accountDiscount = accountDiscountView(latestStartedDiscount(discountRows, now), now);
+    const discounted = discountInvoiceLines(quotedLines, accountDiscount, now);
+    const lineItems = discounted.lineItems;
     const amountHalala = lineItems.reduce((sum, line) => sum + line.amountHalala, 0);
     if (!Number.isSafeInteger(amountHalala) || amountHalala <= 0 || amountHalala > 2_147_483_647) return null;
     const givenId = randomUUID();
@@ -113,6 +170,7 @@ async function createOrReadDueInvoice(ownerId: string, now: Date) {
       basePriceHalala: subscription.renewalPriceHalala,
       amountHalala,
       lineItems,
+      accountDiscountSnapshot: discounted.snapshot,
       status: "pending",
       nextAttemptAt: now,
     }).onConflictDoNothing({
@@ -148,11 +206,19 @@ async function claimAttempt(invoiceId: number) {
     const grants = await tx.select({
       id: ownerFreeAccessGrantsTable.id,
       expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+      startDate: ownerFreeAccessGrantsTable.startDate,
+      endDate: ownerFreeAccessGrantsTable.endDate,
       createdAt: ownerFreeAccessGrantsTable.createdAt,
     }).from(ownerFreeAccessGrantsTable)
       .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
     const latestGrant = latestOwnerFreeAccess(grants);
     if (isOwnerFreeAccessGrantActive(latestGrant)) {
+      await tx.update(ownerSubscriptionsTable)
+        .set({ autoRenewEnabled: false })
+        .where(eq(ownerSubscriptionsTable.ownerId, invoice.ownerId));
+      await tx.update(ownerBillingProfilesTable)
+        .set({ autoRenewEnabled: false, updatedAt: new Date() })
+        .where(eq(ownerBillingProfilesTable.ownerId, invoice.ownerId));
       const possiblyDispatched = latest && latest.status !== "failed" && latest.status !== "cancelled";
       if (possiblyDispatched) {
         const [reconciling] = await tx.update(subscriptionRenewalAttemptsTable).set({
@@ -182,15 +248,61 @@ async function claimAttempt(invoiceId: number) {
         .where(eq(subscriptionRenewalInvoicesTable.id, invoiceId));
       return null;
     }
-    const unresolvedAttempt = latest && latest.status !== "failed";
+    const discounts = await tx.select().from(ownerAccountDiscountsTable)
+      .where(inArray(ownerAccountDiscountsTable.ownerId, ownerKeys));
+    const currentDiscount = accountDiscountView(latestStartedDiscount(discounts, new Date()), new Date());
+    const termsKey = (discount: { active: boolean; kind: string; value: number; startDate: string | null; endDate: string | null; reason: string } | null) =>
+      discount?.active
+        ? JSON.stringify([discount.kind, discount.value, discount.startDate, discount.endDate, discount.reason])
+        : null;
+    const invoiceDiscount = invoice.accountDiscountSnapshot
+      ? { ...invoice.accountDiscountSnapshot, active: true }
+      : null;
+    const unresolvedAttempt = latest && latest.status !== "failed" && latest.status !== "cancelled";
+    if (termsKey(currentDiscount) !== termsKey(invoiceDiscount)) {
+      const mayHaveReachedProvider = latest && (
+        ["dispatched", "initiated", "reconciling"].includes(latest.status) ||
+        (!!latest.paymentId && latest.status !== "failed" && latest.status !== "cancelled")
+      );
+      if (mayHaveReachedProvider) {
+        const [reconciling] = await tx.update(subscriptionRenewalAttemptsTable).set({
+          status: "reconciling",
+          nextAttemptAt: new Date(),
+          updatedAt: new Date(),
+          lastError: "Account discount changed; reconcile provider state by payment ID or idempotency key using GET only",
+        }).where(eq(subscriptionRenewalAttemptsTable.id, latest.id)).returning();
+        await tx.update(subscriptionRenewalInvoicesTable).set({
+          status: "processing",
+          nextAttemptAt: new Date(),
+          lastError: "Account discount changed; reconcile dispatched payment using GET only",
+        }).where(eq(subscriptionRenewalInvoicesTable.id, invoiceId));
+        return reconciling
+          ? { invoice, attempt: reconciling, allowNewCharge: false, lookupBeforeCharge: true }
+          : null;
+      }
+      if (latest && unresolvedAttempt) {
+        await tx.update(subscriptionRenewalAttemptsTable).set({
+          status: "cancelled",
+          updatedAt: new Date(),
+          lastError: "Account discount changed before provider dispatch; renewal attempt cancelled",
+        }).where(eq(subscriptionRenewalAttemptsTable.id, latest.id));
+      }
+      await tx.update(subscriptionRenewalInvoicesTable).set({
+        status: "cancelled",
+        nextAttemptAt: new Date(),
+        lastError: "Account discount updated; undispatched renewal invoice invalidated",
+      }).where(eq(subscriptionRenewalInvoicesTable.id, invoiceId));
+      return null;
+    }
+    const hasUnresolvedAttempt = latest && latest.status !== "failed";
     if ((!subscription.autoRenewEnabled || subscription.plan === "trial" ||
-        subscription.expiresAt?.getTime() !== invoice.periodStartAt.getTime()) && !unresolvedAttempt) {
+        subscription.expiresAt?.getTime() !== invoice.periodStartAt.getTime()) && !hasUnresolvedAttempt) {
       await tx.update(subscriptionRenewalInvoicesTable)
         .set({ status: "cancelled", lastError: "Automatic renewal consent or period is no longer active" })
         .where(eq(subscriptionRenewalInvoicesTable.id, invoiceId));
       return null;
     }
-    if (!unresolvedAttempt) {
+    if (!hasUnresolvedAttempt) {
       const ownerKeys = await subscriptionOwnerKeys(invoice.ownerId);
       const [pendingCheckout] = await tx.select({ id: subscriptionCheckoutIntentsTable.id })
         .from(subscriptionCheckoutIntentsTable)
@@ -273,6 +385,8 @@ async function authorizeRenewalAttemptDispatch(invoiceId: number, attemptId: num
     const grants = await tx.select({
       id: ownerFreeAccessGrantsTable.id,
       expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+      startDate: ownerFreeAccessGrantsTable.startDate,
+      endDate: ownerFreeAccessGrantsTable.endDate,
       createdAt: ownerFreeAccessGrantsTable.createdAt,
     }).from(ownerFreeAccessGrantsTable)
       .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
@@ -396,6 +510,8 @@ async function dispatchRenewalCharge(
     const grants = await tx.select({
       id: ownerFreeAccessGrantsTable.id,
       expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+      startDate: ownerFreeAccessGrantsTable.startDate,
+      endDate: ownerFreeAccessGrantsTable.endDate,
       createdAt: ownerFreeAccessGrantsTable.createdAt,
     }).from(ownerFreeAccessGrantsTable)
       .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
@@ -503,6 +619,8 @@ async function recordAttemptResult(
       const freeGrants = await tx.select({
         id: ownerFreeAccessGrantsTable.id,
         expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+        startDate: ownerFreeAccessGrantsTable.startDate,
+        endDate: ownerFreeAccessGrantsTable.endDate,
         createdAt: ownerFreeAccessGrantsTable.createdAt,
       }).from(ownerFreeAccessGrantsTable)
         .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
@@ -526,7 +644,8 @@ async function recordAttemptResult(
         }
       }
       const grantAtPayment = hasProviderPaidAt ? freeGrants
-        .filter((grant) => grant.createdAt <= providerPaidAt)
+        .filter((grant) => grant.createdAt <= providerPaidAt &&
+          (!grant.startDate || isOwnerFreeAccessGrantActive(grant, providerPaidAt)))
         .sort((left, right) =>
           left.createdAt.getTime() - right.createdAt.getTime() || left.id - right.id,
         )
@@ -833,13 +952,27 @@ export async function getSubscriptionBillingReadiness(ownerId: string) {
   const ownerKeys = await subscriptionOwnerKeys(ownerId);
   const addons = await db.select().from(subscriptionAddonPurchasesTable)
     .where(inArray(subscriptionAddonPurchasesTable.ownerId, ownerKeys));
-  const addonTotal = addons.filter((addon) =>
-    addon.recurring && !addon.cancelAtPeriodEnd &&
-    (!nextBillingAt || !addon.paidThroughAt || addon.paidThroughAt <= new Date(nextBillingAt)),
-  )
-    .reduce((sum, addon) =>
-      sum + Math.round(addon.monthlyUnitPriceHalala * addon.quantity * cycleDays / 30), 0);
   const now = new Date();
+  const nextPeriodStartAt = subscription?.expiresAt ?? now;
+  const quoteCycleDays = Number.isSafeInteger(cycleDays) && cycleDays > 0 ? cycleDays : 30;
+  const upcomingLines = subscription
+    ? quoteUpcomingInvoice({
+      baseLabel: subscription.termsSnapshot?.nameAr ?? subscription.plan,
+      baseAmountHalala: basePrice,
+      planDays: quoteCycleDays,
+      periodStartAt: nextPeriodStartAt,
+      recurringAddons: addons,
+    })
+    : [{ kind: "base" as const, label: "Subscription", amountHalala: basePrice }];
+  const accountDiscountRows = await db.select().from(ownerAccountDiscountsTable)
+    .where(inArray(ownerAccountDiscountsTable.ownerId, ownerKeys));
+  const chargeDate = subscription?.expiresAt ?? now;
+  const accountDiscount = accountDiscountView(
+    latestStartedDiscount(accountDiscountRows, chargeDate),
+    chargeDate,
+  );
+  const discountedUpcomingLines = discountInvoiceLines(upcomingLines, accountDiscount, chargeDate).lineItems;
+  const upcomingChargeHalala = discountedUpcomingLines.reduce((sum, line) => sum + line.amountHalala, 0);
   const activeRecurringAddons = addons.filter((addon) =>
     addon.recurring && !addon.cancelAtPeriodEnd && !!addon.paidThroughAt && addon.paidThroughAt > now,
   );
@@ -857,9 +990,9 @@ export async function getSubscriptionBillingReadiness(ownerId: string) {
     autoRenewEnabled: freeAccess?.active ? false : autoRenewEnabled,
     recurring: freeAccess?.active ? false : autoRenewEnabled,
     nextBillingAt: freeAccess?.active ? null : nextBillingAt,
-    nextChargeHalala: freeAccess?.active ? 0 : basePrice + addonTotal,
+    nextChargeHalala: freeAccess?.active ? 0 : upcomingChargeHalala,
     paidNextBillingAt: nextBillingAt,
-    paidNextChargeHalala: basePrice + addonTotal,
+    paidNextChargeHalala: upcomingChargeHalala,
     baseRenewalPriceHalala: basePrice,
     baseMonthlyHalala: cycleDays > 0 ? Math.round(basePrice * 30 / cycleDays) : 0,
     recurringAddonCount: recurringChaletSlots + recurringServiceSlots,

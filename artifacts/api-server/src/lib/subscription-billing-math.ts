@@ -190,6 +190,7 @@ export function quoteAddonCheckout(input: {
   remainingDays: number;
   nextChargeHalala: number;
   baseMonthlyHalala: number;
+  nextInvoiceLines: UpcomingInvoiceLine[];
 } {
   const remainingMilliseconds = input.periodEndAt.getTime() - input.periodStartAt.getTime();
   const amountHalala = proratedAddonAmountHalala(
@@ -221,5 +222,6 @@ export function quoteAddonCheckout(input: {
     remainingDays: Math.max(0, Math.ceil(remainingMilliseconds / DAY_MS)),
     nextChargeHalala: nextInvoice.reduce((sum, line) => sum + line.amountHalala, 0),
     baseMonthlyHalala: Math.round(input.baseAmountHalala * 30 / input.cycleDays),
+    nextInvoiceLines: nextInvoice,
   };
 }

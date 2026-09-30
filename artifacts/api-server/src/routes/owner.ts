@@ -48,6 +48,7 @@ import { sendOtpEmail, sendReportEmail } from "../lib/email";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
 import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess, subscriptionOwnerKeys, getOwnerFreeAccess } from "../lib/subscription-access";
+import { getOwnerAccountDiscount } from "../lib/subscription-discounts";
 import { getReminderPreview } from "../lib/subscription-reminder-preview";
 import { createSubscriptionCheckout, previewSubscriptionCheckout, confirmSubscriptionCheckout, redeemFreeSubscriptionCheckout, SubscriptionCheckoutError } from "../lib/subscription-checkout";
 import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
@@ -3212,6 +3213,7 @@ router.get("/subscription", async (req, res) => {
   const ownerId = req.user!.id;
   const sub = await getOrStartOwnerSubscription(ownerId);
   const freeAccess = await getOwnerFreeAccess(ownerId);
+  const accountDiscount = await getOwnerAccountDiscount(ownerId);
   const billing = await getSubscriptionBillingReadiness(sub.ownerId);
   // Only the dashboard explicitly opts in to the visual preview. Billing and
   // checkout readers of this endpoint always receive the real subscription.
@@ -3241,6 +3243,7 @@ router.get("/subscription", async (req, res) => {
         ? freeAccess.expiresAt ? calcDaysLeft(freeAccess.expiresAt) : null
         : calcDaysLeft(sub.expiresAt),
     freeAccess,
+    accountDiscount,
     ...billing,
     autoRenewEnabled: billing.autoRenewEnabled,
     ...(preview ? { reminderPreviewMilestone: preview.milestone } : {}),

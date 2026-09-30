@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import {
   ownerSubscriptionsTable,
   ownerFreeAccessGrantsTable,
+  ownerAccountDiscountsTable,
   subscriptionAddonCheckoutIntentsTable,
   subscriptionAddonPurchasesTable,
   subscriptionPaymentReconciliationsTable,
@@ -28,6 +29,11 @@ import {
   quoteAddonCheckout,
 } from "./subscription-billing-math";
 import { retrySubscriptionPaymentReconciliation } from "./subscription-payment-reconciliation";
+import {
+  accountDiscountView,
+  discountInvoiceLines,
+  latestStartedDiscount,
+} from "./subscription-discounts";
 
 const INTENT_TTL_MS = 30 * 60 * 1000;
 const MAX_HALALA_AMOUNT = 2_147_483_647;
@@ -185,6 +191,7 @@ type AddonQuoteContext = {
   unitPriceHalala: number;
   cycleDays: number;
   recurringAddons: Array<typeof subscriptionAddonPurchasesTable.$inferSelect>;
+  accountDiscounts: Array<typeof ownerAccountDiscountsTable.$inferSelect>;
 };
 
 async function readAddonQuoteContext(input: {
@@ -222,7 +229,9 @@ async function readAddonQuoteContext(input: {
   const ownerIds = await subscriptionOwnerKeys(input.ownerId);
   const recurringAddons = await db.select().from(subscriptionAddonPurchasesTable)
     .where(inArray(subscriptionAddonPurchasesTable.ownerId, ownerIds));
-  return { access, unitPriceHalala, cycleDays, recurringAddons };
+  const accountDiscountRows = await db.select().from(ownerAccountDiscountsTable)
+    .where(inArray(ownerAccountDiscountsTable.ownerId, ownerIds));
+  return { access, unitPriceHalala, cycleDays, recurringAddons, accountDiscounts: accountDiscountRows };
 }
 
 function buildAddonQuote(input: {
@@ -232,6 +241,10 @@ function buildAddonQuote(input: {
   quoteTime: Date;
 }) {
   const { access, unitPriceHalala, cycleDays, recurringAddons } = input.context;
+  const currentDiscount = accountDiscountView(
+    latestStartedDiscount(input.context.accountDiscounts, input.quoteTime),
+    input.quoteTime,
+  );
   const periodEndAt = access.subscription.expiresAt!;
   const math = quoteAddonCheckout({
     addonType: input.addonType,
@@ -244,8 +257,19 @@ function buildAddonQuote(input: {
     baseAmountHalala: access.subscription.renewalPriceHalala ?? 0,
     recurringAddons,
   });
+  const discounted = discountInvoiceLines([
+    { kind: "addon" as const, label: addonLabel(input.addonType), amountHalala: math.amountHalala },
+  ], currentDiscount, input.quoteTime);
+  const futureDiscount = accountDiscountView(
+    latestStartedDiscount(input.context.accountDiscounts, periodEndAt),
+    periodEndAt,
+  );
+  const discountedNextInvoice = discountInvoiceLines(math.nextInvoiceLines, futureDiscount, periodEndAt);
+  const nextCharge = discountedNextInvoice.lineItems.reduce((sum, line) => sum + line.amountHalala, 0);
   return {
-    amountHalala: math.amountHalala,
+    amountHalala: discounted.lineItems[0]?.amountHalala ?? math.amountHalala,
+    accountDiscountHalala: discounted.discountHalala,
+    accountDiscountSnapshot: discounted.snapshot,
     unitPriceHalala,
     monthlyUnitPriceHalala: unitPriceHalala,
     remainingDays: math.remainingDays,
@@ -254,7 +278,7 @@ function buildAddonQuote(input: {
     periodStartAt: input.quoteTime,
     periodEndAt,
     nextBillingAt: periodEndAt,
-    nextChargeHalala: math.nextChargeHalala,
+    nextChargeHalala: nextCharge,
     baseMonthlyHalala: math.baseMonthlyHalala,
   };
 }
@@ -354,6 +378,8 @@ export async function createAddonCheckout(input: {
     const freeGrants = await tx.select({
       id: ownerFreeAccessGrantsTable.id,
       expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+      startDate: ownerFreeAccessGrantsTable.startDate,
+      endDate: ownerFreeAccessGrantsTable.endDate,
       createdAt: ownerFreeAccessGrantsTable.createdAt,
     }).from(ownerFreeAccessGrantsTable)
       .where(inArray(ownerFreeAccessGrantsTable.ownerId, linkedOwnerIds));
@@ -367,6 +393,8 @@ export async function createAddonCheckout(input: {
     const access = { ...freshAccess, subscription: lockedSubscription };
     const existingRecurringAddons = await tx.select().from(subscriptionAddonPurchasesTable)
       .where(inArray(subscriptionAddonPurchasesTable.ownerId, linkedOwnerIds));
+    const accountDiscountRows = await tx.select().from(ownerAccountDiscountsTable)
+      .where(inArray(ownerAccountDiscountsTable.ownerId, linkedOwnerIds));
     const cycleDays = lockedSubscription.billingCycleDays ?? context.cycleDays;
     if (!Number.isSafeInteger(cycleDays) || cycleDays < 1) {
       throw new SubscriptionAddonCheckoutError("مدة دورة الاشتراك غير صالحة", 409);
@@ -376,6 +404,7 @@ export async function createAddonCheckout(input: {
       access,
       cycleDays,
       recurringAddons: existingRecurringAddons,
+      accountDiscounts: accountDiscountRows,
     };
     const configuredPrice = input.addonType === "chalet" ? access.extraChaletPrice : access.extraServicePrice;
     const currentUnitPriceHalala = configuredPrice == null ? null : Math.round(Number(configuredPrice) * 100);
@@ -428,6 +457,7 @@ export async function createAddonCheckout(input: {
       nextBillingAt: quote.nextBillingAt,
       cycleDays,
       quotedBaseExpiresAt: quote.periodEndAt,
+      accountDiscountSnapshot: quote.accountDiscountSnapshot,
       periodStartAt: quote.periodStartAt,
       periodEndAt: quote.periodEndAt,
       quoteVersion: 2,
@@ -608,6 +638,8 @@ async function finalizeAddonCheckout(input: {
         const freeGrants = await tx.select({
           id: ownerFreeAccessGrantsTable.id,
           expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+          startDate: ownerFreeAccessGrantsTable.startDate,
+          endDate: ownerFreeAccessGrantsTable.endDate,
           createdAt: ownerFreeAccessGrantsTable.createdAt,
         }).from(ownerFreeAccessGrantsTable)
           .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
@@ -626,10 +658,12 @@ async function finalizeAddonCheckout(input: {
       const grantRows = await tx.select({
         id: ownerFreeAccessGrantsTable.id,
         expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+        startDate: ownerFreeAccessGrantsTable.startDate,
+        endDate: ownerFreeAccessGrantsTable.endDate,
         createdAt: ownerFreeAccessGrantsTable.createdAt,
       }).from(ownerFreeAccessGrantsTable)
         .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
-      const latestGrant = latestOwnerFreeAccess(grantRows);
+      const latestGrant = latestOwnerFreeAccess(grantRows, input.paidAt);
       const grantCutoff = intent.freeAccessBlockedAt ??
         (isOwnerFreeAccessGrantActive(latestGrant, input.paidAt) ? latestGrant?.createdAt : undefined);
       if (intent.amountHalala > 0 && grantCutoff &&

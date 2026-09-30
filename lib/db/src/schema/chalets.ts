@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean, jsonb, varchar, doublePrecision, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, numeric, timestamp, pgEnum, boolean, jsonb, varchar, doublePrecision, uniqueIndex, index, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -468,18 +468,38 @@ export const ownerSubscriptionsTable = pgTable("owner_subscriptions", {
 }));
 export type OwnerSubscription = typeof ownerSubscriptionsTable.$inferSelect;
 
-/* Append-only superadmin full-access grants; the newest grant per owner wins. */
+/* Append-only superadmin full-access grants; the newest started grant per owner wins.
+   Date-window grants use inclusive Saudi calendar start/end dates and keep expiresAt
+   null; legacy duration grants continue to use expiresAt. */
 export const ownerFreeAccessGrantsTable = pgTable("owner_free_access_grants", {
   id: serial("id").primaryKey(),
   ownerId: text("owner_id").notNull(),
   actorId: text("actor_id").notNull(),
   reason: text("reason").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
+  startDate: date("start_date", { mode: "string" }),
+  endDate: date("end_date", { mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({
   ownerCreatedIdx: index("owner_free_access_grants_owner_created_idx").on(table.ownerId, table.createdAt, table.id),
 }));
 export type OwnerFreeAccessGrant = typeof ownerFreeAccessGrantsTable.$inferSelect;
+
+/* Append-only account discounts; newest started row per linked owner wins. */
+export const ownerAccountDiscountsTable = pgTable("owner_account_discounts", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  actorId: text("actor_id").notNull(),
+  kind: text("kind").$type<"percent" | "fixed">().notNull(),
+  value: numeric("value", { precision: 15, scale: 2 }).notNull(),
+  startDate: date("start_date", { mode: "string" }),
+  endDate: date("end_date", { mode: "string" }),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  ownerCreatedIdx: index("owner_account_discounts_owner_created_idx").on(table.ownerId, table.createdAt, table.id),
+}));
+export type OwnerAccountDiscount = typeof ownerAccountDiscountsTable.$inferSelect;
 
 /* ── Subscription Plans (admin-managed) ─────────────────── */
 export const subscriptionPlansTable = pgTable("subscription_plans", {
@@ -536,6 +556,14 @@ export const subscriptionCheckoutIntentsTable = pgTable("subscription_checkout_i
     periodStartAt?: string;
     periodEndAt?: string;
   }>>().notNull().default([]),
+  accountDiscountSnapshot: jsonb("account_discount_snapshot").$type<{
+    kind: "percent" | "fixed";
+    value: number;
+    startDate: string | null;
+    endDate: string | null;
+    reason: string;
+    discountHalala: number;
+  }>(),
   quotedBaseExpiresAt: timestamp("quoted_base_expires_at", { withTimezone: true }),
   recurringAddonSnapshot: jsonb("recurring_addon_snapshot").$type<Array<{
     id: number;
@@ -574,6 +602,14 @@ export const subscriptionAddonCheckoutIntentsTable = pgTable("subscription_addon
   nextBillingAt: timestamp("next_billing_at", { withTimezone: true }),
   cycleDays: integer("cycle_days").notNull().default(30),
   quotedBaseExpiresAt: timestamp("quoted_base_expires_at", { withTimezone: true }),
+  accountDiscountSnapshot: jsonb("account_discount_snapshot").$type<{
+    kind: "percent" | "fixed";
+    value: number;
+    startDate: string | null;
+    endDate: string | null;
+    reason: string;
+    discountHalala: number;
+  }>(),
   periodStartAt: timestamp("period_start_at", { withTimezone: true }),
   periodEndAt: timestamp("period_end_at", { withTimezone: true }),
   quoteVersion: integer("quote_version").notNull().default(1),
@@ -651,6 +687,14 @@ export const subscriptionRenewalInvoicesTable = pgTable("subscription_renewal_in
     periodStartAt?: string;
     periodEndAt?: string;
   }>>().notNull(),
+  accountDiscountSnapshot: jsonb("account_discount_snapshot").$type<{
+    kind: "percent" | "fixed";
+    value: number;
+    startDate: string | null;
+    endDate: string | null;
+    reason: string;
+    discountHalala: number;
+  }>(),
   status: text("status").notNull().default("pending"),
   paymentId: text("payment_id"),
   attempts: integer("attempts").notNull().default(0),

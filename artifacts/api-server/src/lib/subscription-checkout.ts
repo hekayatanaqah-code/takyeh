@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import {
   ownerSubscriptionsTable,
   ownerFreeAccessGrantsTable,
+  ownerAccountDiscountsTable,
   subscriptionCheckoutIntentsTable,
   subscriptionPaymentsTable,
   subscriptionPaymentReconciliationsTable,
@@ -38,6 +39,13 @@ import {
   type UpcomingInvoiceLine,
 } from "./subscription-billing-math";
 import { retrySubscriptionPaymentReconciliation } from "./subscription-payment-reconciliation";
+import {
+  accountDiscountView,
+  discountInvoiceLines,
+  latestStartedDiscount,
+  type AccountDiscountSnapshot,
+  type AccountDiscountView,
+} from "./subscription-discounts";
 
 const INTENT_TTL_MS = 30 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -220,14 +228,19 @@ function buildPlanCheckoutQuote(input: {
   discountHalala: number;
   periodStartAt: Date;
   recurringAddons: Array<typeof subscriptionAddonPurchasesTable.$inferSelect>;
+  accountDiscount?: AccountDiscountView | null;
+  accountDiscounts?: Array<typeof ownerAccountDiscountsTable.$inferSelect>;
+  quotedAt?: Date;
 }) {
-  const lineItems = quoteUpcomingInvoice({
+  const quotedLines = quoteUpcomingInvoice({
     baseLabel: input.plan.label,
     baseAmountHalala: Math.max(0, input.listPriceHalala - input.discountHalala),
     planDays: input.plan.days,
     periodStartAt: input.periodStartAt,
     recurringAddons: input.recurringAddons,
   });
+  const discounted = discountInvoiceLines(quotedLines, input.accountDiscount ?? null, input.quotedAt ?? new Date());
+  const lineItems = discounted.lineItems;
   const amountHalala = lineItems.reduce((sum, line) => sum + line.amountHalala, 0);
   const baseLine = lineItems.find((line) => line.kind === "base");
   const nextBillingAt = baseLine?.periodEndAt ? new Date(baseLine.periodEndAt) : input.periodStartAt;
@@ -238,13 +251,19 @@ function buildPlanCheckoutQuote(input: {
     periodStartAt: nextBillingAt,
     recurringAddons: input.recurringAddons,
   });
+  const nextAccountDiscount = input.accountDiscounts
+    ? accountDiscountView(latestStartedDiscount(input.accountDiscounts, nextBillingAt), nextBillingAt)
+    : input.accountDiscount ?? null;
+  const discountedNext = discountInvoiceLines(nextLineItems, nextAccountDiscount, nextBillingAt).lineItems;
   return {
     lineItems,
     amountHalala,
-    nextChargeHalala: nextLineItems.reduce((sum, line) => sum + line.amountHalala, 0),
+    nextChargeHalala: discountedNext.reduce((sum, line) => sum + line.amountHalala, 0),
     nextBillingAt,
     periodEnd: baseLine?.periodEndAt ?? null,
     baseMonthlyHalala: Math.round(input.listPriceHalala * 30 / input.plan.days),
+    accountDiscountHalala: discounted.discountHalala,
+    accountDiscountSnapshot: discounted.snapshot as AccountDiscountSnapshot | null,
   };
 }
 
@@ -304,6 +323,7 @@ export async function createSubscriptionCheckout(input: {
   nextBillingAt: string | null;
   periodEnd: string | null;
   baseMonthlyHalala: number;
+  accountDiscountSnapshot: AccountDiscountSnapshot | null;
 }> {
   if (!input.ownerId) throw new SubscriptionCheckoutError("يجب تسجيل الدخول أولاً", 401);
   if ((await getOwnerFreeAccess(input.ownerId))?.active) {
@@ -332,6 +352,8 @@ export async function createSubscriptionCheckout(input: {
     const activeGrants = await tx.select({
       id: ownerFreeAccessGrantsTable.id,
       expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+      startDate: ownerFreeAccessGrantsTable.startDate,
+      endDate: ownerFreeAccessGrantsTable.endDate,
       createdAt: ownerFreeAccessGrantsTable.createdAt,
     }).from(ownerFreeAccessGrantsTable)
       .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
@@ -360,8 +382,14 @@ export async function createSubscriptionCheckout(input: {
       .where(inArray(subscriptionAddonPurchasesTable.ownerId, ownerKeys));
     const periodStartAt = lockedSubscription.expiresAt && lockedSubscription.expiresAt > now
       ? lockedSubscription.expiresAt : now;
+    const accountDiscountRows = await tx.select().from(ownerAccountDiscountsTable)
+      .where(inArray(ownerAccountDiscountsTable.ownerId, ownerKeys));
+    const accountDiscount = accountDiscountView(latestStartedDiscount(accountDiscountRows, now), now);
     let discountHalala = 0;
     if (promoCode) {
+      if (accountDiscount?.active) {
+        throw new SubscriptionCheckoutError("لا يمكن استخدام رمز ترويجي مع خصم الحساب النشط");
+      }
       const [promo] = await tx.select().from(subscriptionPromoCodesTable)
         .where(eq(subscriptionPromoCodesTable.code, promoCode))
         .for("update").limit(1);
@@ -385,6 +413,9 @@ export async function createSubscriptionCheckout(input: {
       discountHalala,
       periodStartAt,
       recurringAddons: recurringAddonRows,
+      accountDiscount,
+      accountDiscounts: accountDiscountRows,
+      quotedAt: now,
     });
     assertPaymentConfigured(checkoutQuote.amountHalala);
     const recurringAddonSnapshot = makeRecurringAddonSnapshot(recurringAddonRows);
@@ -399,6 +430,7 @@ export async function createSubscriptionCheckout(input: {
       termsSnapshot: plan.terms,
       discountCode: promoCode,
       invoiceLines: checkoutQuote.lineItems,
+      accountDiscountSnapshot: checkoutQuote.accountDiscountSnapshot,
       quotedBaseExpiresAt: lockedSubscription.expiresAt,
       recurringAddonSnapshot,
       autoRenewConsent: input.autoRenewConsent === true,
@@ -411,7 +443,8 @@ export async function createSubscriptionCheckout(input: {
       nextBillingAt: checkoutQuote.nextBillingAt,
       periodEnd: checkoutQuote.periodEnd,
       baseMonthlyHalala: checkoutQuote.baseMonthlyHalala,
-      discountHalala,
+      discountHalala: discountHalala + checkoutQuote.accountDiscountHalala,
+      accountDiscountSnapshot: checkoutQuote.accountDiscountSnapshot,
     };
   });
   const { invoiceLines, discountHalala } = quote;
@@ -438,6 +471,7 @@ export async function createSubscriptionCheckout(input: {
     nextBillingAt: quote.nextBillingAt.toISOString(),
     periodEnd: quote.periodEnd,
     baseMonthlyHalala: quote.baseMonthlyHalala,
+    accountDiscountSnapshot: quote.accountDiscountSnapshot,
   };
 }
 
@@ -466,6 +500,7 @@ export async function previewSubscriptionCheckout(input: {
   publishableKey: string;
   recurringPreview: true;
   nextChargeRequiresExplicitConsent: true;
+  accountDiscountSnapshot: AccountDiscountSnapshot | null;
 }> {
   if (!input.ownerId) throw new SubscriptionCheckoutError("يجب تسجيل الدخول أولاً", 401);
   const plan = await resolveActivePlan(input.plan);
@@ -476,7 +511,14 @@ export async function previewSubscriptionCheckout(input: {
   const promoCode = normalizePromoCode(input.promoCode);
   const now = new Date();
   let discountHalala = 0;
+  const ownerKeys = await subscriptionOwnerKeys(input.ownerId);
+  const accountDiscountRows = await db.select().from(ownerAccountDiscountsTable)
+    .where(inArray(ownerAccountDiscountsTable.ownerId, ownerKeys));
+  const accountDiscount = accountDiscountView(latestStartedDiscount(accountDiscountRows, now), now);
   if (promoCode) {
+    if (accountDiscount?.active) {
+      throw new SubscriptionCheckoutError("لا يمكن استخدام رمز ترويجي مع خصم الحساب النشط");
+    }
     const [promo] = await db.select().from(subscriptionPromoCodesTable)
       .where(eq(subscriptionPromoCodesTable.code, promoCode)).limit(1);
     if (!promo || !promo.isActive || (promo.expiresAt && promo.expiresAt <= now)) {
@@ -494,7 +536,6 @@ export async function previewSubscriptionCheckout(input: {
     discountHalala = promoDiscountHalala(promo, listPriceHalala);
   }
 
-  const ownerKeys = await subscriptionOwnerKeys(input.ownerId);
   const subscriptions = await db.select().from(ownerSubscriptionsTable)
     .where(inArray(ownerSubscriptionsTable.ownerId, ownerKeys));
   let subscription: Pick<OwnerSubscription,
@@ -528,6 +569,9 @@ export async function previewSubscriptionCheckout(input: {
     discountHalala,
     periodStartAt,
     recurringAddons: recurringAddonRows,
+    accountDiscount,
+    accountDiscounts: accountDiscountRows,
+    quotedAt: now,
   });
   const [billingProfile] = await db.select()
     .from(ownerBillingProfilesTable).where(eq(ownerBillingProfilesTable.ownerId, subscription.ownerId)).limit(1);
@@ -540,7 +584,7 @@ export async function previewSubscriptionCheckout(input: {
     days: plan.days,
     durationDays: plan.days,
     amountHalala: quote.amountHalala,
-    discountHalala,
+    discountHalala: discountHalala + quote.accountDiscountHalala,
     lineItems: quote.lineItems,
     lines: quote.lineItems,
     recurring: false,
@@ -555,6 +599,7 @@ export async function previewSubscriptionCheckout(input: {
     publishableKey: process.env.MOYASAR_PUBLISHABLE_KEY ?? "",
     recurringPreview: true,
     nextChargeRequiresExplicitConsent: true,
+    accountDiscountSnapshot: quote.accountDiscountSnapshot,
   };
 }
 
@@ -677,6 +722,8 @@ async function finalizeCheckout(input: {
         const grants = await tx.select({
           id: ownerFreeAccessGrantsTable.id,
           expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+          startDate: ownerFreeAccessGrantsTable.startDate,
+          endDate: ownerFreeAccessGrantsTable.endDate,
           createdAt: ownerFreeAccessGrantsTable.createdAt,
         }).from(ownerFreeAccessGrantsTable)
           .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
@@ -718,6 +765,29 @@ async function finalizeCheckout(input: {
       }
 
       const now = new Date();
+      if (intent.amountHalala > 0) {
+        const freeGrants = await tx.select({
+          id: ownerFreeAccessGrantsTable.id,
+          ownerId: ownerFreeAccessGrantsTable.ownerId,
+          expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+          startDate: ownerFreeAccessGrantsTable.startDate,
+          endDate: ownerFreeAccessGrantsTable.endDate,
+          createdAt: ownerFreeAccessGrantsTable.createdAt,
+        }).from(ownerFreeAccessGrantsTable)
+          .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));
+        const evaluationTime = input.paidAtKnown ? input.paidAt : now;
+        const grantAtPayment = input.paidAtKnown
+          ? latestOwnerFreeAccess(freeGrants.filter((grant) => grant.createdAt <= input.paidAt), evaluationTime)
+          : latestOwnerFreeAccess(freeGrants, evaluationTime);
+        if (isOwnerFreeAccessGrantActive(grantAtPayment, evaluationTime)) {
+          throw new StaleSubscriptionCheckoutError(
+            input.paidAtKnown
+              ? "تم تحصيل الدفع أثناء تفعيل وصول مجاني مجدول؛ يجب رد المبلغ أو مراجعته"
+              : "تعذّر التحقق من وقت الدفع أثناء وصول مجاني؛ يجب مراجعة المبلغ دون تفعيل الاشتراك",
+            input.paidAtKnown,
+          );
+        }
+      }
       const [existingSubscription] = await tx.select().from(ownerSubscriptionsTable)
         .where(eq(ownerSubscriptionsTable.ownerId, intent.ownerId))
         .for("update")
@@ -750,6 +820,8 @@ async function finalizeCheckout(input: {
       const existingFreeGrants = await tx.select({
         id: ownerFreeAccessGrantsTable.id,
         expiresAt: ownerFreeAccessGrantsTable.expiresAt,
+        startDate: ownerFreeAccessGrantsTable.startDate,
+        endDate: ownerFreeAccessGrantsTable.endDate,
         createdAt: ownerFreeAccessGrantsTable.createdAt,
       }).from(ownerFreeAccessGrantsTable)
         .where(inArray(ownerFreeAccessGrantsTable.ownerId, ownerKeys));

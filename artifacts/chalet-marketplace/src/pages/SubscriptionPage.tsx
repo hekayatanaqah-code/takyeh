@@ -36,6 +36,17 @@ interface FreeAccess {
   expiresAt: string | null;
   reason: string;
   createdAt: string;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+interface AccountDiscount {
+  active: boolean;
+  kind: "percent" | "fixed";
+  value: number;
+  startDate: string | null;
+  endDate: string | null;
+  reason: string;
 }
 
 function formatHalala(halala: number) {
@@ -118,6 +129,7 @@ export default function SubscriptionPage() {
     autoRenewAvailable?: boolean;
     billingCycleDays?: number | null;
     freeAccess?: FreeAccess | null;
+    accountDiscount?: AccountDiscount | null;
   } | null>({
     queryKey: ["owner", "subscription"],
     queryFn: async () => {
@@ -235,7 +247,13 @@ export default function SubscriptionPage() {
     ? { label: "مجاني بالكامل", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200", icon: <CheckCircle2 className="w-3.5 h-3.5" /> }
     : STATUS_MAP[sub?.status ?? "active"] ?? STATUS_MAP.active;
   const days = daysUntil(sub?.expiresAt ?? null);
-  const entitlementDays = hasFreeAccess ? daysUntil(freeAccess?.expiresAt ?? null) : days;
+  const freeAccessEndsAt = freeAccess?.endDate
+    ? new Date(`${freeAccess.endDate}T23:59:59+03:00`).toISOString()
+    : freeAccess?.expiresAt ?? null;
+  const freeAccessStartsAt = freeAccess?.startDate
+    ? new Date(`${freeAccess.startDate}T00:00:00+03:00`).toISOString()
+    : freeAccess?.createdAt ?? null;
+  const entitlementDays = hasFreeAccess ? daysUntil(freeAccessEndsAt) : days;
   const chaletUsed = planLimits?.chaletCount ?? 0;
   const chaletMax = planLimits?.chaletLimit === Infinity ? "∞" : (planLimits?.chaletLimit ?? 1);
   const serviceMax = planLimits?.serviceLimit === Infinity ? "∞" : (planLimits?.serviceLimit ?? 1);
@@ -304,7 +322,7 @@ export default function SubscriptionPage() {
             </div>
             <div className="text-end">
               {hasFreeAccess ? (
-                <p className="text-2xl font-bold opacity-90">{freeAccess?.expiresAt ? "محددة المدة" : "مفتوحة"}</p>
+                <p className="text-2xl font-bold opacity-90">{freeAccessEndsAt ? "محددة المدة" : "مفتوحة"}</p>
               ) : days !== null ? (
                 <>
                   <p className={`text-5xl font-black ${days < 7 ? "text-red-200" : "text-white"}`}>{Math.max(0, days)}</p>
@@ -317,11 +335,11 @@ export default function SubscriptionPage() {
           </div>
 
           {/* Progress bar */}
-          {((hasFreeAccess && entitlementDays !== null && freeAccess?.createdAt) || (!hasFreeAccess && days !== null && sub?.createdAt)) && (
+          {((hasFreeAccess && entitlementDays !== null && freeAccessStartsAt) || (!hasFreeAccess && days !== null && sub?.createdAt)) && (
             <div className="mt-5">
               {(() => {
-                const expiresAt = hasFreeAccess ? freeAccess?.expiresAt : sub?.expiresAt;
-                const createdAt = hasFreeAccess ? freeAccess?.createdAt : sub?.createdAt;
+                const expiresAt = hasFreeAccess ? freeAccessEndsAt : sub?.expiresAt;
+                const createdAt = hasFreeAccess ? freeAccessStartsAt : sub?.createdAt;
                 if (!expiresAt || !createdAt) return null;
                 const totalMs = new Date(expiresAt).getTime() - new Date(createdAt).getTime();
                 const elapsedMs = Date.now() - new Date(createdAt).getTime();
@@ -336,8 +354,8 @@ export default function SubscriptionPage() {
                 );
               })()}
               <div className="flex justify-between text-xs opacity-70 mt-1">
-                <span>بدأ: {new Date((hasFreeAccess ? freeAccess?.createdAt : sub?.createdAt)!).toLocaleDateString("ar-SA")}</span>
-                <span>{hasFreeAccess ? "تنتهي الصلاحية" : "ينتهي الاشتراك"}: {expiryInBothCalendars((hasFreeAccess ? freeAccess?.expiresAt : sub?.expiresAt)!)}</span>
+                <span>بدأ: {new Date((hasFreeAccess ? freeAccessStartsAt : sub?.createdAt)!).toLocaleDateString("ar-SA")}</span>
+                <span>{hasFreeAccess ? "تنتهي الصلاحية" : "ينتهي الاشتراك"}: {expiryInBothCalendars((hasFreeAccess ? freeAccessEndsAt : sub?.expiresAt)!)}</span>
               </div>
             </div>
           )}
@@ -347,10 +365,30 @@ export default function SubscriptionPage() {
           <div className="mb-6 rounded-2xl border border-emerald-300 bg-emerald-50 p-5 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100" data-testid="status-free-access-entitlement">
             <p className="font-bold">حسابك يتمتع بكامل الصلاحيات مجاناً — لا يلزم أي دفع.</p>
             <p className="mt-1 text-sm">
-              {freeAccess?.expiresAt ? `تنتهي المنحة في ${expiryInBothCalendars(freeAccess.expiresAt)}.` : "المنحة مفتوحة بلا تاريخ انتهاء."}
+              {freeAccessEndsAt ? `تنتهي المنحة في ${expiryInBothCalendars(freeAccessEndsAt)}.` : "المنحة مفتوحة بلا تاريخ انتهاء."}
               {" "}تم إيقاف التجديد التلقائي المدفوع.
             </p>
             {freeAccess?.reason && <p className="mt-2 text-sm">سبب المنح: {freeAccess.reason}</p>}
+          </div>
+        )}
+        {sub?.freeAccess && !sub.freeAccess.active && sub.freeAccess.startDate && new Date(`${sub.freeAccess.startDate}T00:00:00+03:00`) > new Date() && (
+          <div className="mb-6 rounded-2xl border border-emerald-300 bg-emerald-50 p-5 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100">
+            يبدأ إعفاء حسابك الكامل في {sub.freeAccess.startDate}؛ وحتى ذلك التاريخ تظل رسوم الاشتراك المعتادة سارية.
+          </div>
+        )}
+        {sub?.accountDiscount && (
+          <div className="mb-6 rounded-2xl border border-sky-300 bg-sky-50 p-5 text-sky-950 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100" data-testid="status-account-discount">
+            <p className="font-bold">
+              {sub.accountDiscount.active ? "خصم إداري خاص متاح لحسابك" : "خصم إداري خاص محفوظ لحسابك"} — {sub.accountDiscount.kind === "percent"
+                ? `${sub.accountDiscount.value.toLocaleString("ar-SA")}٪`
+                : formatHalala(sub.accountDiscount.value)}
+            </p>
+            <p className="mt-1 text-sm">
+              {sub.accountDiscount.startDate ? `من ${sub.accountDiscount.startDate}` : "من الآن"}
+              {sub.accountDiscount.endDate ? ` إلى ${sub.accountDiscount.endDate} (شامل)` : " دون تاريخ انتهاء"}.
+              {" "}يسري على الاشتراك والإضافات في طلبات الدفع الجديدة فقط، ولا يجتمع مع رمز خصم آخر.
+            </p>
+            <p className="mt-2 text-sm">السبب: {sub.accountDiscount.reason}</p>
           </div>
         )}
 

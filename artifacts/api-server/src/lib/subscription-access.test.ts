@@ -63,3 +63,22 @@ test("owner aliases share one latest-grant timeline", () => {
   ];
   assert.equal(latestOwnerFreeAccessForKeys(grants, ["account_user_42", "owner_42"])?.id, 2);
 });
+
+test("scheduled date-range grants preserve earlier access until the inclusive Saudi start date", () => {
+  const prior = { id: 1, createdAt: new Date("2025-01-01T00:00:00Z"), expiresAt: null };
+  const scheduled = {
+    id: 2,
+    createdAt: new Date("2025-01-02T00:00:00Z"),
+    expiresAt: null,
+    startDate: "2025-06-02",
+    endDate: "2025-06-03",
+  };
+  const beforeStart = new Date("2025-06-01T20:59:00Z");
+  assert.equal(latestOwnerFreeAccess([prior, scheduled], beforeStart)?.id, 1);
+  assert.equal(isOwnerFreeAccessGrantActive(scheduled, beforeStart), false);
+  const firstDay = new Date("2025-06-01T21:00:00Z");
+  assert.equal(latestOwnerFreeAccess([prior, scheduled], firstDay)?.id, 2);
+  assert.equal(isOwnerFreeAccessGrantActive(scheduled, firstDay), true);
+  assert.equal(isOwnerFreeAccessGrantActive(scheduled, new Date("2025-06-03T20:59:00Z")), true);
+  assert.equal(isOwnerFreeAccessGrantActive(scheduled, new Date("2025-06-03T21:00:00Z")), false);
+});
