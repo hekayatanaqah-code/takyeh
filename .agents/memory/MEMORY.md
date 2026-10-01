@@ -37,3 +37,4 @@
 - [Subscription reminder observability](subscription-reminder-observability.md) — report persisted in-app notifications and scheduler checks; never imply external message delivery.
 - [Subscription reminder previews](subscription-reminder-previews.md) — test reminders should be visibly simulated and time-limited without modifying real billing entitlements.
 - [Broadcast channel consent](broadcast-channel-consent.md) — campaigns honor independent owner channel preferences; queued external sends must recheck consent before delivery.
+- [Password recovery boundaries](password-recovery-boundaries.md) — recovery is transactional, not marketing; use unique stored destinations and explicit session identity, with honest provider readiness.

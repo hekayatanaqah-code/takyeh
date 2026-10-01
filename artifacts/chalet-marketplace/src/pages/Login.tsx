@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import AuthBrand from "@/components/AuthBrand";
+import { AUTH_LABELS, normalizeIdentifier } from "@/lib/authLabels";
 import { Eye, EyeOff, ShieldAlert, Info } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -8,15 +10,6 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 export default function Login() {
   const [, navigate]    = useLocation();
   const qc              = useQueryClient();
-  const { data: settings = {} } = useQuery<Record<string, string>>({
-    queryKey: ["page-content"],
-    queryFn: async () => {
-      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include" });
-      return r.ok ? r.json() : {};
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-  const logoUrl = settings.site_logo_url || "";
   const [input, setInput]           = useState("");
   const [password, setPassword]     = useState("");
   const [showPw, setShowPw]         = useState(false);
@@ -34,11 +27,13 @@ export default function Login() {
     setIsAdminBlock(false);
     setLoading(true);
     try {
-      const isEmail = trimmed.includes("@");
-      const isPhone = /^[+\d٠-٩\s()-]+$/.test(trimmed);
+      const norm = normalizeIdentifier(trimmed);
+      const isEmail = norm.kind === "email";
+      const isPhone = /^[+\d٠-٩۰-۹\s()-]+$/.test(trimmed);
+      const ident = isEmail || isPhone ? norm.value : trimmed;
       const endpoint = isEmail || isPhone ? "/api/owner-login" : "/api/unified-login";
       const body = isEmail || isPhone
-        ? JSON.stringify({ identifier: trimmed, password, rememberMe })
+        ? JSON.stringify({ identifier: ident, password, rememberMe })
         : JSON.stringify({ username: trimmed, password, rememberMe });
 
       const r = await fetch(`${BASE}${endpoint}`, {
@@ -71,16 +66,7 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-[#FBF9F6] flex flex-col items-center justify-center p-4" dir="rtl">
 
-      {/* Logo */}
-      <a href={`${BASE}/`} className="flex flex-col items-center mb-6 select-none">
-        <div className="w-24 h-24 flex items-center justify-center mb-3">
-          {logoUrl
-            ? <img src={logoUrl} alt="شعار تكيّة" className="w-full h-full object-contain" />
-            : <span className="text-[#8C6246] text-5xl font-bold">ت</span>
-          }
-        </div>
-        <p className="text-sm text-[#8C6246] font-medium mt-2">منصتك المتكاملة لإدارة الحجوزات والخدمات</p>
-      </a>
+      <AuthBrand />
 
       {/* Guidance banner */}
       <div className="w-full max-w-md bg-[#F4EFEA] border border-[#D9C3B0] text-[#734f36] px-4 py-3 rounded-xl flex items-center gap-3 mb-4 text-sm font-medium">
@@ -95,12 +81,14 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-[#4A4A4A] mb-2">
-              البريد الإلكتروني أو رقم الجوال
+            <label htmlFor="login-identifier" className="block text-sm font-semibold text-[#4A4A4A] mb-2">
+              {AUTH_LABELS.identifier}
             </label>
             <input
+              id="login-identifier"
+              inputMode="text"
               type="text"
-              placeholder="أدخل بريدك الإلكتروني أو رقم الجوال"
+              placeholder={AUTH_LABELS.identifierPlaceholder}
               value={input}
               onChange={(e) => { setInput(e.target.value); setError(null); setIsAdminBlock(false); }}
               autoComplete="username"
@@ -112,11 +100,12 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-[#4A4A4A] mb-2">كلمة المرور</label>
+            <label htmlFor="login-password" className="block text-sm font-semibold text-[#4A4A4A] mb-2">{AUTH_LABELS.password}</label>
             <div className="relative">
               <input
+                id="login-password"
                 type={showPw ? "text" : "password"}
-                placeholder="••••••••"
+                placeholder={AUTH_LABELS.passwordPlaceholder}
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(null); setIsAdminBlock(false); }}
                 autoComplete="current-password"
@@ -126,9 +115,10 @@ export default function Login() {
               />
               <button
                 type="button"
-                tabIndex={-1}
+                aria-label={showPw ? AUTH_LABELS.hidePassword : AUTH_LABELS.showPassword}
+                aria-pressed={showPw}
                 onClick={() => setShowPw((v) => !v)}
-                className="absolute end-3 top-1/2 -translate-y-1/2 text-[#B0B0B0] hover:text-[#7A7A7A] transition-colors"
+                className="absolute end-3 top-1/2 -translate-y-1/2 text-[#8A8A8A] hover:text-[#5A5A5A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8C6246] rounded transition-colors"
               >
                 {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -147,7 +137,7 @@ export default function Login() {
           )}
 
           {error && (
-            <div className="rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3">
+            <div role="alert" className="rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3">
               {error}
             </div>
           )}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Mail, ArrowRight, CheckCircle2 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import AuthBrand from "@/components/AuthBrand";
+import { AUTH_LABELS, normalizeIdentifier } from "@/lib/authLabels";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -15,29 +16,36 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
   const [error, setError]           = useState<string | null>(null);
   const [sent, setSent]             = useState(false);
 
-  const { data: pageContent } = useQuery<{ site_logo_url?: string }>({
-    queryKey: ["page-content"],
-    queryFn: () => fetch(`${BASE}/api/page-content`).then((r) => r.json()),
-    enabled: !isAdmin,
-  });
-  const logoUrl = pageContent?.site_logo_url;
+  const [staffMode, setStaffMode] = useState(false);
+  const [channel, setChannel] = useState<"email" | "whatsapp" | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!identifier.trim()) return;
+    const norm = normalizeIdentifier(identifier);
+    if (!isAdmin && !staffMode && norm.kind === "other") {
+      setError("أدخل رقم جوال سعودي صحيح مثل 05XXXXXXXX أو بريداً إلكترونياً صحيحاً");
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
       const r = await fetch(`${BASE}/api/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier: identifier.trim(), portalType }),
+        credentials: "include",
+        body: JSON.stringify({
+          identifier: isAdmin || staffMode ? identifier.trim() : norm.value,
+          portalType,
+          ...(!isAdmin && staffMode ? { identifierType: "username" } : {}),
+        }),
       });
-      const data = await r.json();
+      const data = await r.json().catch(() => ({}));
       if (!r.ok) { setError(data.error ?? "حدث خطأ. يرجى المحاولة مرة أخرى"); return; }
+      setChannel(data.channel === "whatsapp" ? "whatsapp" : data.channel === "email" ? "email" : null);
       setSent(true);
     } catch {
-      setError("تعذّر الاتصال بالخادم");
+      setError("تعذّر الاتصال بالخادم. يرجى المحاولة مرة أخرى");
     } finally {
       setLoading(false);
     }
@@ -116,15 +124,7 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
   return (
     <div className="min-h-screen bg-[#FBF9F6] flex flex-col items-center justify-center px-4 py-10" dir="rtl">
 
-      {/* Logo */}
-      <div className="mb-7 select-none flex flex-col items-center gap-1">
-        {logoUrl ? (
-          <img src={logoUrl} alt="تكيّة" className="h-16 object-contain" />
-        ) : (
-          <div className="w-14 h-14 rounded-2xl bg-[#8C6246] flex items-center justify-center text-white text-2xl font-bold mb-1">ت</div>
-        )}
-        <p className="text-sm text-[#8C6246] font-medium">منصتك المتكاملة لإدارة الحجوزات والخدمات</p>
-      </div>
+      <AuthBrand />
 
       {/* Card */}
       <div className="w-full max-w-md bg-white border border-[#EBEBEB] rounded-3xl p-8 shadow-sm">
@@ -134,9 +134,13 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
             <div className="w-14 h-14 rounded-full bg-[#F5EEE9] flex items-center justify-center mb-4">
               <CheckCircle2 className="w-7 h-7 text-[#8C6246]" />
             </div>
-            <h2 className="text-lg font-bold text-[#2D2D2D] mb-2">تم الإرسال بنجاح</h2>
+            <h2 className="text-lg font-bold text-[#2D2D2D] mb-2" role="status">تم استلام طلب الاستعادة</h2>
             <p className="text-sm text-[#656565] leading-relaxed mb-6">
-              إذا كان البريد الإلكتروني مسجلاً لدينا، ستصلك رسالة تحتوي على رابط إعادة تعيين كلمة المرور خلال دقائق.
+              {channel === "whatsapp"
+                ? "إذا كان رقم الجوال مطابقاً لحساب مسجل لدينا، سيصلك رابط إعادة تعيين كلمة المرور عبر واتساب خلال دقائق."
+                : channel === "email"
+                ? "إذا كان البريد الإلكتروني مطابقاً لحساب مسجل لدينا، سيصلك رابط إعادة تعيين كلمة المرور عبر البريد الإلكتروني خلال دقائق."
+                : "إذا كانت البيانات مطابقة لحساب مسجل لدينا، سيصلك رابط إعادة تعيين كلمة المرور خلال دقائق."}
             </p>
             <a href={backHref} className="flex items-center gap-2 text-sm text-[#656565] font-medium hover:text-[#2D2D2D] hover:underline transition-colors">
               <ArrowRight className="w-4 h-4 rotate-180" />
@@ -151,15 +155,18 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
                 <Mail className="w-5 h-5 text-[#8C6246]" />
               </div>
               <h2 className="text-xl font-bold text-[#2D2D2D] mb-1">نسيت كلمة المرور؟</h2>
-              <p className="text-sm text-[#656565] font-semibold text-center">أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين</p>
+              <p className="text-sm text-[#656565] font-semibold text-center">أدخل رقم جوالك أو بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-[#4A4A4A] mb-2">البريد الإلكتروني</label>
+                <label htmlFor="forgot-identifier" className="block text-sm font-semibold text-[#4A4A4A] mb-2">{staffMode ? "اسم المستخدم" : AUTH_LABELS.identifier}</label>
                 <input
+                  id="forgot-identifier"
                   type="text"
-                  placeholder="أدخل بريدك الإلكتروني"
+                  autoComplete="username"
+                  aria-describedby="forgot-help"
+                  placeholder={staffMode ? "أدخل اسم المستخدم" : AUTH_LABELS.identifierPlaceholder}
                   value={identifier}
                   onChange={(e) => { setIdentifier(e.target.value); setError(null); }}
                   dir="rtl"
@@ -169,8 +176,22 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
                 />
               </div>
 
+              <p id="forgot-help" className="text-xs text-[#656565] leading-relaxed -mt-2">
+                {staffMode
+                  ? "سيتم إرسال رابط الاستعادة إلى القناة المسجلة لحساب الموظف إن وجدت."
+                  : "سيتم اختيار قناة الإرسال المتاحة تلقائياً بحسب ما تدخله. الإرسال عبر واتساب يعتمد على توفر الخدمة وقت الطلب."}
+              </p>
+              <button
+                type="button"
+                data-testid="button-toggle-staff-mode"
+                onClick={() => { setStaffMode((v) => !v); setError(null); setSent(false); setChannel(null); setIdentifier(""); }}
+                className="text-xs text-[#8C6246] font-medium hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8C6246] rounded"
+              >
+                {staffMode ? "العودة للاستعادة برقم الجوال أو البريد الإلكتروني" : "استعادة حساب موظف باسم المستخدم"}
+              </button>
+
               {error && (
-                <div className="rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3">
+                <div role="alert" className="rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3">
                   {error}
                 </div>
               )}

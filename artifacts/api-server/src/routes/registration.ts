@@ -402,6 +402,7 @@ router.post("/owner-login", async (req, res) => {
         profileImageUrl: null,
       },
       access_token: "owner_password_auth",
+      ownerApplicationId: app.id,
       expires_at: Math.floor((Date.now() + ttl) / 1000),
     });
 
