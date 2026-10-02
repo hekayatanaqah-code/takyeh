@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { InventoryFilters } from "../components/admin/InventoryFilters";
 import { emptyInventoryFilters, filterAndSortInventory, propertyPricingMode, uniqueFilterOptions, type InventoryDescriptor } from "./inventory-filters";
 const rows: InventoryDescriptor[] = [
   { id: 1, name: "عقار أ", region: "القصيم", city: "الرس", category: "فئة جديدة", status: "active", pricing: "daily", createdAt: "2026-01-01" },
@@ -8,6 +11,28 @@ const rows: InventoryDescriptor[] = [
 ];
 const filter = (overrides = {}) => filterAndSortInventory(rows, { ...emptyInventoryFilters(), ...overrides }, row => row).map(row => row.id);
 describe("inventory filters", () => {
+  it("removes property pricing controls, chips and sort while retaining service pricing", () => {
+    const props = {
+      value: { ...emptyInventoryFilters(), pricing: ["daily"], sort: "pricing" },
+      onChange: () => {},
+      options: { regions: [], cities: [], categories: [], statuses: [], pricing: [{ value: "daily", label: "حسب أيام الأسبوع" }] },
+      resultCount: 3, totalCount: 3,
+    };
+    const html = renderToStaticMarkup(createElement(InventoryFilters, { ...props, scope: "properties", pricingEnabled: false }));
+    assert.ok(!html.includes("properties-pricing-trigger"));
+    assert.ok(!html.includes('value="pricing"'));
+    assert.ok(!html.includes("properties-chip-pricing"));
+    const services = renderToStaticMarkup(createElement(InventoryFilters, { ...props, scope: "services" }));
+    assert.ok(services.includes("services-pricing-trigger"));
+    assert.ok(services.includes('value="pricing"'));
+  });
+  it("ignores stale property pricing filters and supports searching by owner name", () => {
+    const result = filterAndSortInventory(rows, { ...emptyInventoryFilters(), pricing: ["missing"], sort: "pricing" }, row => row, false);
+    assert.deepEqual(result.map(row => row.id), [3, 2, 1]);
+    const owned = rows.map(row => ({ ...row, ownerName: row.id === 2 ? "مالك تجريبي" : null }));
+    const matches = filterAndSortInventory(owned, { ...emptyInventoryFilters(), search: "مالكتجريبي" }, row => row);
+    assert.deepEqual(matches.map(row => row.id), [2]);
+  });
   it("combines multiple cities/categories with OR within and AND across groups", () => {
     assert.deepEqual(filter({ regions: ["القصيم"], cities: ["الرس", "عنيزة"], categories: ["فئة جديدة", "شالية"] }), [2, 1]);
     assert.deepEqual(filter({ cities: ["الرس", "عنيزة"], statuses: ["active", "paused"], pricing: ["daily"] }), [1]);

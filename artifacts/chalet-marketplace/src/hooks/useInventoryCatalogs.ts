@@ -32,7 +32,11 @@ export function useInventoryCatalogs(kind: "properties" | "services") {
     options: (rows: InventoryDescriptor[], filters: InventoryFilterState) => {
       const selectedRegions = new Set(filters.regions.map(normalizeCityName));
       const inRegion = (name: string) => !selectedRegions.size || selectedRegions.has(normalizeCityName(name));
-      const categoryOptions = categories.map(category => ({
+      const usedCategories = new Set(rows.map(row => row.category));
+      const categoryOptions = categories.filter(category =>
+        kind !== "services" || (category.key !== "other" && category.labelAr?.trim() !== "أخرى")
+        || usedCategories.has(category.key ?? ""),
+      ).map(category => ({
         value: kind === "services" ? category.key ?? "" : category.nameAr ?? "",
         label: `${category.labelAr ?? category.nameAr ?? category.key}${category.isActive ? "" : " (غير مفعّل)"}`,
       }));

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { ChevronDown, RotateCcw, Search, X } from "lucide-react";
 import { normalizeCityName } from "@/lib/city-name";
@@ -33,6 +33,7 @@ export interface InventoryFiltersProps {
   resultCount: number;
   totalCount: number;
   scope?: string;
+  pricingEnabled?: boolean;
 }
 
 const SORTS: FilterOption[] = [
@@ -177,14 +178,15 @@ function MultiSelect({ id, label, options, selected, onChange }: MultiSelectProp
   );
 }
 
-export function InventoryFilters({ value, onChange, options, resultCount, totalCount, scope = "inventory" }: InventoryFiltersProps) {
+export function InventoryFilters({ value, onChange, options, resultCount, totalCount, scope = "inventory", pricingEnabled = true }: InventoryFiltersProps) {
   const set = (patch: Partial<InventoryFilterState>) => onChange({ ...value, ...patch });
   const setList = (key: ArrayKey) => (next: string[]) => set({ [key]: next } as Partial<InventoryFilterState>);
+  const displayedSort = !pricingEnabled && value.sort === "pricing" ? "newest" : value.sort;
 
   const dirty =
     value.search !== "" ||
-    value.sort !== "newest" ||
-    value.regions.length + value.cities.length + value.categories.length + value.statuses.length + value.pricing.length > 0;
+    displayedSort !== "newest" ||
+    value.regions.length + value.cities.length + value.categories.length + value.statuses.length + (pricingEnabled ? value.pricing.length : 0) > 0;
 
   const reset = () =>
     onChange({ search: "", regions: [], cities: [], categories: [], statuses: [], pricing: [], sort: "newest" });
@@ -197,10 +199,10 @@ export function InventoryFilters({ value, onChange, options, resultCount, totalC
       { key: "statuses", opts: options.statuses },
       { key: "pricing", opts: options.pricing },
     ];
-    return groups.flatMap((g) =>
+    return groups.filter(g => pricingEnabled || g.key !== "pricing").flatMap((g) =>
       value[g.key].map((v) => ({ key: g.key, v, label: g.opts.find((o) => o.value === v)?.label ?? v })),
     );
-  }, [value, options]);
+  }, [value, options, pricingEnabled]);
 
   const removeChip = (key: ArrayKey, v: string) => set({ [key]: value[key].filter((x) => x !== v) } as Partial<InventoryFilterState>);
 
@@ -214,7 +216,7 @@ export function InventoryFilters({ value, onChange, options, resultCount, totalC
             data-testid={`${scope}-filter-search`}
             value={value.search}
             onChange={(e) => set({ search: e.target.value })}
-            placeholder="ابحث بالاسم أو الوصف"
+            placeholder="ابحث بالاسم أو اسم المالك"
             aria-label="بحث"
             className="w-full rounded-lg border border-slate-600 bg-slate-800 py-2 pe-3 ps-9 text-sm text-slate-100 placeholder:text-slate-500 focus:border-amber-500 focus:outline-none"
           />
@@ -223,23 +225,23 @@ export function InventoryFilters({ value, onChange, options, resultCount, totalC
           <span className="shrink-0 text-xs text-slate-400">الترتيب</span>
           <select
             data-testid={`${scope}-filter-sort`}
-            value={value.sort}
+            value={displayedSort}
             onChange={(e) => set({ sort: e.target.value })}
             className="min-w-0 flex-1 bg-transparent font-semibold focus:outline-none"
           >
-            {SORTS.map((s) => (
+            {SORTS.filter(s => pricingEnabled || s.value !== "pricing").map((s) => (
               <option key={s.value} value={s.value} className="bg-slate-800">{s.label}</option>
             ))}
           </select>
         </label>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${pricingEnabled ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
         <MultiSelect id={`${scope}-region`} label="المنطقة" options={options.regions} selected={value.regions} onChange={setList("regions")} />
         <MultiSelect id={`${scope}-city`} label="المدينة" options={options.cities} selected={value.cities} onChange={setList("cities")} />
         <MultiSelect id={`${scope}-category`} label="الفئة" options={options.categories} selected={value.categories} onChange={setList("categories")} />
         <MultiSelect id={`${scope}-status`} label="الحالة" options={options.statuses} selected={value.statuses} onChange={setList("statuses")} />
-        <MultiSelect id={`${scope}-pricing`} label="التسعير" options={options.pricing} selected={value.pricing} onChange={setList("pricing")} />
+        {pricingEnabled && <MultiSelect id={`${scope}-pricing`} label="التسعير" options={options.pricing} selected={value.pricing} onChange={setList("pricing")} />}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

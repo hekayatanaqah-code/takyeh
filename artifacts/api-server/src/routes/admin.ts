@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { inventoryOwnerNames } from "../lib/inventory-owner-names";
 import multer from "multer";
 import sharp from "sharp";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -1025,10 +1026,16 @@ router.get("/review-chalets", requireSupportDisputesAdmin, async (_req, res) => 
 });
 
 router.get("/chalets", async (req, res) => {
-  const rows = await db
-    .select()
+  const ownerNames = await inventoryOwnerNames();
+  const linkedRows = await db
+    .select({ chalet: chaletsTable, submissionOwnerId: chaletSubmissionsTable.ownerId })
     .from(chaletsTable)
+    .leftJoin(chaletSubmissionsTable, eq(chaletsTable.submissionId, chaletSubmissionsTable.id))
     .orderBy(chaletsTable.id);
+  const rows = linkedRows.map(({ chalet, submissionOwnerId }) => ({
+    ...chalet,
+    ownerName: ownerNames.get(chalet.ownerId || submissionOwnerId || "") ?? null,
+  }));
 
   await logLongPauseAlerts(rows);
 
@@ -1068,6 +1075,7 @@ router.get("/chalets", async (req, res) => {
 
   const pendingRows = pending.map((row) => ({
     id: -row.id,
+    ownerName: ownerNames.get(row.ownerId ?? "") ?? null,
     submissionId: row.id,
     nameAr: row.nameAr,
     location: row.location,
@@ -1094,6 +1102,7 @@ router.get("/chalets", async (req, res) => {
 
   const deletedRows = deleted.map((row) => ({
     id: -100000 - row.id,
+    ownerName: ownerNames.get(row.ownerId ?? "") ?? null,
     submissionId: row.id,
     nameAr: row.nameAr,
     location: row.location,
@@ -1934,9 +1943,11 @@ router.get("/settings", requirePlatformSettingsAdmin, async (_req, res) => {
 /* ── Service Provider Submissions (Admin) ──────────────────── */
 
 router.get("/service-providers", requirePublishedServicesAdmin, async (_req, res) => {
+  const ownerNames = await inventoryOwnerNames();
   const rows = await db
     .select({
       id: serviceProviderSubmissionsTable.id,
+      ownerId: serviceProviderSubmissionsTable.ownerId,
       submissionId: serviceProviderSubmissionsTable.id,
       businessName: serviceProviderSubmissionsTable.businessName,
       category: serviceProviderSubmissionsTable.category,
@@ -1964,7 +1975,9 @@ router.get("/service-providers", requirePublishedServicesAdmin, async (_req, res
     .leftJoin(serviceRegionsCatalogTable, eq(serviceProviderSubmissionsTable.serviceRegionId, serviceRegionsCatalogTable.id))
     .where(eq(serviceProviderSubmissionsTable.status, "approved"))
     .orderBy(serviceProviderSubmissionsTable.createdAt);
-  return res.json(rows.reverse());
+  return res.json(rows.reverse().map(({ ownerId, ...row }) => ({
+    ...row, ownerName: ownerNames.get(ownerId ?? "") ?? null,
+  })));
 });
 
 router.get("/service-submissions", requireChaletApprovalsAdmin, async (_req, res) => {

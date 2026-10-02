@@ -40,3 +40,4 @@
 - [Password recovery boundaries](password-recovery-boundaries.md) — recovery is transactional, not marketing; use unique stored destinations and explicit session identity, with honest provider readiness.
 - [Dependency audit coverage](dependency-audit-coverage.md) — compare the workspace dependency scanner with pnpm audit; their advisories can differ for the same lockfile.
 - [Dynamic marketplace catalogs](dynamic-marketplace-catalogs.md) — active categories appear before inventory exists; admin filters retain historical values and reconcile dependent cities.
+- [Administrative inventory display](admin-inventory-display.md) — no property pricing-method controls; show actual owner identity alongside property and service names.

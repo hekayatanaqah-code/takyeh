@@ -5,6 +5,7 @@ export interface InventoryDescriptor {
   id: number; name: string; city: string; region: string; category: string;
   status: string; pricing: string; createdAt: string;
   categoryIsIdentifier?: boolean;
+  ownerName?: string | null;
 }
 export const emptyInventoryFilters = (): InventoryFilterState => ({
   search: "", regions: [], cities: [], categories: [], statuses: [], pricing: [], sort: "newest",
@@ -41,10 +42,11 @@ export function uniqueFilterOptions(options: FilterOption[], exactValues = false
 }
 export function filterAndSortInventory<T>(
   rows: T[], filters: InventoryFilterState, describe: (row: T) => InventoryDescriptor,
+  pricingEnabled = true,
 ): T[] {
   const selected = (values: string[]) => new Set(values.map(normalizeCityName));
   const regions = selected(filters.regions), cities = selected(filters.cities);
-  const categories = selected(filters.categories), statuses = selected(filters.statuses), pricing = selected(filters.pricing);
+  const categories = selected(filters.categories), statuses = selected(filters.statuses), pricing = selected(pricingEnabled ? filters.pricing : []);
   const categoryIdentifiers = new Set(filters.categories);
   const query = normalizeCityName(filters.search);
   const matches = (values: Set<string>, value: string) => values.size === 0 || values.has(normalizeCityName(value));
@@ -54,13 +56,13 @@ export function filterAndSortInventory<T>(
       ? categoryIdentifiers.size === 0 || categoryIdentifiers.has(data.category)
       : matches(categories, data.category))
     && matches(statuses, data.status) && matches(pricing, data.pricing)
-    && (!query || normalizeCityName([data.name, data.city, data.region, data.category, data.id].join(" ")).includes(query)),
+    && (!query || normalizeCityName([data.name, data.ownerName ?? "", data.city, data.region, data.category, data.id].join(" ")).includes(query)),
   );
   return filtered.sort((a, b) => {
     let comparison = 0;
     if (filters.sort === "name") comparison = a.data.name.localeCompare(b.data.name, "ar");
     else if (filters.sort === "status") comparison = a.data.status.localeCompare(b.data.status);
-    else if (filters.sort === "pricing") comparison = a.data.pricing.localeCompare(b.data.pricing);
+    else if (filters.sort === "pricing" && pricingEnabled) comparison = a.data.pricing.localeCompare(b.data.pricing);
     else {
       const time = (value: string) => Number.isFinite(Date.parse(value)) ? Date.parse(value) : 0;
       comparison = (time(a.data.createdAt) - time(b.data.createdAt)) * (filters.sort === "oldest" ? 1 : -1);

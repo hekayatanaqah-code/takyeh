@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { refreshCatalogsAfterWrite } from "@/lib/query-client";
 import InventoryFilters, { type InventoryFilterState } from "@/components/admin/InventoryFilters";
 import { useInventoryCatalogs } from "@/hooks/useInventoryCatalogs";
-import { emptyInventoryFilters, filterAndSortInventory, propertyPricingMode, propertyPricingOptions, servicePricingOptions, type InventoryDescriptor } from "@/lib/inventory-filters";
+import { emptyInventoryFilters, filterAndSortInventory, servicePricingOptions, type InventoryDescriptor } from "@/lib/inventory-filters";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
@@ -149,6 +149,7 @@ interface Submission {
 }
 
 interface AdminChalet extends ChaletDetails {
+  ownerName?: string | null;
   region?: string | null;
   submissionId?: number | null;
   isActive?: boolean;
@@ -242,6 +243,7 @@ interface Service {
 }
 
 interface PublishedService {
+  ownerName: string | null;
   id: number;
   submissionId: number;
   businessName: string;
@@ -3122,7 +3124,7 @@ function ServicesTab() {
     { value: "unpublished", label: "مقبولة وغير منشورة" },
   ];
   const describeService = (row: PublishedService): InventoryDescriptor => ({
-    id: row.id, name: row.businessName, city: row.city,
+    id: row.id, name: row.businessName, ownerName: row.ownerName, city: row.city,
     region: row.region || inventoryCatalog.cityRegion(row.city) || "غير محدد",
     category: row.category, categoryIsIdentifier: true, status: row.publicationStatus,
     pricing: row.pricingUnit || "agreement", createdAt: row.createdAt,
@@ -3190,6 +3192,7 @@ function ServicesTab() {
                   {service.descriptionAr && (
                     <div className="text-slate-400 text-xs mt-0.5 line-clamp-1">{service.descriptionAr}</div>
                   )}
+                  <div className="text-xs text-slate-300 mt-1">مقدم الخدمة: {service.ownerName || "الاسم غير مسجل"}</div>
                 </TableCell>
                 <TableCell className="text-slate-300">{service.categoryLabel ?? service.category}</TableCell>
                 <TableCell className="text-slate-300">
@@ -3859,14 +3862,14 @@ function ChaletsVerifyTab() {
   });
 
   const describeChalet = (row: AdminChalet): InventoryDescriptor => ({
-    id: row.id, name: row.nameAr, city: row.location,
+    id: row.id, name: row.nameAr, ownerName: row.ownerName, city: row.location,
     region: row.region || inventoryCatalog.cityRegion(row.location) || "غير محدد",
     category: row.category || row.propertyType || "غير مصنف",
-    status: row.adminStatus ?? "active", pricing: propertyPricingMode(row), createdAt: row.createdAt,
+    status: row.adminStatus ?? "active", pricing: "", createdAt: row.createdAt,
   });
   const inventoryRows = chalets.map(describeChalet);
   const inventoryOptions = inventoryCatalog.options(inventoryRows, inventoryFilters);
-  const filteredChalets = filterAndSortInventory(chalets, inventoryFilters, describeChalet);
+  const filteredChalets = filterAndSortInventory(chalets, inventoryFilters, describeChalet, false);
 
   if (isLoading) {
     return (
@@ -3934,9 +3937,9 @@ function ChaletsVerifyTab() {
         </div>
       </div>
 
-      <InventoryFilters scope="properties" value={inventoryFilters}
+      <InventoryFilters scope="properties" pricingEnabled={false} value={inventoryFilters}
         onChange={next => setInventoryFilters(inventoryCatalog.reconcile(inventoryFilters, next, inventoryRows))}
-        options={{ ...inventoryOptions, statuses: Object.entries(statusLabels).map(([value, label]) => ({ value, label })), pricing: propertyPricingOptions }}
+        options={{ ...inventoryOptions, statuses: Object.entries(statusLabels).map(([value, label]) => ({ value, label })), pricing: [] }}
         resultCount={filteredChalets.length} totalCount={chalets.length} />
       {(isError || inventoryCatalog.isError) && (
         <div role="alert" className="rounded-lg border border-red-800 bg-red-950/20 p-3 text-sm text-red-200">
@@ -3996,7 +3999,10 @@ function ChaletsVerifyTab() {
                 key={c.id}
                 className="border-slate-700 hover:bg-slate-800/50 transition-colors"
               >
-                <TableCell className="font-semibold text-white">{c.nameAr}</TableCell>
+                <TableCell className="font-semibold text-white">
+                  {c.nameAr}
+                  <div className="text-xs font-normal text-slate-300 mt-1">المالك: {c.ownerName || "الاسم غير مسجل"}</div>
+                </TableCell>
                 <TableCell className="text-slate-300 text-sm">
                   {c.location}
                   {c.district && <span className="text-slate-500"> · {c.district}</span>}
@@ -4004,7 +4010,6 @@ function ChaletsVerifyTab() {
                 </TableCell>
                 <TableCell className="text-slate-400 text-sm">
                   {c.category || c.propertyType || "—"}
-                  <div className="text-xs text-amber-300/80 mt-1">{propertyPricingOptions.find(option => option.value === propertyPricingMode(c))?.label}</div>
                 </TableCell>
                 <TableCell>
                   <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusStyles[adminStatus]}`}>
