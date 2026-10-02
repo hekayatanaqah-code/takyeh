@@ -1071,6 +1071,15 @@ router.get("/chalets", async (req, res) => {
     submissionId: row.id,
     nameAr: row.nameAr,
     location: row.location,
+    region: row.region,
+    propertyType: row.propertyType,
+    pricePerNight: row.pricePerNight,
+    priceMorning: row.priceMorning,
+    priceEvening: row.priceEvening,
+    priceFullDay: row.priceFullDay,
+    priceWeekday: row.priceWeekday,
+    priceWeekend: row.priceWeekend,
+    dailyPrices: row.dailyPrices,
     district: row.district,
     category: row.category,
     whatsappNumber: row.whatsappNumber,
@@ -1088,6 +1097,15 @@ router.get("/chalets", async (req, res) => {
     submissionId: row.id,
     nameAr: row.nameAr,
     location: row.location,
+    region: row.region,
+    propertyType: row.propertyType,
+    pricePerNight: row.pricePerNight,
+    priceMorning: row.priceMorning,
+    priceEvening: row.priceEvening,
+    priceFullDay: row.priceFullDay,
+    priceWeekday: row.priceWeekday,
+    priceWeekend: row.priceWeekend,
+    dailyPrices: row.dailyPrices,
     district: row.district,
     category: row.category,
     whatsappNumber: row.whatsappNumber,
@@ -1923,11 +1941,18 @@ router.get("/service-providers", requirePublishedServicesAdmin, async (_req, res
       businessName: serviceProviderSubmissionsTable.businessName,
       category: serviceProviderSubmissionsTable.category,
       categoryLabel: serviceCategoriesTable.labelAr,
+      region: serviceRegionsCatalogTable.name,
+      serviceRegionId: serviceProviderSubmissionsTable.serviceRegionId,
+      serviceCityId: serviceProviderSubmissionsTable.serviceCityId,
       descriptionAr: serviceProviderSubmissionsTable.descriptionAr,
       city: serviceProviderSubmissionsTable.city,
       whatsappNumber: serviceProviderSubmissionsTable.whatsappNumber,
       pricingUnit: serviceProviderSubmissionsTable.pricingUnit,
-      isActive: sql<boolean>`true`,
+      isActive: sql<boolean>`COALESCE(${serviceProvidersTable.isActive}, false)`,
+      publicationStatus: sql<string>`CASE
+        WHEN ${serviceProvidersTable.id} IS NULL THEN 'unpublished'
+        WHEN ${serviceProvidersTable.isActive} THEN 'published'
+        ELSE 'paused' END`,
       createdAt: serviceProviderSubmissionsTable.createdAt,
     })
     .from(serviceProviderSubmissionsTable)
@@ -1935,6 +1960,8 @@ router.get("/service-providers", requirePublishedServicesAdmin, async (_req, res
       serviceCategoriesTable,
       eq(serviceProviderSubmissionsTable.category, serviceCategoriesTable.key),
     )
+    .leftJoin(serviceProvidersTable, eq(serviceProvidersTable.submissionId, serviceProviderSubmissionsTable.id))
+    .leftJoin(serviceRegionsCatalogTable, eq(serviceProviderSubmissionsTable.serviceRegionId, serviceRegionsCatalogTable.id))
     .where(eq(serviceProviderSubmissionsTable.status, "approved"))
     .orderBy(serviceProviderSubmissionsTable.createdAt);
   return res.json(rows.reverse());

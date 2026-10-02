@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
+import { normalizeCityName } from "../lib/city-name";
 import { db } from "@workspace/db";
 import {
   serviceProviderSubmissionsTable,
@@ -213,7 +214,7 @@ router.get("/", async (req, res) => {
   return res.json(rows.filter((row) => row.ownerId && activeOwners.has(row.ownerId)));
 });
 
-/* ── Public: service-only search options with active owner inventory ── */
+/* Active catalog entries remain selectable even before their first provider. */
 router.get("/search-options", async (_req, res) => {
   const providers = await db
     .select({
@@ -227,11 +228,7 @@ router.get("/search-options", async (_req, res) => {
   const activeOwners = await activeInventoryOwnerIds(providers.map((provider) => provider.ownerId));
   const activeProviders = providers.filter((provider) => provider.ownerId && activeOwners.has(provider.ownerId));
 
-  const categoryKeys = [...new Set(
-    activeProviders.map((provider) => provider.category).filter((key): key is string => !!key),
-  )];
-  const categories = categoryKeys.length > 0
-    ? await db
+  const categories = await db
       .select({
         id: serviceCategoriesTable.id,
         key: serviceCategoriesTable.key,
@@ -239,34 +236,25 @@ router.get("/search-options", async (_req, res) => {
         emoji: serviceCategoriesTable.emoji,
       })
       .from(serviceCategoriesTable)
-      .where(and(
-        eq(serviceCategoriesTable.isActive, true),
-        inArray(serviceCategoriesTable.key, categoryKeys),
-      ))
-      .orderBy(serviceCategoriesTable.sortOrder)
-    : [];
+      .where(eq(serviceCategoriesTable.isActive, true))
+      .orderBy(serviceCategoriesTable.sortOrder, serviceCategoriesTable.id);
 
-  const coversAllKingdom = activeProviders.some((provider) =>
-    (provider.coverageTags ?? []).some((tag) => tag.trim() === ALL_KINGDOM_COVERAGE),
-  );
-  let cities: Array<{ id: number; name: string }>;
-  if (coversAllKingdom) {
-    cities = await db
-      .select({ id: citiesCatalogTable.id, name: citiesCatalogTable.name })
-      .from(citiesCatalogTable)
-      .where(eq(citiesCatalogTable.isActive, true))
-      .orderBy(citiesCatalogTable.name);
-  } else {
-    const availableCityNames = [...new Set(
-      activeProviders.flatMap((provider) => [
-        provider.city,
-        ...(provider.coverageTags ?? []),
-      ])
-        .map((city) => city?.trim())
-        .filter((city): city is string => !!city && city !== ALL_KINGDOM_COVERAGE),
-    )];
-    cities = availableCityNames.map((name, index) => ({ id: -(index + 1), name }));
-  }
+  const catalogCities = await db
+    .select({
+      id: serviceCitiesCatalogTable.id, name: serviceCitiesCatalogTable.name,
+      isActive: serviceCitiesCatalogTable.isActive, regionActive: serviceRegionsCatalogTable.isActive,
+    })
+    .from(serviceCitiesCatalogTable)
+    .innerJoin(serviceRegionsCatalogTable, eq(serviceCitiesCatalogTable.regionId, serviceRegionsCatalogTable.id))
+    .orderBy(serviceCitiesCatalogTable.name);
+  const knownCities = new Set(catalogCities.map(city => normalizeCityName(city.name)));
+  const cities = catalogCities.filter(city => city.isActive && city.regionActive)
+    .map(({ id, name }) => ({ id, name }));
+  // Keep old provider coverage searchable, but never reintroduce disabled catalog entries.
+  const legacyNames = [...new Set(activeProviders.flatMap(provider => [provider.city, ...(provider.coverageTags ?? [])])
+    .map(city => city?.trim()).filter((city): city is string => !!city && city !== ALL_KINGDOM_COVERAGE))]
+    .filter(city => !knownCities.has(normalizeCityName(city)));
+  cities.push(...legacyNames.map((name, index) => ({ id: -(index + 1), name })));
 
   return res.json({ categories, cities });
 });

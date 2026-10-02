@@ -418,13 +418,6 @@ export default function Home() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">جميع الفئات</SelectItem>
-                          {categories.length === 0 && (
-                            <>
-                              <SelectItem value="شالية">شالية</SelectItem>
-                              <SelectItem value="مزرعة">مزرعة</SelectItem>
-                              <SelectItem value="استراحة">استراحة</SelectItem>
-                            </>
-                          )}
                           {categories.map((cat) => (
                             <SelectItem key={cat.id} value={cat.nameAr}>{cat.emoji || "🏠"} {cat.nameAr}</SelectItem>
                           ))}

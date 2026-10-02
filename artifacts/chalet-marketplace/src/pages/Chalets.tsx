@@ -134,7 +134,7 @@ export default function Chalets() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const { data: categories = [] } = useQuery<{ id: number; nameAr: string }[]>({
+  const { data: categories = [] } = useQuery<{ id: number; nameAr: string; showSectionFilter: boolean }[]>({
     queryKey: ["catalog", "categories"],
     queryFn: async () => {
       const r = await fetch(`${BASE}/api/categories`, { credentials: "include" });
@@ -154,22 +154,20 @@ export default function Chalets() {
     staleTime: 1000 * 60 * 5,
   });
 
+  const showSectionFilter = filterCategory === "all" || !!categories.find(cat => normalizeCategory(cat.nameAr) === normalizeCategory(filterCategory))?.showSectionFilter;
+  const changeCategory = (value: string) => { setFilterCategory(value); setFilterSections("all"); };
   const { data: chalets, isLoading, isError, refetch } = useQuery<any[]>({
     queryKey: ["chalets", filterCity, filterDate, filterPeriod],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = new URLSearchParams();
       if (filterCity && filterCity !== "all") params.set("location", filterCity);
       if (filterDate) params.set("date", filterDate);
       if (filterPeriod && filterPeriod !== "all") params.set("period", filterPeriod);
-      const r = await fetch(`${BASE}/api/chalets?${params.toString()}`, { credentials: "include" });
+      const r = await fetch(`${BASE}/api/chalets?${params.toString()}`, { credentials: "include", signal });
       if (!r.ok) throw new Error("تعذر تحميل الشاليهات");
       return r.json();
     },
   });
-
-  useEffect(() => {
-    refetch();
-  }, [filterCity, filterDate, filterPeriod, refetch]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -177,9 +175,15 @@ export default function Chalets() {
     else params.delete("location");
     if (filterDate) params.set("checkIn", filterDate);
     else params.delete("checkIn");
+    for (const [key, value] of [["category", filterCategory], ["sections", filterSections], ["period", filterPeriod], ["maxPrice", toWesternDigits(filterMaxPrice)]]) {
+      if (value && value !== "all") params.set(key, value);
+      else params.delete(key);
+    }
+    params.delete("district");
+    filterDistricts.forEach(district => params.append("district", district));
     const query = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
-  }, [filterCity, filterDate]);
+  }, [filterCity, filterDate, filterCategory, filterSections, filterPeriod, filterMaxPrice, filterDistricts]);
 
   /* Reset visible count whenever any filter changes */
   useEffect(() => {
@@ -261,7 +265,7 @@ export default function Chalets() {
       if (!chaletDistrict || !filterDistricts.includes(chaletDistrict)) return false;
     }
     if (!matchesCategory(c, filterCategory)) return false;
-    if (filterSections && filterSections !== "all") {
+    if (showSectionFilter && filterSections && filterSections !== "all") {
       /* Treat null/empty sections as "قسم واحد" — properties added before the field existed */
       const chaletSections = (c as any).sections || "قسم واحد";
       if (chaletSections !== filterSections) return false;
@@ -328,19 +332,12 @@ export default function Chalets() {
       {/* 1. الفئة */}
       <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">الفئة</label>
-        <Select value={filterCategory} onValueChange={setFilterCategory}>
+        <Select value={filterCategory} onValueChange={changeCategory}>
           <SelectTrigger className="bg-background">
             <SelectValue placeholder="جميع الفئات" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">جميع الفئات</SelectItem>
-            {categories.length === 0 && (
-              <>
-                <SelectItem value="شالية">شالية</SelectItem>
-                <SelectItem value="مزرعة">مزرعة</SelectItem>
-                <SelectItem value="استراحة">استراحة</SelectItem>
-              </>
-            )}
             {categories.map((cat) => (
               <SelectItem key={cat.id} value={cat.nameAr}>{cat.nameAr}</SelectItem>
             ))}
@@ -365,7 +362,7 @@ export default function Chalets() {
       </div>
 
       {/* 3. عدد الأقسام */}
-      <div className="space-y-3">
+      {showSectionFilter && <div className="space-y-3">
         <label className="text-sm font-semibold text-foreground">عدد الأقسام</label>
         <Select value={filterSections} onValueChange={setFilterSections}>
           <SelectTrigger className="bg-background">
@@ -377,7 +374,7 @@ export default function Chalets() {
             <SelectItem value="قسمين منفصلة">🔑🔑 قسمين منفصلة</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </div>}
 
       {/* 4. الحي */}
       <div className="space-y-3">
@@ -613,7 +610,7 @@ export default function Chalets() {
                 <div className="flex min-w-0 items-center gap-2 rounded-lg border border-input bg-background px-2">
                   <MapPin className="h-4 w-4 shrink-0 text-primary" />
                   <Select
-                    value={filterCity === "all" ? undefined : filterCity}
+                    value={filterCity}
                     onValueChange={(value) => {
                       setFilterCity(value);
                       setFilterDistricts([]);
@@ -627,6 +624,7 @@ export default function Chalets() {
                       <SelectValue placeholder="اختر المدينة" />
                     </SelectTrigger>
                     <SelectContent dir="rtl" className="text-right">
+                      <SelectItem value="all" className="justify-start text-right">جميع المدن</SelectItem>
                       {cities.map((city) => (
                         <SelectItem key={city.id} value={city.name} className="justify-start text-right">
                           {city.name}
@@ -668,7 +666,7 @@ export default function Chalets() {
             {/* ── Horizontal filter chips ── */}
             <div className="flex gap-2 overflow-x-auto pb-2 mb-3 [&::-webkit-scrollbar]:hidden" dir="rtl">
               {[{ v: "all", l: "جميع الفئات" }, ...categories.map(c => ({ v: c.nameAr, l: c.nameAr }))].map(o => (
-                <button key={o.v} onClick={() => setFilterCategory(o.v)}
+                <button key={o.v} onClick={() => changeCategory(o.v)}
                   className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${filterCategory === o.v ? "bg-primary text-primary-foreground border-primary" : "bg-background text-foreground border-border hover:border-primary/40 hover:bg-primary/5"}`}>
                   {o.l}
                 </button>
@@ -681,7 +679,7 @@ export default function Chalets() {
                 </button>
               ))}
               <div className="w-px bg-border/60 shrink-0 self-stretch my-0.5" />
-              {[{ v: "all", l: "كل الأقسام" }, { v: "قسم واحد", l: "🔑 قسم واحد" }, { v: "قسمين منفصلة", l: "🔑🔑 قسمين" }].map(o => (
+              {(showSectionFilter ? [{ v: "all", l: "كل الأقسام" }, { v: "قسم واحد", l: "🔑 قسم واحد" }, { v: "قسمين منفصلة", l: "🔑🔑 قسمين" }] : []).map(o => (
                 <button key={o.v} onClick={() => setFilterSections(o.v)}
                   className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap ${filterSections === o.v ? "bg-primary text-primary-foreground border-primary" : "bg-background text-foreground border-border hover:border-primary/40 hover:bg-primary/5"}`}>
                   {o.l}

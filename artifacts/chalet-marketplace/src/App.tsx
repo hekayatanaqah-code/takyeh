@@ -1,5 +1,6 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/lib/query-client";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
@@ -38,18 +39,6 @@ import OnboardingWelcome from "./pages/OnboardingWelcome";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import DualCalendarPickerTestPage from "./pages/DualCalendarPickerTestPage";
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 0,
-      gcTime: 0,
-      refetchOnMount: true,
-      refetchOnWindowFocus: true,
-      retry: 1,
-    },
-  },
-});
 
 function ProtectedRoute({ component: Component, returnTo }: { component: React.ComponentType; returnTo?: string }) {
   const { isAuthenticated, isLoading, login } = useAuth();

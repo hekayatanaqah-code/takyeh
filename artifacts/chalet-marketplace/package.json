@@ -9,6 +9,7 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:city-search": "tsx --test src/lib/city-name.test.ts",
+    "test:inventory-filters": "tsx --test src/lib/inventory-filters.test.ts",
     "test": "NODE_ENV=production tsx --test src/lib/serviceReceipt.test.ts",
     "check:playwright-image-version": "node scripts/check-playwright-image-version.mjs",
     "test:e2e": "playwright test",

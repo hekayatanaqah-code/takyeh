@@ -39,3 +39,4 @@
 - [Broadcast channel consent](broadcast-channel-consent.md) — campaigns honor independent owner channel preferences; queued external sends must recheck consent before delivery.
 - [Password recovery boundaries](password-recovery-boundaries.md) — recovery is transactional, not marketing; use unique stored destinations and explicit session identity, with honest provider readiness.
 - [Dependency audit coverage](dependency-audit-coverage.md) — compare the workspace dependency scanner with pnpm audit; their advisories can differ for the same lockfile.
+- [Dynamic marketplace catalogs](dynamic-marketplace-catalogs.md) — active categories appear before inventory exists; admin filters retain historical values and reconcile dependent cities.

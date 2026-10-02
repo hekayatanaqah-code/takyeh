@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { refreshCatalogsAfterWrite } from "@/lib/query-client";
+import InventoryFilters, { type InventoryFilterState } from "@/components/admin/InventoryFilters";
+import { useInventoryCatalogs } from "@/hooks/useInventoryCatalogs";
+import { emptyInventoryFilters, filterAndSortInventory, propertyPricingMode, propertyPricingOptions, servicePricingOptions, type InventoryDescriptor } from "@/lib/inventory-filters";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
@@ -145,6 +149,7 @@ interface Submission {
 }
 
 interface AdminChalet extends ChaletDetails {
+  region?: string | null;
   submissionId?: number | null;
   isActive?: boolean;
   isPausedNow?: boolean;
@@ -244,18 +249,24 @@ interface PublishedService {
   categoryLabel: string | null;
   descriptionAr: string | null;
   city: string;
+  region: string | null;
+  publicationStatus: "published" | "paused" | "unpublished";
   whatsappNumber: string;
   pricingUnit: string | null;
   isActive: boolean;
   createdAt: string;
 }
 
-function apiFetch(path: string, opts?: RequestInit) {
-  return fetch(`${API}${path}`, {
+async function apiFetch(path: string, opts?: RequestInit) {
+  const response = await fetch(`${API}${path}`, {
     credentials: "include",
     headers: { "Content-Type": "application/json", ...(opts?.headers ?? {}) },
     ...opts,
   });
+  if (response.ok && opts?.method && opts.method.toUpperCase() !== "GET") {
+    refreshCatalogsAfterWrite(path);
+  }
+  return response;
 }
 
 interface GlobalSeason {
@@ -3095,14 +3106,30 @@ function LegacyServicesTab() {
 }
 
 function ServicesTab() {
-  const { data: services = [], isLoading } = useQuery<PublishedService[]>({
+  const [inventoryFilters, setInventoryFilters] = useState<InventoryFilterState>(emptyInventoryFilters);
+  const inventoryCatalog = useInventoryCatalogs("services");
+  const { data: services = [], isLoading, isError, refetch } = useQuery<PublishedService[]>({
     queryKey: ["admin", "published-service-providers"],
+    refetchInterval: 30_000,
     queryFn: async () => {
       const response = await apiFetch("/admin/service-providers");
       if (!response.ok) throw new Error("فشل تحميل الخدمات المنشورة");
       return response.json();
     },
   });
+  const serviceStatusOptions = [
+    { value: "published", label: "منشورة" }, { value: "paused", label: "موقوفة" },
+    { value: "unpublished", label: "مقبولة وغير منشورة" },
+  ];
+  const describeService = (row: PublishedService): InventoryDescriptor => ({
+    id: row.id, name: row.businessName, city: row.city,
+    region: row.region || inventoryCatalog.cityRegion(row.city) || "غير محدد",
+    category: row.category, categoryIsIdentifier: true, status: row.publicationStatus,
+    pricing: row.pricingUnit || "agreement", createdAt: row.createdAt,
+  });
+  const inventoryRows = services.map(describeService);
+  const inventoryOptions = inventoryCatalog.options(inventoryRows, inventoryFilters);
+  const filteredServices = filterAndSortInventory(services, inventoryFilters, describeService);
 
   const pricingUnitLabel = (unit: string | null) => {
     if (unit === "per_day") return "باليوم";
@@ -3119,12 +3146,23 @@ function ServicesTab() {
     <div className="space-y-4">
       <div className="rounded-lg border border-emerald-800/60 bg-emerald-950/20 px-4 py-3">
         <p className="text-sm font-semibold text-emerald-300">
-          تعرض هذه القائمة الخدمات المقبولة والمفعلة والمنشورة تلقائياً.
+          تعرض هذه القائمة الخدمات المقبولة وحالتها الإدارية: منشورة أو موقوفة أو بانتظار النشر.
         </p>
         <p className="mt-1 text-xs text-slate-400">
           عند قبول طلب مزود خدمة جديد سيظهر هنا مباشرة دون إضافته يدوياً.
         </p>
       </div>
+
+      <InventoryFilters scope="services" value={inventoryFilters}
+        onChange={next => setInventoryFilters(inventoryCatalog.reconcile(inventoryFilters, next, inventoryRows))}
+        options={{ ...inventoryOptions, statuses: serviceStatusOptions, pricing: servicePricingOptions }}
+        resultCount={filteredServices.length} totalCount={services.length} />
+      {(isError || inventoryCatalog.isError) && (
+        <div role="alert" className="rounded-lg border border-red-800 bg-red-950/20 p-3 text-sm text-red-200">
+          تعذر تحديث البيانات أو خيارات الفلترة. تُعرض آخر بيانات محمّلة، وليست هذه حالة عدم وجود سجلات.
+          <button className="mr-3 underline" onClick={() => { void refetch(); inventoryCatalog.refetch(); }}>إعادة المحاولة</button>
+        </div>
+      )}
 
       <div className="rounded-lg border border-slate-700 overflow-hidden">
         <Table>
@@ -3139,13 +3177,13 @@ function ServicesTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {services.length === 0 ? (
+            {filteredServices.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-slate-400 py-12">
-                  لا توجد خدمات مقبولة ومفعلة حالياً
+                  {isError ? "تعذر تحميل الخدمات" : "لا توجد خدمات تطابق خيارات البحث"}
                 </TableCell>
               </TableRow>
-            ) : services.map((service) => (
+            ) : filteredServices.map((service) => (
               <TableRow key={service.id} className="border-slate-700 hover:bg-slate-800/50">
                 <TableCell>
                   <div className="font-semibold text-white">{service.businessName}</div>
@@ -3154,11 +3192,14 @@ function ServicesTab() {
                   )}
                 </TableCell>
                 <TableCell className="text-slate-300">{service.categoryLabel ?? service.category}</TableCell>
-                <TableCell className="text-slate-300">{service.city}</TableCell>
+                <TableCell className="text-slate-300">
+                  {service.city}
+                  <div className="text-xs text-slate-500">{describeService(service).region}</div>
+                </TableCell>
                 <TableCell className="text-slate-300">{pricingUnitLabel(service.pricingUnit)}</TableCell>
                 <TableCell>
-                  <span className="inline-flex rounded-full bg-green-900/50 px-2.5 py-1 text-xs font-semibold text-green-400">
-                    منشورة
+                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${service.publicationStatus === "published" ? "bg-green-900/50 text-green-400" : service.publicationStatus === "paused" ? "bg-orange-900/50 text-orange-300" : "bg-slate-700 text-slate-300"}`}>
+                    {serviceStatusOptions.find(option => option.value === service.publicationStatus)?.label ?? "غير محدد"}
                   </span>
                 </TableCell>
                 <TableCell>
@@ -3737,15 +3778,17 @@ const FEAT_ICONS: { key: string; label: string; Icon: React.ComponentType<{ clas
 /* ── Chalets Verification Tab ─────────────────── */
 function ChaletsVerifyTab() {
   const qc = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<"active" | "pending" | "paused" | "deleted">("active");
+  const [inventoryFilters, setInventoryFilters] = useState<InventoryFilterState>(() => ({ ...emptyInventoryFilters(), statuses: ["active"] }));
+  const statusFilter = inventoryFilters.statuses.length === 1 ? inventoryFilters.statuses[0] : "all";
+  const setStatusFilter = (status: string) => setInventoryFilters(current => ({ ...current, statuses: [status] }));
+  const inventoryCatalog = useInventoryCatalogs("properties");
   const [detailsChaletId, setDetailsChaletId] = useState<number | null>(null);
   const [deleteChaletTarget, setDeleteChaletTarget] = useState<{ id: number; name: string } | null>(null);
   const [reviewSubmission, setReviewSubmission] = useState<Submission | null>(null);
-  const [cityFilter, setCityFilter]         = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
 
-  const { data: chalets = [], isLoading } = useQuery<AdminChalet[]>({
+  const { data: chalets = [], isLoading, isError, refetch } = useQuery<AdminChalet[]>({
     queryKey: ["admin", "chalets"],
+    refetchInterval: 30_000,
     queryFn: async () => {
       const r = await apiFetch("/admin/chalets?includeStatus=true");
       if (!r.ok) throw new Error(await r.text());
@@ -3815,22 +3858,15 @@ function ChaletsVerifyTab() {
     onError: (e: Error) => alert(e.message),
   });
 
-  const uniqueLocations = useMemo(() => {
-    const seen = new Set<string>();
-    return chalets.map((c) => c.location).filter((l) => { if (!l || seen.has(l)) return false; seen.add(l); return true; }).sort();
-  }, [chalets]);
-
-  const uniqueCategories = useMemo(() => {
-    const seen = new Set<string>();
-    return chalets.map((c) => c.category || c.propertyType || "").filter((v) => { if (!v || seen.has(v)) return false; seen.add(v); return true; }).sort();
-  }, [chalets]);
-
-  const filteredChalets = useMemo(() => chalets.filter((c) => {
-    if ((c.adminStatus ?? "active") !== statusFilter) return false;
-    if (cityFilter && c.location !== cityFilter) return false;
-    if (categoryFilter && (c.category || c.propertyType || "") !== categoryFilter) return false;
-    return true;
-  }), [chalets, statusFilter, cityFilter, categoryFilter]);
+  const describeChalet = (row: AdminChalet): InventoryDescriptor => ({
+    id: row.id, name: row.nameAr, city: row.location,
+    region: row.region || inventoryCatalog.cityRegion(row.location) || "غير محدد",
+    category: row.category || row.propertyType || "غير مصنف",
+    status: row.adminStatus ?? "active", pricing: propertyPricingMode(row), createdAt: row.createdAt,
+  });
+  const inventoryRows = chalets.map(describeChalet);
+  const inventoryOptions = inventoryCatalog.options(inventoryRows, inventoryFilters);
+  const filteredChalets = filterAndSortInventory(chalets, inventoryFilters, describeChalet);
 
   if (isLoading) {
     return (
@@ -3898,39 +3934,16 @@ function ChaletsVerifyTab() {
         </div>
       </div>
 
-      {/* ── City + Category filter row ── */}
-      <div className="flex gap-3 flex-wrap">
-        <select
-          value={cityFilter}
-          onChange={(e) => setCityFilter(e.target.value)}
-          className="bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500"
-          dir="rtl"
-        >
-          <option value="">جميع المدن</option>
-          {uniqueLocations.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
-        </select>
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-amber-500"
-          dir="rtl"
-        >
-          <option value="">جميع الفئات</option>
-          {uniqueCategories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
-        </select>
-        {(cityFilter || categoryFilter) && (
-          <button
-            type="button"
-            onClick={() => { setCityFilter(""); setCategoryFilter(""); }}
-            className="text-xs text-slate-400 hover:text-amber-400 border border-slate-600 hover:border-amber-500/50 rounded-lg px-3 py-2 transition-colors"
-          >
-            مسح الفلاتر
-          </button>
-        )}
-        <span className="text-slate-500 text-xs self-center">
-          {toAr(filteredChalets.length)} نتيجة
-        </span>
-      </div>
+      <InventoryFilters scope="properties" value={inventoryFilters}
+        onChange={next => setInventoryFilters(inventoryCatalog.reconcile(inventoryFilters, next, inventoryRows))}
+        options={{ ...inventoryOptions, statuses: Object.entries(statusLabels).map(([value, label]) => ({ value, label })), pricing: propertyPricingOptions }}
+        resultCount={filteredChalets.length} totalCount={chalets.length} />
+      {(isError || inventoryCatalog.isError) && (
+        <div role="alert" className="rounded-lg border border-red-800 bg-red-950/20 p-3 text-sm text-red-200">
+          تعذر تحديث البيانات أو خيارات الفلترة. تُعرض آخر بيانات محمّلة، وليست هذه حالة عدم وجود سجلات.
+          <button className="mr-3 underline" onClick={() => { void refetch(); inventoryCatalog.refetch(); }}>إعادة المحاولة</button>
+        </div>
+      )}
 
       {pauseAlerts.length > 0 && (
         <div className="bg-orange-950/40 border border-orange-800 rounded-xl p-4 text-sm text-orange-100 flex items-start gap-3">
@@ -3974,7 +3987,7 @@ function ChaletsVerifyTab() {
           <TableBody>
             {filteredChalets.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-slate-400 py-12">لا توجد شاليهات ضمن هذا التصنيف</TableCell>
+                <TableCell colSpan={8} className="text-center text-slate-400 py-12">{isError ? "تعذر تحميل العقارات" : "لا توجد عقارات تطابق خيارات البحث"}</TableCell>
               </TableRow>
             ) : filteredChalets.map((c) => {
               const adminStatus = c.adminStatus ?? "active";
@@ -3987,8 +4000,12 @@ function ChaletsVerifyTab() {
                 <TableCell className="text-slate-300 text-sm">
                   {c.location}
                   {c.district && <span className="text-slate-500"> · {c.district}</span>}
+                  <div className="text-xs text-slate-500">{describeChalet(c).region}</div>
                 </TableCell>
-                <TableCell className="text-slate-400 text-sm">{c.category || c.propertyType || "—"}</TableCell>
+                <TableCell className="text-slate-400 text-sm">
+                  {c.category || c.propertyType || "—"}
+                  <div className="text-xs text-amber-300/80 mt-1">{propertyPricingOptions.find(option => option.value === propertyPricingMode(c))?.label}</div>
+                </TableCell>
                 <TableCell>
                   <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusStyles[adminStatus]}`}>
                     {statusLabels[adminStatus]}

@@ -1077,18 +1077,9 @@ export default function AddChalet() {
                             <SelectValue placeholder="اختر نوع العقار" />
                           </SelectTrigger>
                           <SelectContent>
-                            {propertyCategories.length === 0 ? (
-                              <>
-                                <SelectItem value="شالية">🏕️ شالية</SelectItem>
-                                <SelectItem value="مزرعة">🌿 مزرعة</SelectItem>
-                                <SelectItem value="استراحة">🏡 استراحة</SelectItem>
-                                <SelectItem value="مخيم">⛺ مخيم</SelectItem>
-                              </>
-                            ) : (
-                              propertyCategories.map((cat) => (
+                            {propertyCategories.map((cat) => (
                                 <SelectItem key={cat.id} value={cat.nameAr}>{cat.emoji || "🏠"} {cat.nameAr}</SelectItem>
-                              ))
-                            )}
+                              ))}
                             <SelectItem value="__other__">➕ فئة غير موجودة (اقتراح للإدارة)</SelectItem>
                           </SelectContent>
                         </Select>

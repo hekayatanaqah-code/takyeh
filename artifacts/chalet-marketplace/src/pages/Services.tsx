@@ -238,7 +238,7 @@ export default function Services() {
     queryFn: async () => {
       const url = activeCategory === "all"
         ? `${BASE}/api/services`
-        : `${BASE}/api/services?category=${activeCategory}`;
+        : `${BASE}/api/services?${new URLSearchParams({ category: activeCategory })}`;
       const r = await fetch(url, { credentials: "include" });
       if (!r.ok) throw new Error("فشل تحميل الخدمات");
       return r.json();
