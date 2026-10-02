@@ -6,6 +6,7 @@ import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { toGregorianStr } from "@/lib/hijri";
 import { hijriAndGregorian } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { sameCityName } from "@/lib/city-name";
 import { useGlobalSeasons } from "@/hooks/useGlobalSeasons";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -114,7 +115,14 @@ export default function Chalets() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const selectedCityId = cities.find((c) => c.name === filterCity)?.id;
+  const selectedCityId = cities.find((c) => sameCityName(c.name, filterCity))?.id;
+  useEffect(() => {
+    if (filterCity === "all") return;
+    const matches = cities.filter(city => sameCityName(city.name, filterCity));
+    if (matches.length === 1 && matches[0].name !== filterCity) {
+      setFilterCity(matches[0].name);
+    }
+  }, [cities, filterCity]);
   const { data: districts = [] } = useQuery<{ id: number; name: string }[]>({
     queryKey: ["catalog", "districts", selectedCityId],
     enabled: !!selectedCityId,
@@ -146,7 +154,7 @@ export default function Chalets() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const { data: chalets, isLoading, refetch } = useQuery<any[]>({
+  const { data: chalets, isLoading, isError, refetch } = useQuery<any[]>({
     queryKey: ["chalets", filterCity, filterDate, filterPeriod],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -154,7 +162,7 @@ export default function Chalets() {
       if (filterDate) params.set("date", filterDate);
       if (filterPeriod && filterPeriod !== "all") params.set("period", filterPeriod);
       const r = await fetch(`${BASE}/api/chalets?${params.toString()}`, { credentials: "include" });
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error("تعذر تحميل الشاليهات");
       return r.json();
     },
   });
@@ -186,7 +194,7 @@ export default function Chalets() {
   ────────────────────────────────────────────────────────────────── */
   const needsNextAvail = filterCity !== "all" && !!filterDate;
 
-  const { data: nextAvailResult } = useQuery<{
+  const { data: nextAvailResult, isLoading: nextAvailLoading, isError: nextAvailError } = useQuery<{
     cityEmpty: boolean;
     chalets: any[];
   }>({
@@ -198,7 +206,7 @@ export default function Chalets() {
       params.set("date", filterDate);
       if (filterPeriod && filterPeriod !== "all") params.set("period", filterPeriod);
       const r = await fetch(`${BASE}/api/chalets/next-available?${params.toString()}`, { credentials: "include" });
-      if (!r.ok) return { cityEmpty: false, chalets: [] };
+      if (!r.ok) throw new Error("تعذر التحقق من المواعيد البديلة");
       return r.json();
     },
     staleTime: 1000 * 60 * 2,
@@ -247,7 +255,7 @@ export default function Chalets() {
   });
 
   const filteredChalets = (chalets ?? []).filter((c) => {
-    if (filterCity && filterCity !== "all" && (c as any).location !== filterCity) return false;
+    if (filterCity && filterCity !== "all" && !sameCityName(String(c.location ?? ""), filterCity)) return false;
     if (filterDistricts.length > 0) {
       const chaletDistrict = ((c as any).district ?? "").trim();
       if (!chaletDistrict || !filterDistricts.includes(chaletDistrict)) return false;
@@ -682,7 +690,7 @@ export default function Chalets() {
             </div>
 
             {/* ── Map View ── */}
-            {viewMode === "map" && (
+            {viewMode === "map" && !isLoading && !isError && filteredChalets.length > 0 && (
               <div className="rounded-2xl overflow-hidden border border-border shadow-sm" style={{ height: 500 }}>
                 {filteredChalets.length === 0 ? (
                   <div className="h-full bg-muted flex items-center justify-center text-muted-foreground text-sm">لا توجد نتائج للعرض على الخريطة</div>
@@ -742,7 +750,7 @@ export default function Chalets() {
               </div>
             )}
 
-            {viewMode === "grid" && (
+            {(viewMode === "grid" || isLoading || isError || filteredChalets.length === 0) && (
               isLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {[1, 2, 3, 4].map((i) => (
@@ -753,13 +761,27 @@ export default function Chalets() {
                     </div>
                   ))}
                 </div>
+              ) : isError ? (
+                <div role="alert" className="bg-card rounded-2xl border border-border/50 p-8 text-center">
+                  <h3 className="text-xl font-bold mb-2">تعذر تحميل الشاليهات</h3>
+                  <p className="text-muted-foreground mb-5">حدث خطأ أثناء جلب النتائج. يرجى المحاولة مرة أخرى.</p>
+                  <Button onClick={() => void refetch()}>إعادة المحاولة</Button>
+                </div>
               ) : filteredChalets.length === 0 ? (
                 <>
+                  {filterCity !== "all" && filterDate && (
+                    <div role="status" className="rounded-2xl border border-border/50 bg-card p-5 mb-5 text-center">
+                      <h3 className="text-lg font-bold">لا توجد شاليهات متاحة في هذه المدينة حالياً</h3>
+                      <p className="text-sm text-muted-foreground mt-2">جرّب تغيير تاريخ الحجز أو خيارات البحث.</p>
+                      {nextAvailLoading && <p className="text-sm text-muted-foreground mt-2">جارٍ التحقق من المواعيد البديلة…</p>}
+                      {nextAvailError && <p className="text-sm text-muted-foreground mt-2">تعذر التحقق من المواعيد البديلة. يمكنك تغيير التاريخ أو إعادة المحاولة لاحقاً.</p>}
+                    </div>
+                  )}
                   {/* ══════════════════════════════════════════════════
                       SCENARIO A: Specific city + date → city is EMPTY
                       (no properties registered in this city at all)
                   ══════════════════════════════════════════════════ */}
-                  {filterCity !== "all" && filterDate && cityIsEmpty && (
+                  {filterCity !== "all" && filterDate && !nextAvailError && nextAvailResult && cityIsEmpty && (
                     <>
                       <div className="bg-card rounded-2xl border border-border/50 p-8 text-center flex flex-col items-center mb-8">
                         <div className="w-16 h-16 bg-blue-50 dark:bg-blue-950/30 rounded-full flex items-center justify-center mb-4">
@@ -806,7 +828,7 @@ export default function Chalets() {
                       SCENARIO B: City + date → date is taken,
                       but city has chalets available on other dates
                   ══════════════════════════════════════════════════ */}
-                  {filterCity !== "all" && filterDate && !cityIsEmpty && (
+                  {filterCity !== "all" && filterDate && !nextAvailError && nextAvailResult && !cityIsEmpty && (chalets ?? []).length === 0 && (
                     <>
                       {/* Compact banner — no button, results follow immediately */}
                       <div className="flex items-start gap-4 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl px-5 py-4 mb-6">
@@ -869,11 +891,11 @@ export default function Chalets() {
                       SCENARIO C: Generic no results (no city or no date)
                   ══════════════════════════════════════════════════ */}
                   {(filterCity === "all" || !filterDate) && (
-                    <div className="bg-card rounded-2xl border border-border/50 p-12 text-center flex flex-col items-center">
+                    <div role="status" className="bg-card rounded-2xl border border-border/50 p-12 text-center flex flex-col items-center">
                       <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-4">
                         <FilterX className="w-10 h-10 text-muted-foreground" />
                       </div>
-                      <h3 className="text-xl font-bold mb-2">لا توجد نتائج مطابقة</h3>
+                      <h3 className="text-xl font-bold mb-2">{filterCity !== "all" ? "لا توجد شاليهات متاحة في هذه المدينة حالياً" : "لا توجد نتائج مطابقة"}</h3>
                       <p className="text-muted-foreground mb-6">حاول تغيير خيارات البحث للوصول لنتائج أفضل.</p>
                       <Button onClick={resetFilters} className="gap-2">
                         <FilterX className="w-4 h-4" />

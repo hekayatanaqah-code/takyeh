@@ -11,6 +11,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, lte, gte, and, sql, inArray, isNull, or, type SQL } from "drizzle-orm";
 import { activeOwnersWithFreeAccess, isSubscriptionActive, preferredOwnerSubscription } from "../lib/subscription-access";
+import { cityNameMatches } from "../lib/city-name";
 import {
   GetChaletsQueryParams,
   GetChaletByIdParams,
@@ -167,7 +168,7 @@ router.get("/", async (req, res) => {
   const conditions: SQL[] = [eq(chaletsTable.isActive, true), isNull(chaletsTable.deletedAt)];
 
   if (location) {
-    conditions.push(eq(chaletsTable.location, location));
+    conditions.push(cityNameMatches(sql`${chaletsTable.location}`, location));
   }
   if (maxGuests !== undefined) {
     conditions.push(gte(chaletsTable.maxGuests, maxGuests));
@@ -350,7 +351,11 @@ router.get("/next-available", async (req, res) => {
   const allChalets = await db
     .select()
     .from(chaletsTable)
-    .where(and(eq(chaletsTable.isActive, true), eq(chaletsTable.location, location)));
+    .where(and(
+      eq(chaletsTable.isActive, true),
+      isNull(chaletsTable.deletedAt),
+      cityNameMatches(sql`${chaletsTable.location}`, location),
+    ));
 
   const activeOwners = await activeInventoryOwnerIds(allChalets.map((row) => row.ownerId));
   const activeChalets = allChalets.filter((row) =>

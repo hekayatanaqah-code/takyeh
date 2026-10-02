@@ -5,6 +5,7 @@ import { MapPin, Search, Calendar, Plus, Minus, Tag, Shield, Clock, Zap, Globe, 
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { toGregorianStr } from "@/lib/hijri";
 import { useQuery } from "@tanstack/react-query";
+import { sameCityName } from "@/lib/city-name";
 import { useGlobalSeasons } from "@/hooks/useGlobalSeasons";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -131,7 +132,7 @@ export default function Home() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const selectedCityId = cities.find((c) => c.name === searchCity)?.id;
+  const selectedCityId = cities.find((c) => sameCityName(c.name, searchCity))?.id;
   const { data: districts = [] } = useQuery<{ id: number; name: string; cityId: number }[]>({
     queryKey: ["catalog", "districts", selectedCityId],
     enabled: !!selectedCityId,
