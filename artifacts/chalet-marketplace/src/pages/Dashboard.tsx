@@ -25144,7 +25144,8 @@ export default function Dashboard() {
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
   const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history" | "ledger">("revenue");
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
-  const [selectedServiceId, setSelectedServiceId] = useState<number | "submissions" | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
+  const [serviceView, setServiceView] = useState<"manage" | "submissions">("manage");
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
   const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "customers" | "digitalContracts" | "notifications">("chalets");
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
@@ -25390,15 +25391,16 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerProfile]);
 
-  /* Auto-select first service when entering services mode */
+  /* Preserve a valid selection; recover when the selected service is removed. */
   useEffect(() => {
-    if (activeDashMode === "services" && myApprovedProviders.length > 0 && selectedServiceId === null) {
-      setSelectedServiceId(myApprovedProviders[0].id);
+    if (activeDashMode !== "services") return;
+    if (myApprovedProviders.some((provider) => provider.id === selectedServiceId)) return;
+    const nextServiceId = myApprovedProviders[0]?.id ?? null;
+    if (nextServiceId !== selectedServiceId) {
+      setSelectedServiceId(nextServiceId);
+      setSelectedServiceTab("details");
     }
-    if (activeDashMode === "services" && myApprovedProviders.length === 0) {
-      setSelectedServiceId(null);
-    }
-  }, [activeDashMode, myApprovedProviders.length]);
+  }, [activeDashMode, myApprovedProviders, selectedServiceId]);
 
   useEffect(() => {
     if (planLimits?.scope !== "property" || dashMode !== "admin-finance") return;
@@ -26007,6 +26009,27 @@ export default function Dashboard() {
                 </h2>
                 <p className="text-sm text-muted-foreground mt-0.5">إدارة وتنظيم كافة خدماتك وحجوزاتك بكل سهولة</p>
               </div>
+              <div className="flex items-center gap-2 flex-wrap" aria-label="الأقسام العامة للخدمات">
+                <Button
+                  type="button"
+                  variant={serviceView === "manage" && myApprovedProviders.length > 0 ? "default" : "outline"}
+                  className="gap-2 rounded-xl"
+                  aria-pressed={serviceView === "manage" && myApprovedProviders.length > 0}
+                  disabled={myApprovedProviders.length === 0}
+                  onClick={() => setServiceView("manage")}
+                >
+                  <Star className="w-4 h-4" />إدارة الخدمات
+                </Button>
+                <Button
+                  type="button"
+                  variant={serviceView === "submissions" || myApprovedProviders.length === 0 ? "default" : "outline"}
+                  className="gap-2 rounded-xl"
+                  aria-pressed={serviceView === "submissions" || myApprovedProviders.length === 0}
+                  onClick={() => setServiceView("submissions")}
+                >
+                  <Archive className="w-4 h-4" />الطلبات والتقديمات
+                </Button>
+              </div>
             </div>
 
             {/* Cross-owner shortcut to admin section */}
@@ -26023,65 +26046,74 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* If no approved providers: show submissions manager directly */}
-             {myApprovedProviders.length === 0 ? (
-              <ServiceSubmissionsTab
-                onManageCalendar={(providerId) => {
-                  setSelectedServiceId(providerId);
-                  setSelectedServiceTab("calendar");
-                }}
-                onEditProvider={(providerId) => {
-                  setSelectedServiceId(providerId);
-                  setSelectedServiceTab("details");
-                }}
-              />
+            {/* Account-wide requests are independent of the selected service. */}
+             {serviceView === "submissions" || myApprovedProviders.length === 0 ? (
+              <section className="space-y-4" aria-label="الطلبات والتقديمات لجميع الخدمات">
+                <div>
+                  <h3 className="text-lg font-bold">الطلبات والتقديمات</h3>
+                  <p className="text-sm text-muted-foreground">عرض الطلبات والتقديمات لجميع خدماتك، وليس للخدمة المختارة فقط.</p>
+                </div>
+                <ServiceSubmissionsTab
+                  onManageCalendar={(providerId) => {
+                    setSelectedServiceId(providerId);
+                    setSelectedServiceTab("calendar");
+                    setServiceView("manage");
+                  }}
+                  onEditProvider={(providerId) => {
+                    setSelectedServiceId(providerId);
+                    setSelectedServiceTab("details");
+                    setServiceView("manage");
+                  }}
+                />
+              </section>
             ) : (
               <>
                 {/* ── Service Selector Tabs ─────────────────────────── */}
-                <div className="flex gap-1.5 flex-wrap">
-                  {myApprovedProviders.map(p => (
+                <div className="min-w-0 w-full space-y-2">
+                  <p className="text-sm font-semibold text-muted-foreground">اختر الخدمة التي تريد إدارتها</p>
+                  <div className="w-full overflow-x-auto pb-1">
+                  <div role="tablist" aria-label="خدماتي المستقلة" aria-orientation="horizontal" dir="rtl" className="flex w-max min-w-full gap-2">
+                  {myApprovedProviders.map((p, index) => (
                     <button key={p.id} type="button"
+                      role="tab"
+                      id={`service-tab-${p.id}`}
+                      aria-selected={selectedServiceId === p.id}
+                      aria-controls={`service-panel-${p.id}`}
+                      tabIndex={selectedServiceId === p.id ? 0 : -1}
                       onClick={() => { setSelectedServiceId(p.id); setSelectedServiceTab("details"); }}
-                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all border ${
+                      onKeyDown={(event) => {
+                        let nextIndex: number;
+                        if (event.key === "ArrowLeft") nextIndex = (index + 1) % myApprovedProviders.length;
+                        else if (event.key === "ArrowRight") nextIndex = (index - 1 + myApprovedProviders.length) % myApprovedProviders.length;
+                        else if (event.key === "Home") nextIndex = 0;
+                        else if (event.key === "End") nextIndex = myApprovedProviders.length - 1;
+                        else return;
+                        event.preventDefault();
+                        setSelectedServiceId(myApprovedProviders[nextIndex].id);
+                        setSelectedServiceTab("details");
+                        const nextTab = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex];
+                        nextTab?.focus({ preventScroll: true });
+                        nextTab?.scrollIntoView({ block: "nearest", inline: "nearest" });
+                      }}
+                      title={p.businessName}
+                      className={`flex shrink-0 items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all border whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 ${
                         selectedServiceId === p.id
-                          ? "bg-background text-amber-600 border-amber-300 dark:border-amber-700 shadow-sm"
-                          : "bg-muted text-muted-foreground border-transparent hover:text-foreground"
+                          ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-400 dark:border-amber-700 shadow-sm"
+                          : "bg-card text-muted-foreground border-border hover:text-foreground hover:border-amber-300"
                       }`}>
                       <span className="text-base">{(SERVICE_CATEGORY_LABELS[p.category as keyof typeof SERVICE_CATEGORY_LABELS] ?? "✨").split(" ")[0]}</span>
-                      <span className="max-w-[140px] truncate">{p.businessName}</span>
+                      <span>{p.businessName}</span>
                       {!p.isActive && <span className="text-xs opacity-60">(متوقف)</span>}
                     </button>
                   ))}
-                  {/* Submissions pill */}
-                  <button type="button"
-                    onClick={() => setSelectedServiceId("submissions")}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all border ${
-                      selectedServiceId === "submissions"
-                        ? "bg-background text-foreground border-border shadow-sm"
-                        : "bg-muted text-muted-foreground border-transparent hover:text-foreground"
-                    }`}>
-                    <Archive className="w-3.5 h-3.5" />
-                    الطلبات والتقديمات
-                  </button>
+                  </div>
+                  </div>
                 </div>
 
-                {/* ── Submissions View ─────────────────────────────── */}
-                 {selectedServiceId === "submissions" && (
-                   <ServiceSubmissionsTab
-                     onManageCalendar={(providerId) => {
-                       setSelectedServiceId(providerId);
-                       setSelectedServiceTab("calendar");
-                     }}
-                     onEditProvider={(providerId) => {
-                       setSelectedServiceId(providerId);
-                       setSelectedServiceTab("details");
-                     }}
-                   />
-                 )}
-
                 {/* ── Service ERP Dashboard ─────────────────────────── */}
-                {selectedServiceId !== "submissions" && selectedServiceId !== null && (() => {
+                {selectedServiceId !== null && (() => {
                   const selectedProvider = myApprovedProviders.find(p => p.id === selectedServiceId);
+                  if (!selectedProvider) return null;
                     const serviceErpTabs = [
                     { id: "details",   label: "تفاصيل الخدمة",    icon: <Edit2 className="w-3.5 h-3.5" /> },
                     { id: "seasons",   label: "المواسم والأعياد",  icon: <Sunrise className="w-3.5 h-3.5" /> },
@@ -26097,7 +26129,13 @@ export default function Dashboard() {
                       { id: "messages", label: "إعدادات الرسائل", icon: <Send className="w-3.5 h-3.5" /> },
                   ];
                   return (
-                    <ServiceErpCtx.Provider value={{ providerId: selectedServiceId }}>
+                    <ServiceErpCtx.Provider key={selectedServiceId} value={{ providerId: selectedServiceId }}>
+                      <section
+                        role="tabpanel"
+                        id={`service-panel-${selectedServiceId}`}
+                        aria-labelledby={`service-tab-${selectedServiceId}`}
+                        className="min-w-0 space-y-5"
+                      >
                       {/* Provider header card */}
                       <div className="bg-card border border-border rounded-2xl px-5 py-4 flex items-center gap-4 flex-wrap">
                         <div className="w-11 h-11 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-xl font-bold shrink-0">
@@ -26167,6 +26205,7 @@ export default function Dashboard() {
                           الانتقال إلى الشؤون المالية والإدارية
                         </button>
                       </div>}
+                      </section>
                     </ServiceErpCtx.Provider>
                   );
                 })()}
