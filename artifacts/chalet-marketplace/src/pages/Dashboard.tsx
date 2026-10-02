@@ -9328,7 +9328,7 @@ function ServiceDetailsTab() {
       setForm({
         businessName: provider.businessName ?? "",
         descriptionAr: provider.descriptionAr ?? "",
-        whatsappNumber: provider.whatsappNumber ?? "",
+        whatsappNumber: fromAr(provider.whatsappNumber ?? ""),
         city: provider.city ?? "",
         yearsOfExperience: provider.yearsOfExperience ?? "",
         requiresInsurance: Boolean(provider.requiresInsurance),
@@ -9476,7 +9476,15 @@ function ServiceDetailsTab() {
         {/* WhatsApp */}
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">رقم الواتساب</label>
-          <Input value={form.whatsappNumber} onChange={e => setForm({ ...form, whatsappNumber: e.target.value })} className="rounded-xl" dir="ltr" />
+          <Input
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            value={toAr(form.whatsappNumber)}
+            onChange={e => setForm({ ...form, whatsappNumber: fromAr(e.target.value) })}
+            className="rounded-xl text-right"
+            dir="ltr"
+          />
         </div>
         {/* City */}
         <div className="space-y-1.5">
