@@ -9304,6 +9304,7 @@ function ServiceDetailsTab() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [form, setForm] = useState<Record<string, any> | null>(null);
   const [coverageTags, setCoverageTags] = useState<string[]>([]);
+  const [coverageSearch, setCoverageSearch] = useState("");
   const [featureTags, setFeatureTags] = useState<string[]>([]);
   const [newFeature, setNewFeature] = useState("");
   const [logoUrl, setLogoUrl] = useState<string>("");
@@ -9311,6 +9312,17 @@ function ServiceDetailsTab() {
   const [photoCaptions, setPhotoCaptions] = useState<string[]>([]);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
+
+  const { data: serviceCities = [], isLoading: citiesLoading, isError: citiesError, refetch: reloadCities } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["service-locations", "cities", "all"],
+    queryFn: async () => {
+      const r = await apiFetch("/service-cities");
+      if (!r.ok) throw new Error("تعذر تحميل مدن الخدمات");
+      return r.json();
+    },
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
 
   const { data: provider, isLoading } = useQuery({
     queryKey: ["service-provider-detail", providerId],
@@ -9337,11 +9349,16 @@ function ServiceDetailsTab() {
         includeElectronicSignature: provider.includeElectronicSignature !== false,
         insuranceAmount: provider.insuranceAmount == null ? "" : String(provider.insuranceAmount),
       });
-      setCoverageTags(provider.coverageTags ?? []);
+      setCoverageTags([...new Set<string>(provider.coverageTags ?? [])]);
       setFeatureTags(provider.customFeatureTags ?? []);
-      setLogoUrl(provider.logoUrl ?? "");
-      setGalleryPhotos(provider.galleryPhotos ?? []);
-      setPhotoCaptions(provider.photoCaptions ?? []);
+      const photos: string[] = provider.galleryPhotos ?? [];
+      const mainIndex = photos.indexOf(provider.logoUrl);
+      const photoOrder = mainIndex > 0
+        ? [mainIndex, ...photos.map((_, index) => index).filter(index => index !== mainIndex)]
+        : photos.map((_, index) => index);
+      setLogoUrl(provider.logoUrl || photos[0] || "");
+      setGalleryPhotos(photoOrder.map(index => photos[index]));
+      setPhotoCaptions(photoOrder.map(index => provider.photoCaptions?.[index] ?? ""));
     }
   }, [provider, providerId]);
 
@@ -9351,6 +9368,10 @@ function ServiceDetailsTab() {
   async function handleSave() {
     if (isReadOnly) return onBlockedEdit();
     const currentForm = form!;
+    if (!currentForm.city?.trim()) {
+      toast({ title: "المدينة الرئيسية مطلوبة", description: "اختر المدينة الرئيسية لنشاطك", variant: "destructive" });
+      return;
+    }
     if (currentForm.requiresInsurance && (!currentForm.insuranceAmount || Number(currentForm.insuranceAmount) <= 0)) {
       toast({ title: "قيمة التأمين مطلوبة", description: "أدخل قيمة أكبر من صفر للتأمين المسترد", variant: "destructive" });
       return;
@@ -9416,7 +9437,27 @@ function ServiceDetailsTab() {
     } finally { setDeleting(false); }
   }
 
-  const allSelected = AL_QASSIM_CITIES.every(c => coverageTags.includes(c));
+  const allKingdomCoverage = "جميع مناطق المملكة";
+  const cityOptions = [...new Set<string>([
+    ...(provider.city ? [provider.city] : []),
+    ...(form.city ? [form.city] : []),
+    ...serviceCities.map(city => city.name),
+  ])];
+  const coverageCityOptions = [...new Set([
+    ...cityOptions,
+    ...(provider.coverageTags ?? []).filter((city: string) => city !== allKingdomCoverage),
+    ...coverageTags.filter(city => city !== allKingdomCoverage),
+  ])];
+  const visibleCoverageCities = coverageCityOptions.filter(city => city.includes(coverageSearch.trim()));
+  const kingdomSelected = coverageTags.includes(allKingdomCoverage);
+  const allVisibleSelected = visibleCoverageCities.length > 0 && visibleCoverageCities.every(city => coverageTags.includes(city));
+
+  function toggleCoverageCity(city: string) {
+    setCoverageTags(previous => {
+      const cities = previous.filter(value => value !== allKingdomCoverage);
+      return cities.includes(city) ? cities.filter(value => value !== city) : [...cities, city];
+    });
+  }
 
   async function handleLogoUpload(file: File) {
     setUploadingLogo(true);
@@ -9438,8 +9479,10 @@ function ServiceDetailsTab() {
   }
 
   function removeGalleryItem(idx: number) {
-    setGalleryPhotos(p => p.filter((_, i) => i !== idx));
-    setPhotoCaptions(p => p.filter((_, i) => i !== idx));
+    const remainingPhotos = galleryPhotos.filter((_, index) => index !== idx);
+    if (galleryPhotos[idx] === logoUrl) setLogoUrl(remainingPhotos[0] ?? "");
+    setGalleryPhotos(remainingPhotos);
+    setPhotoCaptions(galleryPhotos.flatMap((_, index) => index === idx ? [] : [photoCaptions[index] ?? ""]));
   }
 
   function updateCaption(idx: number, val: string) {
@@ -9448,7 +9491,11 @@ function ServiceDetailsTab() {
 
   function setMainFromGallery(idx: number) {
     const photo = galleryPhotos[idx];
+    if (!photo) return;
     setLogoUrl(photo);
+    const order = [idx, ...galleryPhotos.map((_, index) => index).filter(index => index !== idx)];
+    setGalleryPhotos(order.map(index => galleryPhotos[index]));
+    setPhotoCaptions(order.map(index => photoCaptions[index] ?? ""));
   }
 
   return (
@@ -9490,11 +9537,18 @@ function ServiceDetailsTab() {
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">المدينة الرئيسية</label>
           <Select value={form.city} onValueChange={v => setForm({ ...form, city: v })}>
-            <SelectTrigger className="rounded-xl"><SelectValue placeholder="اختر المدينة" /></SelectTrigger>
+            <SelectTrigger className="rounded-xl" aria-label="المدينة الرئيسية"><SelectValue placeholder="اختر المدينة">{form.city || undefined}</SelectValue></SelectTrigger>
             <SelectContent>
-              {AL_QASSIM_CITIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              {cityOptions.map(city => <SelectItem key={city} value={city}>{city}</SelectItem>)}
             </SelectContent>
           </Select>
+          {citiesLoading && <p className="text-xs text-muted-foreground">جارٍ تحميل المدن المتاحة…</p>}
+          {citiesError && (
+            <p className="text-xs text-destructive" role="alert">
+              تعذر تحميل المدن المتاحة. المدينة المحفوظة لم تتغير.{" "}
+              <button type="button" className="underline" onClick={() => void reloadCities()}>إعادة المحاولة</button>
+            </p>
+          )}
         </div>
         {/* Years of Experience */}
         <div className="space-y-1.5">
@@ -9565,23 +9619,42 @@ function ServiceDetailsTab() {
 
       {/* Coverage Tags */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <label className="text-sm font-semibold text-foreground">نطاق التغطية الجغرافية</label>
-          <button type="button" onClick={() => setCoverageTags(allSelected ? [] : [...AL_QASSIM_CITIES])}
-            className="text-xs font-semibold text-primary hover:underline">
-            {allSelected ? "إلغاء تحديد الكل" : "تحديد كل القصيم"}
-          </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button type="button" disabled={visibleCoverageCities.length === 0}
+              onClick={() => setCoverageTags(previous => allVisibleSelected
+                ? previous.filter(city => !visibleCoverageCities.includes(city))
+                : [...new Set([...previous.filter(city => city !== allKingdomCoverage), ...visibleCoverageCities])])}
+              className="text-xs font-semibold text-primary hover:underline disabled:opacity-50">
+              {allVisibleSelected ? (coverageSearch.trim() ? "إلغاء تحديد نتائج البحث" : "إلغاء تحديد المدن") : (coverageSearch.trim() ? "تحديد نتائج البحث" : "تحديد كل المدن")}
+            </button>
+            <button type="button" disabled={coverageTags.length === 0} onClick={() => setCoverageTags([])}
+              className="text-xs font-semibold text-muted-foreground hover:text-destructive disabled:opacity-50">
+              إلغاء تحديد الكل
+            </button>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2 p-3 bg-muted rounded-xl min-h-[60px]">
-          {AL_QASSIM_CITIES.map(city => (
+        <button type="button" aria-pressed={kingdomSelected}
+          onClick={() => setCoverageTags(previous => previous.includes(allKingdomCoverage) ? [] : [allKingdomCoverage])}
+          className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${kingdomSelected ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border"}`}>
+          <CheckCircle className="w-3.5 h-3.5" />تغطية جميع مناطق المملكة
+        </button>
+        <Input value={coverageSearch} onChange={event => setCoverageSearch(event.target.value)}
+          placeholder="ابحث عن مدينة لتحديدها أو إلغاء تحديدها" aria-label="البحث في مدن نطاق التغطية" className="rounded-xl" />
+        <div role="group" aria-label="مدن نطاق التغطية" className="flex flex-wrap gap-2 p-3 bg-muted rounded-xl min-h-[60px] max-h-60 overflow-y-auto">
+          {visibleCoverageCities.map(city => (
             <button key={city} type="button"
-              onClick={() => setCoverageTags(prev => prev.includes(city) ? prev.filter(c => c !== city) : [...prev, city])}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${coverageTags.includes(city) ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground border border-border hover:border-primary"}`}>
+              aria-pressed={coverageTags.includes(city)}
+              onClick={() => toggleCoverageCity(city)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${coverageTags.includes(city) ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground border border-border hover:border-primary"}`}>
+              {coverageTags.includes(city) && <CheckCircle className="w-3.5 h-3.5" />}
               {city}
             </button>
           ))}
+          {visibleCoverageCities.length === 0 && <p className="text-xs text-muted-foreground">{citiesLoading ? "جارٍ تحميل المدن…" : citiesError ? "تعذر تحميل المدن. يمكنك إعادة المحاولة من حقل المدينة الرئيسية." : "لا توجد مدن مطابقة."}</p>}
         </div>
-        <p className="text-xs text-muted-foreground">محدّد: {coverageTags.length} / {AL_QASSIM_CITIES.length} مدينة</p>
+        <p className="text-xs text-muted-foreground" aria-live="polite">{kingdomSelected ? "نطاق التغطية: جميع مناطق المملكة" : `محدّد: ${toAr(coverageTags.length)} مدينة. البحث لا يلغي اختياراتك الأخرى.`}</p>
       </div>
 
       {/* Feature Tags */}
@@ -9617,7 +9690,7 @@ function ServiceDetailsTab() {
 
         {/* Main / Logo Image */}
         <div className="space-y-2">
-          <label className="text-xs font-semibold text-muted-foreground">الصورة الرئيسية (الشعار)</label>
+          <label className="text-xs font-semibold text-muted-foreground">الصورة الرئيسية للخدمة</label>
           <div className="flex items-center gap-4 flex-wrap">
             {logoUrl ? (
               <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-border bg-muted shrink-0">
@@ -9658,23 +9731,24 @@ function ServiceDetailsTab() {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {galleryPhotos.map((url, idx) => (
-                <div key={idx} className="space-y-1.5">
+                <div key={url} className="space-y-1.5">
                   <div className="relative aspect-square rounded-xl overflow-hidden border border-border bg-muted group">
                     <img src={`${BASE}${url}`} alt={`gallery-${idx}`} className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).src = ""; }} />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <button type="button" onClick={() => setMainFromGallery(idx)} title="تعيين كصورة رئيسية"
-                        className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center hover:bg-amber-600">
-                        <Star className="w-3.5 h-3.5" />
-                      </button>
                       <button type="button" onClick={() => removeGalleryItem(idx)}
-                        className="w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600">
+                        aria-label={`حذف الصورة ${toAr(idx + 1)} من المعرض`}
+                        className="absolute top-1 left-1 w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    </div>
                     {logoUrl === url && (
                       <span className="absolute top-1 right-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">رئيسية</span>
                     )}
                   </div>
+                  <Button type="button" variant={logoUrl === url ? "default" : "outline"} size="sm"
+                    className="w-full h-auto min-h-8 gap-1 px-2 py-1.5 text-xs whitespace-normal"
+                    aria-pressed={logoUrl === url} onClick={() => setMainFromGallery(idx)}>
+                    <Star className="w-3 h-3 shrink-0" />
+                    {logoUrl === url ? "الصورة الرئيسية" : "تحديد الصورة الرئيسية"}
+                  </Button>
                   <Input
                     value={photoCaptions[idx] ?? ""}
                     onChange={e => updateCaption(idx, e.target.value)}
@@ -9687,6 +9761,8 @@ function ServiceDetailsTab() {
           )}
         </div>
       </div>
+
+      <p className="text-xs text-muted-foreground">اختر الصورة الرئيسية لتظهر أولًا كغلاف لخدمتك، ثم اضغط «حفظ التعديلات». يبقى وصف كل صورة مرتبطًا بها عند تغيير ترتيبها.</p>
 
       {/* Save */}
       <div className="flex justify-end pt-2">
