@@ -101,7 +101,7 @@ export default function OwnerHub(p: OwnerHubProps) {
             <Settings /> الإعدادات الشخصية
           </Button>
           <Button variant="ghost" className="rounded-full" onClick={p.onManageRequests} data-testid="button-manage-requests">
-            <ClipboardList /> الطلبات والتقديمات
+            <ClipboardList /> طلبات التسجيل
           </Button>
         </div>
       </div>
